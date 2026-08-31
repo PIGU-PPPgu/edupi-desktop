@@ -60,3 +60,40 @@ test("class and student modules select one student and expose real import and ex
   assert.match(route, /importStudentRoster/);
   assert.match(route, /readEducationContract/);
 });
+
+test("teaching prepares the next class and continuity modules render one selected record", async () => {
+  const [panel, sider, views] = await Promise.all([
+    read("./EduPiEducationPanel.tsx"),
+    read("./EduPiObjectSider.tsx"),
+    read("./EduPiWorkspaceViews.tsx"),
+  ]);
+  assert.match(views, /导入教学重点/);
+  assert.match(views, /准备下一节课/);
+  assert.match(views, /请为\$\{nextSubject\}/);
+  assert.match(panel, /selectedObjectId/);
+  assert.match(panel, /onObject=\{selectObject\}/);
+  assert.match(sider, /edupi-object-pagination/);
+  assert.match(sider, /onObject\(`memory:/);
+  assert.match(sider, /onObject\(item\.id\)/);
+  assert.match(views, /edupi-record-detail/);
+  assert.doesNotMatch(views, /edupi-memory-groups/);
+  assert.doesNotMatch(views, /edupi-insight-layout/);
+  assert.doesNotMatch(views, /edupi-growth-grid/);
+});
+
+test("review renders one selected decision and the rail exposes real EduPi activity", async () => {
+  const [panel, review, rail, css] = await Promise.all([
+    read("./EduPiEducationPanel.tsx"),
+    read("./EduPiC1Review.tsx"),
+    read("./EduPiNavigationRail.tsx"),
+    read("../app/edupi-workbench.css"),
+  ]);
+  assert.match(panel, /reviewMode/);
+  assert.match(panel, /selectedC1Target/);
+  assert.match(review, /visibleTarget/);
+  assert.doesNotMatch(review, /targets\.map\(\(target\)/);
+  assert.match(rail, /runningAgentCount/);
+  assert.match(rail, /memoryCount/);
+  assert.match(rail, /edupi-activity-pulse/);
+  assert.match(css, /@keyframes edupiActivityPulse/);
+});

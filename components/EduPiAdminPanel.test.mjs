@@ -37,7 +37,7 @@ test("management center is reachable and reuses existing canonical surfaces", as
   assert.doesNotMatch(rail, /aria-label="教育设置"|aria-label="应用设置"/);
   assert.match(panel, /onOpenAdmin/);
   assert.match(panel, /打开管理中心/);
-  assert.match(panel, /<EduPiNavigationRail[^>]+onOpenAdmin=\{onOpenAdmin\}/);
+  assert.match(panel, /<EduPiNavigationRail[\s\S]+?onOpenAdmin=\{onOpenAdmin\}/);
   assert.match(appShell, /onOpenAdmin=\{\(\) => setEduPiAdminOpen\(true\)\}/);
   assert.match(appShell, /edupiAdminOpen && <EduPiAdminPanel/);
   assert.match(appShell, /onOpenModels=\{\(\) => setModelsConfigOpen\(true\)\}/);
