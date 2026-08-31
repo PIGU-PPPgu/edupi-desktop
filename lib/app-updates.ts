@@ -2,6 +2,7 @@ import type {
   AppComponentReleaseInfo,
   AppUpdateInfo,
   AppUpdateProjectId,
+  AppUpdatesResponse,
 } from "@/lib/app-update-types";
 import { APP_DISTRIBUTION_NAME, APP_VERSION } from "./branding";
 
@@ -32,9 +33,9 @@ type Fetcher = (input: string, init?: RequestInit) => Promise<Response>;
 
 export const APP_UPDATE_PROJECTS: readonly AppUpdateProject[] = [
   {
-    id: "pi-agent-desktop",
+    id: "edupi-desktop",
     name: APP_DISTRIBUTION_NAME,
-    repository: "abcwyc/pi-agent-desktop",
+    repository: "PIGU-PPPgu/edupi-releases",
     currentVersion: APP_VERSION,
   },
 ];
@@ -169,7 +170,7 @@ export async function getLatestAppRelease(
       headers: {
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": `pi-agent-desktop/${APP_VERSION}`,
+        "User-Agent": `edupi-desktop/${APP_VERSION}`,
       },
       signal: AbortSignal.timeout(options.timeoutMs ?? 15_000),
     },
@@ -177,6 +178,29 @@ export async function getLatestAppRelease(
   if (response.status === 404) return unpublishedRelease(project);
   if (!response.ok) throw new Error(`GitHub request failed with HTTP ${response.status}.`);
   return parseRelease(project, await response.json() as GitHubRelease);
+}
+
+export function getAvailableAppUpdates(
+  components: readonly AppComponentReleaseInfo[],
+): AppUpdateInfo[] {
+  return components.flatMap((release) => (
+    release.updateAvailable && release.latestVersion && release.releaseUrl
+      ? [{
+          project: release.project,
+          name: release.name,
+          currentVersion: release.currentVersion,
+          latestVersion: release.latestVersion,
+          releaseUrl: release.releaseUrl,
+        }]
+      : []
+  ));
+}
+
+export function hasAppUpdateCheckError(
+  response: Pick<AppUpdatesResponse, "errors">,
+  project: AppUpdateProjectId,
+): boolean {
+  return response.errors?.some((error) => error.project === project) ?? false;
 }
 
 export async function checkAppUpdate(

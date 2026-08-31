@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: pi-agent-desktop-release
+  group: edupi-desktop-release
   cancel-in-progress: false
 
 jobs:
@@ -36,20 +36,22 @@ jobs:
             apple_signing_identity: ""
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Check out pi-agent-desktop
-        uses: actions/checkout@v7
+      - name: Check out EduPi Desktop
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Require updater signing secrets
         shell: bash
         env:
           UPDATER_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+          RELEASE_TOKEN: ${{ secrets.EDUPI_RELEASE_TOKEN }}
         run: |
           test -n "$UPDATER_PRIVATE_KEY"
           test -n "$UPDATER_PUBLIC_KEY"
+          test -n "$RELEASE_TOKEN"
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: npm
@@ -60,7 +62,7 @@ jobs:
         run: node scripts/configure-updater-public-key.mjs
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
           targets: ${{ matrix.target }}
 
@@ -92,63 +94,48 @@ jobs:
         run: cargo test --release --manifest-path src-tauri/Cargo.toml --lib --target ${{ matrix.target }}
 
       - name: Build, sign, and upload updater artifacts
-        uses: tauri-apps/tauri-action@v1
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.EDUPI_RELEASE_TOKEN }}
           PI_AGENT_DESKTOP_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ matrix.apple_signing_identity }}
         with:
+          owner: PIGU-PPPgu
+          repo: edupi-releases
+          releaseCommitish: main
           tagName: v__VERSION__
-          releaseName: pi-agent-desktop v__VERSION__
+          releaseName: EduPi Desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.3.3
+            EduPi Desktop 的正式签名版本。
 
-            This release adds a user stylesheet so the UI can be customized without rebuilding the app.
+            - macOS Apple Silicon DMG
+            - Windows x64 安装程序
+            - Linux x64 Debian 包
+            - 应用内检查、下载、安装并重启更新
 
-            ### New features
-
-            - Added `custom.css` support: fonts, colors, and sizes can now be overridden by editing `~/.pi/agent/desktop/custom.css`. The stylesheet is loaded last so user rules win the cascade, and edits apply after reloading the window (Ctrl+R / Cmd+R).
-            - Settings → Appearance gains an "Open custom.css" button (desktop app) that creates a commented starter file on first use and reveals it in your editor. Web users can create the file at the same path manually.
-            - Kept the bundled Pi engine at 0.84.2 and pi-web at 0.8.7.
-            - Verified the full test suite, TypeScript checks, and lint before packaging.
-
-            Bundled components: pi 0.84.2, pi-web 0.8.7.
-
-            ---
-
-            ## Pi Agent Desktop 0.3.3
-
-            本次发布新增用户自定义样式表，无需重新构建应用即可定制界面。
-
-            ### 新功能
-
-            - 新增 `custom.css` 支持：编辑 `~/.pi/agent/desktop/custom.css` 即可自定义字体、颜色与尺寸。该样式表最后加载，用户规则优先级最高；保存后刷新窗口（Ctrl+R / Cmd+R）即可生效。
-            - 设置 → 外观新增“打开 custom.css”按钮（桌面端），首次使用会创建带注释的模板文件并在编辑器中打开。网页端用户可按相同路径手动创建该文件。
-            - 内置 Pi 引擎保持在 0.84.2，pi-web 保持在 0.8.7。
-            - 打包前已完成完整测试、TypeScript 检查和 lint 验证。
-
-            内置组件版本：pi 0.84.2、pi-web 0.8.7。
+            完整变更记录以本次 EduPi 源码版本为准。
           releaseDraft: true
           prerelease: false
-          uploadUpdaterJson: true
+          includeUpdaterJson: true
           args: ${{ matrix.args }}
 
   manifest:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Check out pi-agent-desktop
-        uses: actions/checkout@v7
+      - name: Check out EduPi Desktop
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Upload component manifest to the release
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.EDUPI_RELEASE_TOKEN }}
+          RELEASE_REPOSITORY: PIGU-PPPgu/edupi-releases
         run: |
           version="$(node -p "require('./src-tauri/pi-agent-desktop-package.json').version")"
-          gh release upload "v$version" src-tauri/resources/component-versions.json --clobber
-          gh release edit "v$version" --draft=false --latest
+          gh release upload "v$version" src-tauri/resources/component-versions.json --clobber --repo "$RELEASE_REPOSITORY"
+          gh release edit "v$version" --draft=false --latest --repo "$RELEASE_REPOSITORY"
 
   # A partially failed matrix leaves the release a draft and skips `manifest`,
   # which is correct — but it was also completely silent. Four consecutive

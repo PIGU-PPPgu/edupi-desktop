@@ -13,25 +13,25 @@
 - Switch Git worktrees from the sidebar and browse project files.
 - Preview source code, diffs, Markdown, images, audio, PDF, and DOCX files.
 - Dark mode, automatic session naming, a completion sound, and restored run state.
-- A weekly check of the latest stable `pi-agent-desktop` GitHub Release, with an in-app notice only when the installed app is older.
+- A weekly check of the latest stable EduPi Desktop release, with an in-app notice only when the installed app is older.
 - One upgrade button installs a complete, signed new build of Pi Agent and restarts automatically.
 
 ![Pi Agent light mode](./docs/screenshots/pi-agent-light@2x.png)
 
 ![Pi Agent dark mode](./docs/screenshots/pi-agent-dark@2x.png)
 
-**[⬇️ Download Pi Agent (macOS / Windows)](https://github.com/abcwyc/pi-agent-desktop/releases)**
+**[⬇️ Download EduPi Desktop (macOS / Windows / Linux)](https://github.com/PIGU-PPPgu/edupi-releases/releases)**
 
-Repository: [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop)
+Source repository: [PIGU-PPPgu/edupi-desktop](https://github.com/PIGU-PPPgu/edupi-desktop)
 
 ## Installation And Usage
 
 ### Install The Desktop App
 
-Builds are available from [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases):
+Builds are available from [EduPi Desktop releases](https://github.com/PIGU-PPPgu/edupi-releases/releases):
 
 - Apple Silicon Mac: download the `aarch64.dmg`, open it, and drag the app into `Applications`. Official releases do not build for Intel Macs.
-- Linux x64: download the `.deb` package and install it with your distribution's package manager. A community-maintained Flatpak is also available at [flatpark.org](https://flatpark.org/apps/io.github.abcwyc.pi-agent-desktop/) — not an official release, but Flatpak works across most distributions and handles updates for you.
+- Linux x64: download the `.deb` package and install it with your distribution's package manager.
 
 - Windows x64: download the installer whose name ends in `x64-setup.exe` and run it. The installer pulls in Microsoft WebView2 when it is missing.
 
@@ -61,15 +61,14 @@ Model keys and session data stay on your machine. The file-browsing API only all
 
 ## Update Checks And Upgrades
 
-Pi Agent checks the latest stable release of `abcwyc/pi-agent-desktop` at most once every seven days:
+EduPi checks the latest stable desktop release from `PIGU-PPPgu/edupi-releases` at most once every seven days. The bundled component manifest also records the reviewed versions of:
 
-- `abcwyc/pi-agent-desktop`
 - `earendil-works/pi`
 - `agegr/pi-web`
 
 The versioning and upgrade rules are:
 
-1. The latest stable `pi-agent-desktop` release is the only source used for update reminders.
+1. The latest stable release in `PIGU-PPPgu/edupi-releases` is the only source used for desktop update reminders and downloads.
 2. The upgrade button in Settings becomes enabled only when the installed desktop app version is older.
 3. When several components need updating, the release automation syncs and verifies them in the order `pi → pi-web → pi-agent-desktop`.
 4. Nothing patches an individual JavaScript package inside an installed app. The app downloads one complete signed build containing all three components at their latest versions.
@@ -77,7 +76,7 @@ The versioning and upgrade rules are:
 
 This keeps the components in a desktop install consistent, and avoids the runtime incompatibilities that come from swapping `pi` or `pi-web` on their own.
 
-If a new upstream version has been detected but the signed `pi-agent-desktop` release containing it is not published yet, Settings says that no signed complete build is installable for now. The app never falls back to downloading unsigned files or partially overwriting dependencies.
+If a new upstream version has been detected but the signed EduPi Desktop release containing it is not published yet, Settings says that no signed complete build is installable for now. The app never falls back to downloading unsigned files or partially overwriting dependencies.
 
 The full sync, signing, and release configuration is described in [Desktop updates and releases](./docs/desktop-updates.md).
 
@@ -167,16 +166,15 @@ Local builds do not register the production updater and cannot accept official u
 
 ## Upstream Sync And Releases
 
-The repository contains two chained automation workflows:
+The repository keeps desktop-shell review, component maintenance, and release automation separate:
 
-- [`component-updates.yml`](./.github/workflows/component-updates.yml): checks the stable releases of `pi` and `pi-web` daily. When a new version appears, it **first** intersects the incoming upstream changeset with the "upstream files this fork has modified" recorded in [`scripts/fork-ownership.json`](./scripts/fork-ownership.json), then merges the tag, updates dependencies and the component manifest, and runs the full gate (`npm test`, `tsc`, `lint`, a real standalone build).
-  - Empty intersection → commits to `main` and triggers a release.
-  - High or medium risk files hit → pushes a `sync/pi-web-<tag>` branch and opens a PR with the boundary report, and does **not** trigger a release. Merging that PR is what ships a version.
-- [`release.yml`](./.github/workflows/release.yml): after an explicit trigger from the component sync workflow, serially builds the Apple Silicon (`aarch64`) DMG, the Linux x64 `.deb`, and the Windows x64 NSIS `-setup.exe`. No Intel Mac build is produced. The release stays a draft until the updater signature files, `latest.json`, and the component manifest for all platforms are uploaded — the `manifest` job depends on the **entire** build matrix, so a failure on any platform keeps it from being published. Build failures create or update a `release-failure` issue.
+- [`desktop-upstream-sync.yml`](./.github/workflows/desktop-upstream-sync.yml): detects `abcwyc/pi-agent-desktop` changes daily under read-only permissions. A change is merged only into the managed `sync/upstream-desktop` branch, where public-upstream workflow definitions are excluded and the full tests, typecheck, lint, and EduPi release-destination sentinels must pass before the workflow creates or updates a `main` review PR. It never pushes `main`, signs an app, creates a release, or dispatches release automation.
+- [`component-updates.yml`](./.github/workflows/component-updates.yml): manually checks released `pi` and `pi-web` components, classifies changes against [`scripts/fork-ownership.json`](./scripts/fork-ownership.json), and applies its existing component boundary policy.
+- [`release.yml`](./.github/workflows/release.yml): a separate manual-only workflow that serially builds the Apple Silicon (`aarch64`) DMG, Linux x64 `.deb`, and Windows x64 NSIS `-setup.exe`. The release stays a draft until every platform and the component manifest succeed.
 
-Upstream sync uses a Git merge, so this fork's Pi Agent branding, settings entry points, and upgrade logic survive as local modifications. Merge conflicts stop the workflow, which is the safe failure mode. The genuinely dangerous case is a **conflict-free but semantically wrong** merge: upstream changed a region this fork also changed, Git merged it cleanly, and the tests still pass. The boundary intersection above exists for exactly that case; the rules are in [Ownership boundaries](./docs/ownership-boundaries.md).
+`abcwyc/pi-agent-desktop` remains the attributed desktop upstream, not an EduPi source or release destination. Merge conflicts stop before any branch is pushed. Conflict-free merges still require a human to review EduPi branding, teacher workflows, updater destinations, and fork-owned behavior. The complete contract is in [Desktop upstream synchronization](./docs/desktop-upstream-sync.md); the `pi-web` boundary rules remain in [Ownership boundaries](./docs/ownership-boundaries.md).
 
-A failed sync creates or updates a `component-sync-failure` issue, so nothing piles up silently.
+A failed desktop sync is visible as a failed workflow run and leaves `main` untouched. No credentials used for signing or publishing releases are available to that workflow.
 
 An official release additionally requires:
 
@@ -197,19 +195,22 @@ src-tauri/
   capabilities/         Tauri permission configuration
   resources/            Desktop resources and the component version manifest
   src/                  Desktop window, local server, and updater registration
-.github/workflows/      Daily component sync and desktop release automation
+.github/workflows/      Upstream review, component maintenance, and desktop release automation
 instrumentation.ts     Next.js server-side HTTP proxy initialization
 ```
 
 ## Related Documents
 
+- [EduPi teacher-agent master execution plan](./docs/plans/2026-08-27-edupi-teacher-agent-master-execution.md)
+- [EduPi C1/Task 2 review checkpoint](./docs/plans/2026-08-27-edupi-c1-review-checkpoint.md)
 - [Ownership boundaries](./docs/ownership-boundaries.md) — the split with `pi-web` upstream, the rules for editing shared files, and how the automated sync decides
+- [Desktop upstream synchronization](./docs/desktop-upstream-sync.md) — read-only detection, review-branch gates, idempotency, and release isolation
 - [Desktop updates and releases](./docs/desktop-updates.md)
 - [Git worktrees](./docs/worktrees.md)
 - [Pi session and project architecture](./AGENTS.md)
 
 ## Credits And License
 
-The desktop integration of Pi Agent is provided by `pi-agent-desktop`; the core capabilities and the web interface come from [earendil-works/pi](https://github.com/earendil-works/pi) and [agegr/pi-web](https://github.com/agegr/pi-web) respectively. Thanks to those projects and their contributors.
+EduPi Desktop is based on the MIT-licensed [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) desktop upstream. Its core capabilities and web interface come from [earendil-works/pi](https://github.com/earendil-works/pi) and [agegr/pi-web](https://github.com/agegr/pi-web) respectively. Thanks to those projects and their contributors.
 
 Code in the root of this repository is under the MIT License in [`LICENSE`](./LICENSE). The code and dependencies of the three component projects remain subject to the licenses of their own repositories; keep the corresponding copyright and license notices when copying, modifying, or redistributing.

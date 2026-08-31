@@ -1,0 +1,31 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createJiti } from "jiti";
+
+const { POST } = await createJiti(import.meta.url, { tsconfigPaths: true }).import("./route.ts");
+
+function request(body, headers = {}) {
+  return new Request("http://localhost/api/edupi/tasks", {
+    method: "POST",
+    headers: { host: "localhost", origin: "http://localhost", "content-type": "application/json", "sec-fetch-site": "same-origin", ...headers },
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  });
+}
+
+test("rejects cross-site, non-JSON, malformed and unknown task creation fields", async () => {
+  const crossSite = await POST(request({ title: "任务" }, { origin: "http://evil.test", "sec-fetch-site": "cross-site" }));
+  assert.equal(crossSite.status, 403);
+  const nonJson = await POST(request({ title: "任务" }, { "content-type": "text/plain" }));
+  assert.equal(nonJson.status, 415);
+  for (const body of ["{", {}, { title: "" }, { title: "任务", dueDate: "2026-02-31" }, { title: "任务", note: "x".repeat(1001) }, { title: "任务", admin: true }]) {
+    const response = await POST(request(body));
+    assert.equal(response.status, 400);
+  }
+});
+
+test("a valid task creation request reaches the Core boundary", async () => {
+  const response = await POST(request({ title: "准备第一次单元检测", dueDate: "2026-09-10", note: "先整理范围" }));
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.code, "unavailable");
+});

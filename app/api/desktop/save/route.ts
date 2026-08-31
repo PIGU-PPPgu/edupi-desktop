@@ -13,6 +13,10 @@ import {
 } from "@/lib/bounded-form-data";
 import { isDesktopApiRequestAllowed } from "@/lib/desktop-api-auth";
 import { MAX_DESKTOP_SAVE_BYTES } from "@/lib/desktop-api";
+import {
+  EDUPI_MANAGED_WRITE_ERROR,
+  isEduPiManagedPath,
+} from "@/lib/edupi-managed-path";
 
 export const runtime = "nodejs";
 
@@ -46,6 +50,31 @@ function assertWritableDest(destPath: string): string | null {
   return null;
 }
 
+function resolvedDestinationPath(destPath: string): string | null {
+  const resolver = isWindowsAbsolutePath(destPath) ? path.win32 : path;
+  try {
+    if (fs.existsSync(destPath)) return fs.realpathSync(destPath);
+    const parent = resolver.dirname(destPath);
+    if (!fs.existsSync(parent)) return null;
+    return resolver.join(fs.realpathSync(parent), resolver.basename(destPath));
+  } catch {
+    return null;
+  }
+}
+
+function isManagedDestination(destPath: string): boolean {
+  const configuredRoot = process.env.EDUPI_DATA_ROOT;
+  if (!configuredRoot) return false;
+  const resolved = resolvedDestinationPath(destPath);
+  const roots = [configuredRoot];
+  try {
+    roots.push(fs.realpathSync(configuredRoot));
+  } catch {
+    // A not-yet-created data root is still covered by the configured lexical path.
+  }
+  return roots.some((root) => isEduPiManagedPath(destPath, root, resolved ?? undefined));
+}
+
 export async function POST(request: NextRequest) {
   if (!isDesktopApiRequestAllowed(request)) {
     return NextResponse.json({ error: "Desktop authorization required" }, { status: 403 });
@@ -67,6 +96,9 @@ export async function POST(request: NextRequest) {
       const destPath = resolveAbsolutePath(body.destPath);
       if (!sourcePath || !destPath) {
         return NextResponse.json({ error: "Paths must be absolute" }, { status: 400 });
+      }
+      if (isManagedDestination(destPath)) {
+        return NextResponse.json({ error: EDUPI_MANAGED_WRITE_ERROR }, { status: 403 });
       }
 
       const allowedRoots = await getAllowedFileRoots();
@@ -101,6 +133,9 @@ export async function POST(request: NextRequest) {
     }
     if (!destPath) {
       return NextResponse.json({ error: "Destination must be an absolute path" }, { status: 400 });
+    }
+    if (isManagedDestination(destPath)) {
+      return NextResponse.json({ error: EDUPI_MANAGED_WRITE_ERROR }, { status: 403 });
     }
 
     const destError = assertWritableDest(destPath);

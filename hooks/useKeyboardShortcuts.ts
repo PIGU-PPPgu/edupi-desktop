@@ -25,6 +25,16 @@ interface UseGlobalKeyboardShortcutsOptions {
   onNewSession?: (cwd: string) => void;
   /** The currently selected project directory (sidebar cwd). */
   activeCwd?: string | null;
+  /** Open EduPi quick entry from anywhere in the app. */
+  onQuickEntry?: () => void;
+}
+
+export function isQuickEntryShortcut(event: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "isComposing">): boolean {
+  return !event.isComposing
+    && event.key.toLocaleLowerCase() === "k"
+    && (event.metaKey || event.ctrlKey)
+    && !event.altKey
+    && !event.shiftKey;
 }
 
 /**
@@ -43,10 +53,16 @@ interface UseGlobalKeyboardShortcutsOptions {
 export function useGlobalKeyboardShortcuts(
   options: UseGlobalKeyboardShortcutsOptions,
 ): void {
-  const { onNewSession, activeCwd } = options;
+  const { onNewSession, activeCwd, onQuickEntry } = options;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
+      if (e.defaultPrevented) return;
+      if (isQuickEntryShortcut(e) && onQuickEntry) {
+        e.preventDefault();
+        onQuickEntry();
+        return;
+      }
       // ---- Esc: stop agent ----
       if (e.key === "Escape") {
         if (!globalAbortHandler) return;
@@ -72,5 +88,5 @@ export function useGlobalKeyboardShortcuts(
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [activeCwd, onNewSession]);
+  }, [activeCwd, onNewSession, onQuickEntry]);
 }

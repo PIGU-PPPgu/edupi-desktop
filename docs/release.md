@@ -1,5 +1,7 @@
 # Release Checklist
 
+> Upstream pi-web reference only. EduPi Desktop is not published to npm; use `docs/desktop-updates.md` and the manual signed desktop release workflow instead.
+
 This repo publishes two artifacts for each release:
 
 - npm package: `@agegr/pi-web`

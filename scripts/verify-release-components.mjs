@@ -13,7 +13,10 @@ const local = await readLocalComponentVersions();
 const remote = await readRemoteComponentVersions();
 const pins = JSON.parse(await readFile(join(rootDir, "scripts", "release-component-pins.json"), "utf8"));
 const problems = [];
-if (compareVersions(local.pi, remote.pi.version) !== 0) {
+if (
+  compareVersions(local.pi, remote.pi.version) !== 0
+  && !isReleasePinValid(pins.pi, local.pi)
+) {
   problems.push(`pi is ${local.pi}; latest Release is ${remote.pi.version}`);
 }
 if (
@@ -44,5 +47,5 @@ if (problems.length > 0) {
   throw new Error(`Release verification failed:\n- ${problems.join("\n- ")}`);
 }
 console.log(
-  `Verified pi-agent-desktop ${local["pi-agent-desktop"]}, pi ${local.pi}, pi-web ${local["pi-web"]}${isReleasePinValid(pins["pi-web"], local["pi-web"]) ? " (pinned)" : ""}.`,
+  `Verified EduPi Desktop ${local["pi-agent-desktop"]}, pi ${local.pi}${isReleasePinValid(pins.pi, local.pi) ? " (pinned)" : ""}, pi-web ${local["pi-web"]}${isReleasePinValid(pins["pi-web"], local["pi-web"]) ? " (pinned)" : ""}.`,
 );

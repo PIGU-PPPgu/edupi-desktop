@@ -6,17 +6,28 @@ import "./globals.css";
 // Fork-local restyle layer — must come after globals.css so its
 // equal-specificity rules win the cascade. See app/native-theme.css.
 import "./native-theme.css";
+import "./edupi-workspace.css";
+import "./edupi-admin.css";
+import "./edupi-education.css";
+import "./edupi-help.css";
+import "./edupi-context.css";
+import "./edupi-welcome.css";
+import "./edupi-sidebar.css";
+import "./edupi-settings.css";
+import "./edupi-rhythm-review.css";
+import "./edupi-workbench.css";
 import { PRODUCT_NAME } from "@/lib/branding";
 
 const notoSansMono = Noto_Sans_Mono({
   subsets: ["latin", "cyrillic"],
   variable: "--font-noto-mono",
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
   title: PRODUCT_NAME,
-  description: `${PRODUCT_NAME} interface for the pi coding agent`,
+  description: `${PRODUCT_NAME} 教师教育工作台与本地 AI 协作界面`,
   applicationName: PRODUCT_NAME,
   manifest: "/manifest.webmanifest",
   icons: {
@@ -62,13 +73,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" translate="no" className={`${notoSansMono.variable} notranslate`} suppressHydrationWarning>
+    <html lang="zh-CN" translate="no" className={`${notoSansMono.variable} notranslate`} suppressHydrationWarning>
       <head>
         <meta name="google" content="notranslate" />
-        {/* Optional user stylesheet: <agentDir>/desktop/custom.css served by
-            /api/custom-css. Empty when the file is absent; no-store so edits
-            apply on reload. Loaded last so user rules win the cascade. */}
-        <link rel="stylesheet" href="/api/custom-css" />
         <script
           dangerouslySetInnerHTML={{
             // Pin color-scheme + .dark before first paint so a light preference
@@ -78,7 +85,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body translate="no" className="notranslate">
+      <body translate="no" className="notranslate" suppressHydrationWarning>
         {children}
         <PwaRegistration />
       </body>

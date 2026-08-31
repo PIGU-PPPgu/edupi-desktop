@@ -10,6 +10,14 @@ Typecheck: `node_modules/.bin/tsc --noEmit`
 Lint: `npm run lint`  
 **Never run `next build` during dev** — pollutes `.next/` and breaks `npm run dev`.
 
+## EduPi UI Content Contract
+
+- Operational surfaces use restrained, Notion-like hierarchy. First-run moments use Apple setup-style progressive reveal.
+- One screen gets one primary action. Do not add feature lists, principle lists, marketing blocks, footer slogans, or repeated explanations.
+- Do not explain what the interaction already shows. Keep default helper copy to one short line at most; move additional help behind an explicit user action.
+- Prefer motion, state transitions, direct labels, and real content over instructional prose.
+- Before shipping a user-facing view, delete every sentence that is not required to decide or complete the current action.
+
 ---
 
 ## Architecture
@@ -66,8 +74,7 @@ app/api/
   skills/route.ts                 GET/PATCH loaded skills and disable-model-invocation
   skills/install/route.ts         POST install skills through npx skills add
   skills/search/route.ts          GET/POST skills.sh search
-  worktrees/route.ts              GET list / POST create / PUT switch branch / DELETE git worktrees
-  worktrees/fetch/route.ts        POST git fetch --prune + fresh branch lists
+  worktrees/route.ts              GET/POST/DELETE git worktrees
   desktop/read-images/route.ts    POST read natively-picked images into attachment payloads
   desktop/save/route.ts           POST copy a file to, or write bytes at, a natively-picked path
 
@@ -178,9 +185,6 @@ Switching chats does **not** remount `ChatWindow` — `AppShell.handleSelectSess
 - New worktrees are created under `<repoRoot>-worktrees/<sanitized-branch>`. Existing branches are reused; otherwise `git worktree add -b` creates the branch.
 - Removing a dirty worktree returns `409` with `{ dirty: true }` so the UI can ask before retrying with `force`.
 - Sessions whose cwd points at a removed worktree are inferred back into the main project instead of becoming a phantom project row.
-- The switcher also switches the *current* checkout's branch in place: `PUT /api/worktrees { cwd, branch }` → `switchBranch()` (local branch, or `checkout -b --track` when the name exists on exactly one remote). Branch names are validated to not start with `-` — they are passed as git argv, never through a shell. `POST /api/worktrees/fetch` runs `git fetch --prune` (with `GIT_TERMINAL_PROMPT=0` so it fails fast instead of hanging on a credential prompt) and returns fresh local/remote-only branch lists.
-- The sidebar worktree state is event-driven by nature (agent end, cwd switch) — branches checked out *outside* pi would go stale. `SessionSidebar` therefore polls `/api/worktrees` every 10 s while the tab is visible, on window focus, and when the dropdown opens; the `checkedWorktreeCwdsRef` guard keeps those background refetches silent.
-- A branch already checked out in another worktree cannot be checked out again (git refuses); clicking it in the switcher jumps to that worktree instead.
 
 ### File access allow-list
 - `/api/files` is intentionally not a general filesystem browser. Allowed roots come from session cwds, their resolved project roots, `~/pi-cwd-*`, and roots explicitly added with `allowFileRoot()`.

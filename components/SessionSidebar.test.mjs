@@ -27,3 +27,18 @@ test("streams running sessions and reconnects after visibility or network change
   assert.match(source, /window\.addEventListener\("online", connect\)/);
   assert.match(source, /source\?\.close\(\)/);
 });
+
+test("groups sessions into collapsible time buckets", () => {
+  assert.match(source, /groupSessionTreeByAge/);
+  assert.match(source, /今天/);
+  assert.match(source, /近三天/);
+  assert.match(source, /近七天/);
+  assert.match(source, /更早/);
+  assert.match(source, /session-time-group__header/);
+});
+
+test("exposes EduPi education modules in the sidebar", () => {
+  assert.match(source, /edupi-sidebar-modules/);
+  assert.match(source, /材料/);
+  assert.match(source, /审核/);
+});

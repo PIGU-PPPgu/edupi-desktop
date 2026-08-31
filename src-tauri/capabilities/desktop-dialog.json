@@ -19,6 +19,11 @@
     "allow-quit-app",
     "allow-show-main-window-cmd",
     "allow-set-ui-theme",
-    "allow-get-desktop-api-token"
+    "allow-get-desktop-api-token",
+    "allow-computer-use-status",
+    "allow-computer-use-set-enabled",
+    "allow-computer-use-emergency-stop",
+    "allow-computer-use-request-permission",
+    "allow-computer-use-execute"
   ]
 }

@@ -1,25 +1,19 @@
 import { NextResponse } from "next/server";
 import { existsSync } from "fs";
-import {
-  addWorktree,
-  listLocalBranches,
-  listRemoteBranches,
-  listWorktrees,
-  partitionBranchList,
-  removeWorktree,
-  resolveProject,
-  switchBranch,
-} from "@/lib/worktree";
-import { allowFileRoot, isCwdAllowed } from "@/lib/file-access";
+import { addWorktree, listLocalBranches, listWorktrees, removeWorktree, resolveProject } from "@/lib/worktree";
+import { allowFileRoot, getAllowedFileRoots, isExistingFilePathAllowed, isFilePathAllowed } from "@/lib/file-access";
 
 /** Same gate as /api/files: only session cwds / project roots / explicitly
  *  allowed dirs may be inspected or mutated through this endpoint. */
 async function checkCwdAllowed(cwd: string): Promise<NextResponse | null> {
-  return (await isCwdAllowed(cwd)) ? null : NextResponse.json({ error: "Access denied" }, { status: 403 });
+  const allowedRoots = await getAllowedFileRoots();
+  if (!isFilePathAllowed(cwd, allowedRoots) || !isExistingFilePathAllowed(cwd, allowedRoots)) {
+    return NextResponse.json({ error: "Access denied" }, { status: 403 });
+  }
+  return null;
 }
 
 // GET /api/worktrees?cwd=  →  { projectRoot, isGit, isTopLevel, worktrees }
-//   &branches=1 additionally returns { branches (local), remoteBranches (remote-only) }
 export async function GET(req: Request) {
   try {
     const cwd = new URL(req.url).searchParams.get("cwd");
@@ -46,15 +40,11 @@ export async function GET(req: Request) {
 
     const includeBranches = new URL(req.url).searchParams.get("branches") === "1";
     let branches: string[] = [];
-    let remoteBranches: string[] = [];
     if (includeBranches && isGit) {
       try {
-        const base = existsSync(cwd) ? cwd : project.projectRoot;
-        const [local, remote] = await Promise.all([listLocalBranches(base), listRemoteBranches(base)]);
-        ({ local: branches, remoteOnly: remoteBranches } = partitionBranchList(local, remote));
+        branches = await listLocalBranches(existsSync(cwd) ? cwd : project.projectRoot);
       } catch {
         branches = [];
-        remoteBranches = [];
       }
     }
 
@@ -63,7 +53,7 @@ export async function GET(req: Request) {
       isGit,
       isTopLevel: project.isTopLevel,
       worktrees,
-      ...(includeBranches ? { branches, remoteBranches } : {}),
+      ...(includeBranches ? { branches } : {}),
     });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
@@ -87,32 +77,6 @@ export async function POST(req: Request) {
     }
 
     const result = await addWorktree(body.cwd, body.branch);
-    return NextResponse.json(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
-}
-
-// PUT /api/worktrees  body: { cwd, branch }  →  { branch }
-// Checks out the branch in the cwd's own checkout (local branch, or a new
-// tracking branch when the name only exists on one remote).
-export async function PUT(req: Request) {
-  try {
-    const body = await req.json() as { cwd?: string; branch?: string };
-    if (!body.cwd || typeof body.cwd !== "string") {
-      return NextResponse.json({ error: "cwd is required" }, { status: 400 });
-    }
-    if (!body.branch || typeof body.branch !== "string") {
-      return NextResponse.json({ error: "branch is required" }, { status: 400 });
-    }
-    const denied = await checkCwdAllowed(body.cwd);
-    if (denied) return denied;
-    if (!existsSync(body.cwd)) {
-      return NextResponse.json({ error: `Directory does not exist: ${body.cwd}` }, { status: 400 });
-    }
-
-    const result = await switchBranch(body.cwd, body.branch);
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

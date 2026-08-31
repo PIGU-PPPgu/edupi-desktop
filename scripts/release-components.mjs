@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 export const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 
 export const componentRepositories = {
-  "pi-agent-desktop": "abcwyc/pi-agent-desktop",
+  "pi-agent-desktop": "PIGU-PPPgu/edupi-releases",
   pi: "earendil-works/pi",
   "pi-web": "agegr/pi-web",
 };
@@ -95,7 +95,7 @@ export async function fetchLatestRelease(repository, options = {}) {
   const headers = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "pi-agent-desktop-release-automation",
+    "User-Agent": "edupi-desktop-release-automation",
   };
   if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   const response = await (options.fetcher ?? fetch)(

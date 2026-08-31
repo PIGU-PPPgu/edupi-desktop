@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { createAgentSessionFromServices, createAgentSessionServices, getAgentDir, initTheme, SessionManager, Theme } from "@earendil-works/pi-coding-agent";
+import { createAgentSessionFromServices, createAgentSessionServices, createBashToolDefinition, defineTool, getAgentDir, initTheme, SessionManager, Theme } from "@earendil-works/pi-coding-agent";
 import { KeybindingsManager as TuiKeybindingsManager, TUI_KEYBINDINGS } from "@earendil-works/pi-tui";
 import { randomUUID } from "crypto";
 import { existsSync, realpathSync, writeFileSync } from "fs";
@@ -16,6 +16,13 @@ import { PRODUCT_NAME } from "./branding";
 import type { AgentSessionLike, ExtensionUiContextLike, ToolInfo } from "./pi-types";
 import type { ExtensionUiRequest, ExtensionUiResponse, ExtensionWidgetItem } from "./types";
 import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS } from "./custom-ui-terminal";
+import { EDUPI_ROOT, extensionPaths } from "./edupi-runtime";
+import { createEduPiAppControlTool } from "./edupi-desktop-tool";
+import type { DesktopControlInput } from "./edupi-desktop-control";
+import { createEduPiComputerUseTool } from "./edupi-computer-tool";
+import { parseComputerUseBridgeResult, type ComputerUseBridgeResult, type ComputerUseInput } from "./edupi-computer-use";
+import { createDesktopSafeBashOperations, redactDesktopSpawnContext } from "./desktop-shell-security";
+import { createEduPiTeacherContextAppendSystemPromptOverride } from "./edupi-teacher-context-prompt";
 
 // ============================================================================
 // Types
@@ -112,9 +119,7 @@ const CODING_TOOL_NAMES = ["read", "bash", "edit", "write", "grep", "find", "ls"
 class PlainTextTheme extends Theme {
   constructor() {
     super(
-      // Pi 0.84 derives searchMatchText from text during construction, even
-      // though this headless theme overrides every color operation.
-      { thinkingXhigh: "", text: "" } as ConstructorParameters<typeof Theme>[0],
+      { thinkingXhigh: "" } as ConstructorParameters<typeof Theme>[0],
       // Pi 0.84 derives scrollbarThumb from selectedBg during construction,
       // even though this headless theme overrides every color operation.
       { selectedBg: "" } as ConstructorParameters<typeof Theme>[1],
@@ -415,6 +420,31 @@ export class AgentSessionWrapper {
     this.onDestroyCallback = cb;
   }
 
+  requestEduPiAppAction(action: DesktopControlInput, signal?: AbortSignal): Promise<boolean> {
+    return this.requestExtensionUi(
+      { method: "edupi_action", action },
+      false,
+      (response) => "confirmed" in response ? response.confirmed : false,
+      15_000,
+      signal,
+    );
+  }
+
+  requestEduPiComputerAction(action: ComputerUseInput, signal?: AbortSignal): Promise<ComputerUseBridgeResult> {
+    return this.requestExtensionUi(
+      { method: "edupi_computer_action", action },
+      { ok: false, error: "EduPi 桌面窗口未连接" } as ComputerUseBridgeResult,
+      (response) => "value" in response ? parseComputerUseBridgeResult(response.value) : { ok: false, error: "桌面控制未返回结果" },
+      45_000,
+      signal,
+    );
+  }
+
+  ensureSessionPersisted(): void {
+    this.persistBashOnlySession();
+    invalidateSessionListCache();
+  }
+
   async send(command: Record<string, unknown>): Promise<unknown> {
     this.resetIdleTimer();
     const type = command.type as string;
@@ -704,7 +734,10 @@ export class AgentSessionWrapper {
         const execution = this.inner.executeBash(
           command.command as string,
           undefined,
-          { excludeFromContext: command.excludeFromContext as boolean | undefined },
+          {
+            excludeFromContext: command.excludeFromContext as boolean | undefined,
+            operations: createDesktopSafeBashOperations(this.inner.settingsManager.getShellPath()),
+          },
         );
         notifyRunningChange();
         try {
@@ -1287,6 +1320,8 @@ export async function startRpcSession(
   const sessionCwd = sessionManager.getCwd();
   const finishStartingSession = trackStartingSession(sessionCwd);
   const starting = (async () => {
+    let requestEduPiAppAction: (action: DesktopControlInput, signal?: AbortSignal) => Promise<boolean> = async () => false;
+    let requestEduPiComputerAction: (action: ComputerUseInput, signal?: AbortSignal) => Promise<ComputerUseBridgeResult> = async () => ({ ok: false, error: "EduPi 桌面窗口未连接" });
     // Some extensions access the SDK's global theme even outside the terminal UI.
     initTheme();
     const agentDir = getAgentDir();
@@ -1310,9 +1345,21 @@ export async function startRpcSession(
     // Gate untrusted project extensions so opening a repository does not run
     // its .pi/extensions code automatically (see lib/project-trust.ts, #236).
     const trustReloadOptions = projectTrustReloadOptions(sessionCwd, agentDir);
+    let teacherContextAppendSystemPromptOverride;
+    try {
+      teacherContextAppendSystemPromptOverride = await createEduPiTeacherContextAppendSystemPromptOverride(sessionCwd);
+    } catch {
+      console.warn("EduPi teacher context is unavailable for this session");
+    }
     const services = await createAgentSessionServices({
       cwd: sessionCwd,
       agentDir,
+      resourceLoaderOptions: {
+        additionalExtensionPaths: extensionPaths,
+        ...(teacherContextAppendSystemPromptOverride
+          ? { appendSystemPromptOverride: teacherContextAppendSystemPromptOverride }
+          : {}),
+      },
       ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
     });
     const scope = await resolveVisibleModels(
@@ -1338,6 +1385,16 @@ export async function startRpcSession(
       ...(initial.thinkingLevel ? { thinkingLevel: initial.thinkingLevel } : {}),
       ...(initial.scopedModels.length > 0 ? { scopedModels: initial.scopedModels } : {}),
       ...(toolsOption !== undefined ? { tools: toolsOption } : {}),
+      customTools: [
+        defineTool(createBashToolDefinition(sessionCwd, { shellPath: services.settingsManager.getShellPath(), spawnHook: redactDesktopSpawnContext })),
+        ...(resolve(sessionCwd) === EDUPI_ROOT ? [createEduPiAppControlTool({
+          projectRoot: EDUPI_ROOT,
+          requestAction: (action, signal) => requestEduPiAppAction(action, signal),
+        }), createEduPiComputerUseTool({
+          projectRoot: EDUPI_ROOT,
+          requestAction: (action, signal) => requestEduPiComputerAction(action, signal),
+        })] : []),
+      ],
     });
 
     const persistedPreferences = await persistExplicitStartupPreferences(
@@ -1364,6 +1421,8 @@ export async function startRpcSession(
     }
 
     const wrapper = new AgentSessionWrapper(inner);
+    requestEduPiAppAction = (action, signal) => wrapper.requestEduPiAppAction(action, signal);
+    requestEduPiComputerAction = (action, signal) => wrapper.requestEduPiComputerAction(action, signal);
     // When all tools are disabled, clear the system prompt entirely.
     // pi's buildSystemPrompt always produces a non-empty prompt even with no tools;
     // keep this forced after extension resource discovery and reloads as well.

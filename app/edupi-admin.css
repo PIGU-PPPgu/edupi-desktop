@@ -1,0 +1,35 @@
+.edupi-admin-panel { position: absolute; z-index: 360; inset: 0; display: grid; min-width: 0; min-height: 0; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; background: var(--bg); color: var(--text); }
+.edupi-admin-panel__topbar { display: flex; min-height: 76px; align-items: center; justify-content: space-between; gap: 20px; padding: 14px clamp(18px, 4vw, 52px); border-bottom: 1px solid var(--border); background: var(--bg-panel); }
+.edupi-admin-panel__topbar > div:first-child { display: grid; gap: 2px; }
+.edupi-admin-panel__topbar > div:first-child > span { color: var(--text-muted); font-size: 10px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+.edupi-admin-panel__topbar h1 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -.025em; }
+.edupi-admin-panel__topbar p { margin: 0; color: var(--text-muted); font-size: 11px; }
+.edupi-admin-panel__topbar > div:last-child { display: flex; gap: 7px; }
+.edupi-admin-panel button { min-height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); color: var(--text); cursor: pointer; font: inherit; font-size: 11px; }
+.edupi-admin-panel button:hover { background: var(--bg-hover); }
+.edupi-admin-panel button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.edupi-admin-panel__content { width: min(1180px, 100%); margin: 0 auto; overflow-y: auto; padding: 24px clamp(18px, 4vw, 52px) 42px; }
+.edupi-admin-readiness { overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); }
+.edupi-admin-readiness > header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 18px 13px; }
+.edupi-admin-readiness > header div { display: grid; gap: 2px; }
+.edupi-admin-readiness > header span { color: var(--text-muted); font-size: 10px; }
+.edupi-admin-readiness h2 { margin: 0; font-size: 15px; font-weight: 650; }
+.edupi-admin-readiness > header > strong { color: var(--text-muted); font-size: 11px; }
+.edupi-admin-readiness__bar { height: 3px; background: var(--border); }
+.edupi-admin-readiness__bar > span { display: block; height: 100%; background: var(--accent); transition: width 180ms ease; }
+.edupi-admin-readiness__items { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); border-top: 1px solid var(--border); }
+.edupi-admin-readiness__items button { display: grid; min-height: 46px; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 7px; border: 0; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); border-radius: 0; text-align: left; }
+.edupi-admin-readiness__items i { display: grid; width: 18px; height: 18px; place-items: center; border: 1px solid var(--border); border-radius: 50%; color: var(--text-muted); font-size: 10px; font-style: normal; }
+.edupi-admin-readiness__items i.is-complete { border-color: color-mix(in srgb, #18805a 45%, var(--border)); background: color-mix(in srgb, #18805a 10%, transparent); color: #18805a; }
+.edupi-admin-readiness__items span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edupi-admin-readiness__items em { color: var(--text-muted); font-size: 10px; font-style: normal; }
+.edupi-admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.edupi-admin-grid article { display: grid; min-height: 164px; align-content: start; gap: 8px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); }
+.edupi-admin-grid article > span { color: var(--text-muted); font-size: 10px; font-weight: 650; }
+.edupi-admin-grid h2 { margin: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 650; }
+.edupi-admin-grid p { min-height: 34px; margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.55; }
+.edupi-admin-grid article > button,
+.edupi-admin-grid article > div { align-self: end; justify-self: start; }
+.edupi-admin-grid article > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.edupi-admin-boundary { margin: 16px 2px 0; color: var(--text-muted); font-size: 10px; line-height: 1.6; }
+@media (max-width: 760px) { .edupi-admin-panel__topbar { align-items: flex-start; padding: 12px 14px; } .edupi-admin-panel__topbar p { display: none; } .edupi-admin-panel__content { padding: 14px 12px 32px; } .edupi-admin-grid { grid-template-columns: 1fr; } .edupi-admin-readiness__items { grid-template-columns: 1fr; } }

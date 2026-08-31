@@ -31,16 +31,16 @@ test("the boundary is classified before the merge, not after", () => {
   assert.ok(classifyAt < mergeAt, "classification must run before the merge");
 });
 
-test("a manually requested direct sync is gated on the fork boundary", () => {
-  // A clean merge into a fork-modified file can be a silent semantic conflict,
-  // so only a no-overlap sync may reach a signed release without review.
-  assert.match(
-    componentUpdates,
-    /steps\.boundary\.outputs\.review_required != 'true'[\s\S]{0,400}git push origin HEAD:main/,
-  );
+test("every component sync opens a review PR and never pushes main", () => {
   const reviewStep = componentUpdates.slice(componentUpdates.indexOf("Open a review PR"));
-  assert.match(reviewStep, /steps\.boundary\.outputs\.review_required == 'true'/);
+  assert.match(
+    reviewStep,
+    /steps\.releases\.outputs\.needs_update == 'true' && steps\.pending\.outputs\.awaiting_review != 'true'/,
+  );
+  assert.match(reviewStep, /git push --force-with-lease origin "HEAD:refs\/heads\/\$branch"/);
+  assert.match(reviewStep, /branch="sync\/components-\$PI_VERSION-\$PI_WEB_TAG"/);
   assert.match(reviewStep, /gh pr create/);
+  assert.doesNotMatch(componentUpdates, /git push origin HEAD:main/);
   assert.doesNotMatch(componentUpdates, /gh workflow run release\.yml/);
 });
 
@@ -48,6 +48,22 @@ test("the signed release workflow is manual-only", async () => {
   const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
   assert.match(release, /on:\s*\n\s*workflow_dispatch:/);
   assert.doesNotMatch(release, /\bpush:/);
+});
+
+test("signed releases and updater metadata belong to the EduPi binary repository", async () => {
+  const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+  const tauriConfig = JSON.parse(await readFile(join(root, "src-tauri", "tauri.conf.json"), "utf8"));
+
+  assert.match(release, /EDUPI_RELEASE_TOKEN/);
+  assert.match(release, /owner:\s*PIGU-PPPgu/);
+  assert.match(release, /repo:\s*edupi-releases/);
+  assert.match(release, /releaseCommitish:\s*main/);
+  assert.match(release, /--repo "\$RELEASE_REPOSITORY"/);
+  assert.doesNotMatch(release, /abcwyc\/pi-agent-desktop/);
+  assert.deepEqual(tauriConfig.plugins.updater.endpoints, [
+    "https://github.com/PIGU-PPPgu/edupi-releases/releases/latest/download/latest.json",
+  ]);
+  assert.equal(tauriConfig.identifier, "com.abcwyc.pi-agent");
 });
 
 test("the merge gate covers tests, types, lint and a real build", () => {
@@ -91,10 +107,19 @@ test("a sync already awaiting review is skipped, not retried nightly", () => {
   // needs_update stays true while a review PR is open, so without this guard
   // the job would rebuild and collide with its own branch every night — and
   // file a failure issue each time.
-  assert.match(componentUpdates, /gh pr list[\s\S]{0,160}--head "sync\/pi-web-\$PI_WEB_TAG"/);
+  const pending = componentUpdates.slice(
+    componentUpdates.indexOf("Skip if this sync is already awaiting review"),
+    componentUpdates.indexOf("Classify the upstream changeset"),
+  );
+  assert.match(pending, /if: steps\.releases\.outputs\.needs_update == 'true'/);
+  assert.match(pending, /PI_VERSION: \$\{\{ steps\.releases\.outputs\.pi_version \}\}/);
+  assert.match(pending, /PI_WEB_TAG: \$\{\{ steps\.releases\.outputs\.pi_web_tag \}\}/);
+  assert.match(pending, /branch="sync\/components-\$PI_VERSION-\$PI_WEB_TAG"/);
+  assert.match(pending, /gh pr list[\s\S]{0,160}--head "\$branch"/);
   assert.match(componentUpdates, /awaiting_review=true/);
 
   const gated = componentUpdates
+    .slice(componentUpdates.indexOf("Classify the upstream changeset"))
     .split("\n")
     .filter((line) => line.trimStart().startsWith("if: steps.releases.outputs.needs_update"));
   assert.ok(gated.length >= 3, "expected the sync/verify/publish steps to be gated");
@@ -180,7 +205,8 @@ test("release workflow publishes Apple Silicon, Linux x64, and Windows x64 insta
   assert.match(workflow, /--bundles nsis/);
   assert.doesNotMatch(workflow, /x86_64-apple-darwin/);
   assert.doesNotMatch(workflow, /macos-15-intel/);
-  assert.match(workflow, /uploadUpdaterJson: true/);
+  assert.match(workflow, /includeUpdaterJson: true/);
+  assert.doesNotMatch(workflow, /uploadUpdaterJson:/);
   assert.match(workflow, /gh release edit "v\$version" --draft=false --latest/);
 });
 
@@ -206,6 +232,20 @@ test("nothing reintroduces a literal homedir() into an fs call", async () => {
     );
     assert.match(code, /userHome\s*\(/, `${file} should resolve the home directory via userHome()`);
   }
+});
+
+test("every Next.js build keeps output tracing inside the repository", async () => {
+  const config = await readFile(join(root, "next.config.ts"), "utf8");
+  const beforeDesktopBranch = config.slice(0, config.indexOf("...(isDesktopBuild"));
+  assert.match(beforeDesktopBranch, /outputFileTracingRoot: __dirname/);
+});
+
+test("the packaged server reads EduPi roots at runtime instead of baking build-machine paths", async () => {
+  const config = await readFile(join(root, "next.config.ts"), "utf8");
+  assert.doesNotMatch(config, /env:\s*\{[\s\S]*EDUPI_PROJECT_ROOT/);
+  const launcher = await readFile(join(root, "desktop", "server-launcher.cjs"), "utf8");
+  assert.match(launcher, /resolveEduPiLaunchRoots\(environment = process\.env\)/);
+  assert.match(launcher, /EDUPI_PROJECT_ROOT/);
 });
 
 test("the Windows debug workflow cannot release or sign anything", async () => {

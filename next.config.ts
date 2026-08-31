@@ -3,25 +3,29 @@ import type { NextConfig } from "next";
 const isDesktopBuild = process.env.PI_WEB_DESKTOP_BUILD === "1";
 
 const nextConfig: NextConfig = {
-  // Desktop packaging gets an isolated standalone build. Keeping it outside
-  // `.next` prevents a Tauri release build from disrupting `npm run dev`.
-  // outputFileTracingRoot pins standalone file tracing to this package;
-  // otherwise Windows builds can scan protected profile dirs (EPERM on
-  // "C:\Users\<user>\Application Data") and fail.
+  agentRules: false,
+  outputFileTracingRoot: __dirname,
   ...(isDesktopBuild
-    ? { output: "standalone" as const, distDir: ".next-desktop", outputFileTracingRoot: __dirname }
+    ? { output: "standalone" as const, distDir: ".next-desktop" }
     : {}),
   serverExternalPackages: [
-    "undici",
     "@earendil-works/pi-coding-agent",
     "@earendil-works/pi-agent-core",
     "@earendil-works/pi-ai",
     "@earendil-works/pi-tui",
+    "mammoth",
   ],
   experimental: {
     optimizePackageImports: ["@lobehub/icons", "react-syntax-highlighter"],
   },
-  allowedDevOrigins: ['192.168.*.*'],
+  allowedDevOrigins: ["192.168.*.*"],
+  devIndicators: false,
+  webpack(config, { isServer }) {
+    if (isServer) {
+      config.externals = [...(config.externals ?? []), "undici"];
+    }
+    return config;
+  },
   async headers() {
     return [
       {

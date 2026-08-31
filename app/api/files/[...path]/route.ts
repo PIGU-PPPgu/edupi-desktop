@@ -32,6 +32,10 @@ import {
   RequestBodyTooLargeError,
 } from "@/lib/bounded-form-data";
 import { isDesktopApiRequestAllowed } from "@/lib/desktop-api-auth";
+import {
+  EDUPI_MANAGED_WRITE_ERROR,
+  isEduPiManagedPath,
+} from "@/lib/edupi-managed-path";
 
 const IGNORED_NAMES = new Set([
   "node_modules", ".git", ".next", "dist", "build", "__pycache__",
@@ -129,6 +133,17 @@ function parseUploadFileNames(value: unknown): string[] | null {
   return value;
 }
 
+function isManagedUploadDirectory(directory: string): boolean {
+  const configuredRoot = process.env.EDUPI_DATA_ROOT;
+  if (!configuredRoot) return false;
+  if (isEduPiManagedPath(directory, configuredRoot)) return true;
+  try {
+    return isEduPiManagedPath(directory, fs.realpathSync(configuredRoot));
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
@@ -142,7 +157,18 @@ export async function POST(
     const uploadDirectory = await getUploadDirectory(segments);
     if ("response" in uploadDirectory) return uploadDirectory.response;
     const { directory } = uploadDirectory;
+    if (isManagedUploadDirectory(directory)) {
+      return NextResponse.json({ error: EDUPI_MANAGED_WRITE_ERROR }, { status: 403 });
+    }
     const type = request.nextUrl.searchParams.get("type") ?? "upload";
+
+    if (type === "upload") {
+      try {
+        fs.mkdirSync(directory, { recursive: true });
+      } catch {
+        return NextResponse.json({ error: "Unable to initialize upload directory" }, { status: 500 });
+      }
+    }
 
     if (type === "upload-check") {
       const body = await request.json().catch(() => null) as { fileNames?: unknown } | null;
@@ -733,13 +759,7 @@ export async function GET(
             scheduleChange();
           };
           try {
-            // Non-recursive on purpose: on Linux, recursive fs.watch walks the
-            // whole tree synchronously and stalls the event loop for seconds on
-            // large directories (breaks unrelated requests, e.g. the desktop
-            // health probe). The list endpoint renders a single level and file
-            // content changes are covered by the per-file `watch` above, so
-            // top-level entry events are enough; navigation re-lists as needed.
-            watcher = fs.watch(filePath, handleEvent);
+            watcher = fs.watch(filePath, { recursive: true }, handleEvent);
           } catch {
             // Recursive watching may be unavailable on some platforms; fall
             // back to watching only the top-level directory.

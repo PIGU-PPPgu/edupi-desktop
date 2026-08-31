@@ -713,6 +713,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     selectedPath,
     selectedIsDir,
   });
+  const uploadTargetDirectory = defaultUploadDirectory;
   const activeDropDirectory = dropTargetPath ?? defaultUploadDirectory;
 
   const gitStatusByPath = useMemo(() => new Map(
@@ -932,8 +933,8 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   const handleUploadInput = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    void prepareUpload(files, defaultUploadDirectory);
-  }, [defaultUploadDirectory, prepareUpload]);
+    void prepareUpload(files, uploadTargetDirectory);
+  }, [prepareUpload, uploadTargetDirectory]);
 
   const handleDownloadFile = useCallback(async (filePath: string) => {
     try {
@@ -956,7 +957,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   useImperativeHandle(ref, () => ({
     openUploadPicker() {
       if (uploadBusy) return;
-      const targetDirectory = defaultUploadDirectory;
+      const targetDirectory = uploadTargetDirectory;
       if (!isTauriDesktop()) {
         uploadInputRef.current?.click();
         return;
@@ -974,7 +975,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         }
       })();
     },
-  }), [defaultUploadDirectory, prepareImport, uploadBusy]);
+  }), [prepareImport, uploadTargetDirectory, uploadBusy]);
 
   useEffect(() => {
     onUploadBusyChange?.(uploadBusy);

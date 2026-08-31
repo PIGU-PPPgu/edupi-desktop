@@ -15,14 +15,14 @@ use std::os::unix::process::CommandExt as _;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt as _;
 
-#[cfg(not(target_os = "linux"))]
-use tauri::menu::{Menu, MenuItem};
-#[cfg(not(target_os = "linux"))]
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     webview::{Color, NewWindowResponse},
-    AppHandle, Manager, RunEvent, Theme, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    AppHandle, Emitter, Manager, RunEvent, Theme, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
+
+mod computer_use;
 
 const WINDOW_LABEL: &str = "main";
 const DESKTOP_API_TOKEN_ENV: &str = "PI_DESKTOP_API_TOKEN";
@@ -88,154 +88,6 @@ fn quit_application(app: &AppHandle) {
     app.exit(0);
 }
 
-#[cfg(target_os = "linux")]
-const LINUX_TRAY_SHOW_LABEL: &str = "Show Pi Agent";
-#[cfg(target_os = "linux")]
-const LINUX_TRAY_QUIT_LABEL: &str = "Quit Pi Agent";
-
-#[cfg(target_os = "linux")]
-struct LinuxTray {
-    app: AppHandle,
-    icon: ksni::Icon,
-}
-
-#[cfg(target_os = "linux")]
-impl ksni::Tray for LinuxTray {
-    fn id(&self) -> String {
-        "pi-agent-desktop".into()
-    }
-
-    fn title(&self) -> String {
-        "Pi Agent".into()
-    }
-
-    fn icon_name(&self) -> String {
-        "pi-agent-desktop".into()
-    }
-
-    fn icon_pixmap(&self) -> Vec<ksni::Icon> {
-        vec![self.icon.clone()]
-    }
-
-    fn tool_tip(&self) -> ksni::ToolTip {
-        ksni::ToolTip {
-            title: "Pi Agent".into(),
-            ..Default::default()
-        }
-    }
-
-    fn activate(&mut self, _x: i32, _y: i32) {
-        show_main_window_on_main_thread(&self.app);
-    }
-
-    fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
-        let show_app = self.app.clone();
-        let quit_app = self.app.clone();
-
-        vec![
-            visible_linux_tray_item(LINUX_TRAY_SHOW_LABEL, move |_| {
-                show_main_window_on_main_thread(&show_app)
-            }),
-            visible_linux_tray_item(LINUX_TRAY_QUIT_LABEL, move |_| {
-                quit_application_on_main_thread(&quit_app)
-            }),
-        ]
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn visible_linux_tray_item<T: 'static>(
-    label: &str,
-    activate: impl Fn(&mut T) + 'static,
-) -> ksni::MenuItem<T> {
-    ksni::menu::StandardItem {
-        label: label.into(),
-        enabled: true,
-        visible: true,
-        activate: Box::new(activate),
-        ..Default::default()
-    }
-    .into()
-}
-
-#[cfg(target_os = "linux")]
-fn show_main_window_on_main_thread(app: &AppHandle) {
-    let app_handle = app.clone();
-    let _ = app.run_on_main_thread(move || show_main_window(&app_handle));
-}
-
-#[cfg(target_os = "linux")]
-fn quit_application_on_main_thread(app: &AppHandle) {
-    let app_handle = app.clone();
-    let _ = app.run_on_main_thread(move || quit_application(&app_handle));
-}
-
-#[cfg(target_os = "linux")]
-fn linux_tray_icon(icon: &tauri::image::Image<'_>) -> ksni::Icon {
-    let mut data = Vec::with_capacity(icon.rgba().len());
-    for rgba in icon.rgba().chunks_exact(4) {
-        data.extend_from_slice(&[rgba[3], rgba[0], rgba[1], rgba[2]]);
-    }
-
-    ksni::Icon {
-        width: icon.width() as i32,
-        height: icon.height() as i32,
-        data,
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn build_linux_tray(app: &tauri::App) -> Result<(), std::io::Error> {
-    let icon = app
-        .default_window_icon()
-        .ok_or_else(|| std::io::Error::other("missing default window icon"))?;
-    let service = ksni::TrayService::new(LinuxTray {
-        app: app.handle().clone(),
-        icon: linux_tray_icon(icon),
-    });
-
-    std::thread::spawn(move || {
-        if let Err(error) = service.run() {
-            eprintln!("Pi Agent Linux tray stopped: {error}");
-        }
-    });
-    Ok(())
-}
-
-#[cfg(not(target_os = "linux"))]
-fn build_platform_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let show_item = MenuItem::with_id(app, "show", "Show Pi Agent", true, None::<&str>)?;
-    let quit_item = MenuItem::with_id(app, "quit", "Quit Pi Agent", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
-    let icon = app
-        .default_window_icon()
-        .cloned()
-        .ok_or_else(|| std::io::Error::other("missing default window icon"))?;
-
-    let _tray = TrayIconBuilder::new()
-        .icon(icon)
-        .menu(&menu)
-        .tooltip("Pi Agent")
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "show" => show_main_window(app),
-            "quit" => quit_application(app),
-            _ => {}
-        })
-        .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
-            } = event
-            {
-                show_main_window(tray.app_handle());
-            }
-        })
-        .build(app)?;
-
-    Ok(())
-}
-
 impl DesktopServer {
     #[cfg(not(feature = "custom-protocol"))]
     fn empty() -> Self {
@@ -254,47 +106,37 @@ impl DesktopServer {
         let Ok(mut guard) = self.child.lock() else {
             return;
         };
-        let Some(child) = guard.take() else {
+        let Some(mut child) = guard.take() else {
             return;
         };
 
-        terminate_process_tree(child);
+        terminate_process_tree(&mut child);
     }
 }
 
-fn terminate_process_tree(mut child: Child) {
+fn terminate_process_tree(child: &mut Child) {
     #[cfg(unix)]
     {
-        let pid = child.id();
         unsafe {
             // The Node server owns its process group, so this also stops any
             // agent/tool subprocesses that are active when the App quits.
-            libc::kill(-(pid as i32), libc::SIGTERM);
+            libc::kill(-(child.id() as i32), libc::SIGTERM);
         }
 
-        // Reap on a detached thread so the quit/exit path never blocks on the
-        // Node server's shutdown. The packaged server installs no SIGTERM
-        // handler, so it normally dies immediately, but any child that ignores
-        // SIGTERM must not stall the UI for the full grace window. If the main
-        // process exits before this thread finishes, the server's own parent
-        // watchdog (desktop/server-launcher.cjs) exits it within ~1 s, so no
-        // orphan is left behind either way.
-        thread::spawn(move || {
-            let deadline = Instant::now() + Duration::from_secs(2);
-            while Instant::now() < deadline {
-                match child.try_wait() {
-                    Ok(Some(_)) => return,
-                    Ok(None) => thread::sleep(Duration::from_millis(50)),
-                    Err(_) => return,
-                }
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            match child.try_wait() {
+                Ok(Some(_)) => return,
+                Ok(None) => thread::sleep(Duration::from_millis(50)),
+                Err(_) => break,
             }
+        }
 
-            unsafe {
-                libc::kill(-(pid as i32), libc::SIGKILL);
-            }
-            let _ = child.kill();
-            let _ = child.wait();
-        });
+        unsafe {
+            libc::kill(-(child.id() as i32), libc::SIGKILL);
+        }
+        let _ = child.kill();
+        let _ = child.wait();
     }
 
     #[cfg(windows)]
@@ -551,25 +393,10 @@ fn theme_background_color(theme: &str) -> Color {
 
 fn theme_bootstrap_script(theme: &str) -> String {
     // Runs before page scripts so localStorage/class match the persisted
-    // preference even on a fresh webview origin (new localhost port). The
-    // native pref is only seeded into localStorage when the origin has no
-    // choice recorded yet: the renderer writes "pi-theme" before it invokes
-    // `set_ui_theme`, so localStorage is always the freshest user intent and
-    // must never be clobbered by a (possibly stale) native pref — e.g. after
-    // a crash interrupted the toggle before the IPC round-trip landed.
+    // preference even on a fresh webview origin (new localhost port).
     format!(
-        r#"(function(){{try{{var t=localStorage.getItem("pi-theme");if(!t){{t="{theme}";localStorage.setItem("pi-theme",t);}}var d=t==="dark";document.documentElement.classList.toggle("dark",d);document.documentElement.style.colorScheme=d?"dark":"light";}}catch(e){{}}}})();"#
+        r#"(function(){{try{{localStorage.setItem("pi-theme","{theme}");var d="{theme}"==="dark";document.documentElement.classList.toggle("dark",d);document.documentElement.style.colorScheme=d?"dark":"light";}}catch(e){{}}}})();"#
     )
-}
-
-/// True when running under a Wayland compositor. `set_background_color` and a
-/// few other native chrome APIs dereference a null GdkSurface there and crash,
-/// so callers consult this to avoid them.
-fn is_wayland() -> bool {
-    env::var("WAYLAND_DISPLAY").is_ok()
-        || env::var("GDK_BACKEND")
-            .map(|value| value.contains("wayland"))
-            .unwrap_or(false)
 }
 
 fn apply_window_theme(app: &AppHandle, theme: &str) {
@@ -582,13 +409,7 @@ fn apply_window_theme(app: &AppHandle, theme: &str) {
         Theme::Light
     };
     let _ = window.set_theme(Some(tauri_theme));
-    // `set_background_color` dereferences a possibly-null GdkSurface under
-    // Wayland and segfaults the whole process (frameless WebKitGTK window).
-    // The page paints its own opaque background via CSS, so the native chrome
-    // color is cosmetic only and is safe to skip on Wayland.
-    if !is_wayland() {
-        let _ = window.set_background_color(Some(theme_background_color(theme)));
-    }
+    let _ = window.set_background_color(Some(theme_background_color(theme)));
 }
 
 fn same_origin(candidate: &Url, app_url: &Url) -> bool {
@@ -602,7 +423,7 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
     let stored_theme = read_stored_theme(app);
 
     let mut builder = WebviewWindowBuilder::new(app, WINDOW_LABEL, WebviewUrl::External(app_url))
-        .title("Pi Agent")
+        .title("EduPi")
         .inner_size(1440.0, 900.0)
         .min_inner_size(900.0, 600.0)
         .resizable(true)
@@ -635,12 +456,8 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
         };
         builder = builder
             .theme(Some(tauri_theme))
+            .background_color(theme_background_color(theme))
             .initialization_script(theme_bootstrap_script(theme));
-        // Skip the native background color on Wayland: it can NULL-deref the
-        // GdkSurface during window creation and crash the process.
-        if !is_wayland() {
-            builder = builder.background_color(theme_background_color(theme));
-        }
     }
 
     // Hide the native title bar. macOS keeps the traffic-light controls
@@ -698,21 +515,7 @@ fn bundled_node_path(resource_dir: &Path) -> PathBuf {
 
 #[cfg(all(feature = "custom-protocol", target_os = "linux"))]
 fn bundled_node_path(resource_dir: &Path) -> PathBuf {
-    // Resolution order: explicit override (distro packs point this at their
-    // own node, e.g. Nix store or /opt prefixes) > bundled runtime > the FHS
-    // default. Next.js requires Node >= 20.9.
-    if let Ok(p) = env::var("PI_DESKTOP_NODE") {
-        let path = PathBuf::from(&p);
-        if !p.is_empty() && path.is_file() {
-            return path;
-        }
-    }
-    let bundled = resource_dir.join("resources/node/node");
-    if bundled.is_file() {
-        bundled
-    } else {
-        PathBuf::from("/usr/bin/node")
-    }
+    resource_dir.join("resources/node/node")
 }
 
 #[cfg(feature = "custom-protocol")]
@@ -732,6 +535,129 @@ fn server_process_path(node_path: &Path) -> Option<std::ffi::OsString> {
     let mut paths = vec![node_path.parent()?.to_path_buf()];
     paths.extend(env::split_paths(&inherited));
     env::join_paths(paths).ok()
+}
+
+#[cfg(feature = "custom-protocol")]
+struct EduPiLaunchRoots {
+    data_root: String,
+    core_root: String,
+    core_allowed_root: String,
+    data_allowed_root: String,
+}
+
+#[cfg(feature = "custom-protocol")]
+fn first_configured_root(names: &[&str]) -> Option<(String, String)> {
+    names.iter().find_map(|name| {
+        env::var(name)
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .map(|value| ((*name).to_string(), value))
+    })
+}
+
+#[cfg(feature = "custom-protocol")]
+fn validate_edupi_directory(name: &str, value: String) -> Result<String, io::Error> {
+    let path = PathBuf::from(&value);
+    if !path.is_absolute() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("{name} must be an absolute directory: {}", path.display()),
+        ));
+    }
+    if !path.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("{name} does not exist: {}", path.display()),
+        ));
+    }
+    Ok(value)
+}
+
+#[cfg(feature = "custom-protocol")]
+fn edupi_root_label(name: &str) -> &str {
+    match name {
+        "EDUPI_DATA_ROOT" => "EduPi data root",
+        "EDUPI_CORE_ROOT" => "EduPi Core root",
+        "EDUPI_WORKSPACE" => "EduPi workspace",
+        _ => "EduPi project root",
+    }
+}
+
+#[cfg(feature = "custom-protocol")]
+fn edupi_project_root() -> Result<String, io::Error> {
+    let Some((name, value)) =
+        first_configured_root(&["EDUPI_DATA_ROOT", "EDUPI_PROJECT_ROOT", "EDUPI_WORKSPACE"])
+    else {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "EDUPI_PROJECT_ROOT is not configured; choose the EduPi workspace before starting the packaged app",
+        ));
+    };
+
+    validate_edupi_directory(edupi_root_label(&name), value)
+}
+
+#[cfg(feature = "custom-protocol")]
+fn edupi_core_root(data_root: &str) -> Result<String, io::Error> {
+    let Some((name, value)) =
+        first_configured_root(&["EDUPI_CORE_ROOT", "EDUPI_PROJECT_ROOT", "EDUPI_WORKSPACE"])
+    else {
+        return Ok(data_root.to_string());
+    };
+
+    validate_edupi_directory(edupi_root_label(&name), value)
+}
+
+#[cfg(feature = "custom-protocol")]
+fn default_allowed_root(root: &str) -> Result<String, io::Error> {
+    let path = Path::new(root);
+    if !path.is_absolute() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("cannot default an allowed root from a relative root: {root}"),
+        ));
+    }
+    path.parent()
+        .map(|parent| parent.to_string_lossy().into_owned())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("cannot default an allowed root from root: {root}"),
+            )
+        })
+}
+
+#[cfg(feature = "custom-protocol")]
+fn edupi_allowed_root(name: &str, root: &str) -> Result<String, io::Error> {
+    let value = first_configured_root(&[name])
+        .map(|(_, value)| value)
+        .unwrap_or(default_allowed_root(root)?);
+
+    validate_edupi_directory(name, value)
+}
+
+#[cfg(feature = "custom-protocol")]
+fn edupi_launch_roots() -> Result<EduPiLaunchRoots, io::Error> {
+    let data_root = edupi_project_root()?;
+    let core_root = edupi_core_root(&data_root)?;
+    let data_allowed_root = edupi_allowed_root("EDUPI_DATA_ALLOWED_ROOT", &data_root)?;
+    let core_allowed_root = edupi_allowed_root("EDUPI_CORE_ALLOWED_ROOT", &core_root)?;
+    Ok(EduPiLaunchRoots {
+        data_root,
+        core_root,
+        core_allowed_root,
+        data_allowed_root,
+    })
+}
+
+#[cfg(not(feature = "custom-protocol"))]
+fn edupi_project_root() -> Result<String, io::Error> {
+    env::var("EDUPI_PROJECT_ROOT").map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "EDUPI_PROJECT_ROOT is not configured; choose the EduPi workspace before starting the desktop app",
+        )
+    })
 }
 
 #[cfg(feature = "custom-protocol")]
@@ -870,10 +796,7 @@ fn start_packaged_server(
     if !node_path.is_file() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
-            format!(
-                "Node.js runtime is missing: {} (Linux: set PI_DESKTOP_NODE or install 'nodejs')",
-                node_path.display()
-            ),
+            format!("Bundled Node runtime is missing: {}", node_path.display()),
         )
         .into());
     }
@@ -901,6 +824,9 @@ fn start_packaged_server(
     let stderr = stdout.try_clone()?;
 
     let port = choose_port(app)?;
+    let roots = edupi_launch_roots()?;
+    let desktop_state_dir = app.path().app_config_dir()?;
+    fs::create_dir_all(&desktop_state_dir)?;
     let mut command = Command::new(&node_path);
     command
         .arg(&server_script)
@@ -909,6 +835,12 @@ fn start_packaged_server(
         .env("PORT", port.to_string())
         .env("NODE_ENV", "production")
         .env("NEXT_TELEMETRY_DISABLED", "1")
+        .env("EDUPI_PROJECT_ROOT", &roots.data_root)
+        .env("EDUPI_DATA_ROOT", &roots.data_root)
+        .env("EDUPI_CORE_ROOT", &roots.core_root)
+        .env("EDUPI_CORE_ALLOWED_ROOT", &roots.core_allowed_root)
+        .env("EDUPI_DATA_ALLOWED_ROOT", &roots.data_allowed_root)
+        .env("PI_DESKTOP_STATE_DIR", &desktop_state_dir)
         .env("PI_WEB_PARENT_PID", std::process::id().to_string())
         .env(DESKTOP_API_TOKEN_ENV, desktop_api_token)
         .env(DESKTOP_INSTANCE_ID_ENV, desktop_instance_id)
@@ -940,9 +872,7 @@ fn start_packaged_server(
 
 #[cfg(all(test, feature = "custom-protocol"))]
 mod tests {
-    use super::{child_process_compatible_path, response_has_instance_id};
-    #[cfg(target_os = "linux")]
-    use super::{visible_linux_tray_item, LinuxTray, LINUX_TRAY_QUIT_LABEL, LINUX_TRAY_SHOW_LABEL};
+    use super::{child_process_compatible_path, default_allowed_root, response_has_instance_id};
     use std::path::{Path, PathBuf};
 
     #[cfg(windows)]
@@ -967,21 +897,6 @@ mod tests {
         assert_eq!(child_process_compatible_path(path), PathBuf::from(path));
     }
 
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn linux_tray_menu_items_publish_visible_labels() {
-        for label in [LINUX_TRAY_SHOW_LABEL, LINUX_TRAY_QUIT_LABEL] {
-            let item = visible_linux_tray_item(label, |_: &mut LinuxTray| {});
-            let ksni::MenuItem::Standard(item) = item else {
-                panic!("Linux tray command must be a standard menu item");
-            };
-
-            assert_eq!(item.label, label);
-            assert!(item.enabled);
-            assert!(item.visible);
-        }
-    }
-
     #[test]
     fn packaged_server_handshake_requires_the_expected_instance_header() {
         let expected = "instance-123";
@@ -993,6 +908,12 @@ mod tests {
         assert!(!response_has_instance_id(wrong, expected));
         assert!(!response_has_instance_id(body_spoof, expected));
     }
+
+    #[test]
+    fn allowed_roots_default_to_the_parent_of_an_absolute_root() {
+        assert_eq!(default_allowed_root("/tmp/edupi-data").unwrap(), "/tmp");
+        assert!(default_allowed_root("relative/edupi-data").is_err());
+    }
 }
 
 #[cfg(not(feature = "custom-protocol"))]
@@ -1002,175 +923,8 @@ fn start_development_server(
     Ok((DEV_SERVER_URL.parse()?, DesktopServer::empty()))
 }
 
-/// Single-instance guard (Linux only). Launching the app binary again starts a
-/// brand-new process instead of focusing the running one, which left multiple
-/// server/window copies in the background. We claim a PID lock file; a later
-/// launch asks the live instance to raise its window via a request file and
-/// exits without starting another server. macOS already gets that behavior
-/// from the OS (LaunchServices + the `Reopen` handler below), and Windows has
-/// its own semantics, so this mechanism is intentionally Linux-scoped and
-/// keeps its `/proc`-based liveness probe off the other platforms.
-///
-/// Focus signalling deliberately uses a polled request file instead of a
-/// signal: JavaScriptCore owns SIGUSR1 on Linux (its GC suspension signal),
-/// and raising it from a second launch would land in JSC's GC handler and
-/// corrupt the process (SEGV).
-#[cfg(target_os = "linux")]
-const FOCUS_REQUEST_FILE: &str = "focus.request";
-
-#[cfg(target_os = "linux")]
-fn instance_lock_path() -> Option<PathBuf> {
-    let base = env::var("XDG_RUNTIME_DIR")
-        .ok()
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| {
-            env::var("XDG_CONFIG_HOME")
-                .ok()
-                .filter(|value| !value.is_empty())
-                .map(PathBuf::from)
-        })
-        .or_else(|| {
-            env::var("HOME")
-                .ok()
-                .filter(|value| !value.is_empty())
-                .map(|value| PathBuf::from(value).join(".config"))
-        });
-    base.map(|value| value.join("com.abcwyc.pi-agent").join("pi-agent.lock"))
-}
-
-#[cfg(target_os = "linux")]
-fn process_is_our_app(pid: i32) -> bool {
-    fs::read_to_string(format!("/proc/{pid}/cmdline"))
-        .map(|content| {
-            let lowered = content.to_lowercase();
-            lowered.contains("pi-agent") || lowered.contains("pi agent")
-        })
-        .unwrap_or(false)
-}
-
-#[cfg(target_os = "linux")]
-fn read_lock_pid(path: &Path) -> Option<i32> {
-    fs::read_to_string(path)
-        .ok()
-        .and_then(|raw| raw.trim().parse::<i32>().ok())
-        .filter(|pid| *pid > 0)
-}
-
-/// Ask a live instance recorded in the lock file to raise its window, if any.
-#[cfg(target_os = "linux")]
-fn focus_existing_instance(path: &Path) -> bool {
-    if let Some(pid) = read_lock_pid(path) {
-        if process_is_our_app(pid) && unsafe { libc::kill(pid, 0) } == 0 {
-            // The primary's focus monitor polls this file (see
-            // `spawn_focus_monitor`); the secondary never signals it.
-            if let Some(request) = focus_request_path() {
-                let _ = fs::write(&request, b"1");
-            }
-            return true;
-        }
-    }
-    false
-}
-
-#[cfg(target_os = "linux")]
-fn focus_request_path() -> Option<PathBuf> {
-    instance_lock_path().map(|lock| match lock.parent() {
-        Some(parent) => parent.join(FOCUS_REQUEST_FILE),
-        None => lock,
-    })
-}
-
-/// Returns true when this process should become the primary instance. When
-/// another live instance already owns the lock, this asks it to show its
-/// window and returns false so the caller can exit.
-#[cfg(target_os = "linux")]
-fn ensure_single_instance() -> bool {
-    let Some(path) = instance_lock_path() else {
-        return true;
-    };
-
-    // An existing live instance owns the lock: focus it and stay secondary.
-    if focus_existing_instance(&path) {
-        return false;
-    }
-
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-
-    // The lock file can outlive its owner: a crashed, killed, or panicked
-    // instance never removes it, and a launch interrupted between open() and
-    // write() leaves an empty file. Reclaim it only when the recorded PID is
-    // no longer a live copy of this app, so a genuinely running instance is
-    // never displaced by a mistaken cleanup.
-    if path.exists() {
-        let owner_live = read_lock_pid(&path)
-            .map(|pid| process_is_our_app(pid) && unsafe { libc::kill(pid, 0) } == 0)
-            .unwrap_or(false);
-        if !owner_live {
-            let _ = fs::remove_file(&path);
-        }
-    }
-
-    // Claim the lock atomically so two near-simultaneous launches cannot both
-    // become primary. `create_new` (O_CREAT | O_EXCL) fails if the file exists.
-    match OpenOptions::new().write(true).create_new(true).open(&path) {
-        Ok(mut file) => {
-            let _ = file.write_all(std::process::id().to_string().as_bytes());
-            let _ = file.sync_all();
-            // Clear a focus request left behind by a crashed previous primary.
-            if let Some(request) = focus_request_path() {
-                let _ = fs::remove_file(request);
-            }
-            true
-        }
-        Err(_) => {
-            // Lost the race: defer to the instance that won the lock.
-            focus_existing_instance(&path);
-            false
-        }
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn remove_instance_lock() {
-    if let Some(path) = instance_lock_path() {
-        // Only remove a lock this process owns; never delete a lock that a
-        // racing launch reclaimed after our shutdown began.
-        if read_lock_pid(&path) == Some(std::process::id() as i32) {
-            let _ = fs::remove_file(path);
-        }
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn spawn_focus_monitor(app: AppHandle) {
-    thread::spawn(move || loop {
-        if let Some(request) = focus_request_path() {
-            if request.exists() {
-                // Consume the request before dispatching so a repeat request
-                // while the window cannot be raised still triggers a retry.
-                let _ = fs::remove_file(&request);
-                let value = app.clone();
-                let _ = app.run_on_main_thread(move || show_main_window(&value));
-            }
-        }
-        thread::sleep(Duration::from_millis(120));
-    });
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Become the single instance (Linux). If another live instance owns the
-    // lock, focus it and exit without starting a second server/window.
-    #[cfg(target_os = "linux")]
-    {
-        if !ensure_single_instance() {
-            std::process::exit(0);
-        }
-    }
-
     let desktop_api_token = load_or_generate_desktop_api_token()
         .expect("failed to create desktop API authorization token");
     let desktop_instance_id =
@@ -1186,6 +940,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(CloseQuits(Mutex::new(false)))
         .manage(DesktopApiToken(desktop_api_token))
+        .manage(computer_use::ComputerUseState::new())
         .invoke_handler(tauri::generate_handler![
             get_desktop_api_token,
             open_external_url,
@@ -1194,7 +949,12 @@ pub fn run() {
             set_close_quits,
             quit_app,
             show_main_window_cmd,
-            set_ui_theme
+            set_ui_theme,
+            computer_use::computer_use_status,
+            computer_use::computer_use_set_enabled,
+            computer_use::computer_use_emergency_stop,
+            computer_use::computer_use_request_permission,
+            computer_use::computer_use_execute
         ])
         .setup(move |app| {
             // The updater public key is embedded at compile time by the release
@@ -1220,13 +980,39 @@ pub fn run() {
             app.manage(server);
             build_window(app.handle(), url)?;
 
-            #[cfg(target_os = "linux")]
-            build_linux_tray(app)?;
-            #[cfg(not(target_os = "linux"))]
-            build_platform_tray(app)?;
+            let quick_entry_item = MenuItem::with_id(app, "quick_entry", "Quick Entry", true, None::<&str>)?;
+            let show_item = MenuItem::with_id(app, "show", "Show EduPi", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit EduPi", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&quick_entry_item, &show_item, &quit_item])?;
+            let icon = app
+                .default_window_icon()
+                .cloned()
+                .ok_or_else(|| std::io::Error::other("missing default window icon"))?;
 
-            #[cfg(target_os = "linux")]
-            spawn_focus_monitor(app.handle().clone());
+            let _tray = TrayIconBuilder::new()
+                .icon(icon)
+                .menu(&menu)
+                .tooltip("EduPi")
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "quick_entry" => {
+                        show_main_window(app);
+                        let _ = app.emit("edupi://quick-entry", ());
+                    }
+                    "show" => show_main_window(app),
+                    "quit" => quit_application(app),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        show_main_window(tray.app_handle());
+                    }
+                })
+                .build(app)?;
 
             Ok(())
         })
@@ -1252,8 +1038,6 @@ pub fn run() {
 
     app.run(|app_handle, event| match event {
         RunEvent::Exit => {
-            #[cfg(target_os = "linux")]
-            remove_instance_lock();
             if let Some(server) = app_handle.try_state::<DesktopServer>() {
                 server.stop();
             }

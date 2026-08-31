@@ -27,36 +27,28 @@
   --surface-elevated: #ffffff;
   --text: #1d1d1f;
   --text-muted: #68686d;
-  /* #7a7a7a rather than the visually lighter #94949a: text-dim carries real
-     labels (timestamps, code-block language tags), and #94949a only cleared
-     ~2.8:1 contrast against --bg — under the 3:1 floor for UI text. This
-     hits ~4:1 while staying visibly de-emphasized next to --text-muted. */
-  --text-dim: #7a7a7a;
+  --text-dim: #94949a;
   --text-meta: #85858b;
-  --accent: #1d1d1f;
-  --accent-hover: #3a3a3c;
+  --accent: #2f63c9;
+  --accent-hover: #2452a8;
   --accent-contrast: #ffffff;
-  --accent-soft: rgba(29, 29, 31, 0.08);
-  --accent-border: rgba(29, 29, 31, 0.22);
-  --focus-ring: rgba(29, 29, 31, 0.25);
+  --accent-soft: rgba(47, 99, 201, 0.09);
+  --accent-border: rgba(47, 99, 201, 0.27);
+  --focus-ring: rgba(47, 99, 201, 0.25);
   --danger: #d92d20;
-  --success: #248a3d;
-  --warning: #b87503;
+  --success: #2f8b62;
+  --warning: #c27a16;
   --user-bg: rgba(29, 29, 31, 0.06);
   --assistant-bg: transparent;
   --tool-bg: rgba(118, 118, 128, 0.08);
   --bg-subtle: rgba(60, 60, 67, 0.055);
   --scroll-thumb: rgba(60, 60, 67, 0.25);
 
-  /* Typography. "Noto Sans SC" backstops CJK on Linux builds (deb target in
-     release.yml), which this stack otherwise has no CJK fallback for once it
-     falls past the macOS/Windows-only names above it. */
+  /* Typography */
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
-    "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", "Noto Sans SC",
-    sans-serif;
+    "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display",
-    "PingFang SC", "Segoe UI Variable Display", "Segoe UI", "Noto Sans SC",
-    sans-serif;
+    "PingFang SC", "Segoe UI Variable Display", "Segoe UI", sans-serif;
 
   /* Shape, spacing and elevation */
   --radius-sm: 6px;
@@ -88,16 +80,14 @@ html.dark {
   --surface-elevated: #2c2c2e;
   --text: #f5f5f7;
   --text-muted: rgba(235, 235, 245, 0.64);
-  /* 0.46 rather than 0.38: matches the light-theme text-dim bump above so
-     both themes land at roughly the same ~4:1 contrast against --bg. */
-  --text-dim: rgba(235, 235, 245, 0.46);
+  --text-dim: rgba(235, 235, 245, 0.38);
   --text-meta: rgba(235, 235, 245, 0.44);
-  --accent: #f5f5f7;
-  --accent-hover: #ffffff;
-  --accent-contrast: #1d1d1f;
-  --accent-soft: rgba(245, 245, 247, 0.14);
-  --accent-border: rgba(245, 245, 247, 0.3);
-  --focus-ring: rgba(245, 245, 247, 0.32);
+  --accent: #7da7ff;
+  --accent-hover: #a9c4ff;
+  --accent-contrast: #10234e;
+  --accent-soft: rgba(125, 167, 255, 0.16);
+  --accent-border: rgba(125, 167, 255, 0.36);
+  --focus-ring: rgba(125, 167, 255, 0.32);
   --danger: #ff6961;
   --success: #30d158;
   --warning: #ffd60a;
@@ -287,7 +277,7 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
@@ -1033,6 +1023,14 @@ html.dark .sidebar-view-switcher-thumb {
   .file-viewer-spinner {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }
 
@@ -1840,14 +1838,6 @@ html.dark .sidebar-view-switcher-thumb {
 }
 
 .chat-input-shell {
-  /* Stop short of the scroll container's scrollbar gutter on both edges (see
-     scrollbarGutter: "stable both-edges" on .chat-window's scroll container)
-     so this overlay doesn't paint over the scrollbar and fade it out before
-     it reaches the bottom. Insetting symmetrically (rather than only from
-     the right) keeps this centered on the same axis as the message column,
-     which also loses 8px of width on each side to that gutter. */
-  width: calc(100% - 16px);
-  margin: 0 auto;
   background:
     linear-gradient(to bottom, transparent, color-mix(in srgb, var(--bg) 94%, transparent) 18%) !important;
 }
@@ -1925,6 +1915,56 @@ html.dark .sidebar-view-switcher-thumb {
   margin-top: 7px !important;
 }
 
+/* Motion: message entrance + expandable content */
+@keyframes native-message-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: none; }
+}
+
+.message-user,
+.message-assistant {
+  animation: native-message-in 190ms var(--ease-native) both;
+}
+
+.process-details-content {
+  animation: native-message-in 160ms var(--ease-native) both;
+}
+
+/* Session-loading skeleton */
+@keyframes chat-skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+.chat-session-skeleton {
+  display: flex;
+  width: 100%;
+  min-height: 40vh;
+  padding: 26px 4px;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chat-session-skeleton__row {
+  width: 82%;
+  height: 54px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, var(--bg-subtle) 25%, var(--bg-hover) 37%, var(--bg-subtle) 63%);
+  background-size: 400% 100%;
+  animation: chat-skeleton-shimmer 1.4s ease infinite;
+}
+
+.chat-session-skeleton__row.is-user {
+  width: 46%;
+  height: 40px;
+  align-self: flex-end;
+  border-radius: 14px;
+}
+
+.chat-session-skeleton__row.is-short {
+  width: 64%;
+}
+
 .process-details {
   margin: 2px 0 16px !important;
 }
@@ -1979,8 +2019,8 @@ html.dark .sidebar-view-switcher-thumb {
 
 /* react-markdown output styles */
 .markdown-body {
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 15px;
+  line-height: 1.67;
   color: var(--text);
   word-break: break-word;
 }
@@ -2110,11 +2150,6 @@ html.dark .sidebar-view-switcher-thumb {
   padding: 6px 10px;
   text-align: left;
   vertical-align: top;
-  /* `anywhere` (not `break-word`) also shrinks min-content sizing: without it
-     one column of long unbreakable tokens (paths, identifiers) claims its full
-     width and starves breakable columns — CJK text then collapses to a single
-     character per line no matter how wide the window is. */
-  overflow-wrap: anywhere;
 }
 .markdown-body tr:last-child td { border-bottom: 0; }
 .markdown-body th {
@@ -2236,16 +2271,16 @@ html.dark .sidebar-view-switcher-thumb {
 .markdown-code-block {
   position: relative;
   margin: 6px 0;
-  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  border: 1px solid var(--border);
   border-radius: 7px;
   overflow: hidden;
   background: var(--bg);
-  box-shadow: none;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 42%, transparent);
 }
 .markdown-code-header {
   padding: 5px 10px;
   background: var(--bg-panel);
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  border-bottom: 1px solid var(--border);
   color: var(--text-dim);
   font-size: 11px;
   display: flex;

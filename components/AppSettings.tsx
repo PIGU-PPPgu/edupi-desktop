@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { AppComponentReleaseInfo, AppUpdatesResponse } from "@/lib/app-update-types";
 import {
   APP_DISTRIBUTION_NAME,
@@ -11,16 +11,26 @@ import {
   APP_VERSION_DISPLAY,
   PRODUCT_NAME,
 } from "@/lib/branding";
-import { compareAppVersions } from "@/lib/app-updates";
+import { compareAppVersions, hasAppUpdateCheckError } from "@/lib/app-updates";
 import { APP_PREF_KEYS, getPrefBool, setPrefBool } from "@/lib/app-prefs";
+import type { ComputerUseStatus } from "@/lib/edupi-computer-use";
+import {
+  emergencyStopComputerUseNative,
+  getComputerUseStatusNative,
+  requestComputerUsePermissionNative,
+  setComputerUseEnabledNative,
+} from "@/lib/desktop-computer-use";
 import {
   installLatestDesktopRelease,
   isTauriDesktop,
   type DesktopUpgradeProgress,
 } from "@/lib/desktop-updater";
-import { handleExternalLinkClick, openPathNative, quitAppNative, setCloseQuitsNative } from "@/lib/desktop-native";
+import { handleExternalLinkClick, quitAppNative, setCloseQuitsNative } from "@/lib/desktop-native";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
+import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
+import { EduPiHelpPanel } from "./EduPiHelpPanel";
+import { announceComputerUseChanged, COMPUTER_USE_CHANGED_EVENT } from "./EduPiComputerUseStop";
 
 const sectionCardStyle: CSSProperties = {
   padding: "13px 14px",
@@ -41,6 +51,79 @@ const sectionHintStyle: CSSProperties = {
   lineHeight: 1.5,
 };
 
+function TeacherContextSettingsCard() {
+  const [context, setContext] = useState<TeacherContextSnapshot | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  useEffect(() => { fetch("/api/edupi/onboarding", { cache: "no-store" }).then((response) => response.json()).then(setContext).catch(() => undefined); }, []);
+  return <div className="native-settings-card" style={sectionCardStyle}><div style={sectionTitleStyle}>EduPi 教师上下文</div><div style={sectionHintStyle}>这是 EduPi 判断课程、校历和材料语境的基础；可随时回来更新。</div><div className="settings-context-summary"><strong>{context?.name || "尚未设置称呼"}</strong><span>{context?.school || "学校待设置"} · {context?.subject || "学科待设置"} · {context?.grade || "年级待设置"}</span></div><div style={{ display: "flex", gap: 8, marginTop: 10 }}><button type="button" className="native-button native-button-primary" onClick={() => setHelpOpen(true)}>查看初始化指引</button><button type="button" className="native-button" onClick={() => window.dispatchEvent(new CustomEvent("edupi-open-context"))}>编辑教育上下文</button></div>{helpOpen ? <EduPiHelpPanel onClose={() => setHelpOpen(false)} onStartSetup={() => { setHelpOpen(false); window.dispatchEvent(new CustomEvent("edupi-open-context")); }} onOpenContext={() => { setHelpOpen(false); window.dispatchEvent(new CustomEvent("edupi-open-context")); }} /> : null}</div>;
+}
+
+function ComputerUseSettingsCard() {
+  const [status, setStatus] = useState<ComputerUseStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void getComputerUseStatusNative()
+      .then((value) => { if (active) setStatus(value); })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : String(cause)); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const update = (event: Event) => {
+      const enabled = (event as CustomEvent<boolean>).detail === true;
+      setStatus((current) => current ? { ...current, enabled } : current);
+    };
+    window.addEventListener(COMPUTER_USE_CHANGED_EVENT, update);
+    return () => window.removeEventListener(COMPUTER_USE_CHANGED_EVENT, update);
+  }, []);
+
+  const updateEnabled = async (enabled: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = enabled ? await setComputerUseEnabledNative(true) : await emergencyStopComputerUseNative();
+      setStatus(next);
+      setPrefBool(APP_PREF_KEYS.computerUseEnabled, next.enabled);
+      announceComputerUseChanged(next.enabled);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const requestPermission = async (permission: "accessibility" | "screen_recording") => {
+    setBusy(true);
+    setError(null);
+    try {
+      setStatus(await requestComputerUsePermissionNative(permission));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const permissionLabel = (value: boolean | null | undefined) => value === undefined || value === null ? "未知" : value ? "已授权" : "未授权";
+  return <div className="native-settings-card" style={sectionCardStyle}>
+    <div style={sectionTitleStyle}>桌面控制</div>
+    <div style={sectionHintStyle}>默认关闭。开启后，每次读取或操作仍需你确认。</div>
+    <div className="computer-use-settings">
+      <div className="computer-use-status-row"><strong>总开关</strong><span className={status?.enabled ? "is-ready" : "is-off"}>{status?.enabled ? "已开启" : "已关闭"}</span></div>
+      <div className="computer-use-status-row"><strong>辅助功能</strong><span className={status?.accessibility ? "is-ready" : "is-off"}>{permissionLabel(status?.accessibility)}</span></div>
+      <div className="computer-use-status-row"><strong>屏幕录制</strong><span className={status?.screenRecording ? "is-ready" : "is-off"}>{permissionLabel(status?.screenRecording)}</span></div>
+      <div className="computer-use-actions">
+        <button type="button" className={`native-button${status?.enabled ? "" : " native-button-primary"}`} disabled={busy} onClick={() => void updateEnabled(!status?.enabled)}>{status?.enabled ? "停止控制" : "开启控制"}</button>
+        {status?.accessibility === false ? <button type="button" className="native-button" disabled={busy} onClick={() => void requestPermission("accessibility")}>授权辅助功能</button> : null}
+        {status?.screenRecording === false ? <button type="button" className="native-button" disabled={busy} onClick={() => void requestPermission("screen_recording")}>授权屏幕录制</button> : null}
+      </div>
+      {error ? <div className="computer-use-error" role="alert">{error}</div> : null}
+    </div>
+  </div>;
+}
 function ChoiceButton({
   active,
   onClick,
@@ -217,47 +300,29 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [closeQuits, setCloseQuits] = useState(() => getPrefBool(APP_PREF_KEYS.closeQuits, false));
   const [notifyOnComplete, setNotifyOnComplete] = useState(() => getPrefBool(APP_PREF_KEYS.notifyOnComplete, true));
-  const [customCssBusy, setCustomCssBusy] = useState(false);
-  const [customCssError, setCustomCssError] = useState<string | null>(null);
 
-  const openCustomCss = async () => {
-    setCustomCssBusy(true);
-    setCustomCssError(null);
+  const checkForUpdates = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    setLoadError(null);
     try {
-      const response = await fetch("/api/custom-css", { method: "POST" });
+      const response = await fetch("/api/updates?refresh=1", { cache: "no-store", signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = (await response.json()) as { path?: string };
-      if (!data.path) throw new Error("Missing path in response");
-      await openPathNative(data.path);
+      const data = await response.json() as AppUpdatesResponse;
+      setComponents(Array.isArray(data.components) ? data.components : []);
+      setLoadError(hasAppUpdateCheckError(data, "edupi-desktop") ? "checkFailed" : null);
     } catch (error) {
-      console.error("Failed to open custom.css:", error);
-      setCustomCssError(t("appSettings.customCssOpenError"));
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setLoadError("checkFailed");
     } finally {
-      setCustomCssBusy(false);
+      if (!signal?.aborted) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/updates?refresh=1", { cache: "no-store", signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json() as Promise<AppUpdatesResponse>;
-      })
-      .then((data) => {
-        const list = Array.isArray(data.components) ? data.components : [];
-        setComponents(list);
-        setLoadError(null);
-      })
-      .catch((error) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        setLoadError("checkFailed");
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
+    void checkForUpdates(controller.signal);
     return () => controller.abort();
-  }, []);
+  }, [checkForUpdates]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -268,7 +333,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
   }, [onClose, upgradeProgress]);
 
   const appRelease = useMemo(
-    () => components.find((component) => component.project === "pi-agent-desktop"),
+    () => components.find((component) => component.project === "edupi-desktop"),
     [components],
   );
   const pendingUpdates = useMemo(
@@ -276,7 +341,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
     [components],
   );
   const updateAvailable = pendingUpdates.length > 0;
-  const canUpgrade = !loading && updateAvailable && !upgradeProgress;
+  const canUpgrade = desktop && !loading && updateAvailable && !upgradeProgress;
   const downloadPercent = upgradeProgress?.phase === "downloading"
     && upgradeProgress.totalBytes
     ? Math.min(100, Math.round((upgradeProgress.downloadedBytes ?? 0) / upgradeProgress.totalBytes * 100))
@@ -401,7 +466,15 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
                 latestLabel={t("appSettings.latestRelease")}
                 upgradeAvailableLabel={t("appSettings.upgradeAvailable")}
               />
-              {(updateAvailable || upgradeProgress) && (
+              <button
+                className="native-button"
+                type="button"
+                disabled={loading || Boolean(upgradeProgress)}
+                onClick={() => void checkForUpdates()}
+              >
+                {loading ? t("appSettings.checking") : t("appSettings.checkUpdates")}
+              </button>
+              {desktop && (updateAvailable || upgradeProgress) && (
                 <button
                   className="native-button native-button-primary"
                   type="button"
@@ -433,6 +506,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
         </header>
 
         <div style={{ overflowY: "auto", padding: "18px 22px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <TeacherContextSettingsCard />
           <div className="native-settings-card" style={sectionCardStyle}>
             <div style={sectionTitleStyle}>{t("appSettings.languageSection")}</div>
             <div style={sectionHintStyle}>{t("appSettings.languageHint")}</div>
@@ -460,29 +534,11 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
                 {t("appSettings.themeDark")}
               </ChoiceButton>
             </div>
-            <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ fontSize: 12, fontWeight: 600 }}>{t("appSettings.customCss")}</div>
-              <div style={{ color: "var(--text-dim)", fontSize: 11, lineHeight: 1.45 }}>
-                {t("appSettings.customCssHint")}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {desktop ? (
-                  <button
-                    type="button"
-                    className="native-button"
-                    disabled={customCssBusy}
-                    onClick={() => void openCustomCss()}
-                    style={{ alignSelf: "flex-start", marginTop: 2 }}
-                  >
-                    {customCssBusy ? t("appSettings.customCssOpening") : t("appSettings.customCssOpen")}
-                  </button>
-                ) : null}
-                {customCssError ? (
-                  <span style={{ color: "var(--danger)", fontSize: 11 }}>{customCssError}</span>
-                ) : null}
-              </div>
-            </div>
           </div>
+
+          {desktop && (
+            <ComputerUseSettingsCard />
+          )}
 
           {desktop && (
             <div className="native-settings-card" style={sectionCardStyle}>

@@ -9,7 +9,7 @@ import { MessageView } from "./MessageView";
 import { ConversationNavigator, type ConversationTurnLocation } from "./ConversationNavigator";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { useI18n } from "@/hooks/useI18n";
-import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAgentSession";
+import { useAgentSession, type AgentPhase, type EducationImportToolName, type NoticeItem } from "@/hooks/useAgentSession";
 import { useAudio } from "@/hooks/useAudio";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import type { SessionStatsInfo } from "@/lib/pi-types";
@@ -23,6 +23,8 @@ import {
   VISIBLE_PAGE_SIZE,
 } from "@/lib/chat-lazy-load";
 import { sessionVisibleCounts } from "@/lib/scroll-memory";
+import type { DesktopControlInput } from "@/lib/edupi-desktop-control";
+import type { ComputerUseBridgeResult, ComputerUseInput } from "@/lib/edupi-computer-use";
 
 interface Props {
   session: SessionInfo | null;
@@ -38,8 +40,13 @@ interface Props {
   onSessionStatsPanelOpen?: () => void;
   onContextUsageChange?: (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => void;
   onOpenFile?: (filePath: string) => void;
+  emptyTitle?: string;
+  emptySubtitle?: string;
   /** Fired after non-image drops are copied into the session cwd (so the explorer can refresh). */
   onProjectFilesImported?: () => void;
+  onEducationImportCompleted?: (toolName: EducationImportToolName) => void;
+  onEduPiAction?: (action: DesktopControlInput) => boolean | Promise<boolean>;
+  onEduPiComputerAction?: (action: ComputerUseInput, expiresAt?: number) => ComputerUseBridgeResult | Promise<ComputerUseBridgeResult>;
 }
 
 function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string | null {
@@ -216,7 +223,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
   );
 }
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
   const { t } = useI18n();
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
 
@@ -262,6 +269,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
+    onEducationImportCompleted, onEduPiAction, onEduPiComputerAction,
   });
   const sessionBusy = agentRunning || bashRunning;
 
@@ -848,8 +856,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       cwd={session?.cwd ?? newSessionCwd}
       autoFocus={isNew}
       extensionStatuses={extensionStatuses}
-      contextUsage={contextUsage}
-      onSessionStatsPanelOpen={onSessionStatsPanelOpen}
     />
   );
 
@@ -936,8 +942,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               }}
             >
               <div className="chat-empty-brand-copy">
-                <strong>{t("chat.emptyTitle")}</strong>
-                <span>{t("chat.emptySubtitle", { product: PRODUCT_NAME })}</span>
+                <strong>{emptyTitle ?? t("chat.emptyTitle")}</strong>
+                <span>{emptySubtitle ?? t("chat.emptySubtitle", { product: PRODUCT_NAME })}</span>
               </div>
             </div>
             <NoticeShelf notices={notices} align="right" />
@@ -974,7 +980,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               {loading || error ? (
                 <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center">
                   {loading ? (
-                    <div className="text-text-muted">{t("chat.loadingSession")}</div>
+                    <div className="chat-session-skeleton">
+                      <span className="sr-only">{t("chat.loadingSession")}</span>
+                      <div className="chat-session-skeleton__row is-user" />
+                      <div className="chat-session-skeleton__row" />
+                      <div className="chat-session-skeleton__row is-short" />
+                    </div>
                   ) : (
                     <>
                       <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 600 }}>
@@ -1217,7 +1228,7 @@ function ExtensionDialog({
       >
         <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border)" }}>
           <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 650 }}>{request.title}</div>
-          <div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 11, fontFamily: "var(--font-mono)" }}>{t("chat.extensionRequest")}</div>
+          <div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 11, fontFamily: "var(--font-mono)" }}>教师任务需要你的确认</div>
         </div>
 
         <div style={{ padding: 14 }}>

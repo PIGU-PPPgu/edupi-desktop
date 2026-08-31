@@ -1,0 +1,381 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+
+test("the EduPi shell owns the default desktop surface and embeds Agent collaboration", async () => {
+  const appShell = await read("./AppShell.tsx");
+  assert.match(appShell, /display: edupiEducationModule \? "none" : "flex"/);
+  assert.match(appShell, /chatPanel=\{edupiChatWindow\}/);
+  assert.doesNotMatch(appShell, /agentPanel=\{edupiChatWindow\}/);
+  assert.match(appShell, /chatSidebar=\{renderSessionSidebar\("embedded-chat"\)\}/);
+  assert.match(appShell, /onSessionCreated=\{handleEducationSessionCreated\}/);
+  assert.match(appShell, /renderFilePreview=/);
+  assert.doesNotMatch(appShell, /<EduPiEducationHome/);
+});
+
+test("the teacher workbench exposes the complete task and review workflow", async () => {
+  const appShell = await read("./AppShell.tsx");
+  const panel = await read("./EduPiEducationPanel.tsx");
+  const rail = await read("./EduPiNavigationRail.tsx");
+  const taskStage = await read("./EduPiTaskStage.tsx");
+  const inspector = await read("./EduPiInspector.tsx");
+  const objectSider = await read("./EduPiObjectSider.tsx");
+  const calendarWorkspace = await read("./EduPiCalendarWorkspace.tsx");
+  const calendarModule = await read("./EduPiCalendarModule.tsx");
+  const taskBoard = await read("./EduPiWorkspaceBoard.tsx");
+  const taskBoardModel = await read("../lib/edupi-task-board.ts");
+  const calendarModel = await read("../lib/edupi-calendar-model.ts");
+  const workspaceViews = await read("./EduPiWorkspaceViews.tsx");
+  const workbench = await read("../lib/edupi-workbench.ts");
+  assert.match(panel, /fetch\("\/api\/edupi\/education"/);
+  assert.match(panel, /fetch\("\/api\/edupi\/status"/);
+  assert.match(panel, /Core 已连接/);
+  assert.doesNotMatch(panel, /本地工作区 · 已连接/);
+  assert.match(panel, /method: "POST"/);
+  assert.match(panel, /const refreshed = await loadWorkspace\(\)/);
+  for (const label of ["AI 协作", "今天", "工作区", "教学", "班级", "日程", "教育记忆", "观察与洞察", "成长", "材料", "待我确认"]) {
+    assert.match(`${rail}\n${workbench}`, new RegExp(label));
+  }
+  assert.match(workbench, /id: "calendar", label: "日程", shortLabel: "日程"/);
+  assert.match(workbench, /id: "workspace", label: "工作区", shortLabel: "任务板"/);
+  assert.match(objectSider, /calendar: "日程"/);
+  assert.match(workspaceViews, /EduPiCalendarWorkspace/);
+  assert.match(workspaceViews, /EduPiWorkspaceBoard/);
+  assert.match(workbench, /export function taskPresentation/);
+  assert.match(taskBoard, /taskPresentation\(task\)/);
+  assert.match(calendarModel, /taskPresentation\(task\)/);
+  assert.doesNotMatch(calendarModel, /taskContentStatusLabel\(task\)/);
+  for (const label of ["待处理", "进行中", "待我确认", "已完成"]) assert.match(`${taskBoard}\n${taskBoardModel}`, new RegExp(label));
+  for (const label of ["新建任务", "移动到", "创建任务", "取消"]) assert.match(taskBoard, new RegExp(label));
+  assert.match(taskBoard, /onPointerDown/);
+  assert.match(taskBoard, /onPointerMove/);
+  assert.match(taskBoard, /dragTarget/);
+  assert.match(taskBoard, /onInput/);
+  assert.match(taskBoard, /await onMoveTask/);
+  assert.doesNotMatch(workspaceViews, /EduPiRhythmImporter/);
+  for (const label of ["行事历", "待确认", "今天", "上一时段", "下一时段", "日", "周", "月", "新建日程", "添加课表", "上传文件", "日期待确认"]) assert.match(calendarWorkspace, new RegExp(label));
+  assert.match(calendarWorkspace, /compact=\{entry\.kind !== "task"\}/);
+  assert.match(calendarWorkspace, /entry\.sourceLabel/);
+  assert.match(calendarWorkspace, /entry\.statusLabel/);
+  assert.match(objectSider, /isRecognizedTimetableNote\(slot\.notes\)/);
+  assert.match(calendarModule, /isRecognizedTimetableNote\(slot\.notes\) \? " · 待确认"/);
+  for (const group of ["协作", "教师工作", "长期积累", "控制"]) assert.match(rail, new RegExp(group));
+  assert.doesNotMatch(rail, /views: \[[^\]]*"tasks"/);
+  assert.doesNotMatch(rail, /views: \[[^\]]*"artifacts"/);
+  assert.doesNotMatch(rail, /views: \[[^\]]*"students"/);
+  assert.match(workbench, /id: "tasks", label: "教学任务"/);
+  assert.match(workbench, /id: "artifacts", label: "教学产物"/);
+  assert.match(workspaceViews, /function TeachingView/);
+  assert.match(workspaceViews, /function HomeroomView/);
+  assert.match(workspaceViews, /function MemoryView/);
+  assert.match(workspaceViews, /function InsightsView/);
+  assert.match(workspaceViews, /function GrowthView/);
+  assert.match(workspaceViews, /continuity\.subjectKnowledge/);
+  assert.match(workspaceViews, /continuity\.familyContacts/);
+  assert.match(workspaceViews, /continuity\.documents/);
+  assert.match(workspaceViews, /task\.trigger === "teaching_adjustment_candidate"/);
+  assert.match(workspaceViews, /task\.trigger === "student_follow_up"/);
+  for (const step of ["观察", "准备", "审核", "留痕"]) assert.match(workspaceViews, new RegExp(step));
+  for (const section of ["交给 EduPi", "EduPi 已经准备好", "今天要判断", "接下来", "值得留意"]) assert.match(`${workspaceViews}\n${await read("./EduPiTodayWork.tsx")}`, new RegExp(section));
+  assert.match(workspaceViews, /onStartAgent/);
+  assert.match(workspaceViews, /complete === steps\.length \? taskStatusLabel\(task\)/);
+  assert.match(workspaceViews, /event !== currentWeek/);
+  assert.match(panel, /showObjectSider/);
+  assert.match(panel, /activeView === "tasks" && activeTask \? <EduPiTaskWorkspace/);
+  assert.match(panel, /onStartAgent=/);
+  assert.match(panel, /pendingAgentPrompt/);
+  assert.match(panel, /requestAnimationFrame/);
+  assert.match(panel, /new EventSource\("\/api\/agent\/running\/events"\)/);
+  assert.match(panel, /runningAgentCount/);
+  assert.match(panel, /activeAgentSessionId/);
+  assert.match(panel, /useEduPiContentSiderCollapse/);
+  assert.match(`${panel}\n${objectSider}`, /收起列表/);
+  assert.match(panel, />列表</);
+  assert.match(panel, /\/api\/edupi\/tasks\/\$\{encodeURIComponent\(pendingTaskBinding\.taskId\)\}\/session/);
+  assert.match(appShell, /onActivateAgentSession=/);
+  assert.match(appShell, /params\.set\("stage", stage\)/);
+  assert.match(panel, /stage: activeStage/);
+  assert.match(workspaceViews, /taskSessions/);
+  for (const label of ["Agent 正在运行", "继续协作", "开始协作", "恢复协作"]) assert.match(taskStage, new RegExp(label));
+  assert.match(workspaceViews, /Agent 就绪/);
+  assert.match(workspaceViews, /个 Agent 运行中/);
+  assert.match(panel, /searchParams\.get\("inspector"\) === "1"/);
+  assert.match(panel, /inspectorOpen \? "收起检查" : "检查"/);
+  assert.doesNotMatch(inspector, /edupi-inspector-reopen/);
+  assert.doesNotMatch(workspaceViews, /edupi-dashboard-columns/);
+  for (const action of ["accept", "modify", "hold", "reject", "rollback"]) {
+    assert.match(taskStage, new RegExp(`submit\\(\"${action}\"\\)`));
+  }
+});
+
+test("the dashboard wires the Core work-candidate inbox with six receipt-bound actions", async () => {
+  const component = await read("./EduPiTodayWork.tsx");
+  const workspaceViews = await read("./EduPiWorkspaceViews.tsx");
+  const css = await read("../app/edupi-workbench.css");
+  const helper = await read("../lib/edupi-today-work.ts");
+  assert.match(workspaceViews, /EduPiTodayWork/);
+  assert.match(component, /data\.workCandidates/);
+  for (const label of ["今天要判断", "现在", "稍后", "已完成", "接受", "调整", "暂缓", "稍后", "停止提示", "拒绝"]) assert.match(component, new RegExp(label));
+  assert.match(component, /教师工作/);
+  assert.doesNotMatch(component, /Core Today|Core 尚未开放/);
+  assert.match(component, /<h3 id=/);
+  assert.match(component, /<h4>/);
+  for (const id of ["edupi-today-work-edit-title", "edupi-today-work-edit-summary", "edupi-today-work-edit-due", "edupi-today-work-snooze-until", "edupi-today-work-suppression-scope", "edupi-today-work-suppression-note"]) {
+    assert.match(component, new RegExp(`htmlFor=\\"${id}\\"`));
+    assert.match(component, new RegExp(`id=\\"${id}\\"`));
+  }
+  assert.match(component, /workCandidateReasonLabel\(candidate\.reason\)/);
+  assert.match(component, /min=\{tomorrow\(\)\}/);
+  assert.match(css, /\.edupi-today-work__group > header h3/);
+  assert.doesNotMatch(css, /\.edupi-today-work__group > header h2/);
+  assert.match(css, /\.edupi-today-work__item h4/);
+  assert.match(helper, /review_work_candidate/);
+  assert.match(helper, /expectedSnapshotId/);
+  assert.match(helper, /expectedRevision/);
+  assert.match(component, /onEducation\(result\.data/);
+  assert.match(component, /useSyncExternalStore/);
+  assert.match(component, /aria-busy=\{busy\}/);
+  assert.match(component, /setFeedback\(null\)/);
+  assert.doesNotMatch(component, /result\??\.reason/);
+  assert.doesNotMatch(component, /setCandidates|data\.tasks/);
+  assert.doesNotMatch(component, /body\.(?:externalSend|sourceIds|evidenceIds|reviewer|issuedAt|provider|model|token)/);
+});
+
+test("refreshes education data after Core imports without remounting chat", async () => {
+  const appShell = await read("./AppShell.tsx");
+  const panel = await read("./EduPiEducationPanel.tsx");
+  const loadEffect = panel.slice(
+    panel.indexOf("useEffect(() => {"),
+    panel.indexOf("useEffect(() => {", panel.indexOf("useEffect(() => {") + 1),
+  );
+  const agentEndHandler = appShell.slice(
+    appShell.indexOf("const handleAgentEnd"),
+    appShell.indexOf("const handleEducationImportCompleted"),
+  );
+
+  assert.match(appShell, /const \[educationRefreshKey, setEducationRefreshKey\] = useState\(0\)/);
+  assert.match(agentEndHandler, /setEducationRefreshKey\(\(key\) => key \+ 1\)/);
+  assert.match(appShell, /const handleEducationImportCompleted = useCallback\(\(\) => \{/);
+  assert.match(appShell, /onEducationImportCompleted=\{handleEducationImportCompleted\}/);
+  assert.match(appShell, /refreshKey=\{educationRefreshKey\}/);
+  assert.match(appShell, /key=\{`edupi-chat-\$\{sessionKey\}`\}/);
+  assert.doesNotMatch(appShell, /edupi-chat-\$\{educationRefreshKey\}/);
+  assert.match(panel, /refreshKey\?: number/);
+  assert.match(loadEffect, /\}, \[loadWorkspace, refreshKey\]\);/);
+});
+
+test("keeps the existing Chat subtree mounted during background education refreshes", async () => {
+  const panel = await read("./EduPiEducationPanel.tsx");
+
+  assert.match(panel, /shouldShowBlockingEducationLoad\(/);
+  assert.match(panel, /aria-busy=\{loading \? true : undefined\}/);
+  assert.match(panel, /onClick=\{retryLoadWorkspace\}/);
+  assert.match(panel, /教育数据刷新失败 · 重试/);
+  assert.match(panel, /className="edupi-teacher-shell is-loading"/);
+  assert.match(panel, /<EduPiPersistentChatHost/);
+  assert.equal((panel.match(/\{chatPanel\}/g) || []).length, 1);
+  assert.match(panel, /mode=\{drawer === "agent" \? "drawer" : activeView === "chat" \? "main" : "hidden"\}/);
+  assert.doesNotMatch(panel, /activeView === "chat" \? <div className="edupi-chat-surface">\{chatPanel\}/);
+  assert.doesNotMatch(panel, /if \(loading \|\| loadError \|\| !education\)/);
+});
+
+test("routes education uploads through Desktop staging without Core paths or auto-send", async () => {
+  const panel = await read("./EduPiEducationPanel.tsx");
+  const workspaceViews = await read("./EduPiWorkspaceViews.tsx");
+  const home = await read("./EduPiEducationHome.tsx");
+  const explorer = await read("./FileExplorer.tsx");
+  const sidebar = await read("./SessionSidebar.tsx");
+  const appShell = await read("./AppShell.tsx");
+  const openUpload = panel.slice(
+    panel.indexOf("const openUpload"),
+    panel.indexOf("const openFile"),
+  );
+
+  assert.match(openUpload, /stageDesktopMaterialPaths|materialUploadInputRef/);
+  assert.match(panel, /stageBrowserMaterialFiles/);
+  assert.match(panel, /processStagedMaterials/);
+  assert.match(panel, /recognize: true/);
+  assert.match(panel, /loadStagedMaterials|listDesktopStagedMaterials/);
+  assert.match(panel, /type="file"/);
+  assert.match(workspaceViews, /stagedMaterials/);
+  assert.match(workspaceViews, /接入 EduPi/);
+  assert.match(panel, /fetch\("\/api\/edupi\/intake"/);
+  assert.doesNotMatch(openUpload, /selectView\("chat"\)|setPendingAgentPrompt|handleSend|sendAgentCommand/);
+  for (const source of [panel, home, explorer, sidebar, appShell]) {
+    assert.doesNotMatch(source, /\.edupi\/inbox\/teacher-materials/);
+  }
+});
+
+test("calendar entries and sidebar nodes open a right-side raw detail drawer without exposing hashes", async () => {
+  const panel = await read("./EduPiEducationPanel.tsx");
+  const calendarWorkspace = await read("./EduPiCalendarWorkspace.tsx");
+  const objectSider = await read("./EduPiObjectSider.tsx");
+  const workspaceViews = await read("./EduPiWorkspaceViews.tsx");
+  const css = `${await read("../app/edupi-workspace.css")}\n${await read("../app/edupi-workbench.css")}`;
+  assert.match(panel, /calendarSelection/);
+  assert.match(calendarWorkspace, /CalendarDetailDrawer/);
+  assert.match(calendarWorkspace, /onSelect\(\{ kind: entry\.kind, sourceId:/);
+  assert.match(calendarWorkspace, /className=\{`\$\{entryClass\(entry\)\}/);
+  assert.match(objectSider, /onCalendarItem/);
+  assert.match(objectSider, /edupi-object-fact is-interactive/);
+  assert.match(css, /\.edupi-calendar-detail/);
+  assert.match(css, /translateX/);
+  assert.doesNotMatch(workspaceViews, /source_hash\.slice|sourceHash\.slice/);
+});
+
+test("board and calendar task entries share a mounted task peek drawer", async () => {
+  const panel = await read("./EduPiEducationPanel.tsx");
+  const board = await read("./EduPiWorkspaceBoard.tsx");
+  const calendar = await read("./EduPiCalendarWorkspace.tsx");
+  const workspaceViews = await read("./EduPiWorkspaceViews.tsx");
+  const drawer = await read("./EduPiTaskDetailDrawer.tsx");
+  const objectSider = await read("./EduPiObjectSider.tsx");
+  const taskStage = await read("./EduPiTaskStage.tsx");
+  const css = await read("../app/edupi-workbench.css");
+
+  assert.match(board, /onTaskDetail/);
+  assert.match(board, /taskPresentation\(task\)\.label/);
+  assert.doesNotMatch(board, /if \(task\.boardStage === "done"\)/);
+  assert.match(board, /onOpen=\{\(\) => onTaskDetail\(task\)\}/);
+  assert.doesNotMatch(board, /onTask\(task, cardStage/);
+  assert.match(calendar, /taskForCalendarEntry/);
+  assert.match(calendar, /entry\.kind === "task" \? onTaskDetail\(entry\)/);
+  assert.match(calendar, /onTaskDetail=\{openTaskDetail\}/);
+  assert.match(workspaceViews, /onTaskDetail: \(task: TeacherTask\)/);
+  assert.match(workspaceViews, /<EduPiWorkspaceBoard[^>]+onTaskDetail=\{props\.onTaskDetail\}/);
+  assert.match(workspaceViews, /<EduPiCalendarWorkspace[^>]+onTaskDetail=\{onTaskDetail\}/);
+  assert.match(panel, /const \[taskDetailTask, setTaskDetailTask\]/);
+  assert.match(panel, /const openTaskDetail = useCallback/);
+  assert.match(panel, /<EduPiTaskDetailDrawer/);
+  assert.match(panel, /onTaskDetail=\{openTaskDetail\}/);
+  assert.match(panel, /const openAgentForTask = useCallback\(\(task: TeacherTask\) =>/);
+  assert.match(panel, /const openAgent = useCallback\(\(\) =>/);
+  assert.match(panel, /activateAgent\(task, "tasks", "run"\)/);
+  assert.match(panel, /onOpenTask=\{selectTask\}/);
+  assert.match(panel, /onOpenAgent=\{openAgentForTask\}/);
+  assert.doesNotMatch(panel, /continueTask/);
+  assert.match(panel, /<EduPiPersistentChatHost/);
+
+  for (const label of ["任务进度", "已准备", "计划交付", "依据", "教师反馈", "打开产物", "进入任务", "继续让 EduPi 做"]) assert.match(drawer, new RegExp(label));
+  assert.match(drawer, /taskAgentSteps\(task\)/);
+  assert.match(drawer, /taskArtifacts\(task\)/);
+  assert.match(drawer, /taskEvidenceRows\(task\)/);
+  assert.match(drawer, /taskStatusLabel\(task\)/);
+  assert.match(drawer, /taskContentReady\(task\)/);
+  assert.match(drawer, /taskArtifactFile\(task, workspace\)/);
+  assert.match(drawer, /onOpenTask\(task\)/);
+  assert.match(drawer, /onOpenAgent\(task\)/);
+  assert.doesNotMatch(drawer, /onStartAgent/);
+  assert.match(drawer, /event\.key === "Escape"/);
+  assert.match(drawer, /event\.stopPropagation\(\)/);
+  assert.match(drawer, /event\.target === event\.currentTarget/);
+  assert.match(drawer, /previouslyFocusedRef/);
+  assert.match(drawer, /querySelectorAll/);
+  assert.match(drawer, /document\.contains\(previouslyFocused\)/);
+  assert.doesNotMatch(drawer, /file_sha256|sha256|复制/i);
+  assert.doesNotMatch(drawer, /<button[^>]+disabled/);
+  assert.doesNotMatch(drawer, /artifact\.revision|版本/);
+  assert.match(objectSider, /taskArtifacts\(task\)/);
+  assert.doesNotMatch(objectSider, /const artifacts = tasks\.filter\(\(task\) => task\.deliverables\.length > 0\)/);
+  assert.doesNotMatch(taskStage, /artifact\.revision|版本/);
+  assert.doesNotMatch(workspaceViews, /artifact\.revision|v\{artifact\.revision\}/);
+  assert.match(css, /\.edupi-task-detail-layer/);
+  assert.match(css, /\.edupi-task-detail-drawer/);
+  assert.match(css, /width: min\(420px/);
+  assert.match(css, /\.edupi-task-detail-drawer \{ width: 100%/);
+
+  const openTaskDetail = panel.slice(panel.indexOf("const openTaskDetail"), panel.indexOf("const openTaskFile"));
+  assert.doesNotMatch(openTaskDetail, /updateLocation|setActiveView|setActiveStage/);
+});
+
+test("every EduPi module accepts one education material drop without handing it to Chat", async () => {
+  const panel = await read("./EduPiEducationPanel.tsx");
+  const desktop = await read("../lib/desktop-native.ts");
+  const tauri = await read("../src-tauri/src/lib.rs");
+  const css = await read("../app/edupi-workbench.css");
+
+  assert.match(panel, /useDragDrop/);
+  assert.match(panel, /Array\.from\(event\.dataTransfer\.types\)\.includes\("Files"\)/);
+  for (const handler of ["onDragEnterCapture", "onDragOverCapture", "onDragLeaveCapture", "onDropCapture"]) assert.match(panel, new RegExp(handler));
+  assert.match(panel, /event\.stopPropagation\(\)/);
+  assert.match(panel, /stageDesktopMaterialFiles\(files\)/);
+  assert.match(panel, /stageBrowserMaterialFiles\(files\)/);
+  assert.match(panel, /await processStagedMaterials\(staged\)/);
+  assert.match(panel, /上一批材料正在处理/);
+  assert.match(panel, /edupi-global-material-drop/);
+  assert.doesNotMatch(panel.slice(panel.indexOf("const stageBrowserFiles"), panel.indexOf("const openUpload")), /onPrepareAgentPrompt|sendAgentCommand|\/api\/agent/);
+  assert.match(desktop, /stageDesktopMaterialFiles/);
+  assert.match(desktop, /desktopApiHeaders\(\)/);
+  assert.match(tauri, /disable_drag_drop_handler\(\)/);
+  assert.match(css, /\.edupi-global-material-drop/);
+});
+
+test("AppShell monitors Core completion and the panel exposes one derived completion inbox", async () => {
+  const appShell = await read("./AppShell.tsx");
+  const panel = await read("./EduPiEducationPanel.tsx");
+  const inbox = await read("./EduPiCompletionInbox.tsx");
+  const hook = await read("../hooks/useEduPiCompletionMonitor.ts");
+  const helper = await read("../lib/edupi-completion-monitor.ts");
+
+  assert.match(appShell, /useEduPiCompletionMonitor/);
+  assert.match(appShell, /onRefresh: handleEducationProjectionChanged/);
+  assert.match(appShell, /setEducationRefreshKey\(\(key\) => key \+ 1\)/);
+  assert.match(panel, /<EduPiCompletionInbox tasks=\{tasks\} onTask=\{openTaskDetail\}/);
+  assert.match(inbox, /EduPi 已完成/);
+  assert.match(inbox, /completionInboxItems\(tasks\)/);
+  assert.match(hook, /fetch\("\/api\/edupi\/education"/);
+  assert.match(hook, /setTimeout/);
+  assert.match(hook, /AbortController/);
+  assert.match(hook, /baseline === null/);
+  assert.match(hook, /notifyDesktop\(notificationCopy\(changes\)\)/);
+  assert.match(helper, /taskArtifactFile\(task, workspace\)/);
+  for (const source of [appShell, panel, inbox, hook, helper]) assert.doesNotMatch(source, /localStorage|sessionStorage|\.edupi\/output\/.*completion/i);
+});
+
+test("Cmd K and the tray open one EduPi quick entry across tasks, calendar, artifacts, and Chat", async () => {
+  const appShell = await read("./AppShell.tsx");
+  const panel = await read("./EduPiEducationPanel.tsx");
+  const component = await read("./EduPiQuickEntry.tsx");
+  const helper = await read("../lib/edupi-quick-entry.ts");
+  const keyboard = await read("../hooks/useKeyboardShortcuts.ts");
+
+  assert.match(appShell, /const \[quickEntryOpen, setQuickEntryOpen\]/);
+  assert.match(appShell, /quickEntryOpenRef\.current = quickEntryOpen/);
+  assert.match(appShell, /event\.stopImmediatePropagation\(\)/);
+  assert.match(appShell, /window\.addEventListener\("keydown", closeTopmostQuickEntry, true\)/);
+  assert.match(appShell, /onQuickEntry: openQuickEntry/);
+  assert.match(appShell, /listenQuickEntryNative\(openQuickEntry\)/);
+  assert.match(appShell, /quickEntryOpen=\{quickEntryOpen\}/);
+  assert.match(panel, /<EduPiQuickEntry/);
+  assert.match(panel, /item\.kind === "chat"/);
+  assert.match(panel, /item\.kind === "artifact" \? "artifact" : "brief"/);
+  assert.match(panel, /calendarQuickEntryKey/);
+  assert.match(component, /role="combobox"/);
+  assert.match(component, /role="listbox"/);
+  assert.match(component, /event\.key === "ArrowDown"/);
+  assert.match(component, /event\.key === "Escape"/);
+  assert.match(component, /onKeyDownCapture/);
+  assert.match(component, /querySelectorAll<HTMLElement>/);
+  assert.match(component, /event\.stopPropagation\(\)/);
+  assert.match(component, /previousFocusRef/);
+  assert.match(helper, /taskArtifacts\(task\)/);
+  assert.match(keyboard, /isQuickEntryShortcut/);
+  assert.match(keyboard, /e\.defaultPrevented/);
+});
+
+test("the CSS defines a harness workspace with an optional object browser and responsive fallback", async () => {
+  const css = await read("../app/edupi-workbench.css");
+  assert.match(css, /grid-template-columns: 220px minmax\(0, 1fr\)/);
+  assert.match(css, /\.edupi-teacher-body\.has-object-sider/);
+  assert.match(css, /\.edupi-command-center/);
+  assert.match(css, /\.edupi-today-layout/);
+  assert.match(css, /\.edupi-memory-groups/);
+  assert.match(css, /\.edupi-insight-layout/);
+  assert.match(css, /\.edupi-growth-grid/);
+  assert.match(css, /\.edupi-semester-ledger/);
+  assert.match(css, /\.edupi-task-inspector/);
+  assert.match(css, /@media \(max-width: 820px\)/);
+  assert.doesNotMatch(css, /Notion-inspired surface language/);
+});

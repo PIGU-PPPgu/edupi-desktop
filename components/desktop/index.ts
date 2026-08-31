@@ -10,4 +10,3 @@
 
 export { WindowControls } from "./WindowControls";
 export { useDesktopChrome, type DesktopChrome } from "./useDesktopChrome";
-export { useWindowDrag } from "./useWindowDrag";

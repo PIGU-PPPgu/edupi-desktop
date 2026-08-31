@@ -50,7 +50,7 @@ test("keeps the session event stream open through the idle grace window", () => 
   assert.match(promptDoneSource, /scheduleEventStreamClose\(sid\)/);
   assert.match(sendSource, /if \(promptRequestStarted && sentSessionId\) \{[\s\S]*?waitForPromptSettlement/);
   assert.match(sendSource, /if \(promptRequestStarted && sentSessionId\) \{[\s\S]*?return;[\s\S]*?\}[\s\S]*?closeEvents\(\)/);
-  assert.match(sendSource, /opts\.chatInputRef\?\.current\?\.replaceMessage\(userMsg\)/);
+  assert.match(sendSource, /chatInputRef\?\.current\?\.replaceMessage\(userMsg\)/);
   assert.doesNotMatch(sendSource, /if \(e instanceof EventStreamConnectionError\)/);
 });
 
@@ -147,4 +147,34 @@ test("sizes the message tail from the rendered bottom composer", () => {
   assert.match(chatWindowSource, /scrollToBottom\("auto"\)/);
   assert.match(chatWindowSource, /<div ref=\{bottomComposerRef\} className="absolute inset-x-0 bottom-0 z-20">/);
   assert.match(chatWindowSource, /height: bottomComposerHeight/);
+});
+
+test("tracks education import tools by call id and refreshes only once on completion", () => {
+  const startSource = source.slice(
+    source.indexOf('case "tool_execution_start"'),
+    source.indexOf('case "tool_execution_end"'),
+  );
+  const endSource = source.slice(
+    source.indexOf('case "tool_execution_end"'),
+    source.indexOf('case "queue_update"'),
+  );
+  const resetSource = source.slice(
+    source.indexOf("if (sessionIdentity !== appliedIdentity)"),
+    source.indexOf("const currentModel ="),
+  );
+  const unmountSource = source.slice(
+    source.indexOf("// Close SSE / invalidate in-flight work"),
+    source.indexOf("// Load (or reset) when the parent switches sessions"),
+  );
+
+  assert.match(source, /onEducationImportCompleted\?: \(toolName: EducationImportToolName\) => void/);
+  assert.match(source, /const educationToolCallsRef = useRef<Map<string, string>>\(new Map\(\)\)/);
+  assert.match(startSource, /educationToolCallsRef\.current\.set\(id, name\)/);
+  assert.match(endSource, /const name = educationToolCallsRef\.current\.get\(id\)/);
+  assert.match(endSource, /educationToolCallsRef\.current\.delete\(id\)/);
+  assert.match(endSource, /if \(name === "calendar_import" \|\| name === "timetable_import"\) \{[\s\S]*?onEducationImportCompleted\?\.\(name\)/);
+  assert.match(resetSource, /educationToolCallsRef\.current\.clear\(\)/);
+  assert.match(unmountSource, /educationToolCallsRef\.current\.clear\(\)/);
+  assert.match(chatWindowSource, /onEducationImportCompleted\?: \(toolName: EducationImportToolName\) => void/);
+  assert.match(chatWindowSource, /onEducationImportCompleted, onEduPiAction/);
 });

@@ -6,6 +6,7 @@ import {
   APP_UPDATE_PROJECTS,
   APP_UPDATE_RETRY_INTERVAL_MS,
   compareAppVersions,
+  getAvailableAppUpdates,
   getNextAppUpdateCheckAt,
   getLatestAppRelease,
   getUnknownAppReleaseInfo,
@@ -13,16 +14,15 @@ import {
 } from "@/lib/app-updates";
 import type {
   AppComponentReleaseInfo,
-  AppUpdateInfo,
   AppUpdateProjectId,
   AppUpdatesResponse,
 } from "@/lib/app-update-types";
 
 export const dynamic = "force-dynamic";
 
-// Version 3 drops the former pi/pi-web checks and their cached notices.
-const STATE_VERSION = 3;
-const STATE_FILE = "pi-web-update-check.json";
+// Version 4 switches the cached release identity from upstream Pi Agent to EduPi.
+const STATE_VERSION = 4;
+const STATE_FILE = "edupi-desktop-update-check.json";
 
 interface UpdateCheckState {
   version: number;
@@ -140,7 +140,6 @@ async function performUpdateCheck(forceRefresh = false): Promise<AppUpdatesRespo
     project,
     release: await getLatestAppRelease(project),
   })));
-  const updates: AppUpdateInfo[] = [];
   const errors: NonNullable<AppUpdatesResponse["errors"]> = [];
   let stateChanged = false;
 
@@ -151,16 +150,6 @@ async function performUpdateCheck(forceRefresh = false): Promise<AppUpdatesRespo
       state.lastCheckedAt[project.id] = now;
       state.releases[project.id] = result.value.release;
       stateChanged = true;
-      const release = result.value.release;
-      if (release.updateAvailable && release.latestVersion && release.releaseUrl) {
-        updates.push({
-          project: release.project,
-          name: release.name,
-          currentVersion: release.currentVersion,
-          latestVersion: release.latestVersion,
-          releaseUrl: release.releaseUrl,
-        });
-      }
     } else {
       errors.push({
         project: project.id,
@@ -174,28 +163,36 @@ async function performUpdateCheck(forceRefresh = false): Promise<AppUpdatesRespo
     ? now + APP_UPDATE_RETRY_INTERVAL_MS
     : getNextAppUpdateCheckAt(state.lastCheckedAt, now);
 
+  const components = APP_UPDATE_PROJECTS.map((project) => (
+    state.releases[project.id] ?? getUnknownAppReleaseInfo(project)
+  ));
+
   return {
     checkedAt: new Date(now).toISOString(),
     nextCheckAt: new Date(nextCheck).toISOString(),
-    components: APP_UPDATE_PROJECTS.map((project) => (
-      state.releases[project.id] ?? getUnknownAppReleaseInfo(project)
-    )),
-    updates,
+    components,
+    updates: getAvailableAppUpdates(components),
     ...(errors.length > 0 && { errors }),
   };
 }
 
 export async function GET(request: Request) {
   const forceRefresh = new URL(request.url).searchParams.get("refresh") === "1";
-  if (!globalThis.__piWebAppUpdateCheck) {
-    globalThis.__piWebAppUpdateCheck = performUpdateCheck(forceRefresh)
-      .finally(() => {
-        globalThis.__piWebAppUpdateCheck = undefined;
-      });
+  let updateCheck: Promise<AppUpdatesResponse>;
+  if (forceRefresh) {
+    updateCheck = performUpdateCheck(true);
+  } else {
+    if (!globalThis.__piWebAppUpdateCheck) {
+      globalThis.__piWebAppUpdateCheck = performUpdateCheck()
+        .finally(() => {
+          globalThis.__piWebAppUpdateCheck = undefined;
+        });
+    }
+    updateCheck = globalThis.__piWebAppUpdateCheck;
   }
 
   try {
-    return Response.json(await globalThis.__piWebAppUpdateCheck);
+    return Response.json(await updateCheck);
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : String(error) },

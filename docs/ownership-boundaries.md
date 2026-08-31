@@ -154,9 +154,9 @@ Safe to edit freely; upstream never touches them. Full list in the manifest's
 
 - **`package.json` is still named `@agegr/pi-web`.** This is intentional. Upstream
   edits its own name and version on every release; renaming the fork would produce a
-  conflict in `package.json` on every single sync. The user-facing brand comes from
-  `lib/branding.ts` and `src-tauri/tauri.conf.json` instead. (JSON has no comments,
-  which is why this note lives here.)
+  conflict in `package.json` on every single sync. The fork is marked `private` so it
+  cannot publish that npm name, while its repository metadata points to EduPi. The
+  user-facing brand comes from `lib/branding.ts` and `src-tauri/tauri.conf.json`.
 - **`next.config.ts` keeps its hand-written `serverExternalPackages` list.** It is
   tempting to derive it from `package.json`, but this file is upstream-owned and
   upstream updates that list itself when it adds a pi package. Auto-deriving it here

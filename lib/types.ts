@@ -1,3 +1,6 @@
+import type { DesktopControlInput } from "./edupi-desktop-control";
+import type { ComputerUseInput } from "./edupi-computer-use";
+
 // Types mirrored from pi-mono coding-agent session-manager
 
 export interface SessionHeader {
@@ -179,6 +182,22 @@ export type ExtensionUiRequest =
       id: string;
       method: "set_editor_text";
       text: string;
+    }
+  | {
+      type: "extension_ui_request";
+      id: string;
+      method: "edupi_action";
+      action: DesktopControlInput;
+      timeout?: number;
+      expiresAt?: number;
+    }
+  | {
+      type: "extension_ui_request";
+      id: string;
+      method: "edupi_computer_action";
+      action: ComputerUseInput;
+      timeout?: number;
+      expiresAt?: number;
     }
   | {
       type: "extension_ui_request";

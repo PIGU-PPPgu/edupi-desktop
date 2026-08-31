@@ -23,9 +23,7 @@ import {
   selectFilesNative,
 } from "@/lib/desktop-native";
 import type { ExtensionStatusItem } from "@/lib/types";
-import type { ContextUsage } from "@/lib/pi-types";
 import { ExtensionStatusBar } from "./ExtensionStatusBar";
-import { ContextUsageRing } from "./ContextUsageRing";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
@@ -83,15 +81,12 @@ interface Props {
   autoFocus?: boolean;
   /** Extension footer statuses (tools/err/last, etc.) shown next to the model selector */
   extensionStatuses?: ExtensionStatusItem[];
-  /** Live context-window usage (numerator) for the usage ring next to the model selector */
-  contextUsage?: ContextUsage | null;
-  /** Open the top-bar session-stats panel when the usage ring is clicked */
-  onSessionStatsPanelOpen?: () => void;
 }
 
 export interface ChatInputHandle {
   insertText: (text: string) => void;
   insertIfEmpty: (text: string) => void;
+  replaceText: (text: string) => void;
   replaceMessage: (message: UserMessage) => void;
   prependText: (text: string) => void;
   addImages: (files: File[]) => void;
@@ -377,10 +372,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   cwd,
   autoFocus = false,
   extensionStatuses = [],
-  contextUsage,
-  onSessionStatsPanelOpen,
 }: Props, ref) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const isMobile = useIsMobile();
   const [value, setValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
@@ -447,6 +440,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       requestAnimationFrame(() => {
         if (!ta) return;
         ta.focus();
+        ta.style.height = "auto";
+        ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+      });
+    },
+    replaceText(text: string) {
+      const ta = textareaRef.current;
+      setValue(text);
+      setAtQuery(null);
+      setHistoryMenuOpen(false);
+      requestAnimationFrame(() => {
+        if (!ta) return;
+        ta.focus();
+        ta.setSelectionRange(text.length, text.length);
         ta.style.height = "auto";
         ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
       });
@@ -1206,10 +1212,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     : null;
   const thinkingDisplayLabel = (() => {
     const lvl = thinkingLevel ?? "auto";
-    if (lvl === "auto" || !thinkingLevelMap) return lvl;
+    const localized: Record<string, string> = { auto: "自动", off: "关闭", minimal: "极简", low: "低", medium: "中", high: "高", xhigh: "很高", max: "最大" };
+    if (lvl === "auto" || !thinkingLevelMap) return locale === "zh-CN" ? localized[lvl] ?? lvl : lvl;
     return thinkingLevelMap[lvl] ?? lvl;
   })();
-  const toolPresetLabel = Object.entries(TOOL_PRESET_MAP).find(([, v]) => v === (toolPreset ?? "default"))?.[0] ?? "default";
+  const rawToolPresetLabel = Object.entries(TOOL_PRESET_MAP).find(([, v]) => v === (toolPreset ?? "default"))?.[0] ?? "default";
+  const toolPresetLabel = locale === "zh-CN" ? ({ off: "关闭", default: "默认", full: "完整" } as const)[rawToolPresetLabel] : rawToolPresetLabel;
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -1792,9 +1800,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             onPaste={handlePaste}
             placeholder={
               isStreaming && (onSteer || onFollowUp)
-                ? t("chat.steerPlaceholder")
-                : isStreaming ? t("chat.agentPlaceholder")
-                : t("chat.messagePlaceholder")
+                ? "继续补充教学任务，EduPi 会接着处理…"
+                : isStreaming ? "EduPi 正在处理任务…"
+                : "描述教学目标，或继续当前任务…"
             }
             rows={1}
             style={{
@@ -2104,7 +2112,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   })()}
                 </div>
             )}
-            <ContextUsageRing contextUsage={contextUsage} onOpenStats={onSessionStatsPanelOpen} />
             <ExtensionStatusBar statuses={extensionStatuses} />
           </div>
 
@@ -2240,7 +2247,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       const isActive = (thinkingLevel ?? "auto") === lvl;
                        const desc = t(THINKING_LEVEL_DESC_KEYS[lvl]);
                       const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
-                      const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
+                      const localizedLabel = locale === "zh-CN" ? ({ auto: "自动", off: "关闭", minimal: "极简", low: "低", medium: "中", high: "高", xhigh: "很高", max: "最大" } as const)[lvl] : lvl;
+                      const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : localizedLabel;
                       const showOriginal = mappedVal != null && mappedVal !== lvl;
                       return (
                         <button
@@ -2342,7 +2350,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           {isActive
                             ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
                             : <span style={{ width: 10, flexShrink: 0 }} />}
-                          <span style={{ flex: 1 }}>{lvl}</span>
+                          <span style={{ flex: 1 }}>{locale === "zh-CN" ? ({ off: "关闭", default: "默认", full: "完整" } as const)[lvl] : lvl}</span>
                           <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
                         </button>
                       );

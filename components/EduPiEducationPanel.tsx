@@ -1,0 +1,801 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type ReactElement, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { EducationContract, TaskReviewAction, TeacherTask } from "@/lib/edupi-education-contract";
+import type { CalendarItemSelection } from "@/lib/edupi-calendar-model";
+import type { EducationModule } from "@/lib/edupi-education-ui";
+import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
+import {
+  isTaskStage,
+  isTaskActionable,
+  isWorkbenchView,
+  moduleFromView,
+  taskKey,
+  taskSourceLabel,
+  viewFromModule,
+  workbenchViews,
+  type TaskStage,
+  type WorkbenchView,
+} from "@/lib/edupi-workbench";
+import { EduPiContextEditor } from "./EduPiContextEditor";
+import { EduPiPersistentChatHost } from "./EduPiPersistentChatHost";
+import { EduPiInspector } from "./EduPiInspector";
+import { EduPiNavigationRail } from "./EduPiNavigationRail";
+import { EduPiObjectSider } from "./EduPiObjectSider";
+import { EduPiTaskDetailDrawer } from "./EduPiTaskDetailDrawer";
+import { EduPiTaskWorkspace } from "./EduPiTaskWorkspace";
+import type { ReviewPayload } from "./EduPiTaskStage";
+import { EduPiWorkspaceDrawer } from "./EduPiWorkspaceDrawer";
+import { EduPiWorkspaceViews } from "./EduPiWorkspaceViews";
+import { EduPiC1Review } from "./EduPiC1Review";
+import { EduPiCompletionInbox } from "./EduPiCompletionInbox";
+import { EduPiQuickEntry } from "./EduPiQuickEntry";
+import { useEduPiContentSiderCollapse } from "@/hooks/useEduPiContentSiderCollapse";
+import { useDragDrop } from "@/hooks/useDragDrop";
+import { createActivationRequestTracker } from "@/lib/edupi-activation-request";
+import { shouldShowBlockingEducationLoad } from "@/lib/edupi-workspace-load-state";
+import { isTauriDesktop } from "@/lib/desktop-updater";
+import { listDesktopStagedMaterials, removeDesktopStagedMaterial, selectFilesNative, stageDesktopMaterialFiles, stageDesktopMaterialPaths } from "@/lib/desktop-native";
+import { loadStagedMaterials, removeStagedMaterial, stageBrowserMaterialFiles, type MaterialStagingDescriptor } from "@/lib/edupi-material-staging-client";
+import type { TaskBoardLaneId } from "@/lib/edupi-task-board";
+import { calendarQuickEntryKey, calendarQuickEntryStatusLabel, type EduPiQuickEntryItem } from "@/lib/edupi-quick-entry";
+
+type Props = {
+  initialModule?: EducationModule;
+  refreshKey?: number;
+  activeAgentSessionId: string | null;
+  onActivateAgentSession: (input: { taskId: string; sessionId: string | null; cwd: string; view: "tasks" | "review"; stage: TaskStage; signal: AbortSignal }) => Promise<"existing" | "new">;
+  chatPanel: ReactNode;
+  chatSidebar: ReactNode;
+  renderFilePreview: (path: string) => ReactNode;
+  onOpenAdmin: () => void;
+  onPrepareAgentPrompt: (prompt: string) => void;
+  onReplaceAgentPrompt: (prompt: string) => void;
+  quickEntryOpen: boolean;
+  onCloseQuickEntry: () => void;
+  onFocusAgentChat: () => void;
+};
+
+type FileWorkspaceDrawerProps = {
+  kind: "file";
+  task: TeacherTask | undefined;
+  filePath: string | null;
+  filePanel: ReactNode;
+  onClose: () => void;
+  onPreparePrompt: (prompt: string) => void;
+};
+
+const FileWorkspaceDrawer = EduPiWorkspaceDrawer as unknown as (props: FileWorkspaceDrawerProps) => ReactElement | null;
+
+type AgentPromptMode = "insert" | "replace";
+
+type CoreConnection = {
+  label: string;
+  ready: boolean;
+  reason: string | null;
+};
+
+type EducationIntakeApiResult = {
+  error?: string;
+  staged?: MaterialStagingDescriptor[];
+  recognition?: { eventCount?: number; slotCount?: number };
+};
+
+const reviewLabels: Record<TaskReviewAction, string> = {
+  accept: "已接受",
+  modify: "已修改并接受",
+  reject: "已拒绝",
+  hold: "已暂缓",
+  rollback: "已回滚",
+};
+
+function hasDroppedFiles(event: ReactDragEvent): boolean {
+  return Array.from(event.dataTransfer.types).includes("Files");
+}
+
+export function EduPiEducationPanel({ initialModule = "home", refreshKey, activeAgentSessionId, onActivateAgentSession, chatPanel, chatSidebar, renderFilePreview, onOpenAdmin, onPrepareAgentPrompt, onReplaceAgentPrompt, quickEntryOpen, onCloseQuickEntry, onFocusAgentChat }: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedView = searchParams.get("view");
+  const requestedStage = searchParams.get("stage");
+  const [activeView, setActiveView] = useState<WorkbenchView>(() => isWorkbenchView(requestedView) ? requestedView : viewFromModule(initialModule));
+  const [activeStage, setActiveStage] = useState<TaskStage>(() => isTaskStage(requestedStage) ? requestedStage : "brief");
+  const [selectedTaskKey, setSelectedTaskKey] = useState<string | null>(() => searchParams.get("task"));
+  const [education, setEducation] = useState<EducationContract | null>(null);
+  const [context, setContext] = useState<TeacherContextSnapshot | null>(null);
+  const [runningAgentCount, setRunningAgentCount] = useState(0);
+  const [coreConnection, setCoreConnection] = useState<CoreConnection>({ label: "正在连接 Core", ready: false, reason: null });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [inspectorOpen, setInspectorOpen] = useState(() => searchParams.get("inspector") === "1");
+  const [contextOpen, setContextOpen] = useState(false);
+  const [contextBusy, setContextBusy] = useState(false);
+  const [drawer, setDrawer] = useState<"agent" | "file" | null>(null);
+  const [pendingAgentPrompt, setPendingAgentPrompt] = useState<string | null>(null);
+  const [pendingAgentPromptMode, setPendingAgentPromptMode] = useState<AgentPromptMode>("insert");
+  const [pendingTaskBinding, setPendingTaskBinding] = useState<{ taskId: string; previousSessionId: string | null } | null>(null);
+  const [taskSessionBusy, setTaskSessionBusy] = useState(false);
+  const [taskSessionError, setTaskSessionError] = useState<string | null>(null);
+  const [previewPath, setPreviewPath] = useState<string | null>(null);
+  const [reviewBusy, setReviewBusy] = useState<TaskReviewAction | null>(null);
+  const [reviewMessage, setReviewMessage] = useState<string | null>(null);
+  const [stagedMaterials, setStagedMaterials] = useState<MaterialStagingDescriptor[]>([]);
+  const [materialStagingBusy, setMaterialStagingBusy] = useState(false);
+  const [educationIntakeBusy, setEducationIntakeBusy] = useState(false);
+  const [materialStagingMessage, setMaterialStagingMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [calendarSelection, setCalendarSelection] = useState<CalendarItemSelection | null>(null);
+  const [taskDetailTask, setTaskDetailTask] = useState<TeacherTask | null>(null);
+  const [agentTask, setAgentTask] = useState<TeacherTask | null>(null);
+  const taskSessionOpeningRef = useRef(false);
+  const contextModalRef = useRef<HTMLDivElement>(null);
+  const materialUploadInputRef = useRef<HTMLInputElement>(null);
+  const activationRequestsRef = useRef(createActivationRequestTracker());
+  const objectSider = useEduPiContentSiderCollapse(false);
+
+  const cancelActivation = useCallback(() => {
+    activationRequestsRef.current.cancel();
+    taskSessionOpeningRef.current = false;
+    setTaskSessionBusy(false);
+  }, []);
+
+  const loadWorkspace = useCallback(async (signal?: AbortSignal) => {
+    const [contextResponse, educationResponse] = await Promise.all([
+      fetch("/api/edupi/onboarding", { cache: "no-store", signal }),
+      fetch("/api/edupi/education", { cache: "no-store", signal }),
+    ]);
+    if (!contextResponse.ok) throw new Error(`上下文读取失败（HTTP ${contextResponse.status}）`);
+    if (!educationResponse.ok) throw new Error(`教育数据读取失败（HTTP ${educationResponse.status}）`);
+    const [nextContext, nextEducation] = await Promise.all([
+      contextResponse.json() as Promise<TeacherContextSnapshot>,
+      educationResponse.json() as Promise<EducationContract>,
+    ]);
+    setContext(nextContext);
+    setEducation(nextEducation);
+    return nextEducation;
+  }, []);
+
+  const retryLoadWorkspace = useCallback(() => {
+    setLoading(true);
+    setLoadError(null);
+    void loadWorkspace()
+      .catch((error) => {
+        setLoadError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => setLoading(false));
+  }, [loadWorkspace]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setLoadError(null);
+    void loadWorkspace(controller.signal).catch((error) => {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setLoadError(error instanceof Error ? error.message : String(error));
+    }).finally(() => {
+      if (!controller.signal.aborted) setLoading(false);
+    });
+    return () => controller.abort();
+  }, [loadWorkspace, refreshKey]);
+
+  useEffect(() => { if (initialModule === "context") setContextOpen(true); }, [initialModule]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/edupi/status", { cache: "no-store", signal: controller.signal })
+      .then((response) => response.json())
+      .then((status: { core?: { status?: string; reason?: string }; projection?: { status?: string; reason?: string } }) => {
+        const coreReady = status.core?.status === "ready";
+        const projectionReady = status.projection?.status === "ready";
+        setCoreConnection({
+          ready: coreReady,
+          label: coreReady ? (projectionReady ? "Core 已连接" : "教育投影待启用") : "Core 未连接",
+          reason: status.core?.reason || status.projection?.reason || null,
+        });
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setCoreConnection({ label: "Core 未连接", ready: false, reason: "Core health 请求失败" });
+      });
+    return () => controller.abort();
+  }, []);
+
+  const submitEducationIntake = useCallback(async (body: Record<string, unknown>): Promise<EducationIntakeApiResult> => {
+    if (educationIntakeBusy) throw new Error("材料正在接入 EduPi。");
+    setEducationIntakeBusy(true);
+    setMaterialStagingMessage(null);
+    try {
+      const response = await fetch("/api/edupi/intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json() as EducationIntakeApiResult;
+      if (!response.ok) throw new Error(result.error || `接入失败（HTTP ${response.status}）`);
+      if (Array.isArray(result.staged)) setStagedMaterials(result.staged);
+      await loadWorkspace();
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "教育数据接入失败。";
+      setMaterialStagingMessage({ tone: "error", text: message });
+      throw error;
+    } finally {
+      setEducationIntakeBusy(false);
+    }
+  }, [educationIntakeBusy, loadWorkspace]);
+
+  const intakeStagedMaterial = useCallback(async (item: MaterialStagingDescriptor) => {
+    const result = await submitEducationIntake({
+      kind: "material",
+      stagingId: item.staging_id,
+      title: item.original_name,
+      materialKind: "other",
+      subject: context?.subject || null,
+      classId: null,
+      recognize: true,
+    });
+    const eventCount = result.recognition?.eventCount || 0;
+    const slotCount = result.recognition?.slotCount || 0;
+    const recognized = eventCount + slotCount > 0 ? `，识别到 ${eventCount} 条日程、${slotCount} 条课表` : "，未发现日程或课表";
+    setMaterialStagingMessage({ tone: "success", text: `${item.original_name} 已接入 EduPi${recognized}。` });
+    return result;
+  }, [context?.subject, submitEducationIntake]);
+
+  const importCalendarEvent = useCallback(async (event: { date: string; endDate: string | null; name: string; type: string; notes: string | null }) => {
+    await submitEducationIntake({ kind: "calendar", events: [{ ...event, confidence: "teacher_confirmed" }] });
+    setMaterialStagingMessage({ tone: "success", text: "日程已写入 EduPi 行事历。" });
+  }, [submitEducationIntake]);
+
+  const importTimetableSlot = useCallback(async (slot: { dayOfWeek: number; period: number; subject: string; className: string | null; kind: "class" | "routine"; notes: string | null }) => {
+    await submitEducationIntake({ kind: "timetable", slots: [slot] });
+    setMaterialStagingMessage({ tone: "success", text: "课程安排已写入 EduPi 周视图。" });
+  }, [submitEducationIntake]);
+
+  useEffect(() => {
+    const events = new EventSource("/api/agent/running/events");
+    events.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as { runningSessionIds?: unknown };
+        const runningIds = Array.isArray(payload.runningSessionIds)
+          ? payload.runningSessionIds.filter((id): id is string => typeof id === "string")
+          : [];
+        const running = new Set(runningIds);
+        setRunningAgentCount(runningIds.length);
+        setEducation((current) => current ? {
+          ...current,
+          taskSessions: Object.fromEntries(Object.entries(current.taskSessions).map(([taskId, binding]) => [
+            taskId,
+            { ...binding, status: binding.status === "missing" ? "missing" : running.has(binding.sessionId) ? "running" : "idle" },
+          ])),
+        } : current);
+      } catch {
+        // Ignore malformed frames; EventSource will continue with the next snapshot.
+      }
+    };
+    return () => events.close();
+  }, []);
+
+  useEffect(() => {
+    if (isWorkbenchView(requestedView)) setActiveView(requestedView);
+    else setActiveView(viewFromModule(initialModule));
+  }, [initialModule, requestedView]);
+
+  useEffect(() => {
+    if (initialModule === "context") setContextOpen(true);
+  }, [initialModule]);
+
+  useEffect(() => {
+    if (isTaskStage(requestedStage)) setActiveStage(requestedStage);
+  }, [requestedStage]);
+
+  useEffect(() => {
+    const requestedTask = searchParams.get("task");
+    if (requestedTask) setSelectedTaskKey(requestedTask);
+  }, [searchParams]);
+
+  useEffect(() => {
+    const requested = searchParams.get("inspector");
+    setInspectorOpen(requested === "1");
+  }, [searchParams]);
+
+  useEffect(() => {
+    const close = () => {
+      cancelActivation();
+      setDrawer(null);
+      setTaskDetailTask(null);
+      setAgentTask(null);
+      if (!contextBusy) setContextOpen(false);
+      setPendingTaskBinding(null);
+    };
+    window.addEventListener("edupi-close-panel", close);
+    return () => window.removeEventListener("edupi-close-panel", close);
+  }, [cancelActivation, contextBusy]);
+
+  useEffect(() => {
+    if (!contextOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !contextBusy) setContextOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [contextBusy, contextOpen]);
+
+  useEffect(() => {
+    if (!contextOpen) return;
+    const containContextFocus = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || !contextModalRef.current) return;
+      const panel = contextModalRef.current;
+      const elements = Array.from(panel.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex='-1'])"));
+      event.preventDefault();
+      if (elements.length === 0) {
+        panel.focus();
+        return;
+      }
+      const active = document.activeElement;
+      const index = elements.indexOf(active as HTMLElement);
+      if (index === -1) {
+        (event.shiftKey ? elements[elements.length - 1] : elements[0]).focus();
+        return;
+      }
+      const nextIndex = event.shiftKey ? (index - 1 + elements.length) % elements.length : (index + 1) % elements.length;
+      elements[nextIndex].focus();
+    };
+    window.addEventListener("keydown", containContextFocus, true);
+    return () => window.removeEventListener("keydown", containContextFocus, true);
+  }, [contextOpen]);
+
+  useEffect(() => () => cancelActivation(), [cancelActivation]);
+
+  const tasks = useMemo(() => education?.tasks ?? [], [education]);
+  const activeTask = useMemo(() => {
+    const requested = selectedTaskKey ? tasks.find((task) => taskKey(task) === selectedTaskKey) : undefined;
+    if (activeView === "review") {
+      const reviewable = (task: TeacherTask) => isTaskActionable(task);
+      return requested && reviewable(requested) ? requested : tasks.find(reviewable);
+    }
+    return requested ?? tasks.find((task) => task.boardStage !== "done" && task.status === "planned") ?? tasks[0];
+  }, [activeView, selectedTaskKey, tasks]);
+  const pendingCount = tasks.filter((task) => isTaskActionable(task)).length;
+  const c1PendingCount = (education?.observations ?? []).filter((item) => item.teacherReview.state === "pending_review" || item.teacherReview.state === "held").length
+    + (education?.memoryCandidates ?? []).filter((item) => item.teacherReview.state === "pending_review" || item.teacherReview.state === "held").length;
+  const teacherContextPendingCount = (education?.teacherContextCandidates ?? []).filter((item) => item.status === "pending_review" || item.status === "held" || item.teacherReview.state === "pending_review" || item.teacherReview.state === "held").length;
+  const teacherContextLabel = [context?.name, context?.subject, context?.grade].filter(Boolean).join(" · ") || "教师工作区";
+
+  const updateLocation = useCallback((view: WorkbenchView, task: TeacherTask | undefined, stage: TaskStage | undefined, nextInspector = inspectorOpen) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("edupi", "1");
+    params.set("module", moduleFromView(view));
+    params.set("view", view);
+    if (task) params.set("task", taskKey(task)); else params.delete("task");
+    if (stage) params.set("stage", stage); else params.delete("stage");
+    params.set("inspector", nextInspector ? "1" : "0");
+    router.replace(`/?${params.toString()}`, { scroll: false });
+  }, [inspectorOpen, router, searchParams]);
+
+  const selectView = useCallback((view: WorkbenchView) => {
+    const stage = view === "review" ? "review" : view === "tasks" ? activeStage : undefined;
+    cancelActivation();
+    setDrawer(null);
+    setTaskDetailTask(null);
+    setAgentTask(null);
+    setQuery("");
+    setPendingTaskBinding(null);
+    if (view !== "calendar") setCalendarSelection(null);
+    setActiveView(view);
+    if (stage) setActiveStage(stage);
+    updateLocation(view, view === "tasks" || view === "review" ? activeTask : undefined, stage);
+  }, [activeStage, activeTask, cancelActivation, updateLocation]);
+
+  const selectTask = useCallback((task: TeacherTask, stage: TaskStage = "brief") => {
+    const view = stage === "review" && activeView === "review" ? "review" : "tasks";
+    cancelActivation();
+    setSelectedTaskKey(taskKey(task));
+    setActiveView(view);
+    setActiveStage(stage);
+    setReviewMessage(null);
+    setDrawer(null);
+    setTaskDetailTask(null);
+    setAgentTask(null);
+    setPendingTaskBinding(null);
+    updateLocation(view, task, stage);
+  }, [activeView, cancelActivation, updateLocation]);
+
+  const selectStage = useCallback((stage: TaskStage) => {
+    cancelActivation();
+    setActiveStage(stage);
+    updateLocation(activeView === "review" ? "review" : "tasks", activeTask, stage);
+  }, [activeTask, activeView, cancelActivation, updateLocation]);
+
+  const toggleInspector = useCallback(() => {
+    const next = !inspectorOpen;
+    setInspectorOpen(next);
+    updateLocation(activeView, activeTask, activeView === "tasks" || activeView === "review" ? activeStage : undefined, next);
+  }, [activeStage, activeTask, activeView, inspectorOpen, updateLocation]);
+
+  const focusC1Review = useCallback((target: { kind: "observation" | "memory_candidate"; id: string }) => {
+    if (activeView !== "review") selectView("review");
+    requestAnimationFrame(() => {
+      document.getElementById(`edupi-c1-review-${target.kind}-${target.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [activeView, selectView]);
+
+  const reviewTask = useCallback(async (action: TaskReviewAction, payload: ReviewPayload) => {
+    if (!activeTask?.id || !education?.capabilities.taskReview.enabled) return;
+    setReviewBusy(action);
+    setReviewMessage(null);
+    try {
+      const response = await fetch("/api/edupi/education", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId: activeTask.id, action, ...payload }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || `审核失败（HTTP ${response.status}）`);
+      const refreshed = await loadWorkspace();
+      const nextTask = refreshed.tasks.find((task) => task.id === activeTask.id);
+      if (nextTask) setSelectedTaskKey(taskKey(nextTask));
+      setReviewMessage(reviewLabels[action]);
+    } catch (error) {
+      setReviewMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setReviewBusy(null);
+    }
+  }, [activeTask, education?.capabilities.taskReview.enabled, loadWorkspace]);
+
+  const rememberStaged = useCallback((items: MaterialStagingDescriptor[]) => {
+    setStagedMaterials((current) => {
+      const byId = new Map(current.map((item) => [item.staging_id, item]));
+      for (const item of items) byId.set(item.staging_id, item);
+      return [...byId.values()].sort((left, right) => left.staging_id.localeCompare(right.staging_id));
+    });
+  }, []);
+
+  const processStagedMaterials = useCallback(async (items: MaterialStagingDescriptor[]) => {
+    let eventCount = 0;
+    let slotCount = 0;
+    selectView("materials");
+    setMaterialStagingMessage({ tone: "success", text: `正在识别 ${items.length} 份材料…` });
+    for (const item of items) {
+      const result = await intakeStagedMaterial(item);
+      eventCount += result.recognition?.eventCount || 0;
+      slotCount += result.recognition?.slotCount || 0;
+    }
+    const recognized = eventCount + slotCount > 0 ? `识别到 ${eventCount} 条日程、${slotCount} 条课表` : "未发现日程或课表";
+    setMaterialStagingMessage({ tone: "success", text: `${items.length} 份材料已接入 EduPi，${recognized}。` });
+  }, [intakeStagedMaterial, selectView]);
+
+  const stageBrowserFiles = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
+    if (materialStagingBusy || educationIntakeBusy) {
+      setMaterialStagingMessage({ tone: "error", text: "上一批材料正在处理，请稍候。" });
+      return;
+    }
+    setMaterialStagingBusy(true);
+    setMaterialStagingMessage(null);
+    try {
+      const staged = isTauriDesktop()
+        ? await stageDesktopMaterialFiles(files)
+        : await stageBrowserMaterialFiles(files);
+      rememberStaged(staged);
+      await processStagedMaterials(staged);
+    } catch (error) {
+      setMaterialStagingMessage({ tone: "error", text: error instanceof Error ? error.message : "材料暂存失败。" });
+    } finally {
+      setMaterialStagingBusy(false);
+    }
+  }, [educationIntakeBusy, materialStagingBusy, processStagedMaterials, rememberStaged]);
+
+  const { isDragOver: educationFileDragOver, handleDragEnter: handleEducationFileDragEnter, handleDragOver: handleEducationFileDragOver, handleDragLeave: handleEducationFileDragLeave, handleDrop: handleEducationFileDrop } = useDragDrop((files) => { void stageBrowserFiles(files); });
+  const onEducationDragEnterCapture = useCallback((event: ReactDragEvent) => {
+    if (!hasDroppedFiles(event)) return;
+    event.stopPropagation();
+    handleEducationFileDragEnter(event);
+  }, [handleEducationFileDragEnter]);
+  const onEducationDragOverCapture = useCallback((event: ReactDragEvent) => {
+    if (!hasDroppedFiles(event)) return;
+    event.stopPropagation();
+    handleEducationFileDragOver(event);
+  }, [handleEducationFileDragOver]);
+  const onEducationDragLeaveCapture = useCallback((event: ReactDragEvent) => {
+    if (!hasDroppedFiles(event)) return;
+    event.stopPropagation();
+    handleEducationFileDragLeave();
+  }, [handleEducationFileDragLeave]);
+  const onEducationDropCapture = useCallback((event: ReactDragEvent) => {
+    if (!hasDroppedFiles(event)) return;
+    event.stopPropagation();
+    handleEducationFileDrop(event);
+  }, [handleEducationFileDrop]);
+
+  const openUpload = useCallback(() => {
+    if (materialStagingBusy || educationIntakeBusy) return;
+    if (!isTauriDesktop()) {
+      materialUploadInputRef.current?.click();
+      return;
+    }
+    setMaterialStagingBusy(true);
+    setMaterialStagingMessage(null);
+    void selectFilesNative({
+      multiple: true,
+      title: "选择教学材料",
+      filters: [{ name: "教学材料", extensions: ["jpg", "jpeg", "png", "webp", "pdf", "doc", "docx"] }],
+    }).then(async (paths) => {
+      if (paths.length === 0) return;
+      const staged = await stageDesktopMaterialPaths(paths);
+      rememberStaged(staged);
+      await processStagedMaterials(staged);
+    }).catch((error) => {
+      setMaterialStagingMessage({ tone: "error", text: error instanceof Error ? error.message : "材料暂存失败。" });
+    }).finally(() => setMaterialStagingBusy(false));
+  }, [educationIntakeBusy, materialStagingBusy, processStagedMaterials, rememberStaged]);
+
+  const removeStagedMaterialEntry = useCallback(async (item: MaterialStagingDescriptor) => {
+    if (materialStagingBusy || educationIntakeBusy) {
+      setMaterialStagingMessage({ tone: "error", text: "上一批材料正在处理，请稍候。" });
+      return;
+    }
+    setMaterialStagingBusy(true);
+    setMaterialStagingMessage(null);
+    try {
+      const next = isTauriDesktop()
+        ? await removeDesktopStagedMaterial(item.staging_id)
+        : await removeStagedMaterial(item.staging_id);
+      setStagedMaterials(next);
+      setMaterialStagingMessage({ tone: "success", text: `${item.original_name} 已从待接入列表移除。` });
+    } catch (error) {
+      setMaterialStagingMessage({ tone: "error", text: error instanceof Error ? error.message : "移除暂存材料失败。" });
+    } finally {
+      setMaterialStagingBusy(false);
+    }
+  }, [educationIntakeBusy, materialStagingBusy]);
+
+  useEffect(() => {
+    let active = true;
+    const request = isTauriDesktop() ? listDesktopStagedMaterials() : loadStagedMaterials();
+    void request.then((items) => { if (active) setStagedMaterials(items); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  const openFile = useCallback((path: string) => {
+    setPreviewPath(path);
+    setDrawer("file");
+  }, []);
+
+  const openTaskDetail = useCallback((task: TeacherTask) => {
+    cancelActivation();
+    setDrawer(null);
+    setAgentTask(null);
+    setPendingTaskBinding(null);
+    setCalendarSelection(null);
+    setTaskDetailTask(task);
+  }, [cancelActivation]);
+
+  const selectQuickEntry = useCallback((item: EduPiQuickEntryItem) => {
+    onCloseQuickEntry();
+    if (item.kind === "chat") {
+      selectView("chat");
+      requestAnimationFrame(onFocusAgentChat);
+      return;
+    }
+    if (item.kind === "task" || item.kind === "artifact") {
+      const task = tasks.find((value) => taskKey(value) === item.targetKey);
+      if (task) selectTask(task, item.kind === "artifact" ? "artifact" : "brief");
+      return;
+    }
+    const index = education?.calendar.findIndex((event, eventIndex) => calendarQuickEntryKey(event, eventIndex) === item.targetKey) ?? -1;
+    const event = index >= 0 ? education?.calendar[index] : null;
+    if (!event) return;
+    selectView("calendar");
+    setCalendarSelection({
+      kind: "calendar",
+      sourceId: event.id,
+      date: event.date,
+      title: event.name,
+      detail: event.notes,
+      sourceLabel: event.source === "teacher" ? "教师" : event.source === "official_school_calendar" ? "学校校历" : event.type || "校历",
+      statusLabel: calendarQuickEntryStatusLabel(event),
+    });
+  }, [education?.calendar, onCloseQuickEntry, onFocusAgentChat, selectTask, selectView, tasks]);
+
+  const openTaskFile = useCallback((path: string) => {
+    setTaskDetailTask(null);
+    openFile(path);
+  }, [openFile]);
+
+  const closeTaskDetail = useCallback(() => {
+    setTaskDetailTask(null);
+  }, []);
+
+  const createBoardTask = useCallback(async (input: { title: string; dueDate: string | null; note: string | null }) => {
+    const response = await fetch("/api/edupi/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    const result = await response.json() as { error?: string; data?: EducationContract };
+    if (!response.ok || !result.data) throw new Error(result.error || `任务创建失败（HTTP ${response.status}）`);
+    setEducation(result.data);
+  }, []);
+
+  const moveBoardTask = useCallback(async (task: TeacherTask, stage: TaskBoardLaneId) => {
+    if (!task.id) throw new Error("任务缺少可写标识。");
+    const response = await fetch(`/api/edupi/tasks/${encodeURIComponent(task.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stage, expectedRevision: task.boardRevision, note: null }) });
+    const result = await response.json() as { error?: string; data?: EducationContract };
+    if (!response.ok || !result.data) throw new Error(result.error || `任务移动失败（HTTP ${response.status}）`);
+    setEducation(result.data);
+  }, []);
+
+  const closeDrawer = useCallback(() => {
+    cancelActivation();
+    setDrawer(null);
+    setTaskDetailTask(null);
+    setAgentTask(null);
+    setPendingTaskBinding(null);
+  }, [cancelActivation]);
+
+  const activateAgent = useCallback((task: TeacherTask, view: "tasks" | "review", stage: TaskStage) => {
+    if (taskSessionOpeningRef.current) return;
+    if (!task.id || !education) {
+      setAgentTask(task || null);
+      setDrawer("agent");
+      return;
+    }
+    const binding = education.taskSessions[task.id];
+    const reusableSessionId = binding && binding.status !== "missing" ? binding.sessionId : null;
+    const prompt = [
+      `教学任务：${task.title}`,
+      `任务 ID：${task.id}`,
+      `来源：${taskSourceLabel(task)}`,
+      `截止：${task.dueDate || "日期待确认"}`,
+      "要求：仅在教师内部协作，保留来源，不外发；写回事实或产物前等待教师确认。",
+    ].join("\n");
+    taskSessionOpeningRef.current = true;
+    const request = activationRequestsRef.current.begin();
+    setTaskSessionBusy(true);
+    setTaskSessionError(null);
+    void onActivateAgentSession({ taskId: task.id, sessionId: reusableSessionId, cwd: education.workspace, view, stage, signal: request.signal })
+      .then((mode) => {
+        if (!activationRequestsRef.current.isCurrent(request)) return;
+        setAgentTask(task);
+        setPendingTaskBinding(mode === "new" ? { taskId: task.id!, previousSessionId: activeAgentSessionId } : null);
+        setPendingAgentPromptMode("insert");
+        setPendingAgentPrompt(prompt);
+        setDrawer("agent");
+      })
+      .catch((error) => {
+        if (!activationRequestsRef.current.isCurrent(request) || (error instanceof DOMException && error.name === "AbortError")) return;
+        setTaskSessionError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!activationRequestsRef.current.isCurrent(request)) return;
+        taskSessionOpeningRef.current = false;
+        setTaskSessionBusy(false);
+      });
+  }, [activeAgentSessionId, education, onActivateAgentSession]);
+
+  const openAgentForTask = useCallback((task: TeacherTask) => {
+    activateAgent(task, "tasks", "run");
+  }, [activateAgent]);
+
+  const openAgent = useCallback(() => {
+    const task = activeView === "tasks" || activeView === "review" ? activeTask : undefined;
+    if (!task) {
+      setAgentTask(null);
+      setDrawer("agent");
+      return;
+    }
+    const activation = { view: (activeView === "review" ? "review" : "tasks") as "tasks" | "review", stage: activeStage };
+    activateAgent(task, activation.view, activation.stage);
+  }, [activeStage, activeTask, activeView, activateAgent]);
+
+  const startAgent = useCallback((prompt: string, mode: AgentPromptMode = "insert") => {
+    setAgentTask(null);
+    setPendingAgentPromptMode(mode);
+    setPendingAgentPrompt(mode === "replace" ? prompt.trim() : [
+      prompt.trim(),
+      "",
+      `教学上下文：${teacherContextLabel}`,
+      "边界：仅在教师内部处理，保留来源，不外发；写回事实或产物前等待教师确认。",
+    ].join("\n"));
+    if (mode === "replace") {
+      selectView("chat");
+      return;
+    }
+    setDrawer("agent");
+  }, [selectView, teacherContextLabel]);
+
+  useEffect(() => {
+    if (!pendingTaskBinding || !activeAgentSessionId || activeAgentSessionId === pendingTaskBinding.previousSessionId) return;
+    const controller = new AbortController();
+    setTaskSessionBusy(true);
+    void fetch(`/api/edupi/tasks/${encodeURIComponent(pendingTaskBinding.taskId)}/session`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: activeAgentSessionId }),
+      signal: controller.signal,
+    }).then(async (response) => {
+      const result = await response.json() as { error?: string; data?: EducationContract };
+      if (!response.ok) throw new Error(result.error || `任务会话绑定失败（HTTP ${response.status}）`);
+      if (result.data) setEducation(result.data);
+      setPendingTaskBinding(null);
+    }).catch((error) => {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setTaskSessionError(error instanceof Error ? error.message : String(error));
+    }).finally(() => {
+      if (!controller.signal.aborted) setTaskSessionBusy(false);
+    });
+    return () => controller.abort();
+  }, [activeAgentSessionId, pendingTaskBinding]);
+
+  useEffect(() => {
+    if (drawer !== "agent" || (activeView !== "tasks" && activeView !== "review") || pendingTaskBinding || !activeTask?.id || !activeAgentSessionId || !education) return;
+    const binding = education.taskSessions[activeTask.id];
+    if (binding && binding.sessionId !== activeAgentSessionId) {
+      setPendingTaskBinding({ taskId: activeTask.id, previousSessionId: binding.sessionId });
+    }
+  }, [activeAgentSessionId, activeTask, activeView, drawer, education, pendingTaskBinding]);
+
+  useEffect(() => {
+    if (!pendingAgentPrompt || (drawer !== "agent" && activeView !== "chat")) return;
+    const mode = pendingAgentPromptMode;
+    const frame = requestAnimationFrame(() => {
+      if (mode === "replace") onReplaceAgentPrompt(pendingAgentPrompt);
+      else onPrepareAgentPrompt(pendingAgentPrompt);
+      setPendingAgentPrompt(null);
+      setPendingAgentPromptMode("insert");
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeView, drawer, onPrepareAgentPrompt, onReplaceAgentPrompt, pendingAgentPrompt, pendingAgentPromptMode]);
+
+  if (shouldShowBlockingEducationLoad(education)) {
+    return <section className="edupi-teacher-shell is-loading"><div className="edupi-workbench-loading" role={loadError ? "alert" : "status"}><span>π</span><strong>{loadError || "正在读取教育工作区"}</strong>{loadError ? <div><button type="button" onClick={retryLoadWorkspace}>重试</button><button type="button" onClick={onOpenAdmin}>打开管理中心</button></div> : null}</div></section>;
+  }
+
+  const taskStage = activeStage;
+  const activeViewLabel = workbenchViews.find((item) => item.id === activeView)?.label || "工作台";
+  const contextLabel = teacherContextLabel;
+  const inspectorAvailable = (activeView === "tasks" || activeView === "review") && Boolean(activeTask);
+  const objectSiderAvailable = activeView !== "dashboard" && activeView !== "chat" && activeView !== "workspace";
+  const showObjectSider = objectSiderAvailable && !objectSider.collapsed;
+  const taskDetail = taskDetailTask ? tasks.find((task) => taskKey(task) === taskKey(taskDetailTask)) || taskDetailTask : null;
+  const currentAgentTask = agentTask ? tasks.find((task) => taskKey(task) === taskKey(agentTask)) || agentTask : null;
+  return (
+    <section
+      className="edupi-teacher-shell"
+      data-view={activeView}
+      aria-busy={loading ? true : undefined}
+      onDragEnterCapture={onEducationDragEnterCapture}
+      onDragOverCapture={onEducationDragOverCapture}
+      onDragLeaveCapture={onEducationDragLeaveCapture}
+      onDropCapture={onEducationDropCapture}
+    >
+      {educationFileDragOver ? <div className="edupi-global-material-drop" role="status" aria-live="polite"><strong>放入 EduPi</strong><span>松开后识别材料、日程与课表</span></div> : null}
+      <EduPiNavigationRail activeView={activeView} pendingReviewCount={pendingCount + c1PendingCount + teacherContextPendingCount} workspaceLabel={context?.school || context?.name || "教师工作区"} onSelect={selectView} onOpenAdmin={onOpenAdmin} />
+      <div className="edupi-teacher-app">
+        <header className="edupi-teacher-topbar">
+          <div className="edupi-teacher-topbar__workspace"><span>{activeViewLabel}</span><strong>{contextLabel}</strong></div>
+          {activeView === "chat" || activeView === "dashboard" ? <button type="button" className="edupi-teacher-topbar__context" onClick={onOpenAdmin} aria-live="polite" title={coreConnection.reason || "打开管理中心"}><span className={coreConnection.ready ? "is-ready" : "is-unavailable"}>{coreConnection.label}</span></button> : <label className="edupi-workbench-search"><span aria-hidden="true">⌕</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`搜索${activeViewLabel}`} aria-label={`搜索${activeViewLabel}`} /></label>}
+          <div className="edupi-teacher-topbar__status"><EduPiCompletionInbox tasks={tasks} onTask={openTaskDetail} /><span className="is-safe">{activeView === "chat" ? "本地会话" : "教师内部"}</span>{loadError ? <button type="button" onClick={retryLoadWorkspace} title={loadError}>教育数据刷新失败 · 重试</button> : null}{objectSiderAvailable && objectSider.collapsed ? <button type="button" onClick={objectSider.toggle}>列表</button> : null}{inspectorAvailable ? <button type="button" onClick={toggleInspector}>{inspectorOpen ? "收起检查" : "检查"}</button> : null}</div>
+        </header>
+        <div className={`edupi-teacher-body${activeView === "chat" ? " is-chat" : ""}${showObjectSider ? " has-object-sider" : ""}${inspectorAvailable && inspectorOpen ? " has-inspector" : ""}`}>
+          {activeView === "chat" ? <aside className="edupi-chat-session-sidebar" aria-label="对话与文件">{chatSidebar}</aside> : showObjectSider ? <EduPiObjectSider view={activeView} data={education} context={context} query={query} selectedTaskKey={activeTask ? taskKey(activeTask) : null} onTask={selectTask} onReviewTarget={focusC1Review} selectedCalendarSourceId={calendarSelection?.sourceId ?? null} onCalendarItem={setCalendarSelection} onUpload={openUpload} onCollapse={objectSider.toggle} /> : null}
+          <div className={`edupi-teacher-main${activeView === "chat" ? " is-chat" : ""}`}>
+            <EduPiPersistentChatHost mode={drawer === "agent" ? "drawer" : activeView === "chat" ? "main" : "hidden"} task={drawer === "agent" ? currentAgentTask : null} onClose={closeDrawer} onPreparePrompt={onPrepareAgentPrompt}>{chatPanel}</EduPiPersistentChatHost>
+            {activeView === "review" ? <div className="edupi-review-surface">
+            {activeView === "review" && activeTask ? <section className="edupi-c1-review-task-bridge"><div className="edupi-c1-review-task-bridge__heading"><h2>任务审核</h2><span>{pendingCount} 项</span></div><EduPiTaskWorkspace task={activeTask} stage={taskStage} workspace={education.workspace} context={context} reviewEnabled={education.capabilities.taskReview.enabled} reviewReason={education.capabilities.taskReview.reason} reviewBusy={reviewBusy} reviewMessage={reviewMessage} agentSession={activeTask.id ? education.taskSessions[activeTask.id] ?? null : null} taskSessionBusy={taskSessionBusy} taskSessionError={taskSessionError} onStage={selectStage} onReview={reviewTask} onOpenAgent={openAgent} onOpenFile={openFile} /></section> : null}
+            <EduPiC1Review data={education} reviewerId={context?.name || "teacher"} onRefresh={loadWorkspace} query={query} />
+            {activeView === "review" && !activeTask && c1PendingCount === 0 ? <section className="edupi-c1-review-task-empty"><span>任务审核</span><strong>暂无待审核任务</strong></section> : null}
+            </div> : null}
+            {activeView === "tasks" && activeTask ? <EduPiTaskWorkspace task={activeTask} stage={taskStage} workspace={education.workspace} context={context} reviewEnabled={education.capabilities.taskReview.enabled} reviewReason={education.capabilities.taskReview.reason} reviewBusy={reviewBusy} reviewMessage={reviewMessage} agentSession={activeTask.id ? education.taskSessions[activeTask.id] ?? null : null} taskSessionBusy={taskSessionBusy} taskSessionError={taskSessionError} onStage={selectStage} onReview={reviewTask} onOpenAgent={openAgent} onOpenFile={openFile} /> : null}
+            {activeView === "tasks" && !activeTask ? <main className="edupi-module-workspace"><header className="edupi-module-heading"><div><h1>暂无任务</h1></div><button type="button" onClick={openUpload}>上传材料</button></header></main> : null}
+            {activeView !== "chat" && activeView !== "tasks" && activeView !== "review" ? <EduPiWorkspaceViews view={activeView} data={education} context={context} query={query} runningAgentCount={runningAgentCount} stagedMaterials={stagedMaterials} stagingBusy={materialStagingBusy || educationIntakeBusy} intakeBusy={educationIntakeBusy} stagingMessage={materialStagingMessage?.text ?? null} calendarSelection={calendarSelection} onCalendarSelection={setCalendarSelection} onTask={selectTask} onTaskDetail={openTaskDetail} onEducation={setEducation} onNavigate={selectView} onUpload={openUpload} onIntakeMaterial={intakeStagedMaterial} onRemoveStagedMaterial={removeStagedMaterialEntry} onImportCalendar={importCalendarEvent} onImportTimetable={importTimetableSlot} onOpenContext={() => setContextOpen(true)} onOpenAdmin={onOpenAdmin} onOpenFile={openFile} onStartAgent={(prompt) => startAgent(prompt)} onCreateTask={createBoardTask} onMoveTask={moveBoardTask} /> : null}
+          </div>
+          {inspectorAvailable ? <EduPiInspector open={inspectorOpen} data={education} task={activeTask} onClose={toggleInspector} onOpenAgent={openAgent} onStage={selectStage} /> : null}
+        </div>
+      </div>
+      {taskDetail ? <EduPiTaskDetailDrawer task={taskDetail} workspace={education.workspace} onClose={closeTaskDetail} onOpenFile={openTaskFile} onOpenTask={selectTask} onOpenAgent={openAgentForTask} /> : null}
+      <EduPiQuickEntry open={quickEntryOpen} education={education} onClose={onCloseQuickEntry} onSelect={selectQuickEntry} />
+      {drawer === "file" ? <FileWorkspaceDrawer kind="file" task={activeView === "tasks" || activeView === "review" ? activeTask : undefined} filePath={previewPath} filePanel={previewPath ? renderFilePreview(previewPath) : null} onClose={closeDrawer} onPreparePrompt={onPrepareAgentPrompt} /> : null}
+      <input ref={materialUploadInputRef} type="file" multiple hidden accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx" onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void stageBrowserFiles(files); }} />
+      {materialStagingMessage && activeView !== "materials" ? <div className={`edupi-material-staging-toast is-${materialStagingMessage.tone}`} role={materialStagingMessage.tone === "error" ? "alert" : "status"} aria-live="polite">{materialStagingMessage.text}</div> : null}
+      {contextOpen ? <div className="edupi-context-modal" onMouseDown={(event) => { if (event.target === event.currentTarget && !contextBusy) setContextOpen(false); }}><div ref={contextModalRef} className="edupi-context-modal__panel" tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="edupi-context-editor-title"><button type="button" className="edupi-context-modal__close" disabled={contextBusy} onClick={() => { if (!contextBusy) setContextOpen(false); }} aria-label="关闭教育上下文">×</button><EduPiContextEditor initial={context} candidate={education?.teacherContextCandidates[0] ?? null} capability={education?.capabilities.teacherContextReview ?? null} onBusyChange={setContextBusy} onClose={() => { if (!contextBusy) setContextOpen(false); }} onReviewed={async () => loadWorkspace()} onAgentRequest={(prompt) => { if (!contextBusy) { setContextOpen(false); startAgent(prompt, "replace"); } }} /></div></div> : null}
+    </section>
+  );
+}

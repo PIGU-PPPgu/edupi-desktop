@@ -66,10 +66,7 @@ function applyTheme(next: Theme, animate: boolean) {
   }
 
   const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  // WebKitGTK crashes its UI process when startViewTransition is called, so the
-  // desktop shell keeps the existing instant-switch fallback.
-  const supportsVT =
-    !isTauriDesktop() && typeof document.startViewTransition === "function";
+  const supportsVT = typeof document.startViewTransition === "function";
 
   if (!supportsVT || reduceMotion) {
     apply();

@@ -13,28 +13,27 @@
 - 在侧边栏切换 Git worktree，并浏览项目文件。
 - 预览源码、Diff、Markdown、图片、音频、PDF 和 DOCX 等文件。
 - 支持深色模式、会话自动命名、完成提示音和运行状态恢复。
-- 每周检查三个组成项目的稳定 GitHub Release，并在发现更新时提醒用户。
+- 每周检查最新的 EduPi Desktop 稳定 Release，并在本地版本落后时提醒用户。
 - 通过一个升级按钮安装完整、签名的 Pi Agent 新版本并自动重启。
 
 ![Pi Agent 浅色模式界面](./docs/screenshots/pi-agent-light@2x.png)
 
 ![Pi Agent 深色模式界面](./docs/screenshots/pi-agent-dark@2x.png)
 
-**[⬇️ 下载 Pi Agent（macOS / Windows）](https://github.com/abcwyc/pi-agent-desktop/releases)**
+**[⬇️ 下载 EduPi Desktop（macOS / Windows / Linux）](https://github.com/PIGU-PPPgu/edupi-releases/releases)**
 
-项目仓库：[abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop)
+源码仓库：[PIGU-PPPgu/edupi-desktop](https://github.com/PIGU-PPPgu/edupi-desktop)
 
 ## 安装与使用
 
 ### 安装桌面 App
 
-发布版本可从 [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases) 下载：
+发布版本可从 [EduPi Desktop Releases](https://github.com/PIGU-PPPgu/edupi-releases/releases) 下载：
 
 - Apple Silicon Mac：下载 `aarch64.dmg`，打开后将 App 拖入 `Applications`。正式 Release 不构建 Intel Mac 版本。
-- Linux x64：下载 `.deb` 包，用发行版自带的包管理器安装。社区还维护了一个 [flatpark.org](https://flatpark.org/apps/io.github.abcwyc.pi-agent-desktop/) 上的 Flatpak 版本——不是官方发布，但 Flatpak 兼容大多数发行版，也会帮你处理更新。
 - Windows x64：下载名称以 `x64-setup.exe` 结尾的安装程序并运行。安装器会在需要时安装 Microsoft WebView2。
 
-正式 Release 支持运行 macOS 11 或更高版本的 Apple Silicon Mac、Windows 10/11 x64，以及使用 WebKitGTK 4.1 和 GTK 3 的 Linux x64 发行版。桌面包内包含运行 Pi Agent 所需的 Next.js 服务、Node.js runtime 和当前版本的 Pi SDK，打开 App 时会自动启动本地服务，不需要用户另开终端、安装 Node.js 或单独启动 Web Server。
+正式 Release 支持运行 macOS 11 或更高版本的 Apple Silicon Mac，以及 Windows 10/11 x64。桌面包内包含运行 Pi Agent 所需的 Next.js 服务、Node.js runtime 和当前版本的 Pi SDK，打开 App 时会自动启动本地服务，不需要用户另开终端、安装 Node.js 或单独启动 Web Server。
 
 > 安装 Pi Agent 后，可以直接使用 App 中的 Pi Agent 功能；但它不会在系统全局安装 `pi` 命令。如果还需要在终端中使用 Pi CLI，请按照 [pi 项目](https://github.com/earendil-works/pi) 的说明单独安装。
 
@@ -60,15 +59,14 @@ Pi Agent 默认读取 Pi 的本地数据目录：
 
 ## 版本检查与升级
 
-Pi Agent 最多每七天检查一次以下仓库的最新稳定 Release：
+EduPi 最多每七天检查一次 `PIGU-PPPgu/edupi-releases` 中的最新稳定桌面版。打包组件清单同时记录已审核的：
 
-- `abcwyc/pi-agent-desktop`
 - `earendil-works/pi`
 - `agegr/pi-web`
 
 版本与升级规则如下：
 
-1. `pi-agent-desktop` 一旦存在 Release，就以最新稳定 Release 作为可升级版本来源。
+1. `PIGU-PPPgu/edupi-releases` 中的最新稳定 Release 是桌面升级提醒和下载的唯一来源。
 2. 三个组件中任意一个版本落后，设置中的统一升级按钮都会启用。
 3. 如果多个组件需要更新，发布自动化按 `pi → pi-web → pi-agent-desktop` 的顺序同步和验证。
 4. 用户侧不会修改已安装 App 内的单个 JavaScript 包，而是下载一个同时包含三个最新版组件的完整签名 App。
@@ -76,7 +74,7 @@ Pi Agent 最多每七天检查一次以下仓库的最新稳定 Release：
 
 这种方式可以保持桌面安装包的组件一致性，也能避免独立替换 `pi` 或 `pi-web` 导致运行时不兼容。
 
-如果上游新版已经被检测到，但包含该版本的签名 `pi-agent-desktop` Release 尚未发布，设置页会提示暂时没有可安装的签名整包；App 不会退回到下载未签名文件或局部覆盖依赖。
+如果上游新版已经被检测到，但包含该版本的签名 EduPi Desktop Release 尚未发布，设置页会提示暂时没有可安装的签名整包；App 不会退回到下载未签名文件或局部覆盖依赖。
 
 更完整的同步、签名和 Release 配置见 [桌面升级与发布说明](./docs/desktop-updates.md)。
 
@@ -163,16 +161,15 @@ npm run desktop:build
 
 ## 上游同步与 Release
 
-仓库包含两条串联的自动化工作流：
+仓库将桌面上游审核、组件维护和正式发布分开处理：
 
-- [`component-updates.yml`](./.github/workflows/component-updates.yml)：每天检查 `pi` 和 `pi-web` 的稳定 Release。发现新版后，**先**把上游改动集与 [`scripts/fork-ownership.json`](./scripts/fork-ownership.json) 记录的「本仓库改过的上游文件」求交集，再合并 Tag、更新依赖和组件清单，并运行完整门禁（`npm test`、`tsc`、`lint`、真实 standalone 构建）。
-  - 交集为空 → 直接提交 `main` 并触发发布；
-  - 命中高/中风险文件 → 推送 `sync/pi-web-<tag>` 分支并开 PR，附上边界报告，**不**触发发布。合并该 PR 才会发版。
-- [`release.yml`](./.github/workflows/release.yml)：收到组件同步工作流的显式触发后，串行构建 Apple Silicon (`aarch64`) DMG 和 Windows x64 NSIS `-setup.exe`，不构建 Intel Mac 版本。Release 在两个平台的 updater 签名文件、`latest.json` 和组件清单全部上传完成前保持草稿状态 —— `manifest` job 依赖**整个**构建矩阵，任一平台失败就不会转正。构建失败会创建/更新 `release-failure` Issue。
+- [`desktop-upstream-sync.yml`](./.github/workflows/desktop-upstream-sync.yml)：每天以只读权限检测 `abcwyc/pi-agent-desktop` 变化。发现变化后只更新受管的 `sync/upstream-desktop` 分支，排除公共上游的 workflow 定义；完整测试、类型检查、lint 和 EduPi 发布目的地哨兵全部通过后，才创建或更新以 `main` 为目标的审核 PR。它永远不直接推送 `main`，也不签名、发版或调度发布工作流。
+- [`component-updates.yml`](./.github/workflows/component-updates.yml)：手动检查已发布的 `pi` 和 `pi-web` 组件，使用 [`scripts/fork-ownership.json`](./scripts/fork-ownership.json) 分类改动，并执行现有的组件边界策略。
+- [`release.yml`](./.github/workflows/release.yml)：独立的纯手动工作流，串行构建 Apple Silicon (`aarch64`) DMG、Linux x64 `.deb` 和 Windows x64 NSIS `-setup.exe`。只有所有平台和组件清单都成功时，草稿 Release 才会发布。
 
-上游同步使用 Git 合并，因此本仓库维护的 Pi Agent 品牌、设置入口和升级逻辑会作为本地修改保留。合并冲突会让工作流停止——这是安全的失败方式。真正危险的是**无冲突但语义错误**的合并：上游改了本仓库也改过的区域，Git 干净地合上了，测试也全绿。上面的边界求交就是为此设置的，规则见 [维护边界说明](./docs/ownership-boundaries.md)。
+`abcwyc/pi-agent-desktop` 只作为已署名的桌面上游，不是 EduPi 源码或发布目的地。合并冲突会在推送分支之前停止；无冲突合并仍需人工检查 EduPi 品牌、教师工作流、updater 目的地和 fork 自有行为。完整约束见 [桌面上游同步](./docs/desktop-upstream-sync.md)；`pi-web` 边界规则仍见 [维护边界说明](./docs/ownership-boundaries.md)。
 
-同步失败会自动创建/更新 `component-sync-failure` Issue，不会静默积压。
+桌面同步失败会保留失败的工作流记录，并保持 `main` 不变。该工作流无法访问签名或发布凭据。
 
 正式发布前需要配置：
 
@@ -193,19 +190,20 @@ src-tauri/
   capabilities/         Tauri 权限配置
   resources/            桌面资源与组件版本清单
   src/                   桌面窗口、本地服务和 updater 注册
-.github/workflows/      每日组件同步与桌面 Release 自动化
+.github/workflows/      上游审核、组件维护与桌面 Release 自动化
 instrumentation.ts     Next.js 服务端 HTTP 代理初始化
 ```
 
 ## 相关文档
 
 - [维护边界说明](./docs/ownership-boundaries.md) — 与 `pi-web` 上游的分工、改共享文件的规则、自动同步的判定逻辑
+- [桌面上游同步](./docs/desktop-upstream-sync.md) — 只读检测、审核分支门禁、幂等更新与发布隔离
 - [桌面升级与发布说明](./docs/desktop-updates.md)
 - [Git Worktree 使用说明](./docs/worktrees.zh-CN.md)
 - [Pi Session 与项目架构说明](./AGENTS.md)
 
 ## 署名与许可证
 
-Pi Agent 的桌面集成由 `pi-agent-desktop` 提供，核心能力和 Web 界面分别来自 [earendil-works/pi](https://github.com/earendil-works/pi) 与 [agegr/pi-web](https://github.com/agegr/pi-web)。感谢这些项目及其贡献者。
+EduPi Desktop 基于 MIT 许可的 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 桌面上游，核心能力和 Web 界面分别来自 [earendil-works/pi](https://github.com/earendil-works/pi) 与 [agegr/pi-web](https://github.com/agegr/pi-web)。感谢这些项目及其贡献者。
 
 本仓库根目录代码遵循 [`LICENSE`](./LICENSE) 中的 MIT License。三个组成项目的代码和依赖同时受各自仓库许可证约束；复制、修改或重新分发时请保留相应版权与许可声明。

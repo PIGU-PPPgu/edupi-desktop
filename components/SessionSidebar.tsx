@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { SessionInfo } from "@/lib/types";
+import type { EducationModule } from "@/lib/edupi-education-ui";
 import { useI18n } from "@/hooks/useI18n";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { ProjectPicker } from "./ProjectPicker";
@@ -12,7 +13,6 @@ import { notifyDesktop } from "@/lib/desktop-notify";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { revealItemInDirNative } from "@/lib/desktop-native";
 import { getDesktopPlatform, type DesktopPlatform } from "@/lib/desktop-window";
-import { useWindowDrag } from "./desktop";
 
 function ToolbarIconButton({
   onClick,
@@ -91,8 +91,12 @@ interface Props {
   onAtMentions?: (relativePaths: string[]) => void;
   /** Window-chrome controls (theme + sidebar collapse) rendered at the top-right of the sidebar. */
   headerControls?: ReactNode;
+  onOpenEduPiAdmin?: (module?: EducationModule) => void;
+  onMaterialInboxRequest?: number;
+  materialInboxPath?: string | null;
+  onOpenContext?: () => void;
+  presentation?: "default" | "embedded-chat";
 }
-
 interface WorktreeEntry {
   path: string;
   branch: string | null;
@@ -189,7 +193,34 @@ function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode[] {
   return roots;
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, selectedFilePath, explorerRefreshKey, onAtMention, onAtMentions, headerControls }: Props) {
+type SessionAgeGroup = { key: string; label: string; nodes: SessionTreeNode[] };
+
+function sessionAgeGroup(date: string): string {
+  const ageMs = Math.max(0, Date.now() - new Date(date).getTime());
+  const ageDays = ageMs / 86_400_000;
+  if (ageDays < 1) return "today";
+  if (ageDays < 3) return "two_days";
+  if (ageDays < 7) return "this_week";
+  return "older";
+}
+
+function groupSessionTreeByAge(nodes: SessionTreeNode[]): SessionAgeGroup[] {
+  const groups = new Map<string, SessionTreeNode[]>();
+  for (const node of nodes) {
+    const key = sessionAgeGroup(node.session.modified || node.session.created);
+    const current = groups.get(key) ?? [];
+    current.push(node);
+    groups.set(key, current);
+  }
+  return [
+    ["today", "今天"],
+    ["two_days", "近三天"],
+    ["this_week", "近七天"],
+    ["older", "更早"],
+  ].flatMap(([key, label]) => groups.has(key) ? [{ key, label, nodes: groups.get(key)! }] : []);
+}
+
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, selectedFilePath, explorerRefreshKey, onAtMention, onAtMentions, headerControls, onOpenEduPiAdmin, onMaterialInboxRequest, materialInboxPath: materialInboxPathProp, onOpenContext, presentation = "default" }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -203,7 +234,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   useEffect(() => {
     if (isTauriDesktop()) setDesktopPlatform(getDesktopPlatform());
   }, []);
-  const windowDrag = useWindowDrag();
   const [wtFilter, setWtFilter] = useState("");
   // Worktree switcher state
   const [worktreeState, setWorktreeState] = useState<WorktreeState | null>(null);
@@ -211,29 +241,21 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [wtNewOpen, setWtNewOpen] = useState(false);
   const [wtNewBranch, setWtNewBranch] = useState("");
   const [wtBranches, setWtBranches] = useState<string[]>([]);
-  // Remote-only branch names (prefix stripped) for the switcher's branch list
-  const [wtRemoteBranches, setWtRemoteBranches] = useState<string[]>([]);
-  // False until the first branch-list response lands, so the "no other
-  // branches" hint is not flashed while the list is still loading.
-  const [wtBranchesLoaded, setWtBranchesLoaded] = useState(false);
   const [wtError, setWtError] = useState<string | null>(null);
   const [wtBusy, setWtBusy] = useState(false);
-  // Branch currently being checked out (name shown dimmed with a spinner)
-  const [wtSwitchingBranch, setWtSwitchingBranch] = useState<string | null>(null);
-  const [wtFetching, setWtFetching] = useState(false);
   const [wtConfirmRemove, setWtConfirmRemove] = useState<{ path: string; force: boolean } | null>(null);
   const [worktreeLoadingCwd, setWorktreeLoadingCwd] = useState<string | null>(null);
-  // Ticked by the poll/focus effect below so the worktree row reflects
-  // branches checked out outside pi (terminal, IDE) without a manual reload.
-  const [wtPollTick, setWtPollTick] = useState(0);
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
   const [sidebarView, setSidebarView] = useState<"chats" | "files">("chats");
+  const materialInboxPath = materialInboxPathProp ?? null;
+  const inboxRequestEnabled = onMaterialInboxRequest != null && onMaterialInboxRequest > 0;
   const [sidebarQuery, setSidebarQuery] = useState("");
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
   const [changesCount, setChangesCount] = useState(0);
   const [changesCollapsed, setChangesCollapsed] = useState(true);
+  const [collapsedTimeGroups, setCollapsedTimeGroups] = useState<Set<string>>(() => new Set(["older"]));
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
   const previousRunningSessionIdsRef = useRef<Set<string>>(new Set());
@@ -243,6 +265,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const fileExplorerRef = useRef<FileExplorerHandle>(null);
   // Overlay-style scrollbar: only visible while the list is actually scrolling.
   const listScrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!inboxRequestEnabled || !materialInboxPath) return;
+    setSidebarView("files");
+    setSidebarQuery("");
+    setExplorerKey((key) => key + 1);
+    const timer = window.setTimeout(() => fileExplorerRef.current?.openUploadPicker(), 0);
+    return () => window.clearTimeout(timer);
+  }, [inboxRequestEnabled, materialInboxPath]);
   const handleListScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     el.classList.add("is-scrolling");
@@ -365,7 +395,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       };
       for (const id of completedInBackground) {
         void notifyDesktop({
-          title: "Pi Agent",
+          title: "EduPi",
           body: `Finished: ${sessionName(id)}`,
         });
       }
@@ -484,25 +514,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         }
       });
     return () => { cancelled = true; };
-  }, [selectedCwd, wtRefreshKey, refreshKey, wtPollTick]);
-
-  // Keep the worktree/branch display honest when branches are switched outside
-  // pi (terminal, IDE, another client): poll while the tab is visible and
-  // refresh on window focus. `git worktree list` is a cheap local op.
-  useEffect(() => {
-    const bump = () => setWtPollTick((t) => t + 1);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") bump();
-    };
-    const id = setInterval(onVisible, 10_000);
-    window.addEventListener("focus", bump);
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      clearInterval(id);
-      window.removeEventListener("focus", bump);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, []);
+  }, [selectedCwd, wtRefreshKey, refreshKey]);
 
   // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
@@ -526,102 +538,19 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     }
   }, [allSessions, selectedCwd, initialSessionId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone]);
 
-  // Branch list for the switcher section (and the new-worktree datalist).
-  // Loaded while the dropdown is open and on every poll tick, so branches
-  // created or fetched elsewhere show up on the next open.
-  const wtProjectRoot = worktreeState?.projectRoot ?? null;
   useEffect(() => {
-    if (!wtDropdownOpen || !wtProjectRoot) return;
+    if (!wtNewOpen || !worktreeState) return;
     let cancelled = false;
-    fetch(`/api/worktrees?cwd=${encodeURIComponent(wtProjectRoot)}&branches=1`)
+    fetch(`/api/worktrees?cwd=${encodeURIComponent(worktreeState.projectRoot)}&branches=1`)
       .then((r) => r.json())
-      .then((d: { branches?: string[]; remoteBranches?: string[] }) => {
-        if (cancelled) return;
-        setWtBranchesLoaded(true);
-        setWtBranches(Array.isArray(d.branches) ? d.branches : []);
-        setWtRemoteBranches(Array.isArray(d.remoteBranches) ? d.remoteBranches : []);
+      .then((d: { branches?: string[] }) => {
+        if (!cancelled) setWtBranches(Array.isArray(d.branches) ? d.branches : []);
       })
       .catch(() => {
-        if (!cancelled) {
-          setWtBranches([]);
-          setWtRemoteBranches([]);
-        }
+        if (!cancelled) setWtBranches([]);
       });
     return () => { cancelled = true; };
-  }, [wtDropdownOpen, wtProjectRoot, wtPollTick]);
-
-  // The worktree matching selectedCwd, falling back to the main worktree when
-  // worktreeState hasn't caught up to selectedCwd yet (e.g. right after
-  // creating/switching to a worktree, before the next refresh lands) — same
-  // fallback the switcher dropdown itself uses to stay correct through that
-  // race, instead of comparing raw paths that may not (yet) match anything.
-  const currentWt = worktreeState?.worktrees.find((w) => w.path === selectedCwd)
-    ?? worktreeState?.worktrees.find((w) => w.isMain)
-    ?? null;
-
-  const handleSwitchBranch = useCallback(async (branch: string) => {
-    if (!worktreeState || wtBusy || wtSwitchingBranch) return;
-    // git refuses to check out a branch that another worktree already holds —
-    // jump to that worktree instead; that is what the user means anyway.
-    const holder = worktreeState.worktrees.find((w) => w.branch === branch && w.path !== currentWt?.path);
-    if (holder) {
-      setSelectedCwd(holder.path);
-      setWtDropdownOpen(false);
-      setWtError(null);
-      setWtFilter("");
-      return;
-    }
-    if (currentWt?.branch === branch) return;
-    const cwd = currentWt?.path ?? selectedCwd ?? worktreeState.projectRoot;
-    setWtSwitchingBranch(branch);
-    setWtError(null);
-    try {
-      const res = await fetch("/api/worktrees", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwd, branch }),
-      });
-      const data = await res.json().catch(() => ({})) as { branch?: string; error?: string };
-      if (!res.ok || data.error || !data.branch) {
-        setWtError(data.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      setWtDropdownOpen(false);
-      setWtRefreshKey((k) => k + 1);
-      // The checkout's contents just changed wholesale — refresh the explorer
-      // and the session rows (worktreeBranch subtitles) alongside the header.
-      setExplorerKey((k) => k + 1);
-      void loadSessions(false);
-    } catch (e) {
-      setWtError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setWtSwitchingBranch(null);
-    }
-  }, [worktreeState, wtBusy, wtSwitchingBranch, currentWt, selectedCwd, loadSessions]);
-
-  const handleFetchBranches = useCallback(async () => {
-    if (!worktreeState || wtFetching) return;
-    setWtFetching(true);
-    setWtError(null);
-    try {
-      const res = await fetch("/api/worktrees/fetch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwd: worktreeState.projectRoot }),
-      });
-      const data = await res.json().catch(() => ({})) as { branches?: string[]; remoteBranches?: string[]; error?: string };
-      if (!res.ok || data.error) {
-        setWtError(data.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      setWtBranches(Array.isArray(data.branches) ? data.branches : []);
-      setWtRemoteBranches(Array.isArray(data.remoteBranches) ? data.remoteBranches : []);
-    } catch (e) {
-      setWtError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setWtFetching(false);
-    }
-  }, [worktreeState, wtFetching]);
+  }, [wtNewOpen, worktreeState]);
 
   const handleCreateWorktree = useCallback(async () => {
     const branch = wtNewBranch.trim();
@@ -770,10 +699,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         || s.firstMessage.toLowerCase().includes(sessionSearch))
     : filteredSessions;
   const sessionTree = buildSessionTree(searchedSessions);
+  const sessionTimeGroups = groupSessionTreeByAge(sessionTree);
+  const embeddedChat = presentation === "embedded-chat";
   // Keep one mounted search input across tab switches — only the placeholder changes.
   const sidebarSearchLabel = sidebarView === "files"
-    ? t("sidebar.searchFiles")
-    : t("sidebar.searchSessions");
+    ? embeddedChat ? "搜索文件…" : "搜索材料与教学文件…"
+    : embeddedChat ? "搜索对话…" : "搜索教学任务…";
   const showSidebarSearch = Boolean(selectedCwdProp || selectedCwd);
 
   return (
@@ -782,7 +713,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       <div
         className={`session-sidebar-header${desktopPlatform === "macos" ? " session-sidebar-header--mac-inset" : ""}`}
         data-tauri-drag-region={desktopPlatform ? true : undefined}
-        {...windowDrag}
         style={{
           padding: "12px 10px 10px",
           borderBottom: "1px solid var(--border)",
@@ -791,18 +721,33 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       >
         {/* Window-chrome controls row: right-aligned (theme + collapse); on macOS
             the traffic lights share this row's left side. */}
-        {headerControls && (
+        {!embeddedChat && headerControls && (
           <div className="sidebar-controls-row">
             {headerControls}
           </div>
         )}
 
-        {/* Row 1: New chat — full-width flat row, Claude Desktop style */}
+        {!embeddedChat ? <button className="edupi-sidebar-brand" type="button" title="打开 EduPi 教师工作台" onClick={() => onOpenEduPiAdmin?.("home")}>
+          <span className="edupi-sidebar-brand__mark">π</span>
+          <span className="edupi-sidebar-brand__copy">
+            <strong>EduPi</strong>
+            <small>教师工作台</small>
+          </span>
+        </button> : null}
+
+        {!embeddedChat ? <div className="edupi-sidebar-modules" aria-label="EduPi 教师工作区">
+          <button type="button" onClick={() => onOpenEduPiAdmin?.("home")}>工作台</button>
+          <button type="button" onClick={() => onOpenEduPiAdmin?.("materials")}>材料</button>
+          <button type="button" onClick={() => onOpenEduPiAdmin?.("calendar")}>课程</button>
+          <button type="button" onClick={() => onOpenEduPiAdmin?.("tasks")}>审核</button>
+        </div> : null}
+
+        {/* 教师任务入口；底层仍复用 Pi session/runtime。 */}
         <button
           className="sidebar-header-row sidebar-new-row"
           onClick={handleNewSession}
           disabled={!selectedCwd}
-          title={selectedCwd ? `${t("sidebar.newSessionTitle", { path: selectedCwd })} (⌘/Ctrl+N)` : t("sidebar.selectProject")}
+          title={selectedCwd ? `${embeddedChat ? "新建对话" : "新建教学任务"} (⌘/Ctrl+N)` : t("sidebar.selectProject")}
         >
           <span className="sidebar-new-plus" aria-hidden="true">
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -810,11 +755,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               <line x1="1.5" y1="6" x2="10.5" y2="6" />
             </svg>
           </span>
-          {t("sidebar.newChat")}
+          {embeddedChat ? "新建对话" : "新建教学任务"}
         </button>
 
-        {/* Row 2: current folder — flat row */}
-        <div className="sidebar-folder-row" data-no-drag style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        {/* 当前学校/班级工作区；底层仍对应原有 cwd。 */}
+        <div className="sidebar-folder-row" style={{ display: "flex", alignItems: "center", gap: 2 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <ProjectPicker
               recentProjects={recentProjects}
@@ -836,21 +781,18 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             project share the same list anyway. */}
         {showWorktreeSwitcher && (() => {
           if (!worktreeState) return null;
+          const currentWt = worktreeState.worktrees.find((w) => w.path === selectedCwd)
+            ?? worktreeState.worktrees.find((w) => w.isMain);
           const showWtFilter = worktreeState.worktrees.length >= 8;
           const visibleWorktrees = showWtFilter && wtFilter.trim()
             ? worktreeState.worktrees.filter((w) =>
                 (w.branch ?? displayCwd(w.path, homeDir)).toLowerCase().includes(wtFilter.trim().toLowerCase()))
             : worktreeState.worktrees;
           return (
-            <div ref={wtDropdownRef} data-no-drag style={{ position: "relative" }}>
+            <div ref={wtDropdownRef} style={{ position: "relative" }}>
               <button
                 className="sidebar-header-row"
-                onClick={() => {
-                  setWtDropdownOpen((v) => !v);
-                  // Opening should show the branch state as of now, not as of
-                  // the last poll — the branch may have been switched outside pi.
-                  if (!wtDropdownOpen) setWtRefreshKey((k) => k + 1);
-                }}
+                onClick={() => setWtDropdownOpen((v) => !v)}
                  title={currentWt ? t("sidebar.switchWorktreeTitle", { path: currentWt.path }) : t("sidebar.switchWorktree")}
                 style={{ background: wtDropdownOpen ? "var(--bg-hover)" : undefined }}
               >
@@ -1037,101 +979,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                     )}
                   </div>
 
-                  {/* Branches of the current checkout — switch in place without
-                      creating a worktree. Hidden while the new-worktree form is
-                      open so the dropdown stays focused on one task. */}
-                  {!wtNewOpen && (() => {
-                    const currentBranch = currentWt?.branch ?? null;
-                    const branchRows = [
-                      ...wtBranches.map((name) => ({ name, remote: false })),
-                      ...wtRemoteBranches.map((name) => ({ name, remote: true })),
-                    ];
-                    return (
-                      <div style={{ borderTop: "1px solid var(--border)" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 8px 3px" }}>
-                          <span style={{ flex: 1, fontSize: 10, fontWeight: 600, letterSpacing: "0.03em", color: "var(--text-dim)" }}>{t("sidebar.switchBranch")}</span>
-                          <button
-                            type="button"
-                            onClick={() => { void handleFetchBranches(); }}
-                            disabled={wtFetching}
-                            title={t("sidebar.fetchBranchesTitle")}
-                            style={{
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              width: 22, height: 20, padding: 0,
-                              background: "none", border: "none",
-                              color: wtFetching ? "var(--accent)" : "var(--text-dim)",
-                              cursor: "pointer", borderRadius: 4, flexShrink: 0,
-                            }}
-                          >
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={wtFetching ? { animation: "spin 0.9s linear infinite" } : undefined}>
-                              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-                              <polyline points="21 3 21 9 15 9" />
-                            </svg>
-                          </button>
-                        </div>
-                        <div style={{ maxHeight: "min(28vh, 200px)", overflowY: "auto" }}>
-                          {wtBranchesLoaded && branchRows.length === 0 && (
-                            <div style={{ padding: "3px 10px 8px", fontSize: 11, color: "var(--text-dim)" }}>{t("sidebar.noOtherBranches")}</div>
-                          )}
-                          {branchRows.map(({ name, remote }) => {
-                            const isCurrent = name === currentBranch;
-                            const holder = worktreeState.worktrees.find((w) => w.branch === name && w.path !== selectedCwd);
-                            const switching = wtSwitchingBranch === name;
-                            return (
-                              <button
-                                key={name}
-                                onClick={() => { void handleSwitchBranch(name); }}
-                                disabled={wtSwitchingBranch !== null}
-                                title={
-                                  holder ? t("sidebar.branchInWorktreeTitle", { branch: name })
-                                    : remote ? t("sidebar.branchRemoteTitle")
-                                      : t("sidebar.switchBranchTitle", { branch: name })
-                                }
-                                style={{
-                                  display: "flex", alignItems: "center", gap: 7,
-                                  width: "100%", padding: "6px 10px",
-                                  background: isCurrent ? "var(--bg-hover)" : "none",
-                                  border: "none",
-                                  color: isCurrent ? "var(--text)" : "var(--text-muted)",
-                                  cursor: "pointer", textAlign: "left",
-                                  fontSize: 11, fontFamily: "var(--font-mono)",
-                                  opacity: switching ? 0.55 : 1,
-                                }}
-                              >
-                                {isCurrent ? (
-                                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                                    <polyline points="1.5 5 4 7.5 8.5 2.5" />
-                                  </svg>
-                                ) : (
-                                  <span style={{ width: 10, flexShrink: 0 }} />
-                                )}
-                                <PathLabel text={name} style={{ flex: 1 }} />
-                                {holder && (
-                                  <span title={holder.path} style={{ flexShrink: 0, display: "flex", alignItems: "center", color: "var(--text-dim)" }}>
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <line x1="6" y1="3" x2="6" y2="15" />
-                                      <circle cx="18" cy="6" r="3" />
-                                      <circle cx="6" cy="18" r="3" />
-                                      <path d="M18 9a9 9 0 0 1-9 9" />
-                                    </svg>
-                                  </span>
-                                )}
-                                {remote && !holder && (
-                                  <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 9.5 }}>{t("sidebar.remoteBranchTag")}</span>
-                                )}
-                                {switching && (
-                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, animation: "spin 0.8s linear infinite" }}>
-                                    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-                                  </svg>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
                   {!wtNewOpen ? (
                     <button
                       onClick={(e) => {
@@ -1311,7 +1158,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               className={sidebarView === "chats" ? "is-active" : undefined}
               onClick={() => setSidebarView("chats")}
             >
-              {t("sidebar.tabChats")}
+              {embeddedChat ? "对话" : "教学任务"}
             </button>
             <button
               type="button"
@@ -1320,11 +1167,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               className={sidebarView === "files" ? "is-active" : undefined}
               onClick={() => setSidebarView("files")}
             >
-              {t("sidebar.tabFiles")}
+              {embeddedChat ? "文件" : "材料与文件"}
             </button>
           </div>
         </div>
       )}
+
+      {!embeddedChat ? <button type="button" className="edupi-sidebar-context-link" onClick={onOpenContext} disabled={!onOpenContext}><span className="edupi-sidebar-context-link__icon">◎</span><span><strong>我的教育上下文</strong><small>身份、班级与工作节奏</small></span></button> : null}
 
       {/* Sidebar search — same input for both tabs; only the placeholder swaps. */}
       {showSidebarSearch && (
@@ -1404,22 +1253,23 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             {t("sidebar.noMatchingSessions")}
           </div>
         )}
-        {sessionTree.map((node) => (
-          <SessionTreeItem
-            key={node.session.id}
-            node={node}
-            selectedSessionId={selectedSessionId}
-            runningSessionIds={runningSessionIds}
-            unreadSessionIds={unreadSessionIds}
-            onSelectSession={handleSelectSessionFromList}
-            onRenamed={loadSessions}
-            onSessionDeleted={(id) => {
-              onSessionDeleted?.(id);
-              loadSessions();
-            }}
-            depth={0}
-          />
-        ))}
+        {sessionTimeGroups.map((group) => {
+          const collapsed = collapsedTimeGroups.has(group.key);
+          return (
+            <section className="session-time-group" key={group.key}>
+              <button type="button" className="session-time-group__header" aria-expanded={!collapsed} onClick={() => setCollapsedTimeGroups((previous) => {
+                const next = new Set(previous);
+                if (next.has(group.key)) next.delete(group.key); else next.add(group.key);
+                return next;
+              })}>
+                <span>{collapsed ? "▸" : "▾"}</span><span>{group.label}</span><small>{group.nodes.length}</small>
+              </button>
+              {!collapsed && group.nodes.map((node) => (
+                <SessionTreeItem key={node.session.id} node={node} selectedSessionId={selectedSessionId} runningSessionIds={runningSessionIds} unreadSessionIds={unreadSessionIds} onSelectSession={handleSelectSessionFromList} onRenamed={loadSessions} onSessionDeleted={(id) => { onSessionDeleted?.(id); loadSessions(); }} depth={0} />
+              ))}
+            </section>
+          );
+        })}
       </div>
 
       {/* File Explorer section */}
@@ -1765,7 +1615,16 @@ function SessionItem({
   return (
     <div
       className={`session-item${isSelected ? " is-selected" : ""}${isRunning ? " is-running" : ""}${isUnread ? " is-unread" : ""}`}
+      role={confirmDelete || renaming ? undefined : "button"}
+      tabIndex={confirmDelete || renaming ? undefined : 0}
+      aria-current={isSelected ? "page" : undefined}
       onClick={confirmDelete || renaming ? undefined : onClick}
+      onKeyDown={confirmDelete || renaming ? undefined : (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick();
+        }
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); }}
       style={{

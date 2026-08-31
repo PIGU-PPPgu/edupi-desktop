@@ -10,6 +10,8 @@ import type {
   SessionTreeNode,
   UserMessage,
 } from "@/lib/types";
+import type { DesktopControlInput } from "@/lib/edupi-desktop-control";
+import type { ComputerUseBridgeResult, ComputerUseInput } from "@/lib/edupi-computer-use";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { fetchWithRetry } from "@/lib/fetch-timeout";
@@ -146,6 +148,8 @@ export type BuiltinSlashCommandResult =
   | { handled: false }
   | { handled: true; message?: string; error?: string; action?: "openSessionStats" };
 
+export type EducationImportToolName = "calendar_import" | "timetable_import";
+
 export interface UseAgentSessionOptions {
   session: SessionInfo | null;
   newSessionCwd: string | null;
@@ -158,6 +162,9 @@ export interface UseAgentSessionOptions {
   onSystemPromptChange?: (prompt: string | null) => void;
   onSessionStatsPanelOpen?: () => void;
   setToolPreset?: (preset: "none" | "default" | "full") => void;
+  onEduPiAction?: (action: DesktopControlInput) => boolean | Promise<boolean>;
+  onEduPiComputerAction?: (action: ComputerUseInput, expiresAt?: number) => ComputerUseBridgeResult | Promise<ComputerUseBridgeResult>;
+  onEducationImportCompleted?: (toolName: EducationImportToolName) => void;
 }
 
 export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
@@ -348,6 +355,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
+    chatInputRef, onEducationImportCompleted, onEduPiAction, onEduPiComputerAction,
   } = opts;
 
   const isNew = session === null && newSessionCwd !== null;
@@ -468,6 +476,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const agentRunningRef = useRef(false);
   const sdkAgentActiveRef = useRef(false);
   const rpcPromptPendingRef = useRef(false);
+  const educationToolCallsRef = useRef<Map<string, string>>(new Map());
   const notifiedPromptRunIdRef = useRef(-1);
   const bashRunningRef = useRef(false);
   const bashRecoveryIdRef = useRef(0);
@@ -514,6 +523,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setAppliedIdentity(sessionIdentity);
 
     if (!isPromotion) {
+      educationToolCallsRef.current.clear();
       // Save the departing session's scroll position now, while the DOM still
       // shows it. The resets below empty the message list in this same commit,
       // and the browser clamps scrollTop to 0 before any effect cleanup runs —
@@ -1010,8 +1020,47 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (request.title) document.title = request.title;
         break;
       case "set_editor_text":
-        opts.chatInputRef?.current?.insertText(request.text);
+        chatInputRef?.current?.insertText(request.text);
         break;
+      case "edupi_action": {
+        const sid = sessionIdRef.current;
+        const expired = request.expiresAt !== undefined && request.expiresAt < Date.now();
+        void Promise.resolve(expired ? false : onEduPiAction?.(request.action) ?? false)
+          .catch(() => false)
+          .then(async (confirmed) => {
+            if (!sid) return;
+            try {
+              await sendAgentCommand(sid, {
+                type: "extension_ui_response",
+                id: request.id,
+                confirmed,
+              });
+            } catch (error) {
+              console.error("Failed to acknowledge EduPi app action:", error);
+            }
+          });
+        break;
+      }
+      case "edupi_computer_action": {
+        const sid = sessionIdRef.current;
+        const expired = request.expiresAt !== undefined && request.expiresAt < Date.now();
+        const fallback: ComputerUseBridgeResult = { ok: false, error: expired ? "桌面控制请求已过期" : "EduPi 桌面窗口未连接" };
+        void Promise.resolve(expired ? fallback : onEduPiComputerAction?.(request.action, request.expiresAt) ?? fallback)
+          .catch((error): ComputerUseBridgeResult => ({ ok: false, error: error instanceof Error ? error.message : String(error) }))
+          .then(async (result) => {
+            if (!sid) return;
+            try {
+              await sendAgentCommand(sid, {
+                type: "extension_ui_response",
+                id: request.id,
+                value: JSON.stringify(result),
+              });
+            } catch (error) {
+              console.error("Failed to return EduPi computer-use result:", error);
+            }
+          });
+        break;
+      }
       case "custom":
         setExtensionCustomUi((current) => {
           if (request.closed) return current?.id === request.id ? null : current;
@@ -1019,7 +1068,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         });
         break;
     }
-  }, [addNotice, opts.chatInputRef]);
+  }, [addNotice, chatInputRef, onEduPiAction, onEduPiComputerAction]);
 
   const settleUiStage = useCallback(() => {
     const wasRunning = agentRunningRef.current;
@@ -1404,6 +1453,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "tool_execution_start": {
         const id = event.toolCallId as string;
         const name = event.toolName as string;
+        if (id && name) educationToolCallsRef.current.set(id, name);
         setAgentPhase((prev) => {
           const tools = prev?.kind === "running_tools" ? [...prev.tools] : [];
           if (!tools.some((t) => t.id === id)) tools.push({ id, name });
@@ -1413,6 +1463,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       case "tool_execution_end": {
         const id = event.toolCallId as string;
+        const name = educationToolCallsRef.current.get(id);
+        educationToolCallsRef.current.delete(id);
+        if (name === "calendar_import" || name === "timetable_import") {
+          onEducationImportCompleted?.(name);
+        }
         setAgentPhase((prev) => {
           if (prev?.kind !== "running_tools") return prev;
           const tools = prev.tools.filter((t) => t.id !== id);
@@ -1454,7 +1509,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         handleExtensionUiRequest(event as ExtensionUiRequest);
         break;
     }
-  }, [addNotice, cancelEventStreamGrace, dispatch, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, scheduleEventStreamClose, scrollToBottom, seedStreamingSnapshot, settleUiStage]);
+  }, [addNotice, cancelEventStreamGrace, dispatch, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, onEducationImportCompleted, scheduleEventStreamClose, scrollToBottom, seedStreamingSnapshot, settleUiStage]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
@@ -1563,7 +1618,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // No prompt request started, so the complete optimistic message is safe
       // to restore. replaceMessage preserves image attachments and refuses to
       // overwrite anything the user typed while startup was failing.
-      opts.chatInputRef?.current?.replaceMessage(userMsg);
+      chatInputRef?.current?.replaceMessage(userMsg);
       optimisticUserMessageKeyRef.current = null;
       setAgentRunning(false);
       setAgentPhase(null);
@@ -1571,7 +1626,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setPromptAnchorActive(false);
       dispatch({ type: "end" });
     }
-  }, [isNew, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, dispatch, opts.chatInputRef]);
+  }, [isNew, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, dispatch, chatInputRef]);
 
   const executeBash = useCallback(async (command: string, excludeFromContext: boolean) => {
     if (agentRunningRef.current || bashRunningRef.current) return;
@@ -1592,13 +1647,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch (e) {
       console.error("Failed to execute shell command:", e);
       addNotice({ type: "error", message: e instanceof Error ? e.message : String(e) });
-      opts.chatInputRef?.current?.insertIfEmpty(inputText);
+      chatInputRef?.current?.insertIfEmpty(inputText);
     } finally {
       bashRunningRef.current = false;
       setPendingBash(null);
       setBashRunning(false);
     }
-  }, [addNotice, ensureNewSession, loadSession, opts.chatInputRef, promoteNewSession, session]);
+  }, [addNotice, ensureNewSession, loadSession, chatInputRef, promoteNewSession, session]);
   executeBashRef.current = executeBash;
 
   const handleAbort = useCallback(async () => {
@@ -1889,13 +1944,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setQueuedMessages({ steering: [], followUp: [] });
       const texts = [...(result?.steering ?? []), ...(result?.followUp ?? [])];
       if (texts.length > 0) {
-        opts.chatInputRef?.current?.prependText(texts.join("\n\n"));
+        chatInputRef?.current?.prependText(texts.join("\n\n"));
       }
     } catch (e) {
       console.error("Failed to recall queued messages:", e);
       addNotice({ type: "error", message: "Failed to recall queued messages" });
     }
-  }, [opts.chatInputRef, addNotice]);
+  }, [chatInputRef, addNotice]);
 
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
     setThinkingLevel(level);
@@ -1975,6 +2030,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
     bashRecoveryIdRef.current += 1;
     promptRunIdRef.current += 1;
+    educationToolCallsRef.current.clear();
     cancelEventStreamGrace();
     closeEvents();
   }, [cancelEventStreamGrace, closeEvents]);

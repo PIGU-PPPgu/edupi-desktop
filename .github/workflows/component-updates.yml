@@ -17,13 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out pi-agent-desktop
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           ref: main
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: npm
@@ -42,16 +42,18 @@ jobs:
       # branch — every night while the PR sits open.
       - name: Skip if this sync is already awaiting review
         id: pending
-        if: steps.releases.outputs.pi_web_update == 'true'
+        if: steps.releases.outputs.needs_update == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          PI_VERSION: ${{ steps.releases.outputs.pi_version }}
           PI_WEB_TAG: ${{ steps.releases.outputs.pi_web_tag }}
         run: |
           set -euo pipefail
+          branch="sync/components-$PI_VERSION-$PI_WEB_TAG"
           open="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open \
-            --head "sync/pi-web-$PI_WEB_TAG" --limit 1 --json number --jq '.[0].number // empty')"
+            --head "$branch" --limit 1 --json number --jq '.[0].number // empty')"
           if [ -n "$open" ]; then
-            echo "Sync for $PI_WEB_TAG is already open as PR #$open; nothing to do."
+            echo "Sync for pi $PI_VERSION / pi-web $PI_WEB_TAG is already open as PR #$open; nothing to do."
             echo "awaiting_review=true" >> "$GITHUB_OUTPUT"
           else
             echo "awaiting_review=false" >> "$GITHUB_OUTPUT"
@@ -122,34 +124,24 @@ jobs:
           git add --all
           git commit -m "chore: sync released pi components"
 
-      # Upstream did not touch anything this fork has modified, so a manually
-      # requested sync may update main without a review PR. Publishing a signed
-      # release remains a separate, manually dispatched action.
-      - name: Publish manually requested sync
-        if: steps.releases.outputs.needs_update == 'true' && steps.pending.outputs.awaiting_review != 'true' && steps.boundary.outputs.review_required != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          git push origin HEAD:main
-
-      # Upstream changed files the fork has also rewritten. Git may have merged
-      # them cleanly and still be wrong, so a human reviews before anything is
-      # signed and published.
+      # Every source update is reviewed before it can reach protected main.
+      # A clean automated merge is evidence for the PR, not permission to push
+      # the canonical branch or publish a signed build.
       - name: Open a review PR
-        if: steps.releases.outputs.needs_update == 'true' && steps.pending.outputs.awaiting_review != 'true' && steps.boundary.outputs.review_required == 'true'
+        if: steps.releases.outputs.needs_update == 'true' && steps.pending.outputs.awaiting_review != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          PI_VERSION: ${{ steps.releases.outputs.pi_version }}
           PI_WEB_TAG: ${{ steps.releases.outputs.pi_web_tag }}
           HIGHEST_RISK: ${{ steps.boundary.outputs.highest_risk }}
           BOUNDARY_REPORT: ${{ steps.boundary.outputs.report }}
         run: |
           set -euo pipefail
-          branch="sync/pi-web-$PI_WEB_TAG"
+          branch="sync/components-$PI_VERSION-$PI_WEB_TAG"
           git push --force-with-lease origin "HEAD:refs/heads/$branch"
 
           {
-            echo "Automated sync of \`$PI_WEB_TAG\`, held for review."
+            echo "Automated sync of pi \`$PI_VERSION\` and pi-web \`$PI_WEB_TAG\`, held for review."
             echo
             echo "$BOUNDARY_REPORT"
             echo
@@ -160,11 +152,12 @@ jobs:
             echo "After merging, dispatch \`release.yml\` manually when ready to publish."
           } > /tmp/pr-body.md
 
+          risk="${HIGHEST_RISK:-low}"
           gh pr create \
             --repo "$GITHUB_REPOSITORY" \
             --base main \
             --head "$branch" \
-            --title "chore: sync pi-web $PI_WEB_TAG (review required: $HIGHEST_RISK risk)" \
+            --title "chore: sync released components ($risk risk)" \
             --body-file /tmp/pr-body.md
 
       # Without this a failed sync is silent, and the fork quietly falls behind

@@ -3,6 +3,13 @@ import {
   DESKTOP_API_TOKEN_HEADER,
   MAX_DESKTOP_SAVE_BYTES,
 } from "@/lib/desktop-api";
+import {
+  loadStagedMaterials,
+  removeStagedMaterial,
+  stageBrowserMaterialFiles,
+  stageNativeMaterialPaths,
+  type MaterialStagingDescriptor,
+} from "@/lib/edupi-material-staging-client";
 
 export type DesktopDialogFilter = {
   name: string;
@@ -276,6 +283,35 @@ export async function readDesktopImageAttachments(paths: string[]): Promise<Desk
     ...file,
     previewUrl: `data:${file.mimeType};base64,${file.data}`,
   }));
+}
+
+/** Stage native-dialog material paths outside Core truth with desktop authorization. */
+export async function stageDesktopMaterialPaths(paths: string[]): Promise<MaterialStagingDescriptor[]> {
+  if (paths.length === 0) return [];
+  return stageNativeMaterialPaths(paths, await desktopApiHeaders({ "Content-Type": "application/json" }));
+}
+
+/** Stage browser-dropped material files with packaged Desktop authorization. */
+export async function stageDesktopMaterialFiles(files: File[]): Promise<MaterialStagingDescriptor[]> {
+  if (files.length === 0) return [];
+  return stageBrowserMaterialFiles(files, fetch, await desktopApiHeaders());
+}
+
+/** Subscribe to the fixed tray quick-entry event. Returns a no-op outside Tauri. */
+export async function listenQuickEntryNative(handler: () => void): Promise<() => void> {
+  if (!isTauriDesktop()) return () => {};
+  const { listen } = await import("@tauri-apps/api/event");
+  return listen("edupi://quick-entry", () => handler());
+}
+
+/** Remove one pending staging copy with packaged Desktop authorization. */
+export async function removeDesktopStagedMaterial(stagingId: string): Promise<MaterialStagingDescriptor[]> {
+  return removeStagedMaterial(stagingId, await desktopApiHeaders());
+}
+
+/** List completed material staging entries after a desktop restart. */
+export async function listDesktopStagedMaterials(): Promise<MaterialStagingDescriptor[]> {
+  return loadStagedMaterials(await desktopApiHeaders());
 }
 
 export type DesktopImportResult = {

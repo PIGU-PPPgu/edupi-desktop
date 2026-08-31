@@ -1,6 +1,6 @@
 [package]
 name = "pi-agent-desktop"
-version = "0.3.3"
+version = "0.3.0"
 description = "Desktop shell for Pi Agent"
 authors = ["pi-agent-desktop contributors"]
 license = "MIT"
@@ -18,6 +18,11 @@ tauri-build = { version = "2.5.5", features = [] }
 dunce = "1"
 getrandom = "0.3"
 libc = "0.2"
+nomi-computer = { path = "vendor/nomifun/nomi-computer" }
+nomi-config = { path = "vendor/nomifun/nomi-config" }
+nomi-tools = { path = "vendor/nomifun/nomi-tools" }
+nomi-types = { path = "vendor/nomifun/nomi-types" }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.151"
 tauri = { version = "2.10.2", features = ["tray-icon"] }
 tauri-plugin-clipboard-manager = "^2"
@@ -25,10 +30,11 @@ tauri-plugin-dialog = "^2"
 tauri-plugin-notification = "^2"
 tauri-plugin-process = "^2"
 tauri-plugin-updater = "^2"
+tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
 
-[target.'cfg(target_os = "linux")'.dependencies]
-# Avoid libappindicator's GTK menu bridge, which can render blank labels under GNOME.
-ksni = "0.2.2"
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+# notify-rust 4.18 requires Rust 1.89, above this crate's declared MSRV.
+notify-rust = "=4.17.0"
 
 [features]
 default = ["custom-protocol"]

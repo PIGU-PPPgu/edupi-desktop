@@ -4,7 +4,15 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useEduPiCompletionMonitor } from "@/hooks/useEduPiCompletionMonitor";
 import { SessionSidebar } from "./SessionSidebar";
+import { EduPiAdminPanel } from "./EduPiAdminPanel";
+import { EduPiEducationPanel } from "./EduPiEducationPanel";
+import type { EducationModule } from "@/lib/edupi-education-ui";
+import { moduleFromView, viewFromModule, type TaskStage, type WorkbenchView } from "@/lib/edupi-workbench";
+import type { DesktopControlInput } from "@/lib/edupi-desktop-control";
+import type { ComputerUseBridgeResult, ComputerUseInput } from "@/lib/edupi-computer-use";
+import { runComputerUseFromAgent, setComputerUseEnabledNative } from "@/lib/desktop-computer-use";
 import { ChatWindow } from "./ChatWindow";
 import { clearDraft } from "@/lib/draft-store";
 import { TabBar, type Tab } from "./TabBar";
@@ -16,18 +24,21 @@ const FileViewer = dynamic(() => import("./FileViewer").then((m) => m.FileViewer
 const ModelsConfig = dynamic(() => import("./ModelsConfig").then((m) => m.ModelsConfig), { ssr: false });
 const SkillsConfig = dynamic(() => import("./SkillsConfig").then((m) => m.SkillsConfig), { ssr: false });
 const PluginsConfig = dynamic(() => import("./PluginsConfig").then((m) => m.PluginsConfig), { ssr: false });
+const EduPiHelpPanel = dynamic(() => import("./EduPiHelpPanel").then((m) => m.EduPiHelpPanel), { ssr: false });
 const AppSettings = dynamic(() => import("./AppSettings").then((m) => m.AppSettings), { ssr: false });
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { BranchNavigator } from "./BranchNavigator";
 import { UpdateReminder } from "./UpdateReminder";
+import { announceComputerUseChanged, EduPiComputerUseStop } from "./EduPiComputerUseStop";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { APP_PREF_KEYS, getPrefBool, getPrefJson, setPrefJson } from "@/lib/app-prefs";
+import { APP_PREF_KEYS, getPrefBool, getPrefJson, setPrefBool, setPrefJson } from "@/lib/app-prefs";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
+import { copyText } from "@/lib/clipboard";
 import { useDesktopConnection } from "@/lib/desktop-connection";
-import { isTauriDesktop, setCloseQuitsNative } from "@/lib/desktop-native";
+import { isTauriDesktop, listenQuickEntryNative, setCloseQuitsNative, showMainWindowNative } from "@/lib/desktop-native";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import { PRODUCT_NAME } from "@/lib/branding";
@@ -36,7 +47,7 @@ import {
   workspaceFileTabsMatchContext,
   type PersistedWorkspace,
 } from "@/lib/workspace-state";
-import { WindowControls, useDesktopChrome, useWindowDrag } from "./desktop";
+import { WindowControls, useDesktopChrome } from "./desktop";
 import {
   getDefaultRightPanelWidth,
   getRightPanelMaxWidth,
@@ -45,7 +56,6 @@ import {
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
   SIDEBAR_DEFAULT_WIDTH,
-  SPLIT_PANEL_MIN_WIDTH,
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
 } from "@/lib/panel-layout";
@@ -53,7 +63,16 @@ import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { ProjectTrustStatus } from "@/lib/api-types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
-import { SessionStatsPanel } from "./SessionStatsPanel";
+
+type SessionCopyField = "file" | "id";
+type SidebarFooterAction = {
+  id: string;
+  label: string;
+  onClick: () => void;
+  disabled: boolean;
+  iconOnly?: boolean;
+  icon: React.ReactNode;
+};
 
 type AutoNameStatus =
   | { kind: "idle" }
@@ -72,7 +91,7 @@ export function AppShell() {
   const [initialNavigation] = useState(() => resolveInitialNavigation(searchParams, persistedWorkspace));
   const [workspaceHydrated, setWorkspaceHydrated] = useState(() => !desktopMode);
   const { isDark, toggleTheme } = useTheme();
-  const { t: translate } = useI18n();
+  const { locale, t: translate } = useI18n();
   const isMobile = useIsMobile();
   useViewportHeight();
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
@@ -83,6 +102,7 @@ export function AppShell() {
   );
   const [initialCwdError, setInitialCwdError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [educationRefreshKey, setEducationRefreshKey] = useState(0);
   const [sessionKey, setSessionKey] = useState(0);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [modelsConfigOpen, setModelsConfigOpen] = useState(false);
@@ -90,6 +110,32 @@ export function AppShell() {
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
   const [pluginsConfigOpen, setPluginsConfigOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
+  const [edupiHelpOpen, setEduPiHelpOpen] = useState(false);
+  const [quickEntryOpen, setQuickEntryOpen] = useState(false);
+  const quickEntryOpenRef = useRef(false);
+  quickEntryOpenRef.current = quickEntryOpen;
+  useEffect(() => {
+    const closeTopmostQuickEntry = (event: KeyboardEvent) => {
+      if (!quickEntryOpenRef.current || event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setQuickEntryOpen(false);
+    };
+    window.addEventListener("keydown", closeTopmostQuickEntry, true);
+    return () => window.removeEventListener("keydown", closeTopmostQuickEntry, true);
+  }, []);
+  useEffect(() => {
+    const handler = () => {
+      setAppSettingsOpen(false);
+      setEduPiEducationModule("context");
+    };
+    window.addEventListener("edupi-open-context", handler);
+    return () => window.removeEventListener("edupi-open-context", handler);
+  }, []);
+
+  const [edupiAdminOpen, setEduPiAdminOpen] = useState(false);
+  const [edupiEducationModule, setEduPiEducationModule] = useState<EducationModule | null>("home");
+  const edupiChatActive = edupiEducationModule !== null && searchParams.get("view") === "chat";
   const [projectTrust, setProjectTrust] = useState<ProjectTrustStatus | null>(null);
   const [projectTrustDialogOpen, setProjectTrustDialogOpen] = useState(false);
   const [projectTrustBusy, setProjectTrustBusy] = useState(false);
@@ -101,7 +147,6 @@ export function AppShell() {
   // and only needs the top bar inset for them; other platforms get the buttons
   // from <WindowControls />, which renders nothing in a browser build.
   const desktopChrome = useDesktopChrome();
-  const windowDrag = useWindowDrag();
   const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
   const rightPanelWidthRef = useRef(RIGHT_PANEL_FALLBACK_WIDTH);
   const getResponsiveRightPanelWidth = useCallback(
@@ -160,20 +205,6 @@ export function AppShell() {
   useEffect(() => {
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
-  // Close right panel when viewport is too narrow for split-panel layout.
-  // Uses matchMedia's change event (not just the rightPanelOpen dependency)
-  // so it also fires when an already-open panel's viewport is resized narrow,
-  // not only when the panel itself is opened.
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mql = window.matchMedia(`(max-width: ${SPLIT_PANEL_MIN_WIDTH - 1}px)`);
-    const checkWidth = () => {
-      if (mql.matches) setRightPanelOpen(false);
-    };
-    checkWidth();
-    mql.addEventListener("change", checkWidth);
-    return () => mql.removeEventListener("change", checkWidth);
-  }, []);
   useEffect(() => {
     setMobileSidebarReady(true);
   }, []);
@@ -182,8 +213,16 @@ export function AppShell() {
     reclampSidebarWidth();
     reclampRightPanelWidth();
   }, [reclampRightPanelWidth, reclampSidebarWidth, rightPanelOpen]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const requestedEducationModule = searchParams.get("module");
+    const allowed: EducationModule[] = ["home", "context", "students", "calendar", "materials", "tasks"];
+    if (requestedEducationModule && allowed.includes(requestedEducationModule as EducationModule)) setEduPiEducationModule(requestedEducationModule as EducationModule);
+    else if (searchParams.get("edupi") === "1") setEduPiEducationModule("home");
+  }, [searchParams]);
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
+  const educationActivationRequestIdRef = useRef(0);
   // Branch navigator state — populated by ChatWindow via onBranchDataChange
   const [branchTree, setBranchTree] = useState<SessionTreeNode[]>([]);
   const [branchActiveLeafId, setBranchActiveLeafId] = useState<string | null>(null);
@@ -214,10 +253,19 @@ export function AppShell() {
   const handleSessionStatsChange = useCallback((stats: SessionStatsInfo | null) => {
     setSessionStats(stats);
   }, []);
-
+  const [copiedSessionField, setCopiedSessionField] = useState<SessionCopyField | null>(null);
+  const sessionCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleCopySessionField = useCallback((field: SessionCopyField, value: string) => {
+    void copyText(value).then(() => {
+      if (sessionCopyTimerRef.current) clearTimeout(sessionCopyTimerRef.current);
+      setCopiedSessionField(field);
+      sessionCopyTimerRef.current = setTimeout(() => setCopiedSessionField(null), 1400);
+    });
+  }, []);
 
   useEffect(() => {
     return () => {
+      if (sessionCopyTimerRef.current) clearTimeout(sessionCopyTimerRef.current);
       if (autoNameTimerRef.current) clearTimeout(autoNameTimerRef.current);
     };
   }, []);
@@ -311,13 +359,60 @@ export function AppShell() {
   useEffect(() => {
     if (desktopMode) {
       void setCloseQuitsNative(getPrefBool(APP_PREF_KEYS.closeQuits, false));
+      const computerUseEnabled = getPrefBool(APP_PREF_KEYS.computerUseEnabled, false);
+      void setComputerUseEnabledNative(computerUseEnabled).catch(() => {
+        setPrefBool(APP_PREF_KEYS.computerUseEnabled, false);
+        announceComputerUseChanged(false);
+      });
     }
   }, [desktopMode]);
 
   const { state: connectionState, retry: retryConnection } = useDesktopConnection(desktopMode);
 
-  // Same @mention format as the chat input's @ autocomplete, so the agent's
-  // read tool resolves it the same way (it strips the @ prefix).
+  const openEducationModule = useCallback((module: EducationModule = "home") => {
+    setEduPiEducationModule(module);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("edupi", "1");
+    params.set("module", module);
+    params.set("view", viewFromModule(module));
+    params.delete("task");
+    params.delete("stage");
+    router.replace(`/?${params.toString()}`, { scroll: false });
+  }, [router, searchParams]);
+
+  const openEducationView = useCallback((view: WorkbenchView) => {
+    setEduPiAdminOpen(false);
+    const educationModule = moduleFromView(view);
+    setEduPiEducationModule(educationModule);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("edupi", "1");
+    params.set("module", educationModule);
+    params.set("view", view);
+    params.delete("task");
+    params.delete("stage");
+    router.replace(`/?${params.toString()}`, { scroll: false });
+  }, [router, searchParams]);
+
+  const askEduPiToUpdateStudents = useCallback(() => {
+    openEducationView("chat");
+    requestAnimationFrame(() => chatInputRef.current?.replaceText("请根据我接下来提供的班级名单、课堂记录或作业材料，整理学生档案更新候选；保留来源，先让我审核，不要直接写入或外发。"));
+  }, [openEducationView]);
+
+  const openQuickEntry = useCallback(() => {
+    setQuickEntryOpen(true);
+    if (!edupiEducationModule) openEducationModule("home");
+  }, [edupiEducationModule, openEducationModule]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+    void listenQuickEntryNative(openQuickEntry).then((next) => {
+      if (disposed) next();
+      else unlisten = next;
+    }).catch(() => {});
+    return () => { disposed = true; unlisten?.(); };
+  }, [openQuickEntry]);
+  // Same @mention format as the chat input's @ autocomplete, so the agent's read tool resolves it the same way (it strips the @ prefix).
   const handleAtMention = useCallback((relativePath: string, isDir: boolean) => {
     chatInputRef.current?.insertText(buildAtMentionText(relativePath, isDir));
   }, []);
@@ -414,8 +509,8 @@ export function AppShell() {
     setFileTabs([]);
     setActiveFileTabId(null);
     setRightPanelOpen(false);
-    router.replace("/", { scroll: false });
-  }, [router, selectedSession]);
+    if (!edupiEducationModule) router.replace("/", { scroll: false });
+  }, [edupiEducationModule, router, selectedSession]);
 
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
     setNewSessionCwd(null);
@@ -445,12 +540,36 @@ export function AppShell() {
     }
   }, [router, isMobile]);
 
+  const handleEducationSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
+    setNewSessionCwd(null);
+    setSelectedSession(session);
+    setBranchTree([]);
+    setBranchActiveLeafId(null);
+    branchLeafChangeFnRef.current = null;
+    setSystemPrompt(null);
+    setSessionStats(null);
+    setContextUsage(null);
+    setActiveTopPanel(null);
+    setTopMoreOpen(false);
+    setInitialSessionRestored(true);
+    if (isRestore) {
+      suppressCwdBumpRef.current = true;
+      return;
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("edupi", "1");
+    params.set("view", "chat");
+    params.set("session", session.id);
+    router.replace(`/?${params.toString()}`, { scroll: false });
+  }, [router, searchParams]);
+
   const handleNewSession = useCallback((_sessionId: string, cwd: string) => {
     // "New task" is an explicit reset. A cwd-based blank-task draft would
     // otherwise be reloaded immediately when the composer remounts.
     clearDraft(`new:${cwd}`);
     setSelectedSession(null);
     setNewSessionCwd(cwd);
+    setEduPiEducationModule(null);
     // A second click in the same cwd must still create a clean composer. The
     // cwd-derived session identity alone cannot distinguish those blank tasks.
     setSessionKey((key) => key + 1);
@@ -465,10 +584,30 @@ export function AppShell() {
     router.replace("/", { scroll: false });
   }, [router, isMobile]);
 
+  const handleEducationNewSession = useCallback((_sessionId: string, cwd: string) => {
+    clearDraft(`new:${cwd}`);
+    setSelectedSession(null);
+    setNewSessionCwd(cwd);
+    setSessionKey((key) => key + 1);
+    setBranchTree([]);
+    setBranchActiveLeafId(null);
+    branchLeafChangeFnRef.current = null;
+    setSystemPrompt(null);
+    setSessionStats(null);
+    setContextUsage(null);
+    setActiveTopPanel(null);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("edupi", "1");
+    params.set("view", "chat");
+    params.delete("session");
+    router.replace(`/?${params.toString()}`, { scroll: false });
+  }, [router, searchParams]);
+
   // Global keyboard shortcuts (handles Esc, Ctrl+Alt+N etc.)
   useGlobalKeyboardShortcuts({
-    onNewSession: (cwd: string) => handleNewSession(`kb-${Date.now()}`, cwd),
+    onNewSession: (cwd: string) => (edupiChatActive ? handleEducationNewSession : handleNewSession)(`kb-${Date.now()}`, cwd),
     activeCwd,
+    onQuickEntry: openQuickEntry,
   });
 
   // Client-built transient SessionInfo (new session / fork) lacks the
@@ -495,10 +634,169 @@ export function AppShell() {
     router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
   }, [router, hydrateSelectedSession]);
 
+  const handleEducationSessionCreated = useCallback((session: SessionInfo) => {
+    setNewSessionCwd(null);
+    setSelectedSession(session);
+    setRefreshKey((key) => key + 1);
+    hydrateSelectedSession(session.id);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("edupi", "1");
+    params.set("session", session.id);
+    router.replace(`/?${params.toString()}`, { scroll: false });
+  }, [hydrateSelectedSession, router, searchParams]);
+
+  const handleActivateEducationAgentSession = useCallback(async ({ taskId, sessionId, cwd, view, stage, signal }: { taskId: string; sessionId: string | null; cwd: string; view: "tasks" | "review"; stage: TaskStage; signal: AbortSignal }): Promise<"existing" | "new"> => {
+    const requestId = educationActivationRequestIdRef.current + 1;
+    educationActivationRequestIdRef.current = requestId;
+    const throwIfStale = () => {
+      if (educationActivationRequestIdRef.current !== requestId || signal.aborted) {
+        throw new DOMException("Education Agent activation was cancelled", "AbortError");
+      }
+    };
+
+    throwIfStale();
+    if (sessionId) {
+      const response = await fetch("/api/sessions", { cache: "no-store", signal });
+      throwIfStale();
+      const result = response.ok ? await response.json() as { sessions?: SessionInfo[] } : {};
+      throwIfStale();
+      let session = result.sessions?.find((item) => item.id === sessionId && item.cwd === cwd);
+      if (!session) {
+        const runtimeResponse = await fetch(`/api/agent/${encodeURIComponent(sessionId)}`, { cache: "no-store", signal });
+        throwIfStale();
+        const runtime = runtimeResponse.ok ? await runtimeResponse.json() as { running?: boolean } : {};
+        throwIfStale();
+        if (runtime.running) {
+          const timestamp = new Date().toISOString();
+          session = { id: sessionId, path: "", cwd, created: timestamp, modified: timestamp, messageCount: 0, firstMessage: "" };
+        }
+      }
+      if (session) {
+        throwIfStale();
+        setNewSessionCwd(null);
+        setSelectedSession(session);
+        setBranchTree([]);
+        setBranchActiveLeafId(null);
+        branchLeafChangeFnRef.current = null;
+        setSystemPrompt(null);
+        setSessionStats(null);
+        setContextUsage(null);
+        setActiveTopPanel(null);
+        setTopMoreOpen(false);
+        throwIfStale();
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("edupi", "1");
+        params.set("module", "tasks");
+        params.set("view", view);
+        params.set("task", taskId);
+        params.set("stage", stage);
+        params.set("session", session.id);
+        router.replace(`/?${params.toString()}`, { scroll: false });
+        return "existing";
+      }
+    }
+
+    throwIfStale();
+    clearDraft(`new:${cwd}`);
+    throwIfStale();
+    setSelectedSession(null);
+    setNewSessionCwd(cwd);
+    setSessionKey((key) => key + 1);
+    setBranchTree([]);
+    setBranchActiveLeafId(null);
+    branchLeafChangeFnRef.current = null;
+    setSystemPrompt(null);
+    setSessionStats(null);
+    setContextUsage(null);
+    setActiveTopPanel(null);
+    throwIfStale();
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("edupi", "1");
+    params.set("module", "tasks");
+    params.set("view", view);
+    params.set("task", taskId);
+    params.set("stage", stage);
+    params.delete("session");
+    router.replace(`/?${params.toString()}`, { scroll: false });
+    return "new";
+  }, [router, searchParams]);
+
+  const handleEduPiAppAction = useCallback(async (action: DesktopControlInput): Promise<boolean> => {
+    if (action.action === "show_window") {
+      if (!isTauriDesktop()) return false;
+      await showMainWindowNative();
+      return true;
+    }
+    if (action.action === "open_settings") {
+      setAppSettingsOpen(true);
+      return true;
+    }
+    if (action.action === "open_context") {
+      setAppSettingsOpen(false);
+      setEduPiEducationModule("context");
+      return true;
+    }
+    if (action.action === "close_panel") {
+      setAppSettingsOpen(false);
+      setModelsConfigOpen(false);
+      setSkillsConfigOpen(false);
+      setPluginsConfigOpen(false);
+      window.dispatchEvent(new CustomEvent("edupi-close-panel"));
+      return true;
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("edupi", "1");
+    if (action.action === "set_inspector") {
+      params.set("inspector", action.open ? "1" : "0");
+      router.replace(`/?${params.toString()}`, { scroll: false });
+      return true;
+    }
+    if (action.action === "open_task") {
+      const response = await fetch("/api/edupi/education", { cache: "no-store" });
+      const data = response.ok ? await response.json() as { tasks?: Array<{ id: string | null }> } : {};
+      if (!data.tasks?.some((task) => task.id === action.taskId)) return false;
+      setEduPiEducationModule("tasks");
+      params.set("module", "tasks");
+      params.set("view", "tasks");
+      params.set("task", action.taskId);
+      params.set("stage", action.stage || "brief");
+      router.replace(`/?${params.toString()}`, { scroll: false });
+      return true;
+    }
+
+    const nextModule = moduleFromView(action.view);
+    setEduPiEducationModule(nextModule);
+    params.set("module", nextModule);
+    params.set("view", action.view);
+    if (action.view !== "tasks" && action.view !== "review") {
+      params.delete("task");
+      params.delete("stage");
+    }
+    router.replace(`/?${params.toString()}`, { scroll: false });
+    return true;
+  }, [router, searchParams]);
+
+  const handleEduPiComputerAction = useCallback((action: ComputerUseInput, expiresAt?: number): Promise<ComputerUseBridgeResult> => {
+    return runComputerUseFromAgent(action, expiresAt);
+  }, []);
+
   const handleAgentEnd = useCallback(() => {
     setRefreshKey((k) => k + 1);
     setExplorerRefreshKey((k) => k + 1);
+    setEducationRefreshKey((key) => key + 1);
   }, []);
+
+  const handleEducationImportCompleted = useCallback(() => {
+    setEducationRefreshKey((key) => key + 1);
+  }, []);
+
+  const focusEducationChat = useCallback(() => { chatInputRef.current?.focus(); }, []);
+
+  const handleEducationProjectionChanged = useCallback(() => {
+    setEducationRefreshKey((key) => key + 1);
+  }, []);
+  useEduPiCompletionMonitor({ onRefresh: handleEducationProjectionChanged });
 
   const handleProjectFilesImported = useCallback(() => {
     setExplorerRefreshKey((k) => k + 1);
@@ -551,6 +849,20 @@ export function AppShell() {
     router.replace(`?session=${encodeURIComponent(newSessionId)}`, { scroll: false });
   }, [router, hydrateSelectedSession]);
 
+  const handleEducationSessionForked = useCallback((newSessionId: string) => {
+    setRefreshKey((key) => key + 1);
+    setNewSessionCwd(null);
+    setSelectedSession((previous) => ({
+      ...(previous ?? { path: "", cwd: "", created: "", modified: "", messageCount: 0, firstMessage: "" }),
+      id: newSessionId,
+    }));
+    hydrateSelectedSession(newSessionId);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("edupi", "1");
+    params.set("session", newSessionId);
+    router.replace(`/?${params.toString()}`, { scroll: false });
+  }, [hydrateSelectedSession, router, searchParams]);
+
   const handleInitialRestoreDone = useCallback(() => {
     setInitialSessionRestored(true);
   }, []);
@@ -565,9 +877,16 @@ export function AppShell() {
       setBranchActiveLeafId(null);
       setSystemPrompt(null);
       setActiveTopPanel(null);
-      router.replace("/", { scroll: false });
+      if (edupiEducationModule) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("edupi", "1");
+        params.delete("session");
+        router.replace(`/?${params.toString()}`, { scroll: false });
+      } else {
+        router.replace("/", { scroll: false });
+      }
     }
-  }, [selectedSession, router]);
+  }, [edupiEducationModule, router, searchParams, selectedSession]);
 
   const handleOpenFile = useCallback((
     filePath: string,
@@ -641,7 +960,6 @@ export function AppShell() {
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
   const projectTrustCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
-  // While restoring initial session from URL, don't show the placeholder
   const showPlaceholder = initialSessionRestored && !showChat;
 
   // Reopen the last file tabs after the cold-start session/cwd restore settles.
@@ -765,11 +1083,11 @@ export function AppShell() {
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
   const windowTitle = activeCwdName ? `${activeCwdName} - ${PRODUCT_NAME}` : PRODUCT_NAME;
   const topBarTitle = selectedSession
-    ? selectedSession.name || selectedSession.firstMessage || translate("appshell.untitledTask")
+    ? selectedSession.name || selectedSession.firstMessage || "未命名教学任务"
     : showChat
-      ? translate("appshell.newTask")
+      ? "新建教学任务"
       : PRODUCT_NAME;
-  const topBarSubtitle = activeCwdName ?? translate("appshell.subtitle");
+  const topBarSubtitle = activeCwdName ? `教育工作区 · ${activeCwdName}` : "教师教学任务与材料协作";
 
   useEffect(() => {
     const syncWindowTitle = () => {
@@ -820,12 +1138,19 @@ export function AppShell() {
     </>
   );
 
-  const sidebarContent = (
-    <>
+  const sidebarFooterActions: SidebarFooterAction[] = [
+    { id: "help-primary", label: "帮助", onClick: () => setEduPiHelpOpen(true), disabled: false, icon: <span aria-hidden="true">?</span> },
+    { id: "models", label: "模型设置", onClick: () => setModelsConfigOpen(true), disabled: false, icon: <span aria-hidden="true">⌘</span> },
+    { id: "skills", label: "教学能力", onClick: () => setSkillsConfigOpen(true), disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd, icon: <span aria-hidden="true">◇</span> },
+    { id: "plugins", label: "扩展管理", onClick: () => setPluginsConfigOpen(true), disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd, icon: <span aria-hidden="true">◌</span> },
+    { id: "settings", label: "教师设置", onClick: () => setAppSettingsOpen(true), disabled: false, iconOnly: true, icon: <span aria-hidden="true">⚙</span> },
+  ];
+
+  const renderSessionSidebar = (presentation: "default" | "embedded-chat" = "default") => (
       <SessionSidebar
         selectedSessionId={selectedSession?.id ?? null}
-        onSelectSession={handleSelectSession}
-        onNewSession={handleNewSession}
+        onSelectSession={presentation === "embedded-chat" ? handleEducationSelectSession : handleSelectSession}
+        onNewSession={presentation === "embedded-chat" ? handleEducationNewSession : handleNewSession}
         initialSessionId={initialSessionId}
         skipInitialProjectSelection={initialNavigation.requestedCwd !== null}
         onInitialRestoreDone={handleInitialRestoreDone}
@@ -838,64 +1163,20 @@ export function AppShell() {
         explorerRefreshKey={explorerRefreshKey}
         onAtMention={handleAtMention}
         onAtMentions={handleAtMentions}
-        headerControls={sidebarHeaderControls}
+        headerControls={presentation === "embedded-chat" ? undefined : sidebarHeaderControls}
+        onOpenEduPiAdmin={openEducationModule}
+        onOpenContext={() => openEducationModule("context")}
+        presentation={presentation}
       />
+  );
+
+  const sidebarContent = (
+    <>
+      {renderSessionSidebar()}
       <div className="sidebar-footer" style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4 }}>
-        {([
-          {
-             label: translate("common.models"),
-            onClick: () => setModelsConfigOpen(true),
-            disabled: false,
-            icon: (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" />
-                <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
-                <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
-                <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" />
-                <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
-              </svg>
-            ),
-          },
-          {
-             label: translate("common.skills"),
-            onClick: () => setSkillsConfigOpen(true),
-            disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd,
-            icon: (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-              </svg>
-            ),
-          },
-          {
-             label: translate("common.plugins"),
-            onClick: () => setPluginsConfigOpen(true),
-            disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd,
-            icon: (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 7V2" />
-                <path d="M15 7V2" />
-                <path d="M6 13V8a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v5a6 6 0 0 1-12 0Z" />
-                <path d="M12 19v3" />
-              </svg>
-            ),
-          },
-          {
-            label: "Settings",
-            onClick: () => setAppSettingsOpen(true),
-            disabled: false,
-            iconOnly: true,
-            icon: (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.94 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.57 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.6 1.7 1.7 0 0 0 10 3.04V3h4v.08a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z" />
-              </svg>
-            ),
-          },
-        ] as { label: string; onClick: () => void; disabled: boolean; iconOnly?: boolean; icon: React.ReactNode }[]).map(({ label, onClick, disabled, iconOnly, icon }) => (
+        {sidebarFooterActions.map(({ id, label, onClick, disabled, iconOnly, icon }) => (
           <button
-            key={label}
+            key={id}
             onClick={onClick}
             disabled={disabled}
             title={label}
@@ -918,44 +1199,44 @@ export function AppShell() {
     </>
   );
 
+  const edupiChatWindow = (
+    <ChatWindow
+      key={`edupi-chat-${sessionKey}`}
+      session={selectedSession}
+      newSessionCwd={effectiveNewSessionCwd}
+      onAgentEnd={handleAgentEnd}
+      onSessionCreated={handleEducationSessionCreated}
+      onSessionForked={handleEducationSessionForked}
+      modelsRefreshKey={modelsRefreshKey}
+      chatInputRef={chatInputRef}
+      onBranchDataChange={handleBranchDataChange}
+      onSystemPromptChange={handleSystemPromptChange}
+      onSessionStatsChange={handleSessionStatsChange}
+      onSessionStatsPanelOpen={openSessionStatsPanel}
+      onContextUsageChange={handleContextUsageChange}
+      onEducationImportCompleted={handleEducationImportCompleted}
+      onEduPiAction={handleEduPiAppAction}
+      onEduPiComputerAction={handleEduPiComputerAction}
+      onOpenFile={handleOpenLinkedFile}
+      onProjectFilesImported={handleProjectFilesImported}
+      emptyTitle="新建对话"
+      emptySubtitle="从教学任务、材料或课堂问题开始。"
+    />
+  );
+
   return (
     <>
     <style>{`
       @keyframes session-info-pop {
-        from {
-          opacity: 0;
-          transform: translateY(-4px) scale(0.99);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0) scale(1);
-        }
+        from { opacity: 0; transform: translateY(-4px) scale(0.99); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
       }
-      .session-info-popover {
-        position: relative;
-        overflow: hidden;
-        transform-origin: top right;
-        animation: session-info-pop 160ms var(--ease-native) both;
-        will-change: transform, opacity;
-      }
-      .session-info-popover::after {
-        display: none;
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .session-info-popover,
-        .session-info-popover::after {
-          animation: none;
-        }
-      }
+      .session-info-popover { position: relative; overflow: hidden; transform-origin: top right; animation: session-info-pop 160ms var(--ease-native) both; will-change: transform, opacity; }
+      .session-info-popover::after { display: none; }
+      @media (prefers-reduced-motion: reduce) { .session-info-popover, .session-info-popover::after { animation: none; } }
       @media (max-width: 640px) {
-        .sidebar-overlay-backdrop.sidebar-mobile-pending {
-          opacity: 0 !important;
-          pointer-events: none !important;
-        }
-        .sidebar-container.sidebar-mobile-pending.sidebar-open {
-          transform: translateX(calc(-100% - env(safe-area-inset-left)));
-          box-shadow: none;
-        }
+        .sidebar-overlay-backdrop.sidebar-mobile-pending { opacity: 0 !important; pointer-events: none !important; }
+        .sidebar-container.sidebar-mobile-pending.sidebar-open { transform: translateX(calc(-100% - env(safe-area-inset-left))); box-shadow: none; }
       }
     `}</style>
     <div
@@ -1014,6 +1295,7 @@ export function AppShell() {
         className={`sidebar-overlay-backdrop${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
         onClick={() => setSidebarOpen(false)}
         style={{
+          display: edupiEducationModule ? "none" : "block",
           position: "fixed",
           inset: 0,
           zIndex: 199,
@@ -1033,7 +1315,7 @@ export function AppShell() {
           "--sidebar-width": `${sidebarResizer.width}px`,
           background: "var(--bg-panel)",
           borderRight: "1px solid var(--border)",
-          display: "flex",
+          display: edupiEducationModule ? "none" : "flex",
           flexDirection: "column",
           flexShrink: 0,
           paddingTop: "env(safe-area-inset-top)",
@@ -1041,9 +1323,9 @@ export function AppShell() {
           zIndex: 200,
         } as React.CSSProperties}
       >
-        {sidebarContent}
+        {edupiChatActive ? null : sidebarContent}
       </div>
-      {sidebarOpen && (
+      {!edupiEducationModule && sidebarOpen && (
         <div
           {...sidebarResizer.separatorProps}
           aria-controls="session-sidebar"
@@ -1060,8 +1342,7 @@ export function AppShell() {
           ref={topBarRef}
           className={`app-topbar${desktopChrome.isMacOS && (!sidebarOpen || isMobile) ? " app-topbar--mac-inset" : ""}`}
           {...desktopChrome.dragRegionProps}
-          {...windowDrag}
-          style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)", background: "var(--bg-panel)" }}
+          style={{ display: edupiEducationModule ? "none" : "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)", background: "var(--bg-panel)" }}
         >
           {/* Sidebar reopen — only while the sidebar (and its own toggle) is hidden */}
           {!sidebarOpen && (
@@ -1328,7 +1609,7 @@ export function AppShell() {
                           if (t && t.output > 0) parts.push(`↓${fmt(t.output)}`);
                           if (c > 0) parts.push(c >= 0.01 ? `$${c.toFixed(2)}` : "<$0.01");
                           if (contextUsage?.contextWindow && contextUsage.percent !== null) {
-                            parts.push(`${contextUsage.percent.toFixed(1)}% ctx`);
+                            parts.push(`${contextUsage.percent.toFixed(0)}% ctx`);
                           }
                           const summary = parts.length > 0 ? parts.join(" · ") : translate("appshell.statsHint");
                           return (
@@ -1404,11 +1685,158 @@ export function AppShell() {
                 </div>
               )}
               {activeTopPanel === "session" && (
-                <SessionStatsPanel
-                  sessionStats={sessionStats}
-                  contextUsage={contextUsage}
-                  isMobile={isMobile}
-                />
+                <div className="session-info-popover" style={{
+                  background: "var(--surface-elevated)",
+                  borderBottom: "1px solid var(--border)",
+                  boxShadow: "var(--shadow-popover)",
+                  padding: "12px 16px",
+                }}>
+                  {sessionStats ? (() => {
+                    const sessionRows = [
+                       ...(sessionStats.sessionName ? [{ label: translate("session.name"), value: sessionStats.sessionName, copyField: null }] : []),
+                       { label: translate("session.file"), value: sessionStats.sessionFile ?? translate("session.inMemory"), copyField: "file" as const },
+                       { label: translate("session.id"), value: sessionStats.sessionId, copyField: "id" as const },
+                    ];
+                    const messageRows = [
+                       [translate("session.user"), sessionStats.userMessages.toLocaleString(locale)],
+                       [translate("session.assistant"), sessionStats.assistantMessages.toLocaleString(locale)],
+                       [translate("session.toolCalls"), sessionStats.toolCalls.toLocaleString(locale)],
+                       [translate("session.toolResults"), sessionStats.toolResults.toLocaleString(locale)],
+                       [translate("session.total"), sessionStats.totalMessages.toLocaleString(locale)],
+                    ];
+                    const tokenRows = [
+                       [translate("session.input"), sessionStats.tokens.input.toLocaleString(locale)],
+                       [translate("session.output"), sessionStats.tokens.output.toLocaleString(locale)],
+                       ...(sessionStats.tokens.cacheRead > 0 ? [[translate("session.cacheRead"), sessionStats.tokens.cacheRead.toLocaleString(locale)]] : []),
+                       ...(sessionStats.tokens.cacheWrite > 0 ? [[translate("session.cacheWrite"), sessionStats.tokens.cacheWrite.toLocaleString(locale)]] : []),
+                       [translate("session.total"), sessionStats.tokens.total.toLocaleString(locale)],
+                    ];
+                    const ctx = contextUsage ?? sessionStats.contextUsage;
+                    const formatCompact = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
+                    const extraTokenRows = [
+                       ...(sessionStats.cost > 0 ? [[translate("session.cost"), `$${sessionStats.cost.toFixed(4)}`]] : []),
+                       ...(ctx?.contextWindow ? [[translate("session.context"), `${ctx.percent !== null ? `${ctx.percent.toFixed(1)}%` : "?"} / ${formatCompact(ctx.contextWindow)}`]] : []),
+                    ];
+                    const section = (
+                      title: string,
+                      sectionRows: string[][],
+                      valueAlign: "left" | "right" = "left",
+                      compact = false,
+                    ) => (
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{title}</div>
+                          <div style={{
+                            display: "grid",
+                            gridTemplateColumns: compact ? "max-content max-content" : "auto minmax(0, 1fr)",
+                            columnGap: compact ? 14 : 12,
+                            rowGap: 4,
+                            justifyContent: compact ? "start" : undefined,
+                          }}>
+                            {sectionRows.map(([label, value]) => (
+                              <div key={`${title}:${label}`} style={{ display: "contents" }}>
+                                <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{label}</div>
+                                <div style={{
+                                  color: "var(--text-muted)",
+                                  minWidth: 0,
+                                  overflowWrap: compact ? "normal" : "anywhere",
+                                  textAlign: valueAlign,
+                                  whiteSpace: valueAlign === "right" ? "nowrap" : "normal",
+                                }}>{value}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    const copyButton = (field: SessionCopyField, value: string) => {
+                      const copied = copiedSessionField === field;
+                      return (
+                        <button
+                          type="button"
+                           title={copied ? translate("session.copied") : translate(field === "file" ? "session.copyFile" : "session.copyId")}
+                          onClick={() => handleCopySessionField(field, value)}
+                          style={{
+                            alignSelf: "start",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: 22,
+                            height: 22,
+                            marginTop: -2,
+                            color: copied ? "var(--accent)" : "var(--text-dim)",
+                            background: "transparent",
+                            border: "1px solid var(--border)",
+                            borderRadius: 4,
+                            cursor: "pointer",
+                            flex: "0 0 auto",
+                            transition: "color 0.12s, border-color 0.12s, background 0.12s",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.color = "var(--accent)";
+                            e.currentTarget.style.borderColor = "var(--accent)";
+                            e.currentTarget.style.background = "var(--bg-hover)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.color = copied ? "var(--accent)" : "var(--text-dim)";
+                            e.currentTarget.style.borderColor = "var(--border)";
+                            e.currentTarget.style.background = "transparent";
+                          }}
+                        >
+                          {copied ? (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          ) : (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    };
+                    const sessionInfoSection = (
+                      <div style={{ minWidth: 0 }}>
+                         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("session.infoSection")}</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", columnGap: 12, rowGap: 8, alignItems: "start" }}>
+                          {sessionRows.map((row) => (
+                            <div key={`session-info:${row.label}`} style={{ display: "contents" }}>
+                              <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{row.label}</div>
+                              <div style={{
+                                color: "var(--text-muted)",
+                                minWidth: 0,
+                                overflowWrap: "anywhere",
+                                wordBreak: "break-word",
+                                whiteSpace: "normal",
+                              }}>{row.value}</div>
+                              <div>{row.copyField ? copyButton(row.copyField, row.value) : null}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+
+                    return (
+                      <div style={{
+                        display: "grid",
+                        gridTemplateColumns: isMobile
+                          ? "1fr"
+                          : "minmax(360px, 1.7fr) minmax(140px, 0.55fr) minmax(190px, 0.75fr)",
+                        gap: isMobile ? 16 : 24,
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                        fontFamily: "var(--font-mono)",
+                      }}>
+                        {sessionInfoSection}
+                         {section(translate("session.messages"), messageRows)}
+                         {section(translate("session.tokens"), [...tokenRows, ...extraTokenRows], "right", true)}
+                      </div>
+                    );
+                  })() : (
+                    <div style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
+                       {translate("session.load")}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -1418,7 +1846,32 @@ export function AppShell() {
 
         {/* Chat content */}
         <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-          {showChat ? (
+          {edupiEducationModule ? (
+            <EduPiEducationPanel
+              initialModule={edupiEducationModule}
+              activeAgentSessionId={selectedSession?.id ?? null}
+              onActivateAgentSession={handleActivateEducationAgentSession}
+              onOpenAdmin={() => setEduPiAdminOpen(true)}
+              onPrepareAgentPrompt={(prompt) => chatInputRef.current?.insertText(`${prompt}\n`)}
+              onReplaceAgentPrompt={(prompt) => chatInputRef.current?.replaceText(prompt)}
+              quickEntryOpen={quickEntryOpen}
+              onCloseQuickEntry={() => setQuickEntryOpen(false)}
+              onFocusAgentChat={focusEducationChat}
+              refreshKey={educationRefreshKey}
+              chatPanel={edupiChatWindow}
+              chatSidebar={renderSessionSidebar("embedded-chat")}
+              renderFilePreview={(filePath) => (
+                <FileViewer
+                  filePath={filePath}
+                  cwd={activeCwd ?? undefined}
+                  sourceSessionId={selectedSession?.id ?? null}
+                  gitRefreshKey={explorerRefreshKey}
+                  onOpenFile={(nextPath: string) => handleOpenFile(nextPath, getFileName(nextPath), { sourceSessionId: selectedSession?.id ?? null })}
+                />
+              )}
+            />
+          ) : null}
+          {!edupiEducationModule && showChat ? (
             <ChatWindow
               key={sessionKey}
               session={selectedSession}
@@ -1433,10 +1886,13 @@ export function AppShell() {
               onSessionStatsChange={handleSessionStatsChange}
               onSessionStatsPanelOpen={openSessionStatsPanel}
               onContextUsageChange={handleContextUsageChange}
+              onEducationImportCompleted={handleEducationImportCompleted}
+              onEduPiAction={handleEduPiAppAction}
+              onEduPiComputerAction={handleEduPiComputerAction}
               onOpenFile={handleOpenLinkedFile}
               onProjectFilesImported={handleProjectFilesImported}
             />
-          ) : initialCwdStatus === "validating" ? (
+          ) : !edupiEducationModule && initialCwdStatus === "validating" ? (
             <div
               role="status"
               style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 24, color: "var(--text-muted)", textAlign: "center" }}
@@ -1446,7 +1902,7 @@ export function AppShell() {
                 {initialNavigation.requestedCwd}
               </div>
             </div>
-          ) : initialCwdStatus === "error" ? (
+          ) : !edupiEducationModule && initialCwdStatus === "error" ? (
             <div
               role="alert"
               style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 24, color: "var(--text-muted)", textAlign: "center" }}
@@ -1457,7 +1913,7 @@ export function AppShell() {
               </div>
               <div style={{ maxWidth: 720, fontSize: 12 }}>{initialCwdError}</div>
             </div>
-          ) : showPlaceholder ? (
+          ) : !edupiEducationModule && showPlaceholder ? (
             activeCwd ? (
               <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 15 }}>
                  {translate("workspace.selectSession")}
@@ -1484,8 +1940,9 @@ export function AppShell() {
         aria-hidden="true"
         className={`right-panel-overlay-backdrop${rightPanelOpen ? " is-open" : ""}`}
         onClick={() => setRightPanelOpen(false)}
+        style={{ display: edupiEducationModule ? "none" : undefined }}
       />
-      {rightPanelOpen && (
+      {!edupiEducationModule && rightPanelOpen && (
         <div
           {...rightPanelResizer.separatorProps}
           aria-controls="file-panel"
@@ -1502,7 +1959,7 @@ export function AppShell() {
         className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${rightPanelResizer.isResizing ? " right-panel-resizing" : ""}`}
         style={{
           "--right-panel-width": `${rightPanelResizer.width}px`,
-          display: "flex",
+          display: edupiEducationModule ? "none" : "flex",
           flexDirection: "column",
           borderLeft: "1px solid var(--border)",
           background: "var(--bg)",
@@ -1541,7 +1998,7 @@ export function AppShell() {
               gitRefreshKey={explorerRefreshKey}
               initialDisplayMode={activeFileTab.initialDisplayMode}
               onMentionLines={rightPanelOpen ? handleFileLineMention : undefined}
-              onOpenFile={(filePath) => handleOpenFile(
+              onOpenFile={(filePath: string) => handleOpenFile(
                 filePath,
                 getFileName(filePath),
                 { sourceSessionId: activeFileTab.sourceSessionId },
@@ -1586,6 +2043,9 @@ export function AppShell() {
       />
     )}
     {appSettingsOpen && <AppSettings onClose={() => setAppSettingsOpen(false)} />}
+    {edupiAdminOpen && <EduPiAdminPanel refreshToken={modelsRefreshKey} onClose={() => setEduPiAdminOpen(false)} onOpenModels={() => setModelsConfigOpen(true)} onOpenContext={() => { setEduPiAdminOpen(false); openEducationModule("context"); }} onAskStudentUpdate={askEduPiToUpdateStudents} onNavigate={openEducationView} onOpenSettings={() => { setEduPiAdminOpen(false); setAppSettingsOpen(true); }} />}
+    <EduPiComputerUseStop />
+    {edupiHelpOpen && <EduPiHelpPanel onClose={() => setEduPiHelpOpen(false)} onStartSetup={() => { setEduPiHelpOpen(false); setEduPiEducationModule("context"); }} onOpenContext={() => { setEduPiHelpOpen(false); setEduPiEducationModule("context"); }} />}
     <UpdateReminder onOpenSettings={() => setAppSettingsOpen(true)} />
     </>
   );
