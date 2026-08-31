@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 16 * 1024;
-const BODY_KEYS = new Set(["decision", "patch", "note"]);
+const BODY_KEYS = new Set(["decision", "expectedRevision", "patch", "note"]);
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -50,12 +50,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ tas
     const body = record(await parseJsonWithinLimit(request, MAX_BODY_BYTES));
     if (!body || Object.keys(body).some((key) => !BODY_KEYS.has(key))) throw new TaskReviewError("invalid_envelope", "任务审核字段无效。");
     const decision = body.decision as TaskReviewDecision;
-    if (!TASK_REVIEW_DECISIONS.includes(decision) || !validPatch(body.patch, decision)
+    if (!Number.isInteger(body.expectedRevision) || Number(body.expectedRevision) < 0
+      || !TASK_REVIEW_DECISIONS.includes(decision) || !validPatch(body.patch, decision)
       || (body.note !== undefined && body.note !== null && (typeof body.note !== "string" || body.note.length > 1000))) {
       throw new TaskReviewError("invalid_envelope", "任务审核字段无效。");
     }
     const result = await reviewEducationTask({
       taskId: taskId.trim(),
+      expectedRevision: Number(body.expectedRevision),
       decision,
       patch: body.patch as TaskReviewPatch | null | undefined,
       note: typeof body.note === "string" ? body.note.trim() || null : null,

@@ -11,6 +11,7 @@ export type TaskReviewDecision = typeof TASK_REVIEW_DECISIONS[number];
 export type TaskReviewPatch = { title?: string; dueDate?: string | null; deliverables?: string[] };
 export type TaskReviewInput = {
   taskId: string;
+  expectedRevision?: number;
   decision: TaskReviewDecision;
   patch?: TaskReviewPatch | null;
   note?: string | null;
@@ -137,6 +138,10 @@ export function buildTaskReviewCommandEnvelope(input: TaskReviewInput & { payloa
   const task = taskFromPayload(payload, taskId);
   const revision = task.revision;
   if (typeof revision !== "number" || !Number.isInteger(revision) || revision < 0) throw new TaskReviewError("invalid_envelope", "任务审核版本无效。");
+  if (input.expectedRevision !== undefined) {
+    if (!Number.isInteger(input.expectedRevision) || input.expectedRevision < 0) throw new TaskReviewError("invalid_envelope", "expectedRevision 无效。");
+    if (input.expectedRevision !== revision) throw new TaskReviewError("stale_revision", "任务已更新，请刷新后重试。");
+  }
   const evidenceIds = evidenceForTask(task);
   const history = reviewHistory(task);
   const latestReviewId = history.length ? requiredText(history.at(-1)?.review_id, "rollbackId") : null;

@@ -20,6 +20,8 @@ test("rejects cross-site, non-JSON, malformed, unknown and invalid task review i
   for (const body of [
     "{",
     {},
+    { decision: "accept" },
+    { decision: "accept", expectedRevision: -1 },
     { decision: "approve" },
     { decision: "accept", admin: true },
     { decision: "accept", patch: {} },
@@ -31,7 +33,7 @@ test("rejects cross-site, non-JSON, malformed, unknown and invalid task review i
 });
 
 test("a valid camelCase task review reaches the Core boundary", async () => {
-  const response = await POST(request({ decision: "modify", patch: { title: "新标题", dueDate: "2026-09-02", deliverables: ["周计划"] }, note: "调整" }), params);
+  const response = await POST(request({ decision: "modify", expectedRevision: 0, patch: { title: "新标题", dueDate: "2026-09-02", deliverables: ["周计划"] }, note: "调整" }), params);
   assert.equal(response.status, 503);
   const body = await response.json();
   assert.ok(["unsupported_command", "unavailable"].includes(body.code));

@@ -458,6 +458,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           decision: action,
+          expectedRevision: activeTask.revision,
           patch: action === "modify" ? {
             title: payload.title,
             dueDate: payload.dueDate ?? null,
@@ -466,10 +467,10 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
           note: payload.note ?? null,
         }),
       });
-      const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error || `审核失败（HTTP ${response.status}）`);
-      const refreshed = await loadWorkspace();
-      const nextTask = refreshed.tasks.find((task) => task.id === activeTask.id);
+      const result = await response.json() as { error?: string; data?: EducationContract };
+      if (!response.ok || !result.data) throw new Error(result.error || `审核失败（HTTP ${response.status}）`);
+      setEducation(result.data);
+      const nextTask = result.data.tasks.find((task) => task.id === activeTask.id);
       if (nextTask) setSelectedTaskKey(taskKey(nextTask));
       setReviewMessage(reviewLabels[action]);
     } catch (error) {
@@ -477,7 +478,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     } finally {
       setReviewBusy(null);
     }
-  }, [activeTask, education?.capabilities.taskReview.enabled, loadWorkspace]);
+  }, [activeTask, education?.capabilities.taskReview.enabled]);
 
   const rememberStaged = useCallback((items: MaterialStagingDescriptor[]) => {
     setStagedMaterials((current) => {
