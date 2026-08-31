@@ -37,6 +37,7 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   assert.match(panel, /\/api\/edupi\/tasks\/\$\{encodeURIComponent\(activeTask\.id\)\}\/review/);
   assert.match(panel, /expectedRevision: activeTask\.revision/);
   assert.match(panel, /setEducation\(result\.data\)/);
+  assert.match(taskStage, /task\.reviewHistory\.at\(-1\)\?\.action !== "rollback"/);
   for (const label of ["AI 协作", "今天", "工作区", "教学", "班级", "日程", "教育记忆", "观察与洞察", "成长", "材料", "待我确认"]) {
     assert.match(`${rail}\n${workbench}`, new RegExp(label));
   }
