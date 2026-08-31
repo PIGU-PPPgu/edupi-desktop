@@ -2,9 +2,9 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "5538021f171a647d87562d91e5ab953f794e2331",
+    "core_commit": "4c9f9cb067952245902bc83d483fa2558ab25c27",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:649c13fd9d6f0defa56a189176cab0e2a461355131397a4601d260fa1d08d922"
+    "component_manifest_hash": "sha256:1f15c9f08af0fa2db422d972c8b65394b4b95b19880a85929cad7d5020ca006c"
   },
   "contract_identities": [
     {
@@ -13,16 +13,15 @@
       "schema_hash": "sha256:a0916f90fbca72da0c48e545c5c8dfddee42a0f0b3e54641c7a2297e54e9eb31",
       "fixture_manifest_path": "fixtures/bridge/v1.1/fixture-manifest.json",
       "fixture_manifest_hash": "sha256:68e9d2e91e04a314037590b1a5ebe51cf2fab3d50392d65e30a0dd71bec29cfb",
-      "supported_commands": ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage"],
+      "supported_commands": ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage"],
       "supported_projections": ["education_workspace"],
       "depends_on": []
     }
   ],
   "cumulative_projection_manifest": null,
-  "supported_commands": ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage"],
+  "supported_commands": ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage"],
   "supported_projections": ["education_workspace"],
   "unsupported_command_reasons": {
-    "review_task": "Core v1.1 does not expose this command capability in the pinned paired C1 runtime",
     "review_teaching_adjustment": "Core v1.1 does not expose this command capability in the pinned paired C1 runtime",
     "review_follow_up": "Core v1.1 does not expose this command capability in the pinned paired C1 runtime",
     "review_insight": "Core v1.1 does not expose this command capability in the pinned paired C1 runtime",
@@ -39,7 +38,9 @@
   },
   "paired_prs": [
     "https://github.com/PIGU-PPPgu/edupi/pull/2",
-    "https://github.com/PIGU-PPPgu/edupi-desktop-internal/pull/11"
+    "https://github.com/PIGU-PPPgu/edupi-desktop-internal/pull/11",
+    "https://github.com/PIGU-PPPgu/edupi/pull/6",
+    "https://github.com/PIGU-PPPgu/edupi-desktop/pull/9"
   ],
-  "change_note": "Enabled receipt-bound teacher task creation and board-stage movement on top of the prior review and intake commands; Desktop still has no canonical task fallback and external_send remains false"
+  "change_note": "Enabled receipt-bound native task review with strict snapshot-state source binding and canonical Core task history; Desktop has no local task-review fallback and external_send remains false"
 }
