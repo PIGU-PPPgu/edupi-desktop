@@ -57,6 +57,7 @@ test("class and student modules select one student and expose real import and ex
   assert.match(views, /mode=\{props\.view\}/);
   for (const label of ["导入名单", "导出档案", "导出轨迹", "学习模式", "成长轨迹", "家校记录", "相关任务"]) assert.match(student, new RegExp(label));
   assert.match(student, /\/api\/edupi\/students\/import/);
+  assert.match(student, /\^id\$\|_id\$\|_ids\$\|hash\|path/);
   assert.match(route, /importStudentRoster/);
   assert.match(route, /readEducationContract/);
 });

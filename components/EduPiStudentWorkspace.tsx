@@ -44,6 +44,14 @@ function download(content: string, name: string, type: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+function exportValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(exportValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .filter(([key]) => !/(?:^id$|_id$|_ids$|hash|path)/i.test(key))
+    .map(([key, child]) => [key, exportValue(child)]));
+}
+
 function statusLabel(value: unknown): string {
   const labels: Record<string, string> = { active: "观察中", resolved: "已解决", pending: "待观察", in_progress: "观察中", hold: "暂缓", dismissed: "已忽略", closed: "已关闭" };
   return typeof value === "string" ? labels[value.toLowerCase()] || value : "观察中";
@@ -86,7 +94,7 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   const exportCurrent = () => {
     const payload = selected || data.students;
     const name = selectedName ? `${selectedName}-学生档案.json` : "班级学生档案.json";
-    download(`${JSON.stringify({ exported_at: new Date().toISOString(), students: Array.isArray(payload) ? payload : [payload] }, null, 2)}\n`, name, "application/json;charset=utf-8");
+    download(`${JSON.stringify({ exported_at: new Date().toISOString(), students: exportValue(Array.isArray(payload) ? payload : [payload]) }, null, 2)}\n`, name, "application/json;charset=utf-8");
   };
   const exportTimeline = () => {
     if (!selected || !selectedName) return;

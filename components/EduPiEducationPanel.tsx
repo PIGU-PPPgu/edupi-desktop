@@ -9,6 +9,7 @@ import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import {
   isTaskStage,
   isTaskActionable,
+  isUserFacingMemory,
   isWorkbenchView,
   moduleFromView,
   taskKey,
@@ -800,7 +801,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       onDropCapture={onEducationDropCapture}
     >
       {educationFileDragOver ? <div className="edupi-global-material-drop" role="status" aria-live="polite"><strong>放入 EduPi</strong><span>松开后识别材料、日程与课表</span></div> : null}
-      <EduPiNavigationRail activeView={activeView} pendingReviewCount={pendingCount + c1PendingCount + teacherContextPendingCount} runningAgentCount={runningAgentCount} memoryCount={education.continuity.memories.filter((memory) => memory.state === "active").length} workspaceLabel={context?.school || context?.name || "教师工作区"} onSelect={selectView} onOpenAdmin={onOpenAdmin} />
+      <EduPiNavigationRail activeView={activeView} pendingReviewCount={pendingCount + c1PendingCount + teacherContextPendingCount} runningAgentCount={runningAgentCount} memoryCount={education.continuity.memories.filter((memory) => memory.state === "active" && isUserFacingMemory(memory)).length} workspaceLabel={context?.school || context?.name || "教师工作区"} onSelect={selectView} onOpenAdmin={onOpenAdmin} />
       <div className="edupi-teacher-app">
         <div className={`edupi-teacher-body${activeView === "chat" ? " is-chat" : ""}${showObjectSider ? " has-object-sider" : ""}${inspectorAvailable && inspectorOpen ? " has-inspector" : ""}`}>
           {(loadError || (objectSiderAvailable && objectSider.collapsed) || inspectorAvailable) ? <div className="edupi-teacher-body__controls">{loadError ? <button type="button" onClick={retryLoadWorkspace} title={loadError}>重试</button> : null}{objectSiderAvailable && objectSider.collapsed ? <button type="button" onClick={objectSider.toggle}>列表</button> : null}{inspectorAvailable ? <button type="button" onClick={toggleInspector}>{inspectorOpen ? "收起检查" : "检查"}</button> : null}</div> : null}
