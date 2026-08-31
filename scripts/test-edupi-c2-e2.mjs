@@ -15,10 +15,10 @@ import os from "node:os";
 import path from "node:path";
 
 const HARD_TIMEOUT_MS = 60_000;
-const EXPECTED_CORE_COMMIT = "5538021f171a647d87562d91e5ab953f794e2331";
-const EXPECTED_COMPONENT_MANIFEST_HASH = "sha256:649c13fd9d6f0defa56a189176cab0e2a461355131397a4601d260fa1d08d922";
+const EXPECTED_CORE_COMMIT = "4c9f9cb067952245902bc83d483fa2558ab25c27";
+const EXPECTED_COMPONENT_MANIFEST_HASH = "sha256:1f15c9f08af0fa2db422d972c8b65394b4b95b19880a85929cad7d5020ca006c";
 const EXPECTED_SCHEMA_HASH = "sha256:a0916f90fbca72da0c48e545c5c8dfddee42a0f0b3e54641c7a2297e54e9eb31";
-const EXPECTED_COMMANDS = ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage"];
+const EXPECTED_COMMANDS = ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage"];
 const EXPECTED_PROJECTIONS = ["education_workspace"];
 const REVIEW_STATUS = { accept: "accepted", hold: "held", reject: "rejected", modify: "modified" };
 const FIXED_ISSUED_AT = "2026-08-28T09:00:00.000Z";

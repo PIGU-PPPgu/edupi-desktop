@@ -1332,6 +1332,22 @@ const TEACHER_CONTEXT_REVIEW_COMMANDS: ["review_teacher_context"] = ["review_tea
 const WORK_CANDIDATE_REVIEW_COMMANDS: ["review_work_candidate"] = ["review_work_candidate"];
 const WORK_CANDIDATE_REVIEW_ACTIONS: EducationWorkCandidateDecision[] = ["accept", "modify", "reject", "hold", "snooze", "suppress"];
 
+function taskReviewCapability(snapshotPayload: RawRecord | undefined, supportedCommands?: readonly string[]): EducationContract["capabilities"]["taskReview"] {
+  const manifestCommands = supportedCommands || [];
+  const snapshotCommands = record(snapshotPayload?.capabilities).supported_commands;
+  const enabled = manifestCommands.includes("review_task") && exactStringList(snapshotCommands, manifestCommands);
+  return {
+    enabled,
+    mode: enabled ? "canonical_safe_store" : "read_only",
+    actions: ["accept", "modify", "reject", "hold", "rollback"],
+    reason: enabled ? "任务审核已连接 Core。" : "Core 尚未启用任务审核。",
+  };
+}
+
+function exactStringList(value: unknown, expected: readonly string[]): boolean {
+  return Array.isArray(value) && value.length === expected.length && value.every((item, index) => item === expected[index]);
+}
+
 function cumulativeReviewCapabilitiesMatch(snapshotPayload: RawRecord | undefined, supportedCommands: readonly string[] | undefined): { commandsMatch: boolean; payloadMatches: boolean } {
   const manifestCommands = supportedCommands || [];
   const payloadCommands = record(snapshotPayload?.capabilities)?.supported_commands;
@@ -1493,7 +1509,7 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
       documents: { path: ".edupi/output", present: sourceCounts.documents.present, count: documents.length },
     },
     capabilities: {
-      taskReview: { enabled: false, mode: "read_only", actions: ["accept", "modify", "reject", "hold", "rollback"], reason: CORE_PROJECTION_UNAVAILABLE },
+      taskReview: taskReviewCapability(snapshotPayload, options.supportedCommands),
       calendar: disabled(),
       timetable: disabled(),
       materialIntake: disabled(),
@@ -1604,12 +1620,7 @@ export function buildEducationContract(input: ContractInput = {}): EducationCont
       },
     },
     capabilities: {
-      taskReview: {
-        enabled: input.taskReview?.enabled === true,
-        mode: input.taskReview?.mode || "read_only",
-        actions: ["accept", "modify", "reject", "hold", "rollback"],
-        reason: input.taskReview?.reason || "当前桌面只读取规范数据，任务审核动作尚未启用。",
-      },
+      taskReview: taskReviewCapability(snapshotPayload, input.supportedCommands),
       calendar: { enabled: false, mode: "read_only", reason: CORE_PROJECTION_UNAVAILABLE },
       timetable: { enabled: false, mode: "read_only", reason: CORE_PROJECTION_UNAVAILABLE },
       materialIntake: { enabled: false, mode: "read_only", reason: CORE_PROJECTION_UNAVAILABLE },

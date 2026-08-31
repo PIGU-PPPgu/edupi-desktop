@@ -453,15 +453,24 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     setReviewBusy(action);
     setReviewMessage(null);
     try {
-      const response = await fetch("/api/edupi/education", {
+      const response = await fetch(`/api/edupi/tasks/${encodeURIComponent(activeTask.id)}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId: activeTask.id, action, ...payload }),
+        body: JSON.stringify({
+          decision: action,
+          expectedRevision: activeTask.revision,
+          patch: action === "modify" ? {
+            title: payload.title,
+            dueDate: payload.dueDate ?? null,
+            deliverables: payload.deliverables,
+          } : null,
+          note: payload.note ?? null,
+        }),
       });
-      const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error || `审核失败（HTTP ${response.status}）`);
-      const refreshed = await loadWorkspace();
-      const nextTask = refreshed.tasks.find((task) => task.id === activeTask.id);
+      const result = await response.json() as { error?: string; data?: EducationContract };
+      if (!response.ok || !result.data) throw new Error(result.error || `审核失败（HTTP ${response.status}）`);
+      setEducation(result.data);
+      const nextTask = result.data.tasks.find((task) => task.id === activeTask.id);
       if (nextTask) setSelectedTaskKey(taskKey(nextTask));
       setReviewMessage(reviewLabels[action]);
     } catch (error) {
@@ -469,7 +478,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     } finally {
       setReviewBusy(null);
     }
-  }, [activeTask, education?.capabilities.taskReview.enabled, loadWorkspace]);
+  }, [activeTask, education?.capabilities.taskReview.enabled]);
 
   const rememberStaged = useCallback((items: MaterialStagingDescriptor[]) => {
     setStagedMaterials((current) => {
