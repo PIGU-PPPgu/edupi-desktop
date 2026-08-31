@@ -453,10 +453,18 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     setReviewBusy(action);
     setReviewMessage(null);
     try {
-      const response = await fetch("/api/edupi/education", {
+      const response = await fetch(`/api/edupi/tasks/${encodeURIComponent(activeTask.id)}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId: activeTask.id, action, ...payload }),
+        body: JSON.stringify({
+          decision: action,
+          patch: action === "modify" ? {
+            title: payload.title,
+            dueDate: payload.dueDate ?? null,
+            deliverables: payload.deliverables,
+          } : null,
+          note: payload.note ?? null,
+        }),
       });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || `审核失败（HTTP ${response.status}）`);
