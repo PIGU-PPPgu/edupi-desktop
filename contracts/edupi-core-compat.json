@@ -39,8 +39,7 @@
   "paired_prs": [
     "https://github.com/PIGU-PPPgu/edupi/pull/2",
     "https://github.com/PIGU-PPPgu/edupi-desktop-internal/pull/11",
-    "https://github.com/PIGU-PPPgu/edupi/pull/6",
-    "https://github.com/PIGU-PPPgu/edupi-desktop/pull/9"
+    "https://github.com/PIGU-PPPgu/edupi/pull/6"
   ],
   "change_note": "Enabled receipt-bound native task review with strict snapshot-state source binding and canonical Core task history; Desktop has no local task-review fallback and external_send remains false"
 }
