@@ -23,7 +23,7 @@ type Props = {
   selection: CalendarItemSelection | null;
   onSelect: (selection: CalendarItemSelection | null) => void;
   onTaskDetail: (task: TeacherTask) => void;
-  onImportCalendar: (event: { date: string; endDate: string | null; name: string; type: string; notes: string | null }) => Promise<void>;
+  onImportCalendar: (event: { eventId: string | null; date: string; endDate: string | null; name: string; type: string; notes: string | null }) => Promise<void>;
   onImportTimetable: (slot: { dayOfWeek: number; period: number; subject: string; className: string | null; kind: "class" | "routine"; notes: string | null }) => Promise<void>;
 };
 
@@ -222,7 +222,7 @@ function isNonTaskSelection(selection: CalendarItemSelection): selection is NonT
   return selection.kind === "calendar" || selection.kind === "timetable";
 }
 
-function CalendarDetailDrawer({ data, selection, onClose }: { data: EducationContract; selection: NonTaskCalendarSelection; onClose: () => void }) {
+function CalendarDetailDrawer({ data, selection, onClose, onEdit }: { data: EducationContract; selection: NonTaskCalendarSelection; onClose: () => void; onEdit?: () => void }) {
   const rows: Array<{ label: string; value: string }> = [];
   if (selection.kind === "calendar") {
     const item = data.calendar.find((event) => event.id === selection.sourceId || (!event.id && event.name === selection.title && event.date === selection.date));
@@ -246,12 +246,13 @@ function CalendarDetailDrawer({ data, selection, onClose }: { data: EducationCon
       ["备注", visibleTimetableNote(item.notes) || selection.detail],
     ] as Array<[string, unknown]>) { const text = rawText(value); if (text) rows.push({ label, value: text }); }
   }
-  return <aside className="edupi-calendar-detail" aria-label={`${selection.title}详情`}><header><div><span>{selection.kind === "calendar" ? "校历节点" : "课程安排"}</span><h2>{selection.title}</h2></div><button type="button" onClick={onClose} aria-label="关闭详情" autoFocus>×</button></header><dl>{rows.map((row) => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl></aside>;
+  return <aside className="edupi-calendar-detail" aria-label={`${selection.title}详情`}><header><div><span>{selection.kind === "calendar" ? "校历节点" : "课程安排"}</span><h2>{selection.title}</h2></div><div className="edupi-calendar-detail__actions">{onEdit ? <button type="button" className="is-edit" onClick={onEdit}>编辑</button> : null}<button type="button" onClick={onClose} aria-label="关闭详情" autoFocus>×</button></div></header><dl>{rows.map((row) => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl></aside>;
 }
 
-function IntakeComposer({ mode, anchorDate, busy, onClose, onImportCalendar, onImportTimetable }: {
+function IntakeComposer({ mode, anchorDate, calendarEvent, busy, onClose, onImportCalendar, onImportTimetable }: {
   mode: "calendar" | "timetable";
   anchorDate: string;
+  calendarEvent?: EducationContract["calendar"][number] | null;
   busy: boolean;
   onClose: () => void;
   onImportCalendar: Props["onImportCalendar"];
@@ -266,6 +267,7 @@ function IntakeComposer({ mode, anchorDate, busy, onClose, onImportCalendar, onI
     try {
       if (mode === "calendar") {
         await onImportCalendar({
+          eventId: calendarEvent?.id || null,
           date: String(form.get("date") || ""),
           endDate: String(form.get("endDate") || "") || null,
           name: String(form.get("name") || ""),
@@ -287,25 +289,31 @@ function IntakeComposer({ mode, anchorDate, busy, onClose, onImportCalendar, onI
       setError("接入失败，请检查后重试");
     }
   };
-  return <section className="edupi-calendar-intake" aria-label={mode === "calendar" ? "新建日程" : "添加课程安排"}><header><strong>{mode === "calendar" ? "新建日程" : "添加课表"}</strong><button type="button" onClick={onClose} aria-label="关闭">×</button></header><form onSubmit={(event) => void submit(event)}>{mode === "calendar" ? <>
-    <label><span>名称</span><input name="name" required maxLength={240} autoFocus placeholder="如：期中考试" /></label>
-    <label><span>开始</span><input name="date" type="date" required defaultValue={anchorDate} /></label>
-    <label><span>结束</span><input name="endDate" type="date" /></label>
-    <label><span>类型</span><select name="type" defaultValue="custom"><option value="custom">日程</option><option value="teaching">教学节点</option><option value="exam">考试</option><option value="meeting">会议</option><option value="activity">活动</option><option value="holiday">假期</option><option value="festival">节日</option></select></label>
+  const editingCalendar = mode === "calendar" && Boolean(calendarEvent?.id);
+  const title = mode === "calendar" ? editingCalendar ? "编辑日程" : "新建日程" : "添加课表";
+  return <section className="edupi-calendar-intake" aria-label={mode === "calendar" ? title : "添加课程安排"}><header><strong>{title}</strong><button type="button" onClick={onClose} aria-label="关闭">×</button></header><form onSubmit={(event) => void submit(event)}>{mode === "calendar" ? <>
+    <label><span>名称</span><input name="name" required maxLength={240} autoFocus placeholder="如：期中考试" defaultValue={calendarEvent?.name || ""} /></label>
+    <label><span>开始</span><input name="date" type="date" required defaultValue={calendarEvent?.date || anchorDate} /></label>
+    <label><span>结束</span><input name="endDate" type="date" defaultValue={calendarEvent?.endDate || ""} /></label>
+    <label><span>类型</span><select name="type" defaultValue={calendarEvent?.type || "custom"}><option value="custom">日程</option><option value="teaching">教学节点</option><option value="exam">考试</option><option value="meeting">会议</option><option value="activity">活动</option><option value="holiday">假期</option><option value="festival">节日</option></select></label>
   </> : <>
     <label><span>星期</span><select name="dayOfWeek" defaultValue={weekdayIndex(anchorDate) + 1}>{WEEKDAY_LABELS.map((label, index) => <option key={label} value={index + 1}>周{label}</option>)}</select></label>
     <label><span>节次</span><input name="period" type="number" min={0} max={64} required defaultValue={1} /></label>
     <label><span>科目 / 事务</span><input name="subject" required maxLength={120} placeholder="如：数学" /></label>
     <label><span>班级</span><input name="className" maxLength={120} placeholder="可不填" /></label>
     <label><span>类型</span><select name="kind" defaultValue="class"><option value="class">课程</option><option value="routine">固定事务</option></select></label>
-  </>}<label className="is-wide"><span>备注</span><input name="notes" maxLength={1000} placeholder="可不填" /></label><footer>{error ? <span role="alert">{error}</span> : <span /> }<button type="button" onClick={onClose}>取消</button><button type="submit" className="is-primary" disabled={busy}>{busy ? "写入中…" : "写入 EduPi"}</button></footer></form></section>;
+  </>}<label className="is-wide"><span>备注</span><textarea name="notes" rows={3} maxLength={1000} placeholder="可不填" defaultValue={calendarEvent?.notes || ""} /></label><footer>{error ? <span role="alert">{error}</span> : <span /> }<button type="button" onClick={onClose}>取消</button><button type="submit" className="is-primary" disabled={busy}>{busy ? "保存中…" : editingCalendar ? "保存更改" : "写入 EduPi"}</button></footer></form></section>;
 }
 
 export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, selection, onSelect, onTaskDetail, onImportCalendar, onImportTimetable }: Props) {
   const [view, setView] = useState<CalendarViewMode>("month");
   const [anchorDate, setAnchorDate] = useState(localIsoDate);
   const [composer, setComposer] = useState<"calendar" | "timetable" | null>(null);
+  const [editingCalendarId, setEditingCalendarId] = useState<string | null>(null);
   const projection = useMemo(() => createCalendarProjection(data, { view, anchorDate, query }), [anchorDate, data, query, view]);
+  const editingCalendarEvent = editingCalendarId
+    ? data.calendar.find((event) => event.id === editingCalendarId) || null
+    : null;
   const openTaskDetail = (entry: CalendarEntry | CalendarPendingEntry) => {
     const task = taskForCalendarEntry(data.tasks, entry);
     if (task) onTaskDetail(task);
@@ -341,14 +349,27 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
     setView("day");
   };
   const itemCount = projection.entries.length + projection.pending.length;
+  const closeComposer = () => {
+    setComposer(null);
+    setEditingCalendarId(null);
+  };
+  const editSelectedCalendar = () => {
+    if (!selection || selection.kind !== "calendar" || !selection.sourceId) return;
+    const event = data.calendar.find((item) => item.id === selection.sourceId);
+    if (!event) return;
+    setEditingCalendarId(event.id || null);
+    if (event.date) setAnchorDate(event.date);
+    setComposer("calendar");
+    onSelect(null);
+  };
 
   return (
     <main className="edupi-module-workspace edupi-calendar-workspace">
       <header className="edupi-calendar-heading">
         <div><span>行事历</span><h1>日程</h1><p>校历、课程表与教师任务 · {itemCount} 项</p></div>
-        <div className="edupi-calendar-heading__actions"><button type="button" onClick={() => setComposer(composer === "calendar" ? null : "calendar")}>新建日程</button><button type="button" onClick={() => setComposer(composer === "timetable" ? null : "timetable")}>添加课表</button><button type="button" className="is-primary" onClick={onUpload}>上传文件</button></div>
+        <div className="edupi-calendar-heading__actions"><button type="button" onClick={() => { if (composer === "calendar" && !editingCalendarId) closeComposer(); else { setEditingCalendarId(null); setComposer("calendar"); } }}>新建日程</button><button type="button" onClick={() => { if (composer === "timetable") closeComposer(); else { setEditingCalendarId(null); setComposer("timetable"); } }}>添加课表</button><button type="button" className="is-primary" onClick={onUpload}>上传文件</button></div>
       </header>
-      {composer ? <IntakeComposer mode={composer} anchorDate={anchorDate} busy={intakeBusy} onClose={() => setComposer(null)} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} /> : null}
+      {composer ? <IntakeComposer mode={composer} anchorDate={anchorDate} calendarEvent={composer === "calendar" ? editingCalendarEvent : null} busy={intakeBusy} onClose={closeComposer} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} /> : null}
       <div className="edupi-calendar-toolbar" role="toolbar" aria-label="日程工具栏">
         <button type="button" className="edupi-calendar-today" onClick={() => setAnchorDate(localIsoDate())}>今天</button>
         <div className="edupi-calendar-period-nav"><button type="button" onClick={() => changePeriod(-1)} aria-label="上一时段">‹</button><button type="button" onClick={() => changePeriod(1)} aria-label="下一时段">›</button></div>
@@ -360,7 +381,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
       {view === "day" ? <DayView projection={projection} selection={selection} onSelect={onSelect} onTaskDetail={openTaskDetail} /> : null}
       <PendingInbox projection={projection} selection={selection} onSelect={onSelect} onTaskDetail={openTaskDetail} />
       {query ? <p className="edupi-calendar-query-note" role="status">正在筛选：{query}{projection.entries.length === 0 && projection.pending.length === 0 ? " · 没有匹配项" : ""}</p> : null}
-      {selection && isNonTaskSelection(selection) ? <CalendarDetailDrawer data={data} selection={selection} onClose={() => onSelect(null)} /> : null}
+      {selection && isNonTaskSelection(selection) ? <CalendarDetailDrawer data={data} selection={selection} onClose={() => onSelect(null)} onEdit={selection.kind === "calendar" && data.calendar.some((event) => event.id === selection.sourceId) ? editSelectedCalendar : undefined} /> : null}
     </main>
   );
 }

@@ -211,16 +211,25 @@ test("routes education uploads through Desktop staging without Core paths or aut
 test("calendar entries and sidebar nodes open a right-side raw detail drawer without exposing hashes", async () => {
   const panel = await read("./EduPiEducationPanel.tsx");
   const calendarWorkspace = await read("./EduPiCalendarWorkspace.tsx");
+  const intakeRoute = await read("../app/api/edupi/intake/route.ts");
   const objectSider = await read("./EduPiObjectSider.tsx");
   const workspaceViews = await read("./EduPiWorkspaceViews.tsx");
   const css = `${await read("../app/edupi-workspace.css")}\n${await read("../app/edupi-workbench.css")}`;
   assert.match(panel, /calendarSelection/);
   assert.match(calendarWorkspace, /CalendarDetailDrawer/);
+  assert.match(calendarWorkspace, /className="is-edit"[\s\S]*>编辑<\/button>/);
+  assert.match(calendarWorkspace, /eventId: calendarEvent\?\.id \|\| null/);
+  assert.match(calendarWorkspace, /defaultValue=\{calendarEvent\?\.notes \|\| ""\}/);
+  assert.match(calendarWorkspace, /editingCalendarId/);
+  assert.match(calendarWorkspace, /保存更改/);
+  assert.match(panel, /eventId: string \| null/);
+  assert.match(intakeRoute, /eventId/);
   assert.match(calendarWorkspace, /onSelect\(\{ kind: entry\.kind, sourceId:/);
   assert.match(calendarWorkspace, /className=\{`\$\{entryClass\(entry\)\}/);
   assert.match(objectSider, /onCalendarItem/);
   assert.match(objectSider, /edupi-object-fact is-interactive/);
   assert.match(css, /\.edupi-calendar-detail/);
+  assert.match(css, /\.edupi-calendar-intake textarea/);
   assert.match(css, /translateX/);
   assert.doesNotMatch(workspaceViews, /source_hash\.slice|sourceHash\.slice/);
 });
