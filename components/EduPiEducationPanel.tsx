@@ -655,7 +655,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
         if (!activationRequestsRef.current.isCurrent(request)) return;
         setAgentTask(task);
         setPendingTaskBinding(mode === "new" ? { taskId: task.id!, previousSessionId: activeAgentSessionId } : null);
-        setPendingAgentPromptMode("insert");
+        setPendingAgentPromptMode("replace");
         setPendingAgentPrompt(prompt);
         setDrawer("agent");
       })
