@@ -223,6 +223,8 @@ test("calendar entries and sidebar nodes open a right-side raw detail drawer wit
   assert.match(calendarWorkspace, /editingCalendarId/);
   assert.match(calendarWorkspace, /保存更改/);
   assert.match(panel, /eventId: string \| null/);
+  assert.match(panel, /education\?\.calendar\.flatMap/);
+  assert.match(panel, /item\.id === event\.eventId/);
   assert.match(intakeRoute, /eventId/);
   assert.match(calendarWorkspace, /onSelect\(\{ kind: entry\.kind, sourceId:/);
   assert.match(calendarWorkspace, /className=\{`\$\{entryClass\(entry\)\}/);
