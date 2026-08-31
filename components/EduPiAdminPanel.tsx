@@ -111,7 +111,7 @@ export function EduPiAdminPanel({ onClose, onOpenModels, onOpenContext, onAskStu
 
   return <section ref={panelRef} className="edupi-admin-panel" role="dialog" aria-modal="true" aria-label="EduPi 管理中心" onKeyDownCapture={keyDown}>
     <header className="edupi-admin-panel__topbar">
-      <div><span>EduPi</span><h1>管理中心</h1><p>模型、教育资料、材料与系统状态</p></div>
+      <div><span>EduPi</span><h1>管理中心</h1></div>
       <div><button type="button" onClick={() => setRefreshKey((value) => value + 1)}>刷新</button><button ref={closeRef} type="button" onClick={onClose}>返回工作台</button></div>
     </header>
     <main className="edupi-admin-panel__content" aria-busy={loading || undefined}>
@@ -122,14 +122,14 @@ export function EduPiAdminPanel({ onClose, onOpenModels, onOpenContext, onAskStu
       </section>
 
       <section className="edupi-admin-grid" aria-label="管理模块">
-        <article><span>AI 与模型</span><h2>{snapshot.models === null ? "模型数据不可用" : defaultModel ? `${defaultModel.provider} / ${defaultModel.modelId}` : "默认模型待配置"}</h2><p>{snapshot.models === null ? "模型列表不可用 · 打开模型服务检查配置" : `${snapshot.models.modelList?.length || 0} 个可用模型 · 支持厂商、Base URL、凭证、发现与连接测试`}</p><button type="button" onClick={onOpenModels}>管理模型服务</button></article>
-        <article><span>教师与学生</span><h2>{snapshot.context ? snapshot.context.configured ? snapshot.context.name || "教师身份已配置" : "教师身份待配置" : "教师数据不可用"}</h2><p>{education ? `${education.students.length} 份学生档案` : "学生档案不可用"} · 当前支持查看、检索和通过 EduPi 审核更新</p><div><button type="button" onClick={onOpenContext}>教师与学校</button><button type="button" onClick={() => onNavigate("students")}>查看学生档案</button><button type="button" onClick={onAskStudentUpdate}>让 EduPi 更新</button></div></article>
-        <article><span>校历与课表</span><h2>{education ? `${education.calendar.length} 个校历节点` : "校历数据不可用"}</h2><p>{education ? `${education.timetable.length} 条课程安排` : "课程表不可用"} · 支持新增、导入和按稳定 ID 更新</p><button type="button" onClick={() => onNavigate("calendar")}>管理校历与课表</button></article>
-        <article><span>上传内容</span><h2>{education ? `${education.intakeTargets.length} 项已接入` : "上传数据不可用"}</h2><p>图片、PDF、Word 与日程材料统一进入教师审核边界</p><button type="button" onClick={() => onNavigate("materials")}>管理上传内容</button></article>
-        <article><span>任务与产物</span><h2>{education ? `${education.tasks.length} 项教师任务` : "任务数据不可用"}</h2><p>查看自动准备、待确认和失败任务；任务编辑继续走 typed Core 流程</p><button type="button" onClick={() => onNavigate("workspace")}>打开工作区</button></article>
-        <article><span>系统</span><h2>{coreReady ? "Core 已连接" : "Core 或教育投影不可用"}</h2><p>{education?.workspace || "数据目录待连接"}</p><button type="button" onClick={onOpenSettings}>应用与桌面设置</button></article>
+        <article><span>AI 与模型</span><h2>{snapshot.models === null ? "模型数据不可用" : defaultModel ? `${defaultModel.provider} / ${defaultModel.modelId}` : "默认模型待配置"}</h2><small>{snapshot.models === null ? "检查模型服务" : `${snapshot.models.modelList?.length || 0} 个可用模型`}</small><button type="button" onClick={onOpenModels}>管理模型服务</button></article>
+        <article><span>教师与学生</span><h2>{snapshot.context ? snapshot.context.configured ? snapshot.context.name || "教师身份已配置" : "教师身份待配置" : "教师数据不可用"}</h2><small>{education ? `${education.students.length} 份学生档案` : "学生档案不可用"}</small><div><button type="button" onClick={onOpenContext}>教师与学校</button><button type="button" onClick={() => onNavigate("students")}>学生档案</button><button type="button" onClick={onAskStudentUpdate}>让 EduPi 更新</button></div></article>
+        <article><span>校历与课表</span><h2>{education ? `${education.calendar.length} 个校历节点` : "校历数据不可用"}</h2><small>{education ? `${education.timetable.length} 条课程安排` : "课程表不可用"}</small><button type="button" onClick={() => onNavigate("calendar")}>管理校历与课表</button></article>
+        <article><span>上传内容</span><h2>{education ? `${education.intakeTargets.length} 项已接入` : "上传数据不可用"}</h2><button type="button" onClick={() => onNavigate("materials")}>管理上传内容</button></article>
+        <article><span>任务与产物</span><h2>{education ? `${education.tasks.length} 项教师任务` : "任务数据不可用"}</h2><button type="button" onClick={() => onNavigate("workspace")}>打开工作区</button></article>
+        <article><span>系统</span><h2>{coreReady ? "Core 已连接" : "Core 或教育投影不可用"}</h2><small>{education?.workspace || "数据目录待连接"}</small><button type="button" onClick={onOpenSettings}>应用与桌面设置</button></article>
       </section>
-      <p className="edupi-admin-boundary">学生档案删除、已接入材料删除和校历删除尚未进入 Desktop typed command；管理中心不会直接修改底层 JSON。</p>
+      <details className="edupi-admin-boundary"><summary>当前限制</summary><span>删除操作尚未接入；管理中心不会直接修改底层 JSON。</span></details>
     </main>
   </section>;
 }

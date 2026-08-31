@@ -23,10 +23,12 @@ test("management center is reachable and reuses existing canonical surfaces", as
   assert.match(admin, /onNavigate\("materials"\)/);
   assert.match(admin, /onNavigate\("workspace"\)/);
   assert.match(admin, /不会直接修改底层 JSON/);
+  assert.match(admin, /<details className="edupi-admin-boundary">/);
+  assert.equal((admin.match(/<p(?:\s|>)/g) || []).length, 0);
   assert.match(admin, /FALLBACK_CHECKLIST/);
   assert.match(admin, /数据读取失败/);
   assert.match(admin, /模型数据不可用/);
-  assert.match(admin, /模型列表不可用/);
+  assert.match(admin, /检查模型服务/);
   assert.doesNotMatch(admin, /education\?\.[a-zA-Z]+\.length \|\| 0/);
   assert.doesNotMatch(admin, /snapshot\.models\?\.modelList\?\.length \|\| 0/);
   assert.doesNotMatch(admin, /配置模块即将接入|EduPiWorkspace/);

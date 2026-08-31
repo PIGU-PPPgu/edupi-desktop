@@ -27,9 +27,11 @@
 .edupi-admin-grid article { display: grid; min-height: 164px; align-content: start; gap: 8px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); }
 .edupi-admin-grid article > span { color: var(--text-muted); font-size: 10px; font-weight: 650; }
 .edupi-admin-grid h2 { margin: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 650; }
-.edupi-admin-grid p { min-height: 34px; margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.55; }
+.edupi-admin-grid small { min-height: 17px; color: var(--text-muted); font-size: 11px; line-height: 1.55; }
 .edupi-admin-grid article > button,
 .edupi-admin-grid article > div { align-self: end; justify-self: start; }
 .edupi-admin-grid article > div { display: flex; flex-wrap: wrap; gap: 6px; }
 .edupi-admin-boundary { margin: 16px 2px 0; color: var(--text-muted); font-size: 10px; line-height: 1.6; }
+.edupi-admin-boundary summary { width: max-content; cursor: pointer; }
+.edupi-admin-boundary span { display: block; margin-top: 6px; }
 @media (max-width: 760px) { .edupi-admin-panel__topbar { align-items: flex-start; padding: 12px 14px; } .edupi-admin-panel__topbar p { display: none; } .edupi-admin-panel__content { padding: 14px 12px 32px; } .edupi-admin-grid { grid-template-columns: 1fr; } .edupi-admin-readiness__items { grid-template-columns: 1fr; } }
