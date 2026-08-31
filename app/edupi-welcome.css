@@ -1,15 +1,15 @@
 .edupi-welcome {
-  --welcome-bg: #eef2f8;
-  --welcome-text: #191a20;
-  --welcome-muted: #5c5d66;
-  --welcome-border: rgba(255, 255, 255, 0.78);
-  --welcome-focus: #006edc;
-  --welcome-field-bg: rgba(255, 255, 255, 0.42);
-  --welcome-field-focus-bg: rgba(255, 255, 255, 0.68);
-  --welcome-button-bg: linear-gradient(145deg, rgba(26, 29, 40, 0.88), rgba(49, 44, 68, 0.9));
-  --welcome-button-hover: linear-gradient(145deg, rgba(35, 38, 51, 0.94), rgba(62, 55, 82, 0.94));
-  --welcome-button-text: #ffffff;
-  --welcome-error: #a51c10;
+  --welcome-bg: #02040a;
+  --welcome-text: #f5f5f7;
+  --welcome-muted: #c5c7cf;
+  --welcome-border: rgba(255, 255, 255, 0.26);
+  --welcome-focus: #78b7ff;
+  --welcome-field-bg: rgba(8, 13, 22, 0.62);
+  --welcome-field-focus-bg: rgba(13, 20, 32, 0.78);
+  --welcome-button-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(220, 232, 238, 0.86));
+  --welcome-button-hover: linear-gradient(145deg, #ffffff, rgba(232, 242, 246, 0.96));
+  --welcome-button-text: #10141b;
+  --welcome-error: #ff9a91;
   --welcome-write-end: 4.04s;
   position: fixed;
   inset: 0;
@@ -19,10 +19,7 @@
   min-height: 100dvh;
   overflow: hidden;
   place-items: center;
-  background:
-    radial-gradient(circle at 28% 38%, rgba(89, 183, 255, 0.18), transparent 31%),
-    radial-gradient(circle at 71% 58%, rgba(236, 122, 197, 0.16), transparent 29%),
-    linear-gradient(145deg, #e9f1fb 0%, #f7f5fb 46%, #f9eef5 100%);
+  background: var(--welcome-bg);
   color: var(--welcome-text);
   isolation: isolate;
   transition: opacity 420ms ease, transform 420ms cubic-bezier(.22, .8, .24, 1);
@@ -30,15 +27,12 @@
 
 .edupi-welcome::before {
   position: absolute;
-  z-index: -1;
-  inset: -34%;
+  z-index: 1;
+  inset: 0;
   background:
-    radial-gradient(ellipse at 32% 46%, rgba(116, 221, 255, 0.4), transparent 25%),
-    radial-gradient(ellipse at 64% 42%, rgba(160, 139, 255, 0.3), transparent 25%),
-    radial-gradient(ellipse at 58% 66%, rgba(255, 132, 190, 0.28), transparent 23%);
+    radial-gradient(ellipse at 50% 46%, rgba(2, 4, 10, 0.34) 0%, rgba(2, 4, 10, 0.2) 38%, rgba(2, 4, 10, 0.08) 58%, rgba(2, 4, 10, 0.72) 100%),
+    linear-gradient(180deg, rgba(2, 4, 10, 0.14), rgba(2, 4, 10, 0.02) 52%, rgba(2, 4, 10, 0.5));
   content: "";
-  filter: blur(62px) saturate(112%);
-  animation: edupi-background-breathe 12s ease-in-out infinite alternate;
   pointer-events: none;
 }
 
@@ -49,6 +43,8 @@
 }
 
 .edupi-welcome-stage {
+  position: relative;
+  z-index: 2;
   display: grid;
   width: 100%;
   place-items: center;
@@ -58,6 +54,21 @@
     max(20px, env(safe-area-inset-right))
     max(24px, env(safe-area-inset-bottom))
     max(20px, env(safe-area-inset-left));
+}
+
+.edupi-welcome-warp {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.edupi-welcome-warp .threeui-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .edupi-welcome-mark {
@@ -105,7 +116,7 @@
 }
 
 .edupi-welcome-glyph {
-  font-family: "HanziPen SC", "Hannotate SC", "Xingkai SC", "Kaiti SC", "KaiTi", cursive;
+  font-family: "HanziPen SC", "Hannotate SC", "Kaiti SC", "KaiTi", cursive;
   font-size: 116px;
   font-weight: 500;
   letter-spacing: -0.025em;
@@ -219,7 +230,7 @@
   border-radius: 16px;
   outline: none;
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.16)),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.035)),
     var(--welcome-field-bg);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.86),
@@ -356,11 +367,6 @@
   100% { filter: saturate(105%) brightness(1); transform: scale(1); }
 }
 
-@keyframes edupi-background-breathe {
-  from { opacity: 0.72; transform: translate3d(-1.5%, -1%, 0) scale(0.98); }
-  to { opacity: 1; transform: translate3d(1.5%, 1%, 0) scale(1.03); }
-}
-
 @media (max-width: 480px) {
   .edupi-welcome-stage {
     gap: 28px;
@@ -393,28 +399,18 @@
 }
 
 html.dark .edupi-welcome {
-  --welcome-bg: #070810;
+  --welcome-bg: #02040a;
   --welcome-text: #f5f5f7;
-  --welcome-muted: #b7b7bd;
-  --welcome-border: rgba(255, 255, 255, 0.24);
+  --welcome-muted: #c5c7cf;
+  --welcome-border: rgba(255, 255, 255, 0.26);
   --welcome-focus: #78b7ff;
-  --welcome-field-bg: rgba(255, 255, 255, 0.08);
-  --welcome-field-focus-bg: rgba(255, 255, 255, 0.13);
-  --welcome-button-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(220, 227, 248, 0.84));
-  --welcome-button-hover: linear-gradient(145deg, #ffffff, rgba(231, 236, 255, 0.94));
-  --welcome-button-text: #1d1d1f;
+  --welcome-field-bg: rgba(8, 13, 22, 0.62);
+  --welcome-field-focus-bg: rgba(13, 20, 32, 0.78);
+  --welcome-button-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(220, 232, 238, 0.86));
+  --welcome-button-hover: linear-gradient(145deg, #ffffff, rgba(232, 242, 246, 0.96));
+  --welcome-button-text: #10141b;
   --welcome-error: #ff9a91;
-  background:
-    radial-gradient(circle at 28% 40%, rgba(34, 129, 255, 0.18), transparent 30%),
-    radial-gradient(circle at 70% 58%, rgba(212, 74, 178, 0.15), transparent 29%),
-    linear-gradient(145deg, #04050a 0%, #0b0b14 48%, #110911 100%);
-}
-
-html.dark .edupi-welcome::before {
-  background:
-    radial-gradient(ellipse at 30% 44%, rgba(50, 147, 255, 0.3), transparent 25%),
-    radial-gradient(ellipse at 64% 42%, rgba(139, 87, 255, 0.24), transparent 24%),
-    radial-gradient(ellipse at 57% 66%, rgba(255, 77, 157, 0.21), transparent 23%);
+  background: var(--welcome-bg);
 }
 
 html.dark .edupi-welcome-mark::before {
@@ -429,6 +425,7 @@ html.dark .edupi-welcome-mark::before {
   }
 
   .edupi-welcome::before,
+  .edupi-welcome-warp,
   .edupi-welcome-mark::before,
   .edupi-welcome-glow,
   .edupi-welcome-glass-highlight {
@@ -463,6 +460,7 @@ html.dark .edupi-welcome-mark::before {
   }
 
   .edupi-welcome::before,
+  .edupi-welcome-warp,
   .edupi-welcome-glass,
   .edupi-welcome-brush,
   .edupi-welcome-handwriting-stroke,
@@ -498,6 +496,7 @@ html.dark .edupi-welcome-mark::before {
   .edupi-welcome::before { display: none; }
 
   .edupi-welcome-mark::before,
+  .edupi-welcome-warp,
   .edupi-welcome-glow,
   .edupi-welcome-glass-highlight,
   .edupi-welcome-writing-light {

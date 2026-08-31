@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { fetchWithRetry } from "@/lib/fetch-timeout";
+import { WarpFieldBackground } from "@/src/shaders/warp-field/WarpFieldBackground";
 
 type RegistrationResponse = {
   registered?: boolean;
@@ -246,20 +247,21 @@ export function EduPiRegistrationGate({
   useEffect(() => {
     mountedRef.current = true;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const queueSequence = () => {
+      sequenceFrameRef.current = requestAnimationFrame(() => {
+        sequenceFrameRef.current = null;
+        if (!mountedRef.current) return;
+        setSequenceStarted(true);
+        revealFallbackRef.current = setTimeout(revealWelcomeAccess, 6_500);
+      });
+    };
     const handleMotion = (event: MediaQueryListEvent) => {
       if (event.matches) revealWelcomeAccess();
     };
 
     if (initialRegistered !== true) {
       if (motion.matches) revealWelcomeAccess();
-      else {
-        sequenceFrameRef.current = requestAnimationFrame(() => {
-          sequenceFrameRef.current = null;
-          if (!mountedRef.current) return;
-          setSequenceStarted(true);
-          revealFallbackRef.current = setTimeout(revealWelcomeAccess, 6_500);
-        });
-      }
+      else queueSequence();
       motion.addEventListener("change", handleMotion);
     }
 
@@ -318,6 +320,18 @@ export function EduPiRegistrationGate({
   const busy = state === "checking" || state === "submitting" || state === "leaving";
   return (
     <main className={`edupi-welcome${state === "leaving" ? " is-leaving" : ""}`} aria-busy={busy}>
+      <div className="edupi-welcome-warp" aria-hidden="true">
+        <WarpFieldBackground
+          variant="letters"
+          speed={15.0}
+          streakOpacity={0.60}
+          tileOpacity={0.90}
+          fov={75}
+          hue={0}
+          saturation={1.00}
+          brightness={1.00}
+        />
+      </div>
       <div className="edupi-welcome-stage">
         <WelcomeWordmark started={sequenceStarted} onComplete={revealWelcomeAccess} />
         <div className={`edupi-welcome-access${revealAccess ? " is-visible" : ""}`}>

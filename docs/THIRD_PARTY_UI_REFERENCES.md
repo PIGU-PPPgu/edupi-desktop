@@ -1,5 +1,17 @@
 # Third-party UI references
 
+## ThreeUI WarpFieldBackground
+
+The first-launch welcome background uses ThreeUI's authored `WarpFieldBackground` **Letter Storm** variant from the complete registered source bundle at https://threeui.com/source-code/warp-field.json.
+
+- Registered source revision: `SHA-256 bd7c486164d8`
+- Verification package: `@designcodeio/threeui@1.1.0`
+- Runtime used by the component: `three128` (`three@0.128.0`)
+- License: MIT
+- Copyright: 2026 Meng To
+
+The three registered files are vendored byte-for-byte at `src/shaders/`; their hashes and the verification package integrity are preserved in `src-tauri/resources/third-party/threeui/SOURCE.md`, and the exact MIT license ships beside it. EduPi does not recreate or modify the renderer and uses the registered `letters` props directly.
+
 ## NomiFun ContentSider
 
 `components/EduPiContentSider.tsx` and `hooks/useEduPiContentSiderCollapse.ts` are adapted from NomiFun's `ContentSider` and collapse-state hook.

@@ -76,6 +76,7 @@ export default function RootLayout({
     <html lang="zh-CN" translate="no" className={`${notoSansMono.variable} notranslate`} suppressHydrationWarning>
       <head>
         <meta name="google" content="notranslate" />
+        <link rel="stylesheet" href="/threeui/threeui.css" />
         <script
           dangerouslySetInnerHTML={{
             // Pin color-scheme + .dark before first paint so a light preference

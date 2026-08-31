@@ -1,10 +1,21 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const gate = await readFile(new URL("./EduPiRegistrationGate.tsx", import.meta.url), "utf8");
 const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
 const css = await readFile(new URL("../app/edupi-welcome.css", import.meta.url), "utf8");
+const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+const packageLock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
+const threeUiSource = await readFile(new URL("../src-tauri/resources/third-party/threeui/SOURCE.md", import.meta.url), "utf8");
+const threeUiComponent = await readFile(new URL("../src/shaders/warp-field/WarpFieldBackground.tsx", import.meta.url));
+const threeUiRenderer = await readFile(new URL("../src/shaders/warp-field/warpFieldRenderer.ts", import.meta.url));
+const threeUiCss = await readFile(new URL("../src/shaders/threeui.css", import.meta.url));
+const servedThreeUiCss = await readFile(new URL("../public/threeui/threeui.css", import.meta.url));
+
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 test("the registration gate owns first launch before AppShell mounts", () => {
   assert.match(page, /<EduPiRegistrationGate initialRegistered=\{initialRegistered\}>\s*<AppShell \/>\s*<\/EduPiRegistrationGate>/);
@@ -54,6 +65,30 @@ test("the first launch draws real Chinese strokes into one glass wordmark before
   assert.doesNotMatch(gate, /把教师的一天|校历先行|材料即入口|教师最后确认|WELCOME TO EDUPI|FIRST ACCESS|教师智能体桌面/);
 });
 
+test("the waiting field uses the exact registered ThreeUI Letter Storm configuration", () => {
+  assert.match(gate, /import \{ WarpFieldBackground \} from "@\/src\/shaders\/warp-field\/WarpFieldBackground"/);
+  assert.match(layout, /<link rel="stylesheet" href="\/threeui\/threeui\.css" \/>/);
+  assert.match(gate, /<WarpFieldBackground[\s\S]*variant="letters"/);
+  assert.match(gate, /speed=\{15\.0\}/);
+  assert.match(gate, /streakOpacity=\{0\.60\}/);
+  assert.match(gate, /tileOpacity=\{0\.90\}/);
+  assert.match(gate, /fov=\{75\}/);
+  assert.match(gate, /hue=\{0\}/);
+  assert.match(gate, /saturation=\{1\.00\}/);
+  assert.match(gate, /brightness=\{1\.00\}/);
+  assert.equal(packageJson.dependencies.three128, "npm:three@0.128.0");
+  assert.equal(packageJson.dependencies["@designcodeio/threeui"], undefined);
+  assert.equal(packageLock.packages["node_modules/three128"].version, "0.128.0");
+  const hashes = [sha256(threeUiComponent), sha256(threeUiRenderer), sha256(threeUiCss)];
+  assert.deepEqual(hashes, [
+    "c78637ee3419deed6c364f4252ed77adfda3a215eb1b82510450a9b7fadefcbe",
+    "c9872c53dd505dea2d87c79e34b9eedd358b5dc32b385d48280fe252f595a44e",
+    "efe4447139f1358dd8e9be68edf6fa46cbefbd1de423a4d6c439ca61d2c8eccf",
+  ]);
+  assert.equal(sha256(servedThreeUiCss), hashes[2]);
+  for (const hash of hashes) assert.match(threeUiSource, new RegExp(hash));
+});
+
 test("the handwritten welcome restores focus and follows explicit theme and accessibility modes", () => {
   assert.match(gate, /prefers-reduced-motion: reduce/);
   assert.match(gate, /setRevealAccess\(true\)/);
@@ -68,8 +103,8 @@ test("the handwritten welcome restores focus and follows explicit theme and acce
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(css, /@media \(prefers-reduced-transparency: reduce\)/);
   assert.match(css, /@media \(forced-colors: active\)/);
-  assert.match(css, /--welcome-focus: #006edc/);
-  assert.match(css, /--welcome-muted: #5c5d66/);
+  assert.match(css, /--welcome-focus: #78b7ff/);
+  assert.match(css, /--welcome-muted: #c5c7cf/);
   assert.match(gate, /window\.matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches/);
   assert.match(css, /@media \(max-width: 480px\)/);
   assert.doesNotMatch(gate, /dangerouslySetInnerHTML|innerHTML/);
