@@ -8,6 +8,8 @@ import { useEduPiCompletionMonitor } from "@/hooks/useEduPiCompletionMonitor";
 import { SessionSidebar } from "./SessionSidebar";
 import { EduPiAdminPanel } from "./EduPiAdminPanel";
 import { EduPiEducationPanel } from "./EduPiEducationPanel";
+import { EduPiFirstRunGuide } from "./EduPiFirstRunGuide";
+import "@/app/edupi-first-run.css";
 import type { EducationModule } from "@/lib/edupi-education-ui";
 import { moduleFromView, viewFromModule, type TaskStage, type WorkbenchView } from "@/lib/edupi-workbench";
 import type { DesktopControlInput } from "@/lib/edupi-desktop-control";
@@ -24,7 +26,6 @@ const FileViewer = dynamic(() => import("./FileViewer").then((m) => m.FileViewer
 const ModelsConfig = dynamic(() => import("./ModelsConfig").then((m) => m.ModelsConfig), { ssr: false });
 const SkillsConfig = dynamic(() => import("./SkillsConfig").then((m) => m.SkillsConfig), { ssr: false });
 const PluginsConfig = dynamic(() => import("./PluginsConfig").then((m) => m.PluginsConfig), { ssr: false });
-const EduPiHelpPanel = dynamic(() => import("./EduPiHelpPanel").then((m) => m.EduPiHelpPanel), { ssr: false });
 const AppSettings = dynamic(() => import("./AppSettings").then((m) => m.AppSettings), { ssr: false });
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { BranchNavigator } from "./BranchNavigator";
@@ -110,7 +111,9 @@ export function AppShell() {
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
   const [pluginsConfigOpen, setPluginsConfigOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
-  const [edupiHelpOpen, setEduPiHelpOpen] = useState(false);
+  const [firstRunGuideOpen, setFirstRunGuideOpen] = useState(() => (
+    !getPrefBool(APP_PREF_KEYS.edupiFirstRunGuideComplete, false)
+  ));
   const [quickEntryOpen, setQuickEntryOpen] = useState(false);
   const quickEntryOpenRef = useRef(false);
   quickEntryOpenRef.current = quickEntryOpen;
@@ -392,6 +395,11 @@ export function AppShell() {
     params.delete("stage");
     router.replace(`/?${params.toString()}`, { scroll: false });
   }, [router, searchParams]);
+
+  const finishFirstRunGuide = useCallback(() => {
+    setPrefBool(APP_PREF_KEYS.edupiFirstRunGuideComplete, true);
+    setFirstRunGuideOpen(false);
+  }, []);
 
   const askEduPiToUpdateStudents = useCallback(() => {
     openEducationView("chat");
@@ -1139,7 +1147,7 @@ export function AppShell() {
   );
 
   const sidebarFooterActions: SidebarFooterAction[] = [
-    { id: "help-primary", label: "帮助", onClick: () => setEduPiHelpOpen(true), disabled: false, icon: <span aria-hidden="true">?</span> },
+    { id: "help-primary", label: "帮助", onClick: () => setFirstRunGuideOpen(true), disabled: false, icon: <span aria-hidden="true">?</span> },
     { id: "models", label: "模型设置", onClick: () => setModelsConfigOpen(true), disabled: false, icon: <span aria-hidden="true">⌘</span> },
     { id: "skills", label: "教学能力", onClick: () => setSkillsConfigOpen(true), disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd, icon: <span aria-hidden="true">◇</span> },
     { id: "plugins", label: "扩展管理", onClick: () => setPluginsConfigOpen(true), disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd, icon: <span aria-hidden="true">◌</span> },
@@ -2045,7 +2053,16 @@ export function AppShell() {
     {appSettingsOpen && <AppSettings onClose={() => setAppSettingsOpen(false)} />}
     {edupiAdminOpen && <EduPiAdminPanel refreshToken={modelsRefreshKey} onClose={() => setEduPiAdminOpen(false)} onOpenModels={() => setModelsConfigOpen(true)} onOpenContext={() => { setEduPiAdminOpen(false); openEducationModule("context"); }} onAskStudentUpdate={askEduPiToUpdateStudents} onNavigate={openEducationView} onOpenSettings={() => { setEduPiAdminOpen(false); setAppSettingsOpen(true); }} />}
     <EduPiComputerUseStop />
-    {edupiHelpOpen && <EduPiHelpPanel onClose={() => setEduPiHelpOpen(false)} onStartSetup={() => { setEduPiHelpOpen(false); setEduPiEducationModule("context"); }} onOpenContext={() => { setEduPiHelpOpen(false); setEduPiEducationModule("context"); }} />}
+    {firstRunGuideOpen && (
+      <EduPiFirstRunGuide
+        suspended={modelsConfigOpen || edupiAdminOpen}
+        onOpenModels={() => setModelsConfigOpen(true)}
+        onOpenContext={() => setEduPiAdminOpen(true)}
+        onEnterToday={() => openEducationModule("home")}
+        onComplete={finishFirstRunGuide}
+        onSkip={finishFirstRunGuide}
+      />
+    )}
     <UpdateReminder onOpenSettings={() => setAppSettingsOpen(true)} />
     </>
   );

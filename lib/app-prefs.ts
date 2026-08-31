@@ -20,6 +20,7 @@ export const APP_PREF_KEYS = {
   /** Last open session / cwd / file tabs for desktop cold-start restore. */
   workspace: "pi-workspace-v1",
   edupiObjectSiderCollapsed: "edupi-object-sider-collapsed",
+  edupiFirstRunGuideComplete: "edupi-first-run-guide-complete",
 } as const;
 
 export type AppPrefKey = (typeof APP_PREF_KEYS)[keyof typeof APP_PREF_KEYS];
