@@ -12,7 +12,7 @@ test("ChatInput exposes replacement without touching attached images", async () 
   assert.doesNotMatch(source.slice(source.indexOf("replaceText(text: string) {"), source.indexOf("replaceMessage(message: UserMessage)")), /setAttachedImages/);
 });
 
-test("context handoff replaces the composer while ordinary EduPi prompts insert", async () => {
+test("context and task handoffs replace the composer while ordinary EduPi prompts insert", async () => {
   const appShell = await read("./AppShell.tsx");
   const panel = await read("./EduPiEducationPanel.tsx");
 
@@ -37,8 +37,9 @@ test("context handoff replaces the composer while ordinary EduPi prompts insert"
   assert.match(replaceBranch, /return/);
   assert.doesNotMatch(replaceBranch, /setDrawer/);
 
-  const taskHandoff = panel.slice(panel.indexOf("const openAgent"), panel.indexOf("const startAgent"));
-  assert.doesNotMatch(taskHandoff, /"replace"/);
+  const taskActivation = panel.slice(panel.indexOf("const activateAgent"), panel.indexOf("const openAgentForTask"));
+  assert.match(taskActivation, /setPendingAgentPromptMode\("replace"\)/);
+  assert.match(taskActivation, /setPendingAgentPrompt\(prompt\)/);
   const uploadHandoff = panel.slice(panel.indexOf("const openUpload"), panel.indexOf("const openFile"));
   assert.doesNotMatch(uploadHandoff, /"replace"/);
 
