@@ -24,7 +24,7 @@ type Props = {
   onSelect: (selection: CalendarItemSelection | null) => void;
   onTaskDetail: (task: TeacherTask) => void;
   onImportCalendar: (event: { eventId: string | null; date: string; endDate: string | null; name: string; type: string; notes: string | null }) => Promise<void>;
-  onImportTimetable: (slot: { dayOfWeek: number; period: number; subject: string; className: string | null; kind: "class" | "routine"; notes: string | null }) => Promise<void>;
+  onImportTimetable: (slot: { slotId: string | null; dayOfWeek: number; period: number; subject: string; className: string | null; kind: "class" | "routine"; notes: string | null }) => Promise<void>;
 };
 
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
@@ -249,10 +249,11 @@ function CalendarDetailDrawer({ data, selection, onClose, onEdit }: { data: Educ
   return <aside className="edupi-calendar-detail" aria-label={`${selection.title}详情`}><header><div><span>{selection.kind === "calendar" ? "校历节点" : "课程安排"}</span><h2>{selection.title}</h2></div><div className="edupi-calendar-detail__actions">{onEdit ? <button type="button" className="is-edit" onClick={onEdit}>编辑</button> : null}<button type="button" onClick={onClose} aria-label="关闭详情" autoFocus>×</button></div></header><dl>{rows.map((row) => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl></aside>;
 }
 
-function IntakeComposer({ mode, anchorDate, calendarEvent, busy, onClose, onImportCalendar, onImportTimetable }: {
+function IntakeComposer({ mode, anchorDate, calendarEvent, timetableSlot, busy, onClose, onImportCalendar, onImportTimetable }: {
   mode: "calendar" | "timetable";
   anchorDate: string;
   calendarEvent?: EducationContract["calendar"][number] | null;
+  timetableSlot?: Record<string, unknown> | null;
   busy: boolean;
   onClose: () => void;
   onImportCalendar: Props["onImportCalendar"];
@@ -276,6 +277,7 @@ function IntakeComposer({ mode, anchorDate, calendarEvent, busy, onClose, onImpo
         });
       } else {
         await onImportTimetable({
+          slotId: rawText(timetableSlot?.slot_id ?? timetableSlot?.id),
           dayOfWeek: Number(form.get("dayOfWeek")),
           period: Number(form.get("period")),
           subject: String(form.get("subject") || ""),
@@ -290,19 +292,20 @@ function IntakeComposer({ mode, anchorDate, calendarEvent, busy, onClose, onImpo
     }
   };
   const editingCalendar = mode === "calendar" && Boolean(calendarEvent?.id);
-  const title = mode === "calendar" ? editingCalendar ? "编辑日程" : "新建日程" : "添加课表";
-  return <section className="edupi-calendar-intake" aria-label={mode === "calendar" ? title : "添加课程安排"}><header><strong>{title}</strong><button type="button" onClick={onClose} aria-label="关闭">×</button></header><form onSubmit={(event) => void submit(event)}>{mode === "calendar" ? <>
+  const editingTimetable = mode === "timetable" && Boolean(rawText(timetableSlot?.slot_id ?? timetableSlot?.id));
+  const title = mode === "calendar" ? editingCalendar ? "编辑日程" : "新建日程" : editingTimetable ? "编辑课表" : "添加课表";
+  return <section className="edupi-calendar-intake" aria-label={title}><header><strong>{title}</strong><button type="button" onClick={onClose} aria-label="关闭">×</button></header><form onSubmit={(event) => void submit(event)}>{mode === "calendar" ? <>
     <label><span>名称</span><input name="name" required maxLength={240} autoFocus placeholder="如：期中考试" defaultValue={calendarEvent?.name || ""} /></label>
     <label><span>开始</span><input name="date" type="date" required defaultValue={calendarEvent?.date || anchorDate} /></label>
     <label><span>结束</span><input name="endDate" type="date" defaultValue={calendarEvent?.endDate || ""} /></label>
     <label><span>类型</span><select name="type" defaultValue={calendarEvent?.type || "custom"}><option value="custom">日程</option><option value="teaching">教学节点</option><option value="exam">考试</option><option value="meeting">会议</option><option value="activity">活动</option><option value="holiday">假期</option><option value="festival">节日</option></select></label>
   </> : <>
-    <label><span>星期</span><select name="dayOfWeek" defaultValue={weekdayIndex(anchorDate) + 1}>{WEEKDAY_LABELS.map((label, index) => <option key={label} value={index + 1}>周{label}</option>)}</select></label>
-    <label><span>节次</span><input name="period" type="number" min={0} max={64} required defaultValue={1} /></label>
-    <label><span>科目 / 事务</span><input name="subject" required maxLength={120} placeholder="如：数学" /></label>
-    <label><span>班级</span><input name="className" maxLength={120} placeholder="可不填" /></label>
-    <label><span>类型</span><select name="kind" defaultValue="class"><option value="class">课程</option><option value="routine">固定事务</option></select></label>
-  </>}<label className="is-wide"><span>备注</span><textarea name="notes" rows={3} maxLength={1000} placeholder="可不填" defaultValue={calendarEvent?.notes || ""} /></label><footer>{error ? <span role="alert">{error}</span> : <span /> }<button type="button" onClick={onClose}>取消</button><button type="submit" className="is-primary" disabled={busy}>{busy ? "保存中…" : editingCalendar ? "保存更改" : "写入 EduPi"}</button></footer></form></section>;
+    <label><span>星期</span><select name="dayOfWeek" defaultValue={rawText(timetableSlot?.day_of_week ?? timetableSlot?.dayOfWeek) || weekdayIndex(anchorDate) + 1}>{WEEKDAY_LABELS.map((label, index) => <option key={label} value={index + 1}>周{label}</option>)}</select></label>
+    <label><span>节次</span><input name="period" type="number" min={0} max={64} required defaultValue={rawText(timetableSlot?.period) || 1} /></label>
+    <label><span>科目 / 事务</span><input name="subject" required maxLength={120} placeholder="如：数学" defaultValue={rawText(timetableSlot?.subject) || ""} /></label>
+    <label><span>班级</span><input name="className" maxLength={120} placeholder="可不填" defaultValue={rawText(timetableSlot?.class_name ?? timetableSlot?.className) || ""} /></label>
+    <label><span>类型</span><select name="kind" defaultValue={timetableSlot?.kind === "routine" ? "routine" : "class"}><option value="class">课程</option><option value="routine">固定事务</option></select></label>
+  </>}<label className="is-wide"><span>备注</span><textarea name="notes" rows={3} maxLength={1000} placeholder="可不填" defaultValue={mode === "calendar" ? calendarEvent?.notes || "" : visibleTimetableNote(timetableSlot?.notes) || ""} /></label><footer>{error ? <span role="alert">{error}</span> : <span /> }<button type="button" onClick={onClose}>取消</button><button type="submit" className="is-primary" disabled={busy}>{busy ? "保存中…" : editingCalendar || editingTimetable ? "保存更改" : "写入 EduPi"}</button></footer></form></section>;
 }
 
 export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, selection, onSelect, onTaskDetail, onImportCalendar, onImportTimetable }: Props) {
@@ -310,9 +313,13 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
   const [anchorDate, setAnchorDate] = useState(localIsoDate);
   const [composer, setComposer] = useState<"calendar" | "timetable" | null>(null);
   const [editingCalendarId, setEditingCalendarId] = useState<string | null>(null);
+  const [editingTimetableId, setEditingTimetableId] = useState<string | null>(null);
   const projection = useMemo(() => createCalendarProjection(data, { view, anchorDate, query }), [anchorDate, data, query, view]);
   const editingCalendarEvent = editingCalendarId
     ? data.calendar.find((event) => event.id === editingCalendarId) || null
+    : null;
+  const editingTimetableSlot = editingTimetableId
+    ? data.timetable.map(rawRecord).find((slot) => rawText(slot.slot_id ?? slot.id) === editingTimetableId) || null
     : null;
   const openTaskDetail = (entry: CalendarEntry | CalendarPendingEntry) => {
     const task = taskForCalendarEntry(data.tasks, entry);
@@ -352,14 +359,25 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
   const closeComposer = () => {
     setComposer(null);
     setEditingCalendarId(null);
+    setEditingTimetableId(null);
   };
   const editSelectedCalendar = () => {
     if (!selection || selection.kind !== "calendar" || !selection.sourceId) return;
     const event = data.calendar.find((item) => item.id === selection.sourceId);
     if (!event) return;
     setEditingCalendarId(event.id || null);
+    setEditingTimetableId(null);
     if (event.date) setAnchorDate(event.date);
     setComposer("calendar");
+    onSelect(null);
+  };
+  const editSelectedTimetable = () => {
+    if (!selection || selection.kind !== "timetable" || !selection.sourceId) return;
+    const slot = data.timetable.map(rawRecord).find((item) => rawText(item.slot_id ?? item.id) === selection.sourceId);
+    if (!slot) return;
+    setEditingTimetableId(selection.sourceId);
+    setEditingCalendarId(null);
+    setComposer("timetable");
     onSelect(null);
   };
 
@@ -367,9 +385,9 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
     <main className="edupi-module-workspace edupi-calendar-workspace">
       <header className="edupi-calendar-heading">
         <div><span>行事历</span><h1>日程</h1><p>校历、课程表与教师任务 · {itemCount} 项</p></div>
-        <div className="edupi-calendar-heading__actions"><button type="button" onClick={() => { if (composer === "calendar" && !editingCalendarId) closeComposer(); else { setEditingCalendarId(null); setComposer("calendar"); } }}>新建日程</button><button type="button" onClick={() => { if (composer === "timetable") closeComposer(); else { setEditingCalendarId(null); setComposer("timetable"); } }}>添加课表</button><button type="button" className="is-primary" onClick={onUpload}>上传文件</button></div>
+        <div className="edupi-calendar-heading__actions"><button type="button" onClick={() => { if (composer === "calendar" && !editingCalendarId) closeComposer(); else { setEditingCalendarId(null); setEditingTimetableId(null); setComposer("calendar"); } }}>新建日程</button><button type="button" onClick={() => { if (composer === "timetable" && !editingTimetableId) closeComposer(); else { setEditingCalendarId(null); setEditingTimetableId(null); setComposer("timetable"); } }}>添加课表</button><button type="button" className="is-primary" onClick={onUpload}>上传文件</button></div>
       </header>
-      {composer ? <IntakeComposer mode={composer} anchorDate={anchorDate} calendarEvent={composer === "calendar" ? editingCalendarEvent : null} busy={intakeBusy} onClose={closeComposer} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} /> : null}
+      {composer ? <IntakeComposer key={`${composer}:${editingCalendarId || editingTimetableId || "new"}`} mode={composer} anchorDate={anchorDate} calendarEvent={composer === "calendar" ? editingCalendarEvent : null} timetableSlot={composer === "timetable" ? editingTimetableSlot : null} busy={intakeBusy} onClose={closeComposer} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} /> : null}
       <div className="edupi-calendar-toolbar" role="toolbar" aria-label="日程工具栏">
         <button type="button" className="edupi-calendar-today" onClick={() => setAnchorDate(localIsoDate())}>今天</button>
         <div className="edupi-calendar-period-nav"><button type="button" onClick={() => changePeriod(-1)} aria-label="上一时段">‹</button><button type="button" onClick={() => changePeriod(1)} aria-label="下一时段">›</button></div>
@@ -381,7 +399,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
       {view === "day" ? <DayView projection={projection} selection={selection} onSelect={onSelect} onTaskDetail={openTaskDetail} /> : null}
       <PendingInbox projection={projection} selection={selection} onSelect={onSelect} onTaskDetail={openTaskDetail} />
       {query ? <p className="edupi-calendar-query-note" role="status">正在筛选：{query}{projection.entries.length === 0 && projection.pending.length === 0 ? " · 没有匹配项" : ""}</p> : null}
-      {selection && isNonTaskSelection(selection) ? <CalendarDetailDrawer data={data} selection={selection} onClose={() => onSelect(null)} onEdit={selection.kind === "calendar" && data.calendar.some((event) => event.id === selection.sourceId) ? editSelectedCalendar : undefined} /> : null}
+      {selection && isNonTaskSelection(selection) ? <CalendarDetailDrawer data={data} selection={selection} onClose={() => onSelect(null)} onEdit={selection.kind === "calendar" && data.calendar.some((event) => event.id === selection.sourceId) ? editSelectedCalendar : selection.kind === "timetable" && data.timetable.map(rawRecord).some((slot) => rawText(slot.slot_id ?? slot.id) === selection.sourceId) ? editSelectedTimetable : undefined} /> : null}
     </main>
   );
 }
