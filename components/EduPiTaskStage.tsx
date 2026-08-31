@@ -88,7 +88,7 @@ function ReviewStage({ task, enabled, reason, busy, message, onReview, onOpenAge
     ...(action === "modify" ? { title: title.trim(), dueDate: dueDate || undefined, deliverables: deliverables.split("\n").map((item) => item.trim()).filter(Boolean) } : {}),
   });
   const decisionRequiresNote = !note.trim();
-  const canRollback = task.status !== "planned" || task.reviewHistory.length > 0;
+  const canRollback = task.reviewHistory.length > 0 && task.reviewHistory.at(-1)?.action !== "rollback";
   const reviewFields = enabled ? (
     <div className="edupi-review-fields">
       <label>审核意见<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="补充判断依据" /></label>
