@@ -67,6 +67,26 @@ function sameList(actual: unknown, expected: readonly string[]): boolean {
   return Array.isArray(actual) && actual.length === expected.length && actual.every((value, index) => value === expected[index]);
 }
 
+function snapshotContainsReceipt(snapshot: CoreEducationSnapshotPayload, expected: RawRecord): boolean {
+  const receipts = Array.isArray(snapshot.receipts) ? snapshot.receipts : [];
+  return receipts.some((value) => {
+    const receipt = record(value);
+    if (!receipt) return false;
+    return receipt.receipt_id === expected.receipt_id
+      && receipt.command_id === expected.command_id
+      && receipt.request_id === expected.request_id
+      && receipt.command_type === expected.command_type
+      && receipt.status === expected.status
+      && receipt.before_snapshot_id === expected.before_snapshot_id
+      && receipt.after_snapshot_id === expected.after_snapshot_id
+      && receipt.before_state_hash === expected.before_state_hash
+      && receipt.after_state_hash === expected.after_state_hash
+      && receipt.external_send === false
+      && sameList(receipt.applied_ids, Array.isArray(expected.applied_ids) ? expected.applied_ids.map(String) : [])
+      && sameList(receipt.rejected_ids, Array.isArray(expected.rejected_ids) ? expected.rejected_ids.map(String) : []);
+  });
+}
+
 function boundedId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
 }
@@ -200,7 +220,8 @@ export async function issueEducationIntake(command: EducationIntakeCommand, depe
   }
   const refresh = dependencies.refreshSnapshot || (async (roots) => (await readEduPiEducationSnapshot({ roots })).payload);
   const data = await refresh(initial.roots);
-  if (data.snapshot_id !== receipt.after_snapshot_id || data.state_hash !== receipt.after_state_hash) {
+  const exactAfterSnapshot = data.snapshot_id === receipt.after_snapshot_id && data.state_hash === receipt.after_state_hash;
+  if (!exactAfterSnapshot && !snapshotContainsReceipt(data, receipt)) {
     throw new EducationIntakeError("invalid_envelope", "Core 导入后的快照与回执不一致。");
   }
   return { receipt, data };
