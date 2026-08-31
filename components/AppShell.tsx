@@ -111,9 +111,10 @@ export function AppShell() {
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
   const [pluginsConfigOpen, setPluginsConfigOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
-  const [firstRunGuideOpen, setFirstRunGuideOpen] = useState(() => (
-    !getPrefBool(APP_PREF_KEYS.edupiFirstRunGuideComplete, false)
-  ));
+  const [firstRunGuideOpen, setFirstRunGuideOpen] = useState(false);
+  useEffect(() => {
+    setFirstRunGuideOpen(!getPrefBool(APP_PREF_KEYS.edupiFirstRunGuideComplete, false));
+  }, []);
   const [quickEntryOpen, setQuickEntryOpen] = useState(false);
   const quickEntryOpenRef = useRef(false);
   quickEntryOpenRef.current = quickEntryOpen;
