@@ -1,7 +1,5 @@
-import { resolve } from "node:path";
 import { readTeacherContext } from "./edupi-onboarding-server";
 import type { TeacherContextSnapshot, TeacherRole } from "./edupi-onboarding-types";
-import { EDUPI_ROOT } from "./edupi-runtime";
 
 const CONTEXT_MARKER = "<edupi_teacher_context>";
 
@@ -15,7 +13,6 @@ const ROLE_LABELS: Record<TeacherRole, string> = {
 type AppendSystemPromptOverride = (base: string[]) => string[];
 
 type TeacherContextPromptDependencies = {
-  edupiRoot?: string;
   readTeacherContext?: () => Promise<TeacherContextSnapshot>;
 };
 
@@ -54,12 +51,9 @@ function appendTeacherContext(base: string[], contextPrompt: string): string[] {
 }
 
 export async function createEduPiTeacherContextAppendSystemPromptOverride(
-  sessionCwd: string,
+  _sessionCwd: string,
   dependencies: TeacherContextPromptDependencies = {},
 ): Promise<AppendSystemPromptOverride | undefined> {
-  const edupiRoot = resolve(dependencies.edupiRoot ?? EDUPI_ROOT);
-  if (resolve(sessionCwd) !== edupiRoot) return undefined;
-
   const context = await (dependencies.readTeacherContext ?? readTeacherContext)();
   const contextPrompt = buildEduPiTeacherContextPrompt(context);
   if (!contextPrompt) return undefined;
