@@ -242,9 +242,9 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     return result;
   }, [context?.subject, submitEducationIntake]);
 
-  const importCalendarEvent = useCallback(async (event: { date: string; endDate: string | null; name: string; type: string; notes: string | null }) => {
+  const importCalendarEvent = useCallback(async (event: { eventId: string | null; date: string; endDate: string | null; name: string; type: string; notes: string | null }) => {
     await submitEducationIntake({ kind: "calendar", events: [{ ...event, confidence: "teacher_confirmed" }] });
-    setMaterialStagingMessage({ tone: "success", text: "日程已写入 EduPi 行事历。" });
+    setMaterialStagingMessage({ tone: "success", text: event.eventId ? "日程更改已保存。" : "日程已写入 EduPi 行事历。" });
   }, [submitEducationIntake]);
 
   const importTimetableSlot = useCallback(async (slot: { dayOfWeek: number; period: number; subject: string; className: string | null; kind: "class" | "routine"; notes: string | null }) => {
