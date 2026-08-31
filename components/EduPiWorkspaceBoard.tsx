@@ -3,6 +3,7 @@
 import { useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { EducationContract, EducationWorkCandidate, TeacherTask } from "@/lib/edupi-education-contract";
 import { projectTaskBoard, taskBoardLane, taskBoardTargets, type TaskBoardLaneId } from "@/lib/edupi-task-board";
+import { taskCategory, TASK_CATEGORY_CONFIG, type TaskCategoryId } from "@/lib/edupi-task-category";
 import type { TaskSessionBinding } from "@/lib/edupi-task-sessions";
 import { taskContentStatusLabel, taskDisplayTitle, taskPresentation, taskStatusLabel, taskTypeLabel } from "@/lib/edupi-workbench";
 
@@ -83,6 +84,7 @@ function TaskCard({ task, session, lane, candidate, busy, selected, dragSource, 
 }
 
 export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, onMoveTask }: Props) {
+  const [category, setCategory] = useState<"all" | TaskCategoryId>("all");
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -98,7 +100,8 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<TaskBoardLaneId | null>(null);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
-  const columns = projectTaskBoard(data.tasks, data.taskSessions, data.workCandidates, query);
+  const scopedTasks = category === "all" ? data.tasks : data.tasks.filter((task) => taskCategory(task) === category);
+  const columns = projectTaskBoard(scopedTasks, data.taskSessions, data.workCandidates, query);
   const candidateByTask = new Map(data.workCandidates.map((candidate) => [candidate.taskId, candidate]));
   const taskById = new Map(data.tasks.filter((task) => task.id).map((task) => [task.id!, task]));
   const visibleCount = columns.reduce((total, column) => total + column.tasks.length, 0);
@@ -179,6 +182,10 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
         <div><span>教师工作</span><h1>工作区</h1><p>{query.trim() ? `找到 ${visibleCount} 项` : `${data.tasks.length} 项任务`}</p></div>
         <div className="edupi-workspace-board__actions"><span className="edupi-workspace-board__mode"><i aria-hidden="true" />Core 回执流转</span><button type="button" onClick={() => setCreateOpen((open) => !open)}>新建任务</button></div>
       </header>
+      <div className="edupi-task-category-segment" role="group" aria-label="任务类型">
+        <button type="button" className={category === "all" ? "is-active" : ""} onClick={() => setCategory("all")} aria-pressed={category === "all"}>全部 <span>{data.tasks.length}</span></button>
+        {TASK_CATEGORY_CONFIG.map((item) => { const count = data.tasks.filter((task) => taskCategory(task) === item.id).length; return count > 0 ? <button type="button" key={item.id} className={category === item.id ? "is-active" : ""} onClick={() => setCategory(item.id)} aria-pressed={category === item.id}>{item.label} <span>{count}</span></button> : null; })}
+      </div>
       {createOpen ? <form className="edupi-task-board-create" onSubmit={submitCreate}>
         <label><span>任务</span><input autoFocus required maxLength={240} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：准备第一次单元检测" /></label>
         <label><span>截止日期</span><input type="date" value={dueDate} onInput={(event) => setDueDate(event.currentTarget.value)} /></label>

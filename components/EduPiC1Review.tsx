@@ -16,6 +16,7 @@ type Props = {
   reviewerId: string;
   onRefresh: () => Promise<EducationContract | void>;
   query?: string;
+  selectedTarget?: { kind: ReviewTargetKind; id: string } | null;
 };
 
 type ReviewTarget =
@@ -244,7 +245,7 @@ function ReviewCard({
   );
 }
 
-export function EduPiC1Review({ data, reviewerId, onRefresh, query = "" }: Props) {
+export function EduPiC1Review({ data, reviewerId, onRefresh, query = "", selectedTarget = null }: Props) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -331,38 +332,37 @@ export function EduPiC1Review({ data, reviewerId, onRefresh, query = "" }: Props
   const latestReceipts = data.receipts.slice(-3).reverse();
   const latestHistory = data.reviewHistory.slice(-3).reverse();
   const reviewCapability = data.capabilities.c1Review;
+  const visibleTarget = targets.find((target) => target.kind === selectedTarget?.kind && target.id === selectedTarget.id) || targets[0] || null;
 
   return (
     <main className="edupi-c1-review" aria-labelledby="edupi-c1-review-title">
       <header className="edupi-c1-review__heading">
         <div>
-          <span className="edupi-c1-review__eyebrow">观察与记忆</span>
+          <span className="edupi-c1-review__eyebrow">审核队列</span>
           <h1 id="edupi-c1-review-title">待我确认</h1>
-          <p>{targets.length} 项观察与记忆候选 · {activeMemoryCount} 条正式记忆</p>
+          <p>{targets.length} 项待判断 · {activeMemoryCount} 条正式记忆</p>
         </div>
         <span className={`edupi-c1-review__capability${reviewCapability.enabled ? " is-enabled" : ""}`} title={reviewCapability.reason}>
           {reviewCapability.enabled ? "可审核" : "只读"}
         </span>
       </header>
 
-      {targets.length > 0 ? (
+      {visibleTarget ? (
         <section className="edupi-c1-review__queue" aria-label="待确认队列">
-          {targets.map((target) => (
             <ReviewCard
-              key={targetKey(target)}
-              target={target}
+              key={targetKey(visibleTarget)}
+              target={visibleTarget}
               capabilityEnabled={reviewCapability.enabled}
               supportedCommands={reviewCapability.commands}
               supportedActions={reviewCapability.actions}
-              busy={busyKey === targetKey(target) ? busyDecision : null}
-              editing={editingKey === targetKey(target)}
+              busy={busyKey === targetKey(visibleTarget) ? busyDecision : null}
+              editing={editingKey === targetKey(visibleTarget)}
               draft={draft}
-              error={errorKey === targetKey(target) ? error : null}
-              onDecision={(decision) => decision === "modify" && editingKey !== targetKey(target) ? startEdit(target) : void handleDecision(target, decision)}
+              error={errorKey === targetKey(visibleTarget) ? error : null}
+              onDecision={(decision) => decision === "modify" && editingKey !== targetKey(visibleTarget) ? startEdit(visibleTarget) : void handleDecision(visibleTarget, decision)}
               onDraft={setDraft}
               onCancelEdit={() => { setEditingKey(null); setDraft(""); setError(null); setErrorKey(null); }}
             />
-          ))}
         </section>
       ) : (
         <section className="edupi-c1-review__empty" role="status">

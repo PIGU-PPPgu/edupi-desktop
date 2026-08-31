@@ -6,6 +6,8 @@ import { workbenchViews } from "@/lib/edupi-workbench";
 type Props = {
   activeView: WorkbenchView;
   pendingReviewCount: number;
+  runningAgentCount: number;
+  memoryCount: number;
   workspaceLabel: string;
   onSelect: (view: WorkbenchView) => void;
   onOpenAdmin: () => void;
@@ -40,7 +42,7 @@ function UtilityIcon() {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1-2.9 2.9-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.1h-4v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1-2.9-2.9.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3v-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1 2.9-2.9.1.1a1.6 1.6 0 0 0 1.8.3 1.6 1.6 0 0 0 1-1.5V3h4v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1 2.9 2.9-.1.1a1.6 1.6 0 0 0-.3 1.8 1.6 1.6 0 0 0 1.5 1h.1v4h-.1a1.6 1.6 0 0 0-1.5 1Z" /></svg>;
 }
 
-export function EduPiNavigationRail({ activeView, pendingReviewCount, workspaceLabel, onSelect, onOpenAdmin }: Props) {
+export function EduPiNavigationRail({ activeView, pendingReviewCount, runningAgentCount, memoryCount, workspaceLabel, onSelect, onOpenAdmin }: Props) {
   const item = (view: WorkbenchView) => {
     const config = workbenchViews.find((entry) => entry.id === view)!;
     return <button key={view} type="button" aria-label={config.label} className={activeView === view ? "is-active" : ""} aria-current={activeView === view ? "page" : undefined} onClick={() => onSelect(view)}><span className="edupi-teacher-rail__icon"><RailIcon view={view} /></span><span className="edupi-teacher-rail__text"><span>{config.label}</span><small>{config.shortLabel}</small></span>{view === "review" && pendingReviewCount > 0 ? <em>{pendingReviewCount}</em> : null}</button>;
@@ -51,6 +53,7 @@ export function EduPiNavigationRail({ activeView, pendingReviewCount, workspaceL
       <div className="edupi-teacher-rail__items">
         {groups.map((group) => <section className="edupi-teacher-rail__group" key={group.label}><div className="edupi-teacher-rail__group-title">{group.label}</div>{group.views.map(item)}</section>)}
       </div>
+      <div className={`edupi-activity-pulse${runningAgentCount > 0 ? " is-running" : ""}`} aria-live="polite"><i aria-hidden="true" /><span>{runningAgentCount > 0 ? `${runningAgentCount} 项运行中` : `已记住 ${memoryCount}`}</span></div>
       <div className="edupi-teacher-rail__utilities">
         <button type="button" aria-label="管理中心" onClick={onOpenAdmin}><span className="edupi-teacher-rail__icon"><UtilityIcon /></span><span className="edupi-teacher-rail__text">管理中心</span></button>
       </div>

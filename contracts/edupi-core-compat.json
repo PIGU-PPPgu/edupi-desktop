@@ -2,9 +2,9 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "4c9f9cb067952245902bc83d483fa2558ab25c27",
+    "core_commit": "b1145350d3cd96baf2a22c1d27e29020fd564613",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:1f15c9f08af0fa2db422d972c8b65394b4b95b19880a85929cad7d5020ca006c"
+    "component_manifest_hash": "sha256:2d2d03e9723d5e51200a5904fd764ec4c142d2c2ca037235e1e4c5598ec2e1d8"
   },
   "contract_identities": [
     {
@@ -39,7 +39,8 @@
   "paired_prs": [
     "https://github.com/PIGU-PPPgu/edupi/pull/2",
     "https://github.com/PIGU-PPPgu/edupi-desktop-internal/pull/11",
-    "https://github.com/PIGU-PPPgu/edupi/pull/6"
+    "https://github.com/PIGU-PPPgu/edupi/pull/6",
+    "https://github.com/PIGU-PPPgu/edupi/pull/7"
   ],
-  "change_note": "Enabled receipt-bound native task review with strict snapshot-state source binding and canonical Core task history; Desktop has no local task-review fallback and external_send remains false"
+  "change_note": "Added a teacher-internal student roster import operation that preserves existing profile history; external_send remains false"
 }

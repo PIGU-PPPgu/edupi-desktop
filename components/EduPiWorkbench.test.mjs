@@ -30,8 +30,7 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   const workspaceViews = await read("./EduPiWorkspaceViews.tsx");
   const workbench = await read("../lib/edupi-workbench.ts");
   assert.match(panel, /fetch\("\/api\/edupi\/education"/);
-  assert.match(panel, /fetch\("\/api\/edupi\/status"/);
-  assert.match(panel, /Core 已连接/);
+  assert.doesNotMatch(panel, /edupi-teacher-topbar/);
   assert.doesNotMatch(panel, /本地工作区 · 已连接/);
   assert.match(panel, /method: "POST"/);
   assert.match(panel, /\/api\/edupi\/tasks\/\$\{encodeURIComponent\(activeTask\.id\)\}\/review/);
@@ -71,15 +70,15 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   assert.match(workbench, /id: "tasks", label: "教学任务"/);
   assert.match(workbench, /id: "artifacts", label: "教学产物"/);
   assert.match(workspaceViews, /function TeachingView/);
-  assert.match(workspaceViews, /function HomeroomView/);
+  assert.match(workspaceViews, /EduPiStudentWorkspace/);
   assert.match(workspaceViews, /function MemoryView/);
   assert.match(workspaceViews, /function InsightsView/);
   assert.match(workspaceViews, /function GrowthView/);
   assert.match(workspaceViews, /continuity\.subjectKnowledge/);
-  assert.match(workspaceViews, /continuity\.familyContacts/);
+  assert.match(await read("./EduPiStudentWorkspace.tsx"), /continuity\.familyContacts/);
   assert.match(workspaceViews, /continuity\.documents/);
   assert.match(workspaceViews, /task\.trigger === "teaching_adjustment_candidate"/);
-  assert.match(workspaceViews, /task\.trigger === "student_follow_up"/);
+  assert.match(await read("./EduPiStudentWorkspace.tsx"), /task\.student === selectedName/);
   for (const step of ["观察", "准备", "审核", "留痕"]) assert.match(workspaceViews, new RegExp(step));
   for (const section of ["交给 EduPi", "EduPi 已经准备好", "今天要判断", "接下来", "值得留意"]) assert.match(`${workspaceViews}\n${await read("./EduPiTodayWork.tsx")}`, new RegExp(section));
   assert.match(workspaceViews, /onStartAgent/);
@@ -175,7 +174,7 @@ test("keeps the existing Chat subtree mounted during background education refres
   assert.match(panel, /shouldShowBlockingEducationLoad\(/);
   assert.match(panel, /aria-busy=\{loading \? true : undefined\}/);
   assert.match(panel, /onClick=\{retryLoadWorkspace\}/);
-  assert.match(panel, /教育数据刷新失败 · 重试/);
+  assert.match(panel, /title=\{loadError\}>重试/);
   assert.match(panel, /className="edupi-teacher-shell is-loading"/);
   assert.match(panel, /<EduPiPersistentChatHost/);
   assert.equal((panel.match(/\{chatPanel\}/g) || []).length, 1);
@@ -350,7 +349,7 @@ test("every EduPi module accepts one education material drop without handing it 
   assert.match(css, /\.edupi-global-material-drop/);
 });
 
-test("AppShell monitors Core completion and the panel exposes one derived completion inbox", async () => {
+test("AppShell monitors Core completion without restoring the removed global top strip", async () => {
   const appShell = await read("./AppShell.tsx");
   const panel = await read("./EduPiEducationPanel.tsx");
   const inbox = await read("./EduPiCompletionInbox.tsx");
@@ -360,7 +359,7 @@ test("AppShell monitors Core completion and the panel exposes one derived comple
   assert.match(appShell, /useEduPiCompletionMonitor/);
   assert.match(appShell, /onRefresh: handleEducationProjectionChanged/);
   assert.match(appShell, /setEducationRefreshKey\(\(key\) => key \+ 1\)/);
-  assert.match(panel, /<EduPiCompletionInbox tasks=\{tasks\} onTask=\{openTaskDetail\}/);
+  assert.doesNotMatch(panel, /EduPiCompletionInbox|edupi-teacher-topbar/);
   assert.match(inbox, /EduPi 已完成/);
   assert.match(inbox, /completionInboxItems\(tasks\)/);
   assert.match(hook, /fetch\("\/api\/edupi\/education"/);

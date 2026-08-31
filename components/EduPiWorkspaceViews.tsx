@@ -6,9 +6,7 @@ import type { CalendarItemSelection } from "@/lib/edupi-calendar-model";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import type { TaskSessionBinding } from "@/lib/edupi-task-sessions";
 import {
-  recordLabel,
   isUserFacingMemory,
-  groupEducationInsights,
   taskAgentSteps,
   taskArtifacts,
   taskDisplayTitle,
@@ -21,6 +19,7 @@ import {
   type WorkbenchView,
 } from "@/lib/edupi-workbench";
 import { EduPiCalendarWorkspace } from "./EduPiCalendarWorkspace";
+import { EduPiStudentWorkspace } from "./EduPiStudentWorkspace";
 import { EduPiTodayWork } from "./EduPiTodayWork";
 import { EduPiWorkspaceBoard } from "./EduPiWorkspaceBoard";
 import type { MaterialStagingDescriptor } from "@/lib/edupi-material-staging-client";
@@ -31,6 +30,8 @@ type Props = {
   data: EducationContract;
   context: TeacherContextSnapshot | null;
   query: string;
+  selectedStudentId: string | null;
+  selectedObjectId: string | null;
   runningAgentCount: number;
   stagedMaterials: MaterialStagingDescriptor[];
   stagingBusy: boolean;
@@ -67,32 +68,6 @@ function shortDate(value: string): string {
 function workspaceFile(workspace: string, relativePath: string): string {
   const separator = workspace.includes("\\") ? "\\" : "/";
   return `${workspace.replace(/[\\/]$/, "")}${separator}${relativePath.replace(/[\\/]/g, separator)}`;
-}
-
-function records(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item)) : [];
-}
-
-function studentStatusLabel(value: unknown): string {
-  if (typeof value !== "string" || !value.trim()) return "状态待确认";
-  const labels: Record<string, string> = { active: "观察中", resolved: "已解决", pending: "待观察", in_progress: "观察中", hold: "暂缓", dismissed: "已忽略", closed: "已关闭" };
-  const normalized = value.trim().toLowerCase();
-  return labels[normalized] || (/[\u3400-\u9fff]/.test(value) ? value.trim() : "状态待确认");
-}
-
-function studentDateLabel(value: unknown): string | null {
-  if (typeof value !== "string" || !value.trim()) return null;
-  const parsed = new Date(value.includes("T") ? value : `${value}T00:00:00`);
-  return Number.isNaN(parsed.getTime()) ? null : shortDate(value);
-}
-
-function studentPatternLabel(pattern: Record<string, unknown>): string {
-  const date = studentDateLabel(pattern.last_seen);
-  return [recordLabel(pattern, ["description", "desc"], "已有学习观察"), studentStatusLabel(pattern.status), date ? `最近 ${date}` : null].filter(Boolean).join(" · ");
-}
-
-function studentTrajectoryLabel(item: Record<string, unknown>): string {
-  return [studentDateLabel(item.date) || "日期待补", recordLabel(item, ["event"], "事件待补"), recordLabel(item, ["note", "description"], "")].filter(Boolean).join(" · ");
 }
 
 function growthReviewStateLabel(value: string | null): string | null {
@@ -255,7 +230,7 @@ function DashboardView({ data, context, runningAgentCount, onEducation, onNaviga
   </main>;
 }
 
-function TeachingView({ data, context, query, onTask, onNavigate }: Pick<Props, "data" | "context" | "query" | "onTask" | "onNavigate">) {
+function TeachingView({ data, context, query, onTask, onNavigate, onUpload, onStartAgent }: Pick<Props, "data" | "context" | "query" | "onTask" | "onNavigate" | "onUpload" | "onStartAgent">) {
   const teachingTasks = data.tasks.filter((task) => (task.trigger === "teaching_adjustment_candidate" || Boolean(task.materialId) || Boolean(task.topic)) && includesQuery(`${task.title} ${task.topic || ""} ${task.sourceEventName || ""}`, query));
   const artifacts = teachingTasks.flatMap((task) => taskArtifacts(task).map((artifact) => ({ task, artifact })));
   const knowledge = data.continuity.subjectKnowledge
@@ -265,9 +240,14 @@ function TeachingView({ data, context, query, onTask, onNavigate }: Pick<Props, 
   const teachingMemories = data.continuity.memories.filter((memory) => memory.category === "teaching" && memory.state === "active" && includesQuery(`${memory.content} ${memory.tags.join(" ")}`, query)).slice(-6).reverse();
   const subject = [context?.subject, context?.grade].filter(Boolean).join(" · ") || "教学上下文待设置";
   const current = teachingTasks.some((task) => task.status === "planned" || task.status === "hold") ? "review" : artifacts.length > 0 ? "record" : knowledge.length > 0 ? "prepare" : "observe";
+  const orderedSlots = data.timetable.slice().sort((left, right) => Number(left.day_of_week) - Number(right.day_of_week) || Number(left.period) - Number(right.period));
+  const weekday = new Date().getDay() || 7;
+  const nextSlot = orderedSlots.find((slot) => Number(slot.day_of_week) >= weekday) || orderedSlots[0];
+  const nextSubject = nextSlot ? String(nextSlot.subject || "课程") : context?.subject || "下一课";
 
   return <main className="edupi-module-workspace edupi-domain-workspace">
-    <header className="edupi-module-heading"><div><h1>教学</h1><p>{subject}</p></div><button type="button" onClick={() => onNavigate("materials")}>打开材料</button></header>
+    <header className="edupi-module-heading"><div><h1>教学</h1><p>{subject}</p></div><div className="edupi-teaching-heading__actions"><button type="button" onClick={onUpload}>导入教学重点</button><button type="button" className="is-primary" onClick={() => onStartAgent(`请为${nextSubject}${nextSlot?.class_name ? `（${String(nextSlot.class_name)}）` : ""}准备下一节课需要的教学重点、材料清单和课堂检查点，结合现有学情与教育记忆，先给我可审核的候选。`)}>准备下一节课</button></div></header>
+    <section className="edupi-teaching-next"><span>下一节课</span><strong>{nextSubject}</strong><p>{nextSlot ? `周${String(nextSlot.day_of_week)} · 第 ${String(nextSlot.period)} 节${nextSlot.class_name ? ` · ${String(nextSlot.class_name)}` : ""}` : "课表待导入"}</p><button type="button" onClick={() => onNavigate("calendar")}>看课程表</button></section>
     <WorkflowStrip current={current} />
         <div className="edupi-workspace-grid">
       <section className="edupi-page-section">
@@ -327,188 +307,43 @@ function TeachingView({ data, context, query, onTask, onNavigate }: Pick<Props, 
   </main>;
 }
 
-function HomeroomView({ data, context, query, onTask, onNavigate }: Pick<Props, "data" | "context" | "query" | "onTask" | "onNavigate">) {
-  const followUps = data.tasks.filter((task) => task.trigger === "student_follow_up" && includesQuery(`${task.title} ${task.student || ""} ${task.sourceEventName || ""}`, query));
-  const openFollowUps = followUps.filter((task) => task.status === "planned" || task.status === "hold");
-  const visibleFollowUps = openFollowUps.length > 0 ? openFollowUps : followUps.slice(0, 3);
-  const students = data.students.filter((student) => includesQuery(`${recordLabel(student, ["name", "student_name", "display_name"], "")} ${JSON.stringify(student.error_patterns || [])}`, query));
-  const attention = students.map((student) => {
-    const patterns = records(student.error_patterns).filter((pattern) => pattern.status !== "resolved" && !/已(?:处理)?完成/.test(recordLabel(pattern, ["description", "desc"], "")));
-    const latest = [...patterns].sort((left, right) => String(right.last_seen || "").localeCompare(String(left.last_seen || "")))[0];
-    return { student, latest, patternCount: patterns.length, patterns };
-  }).filter((item) => item.latest).sort((left, right) => String(right.latest.last_seen || "").localeCompare(String(left.latest.last_seen || "")));
-  const familyContacts = data.continuity.familyContacts.filter((contact) => includesQuery(`${contact.student} ${contact.name} ${contact.lastTopic || ""}`, query));
-  const classes = context?.classes?.length ? context.classes.join(" · ") : context?.grade || "班级待设置";
-  const current = followUps.some((task) => task.status === "planned" || task.status === "hold") ? "review" : followUps.length > 0 ? "record" : attention.length > 0 ? "prepare" : "observe";
-
-  return <main className="edupi-module-workspace edupi-domain-workspace">
-    <header className="edupi-module-heading"><div><h1>班级</h1><p>{classes} · {students.length} 名已记录学生</p></div><button type="button" onClick={() => onNavigate("students")}>学生档案</button></header>
-    <WorkflowStrip current={current} />
-    <div className="edupi-class-grid">
-      <section className="edupi-page-section edupi-class-grid__main">
-        <SectionHeader title="需要继续观察" meta={`${attention.length} 名学生`} />
-        <div className="edupi-student-focus-list">{attention.map(({ student, latest, patternCount, patterns }) => {
-          const name = recordLabel(student, ["name", "student_name", "display_name"], "未命名学生");
-          return <details className="edupi-student-focus-disclosure" key={name}>
-            <summary><span>{name.slice(0, 1)}</span><div><strong>{name}</strong><p>{recordLabel(latest, ["description", "desc"], "已有观察记录")}</p><small>{patternCount} 条在观察模式{studentDateLabel(latest.last_seen) ? ` · ${studentDateLabel(latest.last_seen)}` : ""}</small></div></summary>
-            <div className="edupi-disclosure-detail">
-              <strong>全部观察</strong>
-              {patterns.map((pattern, index) => <p key={`${name}:${index}`}>{studentPatternLabel(pattern)}</p>)}
-            </div>
-          </details>;
-        })}</div>
-        {attention.length === 0 ? <div className="edupi-module-empty">暂无需要继续观察的学生</div> : null}
-      </section>
-      <section className="edupi-page-section edupi-workstream">
-        <SectionHeader title={openFollowUps.length > 0 ? "当前跟进" : "最近闭环"} meta={visibleFollowUps.length ? `${visibleFollowUps.length} 项` : undefined} />
-        <div>{visibleFollowUps.map((task) => <WorkItem key={taskKey(task)} task={task} agentSession={task.id ? data.taskSessions[task.id] ?? null : null} onClick={() => onTask(task, task.status === "planned" || task.status === "hold" ? "review" : "run")} />)}</div>
-        {visibleFollowUps.length === 0 ? <div className="edupi-module-empty">暂无跟进事项</div> : null}
-      </section>
-      <section className="edupi-page-section edupi-class-grid__side">
-        <SectionHeader title="家校联系" meta={`${familyContacts.length} 个家庭`} />
-        <div className="edupi-family-list">{familyContacts.map((contact) => <details className="edupi-family-disclosure" key={contact.id}>
-          <summary><div><strong>{contact.student}</strong><span>{contact.name}{contact.relationship ? ` · ${contact.relationship}` : ""}</span></div><p>{contact.lastTopic || "尚未记录沟通主题"}</p><small>{contact.lastContactAt ? shortDate(contact.lastContactAt) : "暂无联系日期"}{contact.historyCount ? ` · ${contact.historyCount} 次记录` : ""}</small></summary>
-          <div className="edupi-disclosure-detail">
-            {contact.lastOutcome ? <p>上次结果：{contact.lastOutcome}</p> : null}
-            {contact.concerns.length > 0 ? <p>关注事项：{contact.concerns.join("、")}</p> : null}
-            {contact.communicationStyle.length > 0 ? <p>沟通方式：{contact.communicationStyle.join("、")}</p> : null}
-            <footer><span>{contact.historyCount} 次联系记录</span>{contact.lastContactAt ? <span>最近联系 {shortDate(contact.lastContactAt)}</span> : null}</footer>
-          </div>
-        </details>)}</div>
-        {familyContacts.length === 0 ? <div className="edupi-module-empty">暂无家校联系记录</div> : null}
-      </section>
-    </div>
-  </main>;
-}
-
-function StudentsView({ data, query }: Pick<Props, "data" | "query">) {
-  const students = data.students.filter((student) => includesQuery(`${recordLabel(student, ["name", "student_name", "display_name"], "")} ${JSON.stringify(student)}`, query));
-  return <main className="edupi-module-workspace">
-    <header className="edupi-module-heading"><div><h1>学生档案</h1><p>{students.length} 名学生 · 教师内部</p></div></header>
-    <section className="edupi-page-section edupi-student-records">{students.map((student, index) => {
-      const name = recordLabel(student, ["name", "student_name", "display_name"], "未命名学生");
-      const patterns = records(student.error_patterns);
-      const trajectory = records(student.trajectory);
-      const traits = Array.isArray(student.traits) ? student.traits.filter((item): item is string => typeof item === "string") : [];
-      const latest = [...patterns].sort((left, right) => String(right.last_seen || "").localeCompare(String(left.last_seen || "")))[0];
-      return <details className="edupi-student-record-disclosure" key={recordLabel(student, ["id", "student_id"], `${name}:${index}`)}>
-        <summary><span className={index % 4 ? `is-tint-${index % 4}` : undefined}>{name.slice(0, 1)}</span><div><header><strong>{name}</strong><small>{studentDateLabel(student.updated_at) || "尚无更新时间"}</small></header><p>{latest ? recordLabel(latest, ["description", "desc"], "已有学习观察") : traits[0] || "尚未形成学习观察"}</p><footer><span>{patterns.length} 条学习模式</span><span>{trajectory.length} 条成长轨迹</span></footer></div></summary>
-        <div className="edupi-disclosure-detail">
-          {traits.length > 0 ? <p>特征：{traits.join("、")}</p> : null}
-          {patterns.length > 0 ? <div><strong>学习模式</strong>{patterns.map((pattern, patternIndex) => <p key={`${name}:pattern:${patternIndex}`}>
-            {studentPatternLabel(pattern)}
-          </p>)}</div> : null}
-          {trajectory.length > 0 ? <div><strong>成长轨迹（{trajectory.length} 条）</strong>{trajectory.map((item, trajectoryIndex) => <p key={`${name}:trajectory:${trajectoryIndex}`}>
-            {studentTrajectoryLabel(item)}
-          </p>)}</div> : null}
-        </div>
-      </details>;
-    })}{students.length === 0 ? <div className="edupi-module-empty">暂无学生档案</div> : null}</section>
-  </main>;
-}
-
 function CalendarView({ data, query, onUpload, intakeBusy, calendarSelection, onCalendarSelection, onTaskDetail, onImportCalendar, onImportTimetable }: Pick<Props, "data" | "query" | "onUpload" | "intakeBusy" | "calendarSelection" | "onCalendarSelection" | "onTaskDetail" | "onImportCalendar" | "onImportTimetable">) {
   return <EduPiCalendarWorkspace data={data} query={query} onUpload={onUpload} intakeBusy={intakeBusy} selection={calendarSelection} onSelect={onCalendarSelection} onTaskDetail={onTaskDetail} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} />;
 }
 
 const memoryLabels: Record<string, string> = { semester: "学期", class: "班级", teaching: "教学", preferences: "教师偏好", school: "学校" };
 
-function MemoryView({ data, query }: Pick<Props, "data" | "query">) {
+function MemoryView({ data, query, selectedObjectId }: Pick<Props, "data" | "query" | "selectedObjectId">) {
   const memories = data.continuity.memories.filter((memory) => isUserFacingMemory(memory) && includesQuery(`${memory.content} ${memory.student || ""} ${memory.tags.join(" ")}`, query));
   const active = memories.filter((memory) => memory.state === "active").sort((left, right) => String(right.updatedAt || right.createdAt || "").localeCompare(String(left.updatedAt || left.createdAt || "")));
   const superseded = memories.filter((memory) => memory.state === "superseded");
-  return <main className="edupi-module-workspace edupi-continuity-workspace">
+  const selected = active.find((memory) => `memory:${memory.id}` === selectedObjectId) || active[0] || null;
+  return <main className="edupi-module-workspace edupi-record-workspace">
     <header className="edupi-module-heading"><div><h1>教育记忆</h1><p>{active.length} 条当前事实 · 只在教师工作区使用</p></div></header>
-    <div className="edupi-memory-groups">{memoryCategoriesFor(active).map(({ category, items }) => <section className="edupi-page-section" key={category}><SectionHeader title={memoryLabels[category] || category} meta={`${items.length} 条`} /><div className="edupi-memory-list">{items.slice(0, 8).map((memory) => <details className="edupi-memory-record-disclosure" key={memory.id}>
-      <summary>{memory.student ? <span>{memory.student}</span> : null}<strong>{memory.content}</strong><footer><small>{memory.tags.slice(0, 4).join(" · ") || "长期记忆"}</small><time>{memory.updatedAt || memory.createdAt ? shortDate(memory.updatedAt || memory.createdAt || "") : ""}</time></footer></summary>
-      <div className="edupi-disclosure-detail">
-        <p>{memory.tags.length > 0 ? `标签：${memory.tags.join("、")}` : "尚未添加标签"}</p>
-        <footer><span>累积 {memory.count} 次</span><span>当前事实</span>{memory.createdAt ? <time>创建于 {shortDate(memory.createdAt)}</time> : null}{memory.updatedAt ? <time>更新于 {shortDate(memory.updatedAt)}</time> : null}</footer>
-      </div>
-    </details>)}</div>{items.length > 8 ? <details className="edupi-memory-more"><summary>再看 {items.length - 8} 条</summary><div>{items.slice(8).map((memory) => <p key={memory.id}>{memory.content}</p>)}</div></details> : null}</section>)}</div>
-    {active.length === 0 ? <div className="edupi-module-empty">还没有可展示的长期记忆</div> : null}
-    {superseded.length > 0 ? <details className="edupi-superseded-memory"><summary>查看 {superseded.length} 条已更新的旧记忆</summary><div>{superseded.map((memory) => <p key={memory.id}>{memory.content}</p>)}</div></details> : null}
+    {selected ? <article className="edupi-record-detail"><header><span>{memoryLabels[selected.category] || selected.category}</span><h2>{selected.content}</h2>{selected.student ? <strong>{selected.student}</strong> : null}</header><div className="edupi-record-detail__metrics"><span>出现 <strong>{selected.count}</strong> 次</span><span>当前事实 <strong>{active.length}</strong></span><span>旧版本 <strong>{superseded.length}</strong></span></div><section><h3>标签</h3><div className="edupi-record-tags">{selected.tags.map((tag) => <span key={tag}>{tag}</span>)}{selected.tags.length === 0 ? <em>无标签</em> : null}</div></section><footer>{selected.createdAt ? <time>创建 {shortDate(selected.createdAt)}</time> : null}{selected.updatedAt ? <time>更新 {shortDate(selected.updatedAt)}</time> : null}</footer></article> : <div className="edupi-module-empty">还没有可展示的长期记忆</div>}
   </main>;
 }
 
-function memoryCategoriesFor(memories: EducationContract["continuity"]["memories"]): Array<{ category: string; items: typeof memories }> {
-  return ["semester", "class", "teaching", "preferences", "school"].flatMap((category) => {
-    const items = memories.filter((memory) => memory.category === category);
-    return items.length > 0 ? [{ category, items }] : [];
-  });
-}
-
-function InsightsView({ data, query }: Pick<Props, "data" | "query">) {
+function InsightsView({ data, query, selectedObjectId }: Pick<Props, "data" | "query" | "selectedObjectId">) {
   const meaningful = data.continuity.insights.filter((insight) => !insight.content.startsWith("[主题候选]") && (includesQuery(insight.content, query) || insight.evidenceIds.some((evidenceId) => includesQuery(evidenceId, query))));
-  const surfaced = groupEducationInsights(meaningful.filter((insight) => insight.status === "surfaced")).slice(0, 6);
-  const brewing = meaningful.filter((insight) => insight.status === "brewing").slice(-8).reverse();
   const signals = data.continuity.signals.filter((signal) => includesQuery(`${signal.content} ${signal.related.join(" ")}`, query)).sort((left, right) => right.strength - left.strength);
-  return <main className="edupi-module-workspace edupi-continuity-workspace">
+  const selectedInsight = meaningful.find((insight) => `insight:${insight.id}` === selectedObjectId) || (selectedObjectId?.startsWith("signal:") ? null : meaningful[0]) || null;
+  const selectedSignal = signals.find((signal) => `signal:${signal.id}` === selectedObjectId) || (!selectedInsight ? signals[0] : null) || null;
+  return <main className="edupi-module-workspace edupi-record-workspace">
     <header className="edupi-module-heading"><div><h1>观察与洞察</h1><p>{data.continuity.lastDreamAt ? `上次整理 ${shortDate(data.continuity.lastDreamAt)}` : "尚未运行后台整理"}</p></div></header>
-    <div className="edupi-insight-layout">
-      <section className="edupi-page-section edupi-insight-main">
-        <SectionHeader title="已经浮出" meta={`${surfaced.length} 个主题`} />
-        <div className="edupi-insight-list">{surfaced.map((group) => <details className="edupi-insight-disclosure" key={group.topic}>
-          <summary><span aria-hidden="true">◌</span><div><small>{group.topic}</small><strong>{cleanInsight(group.insight.content)}</strong><footer><span>{group.insight.evidenceIds.length} 条可追溯依据{group.relatedCount > 1 ? ` · 合并 ${group.relatedCount} 条同主题记录` : ""}</span><time>{group.insight.createdAt ? shortDate(group.insight.createdAt) : ""}</time></footer></div></summary>
-          <div className="edupi-disclosure-detail">
-            <p>{group.insight.evidenceIds.length > 0 ? `已保留 ${group.insight.evidenceIds.length} 条来源记录` : "暂无可追溯来源记录"}</p>
-            <footer><span>置信度 {Math.round(group.insight.confidence * 100)}%</span>{group.relatedCount > 1 ? <span>同主题记录 {group.relatedCount} 条</span> : null}{group.insight.surfacedAt ? <time>浮出于 {shortDate(group.insight.surfacedAt)}</time> : null}</footer>
-          </div>
-        </details>)}</div>
-        {surfaced.length === 0 ? <div className="edupi-module-empty">暂无已浮出的洞察</div> : null}
-      </section>
-      <aside>
-        <section className="edupi-page-section">
-          <SectionHeader title="仍在观察" meta={`${signals.length} 个弱信号`} />
-          <div className="edupi-signal-list">{signals.map((signal) => <details className="edupi-signal-disclosure" key={signal.id}>
-            <summary><strong>{signal.content}</strong><span>出现 {signal.strength} 次{signal.related.length ? ` · ${signal.related.join("、")}` : ""}</span></summary>
-            <div className="edupi-disclosure-detail"><p>{signal.related.length > 0 ? `关联记录：${signal.related.join("、")}` : "暂无关联记录"}</p><footer>{signal.createdAt ? <time>首次出现 {shortDate(signal.createdAt)}</time> : null}{signal.lastSeenAt ? <time>最近出现 {shortDate(signal.lastSeenAt)}</time> : null}</footer></div>
-          </details>)}</div>
-          {signals.length === 0 ? <div className="edupi-module-empty">暂无弱信号</div> : null}
-        </section>
-        <section className="edupi-page-section">
-          <SectionHeader title="尚未浮出" meta={`${brewing.length} 条`} />
-          <div className="edupi-brewing-list">{brewing.map((insight) => <details className="edupi-brewing-disclosure" key={insight.id}>
-            <summary><strong>{cleanInsight(insight.content)}</strong><span>继续积累证据</span></summary>
-            <div className="edupi-disclosure-detail"><p>状态：酝酿中 · 已保留 {insight.evidenceIds.length} 条来源记录</p><footer>{insight.createdAt ? <time>记录于 {shortDate(insight.createdAt)}</time> : null}</footer></div>
-          </details>)}</div>
-          {brewing.length === 0 ? <div className="edupi-module-empty">暂无酝酿中的判断</div> : null}
-        </section>
-      </aside>
-    </div>
+    {selectedInsight ? <article className="edupi-record-detail"><header><span>{selectedInsight.status === "surfaced" ? "已浮出" : "仍在酝酿"}</span><h2>{cleanInsight(selectedInsight.content)}</h2></header><div className="edupi-record-detail__metrics"><span>置信度 <strong>{Math.round(selectedInsight.confidence * 100)}%</strong></span><span>依据 <strong>{selectedInsight.evidenceIds.length}</strong></span><span>状态 <strong>{selectedInsight.status === "surfaced" ? "可查看" : "积累中"}</strong></span></div><section><h3>来源依据</h3><div className="edupi-record-tags">{selectedInsight.evidenceIds.map((id) => <span key={id}>依据 {id.slice(-6)}</span>)}{selectedInsight.evidenceIds.length === 0 ? <em>暂无依据</em> : null}</div></section><footer>{selectedInsight.createdAt ? <time>记录 {shortDate(selectedInsight.createdAt)}</time> : null}{selectedInsight.surfacedAt ? <time>浮出 {shortDate(selectedInsight.surfacedAt)}</time> : null}</footer></article> : selectedSignal ? <article className="edupi-record-detail"><header><span>弱信号</span><h2>{selectedSignal.content}</h2></header><div className="edupi-record-detail__metrics"><span>出现 <strong>{selectedSignal.strength}</strong> 次</span><span>关联 <strong>{selectedSignal.related.length}</strong></span></div><section><h3>关联记录</h3><div className="edupi-record-tags">{selectedSignal.related.map((item) => <span key={item}>{item}</span>)}{selectedSignal.related.length === 0 ? <em>暂无关联</em> : null}</div></section><footer>{selectedSignal.createdAt ? <time>首次 {shortDate(selectedSignal.createdAt)}</time> : null}{selectedSignal.lastSeenAt ? <time>最近 {shortDate(selectedSignal.lastSeenAt)}</time> : null}</footer></article> : <div className="edupi-module-empty">暂无观察记录</div>}
   </main>;
 }
 
-function GrowthView({ data, query, onOpenFile, onNavigate }: Pick<Props, "data" | "query" | "onOpenFile" | "onNavigate">) {
+function GrowthView({ data, query, selectedObjectId, onOpenFile, onNavigate }: Pick<Props, "data" | "query" | "selectedObjectId" | "onOpenFile" | "onNavigate">) {
   const documents = data.continuity.documents.filter((document) => includesQuery(`${document.title} ${document.excerpt}`, query));
   const themes = data.continuity.themes.filter((theme) => includesQuery(theme.topic, query)).slice(0, 12);
   const confirmedArtifacts = data.tasks.flatMap((task) => taskArtifacts(task).filter((artifact) => artifact.state === "confirmed").map((artifact) => ({ task, artifact })));
-  const documentKind: Record<string, string> = { daily: "日", weekly: "周", insight: "察", dream: "整" };
-  return <main className="edupi-module-workspace edupi-continuity-workspace">
-    <header className="edupi-module-heading"><div><h1>成长</h1><p>从日常工作中留下可复用的证据</p></div></header>
-    <div className="edupi-growth-grid">
-      <section className="edupi-page-section edupi-growth-documents">
-        <SectionHeader title="沉淀记录" meta={`${documents.length} 份`} />
-        <div>{documents.map((document) => <button type="button" key={document.id} onClick={() => onOpenFile(workspaceFile(data.workspace, document.path))}><span>{documentKind[document.kind]}</span><div><strong>{document.title}</strong><p>{document.excerpt}</p><small>{document.date ? shortDate(document.date) : document.path}</small></div><em>打开 ›</em></button>)}</div>
-        {documents.length === 0 ? <div className="edupi-module-empty">日常简报、周报与反思会在这里形成时间线</div> : null}
-      </section>
-      <section className="edupi-page-section edupi-growth-themes">
-        <SectionHeader title="EduPi 学习候选" meta="不会自动晋级" />
-        <div>{themes.map((theme) => {
-          const reviewStateLabel = growthReviewStateLabel(theme.reviewState);
-          return <details className="edupi-growth-theme-disclosure" key={theme.topic}>
-            <summary><div><strong>{theme.topic}</strong><span>在 {theme.occurrences} 次后台整理中出现</span></div><em className={theme.skillCandidate ? "is-candidate" : ""}>{theme.skillCandidate ? theme.reviewState === "pending_review" ? "待验证" : "候选" : "观察中"}</em><small>{theme.evidenceIds.length} 条依据</small></summary>
-            <div className="edupi-disclosure-detail"><p>{theme.evidenceIds.length > 0 ? `已保留 ${theme.evidenceIds.length} 条来源依据` : "暂无来源依据"}</p><footer>{reviewStateLabel ? <span>审核状态：{reviewStateLabel}</span> : null}{theme.firstSeenAt ? <time>首次出现 {shortDate(theme.firstSeenAt)}</time> : null}{theme.lastSeenAt ? <time>最近出现 {shortDate(theme.lastSeenAt)}</time> : null}</footer></div>
-          </details>;
-        })}</div>
-        {themes.length === 0 ? <div className="edupi-module-empty">尚未形成学习候选</div> : null}
-      </section>
-      <section className="edupi-page-section edupi-growth-evidence">
-        <SectionHeader title="已确认成果" meta={`${confirmedArtifacts.length} 项`} action="全部产物" onAction={() => onNavigate("artifacts")} />
-        <div>{confirmedArtifacts.slice(0, 8).map(({ task, artifact }) => <div key={artifact.id}><strong>{artifact.title}</strong><span>{taskDisplayTitle(task)}</span></div>)}</div>
-        {confirmedArtifacts.length === 0 ? <div className="edupi-module-empty">经过教师确认的产物会进入这里</div> : null}
-      </section>
-    </div>
+  const selectedDocument = documents.find((document) => `document:${document.id}` === selectedObjectId) || (selectedObjectId?.startsWith("theme:") ? null : documents[0]) || null;
+  const selectedTheme = themes.find((theme) => `theme:${theme.topic}` === selectedObjectId) || (!selectedDocument ? themes[0] : null) || null;
+  return <main className="edupi-module-workspace edupi-record-workspace">
+    <header className="edupi-module-heading"><div><h1>成长</h1><p>{documents.length} 份工作沉淀 · {confirmedArtifacts.length} 项确认成果</p></div><button type="button" onClick={() => onNavigate("artifacts")}>教学产物</button></header>
+    {selectedDocument ? <article className="edupi-record-detail"><header><span>{({ daily: "日记录", weekly: "周复盘", insight: "洞察", dream: "后台整理" } as Record<string, string>)[selectedDocument.kind] || "记录"}</span><h2>{selectedDocument.title}</h2></header><div className="edupi-record-detail__metrics"><span>沉淀记录 <strong>{documents.length}</strong></span><span>确认成果 <strong>{confirmedArtifacts.length}</strong></span><span>学习候选 <strong>{themes.length}</strong></span></div><section><h3>摘要</h3><p>{selectedDocument.excerpt}</p></section><footer>{selectedDocument.date ? <time>{shortDate(selectedDocument.date)}</time> : null}<button type="button" onClick={() => onOpenFile(workspaceFile(data.workspace, selectedDocument.path))}>打开记录</button></footer></article> : selectedTheme ? <article className="edupi-record-detail"><header><span>{selectedTheme.skillCandidate ? "学习候选" : "持续观察"}</span><h2>{selectedTheme.topic}</h2></header><div className="edupi-record-detail__metrics"><span>出现 <strong>{selectedTheme.occurrences}</strong> 次</span><span>依据 <strong>{selectedTheme.evidenceIds.length}</strong></span><span>状态 <strong>{growthReviewStateLabel(selectedTheme.reviewState) || "观察中"}</strong></span></div><section><h3>来源依据</h3><div className="edupi-record-tags">{selectedTheme.evidenceIds.map((id) => <span key={id}>依据 {id.slice(-6)}</span>)}</div></section><footer>{selectedTheme.firstSeenAt ? <time>首次 {shortDate(selectedTheme.firstSeenAt)}</time> : null}{selectedTheme.lastSeenAt ? <time>最近 {shortDate(selectedTheme.lastSeenAt)}</time> : null}</footer></article> : <div className="edupi-module-empty">暂无成长记录</div>}
   </main>;
 }
 
@@ -527,13 +362,12 @@ function ArtifactsView({ data, query, onTask }: Pick<Props, "data" | "query" | "
 export function EduPiWorkspaceViews(props: Props) {
   if (props.view === "dashboard") return <DashboardView data={props.data} context={props.context} runningAgentCount={props.runningAgentCount} onEducation={props.onEducation} onNavigate={props.onNavigate} onUpload={props.onUpload} onOpenContext={props.onOpenContext} onOpenAdmin={props.onOpenAdmin} onOpenFile={props.onOpenFile} onStartAgent={props.onStartAgent} />;
   if (props.view === "workspace") return <EduPiWorkspaceBoard data={props.data} query={props.query} onTaskDetail={props.onTaskDetail} onCreateTask={props.onCreateTask} onMoveTask={props.onMoveTask} />;
-  if (props.view === "teaching") return <TeachingView data={props.data} context={props.context} query={props.query} onTask={props.onTask} onNavigate={props.onNavigate} />;
-  if (props.view === "homeroom") return <HomeroomView data={props.data} context={props.context} query={props.query} onTask={props.onTask} onNavigate={props.onNavigate} />;
-  if (props.view === "students") return <StudentsView data={props.data} query={props.query} />;
+  if (props.view === "teaching") return <TeachingView data={props.data} context={props.context} query={props.query} onTask={props.onTask} onNavigate={props.onNavigate} onUpload={props.onUpload} onStartAgent={props.onStartAgent} />;
+  if (props.view === "homeroom" || props.view === "students") return <EduPiStudentWorkspace mode={props.view} data={props.data} context={props.context} query={props.query} selectedStudentId={props.selectedStudentId} onEducation={props.onEducation} onTask={(task) => props.onTask(task, "brief")} />;
   if (props.view === "calendar") return <CalendarView data={props.data} query={props.query} onUpload={props.onUpload} intakeBusy={props.intakeBusy} calendarSelection={props.calendarSelection} onCalendarSelection={props.onCalendarSelection} onTaskDetail={props.onTaskDetail} onImportCalendar={props.onImportCalendar} onImportTimetable={props.onImportTimetable} />;
-  if (props.view === "memory") return <MemoryView data={props.data} query={props.query} />;
-  if (props.view === "insights") return <InsightsView data={props.data} query={props.query} />;
-  if (props.view === "growth") return <GrowthView data={props.data} query={props.query} onOpenFile={props.onOpenFile} onNavigate={props.onNavigate} />;
+  if (props.view === "memory") return <MemoryView data={props.data} query={props.query} selectedObjectId={props.selectedObjectId} />;
+  if (props.view === "insights") return <InsightsView data={props.data} query={props.query} selectedObjectId={props.selectedObjectId} />;
+  if (props.view === "growth") return <GrowthView data={props.data} query={props.query} selectedObjectId={props.selectedObjectId} onOpenFile={props.onOpenFile} onNavigate={props.onNavigate} />;
   if (props.view === "materials") return <MaterialsView data={props.data} query={props.query} stagedMaterials={props.stagedMaterials} stagingBusy={props.stagingBusy} stagingMessage={props.stagingMessage} onTask={props.onTask} onUpload={props.onUpload} onIntakeMaterial={props.onIntakeMaterial} onRemoveStagedMaterial={props.onRemoveStagedMaterial} />;
   return <ArtifactsView data={props.data} query={props.query} onTask={props.onTask} />;
 }
