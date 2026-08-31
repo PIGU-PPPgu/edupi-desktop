@@ -246,7 +246,7 @@ function receiptForCommand(value: unknown, envelope: RawRecord, supportedCommand
   }
   const review = record(receipt.teacher_review);
   const requestReview = record(envelope.teacher_review);
-  const allowedReviewStates = decision === "rollback" ? ["accepted", "modified", "rejected", "held"] : [status === "held" ? "held" : status];
+  const allowedReviewStates = decision === "rollback" ? ["pending_review", "accepted", "modified", "rejected", "held"] : [status === "held" ? "held" : status];
   if (!review || !requestReview || review.revision !== Number(command.expected_revision) + 1
     || review.reviewer_id !== requestReview.reviewer_id || review.reviewed_at !== envelope.issued_at
     || review.note !== command.note || !allowedReviewStates.includes(String(review.state))) {
@@ -272,7 +272,7 @@ function verifyRefreshedTask(payload: CoreEducationSnapshotPayload, beforeTask: 
   const afterHistory = reviewHistory(task);
   const latest = afterHistory.at(-1);
   const receiptReview = record(receipt.teacher_review);
-  const taskReviewState = task.status === "hold" ? "held" : task.status;
+  const taskReviewState = task.status === "planned" ? "pending_review" : task.status === "hold" ? "held" : task.status;
   if (task.revision !== expectedRevision || afterHistory.length !== beforeHistory.length + 1
     || !sameRecord(afterHistory.slice(0, beforeHistory.length), beforeHistory) || !latest
     || latest.action !== decision || latest.reviewed_at !== envelope.issued_at
