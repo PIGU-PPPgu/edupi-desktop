@@ -19,6 +19,8 @@ test("the first-run guide has exactly three teacher-facing steps and can be skip
 test("AppShell persists completion, uses existing surfaces, and reopens from help", () => {
   assert.match(prefs, /edupiFirstRunGuideComplete: "edupi-first-run-guide-complete"/);
   assert.match(shell, /getPrefBool\(APP_PREF_KEYS\.edupiFirstRunGuideComplete, false\)/);
+  assert.match(shell, /useEffect\(\(\) => \{\s*setFirstRunGuideOpen\(!getPrefBool\(APP_PREF_KEYS\.edupiFirstRunGuideComplete, false\)\);\s*\}, \[\]\)/s);
+  assert.doesNotMatch(shell, /useState\(\(\) => \(\s*!getPrefBool/);
   assert.match(shell, /setPrefBool\(APP_PREF_KEYS\.edupiFirstRunGuideComplete, true\)/);
   assert.match(shell, /<EduPiFirstRunGuide/);
   assert.match(shell, /onOpenModels=\{\(\) => setModelsConfigOpen\(true\)\}/);
