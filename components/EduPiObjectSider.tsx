@@ -4,6 +4,7 @@ import type { EducationContract, EducationMemoryCandidate, EducationObservation,
 import type { CalendarItemSelection } from "@/lib/edupi-calendar-model";
 import { isRecognizedTimetableNote } from "@/lib/edupi-recognition-markers";
 import { groupTasksByCategory, TASK_CATEGORY_CONFIG } from "@/lib/edupi-task-category";
+import { studentRecordKey, studentRecordName } from "@/lib/edupi-student-roster-model";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { groupEducationInsights, isTaskActionable, isUserFacingMemory, recordLabel, taskArtifacts, taskDisplayTitle, taskKey, taskStatusLabel, taskStatusTone, taskTypeLabel, type TaskStage, type WorkbenchView } from "@/lib/edupi-workbench";
 import { EduPiContentSider } from "./EduPiContentSider";
@@ -14,6 +15,8 @@ type Props = {
   context: TeacherContextSnapshot | null;
   query: string;
   onQuery: (query: string) => void;
+  selectedStudentId: string | null;
+  onStudent: (student: Record<string, unknown>) => void;
   selectedTaskKey: string | null;
   onTask: (task: TeacherTask, stage?: TaskStage) => void;
   onReviewTarget?: (target: { kind: "observation" | "memory_candidate"; id: string }) => void;
@@ -48,30 +51,10 @@ function match(value: string, query: string): boolean {
   return !query || value.toLocaleLowerCase().includes(query.toLocaleLowerCase());
 }
 
-function objectRecords(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item)) : [];
-}
-
 function objectStudentDateLabel(value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
   const parsed = new Date(value.includes("T") ? value : `${value}T00:00:00`);
   return Number.isNaN(parsed.getTime()) ? null : new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }).format(parsed);
-}
-
-function studentStatusLabel(value: unknown): string {
-  if (typeof value !== "string" || !value.trim()) return "状态待确认";
-  const labels: Record<string, string> = { active: "观察中", resolved: "已解决", pending: "待观察", in_progress: "观察中", hold: "暂缓", dismissed: "已忽略", closed: "已关闭" };
-  const normalized = value.trim().toLowerCase();
-  return labels[normalized] || (/[\u3400-\u9fff]/.test(value) ? value.trim() : "状态待确认");
-}
-
-function studentPatternLabel(pattern: Record<string, unknown>): string {
-  const date = objectStudentDateLabel(pattern.last_seen);
-  return [recordLabel(pattern, ["description", "desc"], "已有学习观察"), studentStatusLabel(pattern.status), date ? `最近 ${date}` : null].filter(Boolean).join(" · ");
-}
-
-function studentTrajectoryLabel(item: Record<string, unknown>): string {
-  return [objectStudentDateLabel(item.date) || "日期待补", recordLabel(item, ["event"], "事件待补"), recordLabel(item, ["note", "description"], "")].filter(Boolean).join(" · ");
 }
 
 function GroupTitle({ children, count }: { children: string; count?: number }) {
@@ -91,23 +74,15 @@ function C1ReviewRow({ target, onClick }: { target: C1ObjectTarget; onClick: () 
   return <button type="button" className="edupi-object-row edupi-c1-object-row" onClick={onClick} aria-label={`打开${isObservation ? "教师观察" : "记忆候选"}：${content}`}><span className="edupi-object-row__marker is-warning" aria-hidden="true" /><span className="edupi-object-row__copy"><strong>{content}</strong><small>{isObservation ? "教师观察" : "记忆候选"} · {source}</small></span><em>待确认</em></button>;
 }
 
-function ObjectStudentRow({ student }: { student: Record<string, unknown> }) {
-  const name = recordLabel(student, ["name", "student_name", "display_name"], "未命名学生");
-  const patterns = objectRecords(student.error_patterns);
-  const trajectory = objectRecords(student.trajectory);
-  return <details className="edupi-object-person">
-    <summary><span>{name.slice(0, 1)}</span><strong>{name}</strong></summary>
-    <div className="edupi-object-person__detail">
-      {patterns.length > 0 ? <div><strong>学习模式</strong>{patterns.map((pattern, patternIndex) => <p key={`${name}:pattern:${patternIndex}`}>
-        {studentPatternLabel(pattern)}
-      </p>)}</div> : <p>暂无学习模式</p>}
-      {trajectory.length > 0 ? <div><strong>成长轨迹（{trajectory.length} 条）</strong>{trajectory.map((item, trajectoryIndex) => <p key={`${name}:trajectory:${trajectoryIndex}`}>{studentTrajectoryLabel(item)}</p>)}</div> : null}
-      {student.updated_at ? <small>更新于 {objectStudentDateLabel(student.updated_at) || "日期待补"}</small> : null}
-    </div>
-  </details>;
+function ObjectStudentRow({ student, index, selected, onClick }: { student: Record<string, unknown>; index: number; selected: boolean; onClick: () => void }) {
+  const name = studentRecordName(student);
+  const patterns = Array.isArray(student.error_patterns) ? student.error_patterns : [];
+  const trajectory = Array.isArray(student.trajectory) ? student.trajectory : [];
+  const latest = patterns.find((item) => item && typeof item === "object") as Record<string, unknown> | undefined;
+  return <button type="button" className={`edupi-object-row edupi-object-student${selected ? " is-selected" : ""}`} onClick={onClick}><span className={`edupi-object-student__avatar is-tint-${index % 4}`}>{name.slice(0, 1)}</span><span className="edupi-object-row__copy"><strong>{name}</strong><small>{latest ? recordLabel(latest, ["description", "desc"], "学习观察") : `${patterns.length} 个模式 · ${trajectory.length} 个节点`}</small></span><em>›</em></button>;
 }
 
-export function EduPiObjectSider({ view, data, context, query, onQuery, selectedTaskKey, onTask, onReviewTarget, selectedCalendarSourceId, onCalendarItem, onUpload, onCollapse }: Props) {
+export function EduPiObjectSider({ view, data, context, query, onQuery, selectedStudentId, onStudent, selectedTaskKey, onTask, onReviewTarget, selectedCalendarSourceId, onCalendarItem, onUpload, onCollapse }: Props) {
   const tasks = data.tasks.filter((task) => match(`${task.title} ${task.sourceEventName || ""} ${task.student || ""}`, query));
   const pending = tasks.filter((task) => isTaskActionable(task));
   const pendingC1: C1ObjectTarget[] = [
@@ -134,10 +109,10 @@ export function EduPiObjectSider({ view, data, context, query, onQuery, selected
     <EduPiContentSider width={244} ariaLabel={`${viewTitles[view]}对象列表`} header={<><div className="edupi-object-sider__header"><div><span>当前模块</span><strong>{viewTitles[view]}</strong></div><button type="button" onClick={onCollapse} aria-label="收起列表">‹</button></div><label className="edupi-object-sider__search"><span aria-hidden="true">⌕</span><input type="search" value={query} onChange={(event) => onQuery(event.target.value)} placeholder={`搜索${viewTitles[view]}`} aria-label={`搜索${viewTitles[view]}`} /></label></>}>
       {view === "dashboard" ? <><section className="edupi-object-group"><GroupTitle count={pending.length}>需要处理</GroupTitle>{taskRows(pending, "review")}{pending.length === 0 ? <div className="edupi-object-empty">暂无待处理事项</div> : null}</section><section className="edupi-object-group"><GroupTitle count={reviewed.length}>最近完成</GroupTitle>{taskRows(reviewed.slice(0, 6), "brief")}</section></> : null}
       {view === "teaching" ? <><section className="edupi-object-group"><GroupTitle count={teachingTasks.length}>教学工作</GroupTitle>{taskRows(teachingTasks, "run")}{teachingTasks.length === 0 ? <div className="edupi-object-empty">暂无教学工作</div> : null}</section><section className="edupi-object-group"><GroupTitle count={data.timetable.length}>本周课程</GroupTitle>{data.timetable.slice(0, 6).map((slot, index) => { const recognized = isRecognizedTimetableNote(slot.notes); return <div className="edupi-object-fact" key={`${String(slot.day_of_week)}:${String(slot.period)}:${index}`}><strong>{recordLabel(slot, ["subject"], "课程")}</strong><span>周{String(slot.day_of_week ?? "-")} · 第 {String(slot.period ?? "-")} 节{recognized ? " · 待确认" : ""}</span></div>; })}</section></> : null}
-      {view === "homeroom" ? <><section className="edupi-object-group"><GroupTitle count={homeroomTasks.length}>学生跟进</GroupTitle>{taskRows(homeroomTasks, "run")}{homeroomTasks.length === 0 ? <div className="edupi-object-empty">暂无跟进事项</div> : null}</section><section className="edupi-object-group"><GroupTitle count={students.length}>学生</GroupTitle>{students.slice(0, 8).map((student, index) => <ObjectStudentRow key={recordLabel(student, ["id", "student_id", "name"], String(index))} student={student} />)}</section></> : null}
+      {view === "homeroom" ? <><section className="edupi-object-group"><GroupTitle count={homeroomTasks.length}>学生跟进</GroupTitle>{taskRows(homeroomTasks, "run")}{homeroomTasks.length === 0 ? <div className="edupi-object-empty">暂无跟进事项</div> : null}</section><section className="edupi-object-group"><GroupTitle count={students.length}>学生</GroupTitle>{students.map((student, index) => { const id = studentRecordKey(student, index); return <ObjectStudentRow key={id} student={student} index={index} selected={id === selectedStudentId} onClick={() => onStudent(student)} />; })}</section></> : null}
       {view === "tasks" ? <>{TASK_CATEGORY_CONFIG.map((category) => { const rows = tasksByCategory[category.id]; return rows.length > 0 ? <section className="edupi-object-group" key={category.id}><GroupTitle count={rows.length}>{category.label}</GroupTitle>{taskRows(rows, "brief")}</section> : null; })}{tasks.length === 0 ? <div className="edupi-object-empty">暂无匹配任务</div> : null}</> : null}
       {view === "review" ? <><section className="edupi-object-group"><GroupTitle count={pendingC1.length}>观察与记忆</GroupTitle>{pendingC1.map((target) => <C1ReviewRow key={`${target.kind}:${target.id}`} target={target} onClick={() => onReviewTarget?.({ kind: target.kind, id: target.id })} />)}{pendingC1.length === 0 ? <div className="edupi-object-empty">暂无待确认内容</div> : null}</section><section className="edupi-object-group"><GroupTitle count={pending.length}>任务审核</GroupTitle>{taskRows(pending, "review")}{pending.length === 0 ? <div className="edupi-object-empty">暂无待审核任务</div> : null}</section></> : null}
-      {view === "students" ? <><section className="edupi-object-group"><GroupTitle>班级</GroupTitle>{(context?.classes?.length ? context.classes : [context?.grade || "年级待设置"]).map((name) => <div className="edupi-object-fact" key={name}><strong>{name}</strong><span>{context?.subject || "学科待设置"}</span></div>)}</section><section className="edupi-object-group"><GroupTitle count={students.length}>学生</GroupTitle>{students.map((student, index) => <ObjectStudentRow key={recordLabel(student, ["id", "student_id", "name"], String(index))} student={student} />)}{students.length === 0 ? <div className="edupi-object-empty">暂无学生事实</div> : null}</section></> : null}
+      {view === "students" ? <><section className="edupi-object-group"><GroupTitle>班级</GroupTitle>{(context?.classes?.length ? context.classes : [context?.grade || "年级待设置"]).map((name) => <div className="edupi-object-fact" key={name}><strong>{name}</strong><span>{context?.subject || "学科待设置"}</span></div>)}</section><section className="edupi-object-group"><GroupTitle count={students.length}>学生</GroupTitle>{students.map((student, index) => { const id = studentRecordKey(student, index); return <ObjectStudentRow key={id} student={student} index={index} selected={id === selectedStudentId} onClick={() => onStudent(student)} />; })}{students.length === 0 ? <div className="edupi-object-empty">暂无学生事实</div> : null}</section></> : null}
       {view === "calendar" ? <><section className="edupi-object-group"><GroupTitle count={data.timetable.length}>本周课程</GroupTitle>{data.timetable.map((slot, index) => { const sourceId = recordLabel(slot, ["slot_id", "id"], `timetable:${index}`); const title = recordLabel(slot, ["subject"], "课程"); const detail = `周${String(slot.day_of_week ?? "-")} · 第 ${String(slot.period ?? "-")} 节`; const recognized = isRecognizedTimetableNote(slot.notes); return <button type="button" className={`edupi-object-fact is-interactive${selectedCalendarSourceId === sourceId ? " is-selected" : ""}`} key={sourceId} onClick={() => onCalendarItem?.({ kind: "timetable", sourceId, date: null, title, detail, sourceLabel: recognized ? "材料识别" : "课程表", statusLabel: recognized ? "待确认" : "已确认" })}><strong>{title}</strong><span>{detail}{recognized ? " · 待确认" : ""}</span></button>; })}{data.timetable.length === 0 ? <div className="edupi-object-empty">暂无课程表</div> : null}</section><section className="edupi-object-group"><GroupTitle count={calendar.length}>校历节点</GroupTitle>{calendar.map((event) => { const sourceId = event.id || `calendar:${event.date || "pending"}:${event.name}`; return <button type="button" className={`edupi-object-fact is-interactive${selectedCalendarSourceId === sourceId ? " is-selected" : ""}`} key={sourceId} onClick={() => onCalendarItem?.({ kind: "calendar", sourceId, date: event.date, title: event.name, detail: event.notes, sourceLabel: event.source === "official_school_calendar" ? "学校校历" : event.source === "teacher" ? "教师" : event.source === "inferred" ? "材料识别" : "校历", statusLabel: event.preparationStatus === "read_only" ? "已确认" : "待确认" })}><strong>{event.name}</strong><span>{event.date || "日期待确认"}</span></button>; })}</section></> : null}
       {view === "memory" ? <>{["semester", "class", "teaching", "preferences", "school"].map((category) => { const rows = memories.filter((memory) => memory.category === category); const labels: Record<string, string> = { semester: "学期", class: "班级", teaching: "教学", preferences: "教师偏好", school: "学校" }; return rows.length > 0 ? <section className="edupi-object-group" key={category}><GroupTitle count={rows.length}>{labels[category]}</GroupTitle>{rows.slice(0, 5).map((memory) => <div className="edupi-object-fact" key={memory.id}><strong>{memory.student || labels[category]}</strong><span>{memory.content}</span></div>)}</section> : null; })}</> : null}
       {view === "insights" ? <><section className="edupi-object-group"><GroupTitle count={surfacedInsights.length}>已经浮出</GroupTitle>{surfacedInsights.map((group) => <div className="edupi-object-fact" key={group.topic}><strong>{group.topic}</strong><span>{group.insight.content.replace(/^\[梦境启示\]\s*/, "")}</span></div>)}</section><section className="edupi-object-group"><GroupTitle count={signals.length}>仍在观察</GroupTitle>{signals.map((signal) => <div className="edupi-object-fact" key={signal.id}><strong>{signal.content}</strong><span>出现 {signal.strength} 次</span></div>)}</section></> : null}

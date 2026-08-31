@@ -70,15 +70,15 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   assert.match(workbench, /id: "tasks", label: "教学任务"/);
   assert.match(workbench, /id: "artifacts", label: "教学产物"/);
   assert.match(workspaceViews, /function TeachingView/);
-  assert.match(workspaceViews, /function HomeroomView/);
+  assert.match(workspaceViews, /EduPiStudentWorkspace/);
   assert.match(workspaceViews, /function MemoryView/);
   assert.match(workspaceViews, /function InsightsView/);
   assert.match(workspaceViews, /function GrowthView/);
   assert.match(workspaceViews, /continuity\.subjectKnowledge/);
-  assert.match(workspaceViews, /continuity\.familyContacts/);
+  assert.match(await read("./EduPiStudentWorkspace.tsx"), /continuity\.familyContacts/);
   assert.match(workspaceViews, /continuity\.documents/);
   assert.match(workspaceViews, /task\.trigger === "teaching_adjustment_candidate"/);
-  assert.match(workspaceViews, /task\.trigger === "student_follow_up"/);
+  assert.match(await read("./EduPiStudentWorkspace.tsx"), /task\.student === selectedName/);
   for (const step of ["观察", "准备", "审核", "留痕"]) assert.match(workspaceViews, new RegExp(step));
   for (const section of ["交给 EduPi", "EduPi 已经准备好", "今天要判断", "接下来", "值得留意"]) assert.match(`${workspaceViews}\n${await read("./EduPiTodayWork.tsx")}`, new RegExp(section));
   assert.match(workspaceViews, /onStartAgent/);

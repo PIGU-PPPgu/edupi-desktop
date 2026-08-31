@@ -6,7 +6,6 @@ import type { CalendarItemSelection } from "@/lib/edupi-calendar-model";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import type { TaskSessionBinding } from "@/lib/edupi-task-sessions";
 import {
-  recordLabel,
   isUserFacingMemory,
   groupEducationInsights,
   taskAgentSteps,
@@ -21,6 +20,7 @@ import {
   type WorkbenchView,
 } from "@/lib/edupi-workbench";
 import { EduPiCalendarWorkspace } from "./EduPiCalendarWorkspace";
+import { EduPiStudentWorkspace } from "./EduPiStudentWorkspace";
 import { EduPiTodayWork } from "./EduPiTodayWork";
 import { EduPiWorkspaceBoard } from "./EduPiWorkspaceBoard";
 import type { MaterialStagingDescriptor } from "@/lib/edupi-material-staging-client";
@@ -31,6 +31,7 @@ type Props = {
   data: EducationContract;
   context: TeacherContextSnapshot | null;
   query: string;
+  selectedStudentId: string | null;
   runningAgentCount: number;
   stagedMaterials: MaterialStagingDescriptor[];
   stagingBusy: boolean;
@@ -67,32 +68,6 @@ function shortDate(value: string): string {
 function workspaceFile(workspace: string, relativePath: string): string {
   const separator = workspace.includes("\\") ? "\\" : "/";
   return `${workspace.replace(/[\\/]$/, "")}${separator}${relativePath.replace(/[\\/]/g, separator)}`;
-}
-
-function records(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item)) : [];
-}
-
-function studentStatusLabel(value: unknown): string {
-  if (typeof value !== "string" || !value.trim()) return "状态待确认";
-  const labels: Record<string, string> = { active: "观察中", resolved: "已解决", pending: "待观察", in_progress: "观察中", hold: "暂缓", dismissed: "已忽略", closed: "已关闭" };
-  const normalized = value.trim().toLowerCase();
-  return labels[normalized] || (/[\u3400-\u9fff]/.test(value) ? value.trim() : "状态待确认");
-}
-
-function studentDateLabel(value: unknown): string | null {
-  if (typeof value !== "string" || !value.trim()) return null;
-  const parsed = new Date(value.includes("T") ? value : `${value}T00:00:00`);
-  return Number.isNaN(parsed.getTime()) ? null : shortDate(value);
-}
-
-function studentPatternLabel(pattern: Record<string, unknown>): string {
-  const date = studentDateLabel(pattern.last_seen);
-  return [recordLabel(pattern, ["description", "desc"], "已有学习观察"), studentStatusLabel(pattern.status), date ? `最近 ${date}` : null].filter(Boolean).join(" · ");
-}
-
-function studentTrajectoryLabel(item: Record<string, unknown>): string {
-  return [studentDateLabel(item.date) || "日期待补", recordLabel(item, ["event"], "事件待补"), recordLabel(item, ["note", "description"], "")].filter(Boolean).join(" · ");
 }
 
 function growthReviewStateLabel(value: string | null): string | null {
@@ -327,86 +302,6 @@ function TeachingView({ data, context, query, onTask, onNavigate }: Pick<Props, 
   </main>;
 }
 
-function HomeroomView({ data, context, query, onTask, onNavigate }: Pick<Props, "data" | "context" | "query" | "onTask" | "onNavigate">) {
-  const followUps = data.tasks.filter((task) => task.trigger === "student_follow_up" && includesQuery(`${task.title} ${task.student || ""} ${task.sourceEventName || ""}`, query));
-  const openFollowUps = followUps.filter((task) => task.status === "planned" || task.status === "hold");
-  const visibleFollowUps = openFollowUps.length > 0 ? openFollowUps : followUps.slice(0, 3);
-  const students = data.students.filter((student) => includesQuery(`${recordLabel(student, ["name", "student_name", "display_name"], "")} ${JSON.stringify(student.error_patterns || [])}`, query));
-  const attention = students.map((student) => {
-    const patterns = records(student.error_patterns).filter((pattern) => pattern.status !== "resolved" && !/已(?:处理)?完成/.test(recordLabel(pattern, ["description", "desc"], "")));
-    const latest = [...patterns].sort((left, right) => String(right.last_seen || "").localeCompare(String(left.last_seen || "")))[0];
-    return { student, latest, patternCount: patterns.length, patterns };
-  }).filter((item) => item.latest).sort((left, right) => String(right.latest.last_seen || "").localeCompare(String(left.latest.last_seen || "")));
-  const familyContacts = data.continuity.familyContacts.filter((contact) => includesQuery(`${contact.student} ${contact.name} ${contact.lastTopic || ""}`, query));
-  const classes = context?.classes?.length ? context.classes.join(" · ") : context?.grade || "班级待设置";
-  const current = followUps.some((task) => task.status === "planned" || task.status === "hold") ? "review" : followUps.length > 0 ? "record" : attention.length > 0 ? "prepare" : "observe";
-
-  return <main className="edupi-module-workspace edupi-domain-workspace">
-    <header className="edupi-module-heading"><div><h1>班级</h1><p>{classes} · {students.length} 名已记录学生</p></div><button type="button" onClick={() => onNavigate("students")}>学生档案</button></header>
-    <WorkflowStrip current={current} />
-    <div className="edupi-class-grid">
-      <section className="edupi-page-section edupi-class-grid__main">
-        <SectionHeader title="需要继续观察" meta={`${attention.length} 名学生`} />
-        <div className="edupi-student-focus-list">{attention.map(({ student, latest, patternCount, patterns }) => {
-          const name = recordLabel(student, ["name", "student_name", "display_name"], "未命名学生");
-          return <details className="edupi-student-focus-disclosure" key={name}>
-            <summary><span>{name.slice(0, 1)}</span><div><strong>{name}</strong><p>{recordLabel(latest, ["description", "desc"], "已有观察记录")}</p><small>{patternCount} 条在观察模式{studentDateLabel(latest.last_seen) ? ` · ${studentDateLabel(latest.last_seen)}` : ""}</small></div></summary>
-            <div className="edupi-disclosure-detail">
-              <strong>全部观察</strong>
-              {patterns.map((pattern, index) => <p key={`${name}:${index}`}>{studentPatternLabel(pattern)}</p>)}
-            </div>
-          </details>;
-        })}</div>
-        {attention.length === 0 ? <div className="edupi-module-empty">暂无需要继续观察的学生</div> : null}
-      </section>
-      <section className="edupi-page-section edupi-workstream">
-        <SectionHeader title={openFollowUps.length > 0 ? "当前跟进" : "最近闭环"} meta={visibleFollowUps.length ? `${visibleFollowUps.length} 项` : undefined} />
-        <div>{visibleFollowUps.map((task) => <WorkItem key={taskKey(task)} task={task} agentSession={task.id ? data.taskSessions[task.id] ?? null : null} onClick={() => onTask(task, task.status === "planned" || task.status === "hold" ? "review" : "run")} />)}</div>
-        {visibleFollowUps.length === 0 ? <div className="edupi-module-empty">暂无跟进事项</div> : null}
-      </section>
-      <section className="edupi-page-section edupi-class-grid__side">
-        <SectionHeader title="家校联系" meta={`${familyContacts.length} 个家庭`} />
-        <div className="edupi-family-list">{familyContacts.map((contact) => <details className="edupi-family-disclosure" key={contact.id}>
-          <summary><div><strong>{contact.student}</strong><span>{contact.name}{contact.relationship ? ` · ${contact.relationship}` : ""}</span></div><p>{contact.lastTopic || "尚未记录沟通主题"}</p><small>{contact.lastContactAt ? shortDate(contact.lastContactAt) : "暂无联系日期"}{contact.historyCount ? ` · ${contact.historyCount} 次记录` : ""}</small></summary>
-          <div className="edupi-disclosure-detail">
-            {contact.lastOutcome ? <p>上次结果：{contact.lastOutcome}</p> : null}
-            {contact.concerns.length > 0 ? <p>关注事项：{contact.concerns.join("、")}</p> : null}
-            {contact.communicationStyle.length > 0 ? <p>沟通方式：{contact.communicationStyle.join("、")}</p> : null}
-            <footer><span>{contact.historyCount} 次联系记录</span>{contact.lastContactAt ? <span>最近联系 {shortDate(contact.lastContactAt)}</span> : null}</footer>
-          </div>
-        </details>)}</div>
-        {familyContacts.length === 0 ? <div className="edupi-module-empty">暂无家校联系记录</div> : null}
-      </section>
-    </div>
-  </main>;
-}
-
-function StudentsView({ data, query }: Pick<Props, "data" | "query">) {
-  const students = data.students.filter((student) => includesQuery(`${recordLabel(student, ["name", "student_name", "display_name"], "")} ${JSON.stringify(student)}`, query));
-  return <main className="edupi-module-workspace">
-    <header className="edupi-module-heading"><div><h1>学生档案</h1><p>{students.length} 名学生 · 教师内部</p></div></header>
-    <section className="edupi-page-section edupi-student-records">{students.map((student, index) => {
-      const name = recordLabel(student, ["name", "student_name", "display_name"], "未命名学生");
-      const patterns = records(student.error_patterns);
-      const trajectory = records(student.trajectory);
-      const traits = Array.isArray(student.traits) ? student.traits.filter((item): item is string => typeof item === "string") : [];
-      const latest = [...patterns].sort((left, right) => String(right.last_seen || "").localeCompare(String(left.last_seen || "")))[0];
-      return <details className="edupi-student-record-disclosure" key={recordLabel(student, ["id", "student_id"], `${name}:${index}`)}>
-        <summary><span className={index % 4 ? `is-tint-${index % 4}` : undefined}>{name.slice(0, 1)}</span><div><header><strong>{name}</strong><small>{studentDateLabel(student.updated_at) || "尚无更新时间"}</small></header><p>{latest ? recordLabel(latest, ["description", "desc"], "已有学习观察") : traits[0] || "尚未形成学习观察"}</p><footer><span>{patterns.length} 条学习模式</span><span>{trajectory.length} 条成长轨迹</span></footer></div></summary>
-        <div className="edupi-disclosure-detail">
-          {traits.length > 0 ? <p>特征：{traits.join("、")}</p> : null}
-          {patterns.length > 0 ? <div><strong>学习模式</strong>{patterns.map((pattern, patternIndex) => <p key={`${name}:pattern:${patternIndex}`}>
-            {studentPatternLabel(pattern)}
-          </p>)}</div> : null}
-          {trajectory.length > 0 ? <div><strong>成长轨迹（{trajectory.length} 条）</strong>{trajectory.map((item, trajectoryIndex) => <p key={`${name}:trajectory:${trajectoryIndex}`}>
-            {studentTrajectoryLabel(item)}
-          </p>)}</div> : null}
-        </div>
-      </details>;
-    })}{students.length === 0 ? <div className="edupi-module-empty">暂无学生档案</div> : null}</section>
-  </main>;
-}
-
 function CalendarView({ data, query, onUpload, intakeBusy, calendarSelection, onCalendarSelection, onTaskDetail, onImportCalendar, onImportTimetable }: Pick<Props, "data" | "query" | "onUpload" | "intakeBusy" | "calendarSelection" | "onCalendarSelection" | "onTaskDetail" | "onImportCalendar" | "onImportTimetable">) {
   return <EduPiCalendarWorkspace data={data} query={query} onUpload={onUpload} intakeBusy={intakeBusy} selection={calendarSelection} onSelect={onCalendarSelection} onTaskDetail={onTaskDetail} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} />;
 }
@@ -528,8 +423,7 @@ export function EduPiWorkspaceViews(props: Props) {
   if (props.view === "dashboard") return <DashboardView data={props.data} context={props.context} runningAgentCount={props.runningAgentCount} onEducation={props.onEducation} onNavigate={props.onNavigate} onUpload={props.onUpload} onOpenContext={props.onOpenContext} onOpenAdmin={props.onOpenAdmin} onOpenFile={props.onOpenFile} onStartAgent={props.onStartAgent} />;
   if (props.view === "workspace") return <EduPiWorkspaceBoard data={props.data} query={props.query} onTaskDetail={props.onTaskDetail} onCreateTask={props.onCreateTask} onMoveTask={props.onMoveTask} />;
   if (props.view === "teaching") return <TeachingView data={props.data} context={props.context} query={props.query} onTask={props.onTask} onNavigate={props.onNavigate} />;
-  if (props.view === "homeroom") return <HomeroomView data={props.data} context={props.context} query={props.query} onTask={props.onTask} onNavigate={props.onNavigate} />;
-  if (props.view === "students") return <StudentsView data={props.data} query={props.query} />;
+  if (props.view === "homeroom" || props.view === "students") return <EduPiStudentWorkspace mode={props.view} data={props.data} context={props.context} query={props.query} selectedStudentId={props.selectedStudentId} onEducation={props.onEducation} onTask={(task) => props.onTask(task, "brief")} />;
   if (props.view === "calendar") return <CalendarView data={props.data} query={props.query} onUpload={props.onUpload} intakeBusy={props.intakeBusy} calendarSelection={props.calendarSelection} onCalendarSelection={props.onCalendarSelection} onTaskDetail={props.onTaskDetail} onImportCalendar={props.onImportCalendar} onImportTimetable={props.onImportTimetable} />;
   if (props.view === "memory") return <MemoryView data={props.data} query={props.query} />;
   if (props.view === "insights") return <InsightsView data={props.data} query={props.query} />;

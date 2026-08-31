@@ -41,3 +41,22 @@ test("task board and task sidebar expose the same teacher-facing categories", as
     assert.match(`${board}\n${sider}\n${categories}`, new RegExp(label));
   }
 });
+
+test("class and student modules select one student and expose real import and export actions", async () => {
+  const [panel, sider, views, student, route] = await Promise.all([
+    read("./EduPiEducationPanel.tsx"),
+    read("./EduPiObjectSider.tsx"),
+    read("./EduPiWorkspaceViews.tsx"),
+    read("./EduPiStudentWorkspace.tsx"),
+    read("../app/api/edupi/students/import/route.ts"),
+  ]);
+  assert.match(panel, /selectedStudentId/);
+  assert.match(panel, /onStudent=\{selectStudent\}/);
+  assert.match(sider, /edupi-object-student/);
+  assert.doesNotMatch(sider, /<details className="edupi-object-person"/);
+  assert.match(views, /mode=\{props\.view\}/);
+  for (const label of ["导入名单", "导出档案", "导出轨迹", "学习模式", "成长轨迹", "家校记录", "相关任务"]) assert.match(student, new RegExp(label));
+  assert.match(student, /\/api\/edupi\/students\/import/);
+  assert.match(route, /importStudentRoster/);
+  assert.match(route, /readEducationContract/);
+});
