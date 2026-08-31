@@ -1,13 +1,13 @@
 .edupi-welcome {
-  --welcome-bg: #f5f5f7;
-  --welcome-text: #1d1d1f;
-  --welcome-muted: #626267;
-  --welcome-border: rgba(29, 29, 31, 0.34);
+  --welcome-bg: #eef2f8;
+  --welcome-text: #191a20;
+  --welcome-muted: #5c5d66;
+  --welcome-border: rgba(255, 255, 255, 0.78);
   --welcome-focus: #006edc;
-  --welcome-field-bg: rgba(255, 255, 255, 0.72);
-  --welcome-field-focus-bg: rgba(255, 255, 255, 0.96);
-  --welcome-button-bg: #1d1d1f;
-  --welcome-button-hover: #353538;
+  --welcome-field-bg: rgba(255, 255, 255, 0.42);
+  --welcome-field-focus-bg: rgba(255, 255, 255, 0.68);
+  --welcome-button-bg: linear-gradient(145deg, rgba(26, 29, 40, 0.88), rgba(49, 44, 68, 0.9));
+  --welcome-button-hover: linear-gradient(145deg, rgba(35, 38, 51, 0.94), rgba(62, 55, 82, 0.94));
   --welcome-button-text: #ffffff;
   --welcome-error: #a51c10;
   --welcome-write-end: 4.04s;
@@ -19,7 +19,10 @@
   min-height: 100dvh;
   overflow: hidden;
   place-items: center;
-  background: var(--welcome-bg);
+  background:
+    radial-gradient(circle at 28% 38%, rgba(89, 183, 255, 0.18), transparent 31%),
+    radial-gradient(circle at 71% 58%, rgba(236, 122, 197, 0.16), transparent 29%),
+    linear-gradient(145deg, #e9f1fb 0%, #f7f5fb 46%, #f9eef5 100%);
   color: var(--welcome-text);
   isolation: isolate;
   transition: opacity 420ms ease, transform 420ms cubic-bezier(.22, .8, .24, 1);
@@ -30,11 +33,11 @@
   z-index: -1;
   inset: -34%;
   background:
-    radial-gradient(circle at 30% 44%, rgba(71, 148, 255, 0.09), transparent 27%),
-    radial-gradient(circle at 63% 41%, rgba(164, 91, 255, 0.08), transparent 26%),
-    radial-gradient(circle at 55% 65%, rgba(255, 102, 132, 0.07), transparent 24%);
+    radial-gradient(ellipse at 32% 46%, rgba(116, 221, 255, 0.4), transparent 25%),
+    radial-gradient(ellipse at 64% 42%, rgba(160, 139, 255, 0.3), transparent 25%),
+    radial-gradient(ellipse at 58% 66%, rgba(255, 132, 190, 0.28), transparent 23%);
   content: "";
-  filter: blur(28px) saturate(105%);
+  filter: blur(62px) saturate(112%);
   animation: edupi-background-breathe 12s ease-in-out infinite alternate;
   pointer-events: none;
 }
@@ -58,80 +61,127 @@
 }
 
 .edupi-welcome-mark {
+  position: relative;
   display: grid;
   width: 100%;
   place-items: center;
 }
 
-.edupi-welcome-wordmark {
-  display: block;
-  width: min(920px, calc(100vw - 40px));
-  height: auto;
-  overflow: visible;
+.edupi-welcome-mark::before {
+  position: absolute;
+  width: min(760px, 78vw);
+  height: clamp(84px, 16vw, 148px);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 50%;
+  background: linear-gradient(105deg, rgba(255, 255, 255, 0.08), rgba(150, 208, 255, 0.18), rgba(255, 170, 214, 0.12));
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.62), 0 34px 90px rgba(74, 81, 143, 0.12);
+  content: "";
+  filter: blur(34px);
+  opacity: 0.82;
+  pointer-events: none;
+  transform: translateY(10px) scaleX(1.08);
 }
 
-.edupi-welcome-ink {
+.edupi-welcome-wordmark {
+  position: relative;
+  display: block;
+  width: min(900px, calc(100vw - 48px));
+  height: auto;
+  overflow: visible;
+  filter: drop-shadow(0 28px 38px rgba(54, 62, 125, 0.16));
+}
+
+.edupi-welcome-glass {
   transform-origin: center;
 }
 
-.edupi-welcome-ink.is-coloring {
-  animation: edupi-color-settle 820ms cubic-bezier(.22, .78, .26, 1) both;
+.edupi-welcome-glass.is-coloring {
+  animation: edupi-glass-settle 1.04s cubic-bezier(.2, .74, .22, 1) both;
 }
 
 .edupi-welcome-glyph,
 .edupi-welcome-signature {
-  fill: url("#edupi-welcome-ink");
   text-rendering: geometricPrecision;
 }
 
 .edupi-welcome-glyph {
-  font-family: "STKaiti", "Kaiti SC", "KaiTi", "Songti SC", serif;
-  font-size: 112px;
-  font-weight: 400;
+  font-family: "HanziPen SC", "Hannotate SC", "Xingkai SC", "Kaiti SC", "KaiTi", cursive;
+  font-size: 116px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
 }
 
 .edupi-welcome-signature {
-  font-family: "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive;
-  font-size: 91px;
-  font-style: italic;
-  font-weight: 500;
-  letter-spacing: -0.07em;
+  font-family: "Avenir Next", "SF Pro Rounded", "Segoe UI", sans-serif;
+  font-size: 82px;
+  font-style: normal;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.edupi-welcome-glow {
+  fill: url("#edupi-welcome-glass-fill");
+  filter: blur(17px) saturate(135%);
+  opacity: 0.42;
+}
+
+.edupi-welcome-glass-body {
+  fill: url("#edupi-welcome-glass-fill");
+  stroke: url("#edupi-welcome-glass-edge");
+  stroke-linejoin: round;
+  stroke-width: 1.8px;
+  paint-order: stroke fill;
+}
+
+.edupi-welcome-glass-highlight {
+  fill: url("#edupi-welcome-glass-highlight");
+  mix-blend-mode: screen;
+  opacity: 0.54;
+  transform: translateY(-1.4px);
 }
 
 .edupi-welcome-brush {
   fill: #ffffff;
+  filter: url("#edupi-welcome-brush-soft");
   transform: scaleX(0);
   transform-box: fill-box;
   transform-origin: left center;
+}
+
+.edupi-welcome-handwriting-stroke {
+  fill: none;
+  stroke: #ffffff;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 31px;
+}
+
+.edupi-welcome-writing-light {
+  fill: rgba(255, 255, 255, 0.96);
+  filter: blur(1.6px) drop-shadow(0 0 7px rgba(168, 229, 255, 0.95)) drop-shadow(0 0 15px rgba(255, 151, 215, 0.78));
+  opacity: 0;
+  pointer-events: none;
+  transform-box: view-box;
+  transform-origin: 0 0;
 }
 
 .edupi-welcome-wordmark.is-writing .edupi-welcome-brush {
   animation: edupi-handwrite var(--draw-time) cubic-bezier(.2, .72, .28, 1) var(--draw-delay) forwards;
 }
 
-.edupi-welcome-brush.is-1 {
-  --draw-delay: 160ms;
-  --draw-time: 900ms;
+.edupi-welcome-wordmark.is-writing .edupi-welcome-handwriting-stroke {
+  animation: edupi-stroke-write 220ms cubic-bezier(.22, .7, .3, 1) var(--stroke-delay) forwards;
 }
 
-.edupi-welcome-brush.is-2 {
-  --draw-delay: 820ms;
-  --draw-time: 960ms;
-}
-
-.edupi-welcome-brush.is-3 {
-  --draw-delay: 1.5s;
-  --draw-time: 940ms;
-}
-
-.edupi-welcome-brush.is-4 {
-  --draw-delay: 2.15s;
-  --draw-time: 940ms;
+.edupi-welcome-wordmark.is-writing .edupi-welcome-writing-light {
+  animation: edupi-writing-light var(--welcome-write-end) linear 120ms both;
 }
 
 .edupi-welcome-brush.is-5 {
-  --draw-delay: 2.78s;
-  --draw-time: 1.26s;
+  --draw-delay: 2.88s;
+  --draw-time: 1.16s;
 }
 
 .edupi-welcome-access {
@@ -166,10 +216,17 @@
   height: 50px;
   padding: 0 17px;
   border: 1px solid var(--welcome-border);
-  border-radius: 14px;
+  border-radius: 16px;
   outline: none;
-  background: var(--welcome-field-bg);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.025);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.16)),
+    var(--welcome-field-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    inset 0 -1px 0 rgba(124, 135, 174, 0.1),
+    0 16px 40px rgba(55, 61, 104, 0.12);
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
+  backdrop-filter: blur(24px) saturate(145%);
   color: var(--welcome-text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 15px;
@@ -184,16 +241,24 @@
 .edupi-welcome-controls input:focus {
   border-color: var(--welcome-focus);
   background: var(--welcome-field-focus-bg);
-  box-shadow: 0 0 0 3px rgba(0, 110, 220, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 3px rgba(0, 110, 220, 0.2),
+    0 20px 46px rgba(55, 61, 104, 0.14);
 }
 
 .edupi-welcome-controls button,
 .edupi-welcome-retry button {
   min-height: 50px;
   padding: 0 22px;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 999px;
   background: var(--welcome-button-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 14px 30px rgba(31, 29, 48, 0.2);
+  -webkit-backdrop-filter: blur(20px) saturate(135%);
+  backdrop-filter: blur(20px) saturate(135%);
   color: var(--welcome-button-text);
   cursor: pointer;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -205,7 +270,7 @@
 .edupi-welcome-controls button:hover:not(:disabled),
 .edupi-welcome-retry button:hover {
   background: var(--welcome-button-hover);
-  transform: translateY(-1px);
+  transform: translateY(-1px) scale(1.01);
 }
 
 .edupi-welcome-controls button:focus-visible,
@@ -269,10 +334,26 @@
   to { transform: scaleX(1); }
 }
 
-@keyframes edupi-color-settle {
-  0% { filter: hue-rotate(0deg) saturate(94%); }
-  48% { filter: hue-rotate(54deg) saturate(124%); }
-  100% { filter: hue-rotate(18deg) saturate(106%); }
+@keyframes edupi-stroke-write {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes edupi-writing-light {
+  0%, 3% { opacity: 0; transform: translate3d(0, 8px, 0) scale(0.62); }
+  8% { opacity: 0.92; }
+  25% { transform: translate3d(118px, -8px, 0) scale(1); }
+  43% { transform: translate3d(238px, 6px, 0) scale(0.9); }
+  61% { transform: translate3d(356px, -5px, 0) scale(1.05); }
+  76% { transform: translate3d(482px, 5px, 0) scale(0.9); }
+  94% { opacity: 0.88; transform: translate3d(720px, -4px, 0) scale(1); }
+  100% { opacity: 0; transform: translate3d(792px, 0, 0) scale(0.6); }
+}
+
+@keyframes edupi-glass-settle {
+  0% { filter: saturate(86%) brightness(1.08); transform: scale(0.992); }
+  36% { filter: saturate(145%) brightness(1.18); transform: scale(1.008); }
+  68% { filter: saturate(116%) brightness(1.06); transform: scale(0.998); }
+  100% { filter: saturate(105%) brightness(1); transform: scale(1); }
 }
 
 @keyframes edupi-background-breathe {
@@ -312,24 +393,64 @@
 }
 
 html.dark .edupi-welcome {
-  --welcome-bg: #050506;
+  --welcome-bg: #070810;
   --welcome-text: #f5f5f7;
   --welcome-muted: #b7b7bd;
-  --welcome-border: rgba(255, 255, 255, 0.38);
+  --welcome-border: rgba(255, 255, 255, 0.24);
   --welcome-focus: #78b7ff;
-  --welcome-field-bg: rgba(255, 255, 255, 0.1);
-  --welcome-field-focus-bg: rgba(255, 255, 255, 0.14);
-  --welcome-button-bg: #f5f5f7;
-  --welcome-button-hover: #ffffff;
+  --welcome-field-bg: rgba(255, 255, 255, 0.08);
+  --welcome-field-focus-bg: rgba(255, 255, 255, 0.13);
+  --welcome-button-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(220, 227, 248, 0.84));
+  --welcome-button-hover: linear-gradient(145deg, #ffffff, rgba(231, 236, 255, 0.94));
   --welcome-button-text: #1d1d1f;
   --welcome-error: #ff9a91;
+  background:
+    radial-gradient(circle at 28% 40%, rgba(34, 129, 255, 0.18), transparent 30%),
+    radial-gradient(circle at 70% 58%, rgba(212, 74, 178, 0.15), transparent 29%),
+    linear-gradient(145deg, #04050a 0%, #0b0b14 48%, #110911 100%);
 }
 
 html.dark .edupi-welcome::before {
   background:
-    radial-gradient(circle at 30% 44%, rgba(49, 127, 255, 0.13), transparent 27%),
-    radial-gradient(circle at 63% 41%, rgba(157, 80, 255, 0.12), transparent 26%),
-    radial-gradient(circle at 55% 65%, rgba(255, 87, 120, 0.1), transparent 24%);
+    radial-gradient(ellipse at 30% 44%, rgba(50, 147, 255, 0.3), transparent 25%),
+    radial-gradient(ellipse at 64% 42%, rgba(139, 87, 255, 0.24), transparent 24%),
+    radial-gradient(ellipse at 57% 66%, rgba(255, 77, 157, 0.21), transparent 23%);
+}
+
+html.dark .edupi-welcome-mark::before {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: linear-gradient(105deg, rgba(92, 191, 255, 0.1), rgba(137, 100, 255, 0.12), rgba(255, 95, 180, 0.09));
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.22), 0 38px 100px rgba(32, 44, 108, 0.24);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .edupi-welcome {
+    background: var(--welcome-bg);
+  }
+
+  .edupi-welcome::before,
+  .edupi-welcome-mark::before,
+  .edupi-welcome-glow,
+  .edupi-welcome-glass-highlight {
+    display: none;
+  }
+
+  .edupi-welcome-glass-body {
+    filter: none;
+  }
+
+  .edupi-welcome-glass-body .edupi-welcome-glyph,
+  .edupi-welcome-glass-body .edupi-welcome-signature {
+    fill: currentColor;
+    stroke: none;
+  }
+
+  .edupi-welcome-controls input,
+  .edupi-welcome-controls button,
+  .edupi-welcome-retry button {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -342,12 +463,16 @@ html.dark .edupi-welcome::before {
   }
 
   .edupi-welcome::before,
-  .edupi-welcome-ink,
-  .edupi-welcome-brush {
+  .edupi-welcome-glass,
+  .edupi-welcome-brush,
+  .edupi-welcome-handwriting-stroke,
+  .edupi-welcome-writing-light {
     animation: none;
   }
 
   .edupi-welcome-brush { transform: scaleX(1); }
+  .edupi-welcome-handwriting-stroke { stroke-dashoffset: 0; }
+  .edupi-welcome-writing-light { display: none; }
 
   .edupi-welcome-controls button:hover:not(:disabled),
   .edupi-welcome-retry button:hover {
@@ -372,9 +497,18 @@ html.dark .edupi-welcome::before {
 
   .edupi-welcome::before { display: none; }
 
-  .edupi-welcome-glyph,
-  .edupi-welcome-signature {
+  .edupi-welcome-mark::before,
+  .edupi-welcome-glow,
+  .edupi-welcome-glass-highlight,
+  .edupi-welcome-writing-light {
+    display: none;
+  }
+
+  .edupi-welcome-glass-body .edupi-welcome-glyph,
+  .edupi-welcome-glass-body .edupi-welcome-signature {
     fill: CanvasText;
+    stroke: none;
+    filter: none;
   }
 
   .edupi-welcome-controls input,

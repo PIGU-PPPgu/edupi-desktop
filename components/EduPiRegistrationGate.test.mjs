@@ -21,13 +21,16 @@ test("the registration gate owns first launch before AppShell mounts", () => {
   assert.match(gate, /registrationErrorMessage\(response\.status\)/);
 });
 
-test("the first launch directionally reveals solid handwriting before one minimal action", () => {
+test("the first launch draws real Chinese strokes into one glass wordmark before one minimal action", () => {
   assert.match(gate, /<h1[^>]*>欢迎使用 EduPi<\/h1>/);
   assert.match(gate, /className=\{`edupi-welcome-wordmark\$\{started \? " is-writing" : ""\}`\}/);
   assert.match(gate, /className="edupi-welcome-brush is-5"[\s\S]*onAnimationEnd=\{finishWriting\}/);
-  assert.match(gate, /clipPath="url\(#edupi-welcome-clip-5\)"/);
-  assert.match(gate, /animationName === "edupi-color-settle"[\s\S]*onComplete\(\)/);
-  assert.match(gate, /className=\{`edupi-welcome-ink\$\{coloring \? " is-coloring" : ""\}`\}/);
+  assert.match(gate, /const welcomeHandwriting = \[/);
+  assert.match(gate, /className="edupi-welcome-handwriting-stroke"/);
+  assert.match(gate, /pathLength="1"/);
+  assert.match(gate, /mask="url\(#edupi-welcome-mask-1\)"/);
+  assert.match(gate, /animationName === "edupi-glass-settle"[\s\S]*onComplete\(\)/);
+  assert.match(gate, /className=\{`edupi-welcome-glass\$\{coloring \? " is-coloring" : ""\}`\}/);
   assert.match(gate, /event\.animationName === "edupi-handwrite"/);
   assert.match(gate, /<WelcomeWordmark started=\{sequenceStarted\} onComplete=\{revealWelcomeAccess\} \/>/);
   assert.match(gate, /requestAnimationFrame\(\(\) => \{[\s\S]*setSequenceStarted\(true\)/);
@@ -36,10 +39,17 @@ test("the first launch directionally reveals solid handwriting before one minima
   assert.match(gate, /revealAccess/);
   assert.match(gate, /placeholder="邀请码"/);
   assert.match(css, /@keyframes edupi-handwrite/);
-  assert.match(css, /@keyframes edupi-color-settle/);
+  assert.match(css, /@keyframes edupi-stroke-write/);
+  assert.match(css, /@keyframes edupi-glass-settle/);
+  assert.match(css, /stroke-dasharray: 1/);
+  assert.match(css, /stroke-dashoffset: 1/);
   assert.match(css, /\.edupi-welcome-brush[\s\S]*transform: scaleX\(0\)/);
-  assert.match(css, /\.edupi-welcome-wordmark\.is-writing \.edupi-welcome-brush/);
-  assert.doesNotMatch(gate + css, /WELCOME_SEQUENCE_MS|revealRef|glyph-stroke|stroke-dash/);
+  assert.match(css, /\.edupi-welcome-wordmark\.is-writing \.edupi-welcome-handwriting-stroke/);
+  assert.match(gate, /feSpecularLighting/);
+  assert.match(gate, /edupi-welcome-glass-fill/);
+  assert.match(css, /"Avenir Next", "SF Pro Rounded"/);
+  assert.doesNotMatch(gate + css, /WELCOME_SEQUENCE_MS|revealRef|Comic Sans|Bradley Hand/);
+  assert.doesNotMatch(gate, /clipPath=/);
   assert.doesNotMatch(gate, /EduPiParticleField|edupi-welcome-grid|edupi-welcome-story|edupi-registration-card/);
   assert.doesNotMatch(gate, /把教师的一天|校历先行|材料即入口|教师最后确认|WELCOME TO EDUPI|FIRST ACCESS|教师智能体桌面/);
 });
@@ -56,9 +66,10 @@ test("the handwritten welcome restores focus and follows explicit theme and acce
   assert.match(css, /html\.dark \.edupi-welcome/);
   assert.doesNotMatch(css, /@media \(prefers-color-scheme: dark\)/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(css, /@media \(prefers-reduced-transparency: reduce\)/);
   assert.match(css, /@media \(forced-colors: active\)/);
   assert.match(css, /--welcome-focus: #006edc/);
-  assert.match(css, /--welcome-muted: #626267/);
+  assert.match(css, /--welcome-muted: #5c5d66/);
   assert.match(gate, /window\.matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches/);
   assert.match(css, /@media \(max-width: 480px\)/);
   assert.doesNotMatch(gate, /dangerouslySetInnerHTML|innerHTML/);

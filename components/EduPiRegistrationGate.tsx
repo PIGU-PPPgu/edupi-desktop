@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type AnimationEvent as ReactAnimationEvent,
+  type CSSProperties,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -23,13 +24,98 @@ function registrationErrorMessage(status: number): string {
   return "请重试";
 }
 
+const welcomeHandwriting = [
+  {
+    id: "1",
+    delay: 160,
+    step: 105,
+    paths: [
+      "M88 58 Q108 54 129 55",
+      "M121 57 Q108 86 88 119",
+      "M103 78 Q121 103 143 122",
+      "M153 43 Q149 55 140 68",
+      "M141 68 Q160 61 181 66",
+      "M158 70 Q151 99 137 123",
+      "M158 82 Q170 107 189 124",
+    ],
+  },
+  {
+    id: "2",
+    delay: 850,
+    step: 112,
+    paths: [
+      "M229 46 Q220 57 214 70",
+      "M237 47 Q252 44 265 48",
+      "M250 50 L250 111",
+      "M263 50 Q285 48 286 58 Q286 78 278 91",
+      "M211 79 Q219 84 222 91",
+      "M211 102 Q222 103 220 114 Q243 130 294 122",
+    ],
+  },
+  {
+    id: "3",
+    delay: 1_530,
+    step: 104,
+    paths: [
+      "M335 45 Q328 62 316 80",
+      "M326 72 L326 128",
+      "M347 51 L405 51",
+      "M375 44 L375 106",
+      "M345 69 L401 69 L398 92 L345 92",
+      "M374 94 Q360 119 340 127",
+      "M373 98 Q389 119 409 127",
+    ],
+  },
+  {
+    id: "4",
+    delay: 2_180,
+    step: 108,
+    paths: [
+      "M452 48 Q451 87 445 128",
+      "M452 49 L517 49 L517 126",
+      "M452 75 L516 75",
+      "M451 100 L516 100",
+      "M484 52 L484 120",
+      "M447 127 Q479 130 516 127",
+    ],
+  },
+] as const;
+
+function HandwritingMask({ id, delay, step, paths }: (typeof welcomeHandwriting)[number]) {
+  return (
+    <mask id={`edupi-welcome-mask-${id}`} maskUnits="userSpaceOnUse" x={Number(id) * 116 - 58} y="6" width="160" height="164">
+      {paths.map((path, index) => (
+        <path
+          key={path}
+          className="edupi-welcome-handwriting-stroke"
+          d={path}
+          pathLength="1"
+          style={{ "--stroke-delay": `${delay + (index * step)}ms` } as CSSProperties}
+        />
+      ))}
+    </mask>
+  );
+}
+
+function WelcomeTextLayer({ className, surface = false }: { className: string; surface?: boolean }) {
+  return (
+    <g className={className} filter={surface ? "url(#edupi-welcome-glass-surface)" : undefined}>
+      <text className="edupi-welcome-glyph" x="82" y="130" mask="url(#edupi-welcome-mask-1)">欢</text>
+      <text className="edupi-welcome-glyph" x="198" y="130" mask="url(#edupi-welcome-mask-2)">迎</text>
+      <text className="edupi-welcome-glyph" x="314" y="130" mask="url(#edupi-welcome-mask-3)">使</text>
+      <text className="edupi-welcome-glyph" x="430" y="130" mask="url(#edupi-welcome-mask-4)">用</text>
+      <text className="edupi-welcome-signature" x="558" y="128" mask="url(#edupi-welcome-mask-5)">EduPi</text>
+    </g>
+  );
+}
+
 function WelcomeWordmark({ started, onComplete }: { started: boolean; onComplete: () => void }) {
   const [coloring, setColoring] = useState(false);
   const finishWriting = (event: ReactAnimationEvent<SVGRectElement>) => {
     if (event.animationName === "edupi-handwrite") setColoring(true);
   };
   const finishColor = (event: ReactAnimationEvent<SVGGElement>) => {
-    if (event.animationName === "edupi-color-settle") onComplete();
+    if (event.animationName === "edupi-glass-settle") onComplete();
   };
 
   return (
@@ -42,36 +128,68 @@ function WelcomeWordmark({ started, onComplete }: { started: boolean; onComplete
         focusable="false"
       >
         <defs>
-          <linearGradient id="edupi-welcome-ink" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#2477ff" />
-            <stop offset="0.34" stopColor="#8e5bff" />
-            <stop offset="0.67" stopColor="#ff5f80" />
-            <stop offset="1" stopColor="#ff9f2f" />
+          <linearGradient id="edupi-welcome-glass-fill" gradientUnits="userSpaceOnUse" x1="64" y1="20" x2="858" y2="156">
+            <stop offset="0" stopColor="#ffffff" stopOpacity="0.94" />
+            <stop offset="0.18" stopColor="#75ddff" stopOpacity="0.56" />
+            <stop offset="0.4" stopColor="#9d8cff" stopOpacity="0.5" />
+            <stop offset="0.64" stopColor="#ff8fc8" stopOpacity="0.58" />
+            <stop offset="0.82" stopColor="#ffc86f" stopOpacity="0.48" />
+            <stop offset="1" stopColor="#ffffff" stopOpacity="0.9" />
           </linearGradient>
-          <clipPath id="edupi-welcome-clip-1"><rect className="edupi-welcome-brush is-1" x="70" y="20" width="130" height="132" /></clipPath>
-          <clipPath id="edupi-welcome-clip-2"><rect className="edupi-welcome-brush is-2" x="186" y="20" width="130" height="132" /></clipPath>
-          <clipPath id="edupi-welcome-clip-3"><rect className="edupi-welcome-brush is-3" x="302" y="20" width="130" height="132" /></clipPath>
-          <clipPath id="edupi-welcome-clip-4"><rect className="edupi-welcome-brush is-4" x="418" y="20" width="130" height="132" /></clipPath>
-          <clipPath id="edupi-welcome-clip-5">
+          <linearGradient id="edupi-welcome-glass-edge" gradientUnits="userSpaceOnUse" x1="80" y1="18" x2="844" y2="150">
+            <stop offset="0" stopColor="#ffffff" stopOpacity="0.98" />
+            <stop offset="0.3" stopColor="#b5efff" stopOpacity="0.78" />
+            <stop offset="0.58" stopColor="#d3b9ff" stopOpacity="0.72" />
+            <stop offset="0.8" stopColor="#ffd2e3" stopOpacity="0.78" />
+            <stop offset="1" stopColor="#ffffff" stopOpacity="0.96" />
+          </linearGradient>
+          <linearGradient id="edupi-welcome-glass-highlight" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#ffffff" stopOpacity="0.92" />
+            <stop offset="0.24" stopColor="#ffffff" stopOpacity="0.08" />
+            <stop offset="0.52" stopColor="#c7f4ff" stopOpacity="0.46" />
+            <stop offset="0.72" stopColor="#ffffff" stopOpacity="0.04" />
+            <stop offset="1" stopColor="#ffffff" stopOpacity="0.72" />
+          </linearGradient>
+          <filter id="edupi-welcome-glass-surface" x="-24%" y="-45%" width="148%" height="205%" colorInterpolationFilters="sRGB">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="13" result="soft-shadow" />
+            <feOffset in="soft-shadow" dy="18" result="shadow-offset" />
+            <feFlood floodColor="#5062d8" floodOpacity="0.24" result="shadow-color" />
+            <feComposite in="shadow-color" in2="shadow-offset" operator="in" result="shadow" />
+            <feGaussianBlur in="SourceAlpha" stdDeviation="2.1" result="surface" />
+            <feSpecularLighting in="surface" surfaceScale="7" specularConstant="0.86" specularExponent="28" lightingColor="#ffffff" result="specular">
+              <fePointLight x="250" y="-90" z="300" />
+            </feSpecularLighting>
+            <feComposite in="specular" in2="SourceAlpha" operator="in" result="lit" />
+            <feMerge>
+              <feMergeNode in="shadow" />
+              <feMergeNode in="SourceGraphic" />
+              <feMergeNode in="lit" />
+            </feMerge>
+          </filter>
+          <filter id="edupi-welcome-brush-soft" x="-12%" y="-18%" width="124%" height="136%">
+            <feGaussianBlur stdDeviation="3.8" />
+          </filter>
+          {welcomeHandwriting.map((mask) => <HandwritingMask key={mask.id} {...mask} />)}
+          <mask id="edupi-welcome-mask-5" maskUnits="userSpaceOnUse" x="534" y="8" width="328" height="158">
             <rect
               className="edupi-welcome-brush is-5"
-              x="546"
-              y="20"
-              width="304"
-              height="132"
+              x="542"
+              y="16"
+              width="312"
+              height="142"
+              rx="28"
               onAnimationEnd={finishWriting}
             />
-          </clipPath>
+          </mask>
         </defs>
         <g
-          className={`edupi-welcome-ink${coloring ? " is-coloring" : ""}`}
+          className={`edupi-welcome-glass${coloring ? " is-coloring" : ""}`}
           onAnimationEnd={finishColor}
         >
-          <text className="edupi-welcome-glyph" x="82" y="130" clipPath="url(#edupi-welcome-clip-1)">欢</text>
-          <text className="edupi-welcome-glyph" x="198" y="130" clipPath="url(#edupi-welcome-clip-2)">迎</text>
-          <text className="edupi-welcome-glyph" x="314" y="130" clipPath="url(#edupi-welcome-clip-3)">使</text>
-          <text className="edupi-welcome-glyph" x="430" y="130" clipPath="url(#edupi-welcome-clip-4)">用</text>
-          <text className="edupi-welcome-signature" x="558" y="128" clipPath="url(#edupi-welcome-clip-5)">EduPi</text>
+          <WelcomeTextLayer className="edupi-welcome-glow" />
+          <WelcomeTextLayer className="edupi-welcome-glass-body" surface />
+          <WelcomeTextLayer className="edupi-welcome-glass-highlight" />
+          <circle className="edupi-welcome-writing-light" cx="72" cy="88" r="7" />
         </g>
       </svg>
     </div>
