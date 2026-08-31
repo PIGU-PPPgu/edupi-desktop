@@ -6,10 +6,9 @@ const gate = await readFile(new URL("./EduPiRegistrationGate.tsx", import.meta.u
 const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
 const css = await readFile(new URL("../app/edupi-welcome.css", import.meta.url), "utf8");
 
-test("the registration gate owns first launch before AppShell mounts", () => {
-  assert.match(page, /<EduPiRegistrationGate initialRegistered=\{initialRegistered\}>\s*<AppShell \/>\s*<\/EduPiRegistrationGate>/);
-  assert.match(page, /readEduPiRegistration\(\)\.registered/);
-  assert.match(page, /initialRegistered=\{initialRegistered\}/);
+test("the desktop opens directly while the registration gate stays dormant", () => {
+  assert.match(page, /<I18nProvider initialLocale="zh-CN">\s*<AppShell \/>\s*<\/I18nProvider>/);
+  assert.doesNotMatch(page, /EduPiRegistrationGate|readEduPiRegistration|initialRegistered/);
   assert.match(gate, /initialRegistered === true \? "ready"/);
   assert.match(gate, /fetchWithRetry\("\/api\/edupi\/registration"/);
   assert.match(gate, /type="password"/);
