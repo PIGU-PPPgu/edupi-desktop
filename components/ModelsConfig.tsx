@@ -8,6 +8,12 @@ import { handleExternalLinkClick, openExternal } from "@/lib/desktop-native";
 import { ConfirmDangerButton } from "./ConfirmDangerButton";
 import type { ModelCatalogPreset, ModelCatalogRecommendation } from "@/lib/model-catalog";
 import type { DiscoveredModel } from "@/lib/model-discovery";
+import {
+  MODEL_SETUP_PRESETS,
+  hasUsableModelSetup,
+  pickSetupModel,
+  type ModelSetupPreset,
+} from "@/lib/model-setup-presets";
 // Color icons (have their own fill colors — no background needed)
 import AnthropicIcon from "@lobehub/icons/es/Anthropic/components/Mono";
 import OpenAIIcon from "@lobehub/icons/es/OpenAI/components/Mono";
@@ -1506,6 +1512,209 @@ function ProviderIcon({ id, size }: { id: string; size: number }) {
   return <pi.Icon size={size} style={{ color: "var(--text-muted)" }} />;
 }
 
+// ── First-run setup ──────────────────────────────────────────────────────────
+
+type SetupStage = "provider" | "credentials" | "verify";
+
+function FirstModelSetup({
+  availableProviderIds,
+  onSetupSaved,
+  onUseAdvanced,
+}: {
+  availableProviderIds: readonly string[];
+  onSetupSaved: (providerId: string) => void;
+  onUseAdvanced: () => void;
+}) {
+  const [stage, setStage] = useState<SetupStage>("provider");
+  const [preset, setPreset] = useState<ModelSetupPreset | null>(null);
+  const [apiKey, setApiKey] = useState("");
+  const [models, setModels] = useState<DiscoveredModel[]>([]);
+  const [modelId, setModelId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const availablePresets = MODEL_SETUP_PRESETS.filter((entry) => availableProviderIds.includes(entry.id));
+
+  const selectPreset = (next: ModelSetupPreset) => {
+    setPreset(next);
+    setApiKey("");
+    setModels([]);
+    setModelId("");
+    setError(null);
+    setStage("credentials");
+  };
+
+  const transientProvider = preset ? {
+    baseUrl: preset.baseUrl,
+    api: preset.api,
+    apiKey: apiKey.trim(),
+  } satisfies ProviderEntry : null;
+
+  const handleDiscover = async () => {
+    if (!preset || !transientProvider || !apiKey.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/models-config/discover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerName: preset.id, provider: transientProvider }),
+      });
+      const result = await response.json() as { models?: DiscoveredModel[]; error?: string };
+      if (!response.ok || result.error || !result.models?.length) {
+        setError(result.error ?? `HTTP ${response.status}`);
+        return;
+      }
+      setModels(result.models);
+      setModelId(pickSetupModel(result.models, preset?.modelHints ?? []));
+      setStage("verify");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleTestAndSave = async () => {
+    const chosen = models.find((model) => model.id === modelId);
+    if (!preset || !transientProvider || !chosen || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      let model: ModelEntry = { id: chosen.id, ...(chosen.name ? { name: chosen.name } : {}) };
+      const catalogParams = new URLSearchParams({
+        q: chosen.id,
+        provider: preset.id,
+        baseUrl: preset.baseUrl,
+        limit: "20",
+      });
+      const catalogResponse = await fetch(`/api/models-config/catalog?${catalogParams}`);
+      if (catalogResponse.ok) {
+        const catalog = await catalogResponse.json() as { recommendation?: ModelCatalogRecommendation };
+        if (catalog.recommendation) model = fillEmptyModelFields(model, catalog.recommendation.preset).model;
+      }
+
+      const testResponse = await fetch("/api/models-config/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerName: preset.id, provider: transientProvider, model }),
+      });
+      const testResult = await testResponse.json() as { ok?: boolean; error?: string };
+      if (!testResponse.ok || !testResult.ok) {
+        setError(testResult.error ?? `HTTP ${testResponse.status}`);
+        return;
+      }
+
+      const saveResponse = await fetch(`/api/auth/api-key/${encodeURIComponent(preset.id)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: apiKey.trim() }),
+      });
+      const saveResult = await saveResponse.json() as { success?: boolean; error?: string };
+      if (!saveResponse.ok || saveResult.error || !saveResult.success) {
+        setError(saveResult.error ?? `HTTP ${saveResponse.status}`);
+        return;
+      }
+      onSetupSaved(preset.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stageLabels = ["选择厂商", "获取 API Key", "测试并保存"];
+  const currentStage = stage === "provider" ? 0 : stage === "credentials" ? 1 : 2;
+
+  return (
+    <div style={{ width: "100%", maxWidth: 640, margin: "0 auto", padding: "28px 24px", overflowY: "auto" }}>
+      <div aria-label="模型设置步骤" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 28 }}>
+        {stageLabels.map((label, index) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, color: index <= currentStage ? "var(--text)" : "var(--text-dim)" }}>
+            <span style={{ width: 22, height: 22, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 11, fontWeight: 700, border: `1px solid ${index <= currentStage ? "var(--text-muted)" : "var(--border)"}`, background: index < currentStage ? "var(--bg-selected)" : "transparent" }}>
+              {index + 1}
+            </span>
+            <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+          </div>
+        ))}
+      </div>
+
+      {stage === "provider" && (
+        <section aria-labelledby="model-setup-provider-title">
+          <h2 id="model-setup-provider-title" style={{ margin: "0 0 14px", fontSize: 18, color: "var(--text)" }}>连接模型</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+            {availablePresets.map((entry) => (
+              <button
+                key={entry.id}
+                className="native-button"
+                onClick={() => selectPreset(entry)}
+                style={{ minHeight: 58, padding: "10px 12px", justifyContent: "flex-start", gap: 9, background: "var(--bg-panel)", borderColor: "var(--border)" }}
+              >
+                <ProviderIcon id={entry.id} size={24} />
+                <span style={{ fontWeight: 600 }}>{entry.name}</span>
+              </button>
+            ))}
+            <button
+              className="native-button"
+              onClick={onUseAdvanced}
+              style={{ minHeight: 58, padding: "10px 12px", justifyContent: "flex-start", background: "var(--bg-panel)", borderColor: "var(--border)" }}
+            >
+              自定义 URL
+            </button>
+          </div>
+        </section>
+      )}
+
+      {stage === "credentials" && (
+        <section aria-labelledby="model-setup-key-title" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <h2 id="model-setup-key-title" style={{ margin: 0, fontSize: 18, color: "var(--text)" }}>{preset?.name}</h2>
+            {preset && (
+              <a
+                href={preset.keyUrl}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => handleExternalLinkClick(event, preset.keyUrl)}
+                style={{ color: "var(--accent)", fontSize: 12, textDecoration: "none" }}
+              >
+                获取 API Key ↗
+              </a>
+            )}
+          </div>
+          {preset && <code style={{ padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg-panel)", color: "var(--text-muted)", fontSize: 11, overflowWrap: "anywhere" }}>{preset.baseUrl}</code>}
+          <Field label="API Key">
+            <SecretTextInput value={apiKey} onChange={setApiKey} placeholder="sk-…" mono autoComplete="off" spellCheck={false} />
+          </Field>
+          {error && <p role="alert" style={{ margin: 0, color: "var(--danger)", fontSize: 12 }}>{error}</p>}
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
+            <button className="native-button" onClick={() => { setStage("provider"); setError(null); }} disabled={busy}>返回</button>
+            <button className="native-button native-button-primary" onClick={handleDiscover} disabled={busy || !preset || !apiKey.trim()}>
+              {busy ? "读取中…" : "读取模型"}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {stage === "verify" && (
+        <section aria-labelledby="model-setup-test-title" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <h2 id="model-setup-test-title" style={{ margin: 0, fontSize: 18, color: "var(--text)" }}>选择测试模型</h2>
+          <Field label="模型">
+            <select className="native-select" value={modelId} onChange={(event) => setModelId(event.target.value)} style={inputStyle}>
+              {models.map((model) => <option key={model.id} value={model.id}>{model.name ? `${model.name} · ${model.id}` : model.id}</option>)}
+            </select>
+          </Field>
+          {error && <p role="alert" style={{ margin: 0, color: "var(--danger)", fontSize: 12 }}>{error}</p>}
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
+            <button className="native-button" onClick={() => { setStage("credentials"); setError(null); }} disabled={busy}>返回</button>
+            <button className="native-button native-button-primary" onClick={handleTestAndSave} disabled={busy || !modelId}>
+              {busy ? "测试中…" : "测试并保存"}
+            </button>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
 // ── Add provider picker ───────────────────────────────────────────────────────
 
 interface AddProviderPickerProps {
@@ -1658,7 +1867,10 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
   const [apiKeyProviders, setApiKeyProviders] = useState<ApiKeyProvider[]>([]);
+  const [oauthProvidersLoading, setOauthProvidersLoading] = useState(true);
+  const [apiKeyProvidersLoading, setApiKeyProvidersLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [setupDismissed, setSetupDismissed] = useState(false);
   // Snapshot of the last loaded/saved config — closing with edits beyond this
   // point asks for confirmation instead of silently discarding them.
   const savedSnapshotRef = useRef<string>(JSON.stringify({ providers: {} }));
@@ -1673,17 +1885,21 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const discardRef = useModalDismiss<HTMLDivElement>(() => setConfirmDiscard(false), confirmDiscard);
 
   const loadOAuthProviders = useCallback(() => {
+    setOauthProvidersLoading(true);
     fetch("/api/auth/providers")
       .then((r) => r.json())
       .then((d: { providers: OAuthProvider[] }) => setOauthProviders(d.providers))
-      .catch(() => {});
+      .catch(() => setOauthProviders([]))
+      .finally(() => setOauthProvidersLoading(false));
   }, []);
 
   const loadApiKeyProviders = useCallback(() => {
+    setApiKeyProvidersLoading(true);
     fetch("/api/auth/all-providers")
       .then((r) => r.json())
       .then((d: { providers: ApiKeyProvider[] }) => setApiKeyProviders(d.providers))
-      .catch(() => {});
+      .catch(() => setApiKeyProviders([]))
+      .finally(() => setApiKeyProvidersLoading(false));
   }, []);
 
   // A dual-auth provider moves between the two lists when its credential type
@@ -1821,9 +2037,27 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     }
   }, [config]);
 
+  const onSetupSaved = useCallback((providerId: string) => {
+    setSelection({ type: "apikey", providerId });
+    setSavedOk(true);
+    setTimeout(() => setSavedOk(false), 2000);
+    refreshAuthProviders();
+  }, [refreshAuthProviders]);
+
+  const useAdvancedSetup = useCallback(() => {
+    setSetupDismissed(true);
+    addCustomProvider();
+  }, [addCustomProvider]);
+
   const providers = Object.entries(config.providers ?? {});
   const activeOAuth = oauthProviders.filter((p) => p.loggedIn);
   const activeApiKey = apiKeyProviders.filter((p) => p.configured);
+  const configHasModel = hasUsableModelSetup(config, false);
+  const initialLoading = loading || (!configHasModel && (oauthProvidersLoading || apiKeyProvidersLoading));
+  const showFirstSetup = !setupDismissed && !initialLoading && !hasUsableModelSetup(
+    config,
+    activeOAuth.length > 0 || activeApiKey.some((provider) => provider.modelCount > 0),
+  );
 
   // Resolve current detail
   const detailContent = (() => {
@@ -1885,6 +2119,18 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
         {/* Body */}
         <div className="settings-modal-body" style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
+          {initialLoading ? (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 12 }}>
+              {t("i18n.loading")}
+            </div>
+          ) : showFirstSetup ? (
+            <FirstModelSetup
+              availableProviderIds={apiKeyProviders.map((provider) => provider.id)}
+              onSetupSaved={onSetupSaved}
+              onUseAdvanced={useAdvancedSetup}
+            />
+          ) : (
+          <>
 
           {/* Left: tree */}
           <div className="settings-sidebar models-settings-sidebar" style={{
@@ -2024,10 +2270,12 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
               </div>
             )}
           </div>
+          </>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="settings-footer" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+        {!initialLoading && !showFirstSetup && <div className="settings-footer" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
           {saveError && <span className="settings-footer-status is-error" style={{ fontSize: 12, color: "var(--danger)", flex: 1 }}>{saveError}</span>}
           <button className="native-button" onClick={requestClose}>
             {t("i18n.cancel")}
@@ -2045,7 +2293,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
             )}
              <span>{savedOk ? t("i18n.saved") : saving ? t("i18n.saving") : t("i18n.save")}</span>
           </button>
-        </div>
+        </div>}
 
         {/* Unsaved-changes confirmation before discarding edits */}
         {confirmDiscard && (
@@ -2078,7 +2326,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         )}
       </div>
     </div>
-    {pickerOpen && (
+    {pickerOpen && !showFirstSetup && (
       <AddProviderPicker
         oauthProviders={oauthProviders}
         apiKeyProviders={apiKeyProviders}
