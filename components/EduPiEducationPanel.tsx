@@ -256,10 +256,29 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     setMaterialStagingMessage({ tone: "success", text: event.eventId ? "日程更改已保存。" : "日程已写入 EduPi 行事历。" });
   }, [education?.calendar, submitEducationIntake]);
 
-  const importTimetableSlot = useCallback(async (slot: { dayOfWeek: number; period: number; subject: string; className: string | null; kind: "class" | "routine"; notes: string | null }) => {
-    await submitEducationIntake({ kind: "timetable", slots: [slot] });
-    setMaterialStagingMessage({ tone: "success", text: "课程安排已写入 EduPi 周视图。" });
-  }, [submitEducationIntake]);
+  const importTimetableSlot = useCallback(async (slot: { slotId: string | null; dayOfWeek: number; period: number; subject: string; className: string | null; kind: "class" | "routine"; notes: string | null }) => {
+    const preservedSlots = education?.timetable.flatMap((value) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+      const item = value as Record<string, unknown>;
+      const itemSlotId = typeof (item.slot_id ?? item.id) === "string" ? String(item.slot_id ?? item.id) : null;
+      if (itemSlotId === slot.slotId) return [];
+      const dayOfWeek = Number(item.day_of_week ?? item.dayOfWeek);
+      const period = Number(item.period);
+      const subject = typeof item.subject === "string" ? item.subject.trim() : "";
+      if (!itemSlotId || !Number.isInteger(dayOfWeek) || !Number.isInteger(period) || !subject) return [];
+      return [{
+        slotId: itemSlotId,
+        dayOfWeek,
+        period,
+        subject,
+        className: typeof (item.class_name ?? item.className) === "string" ? String(item.class_name ?? item.className) : null,
+        kind: item.kind === "routine" ? "routine" as const : "class" as const,
+        notes: typeof item.notes === "string" ? item.notes : null,
+      }];
+    }) || [];
+    await submitEducationIntake({ kind: "timetable", slots: [...preservedSlots, slot] });
+    setMaterialStagingMessage({ tone: "success", text: slot.slotId ? "课程更改已保存。" : "课程安排已写入 EduPi 周视图。" });
+  }, [education?.timetable, submitEducationIntake]);
 
   useEffect(() => {
     const events = new EventSource("/api/agent/running/events");

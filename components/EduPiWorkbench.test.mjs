@@ -219,7 +219,7 @@ test("calendar entries and sidebar nodes open a right-side raw detail drawer wit
   assert.match(calendarWorkspace, /CalendarDetailDrawer/);
   assert.match(calendarWorkspace, /className="is-edit"[\s\S]*>编辑<\/button>/);
   assert.match(calendarWorkspace, /eventId: calendarEvent\?\.id \|\| null/);
-  assert.match(calendarWorkspace, /defaultValue=\{calendarEvent\?\.notes \|\| ""\}/);
+  assert.match(calendarWorkspace, /calendarEvent\?\.notes \|\| ""/);
   assert.match(calendarWorkspace, /editingCalendarId/);
   assert.match(calendarWorkspace, /保存更改/);
   assert.match(panel, /eventId: string \| null/);
@@ -234,6 +234,30 @@ test("calendar entries and sidebar nodes open a right-side raw detail drawer wit
   assert.match(css, /\.edupi-calendar-intake textarea/);
   assert.match(css, /translateX/);
   assert.doesNotMatch(workspaceViews, /source_hash\.slice|sourceHash\.slice/);
+});
+
+test("timetable entries edit in place without replacing the remaining weekly schedule", async () => {
+  const calendarWorkspace = await read("./EduPiCalendarWorkspace.tsx");
+  const panel = await read("./EduPiEducationPanel.tsx");
+  const workspaceViews = await read("./EduPiWorkspaceViews.tsx");
+
+  for (const source of [calendarWorkspace, panel, workspaceViews]) {
+    assert.match(source, /slotId: string \| null/);
+  }
+  assert.match(calendarWorkspace, /editingTimetableId/);
+  assert.match(calendarWorkspace, /timetableSlot/);
+  assert.match(calendarWorkspace, /slotId: rawText\(timetableSlot\?\.slot_id \?\? timetableSlot\?\.id\)/);
+  assert.match(calendarWorkspace, /defaultValue=\{rawText\(timetableSlot\?\.day_of_week \?\? timetableSlot\?\.dayOfWeek\)/);
+  assert.match(calendarWorkspace, /defaultValue=\{rawText\(timetableSlot\?\.period\)/);
+  assert.match(calendarWorkspace, /defaultValue=\{rawText\(timetableSlot\?\.subject\)/);
+  assert.match(calendarWorkspace, /defaultValue=\{rawText\(timetableSlot\?\.class_name \?\? timetableSlot\?\.className\)/);
+  assert.match(calendarWorkspace, /defaultValue=\{timetableSlot\?\.kind === "routine" \? "routine" : "class"\}/);
+  assert.match(calendarWorkspace, /visibleTimetableNote\(timetableSlot\?\.notes\) \|\| ""/);
+  assert.match(calendarWorkspace, /selection\.kind === "timetable"/);
+  assert.match(calendarWorkspace, /编辑课表/);
+  assert.match(panel, /education\?\.timetable\.flatMap/);
+  assert.match(panel, /itemSlotId === slot\.slotId/);
+  assert.match(panel, /slots: \[\.\.\.preservedSlots, slot\]/);
 });
 
 test("board and calendar task entries share a mounted task peek drawer", async () => {
