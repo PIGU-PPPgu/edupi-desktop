@@ -11,7 +11,6 @@ import "./edupi-admin.css";
 import "./edupi-education.css";
 import "./edupi-help.css";
 import "./edupi-context.css";
-import "./edupi-welcome.css";
 import "./edupi-sidebar.css";
 import "./edupi-settings.css";
 import "./edupi-rhythm-review.css";
