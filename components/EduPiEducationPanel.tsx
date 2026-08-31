@@ -98,7 +98,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const [selectedTaskKey, setSelectedTaskKey] = useState<string | null>(() => searchParams.get("task"));
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(() => searchParams.get("student"));
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(() => searchParams.get("item"));
-  const [reviewMode, setReviewMode] = useState<"task" | "c1">("c1");
+  const [reviewMode, setReviewMode] = useState<"task" | "c1">(() => searchParams.get("task") && requestedStage === "review" ? "task" : "c1");
   const [selectedC1Target, setSelectedC1Target] = useState<{ kind: "observation" | "memory_candidate"; id: string } | null>(null);
   const [education, setEducation] = useState<EducationContract | null>(null);
   const [context, setContext] = useState<TeacherContextSnapshot | null>(null);
@@ -440,12 +440,14 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     const id = studentRecordKey(student, Math.max(0, index));
     setSelectedStudentId(id);
     updateLocation(activeView, undefined, undefined, inspectorOpen, id);
-  }, [activeView, education?.students, inspectorOpen, updateLocation]);
+    if (window.matchMedia("(max-width: 820px)").matches && !objectSider.collapsed) objectSider.toggle();
+  }, [activeView, education?.students, inspectorOpen, objectSider, updateLocation]);
 
   const selectObject = useCallback((id: string) => {
     setSelectedObjectId(id);
     updateLocation(activeView, undefined, undefined, inspectorOpen, selectedStudentId, id);
-  }, [activeView, inspectorOpen, selectedStudentId, updateLocation]);
+    if (window.matchMedia("(max-width: 820px)").matches && !objectSider.collapsed) objectSider.toggle();
+  }, [activeView, inspectorOpen, objectSider, selectedStudentId, updateLocation]);
 
   const reviewTask = useCallback(async (action: TaskReviewAction, payload: ReviewPayload) => {
     if (!activeTask?.id || !education?.capabilities.taskReview.enabled) return;

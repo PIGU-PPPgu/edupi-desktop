@@ -32,7 +32,8 @@ function shortDate(value: unknown): string {
 
 function csvCell(value: unknown): string {
   const source = String(value ?? "");
-  return /[",\r\n]/.test(source) ? `"${source.replaceAll('"', '""')}"` : source;
+  const safe = /^\s*[=+\-@]/.test(source) ? `'${source}` : source;
+  return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }
 
 function download(content: string, name: string, type: string) {
@@ -62,7 +63,7 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const students = data.students.filter((student) => !query || JSON.stringify(student).toLocaleLowerCase().includes(query.toLocaleLowerCase()));
-  const selected = students.find((student, index) => studentRecordKey(student, index) === selectedStudentId) || students[0] || null;
+  const selected = students.find((student, index) => studentRecordKey(student, index) === selectedStudentId) || (mode === "students" ? students[0] : null) || null;
   const selectedName = selected ? studentRecordName(selected) : null;
   const patterns = selected ? records(selected.error_patterns) : [];
   const trajectory = selected ? records(selected.trajectory) : [];
@@ -71,6 +72,8 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   const familyContacts = selectedName ? data.continuity.familyContacts.filter((contact) => contact.student === selectedName) : [];
   const tasks = selectedName ? data.tasks.filter((task) => task.student === selectedName || task.sourceEventName?.includes(selectedName)) : [];
   const classes = context?.classes?.length ? context.classes.join(" · ") : context?.grade || "班级待设置";
+  const classPatternCount = students.reduce((total, student) => total + (Array.isArray(student.error_patterns) ? student.error_patterns.filter((item) => !item || typeof item !== "object" || (item as Record<string, unknown>).status !== "resolved").length : 0), 0);
+  const classTaskCount = data.tasks.filter((task) => task.trigger === "student_follow_up" && task.boardStage !== "done").length;
 
   const importFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -114,6 +117,6 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
         <section><header><h3>家校记录</h3><span>{parentNotes.length + familyContacts.length}</span></header>{parentNotes.map((note, index) => <article key={`${selectedName}:parent:${index}`}><strong>{typeof note === "string" ? note : text((note as Record<string, unknown>).note) || "家校记录"}</strong></article>)}{familyContacts.map((contact) => <article key={contact.id}><div><strong>{contact.name}</strong><span>{contact.relationship || "家长"}</span></div><p>{contact.lastTopic || contact.lastOutcome || "已记录联系"}</p></article>)}{parentNotes.length + familyContacts.length === 0 ? <p className="edupi-student-profile__empty">暂无家校记录</p> : null}</section>
         <section><header><h3>相关任务</h3><span>{tasks.length}</span></header>{tasks.map((task) => <button type="button" key={taskKey(task)} onClick={() => onTask(task)}><strong>{taskDisplayTitle(task)}</strong><span>{taskStatusLabel(task)}</span></button>)}{tasks.length === 0 ? <p className="edupi-student-profile__empty">暂无跟进任务</p> : null}</section>
       </div>
-    </div> : <section className="edupi-page-section edupi-student-empty"><strong>暂无学生档案</strong><button type="button" onClick={() => inputRef.current?.click()}>导入名单</button></section>}
+    </div> : mode === "homeroom" && students.length > 0 ? <section className="edupi-class-summary"><header><span>班级概览</span><h2>{classes}</h2></header><div><span><strong>{students.length}</strong>名学生</span><span><strong>{classPatternCount}</strong>项观察</span><span><strong>{classTaskCount}</strong>项跟进</span><span><strong>{data.continuity.familyContacts.length}</strong>个家庭</span></div><p>从左侧选择学生查看档案</p></section> : <section className="edupi-page-section edupi-student-empty"><strong>暂无学生档案</strong><button type="button" onClick={() => inputRef.current?.click()}>导入名单</button></section>}
   </main>;
 }

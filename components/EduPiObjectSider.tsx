@@ -8,7 +8,7 @@ import { isRecognizedTimetableNote } from "@/lib/edupi-recognition-markers";
 import { groupTasksByCategory, TASK_CATEGORY_CONFIG } from "@/lib/edupi-task-category";
 import { studentRecordKey, studentRecordName } from "@/lib/edupi-student-roster-model";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
-import { groupEducationInsights, isTaskActionable, isUserFacingMemory, recordLabel, taskArtifacts, taskDisplayTitle, taskKey, taskStatusLabel, taskStatusTone, taskTypeLabel, type TaskStage, type WorkbenchView } from "@/lib/edupi-workbench";
+import { isTaskActionable, isUserFacingMemory, recordLabel, taskArtifacts, taskDisplayTitle, taskKey, taskStatusLabel, taskStatusTone, taskTypeLabel, type TaskStage, type WorkbenchView } from "@/lib/edupi-workbench";
 import { EduPiContentSider } from "./EduPiContentSider";
 
 type Props = {
@@ -111,11 +111,11 @@ export function EduPiObjectSider({ view, data, context, query, onQuery, selected
   const students = data.students.filter((student) => match(recordLabel(student, ["name", "student_name", "display_name"], ""), query));
   const calendar = data.calendar.filter((event) => match(`${event.name} ${event.date || ""}`, query));
   const memories = data.continuity.memories.filter((memory) => memory.state === "active" && isUserFacingMemory(memory) && match(`${memory.content} ${memory.student || ""} ${memory.tags.join(" ")}`, query));
-  const surfacedInsights = groupEducationInsights(data.continuity.insights.filter((insight) => insight.status === "surfaced" && !insight.content.startsWith("[主题候选]") && match(insight.content, query))).slice(0, 6);
+  const insights = data.continuity.insights.filter((insight) => !insight.content.startsWith("[主题候选]") && match(`${insight.content} ${insight.evidenceIds.join(" ")}`, query)).sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
   const signals = data.continuity.signals.filter((signal) => match(`${signal.content} ${signal.related.join(" ")}`, query)).sort((left, right) => right.strength - left.strength);
   const documents = data.continuity.documents.filter((document) => match(`${document.title} ${document.excerpt}`, query));
   const themes = data.continuity.themes.filter((theme) => match(theme.topic, query)).slice(0, 8);
-  const insightRows = [...surfacedInsights.map((group) => ({ id: `insight:${group.insight.id}`, title: group.topic, detail: group.insight.content.replace(/^\[梦境启示\]\s*/, "") })), ...signals.map((signal) => ({ id: `signal:${signal.id}`, title: signal.content, detail: `出现 ${signal.strength} 次` }))];
+  const insightRows = [...insights.map((insight) => ({ id: `insight:${insight.id}`, title: insight.content.replace(/^\[(?:梦境启示|主题候选)\]\s*/, "").slice(0, 32), detail: `${insight.status === "surfaced" ? "已浮出" : "酝酿中"} · ${insight.evidenceIds.length} 条依据` })), ...signals.map((signal) => ({ id: `signal:${signal.id}`, title: signal.content, detail: `出现 ${signal.strength} 次` }))];
   const growthRows = [...documents.map((document) => ({ id: `document:${document.id}`, title: document.title, detail: objectStudentDateLabel(document.date) || document.path })), ...themes.map((theme) => ({ id: `theme:${theme.topic}`, title: theme.topic, detail: `出现 ${theme.occurrences} 次 · ${theme.skillCandidate ? "待验证" : "观察中"}` }))];
   const pageSlice = <T,>(items: T[]) => items.slice(objectPage * OBJECT_PAGE_SIZE, (objectPage + 1) * OBJECT_PAGE_SIZE);
   const tasksByCategory = groupTasksByCategory(tasks);

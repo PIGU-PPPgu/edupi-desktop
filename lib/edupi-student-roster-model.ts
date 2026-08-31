@@ -1,7 +1,7 @@
 export type StudentRosterRow = { name: string; traits: string[]; parentNotes: string[] };
 
 export class StudentRosterError extends Error {
-  constructor(public readonly code: "invalid_csv" | "missing_name" | "duplicate_name" | "too_many_students", message: string) {
+  constructor(public readonly code: "invalid_csv" | "missing_name" | "duplicate_name" | "too_many_students" | "too_large", message: string) {
     super(message);
     this.name = "StudentRosterError";
   }
@@ -40,7 +40,10 @@ function headerKey(value: string): "name" | "traits" | "parentNotes" | null {
 }
 
 function list(value: string | undefined): string[] {
-  return value ? [...new Set(value.split(/[、;；|]/).map((item) => item.trim()).filter(Boolean))].slice(0, 50) : [];
+  if (!value) return [];
+  const items = [...new Set(value.split(/[、;；|]/).map((item) => item.trim()).filter(Boolean))].slice(0, 50);
+  if (items.some((item) => item.length > 240)) throw new StudentRosterError("too_large", "单项学生资料不能超过 240 字。");
+  return items;
 }
 
 export function parseStudentRosterCsv(source: string): StudentRosterRow[] {
@@ -60,6 +63,8 @@ export function parseStudentRosterCsv(source: string): StudentRosterRow[] {
   if (students.length === 0 || students.some((student) => !student.name || student.name.length > 120)) throw new StudentRosterError("missing_name", "学生姓名不能为空且不能超过 120 字。");
   if (students.length > 500) throw new StudentRosterError("too_many_students", "一次最多导入 500 名学生。");
   if (new Set(students.map((student) => student.name)).size !== students.length) throw new StudentRosterError("duplicate_name", "名单中存在重复姓名，请先合并。");
+  const corePayloadBytes = new TextEncoder().encode(JSON.stringify(students.map((student) => ({ name: student.name, traits: student.traits, parent_notes: student.parentNotes })))).byteLength;
+  if (corePayloadBytes > 200 * 1024) throw new StudentRosterError("too_large", "名单内容过大，请拆分后导入。");
   return students;
 }
 

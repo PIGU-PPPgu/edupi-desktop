@@ -90,6 +90,7 @@ test("review renders one selected decision and the rail exposes real EduPi activ
     read("../app/edupi-workbench.css"),
   ]);
   assert.match(panel, /reviewMode/);
+  assert.match(panel, /searchParams\.get\("task"\) && requestedStage === "review" \? "task" : "c1"/);
   assert.match(panel, /selectedC1Target/);
   assert.match(review, /visibleTarget/);
   assert.doesNotMatch(review, /targets\.map\(\(target\)/);
@@ -97,4 +98,19 @@ test("review renders one selected decision and the rail exposes real EduPi activ
   assert.match(rail, /memoryCount/);
   assert.match(rail, /edupi-activity-pulse/);
   assert.match(css, /@keyframes edupiActivityPulse/);
+});
+
+test("narrow screens retain the object selector and exports neutralize spreadsheet formulas", async () => {
+  const [css, student, sider] = await Promise.all([
+    read("../app/edupi-workbench.css"),
+    read("./EduPiStudentWorkspace.tsx"),
+    read("./EduPiObjectSider.tsx"),
+  ]);
+  assert.match(css, /\.edupi-content-sider \{ position: absolute;[^}]*display: flex;/);
+  assert.doesNotMatch(css, /\.edupi-content-sider \{ display: none; \}/);
+  assert.match(student, /\^\\s\*\[=\+\\-@\]/);
+  assert.match(student, /mode === "students" \? students\[0\] : null/);
+  assert.match(student, /edupi-class-summary/);
+  assert.match(sider, /const insights = data\.continuity\.insights\.filter/);
+  assert.doesNotMatch(sider, /surfacedInsights.*slice\(0, 6\)/s);
 });
