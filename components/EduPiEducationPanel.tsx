@@ -14,7 +14,6 @@ import {
   taskKey,
   taskSourceLabel,
   viewFromModule,
-  workbenchViews,
   type TaskStage,
   type WorkbenchView,
 } from "@/lib/edupi-workbench";
@@ -29,7 +28,6 @@ import type { ReviewPayload } from "./EduPiTaskStage";
 import { EduPiWorkspaceDrawer } from "./EduPiWorkspaceDrawer";
 import { EduPiWorkspaceViews } from "./EduPiWorkspaceViews";
 import { EduPiC1Review } from "./EduPiC1Review";
-import { EduPiCompletionInbox } from "./EduPiCompletionInbox";
 import { EduPiQuickEntry } from "./EduPiQuickEntry";
 import { useEduPiContentSiderCollapse } from "@/hooks/useEduPiContentSiderCollapse";
 import { useDragDrop } from "@/hooks/useDragDrop";
@@ -70,12 +68,6 @@ const FileWorkspaceDrawer = EduPiWorkspaceDrawer as unknown as (props: FileWorks
 
 type AgentPromptMode = "insert" | "replace";
 
-type CoreConnection = {
-  label: string;
-  ready: boolean;
-  reason: string | null;
-};
-
 type EducationIntakeApiResult = {
   error?: string;
   staged?: MaterialStagingDescriptor[];
@@ -105,7 +97,6 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const [education, setEducation] = useState<EducationContract | null>(null);
   const [context, setContext] = useState<TeacherContextSnapshot | null>(null);
   const [runningAgentCount, setRunningAgentCount] = useState(0);
-  const [coreConnection, setCoreConnection] = useState<CoreConnection>({ label: "正在连接 Core", ready: false, reason: null });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -180,26 +171,6 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [loadWorkspace, refreshKey]);
 
   useEffect(() => { if (initialModule === "context") setContextOpen(true); }, [initialModule]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/edupi/status", { cache: "no-store", signal: controller.signal })
-      .then((response) => response.json())
-      .then((status: { core?: { status?: string; reason?: string }; projection?: { status?: string; reason?: string } }) => {
-        const coreReady = status.core?.status === "ready";
-        const projectionReady = status.projection?.status === "ready";
-        setCoreConnection({
-          ready: coreReady,
-          label: coreReady ? (projectionReady ? "Core 已连接" : "教育投影待启用") : "Core 未连接",
-          reason: status.core?.reason || status.projection?.reason || null,
-        });
-      })
-      .catch((error) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        setCoreConnection({ label: "Core 未连接", ready: false, reason: "Core health 请求失败" });
-      });
-    return () => controller.abort();
-  }, []);
 
   const submitEducationIntake = useCallback(async (body: Record<string, unknown>): Promise<EducationIntakeApiResult> => {
     if (educationIntakeBusy) throw new Error("材料正在接入 EduPi。");
@@ -786,8 +757,6 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }
 
   const taskStage = activeStage;
-  const activeViewLabel = workbenchViews.find((item) => item.id === activeView)?.label || "工作台";
-  const contextLabel = teacherContextLabel;
   const inspectorAvailable = (activeView === "tasks" || activeView === "review") && Boolean(activeTask);
   const objectSiderAvailable = activeView !== "dashboard" && activeView !== "chat" && activeView !== "workspace";
   const showObjectSider = objectSiderAvailable && !objectSider.collapsed;
@@ -806,13 +775,9 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       {educationFileDragOver ? <div className="edupi-global-material-drop" role="status" aria-live="polite"><strong>放入 EduPi</strong><span>松开后识别材料、日程与课表</span></div> : null}
       <EduPiNavigationRail activeView={activeView} pendingReviewCount={pendingCount + c1PendingCount + teacherContextPendingCount} workspaceLabel={context?.school || context?.name || "教师工作区"} onSelect={selectView} onOpenAdmin={onOpenAdmin} />
       <div className="edupi-teacher-app">
-        <header className="edupi-teacher-topbar">
-          <div className="edupi-teacher-topbar__workspace"><span>{activeViewLabel}</span><strong>{contextLabel}</strong></div>
-          {activeView === "chat" || activeView === "dashboard" ? <button type="button" className="edupi-teacher-topbar__context" onClick={onOpenAdmin} aria-live="polite" title={coreConnection.reason || "打开管理中心"}><span className={coreConnection.ready ? "is-ready" : "is-unavailable"}>{coreConnection.label}</span></button> : <label className="edupi-workbench-search"><span aria-hidden="true">⌕</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`搜索${activeViewLabel}`} aria-label={`搜索${activeViewLabel}`} /></label>}
-          <div className="edupi-teacher-topbar__status"><EduPiCompletionInbox tasks={tasks} onTask={openTaskDetail} /><span className="is-safe">{activeView === "chat" ? "本地会话" : "教师内部"}</span>{loadError ? <button type="button" onClick={retryLoadWorkspace} title={loadError}>教育数据刷新失败 · 重试</button> : null}{objectSiderAvailable && objectSider.collapsed ? <button type="button" onClick={objectSider.toggle}>列表</button> : null}{inspectorAvailable ? <button type="button" onClick={toggleInspector}>{inspectorOpen ? "收起检查" : "检查"}</button> : null}</div>
-        </header>
         <div className={`edupi-teacher-body${activeView === "chat" ? " is-chat" : ""}${showObjectSider ? " has-object-sider" : ""}${inspectorAvailable && inspectorOpen ? " has-inspector" : ""}`}>
-          {activeView === "chat" ? <aside className="edupi-chat-session-sidebar" aria-label="对话与文件">{chatSidebar}</aside> : showObjectSider ? <EduPiObjectSider view={activeView} data={education} context={context} query={query} selectedTaskKey={activeTask ? taskKey(activeTask) : null} onTask={selectTask} onReviewTarget={focusC1Review} selectedCalendarSourceId={calendarSelection?.sourceId ?? null} onCalendarItem={setCalendarSelection} onUpload={openUpload} onCollapse={objectSider.toggle} /> : null}
+          {(loadError || (objectSiderAvailable && objectSider.collapsed) || inspectorAvailable) ? <div className="edupi-teacher-body__controls">{loadError ? <button type="button" onClick={retryLoadWorkspace} title={loadError}>重试</button> : null}{objectSiderAvailable && objectSider.collapsed ? <button type="button" onClick={objectSider.toggle}>列表</button> : null}{inspectorAvailable ? <button type="button" onClick={toggleInspector}>{inspectorOpen ? "收起检查" : "检查"}</button> : null}</div> : null}
+          {activeView === "chat" ? <aside className="edupi-chat-session-sidebar" aria-label="对话与文件">{chatSidebar}</aside> : showObjectSider ? <EduPiObjectSider view={activeView} data={education} context={context} query={query} onQuery={setQuery} selectedTaskKey={activeTask ? taskKey(activeTask) : null} onTask={selectTask} onReviewTarget={focusC1Review} selectedCalendarSourceId={calendarSelection?.sourceId ?? null} onCalendarItem={setCalendarSelection} onUpload={openUpload} onCollapse={objectSider.toggle} /> : null}
           <div className={`edupi-teacher-main${activeView === "chat" ? " is-chat" : ""}`}>
             <EduPiPersistentChatHost mode={drawer === "agent" ? "drawer" : activeView === "chat" ? "main" : "hidden"} task={drawer === "agent" ? currentAgentTask : null} onClose={closeDrawer} onPreparePrompt={onPrepareAgentPrompt}>{chatPanel}</EduPiPersistentChatHost>
             {activeView === "review" ? <div className="edupi-review-surface">
