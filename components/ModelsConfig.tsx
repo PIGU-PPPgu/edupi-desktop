@@ -1925,6 +1925,11 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
     loadApiKeyProviders();
   }, [loadOAuthProviders, loadApiKeyProviders]);
 
+  const handleAuthChanged = useCallback(() => {
+    refreshAuthProviders();
+    onSaved?.();
+  }, [onSaved, refreshAuthProviders]);
+
   useEffect(() => {
     fetch("/api/models-config")
       .then((r) => r.json())
@@ -2055,10 +2060,9 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
   const onSetupSaved = useCallback((providerId: string) => {
     setSelection({ type: "apikey", providerId });
     setSavedOk(true);
-    onSaved?.();
     setTimeout(() => setSavedOk(false), 2000);
-    refreshAuthProviders();
-  }, [onSaved, refreshAuthProviders]);
+    handleAuthChanged();
+  }, [handleAuthChanged]);
 
   const useAdvancedSetup = useCallback(() => {
     setSetupDismissed(true);
@@ -2081,12 +2085,12 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
     if (selection.type === "oauth") {
       const p = oauthProviders.find((p) => p.id === selection.providerId);
       if (!p) return null;
-      return <OAuthDetail key={p.id} provider={p} onRefresh={refreshAuthProviders} />;
+      return <OAuthDetail key={p.id} provider={p} onRefresh={handleAuthChanged} />;
     }
     if (selection.type === "apikey") {
       const p = apiKeyProviders.find((p) => p.id === selection.providerId);
       if (!p) return null;
-      return <ApiKeyDetail key={p.id} provider={p} onRefresh={refreshAuthProviders} />;
+      return <ApiKeyDetail key={p.id} provider={p} onRefresh={handleAuthChanged} />;
     }
     if (selection.type === "provider") {
       const provider = config.providers?.[selection.name];

@@ -19,6 +19,9 @@ test("models settings can render inline without modal chrome", async () => {
   assert.match(source, /onDirtyChange\?\.\(hasUnsavedChanges\)/);
   assert.match(source, /onDirtyChange\?\.\(false\)/);
   assert.match(source, /savedSnapshotRef\.current = JSON\.stringify\(config\);[\s\S]+?onSaved\?\.\(\)/);
+  assert.match(source, /const handleAuthChanged = useCallback\(\(\) => \{[\s\S]+?refreshAuthProviders\(\);[\s\S]+?onSaved\?\.\(\)/);
+  assert.match(source, /<OAuthDetail key=\{p\.id\} provider=\{p\} onRefresh=\{handleAuthChanged\} \/>/);
+  assert.match(source, /<ApiKeyDetail key=\{p\.id\} provider=\{p\} onRefresh=\{handleAuthChanged\} \/>/);
 });
 
 test("default models settings keeps its modal backdrop", async () => {
