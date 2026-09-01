@@ -11,10 +11,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { APP_PREF_KEYS, getPrefBool, setPrefBool } from "@/lib/app-prefs";
+import { APP_PREF_KEYS, getPrefBool, setPrefBool, type AppPrefKey } from "@/lib/app-prefs";
 
-export function useEduPiContentSiderCollapse(defaultCollapsed = false) {
-  const key = APP_PREF_KEYS.edupiObjectSiderCollapsed;
+export function useEduPiContentSiderCollapse(defaultCollapsed = false, key: AppPrefKey = APP_PREF_KEYS.edupiObjectSiderCollapsed) {
   const [collapsed, setCollapsedState] = useState(() => getPrefBool(key, defaultCollapsed));
 
   const setCollapsed = useCallback((value: boolean) => {

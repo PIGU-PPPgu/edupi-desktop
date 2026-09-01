@@ -64,6 +64,7 @@ export type EducationMemory = {
   createdAt: string | null;
   updatedAt: string | null;
   state: "active" | "superseded";
+  revision: number;
 };
 
 export type EducationReviewProvenance = {
@@ -378,6 +379,7 @@ export type EducationContract = {
     c1Review: C1ReviewCapability;
     teacherContextReview: TeacherContextReviewCapability;
     workCandidateReview: WorkCandidateReviewCapability;
+    memoryUpdate: { enabled: boolean; commands: ["update_memory"]; reason: string };
   };
 };
 
@@ -472,6 +474,7 @@ function normalizeMemories(value: unknown): EducationMemory[] {
         createdAt: timestamp(entry.created_at),
         updatedAt: timestamp(entry.updated_at),
         state: entry.state === "superseded" || entry.superseded_by ? "superseded" : "active",
+        revision: Math.max(0, Math.trunc(finiteNumber(entry.revision))),
       } satisfies EducationMemory];
     });
   });
@@ -1331,6 +1334,7 @@ const C1_REVIEW_ACTIONS: ["accept", "modify", "reject", "hold"] = ["accept", "mo
 const TEACHER_CONTEXT_REVIEW_COMMANDS: ["review_teacher_context"] = ["review_teacher_context"];
 const WORK_CANDIDATE_REVIEW_COMMANDS: ["review_work_candidate"] = ["review_work_candidate"];
 const WORK_CANDIDATE_REVIEW_ACTIONS: EducationWorkCandidateDecision[] = ["accept", "modify", "reject", "hold", "snooze", "suppress"];
+const MEMORY_UPDATE_COMMANDS: ["update_memory"] = ["update_memory"];
 
 function taskReviewCapability(snapshotPayload: RawRecord | undefined, supportedCommands?: readonly string[]): EducationContract["capabilities"]["taskReview"] {
   const manifestCommands = supportedCommands || [];
@@ -1342,6 +1346,13 @@ function taskReviewCapability(snapshotPayload: RawRecord | undefined, supportedC
     actions: ["accept", "modify", "reject", "hold", "rollback"],
     reason: enabled ? "任务审核已连接 Core。" : "Core 尚未启用任务审核。",
   };
+}
+
+function memoryUpdateCapability(snapshotPayload: RawRecord | undefined, supportedCommands?: readonly string[]): EducationContract["capabilities"]["memoryUpdate"] {
+  const manifestCommands = supportedCommands || [];
+  const snapshotCommands = record(snapshotPayload?.capabilities).supported_commands;
+  const enabled = manifestCommands.includes("update_memory") && exactStringList(snapshotCommands, manifestCommands);
+  return { enabled, commands: [...MEMORY_UPDATE_COMMANDS], reason: enabled ? "记忆可直接手动修改。" : "Core 尚未启用手动修改记忆。" };
 }
 
 function exactStringList(value: unknown, expected: readonly string[]): boolean {
@@ -1516,6 +1527,7 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
       c1Review: c1ReviewCapability(snapshotPayload, options.supportedCommands),
       teacherContextReview: teacherContextReviewCapability(snapshotPayload, options.supportedCommands),
       workCandidateReview: workCandidateReviewCapability(snapshotPayload, options.supportedCommands),
+      memoryUpdate: memoryUpdateCapability(snapshotPayload, options.supportedCommands),
     },
   };
 }
@@ -1627,6 +1639,7 @@ export function buildEducationContract(input: ContractInput = {}): EducationCont
       c1Review: c1ReviewCapability(snapshotPayload, input.supportedCommands),
       teacherContextReview: teacherContextReviewCapability(snapshotPayload, input.supportedCommands),
       workCandidateReview: workCandidateReviewCapability(snapshotPayload, input.supportedCommands),
+      memoryUpdate: memoryUpdateCapability(snapshotPayload, input.supportedCommands),
     },
   };
 }

@@ -6,6 +6,7 @@ import { issueC1Review, type C1ReviewDependencies, type C1ReviewDecision, type C
 import { issueTeacherContextReview, type TeacherContextReviewDependencies, type TeacherContextReviewInput } from "./edupi-teacher-context-review";
 import { issueWorkCandidateReview, type WorkCandidateReviewDependencies, type WorkCandidateReviewInput } from "./edupi-work-candidate-review";
 import { issueTaskReview, type TaskReviewDependencies, type TaskReviewInput } from "./edupi-task-review";
+import { issueMemoryUpdate, type MemoryUpdateDependencies, type MemoryUpdateInput } from "./edupi-memory-update";
 import { activeBridgeIdentity } from "./edupi-bridge-manifest";
 import { readEduPiEducationSnapshot } from "./edupi-core-snapshot";
 import { bindTaskSessionFile, readTaskSessionFile } from "./edupi-task-session-store";
@@ -169,6 +170,22 @@ export async function reviewEducationTask(
     payload: result.data,
     workspace: refreshedWorkspace as EducationSnapshot["workspace"],
   });
+  return { receipt: result.receipt, data };
+}
+
+/** Update one active memory through Core and project the receipt-bound snapshot. */
+export async function updateEducationMemory(
+  input: MemoryUpdateInput,
+  deps?: MemoryUpdateDependencies,
+): Promise<{ receipt: Record<string, unknown>; data: EducationContract }> {
+  const snapshot = await readEduPiEducationSnapshot();
+  const result = await issueMemoryUpdate(input, {
+    ...deps,
+    readSnapshot: deps?.readSnapshot || (async () => ({ payload: snapshot.payload, roots: { runtime: snapshot.runtime, dataRoot: snapshot.dataRoot } })),
+  });
+  const refreshedWorkspace = result.data.education_workspace;
+  if (!refreshedWorkspace || typeof refreshedWorkspace !== "object" || Array.isArray(refreshedWorkspace)) throw new Error("Core education workspace refresh is unavailable");
+  const data = await projectEducationContract({ ...snapshot, payload: result.data, workspace: refreshedWorkspace as EducationSnapshot["workspace"] });
   return { receipt: result.receipt, data };
 }
 

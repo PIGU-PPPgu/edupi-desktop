@@ -5,6 +5,7 @@ import { filterTimetableSlots, type CalendarItemSelection } from "@/lib/edupi-ca
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { filterSubjectKnowledgeItems, routePart, type TeachingSectionId } from "@/lib/edupi-domain-navigation";
 import { isUserFacingMemory, taskDisplayTitle, taskKey, taskStatusLabel } from "@/lib/edupi-workbench";
+import { buildTeachingPriorityConversationPrompt } from "@/lib/edupi-teaching-priority-prompt";
 import { EduPiTimetableGrid } from "./EduPiTimetableGrid";
 
 function shortDate(value: string | null): string {
@@ -13,7 +14,7 @@ function shortDate(value: string | null): string {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
-export function EduPiTeachingWorkspace({ data, context, query, selectedObjectId, onObject, onTask, onNavigate, onUpload, onStartAgent, onCalendarSelection }: { data: EducationContract; context: TeacherContextSnapshot | null; query: string; selectedObjectId: string | null; onObject: (id: string) => void; onTask: (task: TeacherTask) => void; onNavigate: (view: "calendar" | "tasks" | "memory", objectId?: string) => void; onUpload: () => void; onStartAgent: (prompt: string) => void; onCalendarSelection: (selection: CalendarItemSelection) => void }) {
+export function EduPiTeachingWorkspace({ data, context, query, selectedObjectId, onObject, onTask, onNavigate, onStartAgent, onCalendarSelection }: { data: EducationContract; context: TeacherContextSnapshot | null; query: string; selectedObjectId: string | null; onObject: (id: string) => void; onTask: (task: TeacherTask) => void; onNavigate: (view: "calendar" | "tasks" | "memory", objectId?: string) => void; onStartAgent: (prompt: string, mode?: "insert" | "replace") => void; onCalendarSelection: (selection: CalendarItemSelection) => void }) {
   const section = routePart(selectedObjectId, "teaching", "home") as TeachingSectionId;
   const slots = filterTimetableSlots(data.timetable, query);
   const knowledge = filterSubjectKnowledgeItems(data.continuity.subjectKnowledge, query);
@@ -24,9 +25,10 @@ export function EduPiTeachingWorkspace({ data, context, query, selectedObjectId,
   const nextSlot = orderedSlots.find((slot) => Number(slot.day_of_week) >= weekday) || orderedSlots[0];
   const nextSubject = String(nextSlot?.subject || context?.subject || "下一节课");
   const subjectLabel = [context?.subject, context?.grade].filter(Boolean).join(" · ") || "教学工作区";
+  const priorityPrompt = buildTeachingPriorityConversationPrompt({ subject: context?.subject || null, grade: context?.grade || null, currentTopics: knowledge.map((item) => item.topic) });
   const selectCourse = (selection: CalendarItemSelection) => { onCalendarSelection(selection); onNavigate("calendar"); };
 
-  const header = <header className="edupi-module-heading edupi-teaching-heading"><div>{section !== "home" ? <button type="button" className="edupi-back-link" onClick={() => onObject("teaching:home")}>← 教学首页</button> : <span>教学工作区</span>}<h1>{section === "home" ? "教学" : section === "schedule" ? "课程表" : section === "knowledge" ? "教学重点" : section === "tasks" ? "备课任务" : "教学记忆"}</h1><p>{subjectLabel}</p></div><div className="edupi-teaching-heading__actions"><button type="button" onClick={onUpload}>导入教学重点</button><button type="button" className="is-primary" onClick={() => onStartAgent(`请为${nextSubject}准备下一节课的重点、材料和课堂检查点，结合现有学情与教育记忆，先给我可审核候选。`)}>准备下一节课</button></div></header>;
+  const header = <header className="edupi-module-heading edupi-teaching-heading"><div>{section !== "home" ? <button type="button" className="edupi-back-link" onClick={() => onObject("teaching:home")}>← 教学首页</button> : <span>教学工作区</span>}<h1>{section === "home" ? "教学" : section === "schedule" ? "课程表" : section === "knowledge" ? "教学重点" : section === "tasks" ? "备课任务" : "教学记忆"}</h1><p>{subjectLabel}</p></div><div className="edupi-teaching-heading__actions"><button type="button" onClick={() => onStartAgent(priorityPrompt, "replace")}>对话补充重点</button><button type="button" className="is-primary" onClick={() => onStartAgent(`请为${nextSubject}准备下一节课的重点、材料和课堂检查点，结合现有学情与教育记忆，先给我可审核候选。`)}>准备下一节课</button></div></header>;
 
   if (section === "schedule") return <main className="edupi-module-workspace edupi-teaching-workspace">{header}<EduPiTimetableGrid slots={slots} onSelect={selectCourse} /></main>;
   if (section === "knowledge") return <main className="edupi-module-workspace edupi-teaching-workspace">{header}<section className="edupi-database"><div className="edupi-database__head edupi-teaching-knowledge-grid"><span>主题</span><span>共性问题</span><span>需关注学生</span><span>掌握度</span></div>{knowledge.map((item) => <details className="edupi-database-row" key={item.id}><summary className="edupi-teaching-knowledge-grid"><strong>{item.topic}</strong><span>{item.commonErrors[0]?.description || "暂无"}</span><span>{item.strugglingStudents.join("、") || "—"}</span><span>{item.mastery === null ? "—" : `${Math.round(item.mastery * 100)}%`}</span></summary><div className="edupi-database-row__detail"><div><span>学科</span><strong>{item.subject}</strong></div><div><span>前置知识</span><strong>{item.prerequisites.join("、") || "—"}</strong></div><div><span>最近更新</span><strong>{shortDate(item.updatedAt)}</strong></div></div></details>)}</section></main>;

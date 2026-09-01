@@ -1856,7 +1856,14 @@ function AddProviderPicker({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function ModelsConfig({ onClose }: { onClose: () => void }) {
+interface ModelsConfigProps {
+  onClose: () => void;
+  embedded?: boolean;
+  onDirtyChange?: (dirty: boolean) => void;
+  onSaved?: () => void;
+}
+
+export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved }: ModelsConfigProps) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
   const [config, setConfig] = useState<ModelsJson>({ providers: {} });
@@ -1875,13 +1882,20 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   // point asks for confirmation instead of silently discarding them.
   const savedSnapshotRef = useRef<string>(JSON.stringify({ providers: {} }));
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const hasUnsavedChanges = JSON.stringify(config) !== savedSnapshotRef.current;
+
+  useEffect(() => {
+    onDirtyChange?.(hasUnsavedChanges);
+  }, [hasUnsavedChanges, onDirtyChange]);
+
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   const requestClose = useCallback(() => {
     if (JSON.stringify(config) === savedSnapshotRef.current) onClose();
     else setConfirmDiscard(true);
   }, [config, onClose]);
 
-  const panelRef = useModalDismiss<HTMLDivElement>(requestClose);
+  const panelRef = useModalDismiss<HTMLDivElement>(requestClose, !embedded);
   const discardRef = useModalDismiss<HTMLDivElement>(() => setConfirmDiscard(false), confirmDiscard);
 
   const loadOAuthProviders = useCallback(() => {
@@ -1910,6 +1924,11 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     loadOAuthProviders();
     loadApiKeyProviders();
   }, [loadOAuthProviders, loadApiKeyProviders]);
+
+  const handleAuthChanged = useCallback(() => {
+    refreshAuthProviders();
+    onSaved?.();
+  }, [onSaved, refreshAuthProviders]);
 
   useEffect(() => {
     fetch("/api/models-config")
@@ -2028,6 +2047,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       else {
         savedSnapshotRef.current = JSON.stringify(config);
         setSavedOk(true);
+        onSaved?.();
         setTimeout(() => setSavedOk(false), 2000);
       }
     } catch (e) {
@@ -2035,14 +2055,14 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     } finally {
       setSaving(false);
     }
-  }, [config]);
+  }, [config, onSaved]);
 
   const onSetupSaved = useCallback((providerId: string) => {
     setSelection({ type: "apikey", providerId });
     setSavedOk(true);
     setTimeout(() => setSavedOk(false), 2000);
-    refreshAuthProviders();
-  }, [refreshAuthProviders]);
+    handleAuthChanged();
+  }, [handleAuthChanged]);
 
   const useAdvancedSetup = useCallback(() => {
     setSetupDismissed(true);
@@ -2065,12 +2085,12 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     if (selection.type === "oauth") {
       const p = oauthProviders.find((p) => p.id === selection.providerId);
       if (!p) return null;
-      return <OAuthDetail key={p.id} provider={p} onRefresh={refreshAuthProviders} />;
+      return <OAuthDetail key={p.id} provider={p} onRefresh={handleAuthChanged} />;
     }
     if (selection.type === "apikey") {
       const p = apiKeyProviders.find((p) => p.id === selection.providerId);
       if (!p) return null;
-      return <ApiKeyDetail key={p.id} provider={p} onRefresh={refreshAuthProviders} />;
+      return <ApiKeyDetail key={p.id} provider={p} onRefresh={handleAuthChanged} />;
     }
     if (selection.type === "provider") {
       const provider = config.providers?.[selection.name];
@@ -2102,13 +2122,33 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     );
   })();
 
-  return (
-    <>
-    <div className="native-modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-      <div ref={panelRef} role="dialog" aria-modal="true" className="native-modal settings-modal models-settings-modal" style={{ position: "relative", width: isMobile ? "calc(100vw - 16px)" : 860, maxWidth: "calc(100vw - 16px)", height: isMobile ? "calc(100dvh - 16px)" : "auto", minHeight: isMobile ? undefined : 560, maxHeight: isMobile ? "calc(100dvh - 16px)" : "min(680px, calc(100dvh - 48px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+  const panel = (
+      <div
+        ref={panelRef}
+        role={embedded ? undefined : "dialog"}
+        aria-modal={embedded ? undefined : true}
+        className={embedded
+          ? "settings-modal models-settings-modal models-settings-embedded"
+          : "native-modal settings-modal models-settings-modal"}
+        style={{
+          position: "relative",
+          width: embedded ? "100%" : isMobile ? "calc(100vw - 16px)" : 860,
+          maxWidth: embedded ? "100%" : "calc(100vw - 16px)",
+          height: embedded ? (isMobile ? "calc(100dvh - 160px)" : "min(680px, calc(100dvh - 180px))") : isMobile ? "calc(100dvh - 16px)" : "auto",
+          minHeight: isMobile ? undefined : embedded ? 520 : 560,
+          maxHeight: embedded ? "calc(100dvh - 160px)" : isMobile ? "calc(100dvh - 16px)" : "min(680px, calc(100dvh - 48px))",
+          background: "var(--bg)",
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: embedded ? "none" : "0 8px 32px rgba(0,0,0,0.18)",
+          overflow: "hidden",
+        }}
+      >
 
         {/* Header */}
+        {!embedded && (
         <div className="native-modal-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
             <span className="native-modal-title" style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("common.models")}</span>
@@ -2116,6 +2156,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           </div>
           <button className="native-modal-close" onClick={requestClose} aria-label={t("i18n.close")} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
         </div>
+        )}
 
         {/* Body */}
         <div className="settings-modal-body" style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
@@ -2277,9 +2318,9 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         {/* Footer */}
         {!initialLoading && !showFirstSetup && <div className="settings-footer" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
           {saveError && <span className="settings-footer-status is-error" style={{ fontSize: 12, color: "var(--danger)", flex: 1 }}>{saveError}</span>}
-          <button className="native-button" onClick={requestClose}>
+          {!embedded && <button className="native-button" onClick={requestClose}>
             {t("i18n.cancel")}
-          </button>
+          </button>}
           <button className={`native-button native-button-primary${savedOk ? " is-success" : ""}`} onClick={handleSave} disabled={saving || savedOk} style={{
             position: "relative",
             minWidth: 92,
@@ -2296,7 +2337,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         </div>}
 
         {/* Unsaved-changes confirmation before discarding edits */}
-        {confirmDiscard && (
+        {!embedded && confirmDiscard && (
           <div
             style={{ position: "absolute", inset: 0, zIndex: 20, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
             onClick={(e) => { if (e.target === e.currentTarget) setConfirmDiscard(false); }}
@@ -2325,7 +2366,16 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           </div>
         )}
       </div>
-    </div>
+  );
+
+  return (
+    <>
+    {embedded ? panel : (
+      <div className="native-modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
+        onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
+        {panel}
+      </div>
+    )}
     {pickerOpen && !showFirstSetup && (
       <AddProviderPicker
         oauthProviders={oauthProviders}

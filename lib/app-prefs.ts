@@ -19,6 +19,7 @@ export const APP_PREF_KEYS = {
   chatDrafts: "pi-chat-drafts-v1",
   /** Last open session / cwd / file tabs for desktop cold-start restore. */
   workspace: "pi-workspace-v1",
+  edupiNavigationRailCollapsed: "edupi-navigation-rail-collapsed",
   edupiObjectSiderCollapsed: "edupi-object-sider-collapsed",
   edupiFirstRunGuideComplete: "edupi-first-run-guide-complete",
 } as const;

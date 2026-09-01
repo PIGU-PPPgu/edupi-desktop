@@ -99,7 +99,8 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   assert.match(panel, /activeAgentSessionId/);
   assert.match(panel, /useEduPiContentSiderCollapse/);
   assert.match(`${panel}\n${objectSider}`, /收起列表/);
-  assert.match(panel, />列表</);
+  assert.match(panel, /aria-label="展开列表"/);
+  assert.doesNotMatch(panel, />列表<\/button>/);
   assert.match(panel, /\/api\/edupi\/tasks\/\$\{encodeURIComponent\(pendingTaskBinding\.taskId\)\}\/session/);
   assert.match(appShell, /onActivateAgentSession=/);
   assert.match(appShell, /params\.set\("stage", stage\)/);

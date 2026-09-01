@@ -7,11 +7,11 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const HARD_TIMEOUT_MS = 60_000;
-const EXPECTED_CORE_COMMIT = "b1145350d3cd96baf2a22c1d27e29020fd564613";
-const EXPECTED_COMPONENT_MANIFEST_HASH = "sha256:2d2d03e9723d5e51200a5904fd764ec4c142d2c2ca037235e1e4c5598ec2e1d8";
-const EXPECTED_FIXTURE_MANIFEST_HASH = "sha256:68e9d2e91e04a314037590b1a5ebe51cf2fab3d50392d65e30a0dd71bec29cfb";
-const EXPECTED_SCHEMA_HASH = "sha256:a0916f90fbca72da0c48e545c5c8dfddee42a0f0b3e54641c7a2297e54e9eb31";
-const EXPECTED_COMMANDS = ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage"];
+const EXPECTED_CORE_COMMIT = "461a561e47702cc79edee2fc09109596f2167808";
+const EXPECTED_COMPONENT_MANIFEST_HASH = "sha256:02d0a6203ecb472e1dd1930db3943f71e43a9805def788861a169eb1c16a27de";
+const EXPECTED_FIXTURE_MANIFEST_HASH = "sha256:6ad8012ec811c7b23318dee51043a3151f6ed120a10d6490f798052ddc631545";
+const EXPECTED_SCHEMA_HASH = "sha256:175e33d10cd38ebe7bd5d94260e67f7fabc70e0368ed55492265ef934633980c";
+const EXPECTED_COMMANDS = ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage", "update_memory"];
 const EXPECTED_PROJECTIONS = ["education_workspace"];
 const FIXED_ISSUED_AT = "2026-09-01T09:00:00.000Z";
 const DECISION_STATUS = {

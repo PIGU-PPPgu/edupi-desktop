@@ -18,7 +18,8 @@ test("memory sidebar selects categories while the main database owns rows and pa
   assert.match(memory, /memoryCategoryRoute\(selectedObjectId\)/);
   assert.match(memory, /edupi-memory-db-grid/);
   assert.match(memory, /edupi-database-pagination/);
-  assert.match(memory, /修订记忆/);
+  assert.match(memory, /手动修改/);
+  assert.match(memory, /AI 协作/);
 });
 
 test("insights use primary categories, status filters, and a database table", async () => {
@@ -74,13 +75,14 @@ test("class workspace keeps the student directory mounted and opens a right draw
   assert.match(student, /edupi-student-directory/);
   assert.match(student, /edupi-student-drawer/);
   assert.match(student, /EduPi 相关记忆/);
-  assert.match(student, /补充学生档案/);
+  assert.match(student, /手动修改/);
+  assert.match(student, /AI 协作/);
   assert.match(student, /onStudent\(null\)/);
   assert.doesNotMatch(student, /mode === "students" \? students\[0\] : null/);
   assert.match(student, /selected \? \[selected\] : data\.students/);
   assert.match(student, /disabled=\{data\.students\.length === 0\}/);
-  assert.match(student, /const formElement = event\.currentTarget/);
-  assert.match(student, /formElement\.reset\(\)/);
+  assert.match(student, /parseStudentProfileList/);
+  assert.match(student, /method: "PUT"/);
 });
 
 test("growth and materials use explicit databases and right-side material details", async () => {
@@ -96,6 +98,10 @@ test("growth and materials use explicit databases and right-side material detail
   assert.match(materials, /PAGE_SIZE = 8/);
   assert.match(materials, /item\.subject\} \$\{item\.source\} \$\{item\.summary/);
   assert.match(materials, /edupi-material-message/);
+  assert.match(materials, /const categoryLabel = MATERIAL_CATEGORIES\.find/);
+  assert.match(materials, /<span>材料<\/span><h1>\{categoryLabel\}<\/h1>/);
+  assert.doesNotMatch(materials, /<span>材料 \/ \{MATERIAL_CATEGORIES/);
+  assert.doesNotMatch(materials, /<h1>材料<\/h1>/);
 });
 
 test("review opens with a three-lane mini board and task stages are vertical on desktop", async () => {

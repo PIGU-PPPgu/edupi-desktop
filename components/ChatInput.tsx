@@ -17,6 +17,7 @@ import {
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
+import { appendSpeechTranscript, useSpeechDictation } from "@/hooks/useSpeechDictation";
 import {
   isTauriDesktop,
   readDesktopImageAttachments,
@@ -430,6 +431,24 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   valueRef.current = value;
   attachedImagesRef.current = attachedImages;
 
+  const appendDictationTranscript = useCallback((transcript: string) => {
+    const next = appendSpeechTranscript(valueRef.current, transcript);
+    valueRef.current = next;
+    setValue(next);
+    setHistoryMenuOpen(false);
+    setAtQuery(null);
+    requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(next.length, next.length);
+      textarea.style.height = "auto";
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+    });
+  }, []);
+  const dictation = useSpeechDictation({ lang: locale === "zh-CN" ? "zh-CN" : "en-US", onTranscript: appendDictationTranscript });
+  const abortDictation = dictation.abort;
+
   useImperativeHandle(ref, () => ({
     insertIfEmpty(text: string) {
       const ta = textareaRef.current;
@@ -631,6 +650,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, []);
 
   const clearInput = useCallback(() => {
+    abortDictation();
     setValue("");
     setAtQuery(null);
     setHistoryMenuOpen(false);
@@ -640,7 +660,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [clearImages, draftKey]);
+  }, [abortDictation, clearImages, draftKey]);
 
   useEffect(() => {
     if (!draftKey || draftKeyRef.current !== draftKey) return;
@@ -1278,6 +1298,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       <div className="chat-composer-wrap" style={{ maxWidth: 820, margin: "0 auto" }}>
         <ModelErrorBanner error={modelError} />
         {attachError && <ModelNoticeBanner tone="error" title={t("chat.attachmentError")} body={attachError} />}
+        {dictation.error && <ModelNoticeBanner tone="error" title={t("chat.dictationError")} body={dictation.error === "not-allowed" || dictation.error === "service-not-allowed" ? t("chat.dictationPermissionDenied") : t("chat.dictationTryAgain")} />}
         <ModelScopeWarningBanner warnings={modelScopeWarnings} />
         {/* Queued steering / follow-up messages (delivered by pi on upcoming turns) */}
         {((queuedMessages?.steering.length ?? 0) + (queuedMessages?.followUp.length ?? 0)) > 0 && (
@@ -1822,6 +1843,33 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               overflow: "auto",
             }}
           />
+
+          {dictation.supported ? <button
+            type="button"
+            className="native-toolbar-button"
+            onClick={dictation.toggle}
+            disabled={isStreaming}
+            title={dictation.listening ? t("chat.stopDictation") : t("chat.startDictation")}
+            aria-label={dictation.listening ? t("chat.stopDictation") : t("chat.startDictation")}
+            aria-pressed={dictation.listening}
+            style={{
+              display: "grid",
+              width: 32,
+              height: 32,
+              flex: "0 0 32px",
+              placeItems: "center",
+              alignSelf: "flex-end",
+              padding: 0,
+              border: 0,
+              borderRadius: 8,
+              background: dictation.listening ? "var(--bg-hover)" : "transparent",
+              color: dictation.listening ? "var(--accent)" : "var(--text-muted)",
+              cursor: isStreaming ? "not-allowed" : "pointer",
+              opacity: isStreaming ? 0.45 : 1,
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6" /></svg>
+          </button> : null}
 
           {isStreaming ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
