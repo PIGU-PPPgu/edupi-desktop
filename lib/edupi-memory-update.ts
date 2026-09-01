@@ -196,6 +196,8 @@ export async function issueMemoryUpdate(input: MemoryUpdateInput, dependencies: 
   const data = await (dependencies.refreshSnapshot || (async (roots) => (await readEduPiEducationSnapshot({ roots })).payload))(initial.roots);
   if (!exactList(record(data.capabilities)?.supported_commands, supportedCommands)) throw new MemoryUpdateError("invalid_envelope", "Core 刷新后的能力不一致。");
   const updated = memoryFromPayload(data as unknown as RawRecord, String(record(envelope.command)?.memory_id));
-  if (updated.content !== record(envelope.command)?.content || updated.revision !== Number(beforeMemory.revision) + 1) throw new MemoryUpdateError("invalid_envelope", "Core 刷新后的记忆内容无效。");
+  const committedRevision = Number(beforeMemory.revision) + 1;
+  if (Number(updated.revision) > committedRevision) throw new MemoryUpdateError("stale_revision", "记忆在保存后又被更新，请刷新查看最新内容。");
+  if (updated.content !== record(envelope.command)?.content || updated.revision !== committedRevision) throw new MemoryUpdateError("invalid_envelope", "Core 刷新后的记忆内容无效。");
   return { receipt, data, memory: updated };
 }
