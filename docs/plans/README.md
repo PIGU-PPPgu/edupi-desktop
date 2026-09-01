@@ -139,3 +139,9 @@ The hardened recognition layer passed its isolated real-model E2 on 2026-08-29: 
 ## Current resume pointer — 2026-08-30 workspace board
 
 The first workspace-board slice is implemented in [2026-08-30-edupi-workspace-board.md](./2026-08-30-edupi-workspace-board.md). It adds a first-level full-width board backed only by Core tasks, work-candidate lifecycle, and bound Agent sessions; current live lanes are 30 todo / 0 active / 2 review / 0 done. Search, responsive horizontal scrolling, and card-to-task-detail navigation passed browser checks without console errors. The next slice is a Core receipt-bound `create_task` and `move_task_stage` contract; do not add UI-only drag state.
+
+## Current resume pointer — 2026-09-02 Living Teacher Agent
+
+The active product and architecture entry point is [2026-09-02-edupi-living-teacher-agent-master-plan.md](./2026-09-02-edupi-living-teacher-agent-master-plan.md) together with [ADR-001](../architecture/ADR-001-edupi-living-teacher-agent.md). Core PRs #12/#13 and Desktop PR #16 close stable-ID soft deletion for calendar, timetable, memory, student, task, and accepted material targets; lost-response retry and post-material-delete snapshot refresh pass paired E2 while original source bytes remain unchanged. Apple Silicon DMG `0.3.0` was built from Desktop merge `713eadd`, mounted, launched, and reached its local server in 2.041 seconds; Windows x64/NSIS remains configuration/workflow verified rather than executed on macOS.
+
+Resume at **E1 / PR A — Core Flow Contract v1**. Add a minimal `work_case` and transition projection for one real calendar-triggered preparation chain, then pin it in Desktop and implement **PR B — Desktop Living Flow v1**. Do not begin by adding more navigation or decorative motion; every visible transition must come from Core state and remain the same in Today, Workspace, Calendar, Teaching, Materials, and Review.
