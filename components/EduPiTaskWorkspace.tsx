@@ -45,12 +45,13 @@ export function EduPiTaskWorkspace(props: Props) {
         </div>
         <span className={`edupi-task-status is-${taskStatusTone(props.task)}`}>{taskStatusLabel(props.task)}</span>
       </header>
-      <nav className="edupi-stage-tabs" aria-label="教学任务工作流">
-        {stages.map((stage, index) => <button key={stage.id} type="button" data-stage={stage.id} className={props.stage === stage.id ? "is-active" : ""} aria-current={props.stage === stage.id ? "step" : undefined} onClick={() => props.onStage(stage.id)}><span>{index + 1}</span><strong>{stage.label}</strong></button>)}
-      </nav>
-      <section className="edupi-task-workspace__surface" aria-label={stageLabel}>
-        <h2 className="edupi-visually-hidden">{stageLabel}</h2>
-        <EduPiTaskStage
+      <div className="edupi-task-workspace__flow">
+        <nav className="edupi-stage-tabs" aria-label="教学任务工作流">
+          {stages.map((stage, index) => <button key={stage.id} type="button" data-stage={stage.id} className={props.stage === stage.id ? "is-active" : ""} aria-current={props.stage === stage.id ? "step" : undefined} onClick={() => props.onStage(stage.id)}><span>{index + 1}</span><strong>{stage.label}</strong></button>)}
+        </nav>
+        <section className="edupi-task-workspace__surface" aria-label={stageLabel}>
+          <h2 className="edupi-visually-hidden">{stageLabel}</h2>
+          <EduPiTaskStage
           task={props.task}
           stage={props.stage}
           workspace={props.workspace}
@@ -66,8 +67,9 @@ export function EduPiTaskWorkspace(props: Props) {
           onOpenAgent={props.onOpenAgent}
           onOpenFile={props.onOpenFile}
           onStage={props.onStage}
-        />
-      </section>
+          />
+        </section>
+      </div>
     </main>
   );
 }

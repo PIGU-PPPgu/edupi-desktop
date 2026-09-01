@@ -369,6 +369,22 @@ function matchesQuery(title: string, detail: string | null, sourceLabel: string,
   return `${title} ${detail || ""} ${sourceLabel}`.toLocaleLowerCase().includes(normalizedQuery);
 }
 
+export function filterTimetableSlots(slots: Array<Record<string, unknown>>, query: string): Array<Record<string, unknown>> {
+  return slots.filter((value) => {
+    const slot = record(value);
+    const title = text(slot.subject) || "课程";
+    const detail = [text(slot.class_name ?? slot.className), text(slot.notes), text(slot.day_of_week ?? slot.dayOfWeek), text(slot.period)].filter(Boolean).join(" ");
+    return matchesQuery(title, detail, "课程表", query);
+  });
+}
+
+export function isPrimaryTimetableSlot(value: Record<string, unknown>): boolean {
+  const slot = record(value);
+  const day = Number(slot.day_of_week ?? slot.dayOfWeek);
+  const period = Number(slot.period);
+  return Number.isInteger(day) && day >= 1 && day <= 5 && Number.isInteger(period) && period >= 1 && period <= 10;
+}
+
 function makeEntry(input: Omit<CalendarEntry, "statusLabel">): CalendarEntry {
   return { ...input, statusLabel: statusLabel(input.status) };
 }

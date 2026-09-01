@@ -7,6 +7,7 @@ import { taskDisplayTitle } from "@/lib/edupi-workbench";
 import {
   addCalendarDays,
   createCalendarProjection,
+  filterTimetableSlots,
   getCalendarViewRange,
   shiftCalendarAnchor,
   type CalendarEntry,
@@ -15,6 +16,7 @@ import {
   type CalendarProjection,
   type CalendarViewMode,
 } from "@/lib/edupi-calendar-model";
+import { EduPiTimetableGrid } from "./EduPiTimetableGrid";
 
 type Props = {
   data: EducationContract;
@@ -339,6 +341,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
   const [editingCalendarId, setEditingCalendarId] = useState<string | null>(null);
   const [editingTimetableId, setEditingTimetableId] = useState<string | null>(null);
   const projection = useMemo(() => filterProjection(createCalendarProjection(data, { view, anchorDate, query }), contentMode), [anchorDate, contentMode, data, query, view]);
+  const filteredTimetable = useMemo(() => filterTimetableSlots(data.timetable, query), [data.timetable, query]);
   const editingCalendarEvent = editingCalendarId
     ? data.calendar.find((event) => event.id === editingCalendarId) || null
     : null;
@@ -426,6 +429,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
       </header>
       {composer ? <IntakeComposer key={`${composer}:${editingCalendarId || editingTimetableId || "new"}`} mode={composer} anchorDate={anchorDate} calendarEvent={composer === "calendar" ? editingCalendarEvent : null} timetableSlot={composer === "timetable" ? editingTimetableSlot : null} busy={intakeBusy} onClose={closeComposer} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} /> : null}
       <div className="edupi-calendar-content-segment" role="group" aria-label="切换日程内容">{CONTENT_LABELS.map((item) => <button type="button" key={item.mode} className={contentMode === item.mode ? "is-active" : ""} onClick={() => { setContentMode(item.mode); setEditingCalendarId(null); setEditingTimetableId(null); onSelect(null); }} aria-pressed={contentMode === item.mode}>{item.label}</button>)}</div>
+      {contentMode === "timetable" ? <EduPiTimetableGrid slots={filteredTimetable} onSelect={onSelect} /> : <>
       <div className="edupi-calendar-toolbar" role="toolbar" aria-label="日程工具栏">
         <button type="button" className="edupi-calendar-today" onClick={() => setAnchorDate(localIsoDate())}>今天</button>
         <div className="edupi-calendar-period-nav"><button type="button" onClick={() => changePeriod(-1)} aria-label="上一时段">‹</button><button type="button" onClick={() => changePeriod(1)} aria-label="下一时段">›</button></div>
@@ -436,6 +440,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
       {view === "week" ? <WeekView projection={projection} selection={selection} onSelectDate={selectDate} onSelect={onSelect} onTaskDetail={openTaskDetail} /> : null}
       {view === "day" ? <DayView projection={projection} selection={selection} onSelect={onSelect} onTaskDetail={openTaskDetail} /> : null}
       <PendingInbox projection={projection} selection={selection} onSelect={onSelect} onTaskDetail={openTaskDetail} />
+      </>}
       {query ? <p className="edupi-calendar-query-note" role="status">正在筛选：{query}{projection.entries.length === 0 && projection.pending.length === 0 ? " · 没有匹配项" : ""}</p> : null}
       {selection && isNonTaskSelection(selection) ? <CalendarDetailDrawer data={data} selection={selection} onClose={closeDetail} editor={drawerEditor} onEdit={selection.kind === "calendar" && data.calendar.some((event) => event.id === selection.sourceId) ? editSelectedCalendar : selection.kind === "timetable" && data.timetable.map(rawRecord).some((slot) => rawText(slot.slot_id ?? slot.id) === selection.sourceId) ? editSelectedTimetable : undefined} /> : null}
     </main>

@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 import type { EducationContract, EducationMemoryCandidate, EducationObservation, TeacherTask } from "@/lib/edupi-education-contract";
-import type { CalendarItemSelection } from "@/lib/edupi-calendar-model";
+import { filterTimetableSlots, type CalendarItemSelection } from "@/lib/edupi-calendar-model";
 import { isRecognizedTimetableNote } from "@/lib/edupi-recognition-markers";
+import { INSIGHT_CATEGORIES, INSIGHT_STATUSES, MATERIAL_CATEGORIES, MEMORY_CATEGORIES, TEACHING_SECTIONS, filterSubjectKnowledgeItems, insightCategory, matchesWorkspaceQuery as match, materialCategoryCount, memoryCategoryRoute, routePart, type InsightCategoryId, type InsightStatusId, type MaterialCategoryId } from "@/lib/edupi-domain-navigation";
 import { groupTasksByCategory, TASK_CATEGORY_CONFIG } from "@/lib/edupi-task-category";
 import { studentRecordKey, studentRecordName } from "@/lib/edupi-student-roster-model";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
-import { isTaskActionable, isUserFacingMemory, recordLabel, taskArtifacts, taskDisplayTitle, taskKey, taskStatusLabel, taskStatusTone, taskTypeLabel, type TaskStage, type WorkbenchView } from "@/lib/edupi-workbench";
+import { confirmedTaskArtifacts, isTaskActionable, isUserFacingMemory, recordLabel, taskArtifacts, taskDisplayTitle, taskKey, taskStatusLabel, taskStatusTone, taskTypeLabel, type TaskStage, type WorkbenchView } from "@/lib/edupi-workbench";
 import { EduPiContentSider } from "./EduPiContentSider";
 
 type Props = {
@@ -51,16 +50,6 @@ const viewTitles: Record<WorkbenchView, string> = {
   artifacts: "教学产物",
 };
 
-function match(value: string, query: string): boolean {
-  return !query || value.toLocaleLowerCase().includes(query.toLocaleLowerCase());
-}
-
-function objectStudentDateLabel(value: unknown): string | null {
-  if (typeof value !== "string" || !value.trim()) return null;
-  const parsed = new Date(value.includes("T") ? value : `${value}T00:00:00`);
-  return Number.isNaN(parsed.getTime()) ? null : new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }).format(parsed);
-}
-
 function GroupTitle({ children, count }: { children: string; count?: number }) {
   return <div className="edupi-object-group__title"><strong>{children}</strong>{count !== undefined ? <span>{count}</span> : null}</div>;
 }
@@ -78,11 +67,8 @@ function C1ReviewRow({ target, onClick }: { target: C1ObjectTarget; onClick: () 
   return <button type="button" className="edupi-object-row edupi-c1-object-row" onClick={onClick} aria-label={`打开${isObservation ? "教师观察" : "记忆候选"}：${content}`}><span className="edupi-object-row__marker is-warning" aria-hidden="true" /><span className="edupi-object-row__copy"><strong>{content}</strong><small>{isObservation ? "教师观察" : "记忆候选"} · {source}</small></span><em>待确认</em></button>;
 }
 
-const OBJECT_PAGE_SIZE = 10;
-function PageControls({ page, total, onPage }: { page: number; total: number; onPage: (page: number) => void }) {
-  const pages = Math.max(1, Math.ceil(total / OBJECT_PAGE_SIZE));
-  if (pages <= 1) return null;
-  return <div className="edupi-object-pagination"><button type="button" disabled={page <= 0} onClick={() => onPage(page - 1)}>上一页</button><span>{page + 1} / {pages}</span><button type="button" disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>下一页</button></div>;
+function CategoryRow({ label, count, selected, onClick }: { label: string; count?: number; selected: boolean; onClick: () => void }) {
+  return <button type="button" className={`edupi-object-category${selected ? " is-selected" : ""}`} onClick={onClick}><strong>{label}</strong>{count !== undefined ? <span>{count}</span> : null}<em>›</em></button>;
 }
 
 function ObjectStudentRow({ student, index, selected, onClick }: { student: Record<string, unknown>; index: number; selected: boolean; onClick: () => void }) {
@@ -94,8 +80,6 @@ function ObjectStudentRow({ student, index, selected, onClick }: { student: Reco
 }
 
 export function EduPiObjectSider({ view, data, context, query, onQuery, selectedStudentId, onStudent, selectedObjectId, onObject, selectedTaskKey, onTask, onReviewTarget, selectedCalendarSourceId, onCalendarItem, onUpload, onCollapse }: Props) {
-  const [objectPage, setObjectPage] = useState(0);
-  useEffect(() => setObjectPage(0), [query, view]);
   const tasks = data.tasks.filter((task) => match(`${task.title} ${task.sourceEventName || ""} ${task.student || ""}`, query));
   const pending = tasks.filter((task) => isTaskActionable(task));
   const pendingC1: C1ObjectTarget[] = [
@@ -108,32 +92,46 @@ export function EduPiObjectSider({ view, data, context, query, onQuery, selected
   const materials = tasks.filter((task) => task.materialId || task.trigger === "teaching_adjustment_candidate");
   const intakeMaterials = (data.intakeTargets ?? []).filter((target) => target.projectionKind === "material_intake" && target.status === "accepted").slice().reverse();
   const artifacts = tasks.filter((task) => taskArtifacts(task).length > 0);
+  const confirmedGrowthArtifacts = confirmedTaskArtifacts(data.tasks, query);
   const students = data.students.filter((student) => match(recordLabel(student, ["name", "student_name", "display_name"], ""), query));
   const calendar = data.calendar.filter((event) => match(`${event.name} ${event.date || ""}`, query));
+  const timetable = filterTimetableSlots(data.timetable, query);
+  const subjectKnowledge = filterSubjectKnowledgeItems(data.continuity.subjectKnowledge, query);
   const memories = data.continuity.memories.filter((memory) => memory.state === "active" && isUserFacingMemory(memory) && match(`${memory.content} ${memory.student || ""} ${memory.tags.join(" ")}`, query));
   const insights = data.continuity.insights.filter((insight) => !insight.content.startsWith("[主题候选]") && match(`${insight.content} ${insight.evidenceIds.join(" ")}`, query)).sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
   const signals = data.continuity.signals.filter((signal) => match(`${signal.content} ${signal.related.join(" ")}`, query)).sort((left, right) => right.strength - left.strength);
   const documents = data.continuity.documents.filter((document) => match(`${document.title} ${document.excerpt}`, query));
-  const themes = data.continuity.themes.filter((theme) => match(theme.topic, query)).slice(0, 8);
-  const insightRows = [...insights.map((insight) => ({ id: `insight:${insight.id}`, title: insight.content.replace(/^\[(?:梦境启示|主题候选)\]\s*/, "").slice(0, 32), detail: `${insight.status === "surfaced" ? "已浮出" : "酝酿中"} · ${insight.evidenceIds.length} 条依据` })), ...signals.map((signal) => ({ id: `signal:${signal.id}`, title: signal.content, detail: `出现 ${signal.strength} 次` }))];
-  const growthRows = [...documents.map((document) => ({ id: `document:${document.id}`, title: document.title, detail: objectStudentDateLabel(document.date) || document.path })), ...themes.map((theme) => ({ id: `theme:${theme.topic}`, title: theme.topic, detail: `出现 ${theme.occurrences} 次 · ${theme.skillCandidate ? "待验证" : "观察中"}` }))];
-  const pageSlice = <T,>(items: T[]) => items.slice(objectPage * OBJECT_PAGE_SIZE, (objectPage + 1) * OBJECT_PAGE_SIZE);
+  const themes = data.continuity.themes.filter((theme) => match(theme.topic, query));
+  const teachingSection = routePart(selectedObjectId, "teaching", "home");
+  const memoryCategory = memoryCategoryRoute(selectedObjectId);
+  const [insightCategoryRoute = "learning", insightStatusRoute = "all"] = routePart(selectedObjectId, "insights", "learning:all").split(":") as [InsightCategoryId, InsightStatusId];
+  const growthCategory = routePart(selectedObjectId, "growth", "teacher");
+  const materialCategoryRoute = routePart(selectedObjectId, "materials", "all");
+  const insightCategoryCount = (category: InsightCategoryId) => insights.filter((item) => insightCategory(item.content) === category).length + signals.filter((item) => insightCategory(item.content) === category).length;
+  const insightStatusCount = (status: InsightStatusId) => {
+    const categoryInsights = insights.filter((item) => insightCategory(item.content) === insightCategoryRoute);
+    const categorySignals = signals.filter((item) => insightCategory(item.content) === insightCategoryRoute);
+    if (status === "signal") return categorySignals.length;
+    if (status === "surfaced" || status === "brewing") return categoryInsights.filter((item) => item.status === status).length;
+    return categoryInsights.length + categorySignals.length;
+  };
+  const materialCount = (category: MaterialCategoryId) => materialCategoryCount(category, materials, intakeMaterials.length);
   const tasksByCategory = groupTasksByCategory(tasks);
   const taskRows = (rows: TeacherTask[], stage: TaskStage) => rows.map((task) => <TaskRow key={taskKey(task)} task={task} selected={taskKey(task) === selectedTaskKey} onClick={() => onTask(task, stage)} />);
 
   return (
     <EduPiContentSider width={244} ariaLabel={`${viewTitles[view]}对象列表`} header={<><div className="edupi-object-sider__header"><div><span>当前模块</span><strong>{viewTitles[view]}</strong></div><button type="button" onClick={onCollapse} aria-label="收起列表">‹</button></div><label className="edupi-object-sider__search"><span aria-hidden="true">⌕</span><input type="search" value={query} onChange={(event) => onQuery(event.target.value)} placeholder={`搜索${viewTitles[view]}`} aria-label={`搜索${viewTitles[view]}`} /></label></>}>
       {view === "dashboard" ? <><section className="edupi-object-group"><GroupTitle count={pending.length}>需要处理</GroupTitle>{taskRows(pending, "review")}{pending.length === 0 ? <div className="edupi-object-empty">暂无待处理事项</div> : null}</section><section className="edupi-object-group"><GroupTitle count={reviewed.length}>最近完成</GroupTitle>{taskRows(reviewed.slice(0, 6), "brief")}</section></> : null}
-      {view === "teaching" ? <><section className="edupi-object-group"><GroupTitle count={teachingTasks.length}>教学工作</GroupTitle>{taskRows(teachingTasks, "run")}{teachingTasks.length === 0 ? <div className="edupi-object-empty">暂无教学工作</div> : null}</section><section className="edupi-object-group"><GroupTitle count={data.timetable.length}>本周课程</GroupTitle>{data.timetable.slice(0, 6).map((slot, index) => { const recognized = isRecognizedTimetableNote(slot.notes); return <div className="edupi-object-fact" key={`${String(slot.day_of_week)}:${String(slot.period)}:${index}`}><strong>{recordLabel(slot, ["subject"], "课程")}</strong><span>周{String(slot.day_of_week ?? "-")} · 第 {String(slot.period ?? "-")} 节{recognized ? " · 待确认" : ""}</span></div>; })}</section></> : null}
+      {view === "teaching" ? <section className="edupi-object-group"><GroupTitle>教学工作区</GroupTitle>{TEACHING_SECTIONS.map((section) => <CategoryRow key={section.id} label={section.label} count={section.id === "schedule" ? timetable.length : section.id === "knowledge" ? subjectKnowledge.length : section.id === "tasks" ? teachingTasks.length : section.id === "memory" ? memories.filter((item) => item.category === "teaching").length : undefined} selected={teachingSection === section.id} onClick={() => onObject(`teaching:${section.id}`)} />)}</section> : null}
       {view === "homeroom" ? <><section className="edupi-object-group"><GroupTitle count={homeroomTasks.length}>学生跟进</GroupTitle>{taskRows(homeroomTasks, "run")}{homeroomTasks.length === 0 ? <div className="edupi-object-empty">暂无跟进事项</div> : null}</section><section className="edupi-object-group"><GroupTitle count={students.length}>学生</GroupTitle>{students.map((student, index) => { const id = studentRecordKey(student, index); return <ObjectStudentRow key={id} student={student} index={index} selected={id === selectedStudentId} onClick={() => onStudent(student)} />; })}</section></> : null}
       {view === "tasks" ? <>{TASK_CATEGORY_CONFIG.map((category) => { const rows = tasksByCategory[category.id]; return rows.length > 0 ? <section className="edupi-object-group" key={category.id}><GroupTitle count={rows.length}>{category.label}</GroupTitle>{taskRows(rows, "brief")}</section> : null; })}{tasks.length === 0 ? <div className="edupi-object-empty">暂无匹配任务</div> : null}</> : null}
-      {view === "review" ? <><section className="edupi-object-group"><GroupTitle count={pendingC1.length}>观察与记忆</GroupTitle>{pendingC1.map((target) => <C1ReviewRow key={`${target.kind}:${target.id}`} target={target} onClick={() => onReviewTarget?.({ kind: target.kind, id: target.id })} />)}{pendingC1.length === 0 ? <div className="edupi-object-empty">暂无待确认内容</div> : null}</section><section className="edupi-object-group"><GroupTitle count={pending.length}>任务审核</GroupTitle>{taskRows(pending, "review")}{pending.length === 0 ? <div className="edupi-object-empty">暂无待审核任务</div> : null}</section></> : null}
+      {view === "review" ? <><section className="edupi-object-group"><GroupTitle>审核入口</GroupTitle><CategoryRow label="审核看板" count={pending.length + pendingC1.length} selected={selectedObjectId === "review:board" || !selectedObjectId} onClick={() => onObject("review:board")} /></section><section className="edupi-object-group"><GroupTitle count={pendingC1.length}>观察与记忆</GroupTitle>{pendingC1.map((target) => <C1ReviewRow key={`${target.kind}:${target.id}`} target={target} onClick={() => onReviewTarget?.({ kind: target.kind, id: target.id })} />)}{pendingC1.length === 0 ? <div className="edupi-object-empty">暂无待确认内容</div> : null}</section><section className="edupi-object-group"><GroupTitle count={pending.length}>任务审核</GroupTitle>{taskRows(pending, "review")}{pending.length === 0 ? <div className="edupi-object-empty">暂无待审核任务</div> : null}</section></> : null}
       {view === "students" ? <><section className="edupi-object-group"><GroupTitle>班级</GroupTitle>{(context?.classes?.length ? context.classes : [context?.grade || "年级待设置"]).map((name) => <div className="edupi-object-fact" key={name}><strong>{name}</strong><span>{context?.subject || "学科待设置"}</span></div>)}</section><section className="edupi-object-group"><GroupTitle count={students.length}>学生</GroupTitle>{students.map((student, index) => { const id = studentRecordKey(student, index); return <ObjectStudentRow key={id} student={student} index={index} selected={id === selectedStudentId} onClick={() => onStudent(student)} />; })}{students.length === 0 ? <div className="edupi-object-empty">暂无学生事实</div> : null}</section></> : null}
-      {view === "calendar" ? <><section className="edupi-object-group"><GroupTitle count={data.timetable.length}>本周课程</GroupTitle>{data.timetable.map((slot, index) => { const sourceId = recordLabel(slot, ["slot_id", "id"], `timetable:${index}`); const title = recordLabel(slot, ["subject"], "课程"); const detail = `周${String(slot.day_of_week ?? "-")} · 第 ${String(slot.period ?? "-")} 节`; const recognized = isRecognizedTimetableNote(slot.notes); return <button type="button" className={`edupi-object-fact is-interactive${selectedCalendarSourceId === sourceId ? " is-selected" : ""}`} key={sourceId} onClick={() => onCalendarItem?.({ kind: "timetable", sourceId, date: null, title, detail, sourceLabel: recognized ? "材料识别" : "课程表", statusLabel: recognized ? "待确认" : "已确认" })}><strong>{title}</strong><span>{detail}{recognized ? " · 待确认" : ""}</span></button>; })}{data.timetable.length === 0 ? <div className="edupi-object-empty">暂无课程表</div> : null}</section><section className="edupi-object-group"><GroupTitle count={calendar.length}>校历节点</GroupTitle>{calendar.map((event) => { const sourceId = event.id || `calendar:${event.date || "pending"}:${event.name}`; return <button type="button" className={`edupi-object-fact is-interactive${selectedCalendarSourceId === sourceId ? " is-selected" : ""}`} key={sourceId} onClick={() => onCalendarItem?.({ kind: "calendar", sourceId, date: event.date, title: event.name, detail: event.notes, sourceLabel: event.source === "official_school_calendar" ? "学校校历" : event.source === "teacher" ? "教师" : event.source === "inferred" ? "材料识别" : "校历", statusLabel: event.preparationStatus === "read_only" ? "已确认" : "待确认" })}><strong>{event.name}</strong><span>{event.date || "日期待确认"}</span></button>; })}</section></> : null}
-      {view === "memory" ? <section className="edupi-object-group"><GroupTitle count={memories.length}>当前记忆</GroupTitle>{pageSlice(memories).map((memory, index) => <button type="button" className={`edupi-object-fact is-interactive${selectedObjectId === `memory:${memory.id}` || (!selectedObjectId && objectPage === 0 && index === 0) ? " is-selected" : ""}`} key={memory.id} onClick={() => onObject(`memory:${memory.id}`)}><strong>{memory.student || ({ semester: "学期", class: "班级", teaching: "教学", preferences: "教师偏好", school: "学校" } as Record<string, string>)[memory.category] || memory.category}</strong><span>{memory.content}</span></button>)}<PageControls page={objectPage} total={memories.length} onPage={setObjectPage} /></section> : null}
-      {view === "insights" ? <section className="edupi-object-group"><GroupTitle count={insightRows.length}>观察记录</GroupTitle>{pageSlice(insightRows).map((item, index) => <button type="button" className={`edupi-object-fact is-interactive${selectedObjectId === item.id || (!selectedObjectId && objectPage === 0 && index === 0) ? " is-selected" : ""}`} key={item.id} onClick={() => onObject(item.id)}><strong>{item.title}</strong><span>{item.detail}</span></button>)}<PageControls page={objectPage} total={insightRows.length} onPage={setObjectPage} /></section> : null}
-      {view === "growth" ? <section className="edupi-object-group"><GroupTitle count={growthRows.length}>成长记录</GroupTitle>{pageSlice(growthRows).map((item, index) => <button type="button" className={`edupi-object-fact is-interactive${selectedObjectId === item.id || (!selectedObjectId && objectPage === 0 && index === 0) ? " is-selected" : ""}`} key={item.id} onClick={() => onObject(item.id)}><strong>{item.title}</strong><span>{item.detail}</span></button>)}<PageControls page={objectPage} total={growthRows.length} onPage={setObjectPage} /></section> : null}
-      {view === "materials" ? <><section className="edupi-object-group"><div className="edupi-object-group__actions"><GroupTitle count={materials.length}>收件箱</GroupTitle><button type="button" onClick={onUpload}>上传</button></div>{taskRows(materials, "evidence")}{materials.length === 0 ? <div className="edupi-object-empty">暂无待处理材料</div> : null}</section><section className="edupi-object-group"><GroupTitle count={intakeMaterials.length}>已接入</GroupTitle>{intakeMaterials.map((target) => <div className="edupi-object-fact" key={target.targetId}><strong>{target.title}</strong><span>{target.reviewedAt ? objectStudentDateLabel(target.reviewedAt) : "已保留来源"}</span></div>)}</section></> : null}
+      {view === "calendar" ? <><section className="edupi-object-group"><GroupTitle count={timetable.length}>本周课程</GroupTitle>{timetable.map((slot, index) => { const sourceId = recordLabel(slot, ["slot_id", "id"], `timetable:${index}`); const title = recordLabel(slot, ["subject"], "课程"); const detail = `周${String(slot.day_of_week ?? "-")} · 第 ${String(slot.period ?? "-")} 节`; const recognized = isRecognizedTimetableNote(slot.notes); return <button type="button" className={`edupi-object-fact is-interactive${selectedCalendarSourceId === sourceId ? " is-selected" : ""}`} key={sourceId} onClick={() => onCalendarItem?.({ kind: "timetable", sourceId, date: null, title, detail, sourceLabel: recognized ? "材料识别" : "课程表", statusLabel: recognized ? "待确认" : "已确认" })}><strong>{title}</strong><span>{detail}{recognized ? " · 待确认" : ""}</span></button>; })}{timetable.length === 0 ? <div className="edupi-object-empty">暂无课程表</div> : null}</section><section className="edupi-object-group"><GroupTitle count={calendar.length}>校历节点</GroupTitle>{calendar.map((event) => { const sourceId = event.id || `calendar:${event.date || "pending"}:${event.name}`; return <button type="button" className={`edupi-object-fact is-interactive${selectedCalendarSourceId === sourceId ? " is-selected" : ""}`} key={sourceId} onClick={() => onCalendarItem?.({ kind: "calendar", sourceId, date: event.date, title: event.name, detail: event.notes, sourceLabel: event.source === "official_school_calendar" ? "学校校历" : event.source === "teacher" ? "教师" : event.source === "inferred" ? "材料识别" : "校历", statusLabel: event.preparationStatus === "read_only" ? "已确认" : "待确认" })}><strong>{event.name}</strong><span>{event.date || "日期待确认"}</span></button>; })}</section></> : null}
+      {view === "memory" ? <section className="edupi-object-group"><GroupTitle count={memories.length}>记忆分类</GroupTitle>{MEMORY_CATEGORIES.map((category) => <CategoryRow key={category.id} label={category.label} count={memories.filter((item) => item.category === category.id).length} selected={memoryCategory === category.id} onClick={() => onObject(`memory:${category.id}`)} />)}</section> : null}
+      {view === "insights" ? <><section className="edupi-object-group"><GroupTitle>一级分类</GroupTitle>{INSIGHT_CATEGORIES.map((category) => <CategoryRow key={category.id} label={category.label} count={insightCategoryCount(category.id)} selected={insightCategoryRoute === category.id} onClick={() => onObject(`insights:${category.id}:${insightStatusRoute}`)} />)}</section><section className="edupi-object-group"><GroupTitle>状态筛选</GroupTitle>{INSIGHT_STATUSES.map((status) => <CategoryRow key={status.id} label={status.label} count={insightStatusCount(status.id)} selected={insightStatusRoute === status.id} onClick={() => onObject(`insights:${insightCategoryRoute}:${status.id}`)} />)}</section></> : null}
+      {view === "growth" ? <section className="edupi-object-group"><GroupTitle>成长对象</GroupTitle><CategoryRow label="教师专业成长" count={documents.length + confirmedGrowthArtifacts.length} selected={growthCategory === "teacher"} onClick={() => onObject("growth:teacher")} /><CategoryRow label="EduPi 能力成长" count={themes.length} selected={growthCategory === "edupi"} onClick={() => onObject("growth:edupi")} /></section> : null}
+      {view === "materials" ? <section className="edupi-object-group"><div className="edupi-object-group__actions"><GroupTitle count={materials.length + intakeMaterials.length}>材料分类</GroupTitle><button type="button" onClick={onUpload}>上传</button></div>{MATERIAL_CATEGORIES.map((category) => <CategoryRow key={category.id} label={category.label} count={materialCount(category.id)} selected={materialCategoryRoute === category.id} onClick={() => onObject(`materials:${category.id}`)} />)}</section> : null}
       {view === "artifacts" ? <section className="edupi-object-group"><GroupTitle count={artifacts.reduce((total, task) => total + taskArtifacts(task).length, 0)}>最近产物</GroupTitle>{taskRows(artifacts, "artifact")}{artifacts.length === 0 ? <div className="edupi-object-empty">暂无教学产物</div> : null}</section> : null}
     </EduPiContentSider>
   );

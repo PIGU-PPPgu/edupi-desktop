@@ -28,6 +28,10 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   const taskBoardModel = await read("../lib/edupi-task-board.ts");
   const calendarModel = await read("../lib/edupi-calendar-model.ts");
   const workspaceViews = await read("./EduPiWorkspaceViews.tsx");
+  const teaching = await read("./EduPiTeachingWorkspace.tsx");
+  const memoryDatabase = await read("./EduPiMemoryDatabase.tsx");
+  const insightDatabase = await read("./EduPiInsightDatabase.tsx");
+  const growth = await read("./EduPiGrowthWorkspace.tsx");
   const workbench = await read("../lib/edupi-workbench.ts");
   assert.match(panel, /fetch\("\/api\/edupi\/education"/);
   assert.doesNotMatch(panel, /edupi-teacher-topbar/);
@@ -69,20 +73,21 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   assert.doesNotMatch(rail, /views: \[[^\]]*"students"/);
   assert.match(workbench, /id: "tasks", label: "教学任务"/);
   assert.match(workbench, /id: "artifacts", label: "教学产物"/);
-  assert.match(workspaceViews, /function TeachingView/);
+  assert.match(workspaceViews, /EduPiTeachingWorkspace/);
   assert.match(workspaceViews, /EduPiStudentWorkspace/);
-  assert.match(workspaceViews, /function MemoryView/);
-  assert.match(workspaceViews, /function InsightsView/);
-  assert.match(workspaceViews, /function GrowthView/);
-  assert.match(workspaceViews, /continuity\.subjectKnowledge/);
+  assert.match(workspaceViews, /EduPiMemoryDatabase/);
+  assert.match(workspaceViews, /EduPiInsightDatabase/);
+  assert.match(workspaceViews, /EduPiGrowthWorkspace/);
+  assert.match(memoryDatabase, /edupi-database/);
+  assert.match(insightDatabase, /edupi-database/);
+  assert.match(teaching, /continuity\.subjectKnowledge/);
   assert.match(await read("./EduPiStudentWorkspace.tsx"), /continuity\.familyContacts/);
-  assert.match(workspaceViews, /continuity\.documents/);
-  assert.match(workspaceViews, /task\.trigger === "teaching_adjustment_candidate"/);
+  assert.match(growth, /continuity\.documents/);
+  assert.match(teaching, /task\.trigger === "teaching_adjustment_candidate"/);
   assert.match(await read("./EduPiStudentWorkspace.tsx"), /task\.student === selectedName/);
-  for (const step of ["观察", "准备", "审核", "留痕"]) assert.match(workspaceViews, new RegExp(step));
+  for (const label of ["教学首页", "课程表", "教学重点", "备课任务", "教学记忆"]) assert.match(`${teaching}\n${await read("../lib/edupi-domain-navigation.ts")}`, new RegExp(label));
   for (const section of ["交给 EduPi", "EduPi 已经准备好", "今天要判断", "接下来", "值得留意"]) assert.match(`${workspaceViews}\n${await read("./EduPiTodayWork.tsx")}`, new RegExp(section));
   assert.match(workspaceViews, /onStartAgent/);
-  assert.match(workspaceViews, /complete === steps\.length \? taskStatusLabel\(task\)/);
   assert.match(workspaceViews, /event !== currentWeek/);
   assert.match(panel, /showObjectSider/);
   assert.match(panel, /activeView === "tasks" && activeTask \? <EduPiTaskWorkspace/);
@@ -99,7 +104,6 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   assert.match(appShell, /onActivateAgentSession=/);
   assert.match(appShell, /params\.set\("stage", stage\)/);
   assert.match(panel, /stage: activeStage/);
-  assert.match(workspaceViews, /taskSessions/);
   for (const label of ["Agent 正在运行", "继续协作", "开始协作", "恢复协作"]) assert.match(taskStage, new RegExp(label));
   assert.match(workspaceViews, /Agent 就绪/);
   assert.match(workspaceViews, /个 Agent 运行中/);
@@ -186,6 +190,7 @@ test("keeps the existing Chat subtree mounted during background education refres
 test("routes education uploads through Desktop staging without Core paths or auto-send", async () => {
   const panel = await read("./EduPiEducationPanel.tsx");
   const workspaceViews = await read("./EduPiWorkspaceViews.tsx");
+  const materials = await read("./EduPiMaterialsWorkspace.tsx");
   const home = await read("./EduPiEducationHome.tsx");
   const explorer = await read("./FileExplorer.tsx");
   const sidebar = await read("./SessionSidebar.tsx");
@@ -202,7 +207,7 @@ test("routes education uploads through Desktop staging without Core paths or aut
   assert.match(panel, /loadStagedMaterials|listDesktopStagedMaterials/);
   assert.match(panel, /type="file"/);
   assert.match(workspaceViews, /stagedMaterials/);
-  assert.match(workspaceViews, /接入 EduPi/);
+  assert.match(materials, /接入 EduPi/);
   assert.match(panel, /fetch\("\/api\/edupi\/intake"/);
   assert.doesNotMatch(openUpload, /selectView\("chat"\)|setPendingAgentPrompt|handleSend|sendAgentCommand/);
   for (const source of [panel, home, explorer, sidebar, appShell]) {

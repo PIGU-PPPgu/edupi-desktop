@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { EducationContract, TeacherTask } from "@/lib/edupi-education-contract";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { studentRecordKey, studentRecordName } from "@/lib/edupi-student-roster-model";
-import { taskDisplayTitle, taskKey, taskStatusLabel } from "@/lib/edupi-workbench";
+import { isUserFacingMemory, taskDisplayTitle, taskKey, taskStatusLabel } from "@/lib/edupi-workbench";
 
 type Props = {
   mode: "homeroom" | "students";
@@ -12,16 +12,14 @@ type Props = {
   context: TeacherContextSnapshot | null;
   query: string;
   selectedStudentId: string | null;
+  onStudent: (student: Record<string, unknown> | null) => void;
   onEducation: (data: EducationContract) => void;
   onTask: (task: TeacherTask) => void;
+  onStartAgent: (prompt: string) => void;
 };
 
 function records(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item)) : [];
-}
-
-function text(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function shortDate(value: unknown): string {
@@ -48,22 +46,15 @@ function download(content: string, name: string, type: string) {
 function exportValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(exportValue);
   if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-    .filter(([key]) => !/(?:^id$|_id$|_ids$|hash|path)/i.test(key))
-    .map(([key, child]) => [key, exportValue(child)]));
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).filter(([key]) => !/(?:^id$|_id$|_ids$|hash|path)/i.test(key)).map(([key, child]) => [key, exportValue(child)]));
 }
 
-function statusLabel(value: unknown): string {
-  const labels: Record<string, string> = { active: "观察中", resolved: "已解决", pending: "待观察", in_progress: "观察中", hold: "暂缓", dismissed: "已忽略", closed: "已关闭" };
-  return typeof value === "string" ? labels[value.toLowerCase()] || value : "观察中";
-}
-
-export function EduPiStudentWorkspace({ mode, data, context, query, selectedStudentId, onEducation, onTask }: Props) {
+export function EduPiStudentWorkspace({ mode, data, context, query, selectedStudentId, onStudent, onEducation, onTask, onStartAgent }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
-  const students = data.students.filter((student) => !query || JSON.stringify(student).toLocaleLowerCase().includes(query.toLocaleLowerCase()));
-  const selected = students.find((student, index) => studentRecordKey(student, index) === selectedStudentId) || (mode === "students" ? students[0] : null) || null;
+  const students = data.students.filter((student) => !query || JSON.stringify(student).toLocaleLowerCase().includes(query.toLocaleLowerCase())).slice().sort((left, right) => studentRecordName(left).localeCompare(studentRecordName(right), "zh-CN"));
+  const selected = students.find((student, index) => studentRecordKey(student, index) === selectedStudentId) || null;
   const selectedName = selected ? studentRecordName(selected) : null;
   const patterns = selected ? records(selected.error_patterns) : [];
   const trajectory = selected ? records(selected.trajectory) : [];
@@ -71,52 +62,52 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   const parentNotes = selected && Array.isArray(selected.parent_notes) ? selected.parent_notes : [];
   const familyContacts = selectedName ? data.continuity.familyContacts.filter((contact) => contact.student === selectedName) : [];
   const tasks = selectedName ? data.tasks.filter((task) => task.student === selectedName || task.sourceEventName?.includes(selectedName)) : [];
+  const memories = selectedName ? data.continuity.memories.filter((memory) => memory.state === "active" && isUserFacingMemory(memory) && (memory.student === selectedName || memory.content.includes(selectedName))) : [];
   const classes = context?.classes?.length ? context.classes.join(" · ") : context?.grade || "班级待设置";
-  const classPatternCount = students.reduce((total, student) => total + (Array.isArray(student.error_patterns) ? student.error_patterns.filter((item) => !item || typeof item !== "object" || (item as Record<string, unknown>).status !== "resolved").length : 0), 0);
-  const classTaskCount = data.tasks.filter((task) => task.trigger === "student_follow_up" && task.boardStage !== "done").length;
+  const activePatterns = students.reduce((total, student) => total + records(student.error_patterns).filter((item) => item.status !== "resolved").length, 0);
+  const openFollowUps = data.tasks.filter((task) => task.trigger === "student_follow_up" && task.boardStage !== "done").length;
 
+  const importCsv = async (sourceName: string, csv: string) => {
+    const response = await fetch("/api/edupi/students/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourceName, csv }) });
+    const result = await response.json() as { error?: string; data?: EducationContract; result?: { imported?: number } };
+    if (!response.ok || !result.data) throw new Error(result.error || "学生档案更新失败。");
+    onEducation(result.data);
+    return result;
+  };
   const importFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || busy) return;
-    setBusy(true);
-    setMessage(null);
-    try {
-      const response = await fetch("/api/edupi/students/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourceName: file.name, csv: await file.text() }) });
-      const result = await response.json() as { error?: string; data?: EducationContract; result?: { imported?: number; created?: number; updated?: number } };
-      if (!response.ok || !result.data) throw new Error(result.error || "学生名单导入失败。");
-      onEducation(result.data);
-      setMessage({ tone: "success", text: `已导入 ${result.result?.imported ?? 0} 名学生` });
-    } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : "学生名单导入失败。" });
-    } finally {
-      setBusy(false);
-    }
+    setBusy(true); setMessage(null);
+    try { const result = await importCsv(file.name, await file.text()); setMessage({ tone: "success", text: `已导入 ${result.result?.imported ?? 0} 名学生` }); }
+    catch (error) { setMessage({ tone: "error", text: error instanceof Error ? error.message : "学生名单导入失败。" }); }
+    finally { setBusy(false); }
   };
-
-  const exportCurrent = () => {
-    const payload = selected || data.students;
-    const name = selectedName ? `${selectedName}-学生档案.json` : "班级学生档案.json";
-    download(`${JSON.stringify({ exported_at: new Date().toISOString(), students: exportValue(Array.isArray(payload) ? payload : [payload]) }, null, 2)}\n`, name, "application/json;charset=utf-8");
+  const supplement = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedName || busy) return;
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const trait = String(form.get("trait") || "").trim();
+    const parentNote = String(form.get("parentNote") || "").trim();
+    if (!trait && !parentNote) return;
+    setBusy(true); setMessage(null);
+    try { await importCsv(`${selectedName}-档案补充.csv`, `姓名,性格特征,家长备注\n${csvCell(selectedName)},${csvCell(trait)},${csvCell(parentNote)}\n`); setMessage({ tone: "success", text: "学生档案已补充" }); formElement.reset(); }
+    catch (error) { setMessage({ tone: "error", text: error instanceof Error ? error.message : "学生档案补充失败。" }); }
+    finally { setBusy(false); }
   };
+  const exportCurrent = () => download(`${JSON.stringify({ exported_at: new Date().toISOString(), students: exportValue(selected ? [selected] : data.students) }, null, 2)}\n`, selectedName ? `${selectedName}-学生档案.json` : "班级学生档案.json", "application/json;charset=utf-8");
   const exportTimeline = () => {
-    if (!selected || !selectedName) return;
+    if (!selectedName) return;
     const rows = trajectory.map((item) => [item.date || "", item.event || "", item.note || item.description || ""]);
     download(`\uFEFF${[["日期", "事件", "备注"], ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`, `${selectedName}-成长轨迹.csv`, "text/csv;charset=utf-8");
   };
 
-  return <main className="edupi-module-workspace edupi-student-workspace">
-    <header className="edupi-module-heading edupi-student-heading"><div><h1>{mode === "homeroom" ? "班级" : "学生档案"}</h1><p>{classes} · {data.students.length} 名学生</p></div><div className="edupi-student-heading__actions"><button type="button" onClick={() => inputRef.current?.click()} disabled={busy}>{busy ? "导入中…" : "导入名单"}</button><button type="button" onClick={exportCurrent} disabled={!selected}>导出档案</button><button type="button" onClick={exportTimeline} disabled={!selected}>导出轨迹</button></div><input ref={inputRef} type="file" accept=".csv,text/csv" hidden onChange={importFile} /></header>
+  return <main className="edupi-module-workspace edupi-class-workspace">
+    <header className="edupi-module-heading edupi-student-heading"><div><span>{mode === "homeroom" ? "班级工作区" : "学生档案"}</span><h1>{mode === "homeroom" ? "班级" : "学生档案"}</h1><p>{classes} · {students.length} 名学生</p></div><div className="edupi-student-heading__actions"><button type="button" onClick={() => inputRef.current?.click()} disabled={busy}>{busy ? "导入中…" : "导入名单"}</button><button type="button" onClick={exportCurrent} disabled={data.students.length === 0}>导出档案</button><button type="button" onClick={exportTimeline} disabled={!selected}>导出轨迹</button></div><input ref={inputRef} type="file" accept=".csv,text/csv" hidden onChange={importFile} /></header>
     {message ? <p className={`edupi-student-message is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p> : null}
-    {selected && selectedName ? <div className="edupi-student-profile">
-      <section className="edupi-student-profile__identity"><span>{selectedName.slice(0, 1)}</span><div><h2>{selectedName}</h2><p>{traits.join(" · ") || "学生档案"}</p></div><time>{shortDate(selected.updated_at)}</time></section>
-      <section className="edupi-student-profile__metrics" aria-label={`${selectedName}档案概览`}><div><strong>{patterns.length}</strong><span>学习模式</span></div><div><strong>{trajectory.length}</strong><span>成长节点</span></div><div><strong>{parentNotes.length + familyContacts.length}</strong><span>家校记录</span></div><div><strong>{tasks.length}</strong><span>相关任务</span></div></section>
-      <div className="edupi-student-profile__grid">
-        <section><header><h3>学习模式</h3><span>{patterns.length}</span></header>{patterns.map((pattern, index) => <article key={`${selectedName}:pattern:${index}`}><div><strong>{text(pattern.description ?? pattern.desc) || "学习观察"}</strong><span>{statusLabel(pattern.status)}</span></div><p>{pattern.count ? `出现 ${String(pattern.count)} 次` : "已记录"}{pattern.last_seen ? ` · ${shortDate(pattern.last_seen)}` : ""}</p></article>)}{patterns.length === 0 ? <p className="edupi-student-profile__empty">暂无学习模式</p> : null}</section>
-        <section><header><h3>成长轨迹</h3><span>{trajectory.length}</span></header>{trajectory.slice().reverse().map((item, index) => <article key={`${selectedName}:trajectory:${index}`}><time>{shortDate(item.date)}</time><div><strong>{text(item.event) || "成长记录"}</strong><p>{text(item.note ?? item.description) || ""}</p></div></article>)}{trajectory.length === 0 ? <p className="edupi-student-profile__empty">暂无成长节点</p> : null}</section>
-        <section><header><h3>家校记录</h3><span>{parentNotes.length + familyContacts.length}</span></header>{parentNotes.map((note, index) => <article key={`${selectedName}:parent:${index}`}><strong>{typeof note === "string" ? note : text((note as Record<string, unknown>).note) || "家校记录"}</strong></article>)}{familyContacts.map((contact) => <article key={contact.id}><div><strong>{contact.name}</strong><span>{contact.relationship || "家长"}</span></div><p>{contact.lastTopic || contact.lastOutcome || "已记录联系"}</p></article>)}{parentNotes.length + familyContacts.length === 0 ? <p className="edupi-student-profile__empty">暂无家校记录</p> : null}</section>
-        <section><header><h3>相关任务</h3><span>{tasks.length}</span></header>{tasks.map((task) => <button type="button" key={taskKey(task)} onClick={() => onTask(task)}><strong>{taskDisplayTitle(task)}</strong><span>{taskStatusLabel(task)}</span></button>)}{tasks.length === 0 ? <p className="edupi-student-profile__empty">暂无跟进任务</p> : null}</section>
-      </div>
-    </div> : mode === "homeroom" && students.length > 0 ? <section className="edupi-class-summary"><header><span>班级概览</span><h2>{classes}</h2></header><div><span><strong>{students.length}</strong>名学生</span><span><strong>{classPatternCount}</strong>项观察</span><span><strong>{classTaskCount}</strong>项跟进</span><span><strong>{data.continuity.familyContacts.length}</strong>个家庭</span></div><p>从左侧选择学生查看档案</p></section> : <section className="edupi-page-section edupi-student-empty"><strong>暂无学生档案</strong><button type="button" onClick={() => inputRef.current?.click()}>导入名单</button></section>}
+    <section className="edupi-class-summary-strip"><div><strong>{students.length}</strong><span>学生</span></div><div><strong>{activePatterns}</strong><span>观察中模式</span></div><div><strong>{openFollowUps}</strong><span>待跟进</span></div><div><strong>{data.continuity.familyContacts.length}</strong><span>家校档案</span></div></section>
+    <section className="edupi-student-directory" aria-label="学生名单"><header><h2>学生</h2><span>按姓名排序</span></header><div>{students.map((student, index) => { const name = studentRecordName(student); const studentPatterns = records(student.error_patterns); const key = studentRecordKey(student, index); return <button type="button" key={key} className={key === selectedStudentId ? "is-selected" : ""} onClick={() => onStudent(student)}><span className={`is-tint-${index % 4}`}>{name.slice(0, 1)}</span><strong>{name}</strong><small>{studentPatterns.filter((item) => item.status !== "resolved").length} 项观察</small></button>; })}</div>{students.length === 0 ? <button type="button" className="edupi-student-directory__empty" onClick={() => inputRef.current?.click()}>导入学生名单</button> : null}</section>
+    {selected && selectedName ? <aside className="edupi-student-drawer" aria-label={`${selectedName}学生档案`}><header><div><span>学生档案</span><h2>{selectedName}</h2><p>{traits.join(" · ") || "教师内部"}</p></div><button type="button" onClick={() => onStudent(null)} aria-label="关闭学生档案">×</button></header><section className="edupi-student-drawer__metrics"><div><strong>{patterns.length}</strong><span>学习模式</span></div><div><strong>{trajectory.length}</strong><span>成长节点</span></div><div><strong>{memories.length}</strong><span>EduPi 记忆</span></div></section><div className="edupi-student-drawer__scroll"><details open><summary>学习模式 <span>{patterns.length}</span></summary><div>{patterns.map((item, index) => <p key={index}><strong>{String(item.description || "学习观察")}</strong><span>{item.status === "resolved" ? "已解决" : "观察中"}{item.last_seen ? ` · ${shortDate(item.last_seen)}` : ""}</span></p>)}{patterns.length === 0 ? <em>暂无记录</em> : null}</div></details><details><summary>成长轨迹 <span>{trajectory.length}</span></summary><div>{trajectory.slice().reverse().map((item, index) => <p key={index}><strong>{String(item.event || "成长记录")}</strong><span>{shortDate(item.date)} · {String(item.note || "")}</span></p>)}{trajectory.length === 0 ? <em>暂无记录</em> : null}</div></details><details><summary>家校记录 <span>{parentNotes.length + familyContacts.length}</span></summary><div>{parentNotes.map((item, index) => <p key={`note:${index}`}><strong>{typeof item === "string" ? item : String((item as Record<string, unknown>).note || "家校记录")}</strong></p>)}{familyContacts.map((item) => <p key={item.id}><strong>{item.name}</strong><span>{item.lastTopic || item.lastOutcome || "已联系"}</span></p>)}</div></details><details open><summary>EduPi 相关记忆 <span>{memories.length}</span></summary><div>{memories.map((memory) => <p key={memory.id}><strong>{memory.content}</strong><button type="button" onClick={() => onStartAgent(`请修订关于${selectedName}的这条 EduPi 记忆：\n${memory.content}\n\n请先给出修改建议和依据，待我确认后再写回并保留旧版本。`)}>修订</button></p>)}{memories.length === 0 ? <em>暂无相关记忆</em> : null}</div></details><details><summary>相关任务 <span>{tasks.length}</span></summary><div>{tasks.map((task) => <button type="button" key={taskKey(task)} onClick={() => onTask(task)}><strong>{taskDisplayTitle(task)}</strong><span>{taskStatusLabel(task)}</span></button>)}</div></details><form onSubmit={supplement}><h3>补充学生档案</h3><input name="trait" maxLength={240} placeholder="新增特征" /><textarea name="parentNote" maxLength={240} rows={2} placeholder="新增家校备注" /><button type="submit" disabled={busy}>保存补充</button></form></div></aside> : null}
   </main>;
 }
