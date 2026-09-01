@@ -41,7 +41,8 @@
     "https://github.com/PIGU-PPPgu/edupi-desktop-internal/pull/11",
     "https://github.com/PIGU-PPPgu/edupi/pull/6",
     "https://github.com/PIGU-PPPgu/edupi/pull/7",
-    "https://github.com/PIGU-PPPgu/edupi/pull/8"
+    "https://github.com/PIGU-PPPgu/edupi/pull/8",
+    "https://github.com/PIGU-PPPgu/edupi-desktop/pull/14"
   ],
   "change_note": "Added manual teacher-internal memory updates through a versioned Core override store; legacy memory source bytes and external_send=false are preserved"
 }
