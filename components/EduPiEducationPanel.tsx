@@ -43,6 +43,7 @@ import { calendarQuickEntryKey, calendarQuickEntryStatusLabel, type EduPiQuickEn
 import { studentRecordKey } from "@/lib/edupi-student-roster-model";
 import { objectItemForView, viewKeepsObjectItem } from "@/lib/edupi-domain-navigation";
 import { APP_PREF_KEYS } from "@/lib/app-prefs";
+import { appendTeacherInputSlot } from "@/lib/edupi-teacher-input-slot";
 
 type Props = {
   initialModule?: EducationModule;
@@ -689,13 +690,13 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     }
     const binding = education.taskSessions[task.id];
     const reusableSessionId = binding && binding.status !== "missing" ? binding.sessionId : null;
-    const prompt = [
+    const prompt = appendTeacherInputSlot([
       `教学任务：${task.title}`,
       `任务 ID：${task.id}`,
       `来源：${taskSourceLabel(task)}`,
       `截止：${task.dueDate || "日期待确认"}`,
       "要求：仅在教师内部协作，保留来源，不外发；写回事实或产物前等待教师确认。",
-    ].join("\n");
+    ].join("\n"), "我要让 EduPi 处理的内容（在这里输入或口述）：");
     taskSessionOpeningRef.current = true;
     const request = activationRequestsRef.current.begin();
     setTaskSessionBusy(true);
@@ -738,7 +739,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const startAgent = useCallback((prompt: string, mode: AgentPromptMode = "insert") => {
     setAgentTask(null);
     setPendingAgentPromptMode(mode);
-    setPendingAgentPrompt(mode === "replace" ? prompt.trim() : [
+    setPendingAgentPrompt(mode === "replace" ? `${prompt.trim()}\n` : [
       prompt.trim(),
       "",
       `教学上下文：${teacherContextLabel}`,

@@ -45,7 +45,7 @@ test("context and task handoffs replace the composer while ordinary EduPi prompt
 
   assert.match(panel, /const mode = pendingAgentPromptMode/);
   assert.match(panel, /if \(mode === "replace"\)/);
-  assert.match(startAgent, /setPendingAgentPrompt\(mode === "replace" \? prompt\.trim\(\)/);
+  assert.match(startAgent, /mode === "replace" \? `\$\{prompt\.trim\(\)\}\\n`/);
   assert.doesNotMatch(replaceBranch, /setDrawer\("agent"\)/);
   assert.match(panel, /onReplaceAgentPrompt\(pendingAgentPrompt\)/);
 });
