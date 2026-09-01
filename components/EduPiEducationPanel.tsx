@@ -41,7 +41,7 @@ import { loadStagedMaterials, removeStagedMaterial, stageBrowserMaterialFiles, t
 import type { TaskBoardLaneId } from "@/lib/edupi-task-board";
 import { calendarQuickEntryKey, calendarQuickEntryStatusLabel, type EduPiQuickEntryItem } from "@/lib/edupi-quick-entry";
 import { studentRecordKey } from "@/lib/edupi-student-roster-model";
-import { viewKeepsObjectItem } from "@/lib/edupi-domain-navigation";
+import { objectItemForView, viewKeepsObjectItem } from "@/lib/edupi-domain-navigation";
 
 type Props = {
   initialModule?: EducationModule;
@@ -386,8 +386,9 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     router.replace(`/?${params.toString()}`, { scroll: false });
   }, [inspectorOpen, router, searchParams, selectedObjectId, selectedStudentId]);
 
-  const selectView = useCallback((view: WorkbenchView) => {
+  const selectView = useCallback((view: WorkbenchView, requestedObjectId?: string) => {
     const stage = view === "tasks" ? activeStage : undefined;
+    const nextObjectId = objectItemForView(view, requestedObjectId ?? selectedObjectId);
     cancelActivation();
     setDrawer(null);
     setTaskDetailTask(null);
@@ -397,9 +398,10 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     if (view !== "calendar") setCalendarSelection(null);
     if (view === "review") setReviewMode("board");
     setActiveView(view);
+    setSelectedObjectId(nextObjectId);
     if (stage) setActiveStage(stage);
-    updateLocation(view, view === "tasks" ? activeTask : undefined, stage);
-  }, [activeStage, activeTask, cancelActivation, updateLocation]);
+    updateLocation(view, view === "tasks" ? activeTask : undefined, stage, inspectorOpen, selectedStudentId, nextObjectId);
+  }, [activeStage, activeTask, cancelActivation, inspectorOpen, selectedObjectId, selectedStudentId, updateLocation]);
 
   const selectTask = useCallback((task: TeacherTask, stage: TaskStage = "brief") => {
     const view = stage === "review" && activeView === "review" ? "review" : "tasks";
@@ -819,7 +821,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
           <div className={`edupi-teacher-main${activeView === "chat" ? " is-chat" : ""}`}>
             <EduPiPersistentChatHost mode={drawer === "agent" ? "drawer" : activeView === "chat" ? "main" : "hidden"} task={drawer === "agent" ? currentAgentTask : null} onClose={closeDrawer} onPreparePrompt={onPrepareAgentPrompt}>{chatPanel}</EduPiPersistentChatHost>
             {activeView === "review" ? <div className="edupi-review-surface">
-            {reviewMode === "board" ? <EduPiReviewBoard data={education} onTask={(task) => selectTask(task, "review")} onReviewTarget={focusC1Review} /> : null}
+            {reviewMode === "board" ? <EduPiReviewBoard data={education} query={query} onTask={(task) => selectTask(task, "review")} onReviewTarget={focusC1Review} /> : null}
             {reviewMode === "task" && activeTask ? <section className="edupi-c1-review-task-bridge"><div className="edupi-c1-review-task-bridge__heading"><h2>任务审核</h2><span>{pendingCount} 项</span></div><EduPiTaskWorkspace task={activeTask} stage={taskStage} workspace={education.workspace} context={context} reviewEnabled={education.capabilities.taskReview.enabled} reviewReason={education.capabilities.taskReview.reason} reviewBusy={reviewBusy} reviewMessage={reviewMessage} agentSession={activeTask.id ? education.taskSessions[activeTask.id] ?? null : null} taskSessionBusy={taskSessionBusy} taskSessionError={taskSessionError} onStage={selectStage} onReview={reviewTask} onOpenAgent={openAgent} onOpenFile={openFile} /></section> : null}
             {reviewMode === "c1" ? <EduPiC1Review data={education} reviewerId={context?.name || "teacher"} onRefresh={loadWorkspace} query={query} selectedTarget={selectedC1Target} /> : null}
             {reviewMode === "task" && !activeTask ? <section className="edupi-c1-review-task-empty"><span>任务审核</span><strong>暂无待审核任务</strong></section> : null}

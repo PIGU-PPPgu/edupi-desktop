@@ -40,7 +40,7 @@ type Props = {
   onEducation: (data: EducationContract) => void;
   onStudent: (student: Record<string, unknown> | null) => void;
   onObject: (id: string) => void;
-  onNavigate: (view: WorkbenchView) => void;
+  onNavigate: (view: WorkbenchView, objectId?: string) => void;
   onUpload: () => void;
   onIntakeMaterial: (item: MaterialStagingDescriptor) => Promise<unknown>;
   onRemoveStagedMaterial: (item: MaterialStagingDescriptor) => Promise<void>;
@@ -199,7 +199,7 @@ function ArtifactsView({ data, query, onTask }: Pick<Props, "data" | "query" | "
 export function EduPiWorkspaceViews(props: Props) {
   if (props.view === "dashboard") return <DashboardView data={props.data} context={props.context} runningAgentCount={props.runningAgentCount} onEducation={props.onEducation} onNavigate={props.onNavigate} onUpload={props.onUpload} onOpenContext={props.onOpenContext} onOpenAdmin={props.onOpenAdmin} onOpenFile={props.onOpenFile} onStartAgent={props.onStartAgent} />;
   if (props.view === "workspace") return <EduPiWorkspaceBoard data={props.data} query={props.query} onTaskDetail={props.onTaskDetail} onCreateTask={props.onCreateTask} onMoveTask={props.onMoveTask} />;
-  if (props.view === "teaching") return <EduPiTeachingWorkspace data={props.data} context={props.context} query={props.query} selectedObjectId={props.selectedObjectId} onObject={props.onObject} onTask={(task) => props.onTask(task, "brief")} onNavigate={(view) => props.onNavigate(view)} onUpload={props.onUpload} onStartAgent={props.onStartAgent} onCalendarSelection={props.onCalendarSelection} />;
+  if (props.view === "teaching") return <EduPiTeachingWorkspace data={props.data} context={props.context} query={props.query} selectedObjectId={props.selectedObjectId} onObject={props.onObject} onTask={(task) => props.onTask(task, "brief")} onNavigate={props.onNavigate} onUpload={props.onUpload} onStartAgent={props.onStartAgent} onCalendarSelection={props.onCalendarSelection} />;
   if (props.view === "homeroom" || props.view === "students") return <EduPiStudentWorkspace mode={props.view} data={props.data} context={props.context} query={props.query} selectedStudentId={props.selectedStudentId} onStudent={props.onStudent} onEducation={props.onEducation} onTask={(task) => props.onTask(task, "brief")} onStartAgent={props.onStartAgent} />;
   if (props.view === "calendar") return <CalendarView data={props.data} query={props.query} onUpload={props.onUpload} intakeBusy={props.intakeBusy} calendarSelection={props.calendarSelection} onCalendarSelection={props.onCalendarSelection} onTaskDetail={props.onTaskDetail} onImportCalendar={props.onImportCalendar} onImportTimetable={props.onImportTimetable} />;
   if (props.view === "memory") return <EduPiMemoryDatabase data={props.data} query={props.query} selectedObjectId={props.selectedObjectId} onStartAgent={props.onStartAgent} />;

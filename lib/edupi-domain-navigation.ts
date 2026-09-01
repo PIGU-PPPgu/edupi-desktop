@@ -71,6 +71,14 @@ export function viewKeepsObjectItem(view: string): boolean {
   return view === "teaching" || view === "memory" || view === "insights" || view === "growth" || view === "materials";
 }
 
+export function objectItemForView(view: string, item: string | null | undefined): string | null {
+  return viewKeepsObjectItem(view) && item?.startsWith(`${view}:`) ? item : null;
+}
+
+export function matchesWorkspaceQuery(value: string, query: string): boolean {
+  return !query || value.toLocaleLowerCase().includes(query.toLocaleLowerCase());
+}
+
 export function growthReviewStateLabel(value: string | null | undefined): string {
   if (value === "accepted" || value === "confirmed") return "已确认";
   if (value === "rejected") return "已拒绝";

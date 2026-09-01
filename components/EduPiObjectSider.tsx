@@ -3,7 +3,7 @@
 import type { EducationContract, EducationMemoryCandidate, EducationObservation, TeacherTask } from "@/lib/edupi-education-contract";
 import type { CalendarItemSelection } from "@/lib/edupi-calendar-model";
 import { isRecognizedTimetableNote } from "@/lib/edupi-recognition-markers";
-import { INSIGHT_CATEGORIES, INSIGHT_STATUSES, MATERIAL_CATEGORIES, MEMORY_CATEGORIES, TEACHING_SECTIONS, insightCategory, materialCategoryCount, routePart, type InsightCategoryId, type InsightStatusId, type MaterialCategoryId } from "@/lib/edupi-domain-navigation";
+import { INSIGHT_CATEGORIES, INSIGHT_STATUSES, MATERIAL_CATEGORIES, MEMORY_CATEGORIES, TEACHING_SECTIONS, insightCategory, matchesWorkspaceQuery as match, materialCategoryCount, routePart, type InsightCategoryId, type InsightStatusId, type MaterialCategoryId } from "@/lib/edupi-domain-navigation";
 import { groupTasksByCategory, TASK_CATEGORY_CONFIG } from "@/lib/edupi-task-category";
 import { studentRecordKey, studentRecordName } from "@/lib/edupi-student-roster-model";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
@@ -49,10 +49,6 @@ const viewTitles: Record<WorkbenchView, string> = {
   tasks: "教学任务",
   artifacts: "教学产物",
 };
-
-function match(value: string, query: string): boolean {
-  return !query || value.toLocaleLowerCase().includes(query.toLocaleLowerCase());
-}
 
 function GroupTitle({ children, count }: { children: string; count?: number }) {
   return <div className="edupi-object-group__title"><strong>{children}</strong>{count !== undefined ? <span>{count}</span> : null}</div>;
