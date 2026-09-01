@@ -11,15 +11,15 @@ const request = (body, headers = {}) => new Request("http://localhost/api/edupi/
   body: typeof body === "string" ? body : JSON.stringify(body),
 });
 
-test("entity DELETE rejects cross-site, malformed, unknown and unsupported targets before Core", async () => {
+test("entity DELETE rejects cross-site, malformed, unknown fields and unknown targets before Core", async () => {
   const crossSite = await DELETE(request({ note: null }, { origin: "https://evil.example", "sec-fetch-site": "cross-site" }), context("calendar", "calendar-1"));
   assert.equal(crossSite.status, 403);
   const malformed = await DELETE(request("{"), context("calendar", "calendar-1"));
   assert.equal(malformed.status, 400);
   const unknown = await DELETE(request({ note: null, force: true }), context("calendar", "calendar-1"));
   assert.equal(unknown.status, 400);
-  const unsupported = await DELETE(request({ note: null }), context("material", "material-1"));
-  assert.equal(unsupported.status, 400);
+  const unknownTarget = await DELETE(request({ note: null }), context("unknown-kind", "unknown-1"));
+  assert.equal(unknownTarget.status, 400);
   const invalidId = await DELETE(request({ note: null }), context("calendar", "bad\ncalendar"));
   assert.equal(invalidId.status, 400);
 });
