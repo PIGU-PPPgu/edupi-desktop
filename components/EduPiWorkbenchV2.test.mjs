@@ -63,20 +63,25 @@ test("class and student modules select one student and expose real import and ex
 });
 
 test("teaching prepares the next class and continuity modules render one selected record", async () => {
-  const [panel, sider, views] = await Promise.all([
+  const [panel, sider, views, teaching, memory, insights, growth] = await Promise.all([
     read("./EduPiEducationPanel.tsx"),
     read("./EduPiObjectSider.tsx"),
     read("./EduPiWorkspaceViews.tsx"),
+    read("./EduPiTeachingWorkspace.tsx"),
+    read("./EduPiMemoryDatabase.tsx"),
+    read("./EduPiInsightDatabase.tsx"),
+    read("./EduPiGrowthWorkspace.tsx"),
   ]);
-  assert.match(views, /导入教学重点/);
-  assert.match(views, /准备下一节课/);
-  assert.match(views, /请为\$\{nextSubject\}/);
+  assert.match(teaching, /导入教学重点/);
+  assert.match(teaching, /准备下一节课/);
+  assert.match(teaching, /请为\$\{nextSubject\}/);
   assert.match(panel, /selectedObjectId/);
   assert.match(panel, /onObject=\{selectObject\}/);
-  assert.match(sider, /edupi-object-pagination/);
-  assert.match(sider, /onObject\(`memory:/);
-  assert.match(sider, /onObject\(item\.id\)/);
-  assert.match(views, /edupi-record-detail/);
+  assert.match(sider, /MEMORY_CATEGORIES\.map/);
+  assert.match(sider, /INSIGHT_CATEGORIES\.map/);
+  assert.match(memory, /edupi-database/);
+  assert.match(insights, /edupi-database/);
+  assert.match(growth, /edupi-database/);
   assert.doesNotMatch(views, /edupi-memory-groups/);
   assert.doesNotMatch(views, /edupi-insight-layout/);
   assert.doesNotMatch(views, /edupi-growth-grid/);
@@ -90,7 +95,7 @@ test("review renders one selected decision and the rail exposes real EduPi activ
     read("../app/edupi-workbench.css"),
   ]);
   assert.match(panel, /reviewMode/);
-  assert.match(panel, /searchParams\.get\("task"\) && requestedStage === "review" \? "task" : "c1"/);
+  assert.match(panel, /searchParams\.get\("task"\) && requestedStage === "review" \? "task" : "board"/);
   assert.match(panel, /selectedC1Target/);
   assert.match(review, /visibleTarget/);
   assert.doesNotMatch(review, /targets\.map\(\(target\)/);
@@ -109,8 +114,9 @@ test("narrow screens retain the object selector and exports neutralize spreadshe
   assert.match(css, /\.edupi-content-sider \{ position: absolute;[^}]*display: flex;/);
   assert.doesNotMatch(css, /\.edupi-content-sider \{ display: none; \}/);
   assert.match(student, /\^\\s\*\[=\+\\-@\]/);
-  assert.match(student, /mode === "students" \? students\[0\] : null/);
-  assert.match(student, /edupi-class-summary/);
+  assert.doesNotMatch(student, /mode === "students" \? students\[0\] : null/);
+  assert.match(student, /edupi-class-summary-strip/);
+  assert.match(student, /edupi-student-drawer/);
   assert.match(sider, /const insights = data\.continuity\.insights\.filter/);
   assert.doesNotMatch(sider, /surfacedInsights.*slice\(0, 6\)/s);
 });

@@ -5,12 +5,13 @@ import test from "node:test";
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("management center is reachable and reuses existing canonical surfaces", async () => {
-  const [admin, appShell, panel, rail, workspace, css] = await Promise.all([
+  const [admin, appShell, panel, rail, workspace, materials, css] = await Promise.all([
     read("./EduPiAdminPanel.tsx"),
     read("./AppShell.tsx"),
     read("./EduPiEducationPanel.tsx"),
     read("./EduPiNavigationRail.tsx"),
     read("./EduPiWorkspaceViews.tsx"),
+    read("./EduPiMaterialsWorkspace.tsx"),
     read("../app/edupi-admin.css"),
   ]);
 
@@ -47,7 +48,7 @@ test("management center is reachable and reuses existing canonical surfaces", as
   assert.match(workspace, /EduPi 就绪度/);
   assert.match(workspace, /onOpenAdmin/);
   assert.match(workspace, /onRemoveStagedMaterial/);
-  assert.match(workspace, />移除</);
+  assert.match(materials, />移除</);
   assert.match(css, /\.edupi-admin-grid/);
   assert.match(css, /\.edupi-admin-readiness/);
 });

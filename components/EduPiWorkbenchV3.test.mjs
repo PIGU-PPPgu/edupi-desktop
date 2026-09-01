@@ -41,3 +41,51 @@ test("teaching, growth, and material sidebars expose domain categories instead o
   assert.match(sider, /EduPi 能力成长/);
   assert.match(sider, /MATERIAL_CATEGORIES\.map/);
 });
+
+test("teaching keeps a home route and the calendar exposes a ten-period weekday grid", async () => {
+  const [teaching, timetable, calendar] = await Promise.all([
+    read("./EduPiTeachingWorkspace.tsx"),
+    read("./EduPiTimetableGrid.tsx"),
+    read("./EduPiCalendarWorkspace.tsx"),
+  ]);
+  assert.match(teaching, /← 教学首页/);
+  assert.match(teaching, /onObject\("teaching:home"\)/);
+  assert.match(teaching, /本周课程/);
+  assert.match(teaching, /EduPiTimetableGrid/);
+  assert.match(timetable, /length: 10/);
+  for (const day of ["星期一", "星期二", "星期三", "星期四", "星期五"]) assert.match(timetable, new RegExp(day));
+  assert.match(timetable, /period === 6 \? " is-afternoon-start"/);
+  assert.match(calendar, /contentMode === "timetable" \? <EduPiTimetableGrid/);
+});
+
+test("class workspace keeps the student directory mounted and opens a right drawer", async () => {
+  const student = await read("./EduPiStudentWorkspace.tsx");
+  assert.match(student, /localeCompare\(studentRecordName\(right\), "zh-CN"\)/);
+  assert.match(student, /edupi-student-directory/);
+  assert.match(student, /edupi-student-drawer/);
+  assert.match(student, /EduPi 相关记忆/);
+  assert.match(student, /补充学生档案/);
+  assert.match(student, /onStudent\(null\)/);
+  assert.doesNotMatch(student, /mode === "students" \? students\[0\] : null/);
+});
+
+test("growth and materials use explicit databases and right-side material details", async () => {
+  const [growth, materials] = await Promise.all([read("./EduPiGrowthWorkspace.tsx"), read("./EduPiMaterialsWorkspace.tsx")]);
+  assert.match(growth, /教师专业成长/);
+  assert.match(growth, /EduPi 能力成长/);
+  assert.match(growth, /用于改进 EduPi 的工作方式/);
+  assert.match(materials, /edupi-material-db-grid/);
+  assert.match(materials, /edupi-material-drawer/);
+  assert.match(materials, /补充 \/ 修订/);
+  assert.match(materials, /PAGE_SIZE = 8/);
+});
+
+test("review opens with a three-lane mini board and task stages are vertical on desktop", async () => {
+  const [panel, board, task, css] = await Promise.all([read("./EduPiEducationPanel.tsx"), read("./EduPiReviewBoard.tsx"), read("./EduPiTaskWorkspace.tsx"), read("../app/edupi-workbench.css")]);
+  assert.match(panel, /"board" \| "task" \| "c1"/);
+  assert.match(panel, /reviewMode === "board" \? <EduPiReviewBoard/);
+  for (const label of ["任务审核", "观察确认", "记忆确认"]) assert.match(board, new RegExp(label));
+  assert.match(task, /edupi-task-workspace__flow/);
+  assert.match(css, /\.edupi-task-workspace__flow \{ display: grid; grid-template-columns: 180px minmax\(0, 1fr\)/);
+  assert.match(css, /\.edupi-review-mini-board \{ display: grid; grid-template-columns: repeat\(3/);
+});
