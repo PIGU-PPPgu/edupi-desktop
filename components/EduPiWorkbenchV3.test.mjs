@@ -98,6 +98,10 @@ test("growth and materials use explicit databases and right-side material detail
   assert.match(materials, /PAGE_SIZE = 8/);
   assert.match(materials, /item\.subject\} \$\{item\.source\} \$\{item\.summary/);
   assert.match(materials, /edupi-material-message/);
+  assert.match(materials, /const categoryLabel = MATERIAL_CATEGORIES\.find/);
+  assert.match(materials, /<span>材料<\/span><h1>\{categoryLabel\}<\/h1>/);
+  assert.doesNotMatch(materials, /<span>材料 \/ \{MATERIAL_CATEGORIES/);
+  assert.doesNotMatch(materials, /<h1>材料<\/h1>/);
 });
 
 test("review opens with a three-lane mini board and task stages are vertical on desktop", async () => {

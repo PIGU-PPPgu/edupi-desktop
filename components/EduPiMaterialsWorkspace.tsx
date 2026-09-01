@@ -18,6 +18,7 @@ function shortDate(value: string | null): string {
 
 export function EduPiMaterialsWorkspace({ data, query, selectedObjectId, stagedMaterials, stagingBusy, stagingMessage, onTask, onUpload, onIntakeMaterial, onRemoveStagedMaterial, onStartAgent }: { data: EducationContract; query: string; selectedObjectId: string | null; stagedMaterials: MaterialStagingDescriptor[]; stagingBusy: boolean; stagingMessage: string | null; onTask: (task: TeacherTask) => void; onUpload: () => void; onIntakeMaterial: (item: MaterialStagingDescriptor) => Promise<unknown>; onRemoveStagedMaterial: (item: MaterialStagingDescriptor) => Promise<void>; onStartAgent: (prompt: string, mode?: "insert" | "replace") => void }) {
   const category = routePart(selectedObjectId, "materials", "all") as MaterialCategoryId;
+  const categoryLabel = MATERIAL_CATEGORIES.find((item) => item.id === category)?.label || "全部材料";
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<MaterialRow | null>(null);
   const rows = useMemo<MaterialRow[]>(() => {
@@ -40,7 +41,7 @@ export function EduPiMaterialsWorkspace({ data, query, selectedObjectId, stagedM
   };
 
   return <main className="edupi-module-workspace edupi-database-workspace">
-    <header className="edupi-module-heading"><div><span>材料 / {MATERIAL_CATEGORIES.find((item) => item.id === category)?.label}</span><h1>材料</h1><p>{rows.length} 份材料 · {stagedMaterials.length} 份待接入</p></div><button type="button" disabled={stagingBusy} onClick={onUpload}>{stagingBusy ? "处理中…" : "上传材料"}</button></header>
+    <header className="edupi-module-heading"><div><span>材料</span><h1>{categoryLabel}</h1><p>{rows.length} 份材料 · {stagedMaterials.length} 份待接入</p></div><button type="button" disabled={stagingBusy} onClick={onUpload}>{stagingBusy ? "处理中…" : "上传材料"}</button></header>
     {stagedMaterials.length > 0 ? <details className="edupi-material-inbox" open><summary>待接入材料 <span>{stagedMaterials.length}</span></summary><div>{stagedMaterials.map((item) => <div key={item.staging_id}><strong>{item.original_name}</strong><span>{Math.ceil(item.expected_size_bytes / 1024)} KB</span><button type="button" disabled={stagingBusy} onClick={() => void onIntakeMaterial(item).catch(() => {})}>接入 EduPi</button><button type="button" disabled={stagingBusy} onClick={() => void onRemoveStagedMaterial(item)}>移除</button></div>)}</div></details> : null}
     {stagingMessage ? <p className="edupi-material-message" role="status">{stagingMessage}</p> : null}
     <section className="edupi-database"><div className="edupi-database__head edupi-material-db-grid"><span>材料</span><span>类型</span><span>学科 / 班级</span><span>来源</span><span>日期</span><span>状态</span></div>{visible.map((item) => <button type="button" className="edupi-database-button-row edupi-material-db-grid" key={item.id} onClick={() => setSelected(item)}><strong>{item.title}</strong><span>{item.type}</span><span>{item.subject}</span><span>{item.source}</span><time>{shortDate(item.date)}</time><span>{item.status}</span></button>)}{visible.length === 0 ? <div className="edupi-database__empty">当前分类暂无材料</div> : null}</section>
