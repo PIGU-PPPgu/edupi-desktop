@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
 import type {
   EducationContract,
+  EducationWorkCase,
   EducationWorkCandidate,
   EducationWorkCandidateDecision,
   WorkCandidateReviewCapability,
@@ -17,10 +18,12 @@ import {
   TodayWorkReviewError,
 } from "@/lib/edupi-today-work";
 import { groupWorkCandidates, workCandidateReasonLabel, type WorkCandidateGroups } from "@/lib/edupi-workbench";
+import { activeLivingWorkCases, workCaseStateLabel } from "@/lib/edupi-work-case";
 
 type Props = {
   data: EducationContract;
   onEducation: (data: EducationContract) => void;
+  onWorkCaseDetail: (workCase: EducationWorkCase) => void;
 };
 
 type EditorMode = "modify" | "snooze" | "suppress";
@@ -136,8 +139,9 @@ function capabilityCopy(capability: WorkCandidateReviewCapability): string | nul
   return capability.enabled ? null : "当前仅可查看，待办审核暂不可用。";
 }
 
-export function EduPiTodayWork({ data, onEducation }: Props) {
+export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
   const groups = groupWorkCandidates(data.workCandidates);
+  const livingCases = activeLivingWorkCases(data.workCases);
   const capability = data.capabilities.workCandidateReview;
   const busy = useSyncExternalStore(subscribeTodayWorkMutation, getTodayWorkMutationSnapshot, getTodayWorkMutationSnapshot);
   const [editor, setEditor] = useState<EditorState | null>(null);
@@ -276,6 +280,7 @@ export function EduPiTodayWork({ data, onEducation }: Props) {
   const unavailableCopy = capabilityCopy(capability);
   return <section className="edupi-today-work" aria-labelledby="edupi-today-work-title" aria-busy={busy}>
     <header className="edupi-today-work__header"><div><span>教师工作</span><h2 id="edupi-today-work-title">今天要判断</h2></div><span>{data.workCandidates.length} 项 · 教师内部</span></header>
+    {livingCases.length > 0 ? <div className="edupi-today-flow" aria-label="EduPi 当前工作流"><header><span>EduPi 流</span><strong>{livingCases.length} 项</strong></header><div>{livingCases.slice(0, 4).map((workCase) => <button type="button" key={workCase.id} onClick={() => onWorkCaseDetail(workCase)}><i className={`edupi-flow-state is-${workCase.currentState}`} aria-hidden="true" /><span><strong>{workCase.title}</strong><small>{workCaseStateLabel(workCase.currentState)}{workCase.dueDate ? ` · ${workCase.dueDate}` : ""}</small></span><em aria-hidden="true">›</em></button>)}</div></div> : null}
     {unavailableCopy ? <p className="edupi-today-work__notice">{unavailableCopy}</p> : null}
     {feedback ? <p className={`edupi-today-work__feedback is-${feedback.kind}`} role={feedback.kind === "error" ? "alert" : "status"} aria-live="polite">{feedback.text}</p> : null}
     <div className="edupi-today-work__groups">{(["now", "later", "done"] as const).map(renderGroup)}</div>
