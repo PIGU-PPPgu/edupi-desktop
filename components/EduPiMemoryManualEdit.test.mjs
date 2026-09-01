@@ -13,6 +13,7 @@ test("memory rows separate direct manual editing from optional AI collaboration"
   assert.match(source, /expectedRevision: editor\.revision/);
   assert.match(source, /revision: memory\.revision/);
   assert.match(source, /onEducation\(result\.data\)/);
+  assert.match(source, /setEditor\(\(current\) => current\?\.memoryId === memory\.id \? null : current\)/);
   assert.match(source, /onStartAgent/);
   assert.match(source, /aria-disabled=\{!data\.capabilities\.memoryUpdate\.enabled\}/);
   assert.match(source, /aria-describedby=/);

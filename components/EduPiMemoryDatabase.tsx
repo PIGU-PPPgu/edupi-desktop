@@ -41,7 +41,7 @@ export function EduPiMemoryDatabase({ data, query, selectedObjectId, onEducation
       const result = await response.json() as { error?: string; code?: string; data?: EducationContract };
       if (!response.ok || !result.data) throw new Error(result.error || (result.code === "stale_revision" ? "记忆已更新，请刷新后重试" : "记忆保存失败"));
       onEducation(result.data);
-      setEditor(null);
+      setEditor((current) => current?.memoryId === memory.id ? null : current);
       setMessage({ memoryId: memory.id, tone: "success", text: "记忆已保存" });
     } catch (error) {
       setMessage({ memoryId: memory.id, tone: "error", text: error instanceof Error ? error.message : "记忆保存失败" });
