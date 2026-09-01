@@ -61,3 +61,7 @@ export function materialCategory(value: { materialKind?: string | null; title?: 
 export function routePart(value: string | null | undefined, prefix: string, fallback: string): string {
   return value?.startsWith(`${prefix}:`) ? value.slice(prefix.length + 1) : fallback;
 }
+
+export function viewKeepsObjectItem(view: string): boolean {
+  return view === "teaching" || view === "memory" || view === "insights" || view === "growth" || view === "materials";
+}

@@ -41,6 +41,7 @@ import { loadStagedMaterials, removeStagedMaterial, stageBrowserMaterialFiles, t
 import type { TaskBoardLaneId } from "@/lib/edupi-task-board";
 import { calendarQuickEntryKey, calendarQuickEntryStatusLabel, type EduPiQuickEntryItem } from "@/lib/edupi-quick-entry";
 import { studentRecordKey } from "@/lib/edupi-student-roster-model";
+import { viewKeepsObjectItem } from "@/lib/edupi-domain-navigation";
 
 type Props = {
   initialModule?: EducationModule;
@@ -380,7 +381,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     if (task) params.set("task", taskKey(task)); else params.delete("task");
     if (stage) params.set("stage", stage); else params.delete("stage");
     if ((view === "homeroom" || view === "students") && nextStudentId) params.set("student", nextStudentId); else params.delete("student");
-    if ((view === "memory" || view === "insights" || view === "growth") && nextObjectId) params.set("item", nextObjectId); else params.delete("item");
+    if (viewKeepsObjectItem(view) && nextObjectId) params.set("item", nextObjectId); else params.delete("item");
     params.set("inspector", nextInspector ? "1" : "0");
     router.replace(`/?${params.toString()}`, { scroll: false });
   }, [inspectorOpen, router, searchParams, selectedObjectId, selectedStudentId]);
