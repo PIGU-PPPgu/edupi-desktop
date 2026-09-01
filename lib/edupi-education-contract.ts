@@ -69,7 +69,7 @@ export type EducationWorkTransition = {
 
 export type EducationWorkCase = {
   id: string;
-  kind: "calendar_preparation";
+  kind: "calendar_preparation" | "teaching_before_class";
   triggerId: string;
   taskId: string;
   title: string;
@@ -918,7 +918,7 @@ function normalizeWorkCases(value: unknown, tasks: TeacherTask[]): EducationWork
     const sourceIds = boundedUniqueStrings(entry.source_ids, "work_case.source_ids", 50);
     const artifactIds = boundedUniqueStrings(entry.artifact_ids, "work_case.artifact_ids", 50);
     const task = taskId ? taskById.get(taskId) : null;
-    if (!id || !triggerId || !taskId || !title || entry.case_kind !== "calendar_preparation"
+    if (!id || !triggerId || !taskId || !title || (entry.case_kind !== "calendar_preparation" && entry.case_kind !== "teaching_before_class")
       || !WORK_CASE_STATES.has(entry.current_state as EducationWorkCaseState)
       || dueDate === undefined || entry.external_send !== false
       || !Number.isInteger(entry.execution_revision) || Number(entry.execution_revision) < 0
@@ -926,6 +926,7 @@ function normalizeWorkCases(value: unknown, tasks: TeacherTask[]): EducationWork
       || !Number.isInteger(entry.transition_revision) || Number(entry.transition_revision) < 0
       || !sourceIds || sourceIds.length !== 1 || sourceIds[0] !== triggerId || !artifactIds
       || !task || task.sourceEventId !== triggerId || task.title !== title || task.dueDate !== dueDate
+      || (entry.case_kind === "teaching_before_class") !== (task.trigger === "teaching_before_class")
       || caseIds.has(id) || taskIds.has(taskId) || !Array.isArray(entry.transitions) || entry.transitions.length > 50) return [];
     const transitions: EducationWorkTransition[] = [];
     const transitionIds = new Set<string>();
@@ -949,7 +950,7 @@ function normalizeWorkCases(value: unknown, tasks: TeacherTask[]): EducationWork
       || (transitions.length > 0 && transitions.at(-1)!.sequence !== Number(entry.transition_revision))) return [];
     caseIds.add(id);
     taskIds.add(taskId);
-    cases.push({ id, kind: "calendar_preparation", triggerId, taskId, title, currentState: entry.current_state as EducationWorkCaseState, dueDate, executionRevision: Number(entry.execution_revision), artifactRevision: Number(entry.artifact_revision), transitionRevision: Number(entry.transition_revision), sourceIds, artifactIds, transitions, externalSend: false });
+    cases.push({ id, kind: entry.case_kind, triggerId, taskId, title, currentState: entry.current_state as EducationWorkCaseState, dueDate, executionRevision: Number(entry.execution_revision), artifactRevision: Number(entry.artifact_revision), transitionRevision: Number(entry.transition_revision), sourceIds, artifactIds, transitions, externalSend: false });
   }
   return cases;
 }

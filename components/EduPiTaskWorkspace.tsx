@@ -1,13 +1,15 @@
 "use client";
 
-import type { TaskReviewAction, TeacherTask } from "@/lib/edupi-education-contract";
+import type { EducationWorkCase, TaskReviewAction, TeacherTask } from "@/lib/edupi-education-contract";
 import type { TaskSessionBinding } from "@/lib/edupi-task-sessions";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { taskDisplayTitle, taskStatusLabel, taskStatusTone, taskTypeLabel, type TaskStage } from "@/lib/edupi-workbench";
+import { isTaskReviewable, workCaseStateLabel } from "@/lib/edupi-work-case";
 import { EduPiTaskStage, type ReviewPayload } from "./EduPiTaskStage";
 
 type Props = {
   task: TeacherTask;
+  workCase: EducationWorkCase | null;
   stage: TaskStage;
   workspace: string;
   context: TeacherContextSnapshot | null;
@@ -35,19 +37,37 @@ const stages: Array<{ id: TaskStage; label: string }> = [
 export function EduPiTaskWorkspace(props: Props) {
   const contextLabel = [props.context?.school, props.context?.grade, props.context?.subject].filter(Boolean).join(" · ") || "教育上下文待设置";
   const stageLabel = stages.find((item) => item.id === props.stage)?.label || "任务阶段";
+  const workCaseTone = props.workCase?.currentState === "failed"
+    ? "danger"
+    : props.workCase?.currentState === "draft_ready" || props.workCase?.currentState === "queued" || props.workCase?.currentState === "running"
+      ? "warning"
+      : props.workCase?.currentState === "accepted" || props.workCase?.currentState === "modified" || props.workCase?.currentState === "completed"
+        ? "success"
+        : "neutral";
+  const statusLabel = props.workCase ? workCaseStateLabel(props.workCase.currentState) : taskStatusLabel(props.task);
+  const statusTone = props.workCase ? workCaseTone : taskStatusTone(props.task);
+  const dateLabel = props.task.trigger === "teaching_before_class" && props.task.sourceEventDate
+    ? `上课 ${props.task.sourceEventDate}${props.task.dueDate ? ` · 截止 ${props.task.dueDate}` : ""}`
+    : props.task.dueDate || "日期待确认";
+  const reviewable = isTaskReviewable(props.task, props.workCase);
+  const reviewReason = reviewable ? props.reviewReason : "等待产物";
+  const selectStage = (stage: TaskStage) => {
+    if (stage === "review" && !reviewable) return;
+    props.onStage(stage);
+  };
   return (
     <main className="edupi-task-workspace" data-stage={props.stage}>
       <header className="edupi-task-workspace__header">
         <div>
           <div className="edupi-task-workspace__meta"><span>{taskTypeLabel(props.task)}</span><span>教师内部</span></div>
           <h1>{taskDisplayTitle(props.task)}</h1>
-          <p>{contextLabel} · {props.task.dueDate || "日期待确认"}</p>
+          <p>{contextLabel} · {dateLabel}</p>
         </div>
-        <span className={`edupi-task-status is-${taskStatusTone(props.task)}`}>{taskStatusLabel(props.task)}</span>
+        <span className={`edupi-task-status is-${statusTone}`}>{statusLabel}</span>
       </header>
       <div className="edupi-task-workspace__flow">
         <nav className="edupi-stage-tabs" aria-label="教学任务工作流">
-          {stages.map((stage, index) => <button key={stage.id} type="button" data-stage={stage.id} className={props.stage === stage.id ? "is-active" : ""} aria-current={props.stage === stage.id ? "step" : undefined} onClick={() => props.onStage(stage.id)}><span>{index + 1}</span><strong>{stage.label}</strong></button>)}
+          {stages.map((stage, index) => <button key={stage.id} type="button" data-stage={stage.id} className={props.stage === stage.id ? "is-active" : ""} aria-current={props.stage === stage.id ? "step" : undefined} disabled={stage.id === "review" && !reviewable} onClick={() => selectStage(stage.id)}><span>{index + 1}</span><strong>{stage.label}</strong></button>)}
         </nav>
         <section className="edupi-task-workspace__surface" aria-label={stageLabel}>
           <h2 className="edupi-visually-hidden">{stageLabel}</h2>
@@ -57,7 +77,8 @@ export function EduPiTaskWorkspace(props: Props) {
           workspace={props.workspace}
           contextLabel={contextLabel}
           reviewEnabled={props.reviewEnabled}
-          reviewReason={props.reviewReason}
+          reviewBlocked={!reviewable}
+          reviewReason={reviewReason}
           reviewBusy={props.reviewBusy}
           reviewMessage={props.reviewMessage}
           agentSession={props.agentSession}

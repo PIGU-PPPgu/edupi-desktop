@@ -8647,8 +8647,16 @@
                     "type": "integer"
                   },
                   "case_kind": {
-                    "const": "calendar_preparation",
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "const": "calendar_preparation",
+                        "type": "string"
+                      },
+                      {
+                        "const": "teaching_before_class",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "current_state": {
                     "anyOf": [
