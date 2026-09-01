@@ -138,6 +138,7 @@ export function AppShell() {
   }, []);
 
   const [edupiAdminOpen, setEduPiAdminOpen] = useState(false);
+  const [adminModelsDirty, setAdminModelsDirty] = useState(false);
   const [edupiEducationModule, setEduPiEducationModule] = useState<EducationModule | null>("home");
   const edupiChatActive = edupiEducationModule !== null && searchParams.get("view") === "chat";
   const [projectTrust, setProjectTrust] = useState<ProjectTrustStatus | null>(null);
@@ -1250,6 +1251,8 @@ export function AppShell() {
     `}</style>
     <div
       className="app-shell"
+      inert={edupiAdminOpen ? true : undefined}
+      aria-hidden={edupiAdminOpen ? true : undefined}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -2052,7 +2055,21 @@ export function AppShell() {
       />
     )}
     {appSettingsOpen && <AppSettings onClose={() => setAppSettingsOpen(false)} />}
-    {edupiAdminOpen && <EduPiAdminPanel refreshToken={modelsRefreshKey} onClose={() => setEduPiAdminOpen(false)} onOpenModels={() => setModelsConfigOpen(true)} onOpenContext={() => { setEduPiAdminOpen(false); openEducationModule("context"); }} onAskStudentUpdate={askEduPiToUpdateStudents} onNavigate={openEducationView} onOpenSettings={() => { setEduPiAdminOpen(false); setAppSettingsOpen(true); }} />}
+    {edupiAdminOpen && <EduPiAdminPanel
+      refreshToken={modelsRefreshKey}
+      modelSettingsDirty={adminModelsDirty}
+      modelsPanel={<ModelsConfig
+        embedded
+        onClose={() => setAdminModelsDirty(false)}
+        onDirtyChange={setAdminModelsDirty}
+        onSaved={() => setModelsRefreshKey((k) => k + 1)}
+      />}
+      onClose={() => setEduPiAdminOpen(false)}
+      onOpenContext={() => { setEduPiAdminOpen(false); openEducationModule("context"); }}
+      onAskStudentUpdate={askEduPiToUpdateStudents}
+      onNavigate={openEducationView}
+      onOpenSettings={() => setAppSettingsOpen(true)}
+    />}
     <EduPiComputerUseStop />
     {firstRunGuideOpen && (
       <EduPiFirstRunGuide
