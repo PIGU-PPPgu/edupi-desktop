@@ -191,7 +191,7 @@ Desktop 常驻运行、快捷入口、系统通知、任务/产物直达、升�
 ## 7. 当前已知风险
 
 - 真正的“提前做完”仍依赖 provider 的稳定性与真实教师材料基准，不能由单测代替。
-- Windows 安装包配置已验证，但本机无法替代 Windows runner 生成并启动真实 NSIS；正式发布仍需 Windows artifact 证据。
+- Windows x64 NSIS 已由 GitHub `windows-latest` runner 构建并上传预览 artifact；干净 Windows 用户环境的安装、首启、更新与卸载仍未实机验收。
 - 当前 DMG 是 ad-hoc 签名预览包，未 notarize，也不是 updater 基线。
 - Core 的部分 L4/L5 能力仍只有隔离证据；Desktop 不应把它们包装成已完成能力。
 - 稳定软删除已解决复活风险，但恢复操作还需作为显式 Core command 和 UI 闭环进入 E1/E2。
