@@ -8628,6 +8628,255 @@
               },
               "maxItems": 200,
               "type": "array"
+            },
+            "work_cases": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "artifact_ids": {
+                    "items": {
+                      "maxLength": 160,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 50,
+                    "type": "array"
+                  },
+                  "artifact_revision": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "case_kind": {
+                    "const": "calendar_preparation",
+                    "type": "string"
+                  },
+                  "current_state": {
+                    "anyOf": [
+                      {
+                        "const": "planned",
+                        "type": "string"
+                      },
+                      {
+                        "const": "accepted",
+                        "type": "string"
+                      },
+                      {
+                        "const": "modified",
+                        "type": "string"
+                      },
+                      {
+                        "const": "rejected",
+                        "type": "string"
+                      },
+                      {
+                        "const": "held",
+                        "type": "string"
+                      },
+                      {
+                        "const": "queued",
+                        "type": "string"
+                      },
+                      {
+                        "const": "running",
+                        "type": "string"
+                      },
+                      {
+                        "const": "draft_ready",
+                        "type": "string"
+                      },
+                      {
+                        "const": "failed",
+                        "type": "string"
+                      },
+                      {
+                        "const": "completed",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "due_date": {
+                    "anyOf": [
+                      {
+                        "maxLength": 10,
+                        "minLength": 10,
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "execution_revision": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "external_send": {
+                    "const": false,
+                    "type": "boolean"
+                  },
+                  "source_ids": {
+                    "items": {
+                      "maxLength": 160,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 50,
+                    "type": "array"
+                  },
+                  "task_id": {
+                    "maxLength": 160,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "title": {
+                    "maxLength": 240,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "transition_revision": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "transitions": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "artifact_ids": {
+                          "items": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "maxItems": 50,
+                          "type": "array"
+                        },
+                        "external_send": {
+                          "const": false,
+                          "type": "boolean"
+                        },
+                        "occurred_at": {
+                          "maxLength": 64,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "sequence": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "source_id": {
+                          "maxLength": 160,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "source_kind": {
+                          "anyOf": [
+                            {
+                              "const": "execution",
+                              "type": "string"
+                            },
+                            {
+                              "const": "teacher_review",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "state": {
+                          "anyOf": [
+                            {
+                              "const": "planned",
+                              "type": "string"
+                            },
+                            {
+                              "const": "accepted",
+                              "type": "string"
+                            },
+                            {
+                              "const": "modified",
+                              "type": "string"
+                            },
+                            {
+                              "const": "rejected",
+                              "type": "string"
+                            },
+                            {
+                              "const": "held",
+                              "type": "string"
+                            },
+                            {
+                              "const": "queued",
+                              "type": "string"
+                            },
+                            {
+                              "const": "running",
+                              "type": "string"
+                            },
+                            {
+                              "const": "draft_ready",
+                              "type": "string"
+                            },
+                            {
+                              "const": "failed",
+                              "type": "string"
+                            },
+                            {
+                              "const": "stale",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "transition_id": {
+                          "maxLength": 160,
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "transition_id",
+                        "sequence",
+                        "state",
+                        "occurred_at",
+                        "source_kind",
+                        "source_id",
+                        "artifact_ids",
+                        "external_send"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 50,
+                    "type": "array"
+                  },
+                  "trigger_id": {
+                    "maxLength": 160,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "work_case_id": {
+                    "maxLength": 160,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "work_case_id",
+                  "case_kind",
+                  "trigger_id",
+                  "task_id",
+                  "title",
+                  "current_state",
+                  "due_date",
+                  "execution_revision",
+                  "artifact_revision",
+                  "transition_revision",
+                  "source_ids",
+                  "artifact_ids",
+                  "transitions",
+                  "external_send"
+                ],
+                "type": "object"
+              },
+              "maxItems": 200,
+              "type": "array"
             }
           },
           "required": [

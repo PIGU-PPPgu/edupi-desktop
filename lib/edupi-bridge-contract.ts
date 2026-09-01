@@ -103,6 +103,7 @@ const IDENTITY_ARRAY_KEYS: Record<string, (value: unknown) => unknown> = {
   receipts: (value) => record(value)?.receipt_id,
   review_history: (value) => record(value)?.review_id,
   review_targets: (value) => record(record(value)?.target)?.target_id,
+  work_cases: (value) => record(value)?.work_case_id,
 };
 
 /**
@@ -210,6 +211,7 @@ export function validateSnapshotSemantics(value: unknown, options: SnapshotSeman
   if (!workspace || workspace.projection_kind !== "education_workspace" || workspace.projection_version !== "1.1" || workspace.external_send !== false || workspace.requires_teacher_review !== true) return { ok: false, code: "invalid_envelope", reason: "invalid education workspace projection" };
   if (record(workspace.freshness)?.state === "stale") return { ok: false, code: "stale_snapshot", reason: "education workspace freshness is stale" };
   for (const key of ["observations", "memory_candidates", "memories", "receipts", "review_history", "review_targets", "action_states", "tasks"]) if (!boundedArray(snapshot[key], key === "receipts" || key === "review_history" ? 100 : 200)) return { ok: false, code: "invalid_envelope", reason: `invalid ${key}` };
+  if (snapshot.work_cases !== undefined && !boundedArray(snapshot.work_cases, 200)) return { ok: false, code: "invalid_envelope", reason: "invalid work_cases" };
   if (rawExecutionToken(snapshot)) return { ok: false, code: "invalid_envelope", reason: "raw execution token in snapshot" };
   for (const item of snapshot.receipts as unknown[]) {
     const result = validateReceiptSemantics(item);

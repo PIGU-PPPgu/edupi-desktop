@@ -2,17 +2,17 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "dae43405f5057e3b7032def28267d258c9066a8e",
+    "core_commit": "5d546d04744055de3fcd2bf00e140899915781ef",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:c0f93e01afa86e1d4968ddf7dc531d629db1f15f819d50a9db2f490a42051dc7"
+    "component_manifest_hash": "sha256:d61f8180fdd28312f5581446b075963497a4ba8269a8dabe09b155b4bd60128f"
   },
   "contract_identities": [
     {
       "contract_id": "edupi-bridge-v1.1",
       "contract_version": "1.1",
-      "schema_hash": "sha256:175e33d10cd38ebe7bd5d94260e67f7fabc70e0368ed55492265ef934633980c",
+      "schema_hash": "sha256:8eeda480da6c78a37e60f0445f55cfdd4c1f676c8d8149da55c30b73edb5c220",
       "fixture_manifest_path": "fixtures/bridge/v1.1/fixture-manifest.json",
-      "fixture_manifest_hash": "sha256:6ad8012ec811c7b23318dee51043a3151f6ed120a10d6490f798052ddc631545",
+      "fixture_manifest_hash": "sha256:61f56ea759600b4c48ed2b3439e85787f736840d69b8ccb04698a7acc0fd2a3f",
       "supported_commands": ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage", "update_memory"],
       "supported_projections": ["education_workspace"],
       "depends_on": []
@@ -44,7 +44,9 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/8",
     "https://github.com/PIGU-PPPgu/edupi/pull/9",
     "https://github.com/PIGU-PPPgu/edupi/pull/10",
-    "https://github.com/PIGU-PPPgu/edupi/pull/11"
+    "https://github.com/PIGU-PPPgu/edupi/pull/11",
+    "https://github.com/PIGU-PPPgu/edupi/pull/14",
+    "https://github.com/PIGU-PPPgu/edupi/pull/15"
   ],
-  "change_note": "Added Core-owned audited soft deletion with lost-response retry reconciliation for teacher entities"
+  "change_note": "Added Core-owned calendar work cases and monotonic execution/review transitions for the Living Flow"
 }

@@ -40,6 +40,7 @@ import { listDesktopStagedMaterials, removeDesktopStagedMaterial, selectFilesNat
 import { loadStagedMaterials, removeStagedMaterial, stageBrowserMaterialFiles, type MaterialStagingDescriptor } from "@/lib/edupi-material-staging-client";
 import type { TaskBoardLaneId } from "@/lib/edupi-task-board";
 import { calendarQuickEntryKey, calendarQuickEntryStatusLabel, type EduPiQuickEntryItem } from "@/lib/edupi-quick-entry";
+import { workCaseForTask } from "@/lib/edupi-work-case";
 import { studentRecordKey } from "@/lib/edupi-student-roster-model";
 import { objectItemForView, viewKeepsObjectItem } from "@/lib/edupi-domain-navigation";
 import { APP_PREF_KEYS } from "@/lib/app-prefs";
@@ -853,7 +854,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
           {inspectorAvailable ? <EduPiInspector open={inspectorOpen} data={education} task={activeTask} onClose={toggleInspector} onOpenAgent={openAgent} onStage={selectStage} /> : null}
         </div>
       </div>
-      {taskDetail ? <EduPiTaskDetailDrawer task={taskDetail} workspace={education.workspace} onClose={closeTaskDetail} onOpenFile={openTaskFile} onOpenTask={selectTask} onOpenAgent={openAgentForTask} onDelete={(task) => { if (task.id) void deleteEntity("task", task.id, task.title).catch(() => {}); }} deleteBusy={deleteBusy === `task:${taskDetail.id}`} /> : null}
+      {taskDetail ? <EduPiTaskDetailDrawer task={taskDetail} workCase={workCaseForTask(education, taskDetail.id)} workspace={education.workspace} onClose={closeTaskDetail} onOpenFile={openTaskFile} onOpenTask={selectTask} onOpenAgent={openAgentForTask} onDelete={(task) => { if (task.id) void deleteEntity("task", task.id, task.title).catch(() => {}); }} deleteBusy={deleteBusy === `task:${taskDetail.id}`} /> : null}
       <EduPiQuickEntry open={quickEntryOpen} education={education} onClose={onCloseQuickEntry} onSelect={selectQuickEntry} />
       {drawer === "file" ? <FileWorkspaceDrawer kind="file" task={activeView === "tasks" || activeView === "review" ? activeTask : undefined} filePath={previewPath} filePanel={previewPath ? renderFilePreview(previewPath) : null} onClose={closeDrawer} onPreparePrompt={onPrepareAgentPrompt} /> : null}
       <input ref={materialUploadInputRef} type="file" multiple hidden accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx" onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void stageBrowserFiles(files); }} />

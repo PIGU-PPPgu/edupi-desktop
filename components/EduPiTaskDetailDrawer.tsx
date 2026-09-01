@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { TeacherTask } from "@/lib/edupi-education-contract";
+import type { EducationWorkCase, TeacherTask } from "@/lib/edupi-education-contract";
+import { workCaseStateLabel, workCaseTransitionLabel } from "@/lib/edupi-work-case";
 import {
   taskAgentSteps,
   taskArtifactFile,
@@ -17,6 +18,7 @@ import {
 
 type Props = {
   task: TeacherTask;
+  workCase: EducationWorkCase | null;
   workspace: string;
   onClose: () => void;
   onOpenFile: (path: string) => void;
@@ -46,7 +48,12 @@ function nonempty(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-export function EduPiTaskDetailDrawer({ task, workspace, onClose, onOpenFile, onOpenTask, onOpenAgent, onDelete, deleteBusy = false }: Props) {
+function flowTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+export function EduPiTaskDetailDrawer({ task, workCase, workspace, onClose, onOpenFile, onOpenTask, onOpenAgent, onDelete, deleteBusy = false }: Props) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
@@ -68,6 +75,7 @@ export function EduPiTaskDetailDrawer({ task, workspace, onClose, onOpenFile, on
     ["审核人", task.reviewer || nonempty(latestReview?.reviewer ?? latestReview?.reviewer_id)],
     ["时间", task.reviewedAt || nonempty(latestReview?.reviewed_at)],
   ].flatMap(([label, value]) => value ? [{ label, value }] : []);
+  const flowTransitions = workCase ? workCase.transitions.slice(-12) : [];
   useEffect(() => {
     previouslyFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeButtonRef.current?.focus();
@@ -123,12 +131,15 @@ export function EduPiTaskDetailDrawer({ task, workspace, onClose, onOpenFile, on
             </dl>
           </section>
 
-          <section className="edupi-task-detail-section" aria-labelledby="edupi-task-detail-progress">
+          {workCase ? <section className="edupi-task-detail-section edupi-task-flow" aria-labelledby="edupi-task-detail-flow">
+            <header><h3 id="edupi-task-detail-flow">EduPi 流</h3><span>{workCaseStateLabel(workCase.currentState)} · v{workCase.transitionRevision}</span></header>
+            {flowTransitions.length > 0 ? <ol>{flowTransitions.map((transition) => <li className={`is-${transition.state}`} key={transition.id}><i className={`edupi-flow-state is-${transition.state}`} aria-hidden="true" /><div><strong>{workCaseTransitionLabel(transition)}</strong><small>{transition.sourceKind === "teacher_review" ? "教师判断" : "EduPi 执行"}</small></div><time>{flowTime(transition.occurredAt)}</time></li>)}</ol> : <p className="edupi-task-detail-empty">等待第一条执行记录</p>}
+          </section> : <section className="edupi-task-detail-section" aria-labelledby="edupi-task-detail-progress">
             <header><h3 id="edupi-task-detail-progress">任务进度</h3><span>{steps.filter((step) => step.state === "done").length}/{steps.length} 步</span></header>
             <ol className="edupi-task-detail-steps">
               {steps.map((step) => { const failed = isFailedStep(step); return <li className={`is-${failed ? "failed" : step.state}`} key={step.id}><span aria-hidden="true">{failed ? "!" : step.state === "done" ? "✓" : step.state === "active" ? "●" : "○"}</span><div><strong>{step.title}</strong><small>{step.detail}</small></div><em>{stepStateLabel(step)}</em></li>; })}
             </ol>
-          </section>
+          </section>}
 
           <section className="edupi-task-detail-section" aria-labelledby="edupi-task-detail-ready">
             <header><h3 id="edupi-task-detail-ready">已准备</h3><span>{artifacts.length} 项</span></header>

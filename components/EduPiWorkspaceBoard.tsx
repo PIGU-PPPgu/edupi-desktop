@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
-import type { EducationContract, EducationWorkCandidate, TeacherTask } from "@/lib/edupi-education-contract";
+import type { EducationContract, EducationWorkCandidate, EducationWorkCase, TeacherTask } from "@/lib/edupi-education-contract";
+import { workCaseForTask, workCaseStateLabel } from "@/lib/edupi-work-case";
 import { projectTaskBoard, taskBoardLane, taskBoardTargets, type TaskBoardLaneId } from "@/lib/edupi-task-board";
 import { taskCategory, TASK_CATEGORY_CONFIG, type TaskCategoryId } from "@/lib/edupi-task-category";
 import type { TaskSessionBinding } from "@/lib/edupi-task-sessions";
@@ -26,7 +27,8 @@ function taskSource(task: TeacherTask): string {
   return task.student || task.topic || task.sourceEventName || "教师内部";
 }
 
-function taskState(task: TeacherTask, session: TaskSessionBinding | null, lane: TaskBoardLaneId, candidate: EducationWorkCandidate | null): string {
+function taskState(task: TeacherTask, session: TaskSessionBinding | null, lane: TaskBoardLaneId, candidate: EducationWorkCandidate | null, workCase: EducationWorkCase | null): string {
+  if (workCase && (workCase.currentState !== "planned" || !task.boardStage || task.boardStage === "todo")) return workCaseStateLabel(workCase.currentState);
   const contentStatus = taskContentStatusLabel(task);
   if (contentStatus) return taskPresentation(task).label;
   if (task.boardStage) return taskPresentation(task).label;
@@ -47,11 +49,12 @@ function stageAtPoint(x: number, y: number): TaskBoardLaneId | null {
   return stage === "todo" || stage === "progress" || stage === "review" || stage === "done" ? stage : null;
 }
 
-function TaskCard({ task, session, lane, candidate, busy, selected, dragSource, onSelect, onOpen, onCardPointerDown, onHandlePointerDown, onMove }: {
+function TaskCard({ task, session, lane, candidate, workCase, busy, selected, dragSource, onSelect, onOpen, onCardPointerDown, onHandlePointerDown, onMove }: {
   task: TeacherTask;
   session: TaskSessionBinding | null;
   lane: TaskBoardLaneId;
   candidate: EducationWorkCandidate | null;
+  workCase: EducationWorkCase | null;
   busy: boolean;
   selected: boolean;
   dragSource: boolean;
@@ -62,17 +65,18 @@ function TaskCard({ task, session, lane, candidate, busy, selected, dragSource, 
   onMove: (stage: TaskBoardLaneId) => void;
 }) {
   const title = taskDisplayTitle(task);
+  const visibleFlowState = workCase?.currentState === "planned" && task.boardStage && task.boardStage !== "todo" ? task.boardStage : workCase?.currentState || lane;
   const selectId = `edupi-task-move-${String(task.id || title).replace(/[^A-Za-z0-9_-]/g, "-")}`;
   return (
-    <article className={`edupi-task-board-card${busy ? " is-moving" : ""}${selected ? " is-selected" : ""}${dragSource ? " is-drag-source" : ""}`} aria-busy={busy || undefined} onPointerDown={onCardPointerDown}>
-      <button type="button" className="edupi-task-board-card__open" onClick={(event) => { if (event.detail === 0) onOpen(); else onSelect(); }} onDoubleClick={onOpen} aria-label={`${title}，${taskState(task, session, lane, candidate)}，双击打开`} aria-pressed={selected}>
+    <article className={`edupi-task-board-card${workCase ? " has-flow" : ""}${busy ? " is-moving" : ""}${selected ? " is-selected" : ""}${dragSource ? " is-drag-source" : ""}`} aria-busy={busy || undefined} onPointerDown={onCardPointerDown}>
+      <button type="button" className="edupi-task-board-card__open" onClick={(event) => { if (event.detail === 0) onOpen(); else onSelect(); }} onDoubleClick={onOpen} aria-label={`${title}，${taskState(task, session, lane, candidate, workCase)}，双击打开`} aria-pressed={selected}>
         <span className="edupi-task-board-card__topline"><span>{taskTypeLabel(task)}</span><time>{taskDate(task)}</time></span>
         <strong>{title}</strong>
         <span className="edupi-task-board-card__source">{taskSource(task)}</span>
       </button>
       <footer className="edupi-task-board-card__footer">
         <span className="edupi-task-board-card__handle" onPointerDown={(event) => { event.stopPropagation(); onHandlePointerDown(event); }} title="拖动任务" aria-hidden="true">⠿</span>
-        <span><i className={`is-${lane}`} aria-hidden="true" />{busy ? "正在移动" : taskState(task, session, lane, candidate)}</span>
+        <span><i className={`edupi-flow-state is-${visibleFlowState}`} aria-hidden="true" />{busy ? "正在移动" : taskState(task, session, lane, candidate, workCase)}</span>
         <label className="edupi-visually-hidden" htmlFor={selectId}>移动到</label>
         <select id={selectId} value="" disabled={busy} onChange={(event) => { const value = event.target.value as TaskBoardLaneId; if (value) onMove(value); }}>
           <option value="">移动到</option>
@@ -205,7 +209,8 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
                 {column.tasks.map((task) => {
                   const session = task.id ? data.taskSessions[task.id] ?? null : null;
                   const candidate = task.id ? candidateByTask.get(task.id) ?? null : null;
-                  return <div role="listitem" key={task.id || `${task.trigger}:${task.title}`}><TaskCard task={task} session={session} lane={column.id} candidate={candidate} busy={movingTaskId === task.id} selected={Boolean(task.id) && selectedCardId === task.id} dragSource={draggedTaskId === task.id} onSelect={() => { if (suppressClickRef.current) { suppressClickRef.current = false; return; } setSelectedCardId(task.id ?? null); }} onOpen={() => onTaskDetail(task)} onCardPointerDown={(event) => { suppressClickRef.current = false; if (!task.id || movingTaskId) return; if ((event.target as HTMLElement).closest("select")) return; const rect = event.currentTarget.getBoundingClientRect(); dragStartRef.current = { id: task.id, x: event.clientX, y: event.clientY, offX: event.clientX - rect.x, offY: event.clientY - rect.y, width: rect.width }; }} onHandlePointerDown={(event) => { if (!task.id || movingTaskId) return; event.preventDefault(); const card = event.currentTarget.closest<HTMLElement>(".edupi-task-board-card"); const rect = card?.getBoundingClientRect(); beginDrag({ id: task.id, offX: rect ? event.clientX - rect.x : 14, offY: rect ? event.clientY - rect.y : 14, width: rect?.width ?? 240 }, event.clientX, event.clientY); }} onMove={(stage) => void move(task, stage)} /></div>;
+                  const workCase = workCaseForTask(data, task.id);
+                  return <div role="listitem" key={task.id || `${task.trigger}:${task.title}`}><TaskCard task={task} session={session} lane={column.id} candidate={candidate} workCase={workCase} busy={movingTaskId === task.id} selected={Boolean(task.id) && selectedCardId === task.id} dragSource={draggedTaskId === task.id} onSelect={() => { if (suppressClickRef.current) { suppressClickRef.current = false; return; } setSelectedCardId(task.id ?? null); }} onOpen={() => onTaskDetail(task)} onCardPointerDown={(event) => { suppressClickRef.current = false; if (!task.id || movingTaskId) return; if ((event.target as HTMLElement).closest("select")) return; const rect = event.currentTarget.getBoundingClientRect(); dragStartRef.current = { id: task.id, x: event.clientX, y: event.clientY, offX: event.clientX - rect.x, offY: event.clientY - rect.y, width: rect.width }; }} onHandlePointerDown={(event) => { if (!task.id || movingTaskId) return; event.preventDefault(); const card = event.currentTarget.closest<HTMLElement>(".edupi-task-board-card"); const rect = card?.getBoundingClientRect(); beginDrag({ id: task.id, offX: rect ? event.clientX - rect.x : 14, offY: rect ? event.clientY - rect.y : 14, width: rect?.width ?? 240 }, event.clientX, event.clientY); }} onMove={(stage) => void move(task, stage)} /></div>;
                 })}
                 {column.tasks.length === 0 ? <div className="edupi-task-board-column__empty" role="status">暂无任务</div> : null}
               </div>

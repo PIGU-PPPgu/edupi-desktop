@@ -138,7 +138,7 @@ function SectionHeader({ title, meta, action, onAction }: { title: string; meta?
   return <header className="edupi-page-section__header"><div><h2>{title}</h2>{meta ? <span>{meta}</span> : null}</div>{action && onAction ? <button type="button" onClick={onAction}>{action}</button> : null}</header>;
 }
 
-function DashboardView({ data, context, runningAgentCount, onEducation, onNavigate, onUpload, onOpenContext, onOpenAdmin, onOpenFile, onStartAgent }: Pick<Props, "data" | "context" | "runningAgentCount" | "onEducation" | "onNavigate" | "onUpload" | "onOpenContext" | "onOpenAdmin" | "onOpenFile" | "onStartAgent">) {
+function DashboardView({ data, context, runningAgentCount, onEducation, onTaskDetail, onNavigate, onUpload, onOpenContext, onOpenAdmin, onOpenFile, onStartAgent }: Pick<Props, "data" | "context" | "runningAgentCount" | "onEducation" | "onTaskDetail" | "onNavigate" | "onUpload" | "onOpenContext" | "onOpenAdmin" | "onOpenFile" | "onStartAgent">) {
   const today = localIsoDate();
   const currentWeek = data.calendar.find((event) => Boolean(event.date && event.date <= today && (event.endDate || event.date) >= today && /第\d+周/.test(event.name)));
   const upcoming = data.calendar.filter((event) => Boolean(event.date && (event.endDate || event.date) >= today && event !== currentWeek)).slice(0, 5);
@@ -170,7 +170,7 @@ function DashboardView({ data, context, runningAgentCount, onEducation, onNaviga
           <SectionHeader title="EduPi 已经准备好" meta={latestBrief?.date ? shortDate(latestBrief.date) : undefined} action={latestBrief ? "打开原文" : undefined} onAction={latestBrief ? () => onOpenFile(workspaceFile(data.workspace, latestBrief.path)) : undefined} />
           {latestBrief ? <p>{latestBrief.excerpt}</p> : <div className="edupi-module-empty">今天还没有生成简报</div>}
         </section>
-        <EduPiTodayWork data={data} onEducation={onEducation} />
+        <EduPiTodayWork data={data} onEducation={onEducation} onWorkCaseDetail={(workCase) => { const task = data.tasks.find((item) => item.id === workCase.taskId); if (task) onTaskDetail(task); }} />
       </div>
       <aside className="edupi-today-side">
         <section className="edupi-page-section edupi-today-dock">
@@ -198,7 +198,7 @@ function ArtifactsView({ data, query, onTask }: Pick<Props, "data" | "query" | "
 }
 
 export function EduPiWorkspaceViews(props: Props) {
-  if (props.view === "dashboard") return <DashboardView data={props.data} context={props.context} runningAgentCount={props.runningAgentCount} onEducation={props.onEducation} onNavigate={props.onNavigate} onUpload={props.onUpload} onOpenContext={props.onOpenContext} onOpenAdmin={props.onOpenAdmin} onOpenFile={props.onOpenFile} onStartAgent={props.onStartAgent} />;
+  if (props.view === "dashboard") return <DashboardView data={props.data} context={props.context} runningAgentCount={props.runningAgentCount} onEducation={props.onEducation} onTaskDetail={props.onTaskDetail} onNavigate={props.onNavigate} onUpload={props.onUpload} onOpenContext={props.onOpenContext} onOpenAdmin={props.onOpenAdmin} onOpenFile={props.onOpenFile} onStartAgent={props.onStartAgent} />;
   if (props.view === "workspace") return <EduPiWorkspaceBoard data={props.data} query={props.query} onTaskDetail={props.onTaskDetail} onCreateTask={props.onCreateTask} onMoveTask={props.onMoveTask} />;
   if (props.view === "teaching") return <EduPiTeachingWorkspace data={props.data} context={props.context} query={props.query} selectedObjectId={props.selectedObjectId} onObject={props.onObject} onTask={(task) => props.onTask(task, "brief")} onNavigate={props.onNavigate} onStartAgent={props.onStartAgent} onCalendarSelection={props.onCalendarSelection} />;
   if (props.view === "homeroom" || props.view === "students") return <EduPiStudentWorkspace mode={props.view} data={props.data} context={props.context} query={props.query} selectedStudentId={props.selectedStudentId} onStudent={props.onStudent} onEducation={props.onEducation} onTask={(task) => props.onTask(task, "brief")} onStartAgent={props.onStartAgent} onDeleteEntity={props.onDeleteEntity} />;

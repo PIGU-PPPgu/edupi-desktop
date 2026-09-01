@@ -588,6 +588,7 @@ html.dark .edupi-teacher-shell {
 .edupi-task-board-card:hover { border-color: var(--ep-border-strong); background: color-mix(in srgb, var(--ep-surface) 94%, var(--ep-blue-soft)); }
 .edupi-task-board-card.is-moving { opacity: .55; }
 .edupi-task-board-card.is-selected { border-color: var(--ep-blue); box-shadow: 0 0 0 1px var(--ep-blue); }
+.edupi-task-board-card.has-flow { border-left-color: color-mix(in srgb, var(--ep-blue) 58%, var(--ep-border)); }
 .edupi-task-board-card__open { display: flex; min-width: 0; flex: 1; padding: 12px 12px 7px; flex-direction: column; gap: 7px; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
 .edupi-task-board-card__topline,
 .edupi-task-board-card__footer { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; }
@@ -603,6 +604,17 @@ html.dark .edupi-teacher-shell {
 .edupi-task-board-card__footer i.is-progress { background: var(--ep-orange); }
 .edupi-task-board-card__footer i.is-review { background: var(--ep-green); }
 .edupi-task-board-card__footer i.is-done { background: var(--ep-green); }
+.edupi-flow-state { display: inline-block; width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--ep-dim); }
+.edupi-flow-state.is-running { background: var(--ep-blue); animation: edupi-flow-running 1.35s ease-in-out infinite; }
+.edupi-flow-state.is-queued { background: var(--ep-orange); animation: edupi-flow-queued 1.7s ease-in-out infinite; }
+.edupi-flow-state.is-draft_ready,
+.edupi-flow-state.is-accepted,
+.edupi-flow-state.is-modified,
+.edupi-flow-state.is-completed { background: var(--ep-green); }
+.edupi-flow-state.is-failed,
+.edupi-flow-state.is-rejected,
+.edupi-flow-state.is-stale { background: var(--ep-red); }
+.edupi-flow-state.is-held { background: var(--ep-orange); }
 .edupi-task-board-card__footer select { max-width: 94px; height: 25px; padding: 0 5px; border: 1px solid var(--ep-border); border-radius: 5px; background: var(--ep-surface-soft); color: var(--ep-muted); cursor: pointer; font-size: 10px; }
 .edupi-task-board-column__empty { display: grid; min-height: 108px; place-items: center; border: 1px dashed var(--ep-border); border-radius: 8px; color: var(--ep-dim); font-size: 11px; }
 
@@ -783,6 +795,18 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-today-work__feedback.is-success { background: var(--ep-green-soft); color: var(--ep-green); }
 .edupi-today-work__feedback.is-error { background: var(--ep-red-soft); color: var(--ep-red); }
 .edupi-today-work__groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.edupi-today-flow { border-bottom: 1px solid var(--ep-border); background: color-mix(in srgb, var(--ep-blue-soft) 25%, var(--ep-surface)); }
+.edupi-today-flow > header { display: flex; align-items: center; justify-content: space-between; padding: 9px 13px 6px; }
+.edupi-today-flow > header span,
+.edupi-today-flow > header strong { color: var(--ep-muted); font-size: 10px; }
+.edupi-today-flow > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.edupi-today-flow button { display: grid; min-width: 0; min-height: 48px; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 13px; border: 0; border-top: 1px solid var(--ep-border); background: transparent; color: var(--ep-text); cursor: pointer; text-align: left; }
+.edupi-today-flow button:nth-child(odd) { border-right: 1px solid var(--ep-border); }
+.edupi-today-flow button:hover { background: var(--ep-surface-soft); }
+.edupi-today-flow button > span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.edupi-today-flow button strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.edupi-today-flow button small { color: var(--ep-muted); font-size: 9px; }
+.edupi-today-flow button em { color: var(--ep-dim); font-size: 13px; font-style: normal; }
 .edupi-today-work__group { min-width: 0; }
 .edupi-today-work__group + .edupi-today-work__group { border-left: 1px solid var(--ep-border); }
 .edupi-today-work__group > header { display: flex; min-height: 42px; align-items: baseline; justify-content: space-between; gap: 8px; padding: 11px 13px 7px; border-bottom: 1px solid var(--ep-border); background: var(--ep-surface-soft); }
@@ -1288,6 +1312,14 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-task-detail-steps li strong { font-size: 12px; font-weight: 620; }
 .edupi-task-detail-steps li small { color: var(--ep-muted); font-size: 10px; line-height: 1.45; }
 .edupi-task-detail-steps li em { color: var(--ep-muted); font-size: 10px; font-style: normal; white-space: nowrap; }
+.edupi-task-flow > ol { margin: 0; padding: 0 16px 12px; list-style: none; }
+.edupi-task-flow > ol > li { position: relative; display: grid; min-height: 43px; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: start; gap: 8px; padding: 7px 0; }
+.edupi-task-flow > ol > li:not(:last-child)::after { position: absolute; top: 19px; bottom: -7px; left: 3px; width: 1px; background: var(--ep-border); content: ""; }
+.edupi-task-flow li > i { margin-top: 4px; }
+.edupi-task-flow li > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.edupi-task-flow li strong { font-size: 11px; }
+.edupi-task-flow li small,
+.edupi-task-flow li time { color: var(--ep-muted); font-size: 9px; }
 .edupi-task-detail-artifacts { display: grid; gap: 0; margin: 0; padding: 0 16px 8px; list-style: none; }
 .edupi-task-detail-artifacts li { display: flex; min-width: 0; align-items: center; padding: 8px 0; }
 .edupi-task-detail-artifacts li + li { border-top: 1px solid color-mix(in srgb, var(--ep-border) 76%, transparent); }
@@ -1336,6 +1368,8 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 @keyframes edupi-toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes edupi-expand-in { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
 @keyframes edupi-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .7; transform: scale(.93); } }
+@keyframes edupi-flow-running { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ep-blue) 36%, transparent); } 50% { box-shadow: 0 0 0 4px transparent; } }
+@keyframes edupi-flow-queued { 0%, 100% { opacity: 1; } 50% { opacity: .38; } }
 .edupi-module-workspace,
 .edupi-workspace-board,
 .edupi-task-workspace,
