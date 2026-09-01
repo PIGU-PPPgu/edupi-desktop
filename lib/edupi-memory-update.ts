@@ -129,14 +129,27 @@ function receiptFor(value: unknown, envelope: RawRecord, supportedCommands: read
   const command = record(envelope.command);
   if (!receiptEnvelope || !receipt || !command || !validateCoreEnvelopeSchema(receiptEnvelope) || !validateReceiptSemantics(receipt).ok
     || receiptEnvelope.producer !== "edupi-core" || receiptEnvelope.schema_hash !== identity.contract.schema_hash || receiptEnvelope.external_send !== false
+    || receiptEnvelope.request_id !== envelope.request_id || receipt.request_id !== envelope.request_id || receipt.command_id !== envelope.message_id
+    || receiptEnvelope.message_id !== receipt.receipt_id || receiptEnvelope.issued_at !== envelope.issued_at
     || receipt.command_type !== "update_memory" || receipt.receipt_phase !== "mutation" || receipt.decision !== "modify"
     || !same(receipt.target, { target_kind: "memory", target_id: command.memory_id, command_type: "update_memory" })
-    || receipt.before_snapshot_id !== envelope.snapshot_id || receipt.before_state_hash !== record(command.source)?.source_hash
-    || receipt.created_at !== envelope.issued_at || !same(receiptEnvelope.provenance, envelope.provenance)) {
+    || !exactList(receipt.evidence_ids, Array.isArray(record(command.source)?.evidence_ids) ? record(command.source)?.evidence_ids as string[] : [])
+    || receipt.before_snapshot_id !== envelope.snapshot_id
+    || receipt.created_at !== envelope.issued_at || !same(receiptEnvelope.provenance, envelope.provenance) || !same(receiptEnvelope.teacher_review, receipt.teacher_review)) {
     throw new MemoryUpdateError("invalid_envelope", "Core 记忆修改回执绑定无效。");
   }
+  const rollback = record(receipt.rollback);
+  if (!rollback || rollback.available !== false || rollback.rollback_id !== null || rollback.expires_at !== null) throw new MemoryUpdateError("invalid_envelope", "Core 记忆修改回滚声明无效。");
   const status = String(receipt.status || "");
-  if (status === "stale_snapshot" || receipt.reason_code === "stale_snapshot") throw new MemoryUpdateError("stale_snapshot", "记忆数据已更新，请刷新后重试。");
+  if (status === "stale_snapshot") {
+    if (!["stale_snapshot", "snapshot_dependencies_changed"].includes(String(receipt.reason_code || ""))
+      || !exactList(receipt.applied_ids, []) || !exactList(receipt.rejected_ids, [])
+      || receipt.after_snapshot_id !== null || receipt.after_state_hash !== null || receiptEnvelope.snapshot_id !== envelope.snapshot_id) {
+      throw new MemoryUpdateError("invalid_envelope", "Core 记忆修改冲突回执无效。");
+    }
+    throw new MemoryUpdateError("stale_snapshot", "记忆数据已更新，请刷新后重试。");
+  }
+  if (receipt.before_state_hash !== record(command.source)?.source_hash) throw new MemoryUpdateError("invalid_envelope", "Core 记忆修改来源状态无效。");
   if (status === "failed") {
     const reason = String(receipt.reason_code || "");
     if (reason === "stale_revision") throw new MemoryUpdateError("stale_revision", "记忆版本已更新，请刷新后重试。");
@@ -174,7 +187,7 @@ export async function issueMemoryUpdate(input: MemoryUpdateInput, dependencies: 
   }
   const receipt = receiptFor(rawResponse, envelope, supportedCommands);
   const data = await (dependencies.refreshSnapshot || (async (roots) => (await readEduPiEducationSnapshot({ roots })).payload))(initial.roots);
-  if (data.snapshot_id !== receipt.after_snapshot_id || data.state_hash !== receipt.after_state_hash) throw new MemoryUpdateError("invalid_envelope", "Core 记忆修改快照与回执不一致。");
+  if (!exactList(record(data.capabilities)?.supported_commands, supportedCommands)) throw new MemoryUpdateError("invalid_envelope", "Core 刷新后的能力不一致。");
   const updated = memoryFromPayload(data as unknown as RawRecord, String(record(envelope.command)?.memory_id));
   if (updated.content !== record(envelope.command)?.content || updated.revision !== Number(beforeMemory.revision) + 1) throw new MemoryUpdateError("invalid_envelope", "Core 刷新后的记忆内容无效。");
   return { receipt, data, memory: updated };

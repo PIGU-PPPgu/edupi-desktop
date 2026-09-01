@@ -506,6 +506,7 @@ html.dark .edupi-teacher-shell {
 .edupi-memory-editor footer { display: flex; justify-content: flex-end; gap: 6px; }
 .edupi-memory-editor button.is-primary { border-color: var(--ep-text); background: var(--ep-text); color: var(--ep-surface); }
 .edupi-memory-actions button:disabled,
+.edupi-memory-actions button[aria-disabled="true"],
 .edupi-memory-editor button:disabled { cursor: not-allowed; opacity: .45; }
 .edupi-memory-message { grid-column: 1 / -1; margin: 0; color: var(--ep-green); font-size: 10px; }
 .edupi-memory-message.is-error { color: var(--ep-red); }

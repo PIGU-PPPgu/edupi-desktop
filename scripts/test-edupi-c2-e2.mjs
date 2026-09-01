@@ -15,8 +15,8 @@ import os from "node:os";
 import path from "node:path";
 
 const HARD_TIMEOUT_MS = 60_000;
-const EXPECTED_CORE_COMMIT = "a06c02f61aa5b080769fb740205a2c00df9b94f9";
-const EXPECTED_COMPONENT_MANIFEST_HASH = "sha256:a7b37a9ccb2595e7a19d9e8b7b4bd703fc5eb1b78204b90deaa221a593839033";
+const EXPECTED_CORE_COMMIT = "79d1d14d713bce0c55e33659aeeb4d0a44dc742f";
+const EXPECTED_COMPONENT_MANIFEST_HASH = "sha256:58d90918f3e2f4bc297c422b6cc1f069282e22a07c236cf6675e0f5784a783d4";
 const EXPECTED_SCHEMA_HASH = "sha256:175e33d10cd38ebe7bd5d94260e67f7fabc70e0368ed55492265ef934633980c";
 const EXPECTED_COMMANDS = ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage", "update_memory"];
 const EXPECTED_PROJECTIONS = ["education_workspace"];
