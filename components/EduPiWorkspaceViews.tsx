@@ -6,7 +6,6 @@ import type { CalendarItemSelection } from "@/lib/edupi-calendar-model";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import type { TaskSessionBinding } from "@/lib/edupi-task-sessions";
 import {
-  isUserFacingMemory,
   taskAgentSteps,
   taskArtifacts,
   taskDisplayTitle,
@@ -19,6 +18,8 @@ import {
   type WorkbenchView,
 } from "@/lib/edupi-workbench";
 import { EduPiCalendarWorkspace } from "./EduPiCalendarWorkspace";
+import { EduPiInsightDatabase } from "./EduPiInsightDatabase";
+import { EduPiMemoryDatabase } from "./EduPiMemoryDatabase";
 import { EduPiStudentWorkspace } from "./EduPiStudentWorkspace";
 import { EduPiTodayWork } from "./EduPiTodayWork";
 import { EduPiWorkspaceBoard } from "./EduPiWorkspaceBoard";
@@ -311,30 +312,6 @@ function CalendarView({ data, query, onUpload, intakeBusy, calendarSelection, on
   return <EduPiCalendarWorkspace data={data} query={query} onUpload={onUpload} intakeBusy={intakeBusy} selection={calendarSelection} onSelect={onCalendarSelection} onTaskDetail={onTaskDetail} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} />;
 }
 
-const memoryLabels: Record<string, string> = { semester: "学期", class: "班级", teaching: "教学", preferences: "教师偏好", school: "学校" };
-
-function MemoryView({ data, query, selectedObjectId }: Pick<Props, "data" | "query" | "selectedObjectId">) {
-  const memories = data.continuity.memories.filter((memory) => isUserFacingMemory(memory) && includesQuery(`${memory.content} ${memory.student || ""} ${memory.tags.join(" ")}`, query));
-  const active = memories.filter((memory) => memory.state === "active").sort((left, right) => String(right.updatedAt || right.createdAt || "").localeCompare(String(left.updatedAt || left.createdAt || "")));
-  const superseded = memories.filter((memory) => memory.state === "superseded");
-  const selected = active.find((memory) => `memory:${memory.id}` === selectedObjectId) || active[0] || null;
-  return <main className="edupi-module-workspace edupi-record-workspace">
-    <header className="edupi-module-heading"><div><h1>教育记忆</h1><p>{active.length} 条当前事实 · 只在教师工作区使用</p></div></header>
-    {selected ? <article className="edupi-record-detail"><header><span>{memoryLabels[selected.category] || selected.category}</span><h2>{selected.content}</h2>{selected.student ? <strong>{selected.student}</strong> : null}</header><div className="edupi-record-detail__metrics"><span>出现 <strong>{selected.count}</strong> 次</span><span>当前事实 <strong>{active.length}</strong></span><span>旧版本 <strong>{superseded.length}</strong></span></div><section><h3>标签</h3><div className="edupi-record-tags">{selected.tags.map((tag) => <span key={tag}>{tag}</span>)}{selected.tags.length === 0 ? <em>无标签</em> : null}</div></section><footer>{selected.createdAt ? <time>创建 {shortDate(selected.createdAt)}</time> : null}{selected.updatedAt ? <time>更新 {shortDate(selected.updatedAt)}</time> : null}</footer></article> : <div className="edupi-module-empty">还没有可展示的长期记忆</div>}
-  </main>;
-}
-
-function InsightsView({ data, query, selectedObjectId }: Pick<Props, "data" | "query" | "selectedObjectId">) {
-  const meaningful = data.continuity.insights.filter((insight) => !insight.content.startsWith("[主题候选]") && (includesQuery(insight.content, query) || insight.evidenceIds.some((evidenceId) => includesQuery(evidenceId, query))));
-  const signals = data.continuity.signals.filter((signal) => includesQuery(`${signal.content} ${signal.related.join(" ")}`, query)).sort((left, right) => right.strength - left.strength);
-  const selectedInsight = meaningful.find((insight) => `insight:${insight.id}` === selectedObjectId) || (selectedObjectId?.startsWith("signal:") ? null : meaningful[0]) || null;
-  const selectedSignal = signals.find((signal) => `signal:${signal.id}` === selectedObjectId) || (!selectedInsight ? signals[0] : null) || null;
-  return <main className="edupi-module-workspace edupi-record-workspace">
-    <header className="edupi-module-heading"><div><h1>观察与洞察</h1><p>{data.continuity.lastDreamAt ? `上次整理 ${shortDate(data.continuity.lastDreamAt)}` : "尚未运行后台整理"}</p></div></header>
-    {selectedInsight ? <article className="edupi-record-detail"><header><span>{selectedInsight.status === "surfaced" ? "已浮出" : "仍在酝酿"}</span><h2>{cleanInsight(selectedInsight.content)}</h2></header><div className="edupi-record-detail__metrics"><span>置信度 <strong>{Math.round(selectedInsight.confidence * 100)}%</strong></span><span>依据 <strong>{selectedInsight.evidenceIds.length}</strong></span><span>状态 <strong>{selectedInsight.status === "surfaced" ? "可查看" : "积累中"}</strong></span></div><section><h3>来源依据</h3><div className="edupi-record-tags">{selectedInsight.evidenceIds.map((id) => <span key={id}>依据 {id.slice(-6)}</span>)}{selectedInsight.evidenceIds.length === 0 ? <em>暂无依据</em> : null}</div></section><footer>{selectedInsight.createdAt ? <time>记录 {shortDate(selectedInsight.createdAt)}</time> : null}{selectedInsight.surfacedAt ? <time>浮出 {shortDate(selectedInsight.surfacedAt)}</time> : null}</footer></article> : selectedSignal ? <article className="edupi-record-detail"><header><span>弱信号</span><h2>{selectedSignal.content}</h2></header><div className="edupi-record-detail__metrics"><span>出现 <strong>{selectedSignal.strength}</strong> 次</span><span>关联 <strong>{selectedSignal.related.length}</strong></span></div><section><h3>关联记录</h3><div className="edupi-record-tags">{selectedSignal.related.map((item) => <span key={item}>{item}</span>)}{selectedSignal.related.length === 0 ? <em>暂无关联</em> : null}</div></section><footer>{selectedSignal.createdAt ? <time>首次 {shortDate(selectedSignal.createdAt)}</time> : null}{selectedSignal.lastSeenAt ? <time>最近 {shortDate(selectedSignal.lastSeenAt)}</time> : null}</footer></article> : <div className="edupi-module-empty">暂无观察记录</div>}
-  </main>;
-}
-
 function GrowthView({ data, query, selectedObjectId, onOpenFile, onNavigate }: Pick<Props, "data" | "query" | "selectedObjectId" | "onOpenFile" | "onNavigate">) {
   const documents = data.continuity.documents.filter((document) => includesQuery(`${document.title} ${document.excerpt}`, query));
   const themes = data.continuity.themes.filter((theme) => includesQuery(theme.topic, query)).slice(0, 12);
@@ -365,8 +342,8 @@ export function EduPiWorkspaceViews(props: Props) {
   if (props.view === "teaching") return <TeachingView data={props.data} context={props.context} query={props.query} onTask={props.onTask} onNavigate={props.onNavigate} onUpload={props.onUpload} onStartAgent={props.onStartAgent} />;
   if (props.view === "homeroom" || props.view === "students") return <EduPiStudentWorkspace mode={props.view} data={props.data} context={props.context} query={props.query} selectedStudentId={props.selectedStudentId} onEducation={props.onEducation} onTask={(task) => props.onTask(task, "brief")} />;
   if (props.view === "calendar") return <CalendarView data={props.data} query={props.query} onUpload={props.onUpload} intakeBusy={props.intakeBusy} calendarSelection={props.calendarSelection} onCalendarSelection={props.onCalendarSelection} onTaskDetail={props.onTaskDetail} onImportCalendar={props.onImportCalendar} onImportTimetable={props.onImportTimetable} />;
-  if (props.view === "memory") return <MemoryView data={props.data} query={props.query} selectedObjectId={props.selectedObjectId} />;
-  if (props.view === "insights") return <InsightsView data={props.data} query={props.query} selectedObjectId={props.selectedObjectId} />;
+  if (props.view === "memory") return <EduPiMemoryDatabase data={props.data} query={props.query} selectedObjectId={props.selectedObjectId} onStartAgent={props.onStartAgent} />;
+  if (props.view === "insights") return <EduPiInsightDatabase data={props.data} query={props.query} selectedObjectId={props.selectedObjectId} />;
   if (props.view === "growth") return <GrowthView data={props.data} query={props.query} selectedObjectId={props.selectedObjectId} onOpenFile={props.onOpenFile} onNavigate={props.onNavigate} />;
   if (props.view === "materials") return <MaterialsView data={props.data} query={props.query} stagedMaterials={props.stagedMaterials} stagingBusy={props.stagingBusy} stagingMessage={props.stagingMessage} onTask={props.onTask} onUpload={props.onUpload} onIntakeMaterial={props.onIntakeMaterial} onRemoveStagedMaterial={props.onRemoveStagedMaterial} />;
   return <ArtifactsView data={props.data} query={props.query} onTask={props.onTask} />;
