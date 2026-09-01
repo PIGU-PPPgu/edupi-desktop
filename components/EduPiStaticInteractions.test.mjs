@@ -12,6 +12,7 @@ test("EduPi content rows use disclosures inside category databases and drawers",
   const memory = await read("./EduPiMemoryDatabase.tsx");
   const insights = await read("./EduPiInsightDatabase.tsx");
   const growth = await read("./EduPiGrowthWorkspace.tsx");
+  const navigation = await read("../lib/edupi-domain-navigation.ts");
   const css = await read("../app/edupi-workbench.css");
   for (const source of [teaching, memory, insights, growth]) assert.match(source, /<details[\s\S]*?<summary(?:\s|>)/);
   assert.match(sider, /<button type="button" className=\{`edupi-object-row edupi-object-student/);
@@ -25,6 +26,7 @@ test("EduPi content rows use disclosures inside category databases and drawers",
   assert.doesNotMatch(views, /JSON\.stringify\(item\)/);
   assert.doesNotMatch(views, /evidenceIds\.join/);
   assert.doesNotMatch(sider, /String\(pattern\.(?:status|last_seen)\)|String\(student\.updated_at\)/);
-  assert.match(growth, /待验证/);
+  assert.match(growth, /growthReviewStateLabel/);
+  assert.match(navigation, /待验证/);
   assert.doesNotMatch(growth, /审核状态：\{item\.reviewState\}/);
 });
