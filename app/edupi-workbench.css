@@ -508,8 +508,8 @@ html.dark .edupi-teacher-shell {
 .edupi-memory-actions button:disabled,
 .edupi-memory-actions button[aria-disabled="true"],
 .edupi-memory-editor button:disabled { cursor: not-allowed; opacity: .45; }
-.edupi-memory-message { grid-column: 1 / -1; margin: 0; color: var(--ep-green); font-size: 10px; }
-.edupi-memory-message.is-error { color: var(--ep-red); }
+.edupi-memory-message { grid-column: 1 / -1; margin: 10px 0 0; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--ep-green) 20%, var(--ep-border)); border-radius: 6px; background: var(--ep-green-soft); color: var(--ep-green); font-size: 10px; }
+.edupi-memory-message.is-error { border-color: color-mix(in srgb, var(--ep-red) 20%, var(--ep-border)); background: var(--ep-red-soft); color: var(--ep-red); }
 .edupi-database__empty { display: grid; min-height: 120px; place-items: center; color: var(--ep-dim); font-size: 11px; }
 .edupi-database-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 12px 0; color: var(--ep-muted); font-size: 10px; }
 .edupi-database-pagination button { height: 28px; padding: 0 9px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface); color: var(--ep-text); cursor: pointer; font-size: 10px; }

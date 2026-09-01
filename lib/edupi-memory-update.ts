@@ -195,7 +195,12 @@ export async function issueMemoryUpdate(input: MemoryUpdateInput, dependencies: 
   const receipt = receiptFor(rawResponse, envelope, supportedCommands);
   const data = await (dependencies.refreshSnapshot || (async (roots) => (await readEduPiEducationSnapshot({ roots })).payload))(initial.roots);
   if (!exactList(record(data.capabilities)?.supported_commands, supportedCommands)) throw new MemoryUpdateError("invalid_envelope", "Core 刷新后的能力不一致。");
-  const updated = memoryFromPayload(data as unknown as RawRecord, String(record(envelope.command)?.memory_id));
+  let updated: RawRecord;
+  try { updated = memoryFromPayload(data as unknown as RawRecord, String(record(envelope.command)?.memory_id)); }
+  catch (error) {
+    if (error instanceof MemoryUpdateError && error.code === "target_not_found") throw new MemoryUpdateError("stale_revision", "记忆在保存后被移除或失效，请刷新查看最新状态。");
+    throw error;
+  }
   const committedRevision = Number(beforeMemory.revision) + 1;
   if (Number(updated.revision) > committedRevision) throw new MemoryUpdateError("stale_revision", "记忆在保存后又被更新，请刷新查看最新内容。");
   if (updated.content !== record(envelope.command)?.content || updated.revision !== committedRevision) throw new MemoryUpdateError("invalid_envelope", "Core 刷新后的记忆内容无效。");

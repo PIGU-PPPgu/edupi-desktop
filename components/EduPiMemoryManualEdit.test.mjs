@@ -14,7 +14,9 @@ test("memory rows separate direct manual editing from optional AI collaboration"
   assert.match(source, /revision: memory\.revision/);
   assert.match(source, /onEducation\(result\.data\)/);
   assert.match(source, /onEducation\(result\.data\);\s*setPage\(0\)/);
-  assert.match(source, /setEditor\(\(current\) => current\?\.memoryId === memory\.id \? null : current\)/);
+  assert.match(source, /current\.draft\.trim\(\) === draft/);
+  assert.match(source, /originalContent: draft/);
+  assert.match(source, /revision: savedMemory\?\.revision/);
   assert.match(source, /onStartAgent/);
   assert.match(source, /aria-disabled=\{!data\.capabilities\.memoryUpdate\.enabled\}/);
   assert.match(source, /aria-describedby=/);
@@ -26,4 +28,5 @@ test("manual save stays in the memory database and reports bounded states", () =
   assert.match(source, /记忆已保存/);
   assert.match(source, /role=\{message\.tone === "error" \? "alert" : "status"\}/);
   assert.doesNotMatch(source, /onStartAgent\([^)]*draft/);
+  assert.ok(source.indexOf("edupi-memory-message") < source.indexOf('<section className="edupi-database"'));
 });
