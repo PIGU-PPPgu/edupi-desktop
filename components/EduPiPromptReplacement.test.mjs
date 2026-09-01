@@ -20,7 +20,7 @@ test("context and task handoffs replace the composer while ordinary EduPi prompt
   assert.match(appShell, /onPrepareAgentPrompt=\{\(prompt\) => chatInputRef\.current\?\.insertText\(`\$\{prompt\}\\n`\)\}/);
   assert.match(panel, /onReplaceAgentPrompt: \(prompt: string\) => void/);
   assert.match(panel, /type AgentPromptMode = "insert" \| "replace"/);
-  assert.match(panel, /startAgent\(prompt\)/);
+  assert.match(panel, /onStartAgent=\{\(prompt, mode\) => startAgent\(prompt, mode\)\}/);
 
   const contextHandoff = panel.slice(panel.indexOf("onAgentRequest={(prompt) => {"), panel.indexOf("</EduPiContextEditor>"));
   assert.match(contextHandoff, /setContextOpen\(false\)/);

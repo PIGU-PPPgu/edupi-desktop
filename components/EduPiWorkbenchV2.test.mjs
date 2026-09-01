@@ -72,7 +72,7 @@ test("teaching prepares the next class and continuity modules render one selecte
     read("./EduPiInsightDatabase.tsx"),
     read("./EduPiGrowthWorkspace.tsx"),
   ]);
-  assert.match(teaching, /导入教学重点/);
+  assert.match(teaching, /对话补充重点/);
   assert.match(teaching, /准备下一节课/);
   assert.match(teaching, /请为\$\{nextSubject\}/);
   assert.match(panel, /selectedObjectId/);

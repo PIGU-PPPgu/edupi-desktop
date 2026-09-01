@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
   <dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>EduPi 使用麦克风将教师口述转换为待发送的文字草稿。</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>EduPi 使用系统语音识别把教师口述转换为可编辑文字。</string>
     <key>NSAppTransportSecurity</key>
     <dict>
       <key>NSAllowsLocalNetworking</key>
