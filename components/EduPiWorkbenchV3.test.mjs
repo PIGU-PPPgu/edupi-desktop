@@ -31,6 +31,7 @@ test("insights use primary categories, status filters, and a database table", as
   assert.match(sider, /INSIGHT_STATUSES\.map/);
   assert.match(insights, /edupi-insight-db-grid/);
   assert.match(insights, /PAGE_SIZE = 8/);
+  assert.match(insights, /item\.evidence\.join\(" "\)/);
 });
 
 test("teaching, growth, and material sidebars expose domain categories instead of record cards", async () => {
@@ -55,6 +56,8 @@ test("teaching keeps a home route and the calendar exposes a ten-period weekday 
   assert.match(timetable, /length: 10/);
   for (const day of ["星期一", "星期二", "星期三", "星期四", "星期五"]) assert.match(timetable, new RegExp(day));
   assert.match(timetable, /period === 6 \? " is-afternoon-start"/);
+  assert.match(timetable, /其他时段/);
+  assert.match(timetable, /overflowSlots\.map/);
   assert.match(calendar, /contentMode === "timetable" \? <EduPiTimetableGrid/);
 });
 
@@ -68,6 +71,8 @@ test("class workspace keeps the student directory mounted and opens a right draw
   assert.match(student, /onStudent\(null\)/);
   assert.doesNotMatch(student, /mode === "students" \? students\[0\] : null/);
   assert.match(student, /selected \? \[selected\] : data\.students/);
+  assert.match(student, /const formElement = event\.currentTarget/);
+  assert.match(student, /formElement\.reset\(\)/);
 });
 
 test("growth and materials use explicit databases and right-side material details", async () => {

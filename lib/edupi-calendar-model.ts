@@ -378,6 +378,13 @@ export function filterTimetableSlots(slots: Array<Record<string, unknown>>, quer
   });
 }
 
+export function isPrimaryTimetableSlot(value: Record<string, unknown>): boolean {
+  const slot = record(value);
+  const day = Number(slot.day_of_week ?? slot.dayOfWeek);
+  const period = Number(slot.period);
+  return Number.isInteger(day) && day >= 1 && day <= 5 && Number.isInteger(period) && period >= 1 && period <= 10;
+}
+
 function makeEntry(input: Omit<CalendarEntry, "statusLabel">): CalendarEntry {
   return { ...input, statusLabel: statusLabel(input.status) };
 }

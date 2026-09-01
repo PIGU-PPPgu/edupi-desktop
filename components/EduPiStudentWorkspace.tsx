@@ -86,12 +86,13 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   const supplement = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedName || busy) return;
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const trait = String(form.get("trait") || "").trim();
     const parentNote = String(form.get("parentNote") || "").trim();
     if (!trait && !parentNote) return;
     setBusy(true); setMessage(null);
-    try { await importCsv(`${selectedName}-档案补充.csv`, `姓名,性格特征,家长备注\n${csvCell(selectedName)},${csvCell(trait)},${csvCell(parentNote)}\n`); setMessage({ tone: "success", text: "学生档案已补充" }); event.currentTarget.reset(); }
+    try { await importCsv(`${selectedName}-档案补充.csv`, `姓名,性格特征,家长备注\n${csvCell(selectedName)},${csvCell(trait)},${csvCell(parentNote)}\n`); setMessage({ tone: "success", text: "学生档案已补充" }); formElement.reset(); }
     catch (error) { setMessage({ tone: "error", text: error instanceof Error ? error.message : "学生档案补充失败。" }); }
     finally { setBusy(false); }
   };

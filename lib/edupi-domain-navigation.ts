@@ -70,3 +70,11 @@ export function routePart(value: string | null | undefined, prefix: string, fall
 export function viewKeepsObjectItem(view: string): boolean {
   return view === "teaching" || view === "memory" || view === "insights" || view === "growth" || view === "materials";
 }
+
+export function growthReviewStateLabel(value: string | null | undefined): string {
+  if (value === "accepted" || value === "confirmed") return "已确认";
+  if (value === "rejected") return "已拒绝";
+  if (value === "hold") return "已暂缓";
+  if (value === "pending_review") return "待验证";
+  return "能力候选";
+}

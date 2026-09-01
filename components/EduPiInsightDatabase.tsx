@@ -22,7 +22,7 @@ export function EduPiInsightDatabase({ data, query, selectedObjectId }: { data: 
     const signals = data.continuity.signals.filter((item) => insightCategory(item.content) === category).map((item) => ({ id: `signal:${item.id}`, type: "观察", content: item.content, status: "弱信号", statusId: "signal", evidence: [] as string[], strength: item.strength, date: item.lastSeenAt || item.createdAt, related: item.related }));
     return [...insights, ...signals]
       .filter((item) => status === "all" || item.statusId === status)
-      .filter((item) => !query || `${item.content} ${item.status} ${item.related.join(" ")}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+      .filter((item) => !query || `${item.content} ${item.status} ${item.evidence.join(" ")} ${item.related.join(" ")}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
       .sort((left, right) => String(right.date || "").localeCompare(String(left.date || "")));
   }, [category, data.continuity.insights, data.continuity.signals, query, status]);
   useEffect(() => setPage(0), [category, query, status]);
