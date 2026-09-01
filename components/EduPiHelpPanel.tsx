@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { OnboardingChecklistItem, TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
+import { readEduPiWorkspace } from "@/lib/edupi-education-client";
 
 type Props = {
   onClose: () => void;
@@ -50,12 +51,8 @@ export function EduPiHelpPanel({ onClose, onStartSetup, onOpenContext }: Props) 
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/edupi/onboarding", { cache: "no-store", signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json() as Promise<TeacherContextSnapshot>;
-      })
-      .then(setContext)
+    readEduPiWorkspace({ signal: controller.signal })
+      .then((bundle) => setContext(bundle.context))
       .catch((reason) => {
         if (reason instanceof DOMException && reason.name === "AbortError") return;
         setError(reason instanceof Error ? reason.message : String(reason));

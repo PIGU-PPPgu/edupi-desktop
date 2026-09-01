@@ -5,6 +5,7 @@ export type CalendarDateStatus = "explicit" | "missing" | "invalid";
 export type CalendarPreparationStatus = "read_only" | "hold";
 export type TaskReviewAction = "accept" | "modify" | "reject" | "hold" | "rollback";
 export type TeacherTaskStatus = "planned" | "accepted" | "modified" | "rejected" | "hold";
+export type EducationEntityDeleteKind = "calendar" | "timetable" | "memory" | "student" | "task";
 
 export type CalendarFact = {
   id: string | null;
@@ -380,6 +381,7 @@ export type EducationContract = {
     teacherContextReview: TeacherContextReviewCapability;
     workCandidateReview: WorkCandidateReviewCapability;
     memoryUpdate: { enabled: boolean; commands: ["update_memory"]; reason: string };
+    entityDelete: { enabled: boolean; targetKinds: EducationEntityDeleteKind[]; reason: string };
   };
 };
 
@@ -1429,6 +1431,7 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
   snapshotPayload?: RawRecord;
   snapshot?: RawRecord;
   supportedCommands?: readonly string[];
+  entityDeleteEnabled?: boolean;
 } ): EducationContract {
   const workspace = record(workspaceInput);
   const snapshotPayload = options.snapshotPayload || options.snapshot;
@@ -1528,6 +1531,7 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
       teacherContextReview: teacherContextReviewCapability(snapshotPayload, options.supportedCommands),
       workCandidateReview: workCandidateReviewCapability(snapshotPayload, options.supportedCommands),
       memoryUpdate: memoryUpdateCapability(snapshotPayload, options.supportedCommands),
+      entityDelete: { enabled: options.entityDeleteEnabled === true, targetKinds: options.entityDeleteEnabled === true ? ["calendar", "timetable", "memory", "student", "task"] : [], reason: options.entityDeleteEnabled === true ? "Core 软删除已启用。" : CORE_PROJECTION_UNAVAILABLE },
     },
   };
 }
@@ -1640,6 +1644,7 @@ export function buildEducationContract(input: ContractInput = {}): EducationCont
       teacherContextReview: teacherContextReviewCapability(snapshotPayload, input.supportedCommands),
       workCandidateReview: workCandidateReviewCapability(snapshotPayload, input.supportedCommands),
       memoryUpdate: memoryUpdateCapability(snapshotPayload, input.supportedCommands),
+      entityDelete: { enabled: false, targetKinds: [], reason: CORE_PROJECTION_UNAVAILABLE },
     },
   };
 }

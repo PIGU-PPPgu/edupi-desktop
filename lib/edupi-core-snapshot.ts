@@ -31,7 +31,10 @@ type CoreHealth = {
   fixture_manifest_hash?: string;
   supported_commands?: unknown;
   supported_projections?: unknown;
+  supported_operations?: unknown;
 };
+
+const CORE_OPERATIONS = ["health", "snapshot", "command", "students", "delete"] as const;
 
 export function isEduPiAbsolutePath(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && (isAbsolute(value) || isWindowsAbsolutePath(value));
@@ -143,6 +146,7 @@ export async function readEduPiCoreHealth({
     || health.contract_version !== identity.contract.contract_version
     || health.schema_hash !== identity.contract.schema_hash
     || health.fixture_manifest_hash !== identity.contract.fixture_manifest_hash
+    || !sameCapabilityList(health.supported_operations, CORE_OPERATIONS)
     || !sameCapabilityList(health.supported_commands, identity.contract.supported_commands)
     || !sameCapabilityList(health.supported_projections, identity.contract.supported_projections)) {
     throw new EduPiSnapshotError("health_identity", "Core health identity mismatch");

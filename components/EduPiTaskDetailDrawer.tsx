@@ -22,6 +22,8 @@ type Props = {
   onOpenFile: (path: string) => void;
   onOpenTask: (task: TeacherTask) => void;
   onOpenAgent: (task: TeacherTask) => void;
+  onDelete: (task: TeacherTask) => void;
+  deleteBusy?: boolean;
 };
 
 function fileName(path: string): string {
@@ -44,7 +46,7 @@ function nonempty(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-export function EduPiTaskDetailDrawer({ task, workspace, onClose, onOpenFile, onOpenTask, onOpenAgent }: Props) {
+export function EduPiTaskDetailDrawer({ task, workspace, onClose, onOpenFile, onOpenTask, onOpenAgent, onDelete, deleteBusy = false }: Props) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
@@ -144,7 +146,7 @@ export function EduPiTaskDetailDrawer({ task, workspace, onClose, onOpenFile, on
             <dl className="edupi-task-detail-feedback">{feedbackRows.map((row) => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>
           </section> : null}
         </div>
-        <footer className="edupi-task-detail-drawer__footer"><button type="button" onClick={() => { onOpenTask(task); onClose(); }}>进入任务</button><button type="button" className="is-primary" onClick={() => { onOpenAgent(task); onClose(); }}>继续让 EduPi 做</button></footer>
+        <footer className="edupi-task-detail-drawer__footer"><button type="button" className="is-delete" disabled={deleteBusy || !task.id} onClick={() => onDelete(task)}>删除任务</button><button type="button" onClick={() => { onOpenTask(task); onClose(); }}>进入任务</button><button type="button" className="is-primary" onClick={() => { onOpenAgent(task); onClose(); }}>继续让 EduPi 做</button></footer>
       </aside>
     </div>
   );

@@ -33,7 +33,7 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   const insightDatabase = await read("./EduPiInsightDatabase.tsx");
   const growth = await read("./EduPiGrowthWorkspace.tsx");
   const workbench = await read("../lib/edupi-workbench.ts");
-  assert.match(panel, /fetch\("\/api\/edupi\/education"/);
+  assert.match(panel, /readEduPiWorkspace\(\{ signal \}\)/);
   assert.doesNotMatch(panel, /edupi-teacher-topbar/);
   assert.doesNotMatch(panel, /本地工作区 · 已连接/);
   assert.match(panel, /method: "POST"/);
@@ -318,7 +318,7 @@ test("board and calendar task entries share a mounted task peek drawer", async (
   assert.match(drawer, /querySelectorAll/);
   assert.match(drawer, /document\.contains\(previouslyFocused\)/);
   assert.doesNotMatch(drawer, /file_sha256|sha256|复制/i);
-  assert.doesNotMatch(drawer, /<button[^>]+disabled/);
+  assert.match(drawer, /disabled=\{deleteBusy \|\| !task\.id\}/);
   assert.doesNotMatch(drawer, /artifact\.revision|版本/);
   assert.match(objectSider, /taskArtifacts\(task\)/);
   assert.doesNotMatch(objectSider, /const artifacts = tasks\.filter\(\(task\) => task\.deliverables\.length > 0\)/);
@@ -368,7 +368,9 @@ test("AppShell monitors Core completion without restoring the removed global top
   assert.doesNotMatch(panel, /EduPiCompletionInbox|edupi-teacher-topbar/);
   assert.match(inbox, /EduPi 已完成/);
   assert.match(inbox, /completionInboxItems\(tasks\)/);
-  assert.match(hook, /fetch\("\/api\/edupi\/education"/);
+  assert.match(hook, /readEduPiEducation/);
+  assert.doesNotMatch(hook, /fetch\("\/api\/edupi\/education"/);
+  assert.match(panel, /readEduPiWorkspace\(\{ signal \}\)/);
   assert.match(hook, /setTimeout/);
   assert.match(hook, /AbortController/);
   assert.match(hook, /baseline === null/);

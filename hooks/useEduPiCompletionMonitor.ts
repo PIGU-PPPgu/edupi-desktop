@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import type { EducationContract } from "@/lib/edupi-education-contract";
+import { readEduPiEducation } from "@/lib/edupi-education-client";
 import {
   completionSnapshot,
   completionSnapshotSignature,
@@ -52,9 +52,7 @@ export function useEduPiCompletionMonitor({
       controller?.abort();
       controller = new AbortController();
       try {
-        const response = await fetch("/api/edupi/education", { cache: "no-store", signal: controller.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const education = await response.json() as EducationContract;
+        const education = await readEduPiEducation({ signal: controller.signal });
         if (!education || !Array.isArray(education.tasks) || typeof education.workspace !== "string") throw new Error("Invalid education projection");
         if (disposed || requestSequence !== sequence) return;
         const next = completionSnapshot(education.tasks, education.workspace);

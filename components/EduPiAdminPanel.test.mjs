@@ -15,10 +15,13 @@ test("management center is a full admin workspace with persistent navigation", a
     read("../app/edupi-admin.css"),
   ]);
 
-  for (const endpoint of ["/api/edupi/onboarding", "/api/edupi/education", "/api/edupi/status", "/api/models"]) assert.match(admin, new RegExp(endpoint.replaceAll("/", "\\/")));
+  for (const endpoint of ["/api/edupi/workspace", "/api/edupi/status", "/api/models"]) assert.match(admin, new RegExp(endpoint.replaceAll("/", "\\/")));
+  assert.doesNotMatch(admin, /\/api\/edupi\/(?:onboarding|education)/);
   for (const label of ["管理中心", "EduPi 就绪度", "AI 与模型", "教师与学生", "校历与课表", "上传内容", "任务与产物", "系统"]) assert.match(admin, new RegExp(label));
   assert.match(admin, /ADMIN_SECTIONS/);
-  assert.match(admin, /useState<AdminSectionId>\("readiness"\)/);
+  assert.match(admin, /initialSection\?: AdminSectionId/);
+  assert.match(admin, /useState<AdminSectionId>\(initialSection\)/);
+  assert.match(admin, /setActiveSection\(initialSection\)/);
   assert.match(admin, /useState\(false\);[\s\S]+?activeSection === "models"[\s\S]+?setModelsMounted\(true\)/);
   assert.match(admin, /hidden=\{activeSection !== "models"\}/);
   assert.match(admin, /workspaceRef\.current\?\.scrollTo\(\{ top: 0 \}\)/);
@@ -43,14 +46,15 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.match(admin, /默认模型待配置/);
   assert.doesNotMatch(admin, /education\?\.[a-zA-Z]+\.length \|\| 0/);
   assert.doesNotMatch(admin, /snapshot\.models\?\.modelList\?\.length \|\| 0/);
-  assert.doesNotMatch(admin, /配置模块即将接入|EduPiWorkspace/);
+  assert.doesNotMatch(admin, /配置模块即将接入/);
 
   assert.match(rail, /aria-label="管理中心"/);
   assert.doesNotMatch(rail, /aria-label="教育设置"|aria-label="应用设置"/);
   assert.match(panel, /onOpenAdmin/);
   assert.match(panel, /打开管理中心/);
   assert.match(panel, /<EduPiNavigationRail[\s\S]+?onOpenAdmin=\{onOpenAdmin\}/);
-  assert.match(appShell, /onOpenAdmin=\{\(\) => setEduPiAdminOpen\(true\)\}/);
+  assert.match(appShell, /openEduPiAdmin/);
+  assert.match(appShell, /onOpenAdmin=\{\(\) => openEduPiAdmin\(\)\}/);
   assert.match(appShell, /edupiAdminOpen && <EduPiAdminPanel/);
   assert.match(appShell, /modelsPanel=\{<ModelsConfig[\s\S]+?embedded[\s\S]+?onDirtyChange=\{setAdminModelsDirty\}[\s\S]+?onSaved=/);
   assert.match(appShell, /inert=\{edupiAdminOpen \? true : undefined\}/);

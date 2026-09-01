@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import type { EducationContract, TeacherTask } from "@/lib/edupi-education-contract";
+import type { EducationContract, EducationEntityDeleteKind, TeacherTask } from "@/lib/edupi-education-contract";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { studentRecordKey, studentRecordName } from "@/lib/edupi-student-roster-model";
 import { parseStudentProfileList } from "@/lib/edupi-student-profile-edit";
@@ -19,6 +19,7 @@ type Props = {
   onEducation: (data: EducationContract) => void;
   onTask: (task: TeacherTask) => void;
   onStartAgent: (prompt: string, mode?: "insert" | "replace") => void;
+  onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<void>;
 };
 
 type StudentProfileEditor = {
@@ -59,7 +60,7 @@ function exportValue(value: unknown): unknown {
   return Object.fromEntries(Object.entries(value as Record<string, unknown>).filter(([key]) => !/(?:^id$|_id$|_ids$|hash|path)/i.test(key)).map(([key, child]) => [key, exportValue(child)]));
 }
 
-export function EduPiStudentWorkspace({ mode, data, context, query, selectedStudentId, onStudent, onEducation, onTask, onStartAgent }: Props) {
+export function EduPiStudentWorkspace({ mode, data, context, query, selectedStudentId, onStudent, onEducation, onTask, onStartAgent, onDeleteEntity }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
@@ -129,6 +130,20 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
     ].join("\n"), "我希望改成（在这里输入或口述）：");
     onStartAgent(prompt, "replace");
   };
+  const deleteStudent = async () => {
+    if (!selectedName || busy) return;
+    setBusy(true); setMessage(null);
+    try {
+      await onDeleteEntity("student", selectedName, selectedName);
+      setEditor(null);
+      onStudent(null);
+      setMessage({ tone: "success", text: "学生档案已删除" });
+    } catch (error) {
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : "学生档案删除失败。" });
+    } finally {
+      setBusy(false);
+    }
+  };
   const exportCurrent = () => download(`${JSON.stringify({ exported_at: new Date().toISOString(), students: exportValue(selected ? [selected] : data.students) }, null, 2)}\n`, selectedName ? `${selectedName}-学生档案.json` : "班级学生档案.json", "application/json;charset=utf-8");
   const exportTimeline = () => {
     if (!selectedName) return;
@@ -141,6 +156,6 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
     {message ? <p className={`edupi-student-message is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p> : null}
     <section className="edupi-class-summary-strip"><div><strong>{students.length}</strong><span>学生</span></div><div><strong>{activePatterns}</strong><span>观察中模式</span></div><div><strong>{openFollowUps}</strong><span>待跟进</span></div><div><strong>{data.continuity.familyContacts.length}</strong><span>家校档案</span></div></section>
     <section className="edupi-student-directory" aria-label="学生名单"><header><h2>学生</h2><span>按姓名排序</span></header><div>{students.map((student, index) => { const name = studentRecordName(student); const studentPatterns = records(student.error_patterns); const key = studentRecordKey(student, index); return <button type="button" key={key} className={key === selectedStudentId ? "is-selected" : ""} onClick={() => { setEditor(null); onStudent(student); }}><span className={`is-tint-${index % 4}`}>{name.slice(0, 1)}</span><strong>{name}</strong><small>{studentPatterns.filter((item) => item.status !== "resolved").length} 项观察</small></button>; })}</div>{students.length === 0 ? <button type="button" className="edupi-student-directory__empty" onClick={() => inputRef.current?.click()}>导入学生名单</button> : null}</section>
-    {selected && selectedName ? <aside className="edupi-student-drawer" aria-label={`${selectedName}学生档案`}><header><div><span>学生档案</span><h2>{selectedName}</h2><p>{traits.join(" · ") || "教师内部"}</p></div><div className="edupi-student-drawer__actions"><button type="button" onClick={openEditor} disabled={!selectedUpdatedAt || busy}>手动修改</button><button type="button" onClick={openStudentAgent}>AI 协作</button><button type="button" onClick={() => { setEditor(null); onStudent(null); }} aria-label="关闭学生档案">×</button></div></header><section className="edupi-student-drawer__metrics"><div><strong>{patterns.length}</strong><span>学习模式</span></div><div><strong>{trajectory.length}</strong><span>成长节点</span></div><div><strong>{memories.length}</strong><span>EduPi 记忆</span></div></section><div className="edupi-student-drawer__scroll">{editor?.studentKey === selectedStudentId ? <form className="edupi-student-profile-editor" onSubmit={saveProfile}><header><h3>修改档案</h3><button type="button" onClick={() => setEditor(null)} disabled={busy}>取消</button></header><label><span>学生特征</span><textarea value={editor.traits} maxLength={12000} rows={4} placeholder="每行一个特征" onChange={(event) => setEditor({ ...editor, traits: event.target.value })} /></label><label><span>家校备注</span><textarea value={editor.parentNotes} maxLength={12000} rows={5} placeholder="每行一条备注" onChange={(event) => setEditor({ ...editor, parentNotes: event.target.value })} /></label><button type="submit" disabled={busy}>{busy ? "保存中…" : "保存修改"}</button></form> : null}<details open><summary>学习模式 <span>{patterns.length}</span></summary><div>{patterns.map((item, index) => <p key={index}><strong>{String(item.description || "学习观察")}</strong><span>{item.status === "resolved" ? "已解决" : "观察中"}{item.last_seen ? ` · ${shortDate(item.last_seen)}` : ""}</span></p>)}{patterns.length === 0 ? <em>暂无记录</em> : null}</div></details><details><summary>成长轨迹 <span>{trajectory.length}</span></summary><div>{trajectory.slice().reverse().map((item, index) => <p key={index}><strong>{String(item.event || "成长记录")}</strong><span>{shortDate(item.date)} · {String(item.note || "")}</span></p>)}{trajectory.length === 0 ? <em>暂无记录</em> : null}</div></details><details><summary>家校记录 <span>{parentNotes.length + familyContacts.length}</span></summary><div>{parentNotes.map((item, index) => <p key={`note:${index}`}><strong>{item}</strong></p>)}{familyContacts.map((item) => <p key={item.id}><strong>{item.name}</strong><span>{item.lastTopic || item.lastOutcome || "已联系"}</span></p>)}</div></details><details open><summary>EduPi 相关记忆 <span>{memories.length}</span></summary><div>{memories.map((memory) => <p key={memory.id}><strong>{memory.content}</strong><button type="button" onClick={() => openStudentMemoryAgent(memory.content)}>AI 修订</button></p>)}{memories.length === 0 ? <em>暂无相关记忆</em> : null}</div></details><details><summary>相关任务 <span>{tasks.length}</span></summary><div>{tasks.map((task) => <button type="button" key={taskKey(task)} onClick={() => onTask(task)}><strong>{taskDisplayTitle(task)}</strong><span>{taskStatusLabel(task)}</span></button>)}</div></details></div></aside> : null}
+    {selected && selectedName ? <aside className="edupi-student-drawer" aria-label={`${selectedName}学生档案`}><header><div><span>学生档案</span><h2>{selectedName}</h2><p>{traits.join(" · ") || "教师内部"}</p></div><div className="edupi-student-drawer__actions"><button type="button" onClick={openEditor} disabled={!selectedUpdatedAt || busy}>手动修改</button><button type="button" onClick={openStudentAgent}>AI 协作</button>{data.capabilities.entityDelete.enabled && data.capabilities.entityDelete.targetKinds.includes("student") ? <button type="button" className="is-delete" disabled={busy} onClick={() => void deleteStudent()}>{busy ? "处理中…" : "删除"}</button> : null}<button type="button" onClick={() => { setEditor(null); onStudent(null); }} aria-label="关闭学生档案">×</button></div></header><section className="edupi-student-drawer__metrics"><div><strong>{patterns.length}</strong><span>学习模式</span></div><div><strong>{trajectory.length}</strong><span>成长节点</span></div><div><strong>{memories.length}</strong><span>EduPi 记忆</span></div></section><div className="edupi-student-drawer__scroll">{editor?.studentKey === selectedStudentId ? <form className="edupi-student-profile-editor" onSubmit={saveProfile}><header><h3>修改档案</h3><button type="button" onClick={() => setEditor(null)} disabled={busy}>取消</button></header><label><span>学生特征</span><textarea value={editor.traits} maxLength={12000} rows={4} placeholder="每行一个特征" onChange={(event) => setEditor({ ...editor, traits: event.target.value })} /></label><label><span>家校备注</span><textarea value={editor.parentNotes} maxLength={12000} rows={5} placeholder="每行一条备注" onChange={(event) => setEditor({ ...editor, parentNotes: event.target.value })} /></label><button type="submit" disabled={busy}>{busy ? "保存中…" : "保存修改"}</button></form> : null}<details open><summary>学习模式 <span>{patterns.length}</span></summary><div>{patterns.map((item, index) => <p key={index}><strong>{String(item.description || "学习观察")}</strong><span>{item.status === "resolved" ? "已解决" : "观察中"}{item.last_seen ? ` · ${shortDate(item.last_seen)}` : ""}</span></p>)}{patterns.length === 0 ? <em>暂无记录</em> : null}</div></details><details><summary>成长轨迹 <span>{trajectory.length}</span></summary><div>{trajectory.slice().reverse().map((item, index) => <p key={index}><strong>{String(item.event || "成长记录")}</strong><span>{shortDate(item.date)} · {String(item.note || "")}</span></p>)}{trajectory.length === 0 ? <em>暂无记录</em> : null}</div></details><details><summary>家校记录 <span>{parentNotes.length + familyContacts.length}</span></summary><div>{parentNotes.map((item, index) => <p key={`note:${index}`}><strong>{item}</strong></p>)}{familyContacts.map((item) => <p key={item.id}><strong>{item.name}</strong><span>{item.lastTopic || item.lastOutcome || "已联系"}</span></p>)}</div></details><details open><summary>EduPi 相关记忆 <span>{memories.length}</span></summary><div>{memories.map((memory) => <p key={memory.id}><strong>{memory.content}</strong><button type="button" onClick={() => openStudentMemoryAgent(memory.content)}>AI 修订</button></p>)}{memories.length === 0 ? <em>暂无相关记忆</em> : null}</div></details><details><summary>相关任务 <span>{tasks.length}</span></summary><div>{tasks.map((task) => <button type="button" key={taskKey(task)} onClick={() => onTask(task)}><strong>{taskDisplayTitle(task)}</strong><span>{taskStatusLabel(task)}</span></button>)}</div></details></div></aside> : null}
   </main>;
 }

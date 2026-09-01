@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useEduPiCompletionMonitor } from "@/hooks/useEduPiCompletionMonitor";
 import { SessionSidebar } from "./SessionSidebar";
-import { EduPiAdminPanel } from "./EduPiAdminPanel";
+import { EduPiAdminPanel, type AdminSectionId } from "./EduPiAdminPanel";
 import { EduPiEducationPanel } from "./EduPiEducationPanel";
 import { EduPiFirstRunGuide } from "./EduPiFirstRunGuide";
 import "@/app/edupi-first-run.css";
@@ -138,6 +138,7 @@ export function AppShell() {
   }, []);
 
   const [edupiAdminOpen, setEduPiAdminOpen] = useState(false);
+  const [edupiAdminSection, setEduPiAdminSection] = useState<AdminSectionId>("readiness");
   const [adminModelsDirty, setAdminModelsDirty] = useState(false);
   const [edupiEducationModule, setEduPiEducationModule] = useState<EducationModule | null>("home");
   const edupiChatActive = edupiEducationModule !== null && searchParams.get("view") === "chat";
@@ -384,6 +385,11 @@ export function AppShell() {
     params.delete("stage");
     router.replace(`/?${params.toString()}`, { scroll: false });
   }, [router, searchParams]);
+
+  const openEduPiAdmin = useCallback((section: AdminSectionId = "readiness") => {
+    setEduPiAdminSection(section);
+    setEduPiAdminOpen(true);
+  }, []);
 
   const openEducationView = useCallback((view: WorkbenchView) => {
     setEduPiAdminOpen(false);
@@ -1863,7 +1869,8 @@ export function AppShell() {
               initialModule={edupiEducationModule}
               activeAgentSessionId={selectedSession?.id ?? null}
               onActivateAgentSession={handleActivateEducationAgentSession}
-              onOpenAdmin={() => setEduPiAdminOpen(true)}
+              onOpenAdmin={() => openEduPiAdmin()}
+              onOpenGuide={() => setFirstRunGuideOpen(true)}
               onPrepareAgentPrompt={(prompt) => chatInputRef.current?.insertText(`${prompt}\n`)}
               onReplaceAgentPrompt={(prompt) => chatInputRef.current?.replaceText(prompt)}
               quickEntryOpen={quickEntryOpen}
@@ -2057,6 +2064,7 @@ export function AppShell() {
     {appSettingsOpen && <AppSettings onClose={() => setAppSettingsOpen(false)} />}
     {edupiAdminOpen && <EduPiAdminPanel
       refreshToken={modelsRefreshKey}
+      initialSection={edupiAdminSection}
       modelSettingsDirty={adminModelsDirty}
       modelsPanel={<ModelsConfig
         embedded
@@ -2073,9 +2081,10 @@ export function AppShell() {
     <EduPiComputerUseStop />
     {firstRunGuideOpen && (
       <EduPiFirstRunGuide
-        suspended={modelsConfigOpen || edupiAdminOpen}
-        onOpenModels={() => setModelsConfigOpen(true)}
-        onOpenContext={() => setEduPiAdminOpen(true)}
+        onOpenModels={() => openEduPiAdmin("models")}
+        onOpenContext={() => { setEduPiAdminOpen(false); openEducationModule("context"); }}
+        onOpenCalendar={() => openEducationView("calendar")}
+        onOpenMaterials={() => openEducationView("materials")}
         onEnterToday={() => openEducationModule("home")}
         onComplete={finishFirstRunGuide}
         onSkip={finishFirstRunGuide}

@@ -1,35 +1,33 @@
 .edupi-first-run {
   position: fixed;
   z-index: 5200;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  background: color-mix(in srgb, var(--bg) 58%, transparent);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  right: 20px;
+  bottom: 20px;
+  width: min(340px, calc(100vw - 32px));
+  pointer-events: none;
   animation: edupi-first-run-enter 220ms ease both;
 }
 
 .edupi-first-run__dialog {
   display: flex;
-  width: min(380px, 100%);
-  min-height: 340px;
+  width: 100%;
+  min-height: 230px;
   flex-direction: column;
-  align-items: center;
-  padding: 34px;
+  align-items: stretch;
+  padding: 22px;
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: 12px;
   background: var(--bg-panel);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
   color: var(--text);
-  text-align: center;
+  pointer-events: auto;
+  text-align: left;
 }
 
 .edupi-first-run__progress {
   display: flex;
   gap: 6px;
-  margin-bottom: 44px;
+  margin-bottom: 22px;
 }
 
 .edupi-first-run__progress span {
@@ -50,20 +48,20 @@
 }
 
 .edupi-first-run__dialog h2 {
-  margin: 12px 0 0;
-  font-size: 30px;
+  margin: 10px 0 0;
+  font-size: 23px;
   font-weight: 650;
   letter-spacing: -0.04em;
 }
 
 .edupi-first-run__dialog p {
-  margin: 10px 0 34px;
+  margin: 8px 0 22px;
   color: var(--text-muted);
   font-size: 14px;
 }
 
 .edupi-first-run__primary {
-  min-width: 148px;
+  width: 100%;
   min-height: 44px;
   margin-top: auto;
   padding: 0 22px;
@@ -102,8 +100,8 @@
 }
 
 @media (max-width: 420px) {
-  .edupi-first-run { padding: 14px; }
-  .edupi-first-run__dialog { min-height: 320px; padding: 28px 22px; }
+  .edupi-first-run { right: 10px; bottom: 10px; width: calc(100vw - 20px); }
+  .edupi-first-run__dialog { min-height: 210px; padding: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -118,7 +116,6 @@
 }
 
 @media (forced-colors: active) {
-  .edupi-first-run { background: Canvas; }
   .edupi-first-run__dialog { border-color: CanvasText; box-shadow: none; }
   .edupi-first-run__primary { border: 1px solid ButtonText; background: ButtonFace; color: ButtonText; }
 }
