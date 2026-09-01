@@ -442,6 +442,7 @@ html.dark .edupi-teacher-shell {
 .edupi-material-inbox > p { color: var(--ep-muted); font-size: 9px; }
 .edupi-material-inbox button { height: 28px; padding: 0 8px; border: 1px solid var(--ep-border); border-radius: 5px; background: var(--ep-surface); color: var(--ep-text); cursor: pointer; font-size: 9px; }
 .edupi-material-inbox > p { margin: 0; padding: 9px 13px; border-top: 1px solid var(--ep-border); }
+.edupi-material-message { margin: 10px 0 0; color: var(--ep-muted); font-size: 10px; }
 .edupi-material-drawer { position: fixed; z-index: 110; top: 0; right: 0; bottom: 0; display: grid; width: min(400px, 94vw); grid-template-rows: auto minmax(0, 1fr) auto; border-left: 1px solid var(--ep-border); background: var(--ep-surface); box-shadow: -14px 0 34px rgba(18, 24, 32, .16); animation: edupiCalendarDetailIn .16s ease-out; }
 .edupi-material-drawer > header { display: flex; min-height: 88px; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px; border-bottom: 1px solid var(--ep-border); }
 .edupi-material-drawer > header span { color: var(--ep-blue); font-size: 9px; font-weight: 700; }

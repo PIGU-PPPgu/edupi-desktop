@@ -78,6 +78,7 @@ test("class workspace keeps the student directory mounted and opens a right draw
   assert.match(student, /onStudent\(null\)/);
   assert.doesNotMatch(student, /mode === "students" \? students\[0\] : null/);
   assert.match(student, /selected \? \[selected\] : data\.students/);
+  assert.match(student, /disabled=\{data\.students\.length === 0\}/);
   assert.match(student, /const formElement = event\.currentTarget/);
   assert.match(student, /formElement\.reset\(\)/);
 });
@@ -93,6 +94,8 @@ test("growth and materials use explicit databases and right-side material detail
   assert.match(materials, /edupi-material-drawer/);
   assert.match(materials, /补充 \/ 修订/);
   assert.match(materials, /PAGE_SIZE = 8/);
+  assert.match(materials, /item\.subject\} \$\{item\.source\} \$\{item\.summary/);
+  assert.match(materials, /edupi-material-message/);
 });
 
 test("review opens with a three-lane mini board and task stages are vertical on desktop", async () => {
