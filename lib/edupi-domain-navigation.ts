@@ -67,6 +67,11 @@ export function routePart(value: string | null | undefined, prefix: string, fall
   return value?.startsWith(`${prefix}:`) ? value.slice(prefix.length + 1) : fallback;
 }
 
+export function memoryCategoryRoute(value: string | null | undefined): EducationMemoryCategory {
+  const requested = routePart(value, "memory", "semester");
+  return MEMORY_CATEGORIES.some((category) => category.id === requested) ? requested as EducationMemoryCategory : "semester";
+}
+
 export function viewKeepsObjectItem(view: string): boolean {
   return view === "teaching" || view === "memory" || view === "insights" || view === "growth" || view === "materials";
 }

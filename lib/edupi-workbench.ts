@@ -308,6 +308,14 @@ export function taskArtifacts(task: TeacherTask): Array<{ id: string; title: str
   }));
 }
 
+export function confirmedTaskArtifacts(tasks: TeacherTask[], query = ""): Array<{ task: TeacherTask; artifact: { id: string; title: string; summary: string; state: "confirmed" } }> {
+  const normalizedQuery = query.toLocaleLowerCase();
+  return tasks.flatMap((task) => taskArtifacts(task)
+    .filter((artifact): artifact is { id: string; title: string; summary: string; state: "confirmed" } => artifact.state === "confirmed")
+    .map((artifact) => ({ task, artifact })))
+    .filter(({ artifact }) => !query || `${artifact.title} ${artifact.summary}`.toLocaleLowerCase().includes(normalizedQuery));
+}
+
 export function recordLabel(record: Record<string, unknown>, keys: string[], fallback: string): string {
   for (const key of keys) {
     const value = record[key];

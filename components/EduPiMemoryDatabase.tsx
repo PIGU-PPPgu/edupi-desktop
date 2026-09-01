@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { EducationContract, EducationMemoryCategory } from "@/lib/edupi-education-contract";
-import { MEMORY_CATEGORIES, routePart } from "@/lib/edupi-domain-navigation";
+import type { EducationContract } from "@/lib/edupi-education-contract";
+import { MEMORY_CATEGORIES, memoryCategoryRoute } from "@/lib/edupi-domain-navigation";
 import { isUserFacingMemory } from "@/lib/edupi-workbench";
 
 const PAGE_SIZE = 8;
@@ -14,7 +14,7 @@ function shortDate(value: string | null): string {
 }
 
 export function EduPiMemoryDatabase({ data, query, selectedObjectId, onStartAgent }: { data: EducationContract; query: string; selectedObjectId: string | null; onStartAgent: (prompt: string) => void }) {
-  const category = routePart(selectedObjectId, "memory", "semester") as EducationMemoryCategory;
+  const category = memoryCategoryRoute(selectedObjectId);
   const categoryLabel = MEMORY_CATEGORIES.find((item) => item.id === category)?.label || "学期";
   const [page, setPage] = useState(0);
   const rows = useMemo(() => data.continuity.memories

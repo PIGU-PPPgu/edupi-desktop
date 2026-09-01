@@ -15,6 +15,7 @@ test("memory sidebar selects categories while the main database owns rows and pa
   assert.match(sider, /onObject\(`memory:\$\{category\.id\}`\)/);
   assert.doesNotMatch(sider, /onObject\(`memory:\$\{memory\.id\}`\)/);
   assert.match(memory, /PAGE_SIZE = 8/);
+  assert.match(memory, /memoryCategoryRoute\(selectedObjectId\)/);
   assert.match(memory, /edupi-memory-db-grid/);
   assert.match(memory, /edupi-database-pagination/);
   assert.match(memory, /修订记忆/);
@@ -78,10 +79,12 @@ test("class workspace keeps the student directory mounted and opens a right draw
 });
 
 test("growth and materials use explicit databases and right-side material details", async () => {
-  const [growth, materials] = await Promise.all([read("./EduPiGrowthWorkspace.tsx"), read("./EduPiMaterialsWorkspace.tsx")]);
+  const [growth, materials, sider] = await Promise.all([read("./EduPiGrowthWorkspace.tsx"), read("./EduPiMaterialsWorkspace.tsx"), read("./EduPiObjectSider.tsx")]);
   assert.match(growth, /教师专业成长/);
   assert.match(growth, /EduPi 能力成长/);
   assert.match(growth, /用于改进 EduPi 的工作方式/);
+  assert.match(growth, /confirmedTaskArtifacts\(data\.tasks, query\)/);
+  assert.match(sider, /documents\.length \+ confirmedGrowthArtifacts\.length/);
   assert.match(materials, /edupi-material-db-grid/);
   assert.match(materials, /edupi-material-drawer/);
   assert.match(materials, /补充 \/ 修订/);

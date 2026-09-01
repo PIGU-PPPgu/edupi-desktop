@@ -2,7 +2,7 @@
 
 import type { EducationContract, TeacherTask } from "@/lib/edupi-education-contract";
 import { growthReviewStateLabel, routePart } from "@/lib/edupi-domain-navigation";
-import { taskArtifacts, taskDisplayTitle } from "@/lib/edupi-workbench";
+import { confirmedTaskArtifacts, taskDisplayTitle } from "@/lib/edupi-workbench";
 
 function shortDate(value: string | null): string {
   if (!value) return "—";
@@ -13,7 +13,7 @@ function shortDate(value: string | null): string {
 export function EduPiGrowthWorkspace({ data, query, selectedObjectId, onOpenFile, onTask }: { data: EducationContract; query: string; selectedObjectId: string | null; onOpenFile: (path: string) => void; onTask: (task: TeacherTask) => void }) {
   const category = routePart(selectedObjectId, "growth", "teacher");
   const documents = data.continuity.documents.filter((item) => !query || `${item.title} ${item.excerpt}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
-  const artifacts = data.tasks.flatMap((task) => taskArtifacts(task).filter((artifact) => artifact.state === "confirmed").map((artifact) => ({ task, artifact }))).filter((item) => !query || `${item.artifact.title} ${item.artifact.summary}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+  const artifacts = confirmedTaskArtifacts(data.tasks, query);
   const themes = data.continuity.themes.filter((item) => !query || item.topic.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   const workspaceFile = (relative: string) => {
     const separator = data.workspace.includes("\\") ? "\\" : "/";
