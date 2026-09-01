@@ -9,8 +9,10 @@ type Props = {
   runningAgentCount: number;
   memoryCount: number;
   workspaceLabel: string;
+  collapsed: boolean;
   onSelect: (view: WorkbenchView) => void;
   onOpenAdmin: () => void;
+  onCollapse: () => void;
 };
 
 const groups: Array<{ label: string; views: WorkbenchView[] }> = [
@@ -42,14 +44,15 @@ function UtilityIcon() {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1-2.9 2.9-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.1h-4v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1-2.9-2.9.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3v-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1 2.9-2.9.1.1a1.6 1.6 0 0 0 1.8.3 1.6 1.6 0 0 0 1-1.5V3h4v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1 2.9 2.9-.1.1a1.6 1.6 0 0 0-.3 1.8 1.6 1.6 0 0 0 1.5 1h.1v4h-.1a1.6 1.6 0 0 0-1.5 1Z" /></svg>;
 }
 
-export function EduPiNavigationRail({ activeView, pendingReviewCount, runningAgentCount, memoryCount, workspaceLabel, onSelect, onOpenAdmin }: Props) {
+export function EduPiNavigationRail({ activeView, pendingReviewCount, runningAgentCount, memoryCount, workspaceLabel, collapsed, onSelect, onOpenAdmin, onCollapse }: Props) {
   const item = (view: WorkbenchView) => {
     const config = workbenchViews.find((entry) => entry.id === view)!;
     return <button key={view} type="button" aria-label={config.label} className={activeView === view ? "is-active" : ""} aria-current={activeView === view ? "page" : undefined} onClick={() => onSelect(view)}><span className="edupi-teacher-rail__icon"><RailIcon view={view} /></span><span className="edupi-teacher-rail__text"><span>{config.label}</span><small>{config.shortLabel}</small></span>{view === "review" && pendingReviewCount > 0 ? <em>{pendingReviewCount}</em> : null}</button>;
   };
   return (
-    <nav className="edupi-teacher-rail" aria-label="EduPi 主导航">
-      <div className="edupi-teacher-rail__brand"><span>π</span><div><strong>EduPi</strong><small>{workspaceLabel}</small></div></div>
+    <nav className={`edupi-teacher-rail${collapsed ? " is-collapsed" : ""}`} aria-label="EduPi 主导航">
+      <button type="button" className="edupi-teacher-rail__restore" onClick={onCollapse} aria-label="展开主导航"><span aria-hidden="true">›</span></button>
+      <div className="edupi-teacher-rail__brand"><span>π</span><div><strong>EduPi</strong><small>{workspaceLabel}</small></div><button type="button" className="edupi-teacher-rail__collapse" onClick={onCollapse} aria-label="收起主导航"><span aria-hidden="true">‹</span></button></div>
       <div className="edupi-teacher-rail__items">
         {groups.map((group) => <section className="edupi-teacher-rail__group" key={group.label}><div className="edupi-teacher-rail__group-title">{group.label}</div>{group.views.map(item)}</section>)}
       </div>
