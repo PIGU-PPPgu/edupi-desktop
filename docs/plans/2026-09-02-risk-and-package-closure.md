@@ -50,7 +50,9 @@ GET /api/edupi/workspace             200 / 0.165455 s
 
 ## Windows 与发布链路
 
-macOS 不能生成或启动可信的 Windows NSIS 结果，因此不声称 Windows 二进制已实机验证。当前已完成：
+GitHub 公共 runner 的手动预览流水线 [33530915743](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/33530915743) 已在 merge `293136cafa9d1659f7a3d64a640e788403851b16` 上完成：quality、macOS DMG 和 Windows x64 NSIS 三个 job 全部通过，两个安装包均上传为 7 天预览 artifact。Windows artifact `EduPi-Windows-x64` 的压缩大小为 43,999,758 bytes。
+
+当前已完成：
 
 - `x86_64-pc-windows-msvc` / NSIS matrix、内置 Windows Node、artifact 路径验证；
 - Windows 260 字符路径约束在真实 server staging 上通过；
@@ -58,7 +60,7 @@ macOS 不能生成或启动可信的 Windows NSIS 结果，因此不声称 Windo
 - Rust 桌面单测 8/8；
 - release component pins 验证通过。
 
-正式发布前仍必须由 `windows-latest` 生成 EXE，并在干净 Windows 用户环境完成安装、首启、更新提示和卸载验证。
+正式发布前仍需在干净 Windows 用户环境完成安装、首启、更新提示和卸载验证；CI 已证明 EXE 能生成，但不能替代真人 Windows 安装验收。流水线另有一个非阻塞提示：`actions/upload-artifact` 当前被 runner 从 Node 20 强制到 Node 24，后续应更新该固定 action revision。
 
 ## 下一入口
 
