@@ -75,13 +75,14 @@ test("class workspace keeps the student directory mounted and opens a right draw
   assert.match(student, /edupi-student-directory/);
   assert.match(student, /edupi-student-drawer/);
   assert.match(student, /EduPi 相关记忆/);
-  assert.match(student, /补充学生档案/);
+  assert.match(student, /手动修改/);
+  assert.match(student, /AI 协作/);
   assert.match(student, /onStudent\(null\)/);
   assert.doesNotMatch(student, /mode === "students" \? students\[0\] : null/);
   assert.match(student, /selected \? \[selected\] : data\.students/);
   assert.match(student, /disabled=\{data\.students\.length === 0\}/);
-  assert.match(student, /const formElement = event\.currentTarget/);
-  assert.match(student, /formElement\.reset\(\)/);
+  assert.match(student, /parseStudentProfileList/);
+  assert.match(student, /method: "PUT"/);
 });
 
 test("growth and materials use explicit databases and right-side material details", async () => {

@@ -2,9 +2,9 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "77fef7a107fe8aeb5479ebb64bb045e547560476",
+    "core_commit": "461a561e47702cc79edee2fc09109596f2167808",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:1c8e6599ca3ec430f4d0d32c90ce6e8b962ca5c043a88863ef466513aa787a35"
+    "component_manifest_hash": "sha256:02d0a6203ecb472e1dd1930db3943f71e43a9805def788861a169eb1c16a27de"
   },
   "contract_identities": [
     {
@@ -41,7 +41,8 @@
     "https://github.com/PIGU-PPPgu/edupi-desktop-internal/pull/11",
     "https://github.com/PIGU-PPPgu/edupi/pull/6",
     "https://github.com/PIGU-PPPgu/edupi/pull/7",
-    "https://github.com/PIGU-PPPgu/edupi/pull/8"
+    "https://github.com/PIGU-PPPgu/edupi/pull/8",
+    "https://github.com/PIGU-PPPgu/edupi/pull/9"
   ],
-  "change_note": "Added manual teacher-internal memory updates through a versioned Core override store; legacy memory source bytes and external_send=false are preserved"
+  "change_note": "Added teacher-internal replacement updates for editable student profile fields while preserving learning patterns, growth trajectory, and external_send=false"
 }
