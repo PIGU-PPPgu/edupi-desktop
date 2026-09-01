@@ -386,7 +386,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [inspectorOpen, router, searchParams, selectedObjectId, selectedStudentId]);
 
   const selectView = useCallback((view: WorkbenchView) => {
-    const stage = view === "review" ? "review" : view === "tasks" ? activeStage : undefined;
+    const stage = view === "tasks" ? activeStage : undefined;
     cancelActivation();
     setDrawer(null);
     setTaskDetailTask(null);
@@ -397,7 +397,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     if (view === "review") setReviewMode("board");
     setActiveView(view);
     if (stage) setActiveStage(stage);
-    updateLocation(view, view === "tasks" || view === "review" ? activeTask : undefined, stage);
+    updateLocation(view, view === "tasks" ? activeTask : undefined, stage);
   }, [activeStage, activeTask, cancelActivation, updateLocation]);
 
   const selectTask = useCallback((task: TeacherTask, stage: TaskStage = "brief") => {

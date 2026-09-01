@@ -2,9 +2,9 @@
 
 source visual truth path: `/var/folders/xk/qmn_r8g93ljb7b5vqzq3rd040000gn/T/codex-clipboard-9100b5aa-5cdb-488f-9982-ed95bd4584f2.png`
 
-implementation screenshot path: `/Users/iguppp/.openclaw/workspace/edupi-desktop/output/design-qa/timetable-v3-normalized.png`
+implementation screenshot path: `output/design-qa/timetable-v3-normalized.png`
 
-combined comparison path: `/Users/iguppp/.openclaw/workspace/edupi-desktop/output/design-qa/timetable-comparison-normalized.png`
+combined comparison path: `output/design-qa/timetable-comparison-normalized.png`
 
 viewport: 1600 × 1000 CSS px, Codex in-app browser
 

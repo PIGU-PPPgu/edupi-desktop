@@ -15,7 +15,10 @@ export function EduPiGrowthWorkspace({ data, query, selectedObjectId, onOpenFile
   const documents = data.continuity.documents.filter((item) => !query || `${item.title} ${item.excerpt}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   const artifacts = data.tasks.flatMap((task) => taskArtifacts(task).filter((artifact) => artifact.state === "confirmed").map((artifact) => ({ task, artifact }))).filter((item) => !query || `${item.artifact.title} ${item.artifact.summary}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   const themes = data.continuity.themes.filter((item) => !query || item.topic.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
-  const workspaceFile = (relative: string) => `${data.workspace.replace(/[\/]$/, "")}/${relative.replace(/^[\/]/, "")}`;
+  const workspaceFile = (relative: string) => {
+    const separator = data.workspace.includes("\\") ? "\\" : "/";
+    return `${data.workspace.replace(/[\\/]$/, "")}${separator}${relative.replace(/^[\\/]+/, "").replace(/[\\/]/g, separator)}`;
+  };
 
   return <main className="edupi-module-workspace edupi-database-workspace">
     <header className="edupi-module-heading"><div><span>成长 / {category === "teacher" ? "教师专业成长" : "EduPi 能力成长"}</span><h1>{category === "teacher" ? "教师专业成长" : "EduPi 能力成长"}</h1><p>{category === "teacher" ? "沉淀教师在教学中的过程证据与可复用成果" : "记录 EduPi 从真实工作中形成的主题与能力候选"}</p></div></header>
