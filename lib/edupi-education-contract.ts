@@ -5,7 +5,7 @@ export type CalendarDateStatus = "explicit" | "missing" | "invalid";
 export type CalendarPreparationStatus = "read_only" | "hold";
 export type TaskReviewAction = "accept" | "modify" | "reject" | "hold" | "rollback";
 export type TeacherTaskStatus = "planned" | "accepted" | "modified" | "rejected" | "hold";
-export type EducationEntityDeleteKind = "calendar" | "timetable" | "memory" | "student" | "task";
+export type EducationEntityDeleteKind = "calendar" | "timetable" | "memory" | "student" | "task" | "material";
 
 export type CalendarFact = {
   id: string | null;
@@ -1531,7 +1531,7 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
       teacherContextReview: teacherContextReviewCapability(snapshotPayload, options.supportedCommands),
       workCandidateReview: workCandidateReviewCapability(snapshotPayload, options.supportedCommands),
       memoryUpdate: memoryUpdateCapability(snapshotPayload, options.supportedCommands),
-      entityDelete: { enabled: options.entityDeleteEnabled === true, targetKinds: options.entityDeleteEnabled === true ? ["calendar", "timetable", "memory", "student", "task"] : [], reason: options.entityDeleteEnabled === true ? "Core 软删除已启用。" : CORE_PROJECTION_UNAVAILABLE },
+      entityDelete: { enabled: options.entityDeleteEnabled === true, targetKinds: options.entityDeleteEnabled === true ? ["calendar", "timetable", "memory", "student", "task", "material"] : [], reason: options.entityDeleteEnabled === true ? "Core 软删除已启用。" : CORE_PROJECTION_UNAVAILABLE },
     },
   };
 }

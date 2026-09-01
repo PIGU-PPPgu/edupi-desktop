@@ -5,12 +5,13 @@ import test from "node:test";
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("every directly editable teacher object exposes the shared Core delete action", async () => {
-  const [panel, calendar, memories, students, tasks, views] = await Promise.all([
+  const [panel, calendar, memories, students, tasks, materials, views] = await Promise.all([
     read("./EduPiEducationPanel.tsx"),
     read("./EduPiCalendarWorkspace.tsx"),
     read("./EduPiMemoryDatabase.tsx"),
     read("./EduPiStudentWorkspace.tsx"),
     read("./EduPiTaskDetailDrawer.tsx"),
+    read("./EduPiMaterialsWorkspace.tsx"),
     read("./EduPiWorkspaceViews.tsx"),
   ]);
 
@@ -35,6 +36,10 @@ test("every directly editable teacher object exposes the shared Core delete acti
   assert.match(tasks, /onDelete/);
   assert.match(tasks, /onDelete\(task\)/);
   assert.match(tasks, />删除任务</);
+
+  assert.match(materials, /onDeleteEntity/);
+  assert.match(materials, /onDeleteEntity\("material", selected\.id, selected\.title\)/);
+  assert.match(materials, /删除材料/);
 });
 
 test("delete controls require an explicit named confirmation and show progress", async () => {

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ResolvedEduPiCore, ResolvedEduPiDataRoot } from "./edupi-core-root";
 
-export const ENTITY_DELETE_KINDS = ["calendar", "timetable", "memory", "student", "task"] as const;
+export const ENTITY_DELETE_KINDS = ["calendar", "timetable", "memory", "student", "task", "material"] as const;
 export type EntityDeleteKind = typeof ENTITY_DELETE_KINDS[number];
 
 type RawRecord = Record<string, unknown>;
@@ -84,6 +84,21 @@ function hasTarget(workspace: RawRecord, kind: EntityDeleteKind, id: string): bo
   return itemsFor(workspace, kind).some((item) => itemId(kind, item) === id);
 }
 
+function hasTargetInPayload(payload: RawRecord, kind: EntityDeleteKind, id: string): boolean {
+  if (kind === "material") {
+    const targets = Array.isArray(payload.review_targets) ? payload.review_targets : [];
+    return targets.some((value) => {
+      const target = value && typeof value === "object" && !Array.isArray(value) ? value as RawRecord : {};
+      const ref = target.target && typeof target.target === "object" && !Array.isArray(target.target) ? target.target as RawRecord : {};
+      return target.projection_kind === "material_intake" && ref.target_id === id;
+    });
+  }
+  const workspace = payload.education_workspace && typeof payload.education_workspace === "object" && !Array.isArray(payload.education_workspace)
+    ? payload.education_workspace as RawRecord
+    : payload;
+  return hasTarget(workspace, kind, id);
+}
+
 type EntityDeleteDependencies = {
   readSnapshot?: () => Promise<DeleteSnapshot>;
   callCore?: (request: ReturnType<typeof buildEntityDeleteRequest>, snapshot: DeleteSnapshot, signal?: AbortSignal) => Promise<DeleteCoreResponse>;
@@ -127,7 +142,7 @@ export async function issueEntityDelete(
   const refreshedWorkspace = refreshed?.education_workspace;
   if (response.operation !== "delete" || response.request_id !== requestId || response.external_send !== false
     || response.target?.kind !== input.kind || response.target?.id !== input.id
-    || !refreshed || !refreshedWorkspace || hasTarget(refreshedWorkspace, input.kind, input.id)) {
+    || !refreshed || !refreshedWorkspace || hasTargetInPayload(refreshed, input.kind, input.id)) {
     throw new EntityDeleteError("invalid_response", "Core 删除结果无效。");
   }
   return { target: { kind: input.kind, id: input.id }, deletedAt: typeof response.deleted_at === "string" ? response.deleted_at : null, data: refreshed as RawRecord & { education_workspace: RawRecord } };
