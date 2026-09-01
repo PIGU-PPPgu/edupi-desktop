@@ -2,9 +2,9 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "461a561e47702cc79edee2fc09109596f2167808",
+    "core_commit": "09d09d28ac3ca5835a2a16ac4b5d8e8e121abb8c",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:02d0a6203ecb472e1dd1930db3943f71e43a9805def788861a169eb1c16a27de"
+    "component_manifest_hash": "sha256:9777ec12082e1bcc72201702f5f22ffa73f85f216c68220860a028c7c2e5ecc2"
   },
   "contract_identities": [
     {
@@ -42,7 +42,9 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/6",
     "https://github.com/PIGU-PPPgu/edupi/pull/7",
     "https://github.com/PIGU-PPPgu/edupi/pull/8",
-    "https://github.com/PIGU-PPPgu/edupi/pull/9"
+    "https://github.com/PIGU-PPPgu/edupi/pull/9",
+    "https://github.com/PIGU-PPPgu/edupi/pull/10",
+    "https://github.com/PIGU-PPPgu/edupi/pull/11"
   ],
-  "change_note": "Added teacher-internal replacement updates for editable student profile fields while preserving learning patterns, growth trajectory, and external_send=false"
+  "change_note": "Added Core-owned audited soft deletion with lost-response retry reconciliation for teacher entities"
 }

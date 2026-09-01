@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { EducationContract } from "@/lib/edupi-education-contract";
 import type { OnboardingChecklistItem, TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import type { WorkbenchView } from "@/lib/edupi-workbench";
+import type { EduPiWorkspaceBundle } from "@/lib/edupi-education-client";
 
 type AdminSnapshot = {
   context: TeacherContextSnapshot | null;
@@ -12,7 +13,7 @@ type AdminSnapshot = {
   models: { modelList?: Array<{ id: string; provider: string }>; defaultModel?: { provider: string; modelId: string } | null } | null;
 };
 
-type AdminSectionId = "readiness" | "models" | "people" | "calendar" | "materials" | "tasks" | "system";
+export type AdminSectionId = "readiness" | "models" | "people" | "calendar" | "materials" | "tasks" | "system";
 
 type Props = {
   onClose: () => void;
@@ -22,6 +23,7 @@ type Props = {
   onOpenSettings: () => void;
   modelSettingsDirty: boolean;
   modelsPanel: ReactNode;
+  initialSection?: AdminSectionId;
   refreshToken?: number;
 };
 
@@ -64,8 +66,8 @@ function AdminMetric({ value, label }: { value: string | number; label: string }
   return <div><strong>{value}</strong><span>{label}</span></div>;
 }
 
-export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, onNavigate, onOpenSettings, modelSettingsDirty, modelsPanel, refreshToken = 0 }: Props) {
-  const [activeSection, setActiveSection] = useState<AdminSectionId>("readiness");
+export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, onNavigate, onOpenSettings, modelSettingsDirty, modelsPanel, initialSection = "readiness", refreshToken = 0 }: Props) {
+  const [activeSection, setActiveSection] = useState<AdminSectionId>(initialSection);
   const [modelsMounted, setModelsMounted] = useState(false);
   const [snapshot, setSnapshot] = useState<AdminSnapshot>({ context: null, education: null, status: null, models: null });
   const [loading, setLoading] = useState(true);
@@ -89,14 +91,19 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
   }, [activeSection]);
 
   useEffect(() => {
+    setActiveSection(initialSection);
+  }, [initialSection]);
+
+  useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     void (async () => {
-      const [context, education, status] = await Promise.all([
-        readJson<TeacherContextSnapshot>("/api/edupi/onboarding", controller.signal),
-        readJson<EducationContract>("/api/edupi/education", controller.signal),
+      const [bundle, status] = await Promise.all([
+        readJson<EduPiWorkspaceBundle>("/api/edupi/workspace", controller.signal),
         readJson<AdminSnapshot["status"]>("/api/edupi/status", controller.signal),
       ]);
+      const context = bundle?.context ?? null;
+      const education = bundle?.data ?? null;
       const models = await readJson<AdminSnapshot["models"]>(education?.workspace ? `/api/models?cwd=${encodeURIComponent(education.workspace)}` : "/api/models", controller.signal);
       if (!controller.signal.aborted) setSnapshot({ context, education, status, models });
     })().finally(() => { if (!controller.signal.aborted) setLoading(false); });

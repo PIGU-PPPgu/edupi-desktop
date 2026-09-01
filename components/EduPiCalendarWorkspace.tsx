@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import type { EducationContract, TeacherTask } from "@/lib/edupi-education-contract";
+import type { EducationContract, EducationEntityDeleteKind, TeacherTask } from "@/lib/edupi-education-contract";
 import { visibleTimetableNote } from "@/lib/edupi-recognition-markers";
 import { taskDisplayTitle } from "@/lib/edupi-workbench";
 import {
@@ -28,6 +28,7 @@ type Props = {
   onTaskDetail: (task: TeacherTask) => void;
   onImportCalendar: (event: { eventId: string | null; date: string; endDate: string | null; name: string; type: string; notes: string | null }) => Promise<void>;
   onImportTimetable: (slot: { slotId: string | null; dayOfWeek: number; period: number; subject: string; className: string | null; kind: "class" | "routine"; notes: string | null }) => Promise<void>;
+  onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<boolean>;
 };
 
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
@@ -243,7 +244,7 @@ function isNonTaskSelection(selection: CalendarItemSelection): selection is NonT
   return selection.kind === "calendar" || selection.kind === "timetable";
 }
 
-function CalendarDetailDrawer({ data, selection, onClose, onEdit, editor }: { data: EducationContract; selection: NonTaskCalendarSelection; onClose: () => void; onEdit?: () => void; editor?: ReactNode }) {
+function CalendarDetailDrawer({ data, selection, onClose, onEdit, onDelete, deleteBusy = false, editor }: { data: EducationContract; selection: NonTaskCalendarSelection; onClose: () => void; onEdit?: () => void; onDelete?: () => void; deleteBusy?: boolean; editor?: ReactNode }) {
   const rows: Array<{ label: string; value: string }> = [];
   let title = selection.title;
   if (selection.kind === "calendar") {
@@ -270,7 +271,7 @@ function CalendarDetailDrawer({ data, selection, onClose, onEdit, editor }: { da
       ["备注", visibleTimetableNote(item.notes) || selection.detail],
     ] as Array<[string, unknown]>) { const text = rawText(value); if (text) rows.push({ label, value: text }); }
   }
-  return <aside className="edupi-calendar-detail" aria-label={`${title}详情`}><header><div><span>{selection.kind === "calendar" ? "校历节点" : "课程安排"}</span><h2>{title}</h2></div><div className="edupi-calendar-detail__actions">{onEdit && !editor ? <button type="button" className="is-edit" onClick={onEdit}>编辑</button> : null}<button type="button" onClick={onClose} aria-label="关闭详情" autoFocus>×</button></div></header>{editor ? <div className="edupi-calendar-detail__editor">{editor}</div> : <dl>{rows.map((row) => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>}</aside>;
+  return <aside className="edupi-calendar-detail" aria-label={`${title}详情`}><header><div><span>{selection.kind === "calendar" ? "校历节点" : "课程安排"}</span><h2>{title}</h2></div><div className="edupi-calendar-detail__actions">{onEdit && !editor ? <button type="button" className="is-edit" onClick={onEdit}>编辑</button> : null}{onDelete && !editor ? <button type="button" className="is-delete" disabled={deleteBusy} onClick={onDelete}>{deleteBusy ? "删除中…" : "删除"}</button> : null}<button type="button" onClick={onClose} aria-label="关闭详情" autoFocus>×</button></div></header>{editor ? <div className="edupi-calendar-detail__editor">{editor}</div> : <dl>{rows.map((row) => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>}</aside>;
 }
 
 function IntakeComposer({ mode, anchorDate, calendarEvent, timetableSlot, busy, embedded = false, onClose, onImportCalendar, onImportTimetable }: {
@@ -333,13 +334,14 @@ function IntakeComposer({ mode, anchorDate, calendarEvent, timetableSlot, busy, 
   </>}<label className="is-wide"><span>备注</span><textarea name="notes" rows={3} maxLength={1000} placeholder="可不填" defaultValue={mode === "calendar" ? calendarEvent?.notes || "" : visibleTimetableNote(timetableSlot?.notes) || ""} /></label><footer>{error ? <span role="alert">{error}</span> : <span /> }<button type="button" onClick={onClose}>取消</button><button type="submit" className="is-primary" disabled={busy}>{busy ? "保存中…" : editingCalendar || editingTimetable ? "保存更改" : "写入 EduPi"}</button></footer></form></section>;
 }
 
-export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, selection, onSelect, onTaskDetail, onImportCalendar, onImportTimetable }: Props) {
+export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, selection, onSelect, onTaskDetail, onImportCalendar, onImportTimetable, onDeleteEntity }: Props) {
   const [view, setView] = useState<CalendarViewMode>("month");
   const [contentMode, setContentMode] = useState<CalendarContentMode>("summary");
   const [anchorDate, setAnchorDate] = useState(localIsoDate);
   const [composer, setComposer] = useState<"calendar" | "timetable" | null>(null);
   const [editingCalendarId, setEditingCalendarId] = useState<string | null>(null);
   const [editingTimetableId, setEditingTimetableId] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const projection = useMemo(() => filterProjection(createCalendarProjection(data, { view, anchorDate, query }), contentMode), [anchorDate, contentMode, data, query, view]);
   const filteredTimetable = useMemo(() => filterTimetableSlots(data.timetable, query), [data.timetable, query]);
   const editingCalendarEvent = editingCalendarId
@@ -415,6 +417,20 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
     setEditingTimetableId(null);
     onSelect(null);
   };
+  const deleteSelected = async () => {
+    if (!selection || !isNonTaskSelection(selection) || !selection.sourceId || deleteBusy) return;
+    setDeleteBusy(true);
+    try {
+      const deleted = await onDeleteEntity(selection.kind, selection.sourceId, selection.title);
+      if (deleted) closeDetail();
+    } catch {
+      // The parent workspace owns the visible error message.
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+  const canDeleteSelection = Boolean(selection && isNonTaskSelection(selection) && selection.sourceId
+    && data.capabilities.entityDelete.enabled && data.capabilities.entityDelete.targetKinds.includes(selection.kind));
   const drawerEditor = editingCalendarId && editingCalendarEvent
     ? <IntakeComposer key={`calendar:${editingCalendarId}`} embedded mode="calendar" anchorDate={anchorDate} calendarEvent={editingCalendarEvent} busy={intakeBusy} onClose={() => setEditingCalendarId(null)} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} />
     : editingTimetableId && editingTimetableSlot
@@ -442,7 +458,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
       <PendingInbox projection={projection} selection={selection} onSelect={onSelect} onTaskDetail={openTaskDetail} />
       </>}
       {query ? <p className="edupi-calendar-query-note" role="status">正在筛选：{query}{projection.entries.length === 0 && projection.pending.length === 0 ? " · 没有匹配项" : ""}</p> : null}
-      {selection && isNonTaskSelection(selection) ? <CalendarDetailDrawer data={data} selection={selection} onClose={closeDetail} editor={drawerEditor} onEdit={selection.kind === "calendar" && data.calendar.some((event) => event.id === selection.sourceId) ? editSelectedCalendar : selection.kind === "timetable" && data.timetable.map(rawRecord).some((slot) => rawText(slot.slot_id ?? slot.id) === selection.sourceId) ? editSelectedTimetable : undefined} /> : null}
+      {selection && isNonTaskSelection(selection) ? <CalendarDetailDrawer data={data} selection={selection} onClose={closeDetail} editor={drawerEditor} onEdit={selection.kind === "calendar" && data.calendar.some((event) => event.id === selection.sourceId) ? editSelectedCalendar : selection.kind === "timetable" && data.timetable.map(rawRecord).some((slot) => rawText(slot.slot_id ?? slot.id) === selection.sourceId) ? editSelectedTimetable : undefined} onDelete={canDeleteSelection ? () => void deleteSelected() : undefined} deleteBusy={deleteBusy} /> : null}
     </main>
   );
 }

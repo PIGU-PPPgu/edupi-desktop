@@ -7,6 +7,9 @@ import { issueTeacherContextReview, type TeacherContextReviewDependencies, type 
 import { issueWorkCandidateReview, type WorkCandidateReviewDependencies, type WorkCandidateReviewInput } from "./edupi-work-candidate-review";
 import { issueTaskReview, type TaskReviewDependencies, type TaskReviewInput } from "./edupi-task-review";
 import { issueMemoryUpdate, type MemoryUpdateDependencies, type MemoryUpdateInput } from "./edupi-memory-update";
+import { issueEntityDelete, type EntityDeleteKind } from "./edupi-entity-delete";
+import { projectTeacherContextSnapshot } from "./edupi-onboarding-server";
+import type { TeacherContextSnapshot } from "./edupi-onboarding-types";
 import { activeBridgeIdentity } from "./edupi-bridge-manifest";
 import { readEduPiEducationSnapshot } from "./edupi-core-snapshot";
 import { bindTaskSessionFile, readTaskSessionFile } from "./edupi-task-session-store";
@@ -29,7 +32,7 @@ function requiredText(value: unknown, field: string, max = 240): string {
 
 type EducationSnapshot = Awaited<ReturnType<typeof readEduPiEducationSnapshot>>;
 
-async function projectEducationContract(snapshot: EducationSnapshot): Promise<EducationContract> {
+export async function projectEducationContract(snapshot: EducationSnapshot): Promise<EducationContract> {
   const [taskSessionStore, scannedSessions] = await Promise.all([
     readTaskSessionFile(taskSessionFile(snapshot.dataRoot.root)),
     listAllSessions(),
@@ -44,6 +47,7 @@ async function projectEducationContract(snapshot: EducationSnapshot): Promise<Ed
     taskSessions: taskSessionStore,
     snapshotPayload: snapshot.payload,
     supportedCommands: activeBridgeIdentity().contract.supported_commands,
+    entityDeleteEnabled: true,
   });
   return {
     ...contract,
@@ -57,6 +61,15 @@ async function projectEducationContract(snapshot: EducationSnapshot): Promise<Ed
 
 export async function readEducationContract(): Promise<EducationContract> {
   return projectEducationContract(await readEduPiEducationSnapshot());
+}
+
+export async function readEducationWorkspaceBundle(): Promise<{ context: TeacherContextSnapshot; data: EducationContract }> {
+  const snapshot = await readEduPiEducationSnapshot();
+  const [context, data] = await Promise.all([
+    Promise.resolve(projectTeacherContextSnapshot(snapshot)),
+    projectEducationContract(snapshot),
+  ]);
+  return { context, data };
 }
 
 export type EducationReviewInput = {
@@ -187,6 +200,20 @@ export async function updateEducationMemory(
   if (!refreshedWorkspace || typeof refreshedWorkspace !== "object" || Array.isArray(refreshedWorkspace)) throw new Error("Core education workspace refresh is unavailable");
   const data = await projectEducationContract({ ...snapshot, payload: result.data, workspace: refreshedWorkspace as EducationSnapshot["workspace"] });
   return { receipt: result.receipt, data };
+}
+
+export async function deleteEducationEntity(input: { kind: EntityDeleteKind; id: string; note: string | null; signal?: AbortSignal }): Promise<{ target: { kind: EntityDeleteKind; id: string }; deletedAt: string | null; data: EducationContract }> {
+  const snapshot = await readEduPiEducationSnapshot({ signal: input.signal });
+  const result = await issueEntityDelete(input, {
+    readSnapshot: async () => ({ ...snapshot, roots: { runtime: snapshot.runtime, dataRoot: snapshot.dataRoot } }),
+  });
+  const refreshedWorkspace = result.data.education_workspace;
+  const data = await projectEducationContract({
+    ...snapshot,
+    payload: result.data as EducationSnapshot["payload"],
+    workspace: refreshedWorkspace as EducationSnapshot["workspace"],
+  });
+  return { target: result.target, deletedAt: result.deletedAt, data };
 }
 
 export async function bindEducationTaskSession(input: { taskId: unknown; sessionId: unknown }): Promise<{ binding: EducationContract["taskSessions"][string]; data: EducationContract }> {
