@@ -7,8 +7,8 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const HARD_TIMEOUT_MS = 60_000;
-const EXPECTED_CORE_COMMIT = "79d1d14d713bce0c55e33659aeeb4d0a44dc742f";
-const EXPECTED_COMPONENT_MANIFEST_HASH = "sha256:58d90918f3e2f4bc297c422b6cc1f069282e22a07c236cf6675e0f5784a783d4";
+const EXPECTED_CORE_COMMIT = "13e911420d193524f89dbf8dcce70dc59e9e683f";
+const EXPECTED_COMPONENT_MANIFEST_HASH = "sha256:51de6b12f22c68667eca95648a184b239cb4129e914b37947aa9f2d88eccf967";
 const EXPECTED_FIXTURE_MANIFEST_HASH = "sha256:6ad8012ec811c7b23318dee51043a3151f6ed120a10d6490f798052ddc631545";
 const EXPECTED_SCHEMA_HASH = "sha256:175e33d10cd38ebe7bd5d94260e67f7fabc70e0368ed55492265ef934633980c";
 const EXPECTED_COMMANDS = ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage", "update_memory"];

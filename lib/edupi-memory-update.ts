@@ -43,6 +43,13 @@ function text(value: unknown, field: string, maxLength: number): string {
   return value.trim();
 }
 
+function memoryContent(value: unknown): string {
+  if (typeof value !== "string" || !value.trim() || value.length > 4000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) {
+    throw new MemoryUpdateError("invalid_envelope", "content 无效。");
+  }
+  return value.trim();
+}
+
 function exactList(actual: unknown, expected: readonly string[]): boolean {
   return Array.isArray(actual) && actual.length === expected.length && actual.every((value, index) => value === expected[index]);
 }
@@ -82,7 +89,7 @@ export function buildMemoryUpdateCommandEnvelope(input: MemoryUpdateInput & { pa
   const payload = record(input.payload);
   if (!payload) throw new MemoryUpdateError("unavailable", "Core 教育快照不可用。");
   const memoryId = text(input.memoryId, "memoryId", 160);
-  const content = text(input.content, "content", 4000);
+  const content = memoryContent(input.content);
   const snapshotId = text(payload.snapshot_id, "snapshotId", 160);
   const stateHash = text(payload.state_hash, "stateHash", 160);
   if (!/^sha256:[A-Za-z0-9_-]+$/.test(stateHash)) throw new MemoryUpdateError("unavailable", "Core 教育快照来源哈希不可用。");
