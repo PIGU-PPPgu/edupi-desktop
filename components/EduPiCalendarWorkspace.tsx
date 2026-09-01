@@ -7,6 +7,7 @@ import { taskDisplayTitle } from "@/lib/edupi-workbench";
 import {
   addCalendarDays,
   createCalendarProjection,
+  filterTimetableSlots,
   getCalendarViewRange,
   shiftCalendarAnchor,
   type CalendarEntry,
@@ -340,6 +341,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
   const [editingCalendarId, setEditingCalendarId] = useState<string | null>(null);
   const [editingTimetableId, setEditingTimetableId] = useState<string | null>(null);
   const projection = useMemo(() => filterProjection(createCalendarProjection(data, { view, anchorDate, query }), contentMode), [anchorDate, contentMode, data, query, view]);
+  const filteredTimetable = useMemo(() => filterTimetableSlots(data.timetable, query), [data.timetable, query]);
   const editingCalendarEvent = editingCalendarId
     ? data.calendar.find((event) => event.id === editingCalendarId) || null
     : null;
@@ -427,7 +429,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
       </header>
       {composer ? <IntakeComposer key={`${composer}:${editingCalendarId || editingTimetableId || "new"}`} mode={composer} anchorDate={anchorDate} calendarEvent={composer === "calendar" ? editingCalendarEvent : null} timetableSlot={composer === "timetable" ? editingTimetableSlot : null} busy={intakeBusy} onClose={closeComposer} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} /> : null}
       <div className="edupi-calendar-content-segment" role="group" aria-label="切换日程内容">{CONTENT_LABELS.map((item) => <button type="button" key={item.mode} className={contentMode === item.mode ? "is-active" : ""} onClick={() => { setContentMode(item.mode); setEditingCalendarId(null); setEditingTimetableId(null); onSelect(null); }} aria-pressed={contentMode === item.mode}>{item.label}</button>)}</div>
-      {contentMode === "timetable" ? <EduPiTimetableGrid slots={data.timetable} onSelect={onSelect} /> : <>
+      {contentMode === "timetable" ? <EduPiTimetableGrid slots={filteredTimetable} onSelect={onSelect} /> : <>
       <div className="edupi-calendar-toolbar" role="toolbar" aria-label="日程工具栏">
         <button type="button" className="edupi-calendar-today" onClick={() => setAnchorDate(localIsoDate())}>今天</button>
         <div className="edupi-calendar-period-nav"><button type="button" onClick={() => changePeriod(-1)} aria-label="上一时段">‹</button><button type="button" onClick={() => changePeriod(1)} aria-label="下一时段">›</button></div>

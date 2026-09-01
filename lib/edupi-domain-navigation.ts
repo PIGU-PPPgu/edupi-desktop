@@ -58,6 +58,11 @@ export function materialCategory(value: { materialKind?: string | null; title?: 
   return "other";
 }
 
+export function materialCategoryCount(category: MaterialCategoryId, materials: Array<{ materialKind?: string | null; title?: string | null }>, acceptedIntakeCount: number): number {
+  const taskCount = category === "all" ? materials.length : materials.filter((item) => materialCategory(item) === category).length;
+  return taskCount + (category === "all" || category === "other" ? acceptedIntakeCount : 0);
+}
+
 export function routePart(value: string | null | undefined, prefix: string, fallback: string): string {
   return value?.startsWith(`${prefix}:`) ? value.slice(prefix.length + 1) : fallback;
 }

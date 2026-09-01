@@ -3,7 +3,7 @@
 import type { EducationContract, EducationMemoryCandidate, EducationObservation, TeacherTask } from "@/lib/edupi-education-contract";
 import type { CalendarItemSelection } from "@/lib/edupi-calendar-model";
 import { isRecognizedTimetableNote } from "@/lib/edupi-recognition-markers";
-import { INSIGHT_CATEGORIES, INSIGHT_STATUSES, MATERIAL_CATEGORIES, MEMORY_CATEGORIES, TEACHING_SECTIONS, insightCategory, materialCategory, routePart, type InsightCategoryId, type InsightStatusId } from "@/lib/edupi-domain-navigation";
+import { INSIGHT_CATEGORIES, INSIGHT_STATUSES, MATERIAL_CATEGORIES, MEMORY_CATEGORIES, TEACHING_SECTIONS, insightCategory, materialCategoryCount, routePart, type InsightCategoryId, type InsightStatusId, type MaterialCategoryId } from "@/lib/edupi-domain-navigation";
 import { groupTasksByCategory, TASK_CATEGORY_CONFIG } from "@/lib/edupi-task-category";
 import { studentRecordKey, studentRecordName } from "@/lib/edupi-student-roster-model";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
@@ -116,7 +116,7 @@ export function EduPiObjectSider({ view, data, context, query, onQuery, selected
     if (status === "surfaced" || status === "brewing") return categoryInsights.filter((item) => item.status === status).length;
     return categoryInsights.length + categorySignals.length;
   };
-  const materialCount = (category: string) => category === "all" ? materials.length + intakeMaterials.length : materials.filter((task) => materialCategory({ materialKind: task.materialKind, title: task.title }) === category).length;
+  const materialCount = (category: MaterialCategoryId) => materialCategoryCount(category, materials, intakeMaterials.length);
   const tasksByCategory = groupTasksByCategory(tasks);
   const taskRows = (rows: TeacherTask[], stage: TaskStage) => rows.map((task) => <TaskRow key={taskKey(task)} task={task} selected={taskKey(task) === selectedTaskKey} onClick={() => onTask(task, stage)} />);
 

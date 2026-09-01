@@ -95,7 +95,7 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
     catch (error) { setMessage({ tone: "error", text: error instanceof Error ? error.message : "学生档案补充失败。" }); }
     finally { setBusy(false); }
   };
-  const exportCurrent = () => download(`${JSON.stringify({ exported_at: new Date().toISOString(), students: exportValue(selected ? [selected] : students) }, null, 2)}\n`, selectedName ? `${selectedName}-学生档案.json` : "班级学生档案.json", "application/json;charset=utf-8");
+  const exportCurrent = () => download(`${JSON.stringify({ exported_at: new Date().toISOString(), students: exportValue(selected ? [selected] : data.students) }, null, 2)}\n`, selectedName ? `${selectedName}-学生档案.json` : "班级学生档案.json", "application/json;charset=utf-8");
   const exportTimeline = () => {
     if (!selectedName) return;
     const rows = trajectory.map((item) => [item.date || "", item.event || "", item.note || item.description || ""]);

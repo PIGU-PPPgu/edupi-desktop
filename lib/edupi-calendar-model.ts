@@ -369,6 +369,15 @@ function matchesQuery(title: string, detail: string | null, sourceLabel: string,
   return `${title} ${detail || ""} ${sourceLabel}`.toLocaleLowerCase().includes(normalizedQuery);
 }
 
+export function filterTimetableSlots(slots: Array<Record<string, unknown>>, query: string): Array<Record<string, unknown>> {
+  return slots.filter((value) => {
+    const slot = record(value);
+    const title = text(slot.subject) || "课程";
+    const detail = [text(slot.class_name ?? slot.className), text(slot.notes), text(slot.day_of_week ?? slot.dayOfWeek), text(slot.period)].filter(Boolean).join(" ");
+    return matchesQuery(title, detail, "课程表", query);
+  });
+}
+
 function makeEntry(input: Omit<CalendarEntry, "statusLabel">): CalendarEntry {
   return { ...input, statusLabel: statusLabel(input.status) };
 }

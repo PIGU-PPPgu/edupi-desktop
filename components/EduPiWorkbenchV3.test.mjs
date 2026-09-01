@@ -67,6 +67,7 @@ test("class workspace keeps the student directory mounted and opens a right draw
   assert.match(student, /补充学生档案/);
   assert.match(student, /onStudent\(null\)/);
   assert.doesNotMatch(student, /mode === "students" \? students\[0\] : null/);
+  assert.match(student, /selected \? \[selected\] : data\.students/);
 });
 
 test("growth and materials use explicit databases and right-side material details", async () => {
