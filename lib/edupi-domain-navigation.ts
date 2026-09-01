@@ -84,6 +84,10 @@ export function matchesWorkspaceQuery(value: string, query: string): boolean {
   return !query || value.toLocaleLowerCase().includes(query.toLocaleLowerCase());
 }
 
+export function filterSubjectKnowledgeItems<T extends { subject: string; topic: string; commonErrors: Array<{ description: string }> }>(items: readonly T[], query: string): T[] {
+  return items.filter((item) => matchesWorkspaceQuery(`${item.subject} ${item.topic} ${item.commonErrors.map((error) => error.description).join(" ")}`, query));
+}
+
 export function growthReviewStateLabel(value: string | null | undefined): string {
   if (value === "accepted" || value === "confirmed") return "已确认";
   if (value === "rejected") return "已拒绝";

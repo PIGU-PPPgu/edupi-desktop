@@ -42,6 +42,10 @@ test("teaching, growth, and material sidebars expose domain categories instead o
   assert.match(sider, /教师专业成长/);
   assert.match(sider, /EduPi 能力成长/);
   assert.match(sider, /MATERIAL_CATEGORIES\.map/);
+  assert.match(sider, /const timetable = filterTimetableSlots\(data\.timetable, query\)/);
+  assert.match(sider, /const subjectKnowledge = filterSubjectKnowledgeItems\(data\.continuity\.subjectKnowledge, query\)/);
+  assert.match(sider, /section\.id === "schedule" \? timetable\.length/);
+  assert.match(sider, /section\.id === "knowledge" \? subjectKnowledge\.length/);
 });
 
 test("teaching keeps a home route and the calendar exposes a ten-period weekday grid", async () => {

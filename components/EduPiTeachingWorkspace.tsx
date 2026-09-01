@@ -3,7 +3,7 @@
 import type { EducationContract, TeacherTask } from "@/lib/edupi-education-contract";
 import { filterTimetableSlots, type CalendarItemSelection } from "@/lib/edupi-calendar-model";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
-import { routePart, type TeachingSectionId } from "@/lib/edupi-domain-navigation";
+import { filterSubjectKnowledgeItems, routePart, type TeachingSectionId } from "@/lib/edupi-domain-navigation";
 import { isUserFacingMemory, taskDisplayTitle, taskKey, taskStatusLabel } from "@/lib/edupi-workbench";
 import { EduPiTimetableGrid } from "./EduPiTimetableGrid";
 
@@ -16,7 +16,7 @@ function shortDate(value: string | null): string {
 export function EduPiTeachingWorkspace({ data, context, query, selectedObjectId, onObject, onTask, onNavigate, onUpload, onStartAgent, onCalendarSelection }: { data: EducationContract; context: TeacherContextSnapshot | null; query: string; selectedObjectId: string | null; onObject: (id: string) => void; onTask: (task: TeacherTask) => void; onNavigate: (view: "calendar" | "tasks" | "memory", objectId?: string) => void; onUpload: () => void; onStartAgent: (prompt: string) => void; onCalendarSelection: (selection: CalendarItemSelection) => void }) {
   const section = routePart(selectedObjectId, "teaching", "home") as TeachingSectionId;
   const slots = filterTimetableSlots(data.timetable, query);
-  const knowledge = data.continuity.subjectKnowledge.filter((item) => !query || `${item.subject} ${item.topic} ${item.commonErrors.map((error) => error.description).join(" ")}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+  const knowledge = filterSubjectKnowledgeItems(data.continuity.subjectKnowledge, query);
   const tasks = data.tasks.filter((task) => (task.trigger === "teaching_adjustment_candidate" || task.materialId || task.topic) && (!query || `${task.title} ${task.topic || ""}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
   const memories = data.continuity.memories.filter((memory) => memory.state === "active" && memory.category === "teaching" && isUserFacingMemory(memory) && (!query || `${memory.content} ${memory.tags.join(" ")}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
   const weekday = new Date().getDay() || 7;
