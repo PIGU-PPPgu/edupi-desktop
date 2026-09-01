@@ -18,7 +18,8 @@ test("memory sidebar selects categories while the main database owns rows and pa
   assert.match(memory, /memoryCategoryRoute\(selectedObjectId\)/);
   assert.match(memory, /edupi-memory-db-grid/);
   assert.match(memory, /edupi-database-pagination/);
-  assert.match(memory, /修订记忆/);
+  assert.match(memory, /手动修改/);
+  assert.match(memory, /AI 协作/);
 });
 
 test("insights use primary categories, status filters, and a database table", async () => {

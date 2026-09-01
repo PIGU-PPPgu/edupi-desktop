@@ -9,7 +9,7 @@ export const BRIDGE_COMMAND_TYPES = [
   "import_timetable", "intake_material", "review_insight", "review_growth_candidate",
   "review_learning_candidate", "request_action_preview", "approve_action", "stop_action",
   "report_action_result",
-  "create_task", "move_task_stage",
+  "create_task", "move_task_stage", "update_memory",
 ] as const;
 
 export type CoreCommandType = typeof BRIDGE_COMMAND_TYPES[number];
@@ -28,7 +28,7 @@ export const COMMAND_DECISION_MATRIX: Record<CoreCommandType, readonly (ReviewDe
   review_growth_candidate: ["accept", "reject", "hold"],
   review_learning_candidate: ["accept", "reject", "hold"],
   request_action_preview: [null], approve_action: ["approve"], stop_action: ["stop"], report_action_result: [null],
-  create_task: [null], move_task_stage: [null],
+  create_task: [null], move_task_stage: [null], update_memory: ["modify"],
 };
 
 export const TARGET_COMMANDS = {
@@ -37,6 +37,7 @@ export const TARGET_COMMANDS = {
   follow_up: ["review_follow_up"], calendar_import: ["import_calendar"], timetable_import: ["import_timetable"], material_intake: ["intake_material"],
   insight: ["review_insight"], growth_candidate: ["review_growth_candidate"], learning_candidate: ["review_learning_candidate"],
   action: ["request_action_preview", "approve_action", "stop_action", "report_action_result"],
+  memory: ["update_memory"],
 } as const;
 
 export type BridgeErrorCode = "unknown_version" | "unknown_schema_hash" | "invalid_envelope" | "stale_snapshot" | "stale_revision" | "unsupported_command";

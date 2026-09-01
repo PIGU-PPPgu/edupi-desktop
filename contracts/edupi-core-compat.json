@@ -2,24 +2,24 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "b1145350d3cd96baf2a22c1d27e29020fd564613",
+    "core_commit": "a06c02f61aa5b080769fb740205a2c00df9b94f9",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:2d2d03e9723d5e51200a5904fd764ec4c142d2c2ca037235e1e4c5598ec2e1d8"
+    "component_manifest_hash": "sha256:a7b37a9ccb2595e7a19d9e8b7b4bd703fc5eb1b78204b90deaa221a593839033"
   },
   "contract_identities": [
     {
       "contract_id": "edupi-bridge-v1.1",
       "contract_version": "1.1",
-      "schema_hash": "sha256:a0916f90fbca72da0c48e545c5c8dfddee42a0f0b3e54641c7a2297e54e9eb31",
+      "schema_hash": "sha256:175e33d10cd38ebe7bd5d94260e67f7fabc70e0368ed55492265ef934633980c",
       "fixture_manifest_path": "fixtures/bridge/v1.1/fixture-manifest.json",
-      "fixture_manifest_hash": "sha256:68e9d2e91e04a314037590b1a5ebe51cf2fab3d50392d65e30a0dd71bec29cfb",
-      "supported_commands": ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage"],
+      "fixture_manifest_hash": "sha256:6ad8012ec811c7b23318dee51043a3151f6ed120a10d6490f798052ddc631545",
+      "supported_commands": ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage", "update_memory"],
       "supported_projections": ["education_workspace"],
       "depends_on": []
     }
   ],
   "cumulative_projection_manifest": null,
-  "supported_commands": ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage"],
+  "supported_commands": ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage", "update_memory"],
   "supported_projections": ["education_workspace"],
   "unsupported_command_reasons": {
     "review_teaching_adjustment": "Core v1.1 does not expose this command capability in the pinned paired C1 runtime",
@@ -40,7 +40,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/2",
     "https://github.com/PIGU-PPPgu/edupi-desktop-internal/pull/11",
     "https://github.com/PIGU-PPPgu/edupi/pull/6",
-    "https://github.com/PIGU-PPPgu/edupi/pull/7"
+    "https://github.com/PIGU-PPPgu/edupi/pull/7",
+    "https://github.com/PIGU-PPPgu/edupi/pull/8"
   ],
-  "change_note": "Added a teacher-internal student roster import operation that preserves existing profile history; external_send remains false"
+  "change_note": "Added manual teacher-internal memory updates through a versioned Core override store; legacy memory source bytes and external_send=false are preserved"
 }
