@@ -101,7 +101,7 @@ export async function issueEntityDelete(
   });
   const snapshot = await readSnapshot();
   const snapshotId = typeof snapshot.envelope?.snapshot_id === "string" ? snapshot.envelope.snapshot_id : null;
-  if (!snapshotId || !hasTarget(snapshot.payload.education_workspace, input.kind, input.id)) throw new EntityDeleteError("target_not_found", "对象不存在或已经删除。");
+  if (!snapshotId) throw new EntityDeleteError("invalid_response", "Core 教育快照无效。");
   const requestId = `entity-delete-${randomUUID()}`;
   const request = buildEntityDeleteRequest({ kind: input.kind, id: input.id, snapshotId, note: input.note }, requestId);
   const callCore = dependencies.callCore || (async (nextRequest, currentSnapshot, signal) => {

@@ -53,7 +53,7 @@ type Props = {
   onStartAgent: (prompt: string, mode?: "insert" | "replace") => void;
   onCreateTask: (input: { title: string; dueDate: string | null; note: string | null }) => Promise<void>;
   onMoveTask: (task: TeacherTask, stage: TaskBoardLaneId) => Promise<void>;
-  onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<void>;
+  onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<boolean>;
 };
 
 function includesQuery(value: string, query: string): boolean {

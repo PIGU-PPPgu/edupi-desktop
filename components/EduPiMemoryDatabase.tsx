@@ -18,7 +18,7 @@ function memoryUpdateReasonId(memoryId: string): string {
   return `memory-update-reason-${memoryId.replace(/[^A-Za-z0-9_-]/g, "-")}`;
 }
 
-export function EduPiMemoryDatabase({ data, query, selectedObjectId, onEducation, onStartAgent, onDeleteEntity }: { data: EducationContract; query: string; selectedObjectId: string | null; onEducation: (data: EducationContract) => void; onStartAgent: (prompt: string, mode?: "insert" | "replace") => void; onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<void> }) {
+export function EduPiMemoryDatabase({ data, query, selectedObjectId, onEducation, onStartAgent, onDeleteEntity }: { data: EducationContract; query: string; selectedObjectId: string | null; onEducation: (data: EducationContract) => void; onStartAgent: (prompt: string, mode?: "insert" | "replace") => void; onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<boolean> }) {
   const category = memoryCategoryRoute(selectedObjectId);
   const categoryLabel = MEMORY_CATEGORIES.find((item) => item.id === category)?.label || "学期";
   const [page, setPage] = useState(0);
@@ -32,6 +32,7 @@ export function EduPiMemoryDatabase({ data, query, selectedObjectId, onEducation
     .sort((left, right) => String(right.updatedAt || right.createdAt || "").localeCompare(String(left.updatedAt || left.createdAt || ""))), [category, data.continuity.memories, query]);
   useEffect(() => { setPage(0); setEditor(null); setMessage(null); }, [category, query]);
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  useEffect(() => { setPage((current) => Math.min(current, Math.max(0, pages - 1))); }, [pages]);
   const visible = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const saveMemory = async (memory: EducationMemory) => {
     const draft = editor?.memoryId === memory.id ? editor.draft.trim() : "";

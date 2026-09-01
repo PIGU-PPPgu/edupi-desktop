@@ -76,10 +76,14 @@ try {
     data = result.data;
     assert.equal(hasTarget(data, kind, id), false, `${kind} should disappear from the refreshed projection`);
   }
+  const retryResponse = await DELETE(request("calendar", "calendar-delete-1"), { params: Promise.resolve({ kind: "calendar", id: "calendar-delete-1" }) });
+  const retryResult = await retryResponse.json();
+  assert.equal(retryResponse.status, 200, JSON.stringify(retryResult));
+  assert.equal(hasTarget(retryResult.data, "calendar", "calendar-delete-1"), false);
   for (const [key, file] of Object.entries(sources)) assert.equal(fs.readFileSync(file, "utf8"), originalSources[key], `${key} source bytes must remain recoverable`);
   const audit = JSON.parse(fs.readFileSync(path.join(outputDir, "entity_delete_state.json"), "utf8"));
   assert.equal(audit.records.length, 5);
-  console.log(JSON.stringify({ status: "passed", deleted: audit.records.length, source_bytes_preserved: true }));
+  console.log(JSON.stringify({ status: "passed", deleted: audit.records.length, retry_reconciled: true, source_bytes_preserved: true }));
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
 }

@@ -28,7 +28,7 @@ type Props = {
   onTaskDetail: (task: TeacherTask) => void;
   onImportCalendar: (event: { eventId: string | null; date: string; endDate: string | null; name: string; type: string; notes: string | null }) => Promise<void>;
   onImportTimetable: (slot: { slotId: string | null; dayOfWeek: number; period: number; subject: string; className: string | null; kind: "class" | "routine"; notes: string | null }) => Promise<void>;
-  onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<void>;
+  onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<boolean>;
 };
 
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
@@ -421,8 +421,8 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
     if (!selection || !isNonTaskSelection(selection) || !selection.sourceId || deleteBusy) return;
     setDeleteBusy(true);
     try {
-      await onDeleteEntity(selection.kind, selection.sourceId, selection.title);
-      closeDetail();
+      const deleted = await onDeleteEntity(selection.kind, selection.sourceId, selection.title);
+      if (deleted) closeDetail();
     } catch {
       // The parent workspace owns the visible error message.
     } finally {

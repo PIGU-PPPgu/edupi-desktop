@@ -2,9 +2,9 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "53ce7f15f89c30533ba70f0361828c24986f55f6",
+    "core_commit": "09d09d28ac3ca5835a2a16ac4b5d8e8e121abb8c",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:2aae66b1885d866a11a2bcc5c5b0b459564ad9d91afe6cbcd6b8b35d6eaa1eb7"
+    "component_manifest_hash": "sha256:9777ec12082e1bcc72201702f5f22ffa73f85f216c68220860a028c7c2e5ecc2"
   },
   "contract_identities": [
     {
@@ -43,7 +43,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/7",
     "https://github.com/PIGU-PPPgu/edupi/pull/8",
     "https://github.com/PIGU-PPPgu/edupi/pull/9",
-    "https://github.com/PIGU-PPPgu/edupi/pull/10"
+    "https://github.com/PIGU-PPPgu/edupi/pull/10",
+    "https://github.com/PIGU-PPPgu/edupi/pull/11"
   ],
-  "change_note": "Added Core-owned audited soft deletion for calendar events, timetable slots, education memories, student profiles, and teacher tasks"
+  "change_note": "Added Core-owned audited soft deletion with lost-response retry reconciliation for teacher entities"
 }

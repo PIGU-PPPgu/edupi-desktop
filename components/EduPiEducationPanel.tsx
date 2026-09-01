@@ -668,10 +668,10 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     setEducation(result.data);
   }, []);
 
-  const deleteEntity = useCallback(async (kind: EducationEntityDeleteKind, id: string, label: string) => {
+  const deleteEntity = useCallback(async (kind: EducationEntityDeleteKind, id: string, label: string): Promise<boolean> => {
     const key = `${kind}:${id}`;
-    if (deleteBusy || !education?.capabilities.entityDelete.enabled || !education.capabilities.entityDelete.targetKinds.includes(kind)) return;
-    if (!window.confirm(`确定删除“${label}”吗？`)) return;
+    if (deleteBusy || !education?.capabilities.entityDelete.enabled || !education.capabilities.entityDelete.targetKinds.includes(kind)) return false;
+    if (!window.confirm(`确定删除“${label}”吗？`)) return false;
     setDeleteBusy(key);
     setMaterialStagingMessage({ tone: "success", text: "删除中…" });
     try {
@@ -681,6 +681,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       if (kind === "student") setSelectedStudentId(null);
       if (kind === "task") { setTaskDetailTask(null); setSelectedTaskKey(null); }
       setMaterialStagingMessage({ tone: "success", text: `已删除：${label}` });
+      return true;
     } catch (error) {
       setMaterialStagingMessage({ tone: "error", text: error instanceof Error ? error.message : "删除失败" });
       throw error;

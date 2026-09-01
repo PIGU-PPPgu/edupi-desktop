@@ -19,7 +19,7 @@ type Props = {
   onEducation: (data: EducationContract) => void;
   onTask: (task: TeacherTask) => void;
   onStartAgent: (prompt: string, mode?: "insert" | "replace") => void;
-  onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<void>;
+  onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<boolean>;
 };
 
 type StudentProfileEditor = {
@@ -134,7 +134,8 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
     if (!selectedName || busy) return;
     setBusy(true); setMessage(null);
     try {
-      await onDeleteEntity("student", selectedName, selectedName);
+      const deleted = await onDeleteEntity("student", selectedName, selectedName);
+      if (!deleted) return;
       setEditor(null);
       onStudent(null);
       setMessage({ tone: "success", text: "学生档案已删除" });
