@@ -149,3 +149,9 @@ Resume at **E1 / PR A — Core Flow Contract v1**. Add a minimal `work_case` and
 ## Current resume pointer — 2026-09-02 Living Flow complete
 
 Core Flow Contract v1 and Desktop Living Flow v1 are recorded in [2026-09-02-living-flow-checkpoint.md](./2026-09-02-living-flow-checkpoint.md). Resume at **PR C — Teaching Before-Class v1** with the real six-period 703 mathematics timetable. The next slice must connect each weekly lesson occurrence to teaching priorities, class evidence, materials, preparation output and teacher confirmation; do not create a timetable-only demo or a Desktop preparation store.
+
+## Current resume pointer — 2026-09-02 Teaching Before-Class complete
+
+PR A / Core Flow Contract v1, PR B / Desktop Living Flow v1 and PR C / Teaching Before-Class v1 are complete and recorded in [2026-09-02-teaching-before-class-checkpoint.md](./2026-09-02-teaching-before-class-checkpoint.md). The real 703 mathematics timetable projects 126 stable preparation tasks across 21 weeks, with six current-week lesson rows and four bounded outputs per ready lesson. Desktop displays only Core-owned task/work-case/artifact state and keeps `external_send=false`.
+
+Resume at **E4 — 课后口述到教学记忆**. Bind one short teacher voice/text reflection to the just-finished lesson, preserve evidence and teacher control, update bounded teaching memory, and prove that it changes the next preparation cycle. Do not add another navigation shell or a Desktop memory store.

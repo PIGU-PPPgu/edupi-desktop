@@ -428,6 +428,20 @@ html.dark .edupi-teacher-shell {
 .edupi-teaching-home-section h2,
 .edupi-teaching-home-columns h2 { margin: 0; font-size: 12px; }
 .edupi-teaching-home-section .edupi-timetable-grid { margin: 0; border: 0; border-radius: 0; }
+.edupi-teaching-preparation { margin-top: 14px; overflow: hidden; border: 1px solid var(--ep-border); border-radius: 8px; background: var(--ep-surface); }
+.edupi-teaching-preparation > header { display: flex; min-height: 42px; align-items: center; justify-content: space-between; padding: 0 13px; border-bottom: 1px solid var(--ep-border); }
+.edupi-teaching-preparation > header h2 { margin: 0; font-size: 12px; }
+.edupi-teaching-preparation > header span { color: var(--ep-muted); font-size: 10px; }
+.edupi-teaching-preparation > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.edupi-teaching-preparation > div > button { display: grid; min-width: 0; min-height: 70px; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--ep-border); background: transparent; color: var(--ep-text); cursor: pointer; text-align: left; }
+.edupi-teaching-preparation > div > button:nth-child(odd) { border-right: 1px solid var(--ep-border); }
+.edupi-teaching-preparation > div > button:hover { background: var(--ep-surface-soft); }
+.edupi-teaching-preparation time { color: var(--ep-muted); font-size: 10px; }
+.edupi-teaching-preparation button > span { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.edupi-teaching-preparation button strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.edupi-teaching-preparation button small { display: -webkit-box; overflow: hidden; color: var(--ep-muted); font-size: 9px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.edupi-teaching-preparation button em { display: flex; align-items: center; gap: 6px; color: var(--ep-muted); font-size: 9px; font-style: normal; white-space: nowrap; }
+.edupi-teaching-preparation > div > p { grid-column: 1 / -1; margin: 0; padding: 18px 13px; color: var(--ep-muted); font-size: 10px; }
 .edupi-teaching-home-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
 .edupi-teaching-home-columns > section { overflow: hidden; border: 1px solid var(--ep-border); border-radius: 8px; background: var(--ep-surface); }
 .edupi-teaching-home-columns details,
@@ -1447,6 +1461,8 @@ details[open] > .edupi-disclosure-detail { animation: edupi-expand-in .17s ease-
   .edupi-review-mini-board { grid-template-columns: 1fr; }
   .edupi-student-profile__grid { grid-template-columns: 1fr; }
   .edupi-teaching-home-columns { grid-template-columns: 1fr; }
+  .edupi-teaching-preparation > div { grid-template-columns: 1fr; }
+  .edupi-teaching-preparation > div > button:nth-child(odd) { border-right: 0; }
   .edupi-workspace-grid__wide { grid-column: auto; }
   .edupi-class-grid__main,
   .edupi-growth-documents { grid-row: auto; }

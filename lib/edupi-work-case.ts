@@ -1,4 +1,5 @@
-import type { EducationContract, EducationWorkCase, EducationWorkCaseState, EducationWorkTransition } from "./edupi-education-contract";
+import type { EducationContract, EducationWorkCase, EducationWorkCaseState, EducationWorkTransition, TeacherTask } from "./edupi-education-contract";
+import { taskArtifacts } from "./edupi-workbench.ts";
 
 const STATE_LABELS: Record<EducationWorkCaseState, string> = {
   planned: "计划中",
@@ -31,6 +32,17 @@ const ACTIVE_ORDER: Partial<Record<EducationWorkCaseState, number>> = { running:
 export function workCaseForTask(data: Pick<EducationContract, "workCases">, taskId: string | null | undefined): EducationWorkCase | null {
   if (!taskId) return null;
   return data.workCases.find((workCase) => workCase.taskId === taskId) ?? null;
+}
+
+export function taskRequiresWorkCase(task: Pick<TeacherTask, "id" | "sourceEventId" | "externalSend">): boolean {
+  return task.externalSend === false && Boolean(task.id?.trim()) && Boolean(task.sourceEventId?.trim());
+}
+
+export function isTaskReviewable(task: TeacherTask, workCase: EducationWorkCase | null): boolean {
+  const projectedArtifacts = taskArtifacts(task);
+  if (projectedArtifacts.length === 0) return false;
+  if (!workCase) return !taskRequiresWorkCase(task);
+  return workCase.artifactIds.length > 0;
 }
 
 export function workCaseStateLabel(state: EducationWorkCaseState): string {
