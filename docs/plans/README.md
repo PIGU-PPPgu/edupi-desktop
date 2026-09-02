@@ -158,7 +158,7 @@ Resume at **E4 — 课后口述到教学记忆**. Bind one short teacher voice/t
 
 ## Current resume pointer — 2026-09-02 Packaged Core bootstrap
 
-The packaged Core bootstrap is implemented in [2026-09-02-packaged-core-bootstrap.md](./2026-09-02-packaged-core-bootstrap.md). Desktop pins Core `673db19d8fc2a1e34b858e2c3d17f7935862b07c` and component manifest `sha256:d9500f266ed92052798ffc072648d635c3dfb5b673cf2affe35e13506914eed0`, stages the exact runtime closure, and resolves data roots in environment → persisted → managed order. Remaining release evidence is signed artifacts plus clean-machine Windows install/launch/update/uninstall verification.
+The packaged Core bootstrap is implemented in [2026-09-02-packaged-core-bootstrap.md](./2026-09-02-packaged-core-bootstrap.md). Desktop pins Core `2194a3db337457bbdf7c28e6cf4a32ea9c57f72e` and component manifest `sha256:bb0598eb74d479ce6ba09b440d54f4a0d09bca9f6640e5cc124b701a22feac83`, stages the exact runtime closure, and resolves data roots in environment → persisted → managed order. Remaining release evidence is signed artifacts plus clean-machine Windows install/launch/update/uninstall verification.
 
 ## Current resume pointer — 2026-09-02 QM-derived Pi harness seam
 
