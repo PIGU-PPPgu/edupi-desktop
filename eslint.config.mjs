@@ -6,6 +6,8 @@ const eslintConfig = [
     ignores: [
       ".next-desktop/**",
       "src-tauri/resources/server/**",
+      "src-tauri/resources/edupi-core/**",
+      "src-tauri/resources/edupi-core-test-*/**",
       "src-tauri/target/**",
     ],
   },

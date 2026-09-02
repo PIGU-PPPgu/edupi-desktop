@@ -263,3 +263,31 @@ test("the Windows debug workflow cannot release or sign anything", async () => {
   assert.match(workflow, /contents: read/);
   assert.match(workflow, /trace-stray-scandir\.cjs/);
 });
+
+test("every packaged workflow checks out the exact pinned Core runtime", async () => {
+  const workflows = await Promise.all([
+    readFile(join(root, ".github", "workflows", "preview-installers.yml"), "utf8"),
+    readFile(join(root, ".github", "workflows", "release.yml"), "utf8"),
+    readFile(join(root, ".github", "workflows", "windows-build-debug.yml"), "utf8"),
+  ]);
+  for (const workflow of workflows) {
+    assert.match(workflow, /contracts\/edupi-core-compat\.json/);
+    assert.match(workflow, /git init \.edupi-core-runtime/);
+    assert.match(workflow, /git -C \.edupi-core-runtime fetch --depth 1 origin "\$core_commit"/);
+    assert.match(workflow, /git -C \.edupi-core-runtime checkout --detach "\$core_commit"/);
+    assert.match(workflow, /npm ci --ignore-scripts --prefix \.edupi-core-runtime/);
+    assert.match(workflow, /EDUPI_CORE_ROOT: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/);
+    assert.doesNotMatch(workflow, /git checkout (main|master|latest)/i);
+  }
+});
+
+test("all packaged platform configs carry the bundled Core resource", async () => {
+  const [base, windows, linux, dev] = await Promise.all([
+    readFile(join(root, "src-tauri", "tauri.conf.json"), "utf8"),
+    readFile(join(root, "src-tauri", "tauri.windows.conf.json"), "utf8"),
+    readFile(join(root, "src-tauri", "tauri.linux.conf.json"), "utf8"),
+    readFile(join(root, "src-tauri", "tauri.dev.conf.json"), "utf8"),
+  ]);
+  for (const source of [base, windows, linux]) assert.match(source, /resources\/edupi-core/);
+  assert.deepEqual(JSON.parse(dev).bundle.resources, []);
+});

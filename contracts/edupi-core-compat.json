@@ -2,9 +2,9 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "6e806f4e0af4232d95aa7353ed7a46cea4c7032a",
+    "core_commit": "ca623bdf93d781f57b7ad89956dcec9171ac7738",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:03b5944d14312508141b6cbb3868828c95601f88c6f9ff2d6066e16d14bc5130"
+    "component_manifest_hash": "sha256:8431f854d95fd049f3c2e8a54a0885e058bb1b1a40a934acf18502ec2e322028"
   },
   "contract_identities": [
     {
@@ -47,7 +47,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/11",
     "https://github.com/PIGU-PPPgu/edupi/pull/14",
     "https://github.com/PIGU-PPPgu/edupi/pull/15",
-    "https://github.com/PIGU-PPPgu/edupi/pull/16"
+    "https://github.com/PIGU-PPPgu/edupi/pull/16",
+    "https://github.com/PIGU-PPPgu/edupi/pull/17"
   ],
-  "change_note": "Added Core-owned teaching-before-class work cases from the real teacher timetable"
+  "change_note": "Pinned the merged Core PR #17 runtime closure so packaged Desktop copies and verifies Typebox dependencies"
 }

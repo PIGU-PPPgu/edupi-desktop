@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { desktopTargetTriple } from "./desktop-platform.mjs";
+import { buildPackagedCoreBundle } from "./packaged-core-bundle.mjs";
 import { piPackageDirNames } from "./pi-packages.mjs";
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -254,6 +255,8 @@ if (overlong.length > 0) {
 }
 
 const { binaryPath: nodeBinary, triple } = await bundleNodeRuntime();
+const coreBundle = await buildPackagedCoreBundle({ coreRoot: process.env.EDUPI_CORE_ROOT, desktopRoot: rootDir });
 
 console.log(`Desktop server staged at ${serverResourcesDir}`);
 console.log(`Node runtime staged at ${nodeBinary} (${triple})`);
+console.log(`Core runtime staged at ${coreBundle.destinationRoot} (${coreBundle.files} files, ${coreBundle.coreCommit})`);

@@ -54,6 +54,7 @@ next-env.d.ts
 /src-tauri/resources/Pi Web Server.app/
 /src-tauri/resources/Pi Agent Server.app/
 /src-tauri/resources/server/
+/src-tauri/resources/edupi-core/
 /src-tauri/resources/node/
 /src-tauri/target/
 

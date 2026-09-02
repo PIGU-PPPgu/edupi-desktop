@@ -130,10 +130,16 @@ test("explicit allowed roots are forwarded and launcher watchdog entrypoints rem
   ]) {
     assert.match(rust, new RegExp(name));
   }
-  assert.match(rust, /fn edupi_launch_roots\(\)/);
+  assert.match(rust, /fn edupi_launch_roots\(app: &AppHandle\)/);
   assert.match(rust, /if !path\.is_dir\(\)/);
   assert.match(rust, /\.env\("EDUPI_PROJECT_ROOT", &roots\.data_root\)/);
   assert.match(rust, /\.env\("EDUPI_CORE_ROOT", &roots\.core_root\)/);
+  assert.match(rust, /\.env\("EDUPI_CORE_VALIDATION_MODE", roots\.core_validation_mode\)/);
   assert.match(rust, /\.env\("EDUPI_DATA_ALLOWED_ROOT", &roots\.data_allowed_root\)/);
   assert.match(rust, /\.env\("PI_DESKTOP_STATE_DIR", &desktop_state_dir\)/);
+  assert.match(rust, /resources\/edupi-core/);
+  assert.match(rust, /edupiDataRoot/);
+  assert.match(rust, /get_edupi_root_status/);
+  assert.match(rust, /set_edupi_data_root/);
+  assert.match(rust, /reset_edupi_data_root/);
 });

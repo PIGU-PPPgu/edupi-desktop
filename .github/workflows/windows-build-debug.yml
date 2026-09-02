@@ -48,6 +48,17 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Check out the pinned EduPi Core runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          core_commit="$(node -p "require('./contracts/edupi-core-compat.json').core_runtime.core_commit")"
+          git init .edupi-core-runtime
+          git -C .edupi-core-runtime remote add origin https://github.com/PIGU-PPPgu/edupi.git
+          git -C .edupi-core-runtime fetch --depth 1 origin "$core_commit"
+          git -C .edupi-core-runtime checkout --detach "$core_commit"
+          npm ci --ignore-scripts --prefix .edupi-core-runtime
+
       - name: Install dependencies
         run: npm ci
 
@@ -90,6 +101,7 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
           NODE_OPTIONS: "--require ./scripts/trace-stray-scandir.cjs --stack-trace-limit=60"
+          EDUPI_CORE_ROOT: ${{ github.workspace }}/.edupi-core-runtime
         run: npm run desktop:prepare
 
       - name: Show what got staged

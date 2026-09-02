@@ -51,12 +51,14 @@ export function resolveEduPiBridgeRoots(): EduPiBridgeRoots {
     ? absoluteConfiguredRoot(process.env.EDUPI_CORE_ALLOWED_ROOT, "EDUPI_CORE_ALLOWED_ROOT")
     : dirname(configuredCoreRoot);
   const identity = activeBridgeIdentity();
+  const validationMode = process.env.EDUPI_CORE_VALIDATION_MODE === "bundled" ? "bundled" : "external";
   try {
     return {
       runtime: resolveEduPiCoreRoot({
         configuredRoot: configuredCoreRoot,
         allowedRoot: coreAllowedRoot,
         runtimeIdentity: identity.runtime,
+        validationMode,
       }),
       dataRoot: resolveEduPiDataRoot(),
     };
