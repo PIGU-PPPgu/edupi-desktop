@@ -243,6 +243,40 @@
 .edupi-admin-list em { color: var(--text-muted); font-size: 11px; font-style: normal; white-space: nowrap; }
 .edupi-admin-list em.is-ready { color: #18805a; }
 
+.edupi-admin-runtime {
+  overflow: hidden;
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+
+.edupi-admin-runtime > div {
+  display: grid;
+  min-height: 58px;
+  grid-template-columns: 8px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.edupi-admin-runtime > div:last-child { border-bottom: 0; }
+.edupi-admin-runtime > div > i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
+.edupi-admin-runtime > div > i.is-running,
+.edupi-admin-runtime > div > i.is-awaiting_delivery { background: var(--accent); animation: edupiActivityPulse 1.4s ease-out infinite; }
+.edupi-admin-runtime > div > i.is-succeeded { background: #18805a; }
+.edupi-admin-runtime > div > i.is-failed,
+.edupi-admin-runtime > div > i.is-needs_review { background: #b66a00; }
+.edupi-admin-runtime > div > span { display: grid; min-width: 0; gap: 3px; }
+.edupi-admin-runtime strong,
+.edupi-admin-runtime small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edupi-admin-runtime strong { font-size: 12px; font-weight: 600; }
+.edupi-admin-runtime small,
+.edupi-admin-runtime em,
+.edupi-admin-runtime time { color: var(--text-muted); font-size: 10px; font-style: normal; }
+.edupi-admin-runtime > .is-empty { display: flex; justify-content: center; color: var(--text-muted); font-size: 11px; }
+
 .edupi-admin-primary {
   margin-top: 18px;
   border-color: var(--text) !important;
@@ -272,6 +306,8 @@
   .edupi-admin-metrics { grid-template-columns: 1fr; }
   .edupi-admin-metrics > div { min-height: 74px; border-right: 0; border-bottom: 1px solid var(--border); }
   .edupi-admin-metrics > div:last-child { border-bottom: 0; }
+  .edupi-admin-runtime > div { grid-template-columns: 8px minmax(0, 1fr) auto; }
+  .edupi-admin-runtime time { display: none; }
   .edupi-admin-embedded-models .models-settings-embedded {
     height: calc(100dvh - 140px) !important;
     max-height: calc(100dvh - 140px) !important;

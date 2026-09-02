@@ -112,7 +112,9 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const [selectedC1Target, setSelectedC1Target] = useState<{ kind: "observation" | "memory_candidate"; id: string } | null>(null);
   const [education, setEducation] = useState<EducationContract | null>(null);
   const [context, setContext] = useState<TeacherContextSnapshot | null>(null);
-  const [runningAgentCount, setRunningAgentCount] = useState(0);
+  const [runningSessionCount, setRunningSessionCount] = useState(0);
+  const [runningKernelCount, setRunningKernelCount] = useState(0);
+  const runningAgentCount = runningSessionCount + runningKernelCount;
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -269,7 +271,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
           ? payload.runningSessionIds.filter((id): id is string => typeof id === "string")
           : [];
         const running = new Set(runningIds);
-        setRunningAgentCount(runningIds.length);
+        setRunningSessionCount(runningIds.length);
         setEducation((current) => current ? {
           ...current,
           taskSessions: Object.fromEntries(Object.entries(current.taskSessions).map(([taskId, binding]) => [
@@ -282,6 +284,29 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       }
     };
     return () => events.close();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const poll = async () => {
+      if (document.visibilityState === "visible") {
+        try {
+          const response = await fetch("/api/edupi/kernel", { cache: "no-store", signal: controller.signal });
+          const payload = response.ok ? await response.json() as { projection?: { summary?: { running?: unknown } } } : null;
+          const running = payload?.projection?.summary?.running;
+          if (!controller.signal.aborted) setRunningKernelCount(Number.isInteger(running) && Number(running) >= 0 ? Number(running) : 0);
+        } catch (error) {
+          if (!(error instanceof DOMException && error.name === "AbortError") && !controller.signal.aborted) setRunningKernelCount(0);
+        }
+      }
+      if (!controller.signal.aborted) timer = setTimeout(poll, 20_000);
+    };
+    void poll();
+    return () => {
+      controller.abort();
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
