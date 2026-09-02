@@ -111,6 +111,20 @@ test("activity pulse includes proactive kernel runs", async () => {
   assert.match(panel, /runningSessionCount \+ runningKernelCount/);
 });
 
+test("education memory uses Core semesters before category and pagination", async () => {
+  const [panel, sider, database] = await Promise.all([
+    read("./EduPiEducationPanel.tsx"),
+    read("./EduPiObjectSider.tsx"),
+    read("./EduPiMemoryDatabase.tsx"),
+  ]);
+  assert.match(panel, /\/api\/edupi\/memory-scopes/);
+  assert.match(sider, /memoryScopes\?\.semesters/);
+  assert.match(sider, />学期</);
+  assert.match(database, /semester\?\.label/);
+  assert.match(database, /scopedMemoryIds/);
+  assert.match(database, /edupi-database-pagination/);
+});
+
 test("narrow screens retain the object selector and exports neutralize spreadsheet formulas", async () => {
   const [css, student, sider] = await Promise.all([
     read("../app/edupi-workbench.css"),

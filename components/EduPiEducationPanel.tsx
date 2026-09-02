@@ -48,6 +48,7 @@ import { APP_PREF_KEYS } from "@/lib/app-prefs";
 import { appendTeacherInputSlot } from "@/lib/edupi-teacher-input-slot";
 import { readEduPiWorkspace } from "@/lib/edupi-education-client";
 import { deleteEducationEntity } from "@/lib/edupi-entity-delete-client";
+import type { EducationMemoryScopeProjection } from "@/lib/edupi-memory-scopes";
 
 type Props = {
   initialModule?: EducationModule;
@@ -112,6 +113,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const [selectedC1Target, setSelectedC1Target] = useState<{ kind: "observation" | "memory_candidate"; id: string } | null>(null);
   const [education, setEducation] = useState<EducationContract | null>(null);
   const [context, setContext] = useState<TeacherContextSnapshot | null>(null);
+  const [memoryScopes, setMemoryScopes] = useState<EducationMemoryScopeProjection | null>(null);
   const [runningSessionCount, setRunningSessionCount] = useState(0);
   const [runningKernelCount, setRunningKernelCount] = useState(0);
   const runningAgentCount = runningSessionCount + runningKernelCount;
@@ -152,9 +154,16 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, []);
 
   const loadWorkspace = useCallback(async (signal?: AbortSignal) => {
-    const { context: nextContext, data: nextEducation } = await readEduPiWorkspace({ signal });
+    const [workspace, scopeResponse] = await Promise.all([
+      readEduPiWorkspace({ signal }),
+      fetch("/api/edupi/memory-scopes", { cache: "no-store", signal })
+        .then(async (response) => response.ok ? await response.json() as { projection?: EducationMemoryScopeProjection } : null)
+        .catch(() => null),
+    ]);
+    const { context: nextContext, data: nextEducation } = workspace;
     setContext(nextContext);
     setEducation(nextEducation);
+    setMemoryScopes(scopeResponse?.projection?.projection_kind === "scoped_education_memory" ? scopeResponse.projection : null);
     return nextEducation;
   }, []);
 
@@ -866,7 +875,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       <div className="edupi-teacher-app">
         <div className={`edupi-teacher-body${activeView === "chat" ? " is-chat" : ""}${objectSiderAvailable ? " has-object-sider" : ""}${objectSiderAvailable && objectSider.collapsed ? " is-object-sider-collapsed" : ""}${inspectorAvailable && inspectorOpen ? " has-inspector" : ""}`}>
           {(loadError || inspectorAvailable) ? <div className="edupi-teacher-body__controls">{loadError ? <button type="button" onClick={retryLoadWorkspace} title={loadError}>重试</button> : null}{inspectorAvailable ? <button type="button" onClick={toggleInspector}>{inspectorOpen ? "收起检查" : "检查"}</button> : null}</div> : null}
-          {activeView === "chat" ? <aside className="edupi-chat-session-sidebar" aria-label="对话与文件">{chatSidebar}</aside> : showObjectSider ? <EduPiObjectSider view={activeView} data={education} context={context} query={query} onQuery={setQuery} selectedStudentId={selectedStudentId} onStudent={selectStudent} selectedObjectId={selectedObjectId} onObject={selectObject} selectedTaskKey={activeTask ? taskKey(activeTask) : null} onTask={selectTask} onReviewTarget={focusC1Review} selectedCalendarSourceId={calendarSelection?.sourceId ?? null} onCalendarItem={setCalendarSelection} onUpload={openUpload} onCollapse={objectSider.toggle} /> : objectSiderAvailable ? <button type="button" className="edupi-object-sider-strip" onClick={objectSider.toggle} aria-label="展开列表"><span aria-hidden="true">›</span></button> : null}
+          {activeView === "chat" ? <aside className="edupi-chat-session-sidebar" aria-label="对话与文件">{chatSidebar}</aside> : showObjectSider ? <EduPiObjectSider view={activeView} data={education} context={context} memoryScopes={memoryScopes} query={query} onQuery={setQuery} selectedStudentId={selectedStudentId} onStudent={selectStudent} selectedObjectId={selectedObjectId} onObject={selectObject} selectedTaskKey={activeTask ? taskKey(activeTask) : null} onTask={selectTask} onReviewTarget={focusC1Review} selectedCalendarSourceId={calendarSelection?.sourceId ?? null} onCalendarItem={setCalendarSelection} onUpload={openUpload} onCollapse={objectSider.toggle} /> : objectSiderAvailable ? <button type="button" className="edupi-object-sider-strip" onClick={objectSider.toggle} aria-label="展开列表"><span aria-hidden="true">›</span></button> : null}
           <div className={`edupi-teacher-main${activeView === "chat" ? " is-chat" : ""}`}>
             <EduPiPersistentChatHost mode={drawer === "agent" ? "drawer" : activeView === "chat" ? "main" : "hidden"} task={drawer === "agent" ? currentAgentTask : null} onClose={closeDrawer} onPreparePrompt={onPrepareAgentPrompt}>{chatPanel}</EduPiPersistentChatHost>
             {activeView === "review" ? <div className="edupi-review-surface">
@@ -877,7 +886,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
             </div> : null}
             {activeView === "tasks" && activeTask ? <EduPiTaskWorkspace task={activeTask} workCase={workCaseForTask(education, activeTask.id)} stage={taskStage} workspace={education.workspace} context={context} reviewEnabled={education.capabilities.taskReview.enabled} reviewReason={education.capabilities.taskReview.reason} reviewBusy={reviewBusy} reviewMessage={reviewMessage} agentSession={activeTask.id ? education.taskSessions[activeTask.id] ?? null : null} taskSessionBusy={taskSessionBusy} taskSessionError={taskSessionError} onStage={selectStage} onReview={reviewTask} onOpenAgent={openAgent} onOpenFile={openFile} /> : null}
             {activeView === "tasks" && !activeTask ? <main className="edupi-module-workspace"><header className="edupi-module-heading"><div><h1>暂无任务</h1></div><button type="button" onClick={openUpload}>上传材料</button></header></main> : null}
-            {activeView !== "chat" && activeView !== "tasks" && activeView !== "review" ? <EduPiWorkspaceViews view={activeView} data={education} context={context} query={query} selectedStudentId={selectedStudentId} selectedObjectId={selectedObjectId} runningAgentCount={runningAgentCount} stagedMaterials={stagedMaterials} stagingBusy={materialStagingBusy || educationIntakeBusy} intakeBusy={educationIntakeBusy} stagingMessage={materialStagingMessage?.text ?? null} calendarSelection={calendarSelection} onCalendarSelection={setCalendarSelection} onTask={selectTask} onTaskDetail={openTaskDetail} onEducation={setEducation} onStudent={selectStudent} onObject={selectObject} onNavigate={selectView} onUpload={openUpload} onIntakeMaterial={intakeStagedMaterial} onRemoveStagedMaterial={removeStagedMaterialEntry} onImportCalendar={importCalendarEvent} onImportTimetable={importTimetableSlot} onOpenContext={() => setContextOpen(true)} onOpenAdmin={onOpenAdmin} onOpenFile={openFile} onStartAgent={(prompt, mode) => startAgent(prompt, mode)} onCreateTask={createBoardTask} onMoveTask={moveBoardTask} onDeleteEntity={deleteEntity} /> : null}
+            {activeView !== "chat" && activeView !== "tasks" && activeView !== "review" ? <EduPiWorkspaceViews view={activeView} data={education} context={context} memoryScopes={memoryScopes} query={query} selectedStudentId={selectedStudentId} selectedObjectId={selectedObjectId} runningAgentCount={runningAgentCount} stagedMaterials={stagedMaterials} stagingBusy={materialStagingBusy || educationIntakeBusy} intakeBusy={educationIntakeBusy} stagingMessage={materialStagingMessage?.text ?? null} calendarSelection={calendarSelection} onCalendarSelection={setCalendarSelection} onTask={selectTask} onTaskDetail={openTaskDetail} onEducation={setEducation} onStudent={selectStudent} onObject={selectObject} onNavigate={selectView} onUpload={openUpload} onIntakeMaterial={intakeStagedMaterial} onRemoveStagedMaterial={removeStagedMaterialEntry} onImportCalendar={importCalendarEvent} onImportTimetable={importTimetableSlot} onOpenContext={() => setContextOpen(true)} onOpenAdmin={onOpenAdmin} onOpenFile={openFile} onStartAgent={(prompt, mode) => startAgent(prompt, mode)} onCreateTask={createBoardTask} onMoveTask={moveBoardTask} onDeleteEntity={deleteEntity} /> : null}
           </div>
           {inspectorAvailable ? <EduPiInspector open={inspectorOpen} data={education} task={activeTask} onClose={toggleInspector} onOpenAgent={openAgent} onStage={selectStage} /> : null}
         </div>
