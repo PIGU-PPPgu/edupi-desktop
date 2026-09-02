@@ -31,6 +31,7 @@ import { EduPiWorkspaceViews } from "./EduPiWorkspaceViews";
 import { EduPiC1Review } from "./EduPiC1Review";
 import { EduPiReviewBoard } from "./EduPiReviewBoard";
 import { EduPiQuickEntry } from "./EduPiQuickEntry";
+import { useDesktopChrome, WindowControls } from "./desktop";
 import { useEduPiContentSiderCollapse } from "@/hooks/useEduPiContentSiderCollapse";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { createActivationRequestTracker } from "@/lib/edupi-activation-request";
@@ -99,6 +100,7 @@ function hasDroppedFiles(event: ReactDragEvent): boolean {
 export function EduPiEducationPanel({ initialModule = "home", refreshKey, activeAgentSessionId, onActivateAgentSession, chatPanel, chatSidebar, renderFilePreview, onOpenAdmin, onOpenGuide, onPrepareAgentPrompt, onReplaceAgentPrompt, quickEntryOpen, onCloseQuickEntry, onFocusAgentChat }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const desktopChrome = useDesktopChrome();
   const requestedView = searchParams.get("view");
   const requestedStage = searchParams.get("stage");
   const [activeView, setActiveView] = useState<WorkbenchView>(() => isWorkbenchView(requestedView) ? requestedView : viewFromModule(initialModule));
@@ -814,7 +816,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [activeView, drawer, onPrepareAgentPrompt, onReplaceAgentPrompt, pendingAgentPrompt, pendingAgentPromptMode]);
 
   if (shouldShowBlockingEducationLoad(education)) {
-    return <section className="edupi-teacher-shell is-loading"><div className="edupi-workbench-loading" role={loadError ? "alert" : "status"}><span>π</span><strong>{loadError || "正在读取教育工作区"}</strong>{loadError ? <div><button type="button" onClick={retryLoadWorkspace}>重试</button><button type="button" onClick={onOpenAdmin}>打开管理中心</button></div> : null}</div></section>;
+    return <section className={`edupi-teacher-shell is-loading${desktopChrome.isDesktop ? " has-desktop-drag-region" : ""}`}>{desktopChrome.isDesktop ? <div className="edupi-window-drag-region" {...desktopChrome.dragRegionProps}><WindowControls /></div> : null}<div className="edupi-workbench-loading" role={loadError ? "alert" : "status"}><span>π</span><strong>{loadError || "正在读取教育工作区"}</strong>{loadError ? <div><button type="button" onClick={retryLoadWorkspace}>重试</button><button type="button" onClick={onOpenAdmin}>打开管理中心</button></div> : null}</div></section>;
   }
 
   const taskStage = activeStage;
@@ -825,7 +827,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const currentAgentTask = agentTask ? tasks.find((task) => taskKey(task) === taskKey(agentTask)) || agentTask : null;
   return (
     <section
-      className={`edupi-teacher-shell${navigationRail.collapsed ? " is-navigation-collapsed" : ""}`}
+      className={`edupi-teacher-shell${navigationRail.collapsed ? " is-navigation-collapsed" : ""}${desktopChrome.isDesktop ? " has-desktop-drag-region" : ""}`}
       data-view={activeView}
       aria-busy={loading ? true : undefined}
       onDragEnterCapture={onEducationDragEnterCapture}
@@ -833,6 +835,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       onDragLeaveCapture={onEducationDragLeaveCapture}
       onDropCapture={onEducationDropCapture}
     >
+      {desktopChrome.isDesktop ? <div className="edupi-window-drag-region" {...desktopChrome.dragRegionProps}><WindowControls /></div> : null}
       {educationFileDragOver ? <div className="edupi-global-material-drop" role="status" aria-live="polite"><strong>放入 EduPi</strong><span>松开后识别材料、日程与课表</span></div> : null}
       <EduPiNavigationRail activeView={activeView} pendingReviewCount={pendingCount + c1PendingCount + teacherContextPendingCount} runningAgentCount={runningAgentCount} memoryCount={education.continuity.memories.filter((memory) => memory.state === "active" && isUserFacingMemory(memory)).length} workspaceLabel={context?.school || context?.name || "教师工作区"} collapsed={navigationRail.collapsed} onSelect={selectView} onOpenAdmin={onOpenAdmin} onOpenGuide={onOpenGuide} onCollapse={navigationRail.toggle} />
       <div className="edupi-teacher-app">
