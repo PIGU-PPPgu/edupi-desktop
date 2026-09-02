@@ -423,6 +423,197 @@ fn write_ui_prefs(app: &AppHandle, prefs: &serde_json::Value) -> Result<(), Stri
     fs::write(path, raw).map_err(|error| error.to_string())
 }
 
+/// Source adaptation: abcwyc/pi-agent-desktop@deee754.
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(not(test), allow(dead_code))]
+enum WebviewCacheLayout {
+    Linux,
+    Windows,
+    Macos,
+}
+
+fn last_version_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let directory = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?;
+    Ok(directory.join("last-version.json"))
+}
+
+fn read_last_version_from_path(path: &Path) -> Option<String> {
+    let raw = fs::read_to_string(path).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    value
+        .get("version")
+        .and_then(|version| version.as_str())
+        .map(str::to_string)
+}
+
+fn read_last_version(app: &AppHandle) -> Option<String> {
+    read_last_version_from_path(&last_version_path(app).ok()?)
+}
+
+fn should_reconcile_webview_cache(last_version: Option<&str>, current_version: &str) -> bool {
+    last_version != Some(current_version)
+}
+
+fn write_last_version_to_path(path: &Path, version: &str) -> Result<(), io::Error> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let raw = serde_json::to_string_pretty(&serde_json::json!({ "version": version }))
+        .map_err(io::Error::other)?;
+    fs::write(path, raw)
+}
+
+fn write_last_version(app: &AppHandle) {
+    if let Ok(path) = last_version_path(app) {
+        let _ = write_last_version_to_path(&path, APP_VERSION);
+    }
+}
+
+fn remove_bounded_cache_tree(root: &Path, candidate: &Path) -> Result<(), io::Error> {
+    let metadata = match fs::symlink_metadata(candidate) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "webview cache target is not a normal directory: {}",
+                candidate.display()
+            ),
+        ));
+    }
+    let canonical_root = dunce::canonicalize(root)?;
+    let canonical_candidate = dunce::canonicalize(candidate)?;
+    if canonical_candidate == canonical_root || !canonical_candidate.starts_with(&canonical_root) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "webview cache target escapes app data: {}",
+                candidate.display()
+            ),
+        ));
+    }
+    fs::remove_dir_all(canonical_candidate)
+}
+
+fn clear_webview_caches_for_layout(
+    layout: WebviewCacheLayout,
+    app_data_dir: &Path,
+    home_dir: Option<&Path>,
+    identifier: &str,
+) -> Result<(), io::Error> {
+    match layout {
+        WebviewCacheLayout::Linux => {
+            let cache = app_data_dir.join("WebKitCache");
+            remove_bounded_cache_tree(app_data_dir, &cache)
+        }
+        WebviewCacheLayout::Windows => {
+            let webview = app_data_dir.join("EBWebView");
+            let metadata = match fs::symlink_metadata(&webview) {
+                Ok(metadata) => metadata,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+                Err(error) => return Err(error),
+            };
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!(
+                        "webview data root is not a normal directory: {}",
+                        webview.display()
+                    ),
+                ));
+            }
+            for entry in fs::read_dir(&webview)? {
+                let entry = entry?;
+                let cache = entry.path().join("Cache");
+                remove_bounded_cache_tree(app_data_dir, &cache)?;
+            }
+            Ok(())
+        }
+        WebviewCacheLayout::Macos => {
+            let Some(home) = home_dir else {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "home directory is unavailable for macOS webview cache cleanup",
+                ));
+            };
+            // WKWebView keeps persistent website data (LocalStorage, IndexedDB,
+            // cookies) under ~/Library/WebKit/<identifier>. Only the disposable
+            // HTTP/WebKit cache lives under ~/Library/Caches/<identifier>/WebKit.
+            // Deleting the former would silently sign users out and erase local
+            // web state during an upgrade.
+            // Source: https://v2.tauri.app/reference/javascript/api/namespacepath/#appcachedir
+            let cache = home
+                .join("Library")
+                .join("Caches")
+                .join(identifier)
+                .join("WebKit");
+            remove_bounded_cache_tree(&home.join("Library").join("Caches"), &cache)
+        }
+    }
+}
+
+/// Clear only the app-specific webview cache after an application version
+/// change. Preferences and `edupi-data` are outside these bounded targets.
+fn clear_webview_caches(app: &AppHandle) -> Result<(), io::Error> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| io::Error::other(error.to_string()))?;
+    let identifier = app.config().identifier.as_str();
+
+    #[cfg(target_os = "linux")]
+    return clear_webview_caches_for_layout(
+        WebviewCacheLayout::Linux,
+        &app_data_dir,
+        None,
+        identifier,
+    );
+
+    #[cfg(target_os = "windows")]
+    return clear_webview_caches_for_layout(
+        WebviewCacheLayout::Windows,
+        &app_data_dir,
+        None,
+        identifier,
+    );
+
+    #[cfg(target_os = "macos")]
+    return clear_webview_caches_for_layout(
+        WebviewCacheLayout::Macos,
+        &app_data_dir,
+        env::var_os("HOME").as_deref().map(Path::new),
+        identifier,
+    );
+
+    #[allow(unreachable_code)]
+    Ok(())
+}
+
+fn reconcile_cache_version_state(
+    last_version: Option<&str>,
+    current_version: &str,
+    cleanup: impl FnOnce() -> Result<(), io::Error>,
+) -> bool {
+    if !should_reconcile_webview_cache(last_version, current_version) {
+        return true;
+    }
+    cleanup().is_ok()
+}
+
+fn reconcile_webview_cache_for_version(app: &AppHandle) -> bool {
+    reconcile_cache_version_state(read_last_version(app).as_deref(), APP_VERSION, || {
+        clear_webview_caches(app)
+    })
+}
+
 fn read_stored_theme(app: &AppHandle) -> Option<&'static str> {
     read_ui_prefs(app)
         .get("theme")
@@ -1241,13 +1432,16 @@ fn start_packaged_server(
 #[cfg(all(test, feature = "custom-protocol"))]
 mod tests {
     use super::{
-        build_root_status, child_process_compatible_path, default_allowed_root,
-        ensure_data_directories, is_filesystem_root, persisted_data_root_from_prefs,
-        response_has_instance_id, update_server_port_in_prefs, validate_selected_data_root,
+        build_root_status, child_process_compatible_path, clear_webview_caches_for_layout,
+        default_allowed_root, ensure_data_directories, is_filesystem_root,
+        persisted_data_root_from_prefs, read_last_version_from_path, reconcile_cache_version_state,
+        response_has_instance_id, should_reconcile_webview_cache, update_server_port_in_prefs,
+        validate_selected_data_root, write_last_version_to_path, WebviewCacheLayout,
         FALLBACK_PERSISTED_CORRUPT, FALLBACK_PERSISTED_MISSING, FALLBACK_PERSISTED_NON_OBJECT,
         FALLBACK_PERSISTED_NOT_DIRECTORY, FALLBACK_PERSISTED_NO_KEY, FALLBACK_PERSISTED_SYMLINK,
     };
     use std::fs;
+    use std::io;
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -1590,6 +1784,172 @@ mod tests {
         );
     }
 
+    #[test]
+    fn webview_cache_version_state_handles_absent_same_old_and_corrupt_files() {
+        let temp = TempRoot::new("cache-version-state");
+        let state = temp.path().join("last-version.json");
+
+        assert_eq!(read_last_version_from_path(&state), None);
+        assert!(should_reconcile_webview_cache(None, "0.3.1"));
+
+        write_last_version_to_path(&state, "0.3.1").expect("write current version");
+        assert_eq!(
+            read_last_version_from_path(&state).as_deref(),
+            Some("0.3.1")
+        );
+        assert!(!should_reconcile_webview_cache(
+            read_last_version_from_path(&state).as_deref(),
+            "0.3.1",
+        ));
+
+        write_last_version_to_path(&state, "0.3.0").expect("write old version");
+        assert!(should_reconcile_webview_cache(
+            read_last_version_from_path(&state).as_deref(),
+            "0.3.1",
+        ));
+
+        fs::write(&state, "{not-json").expect("write corrupt version state");
+        assert_eq!(read_last_version_from_path(&state), None);
+        assert!(should_reconcile_webview_cache(
+            read_last_version_from_path(&state).as_deref(),
+            "0.3.1",
+        ));
+
+        let cleanup_succeeded = reconcile_cache_version_state(None, "0.3.1", || {
+            Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "cache is locked",
+            ))
+        });
+        assert!(!cleanup_succeeded);
+        if cleanup_succeeded {
+            write_last_version_to_path(&state, "0.3.1").unwrap();
+        }
+        assert!(should_reconcile_webview_cache(
+            read_last_version_from_path(&state).as_deref(),
+            "0.3.1",
+        ));
+    }
+
+    #[test]
+    fn webview_cache_cleanup_is_bounded_and_preserves_edupi_data_and_preferences() {
+        let temp = TempRoot::new("cache-boundaries");
+
+        let linux_data = temp.path().join("linux/app-data");
+        fs::create_dir_all(linux_data.join("WebKitCache/nested")).expect("create Linux cache");
+        fs::create_dir_all(linux_data.join("edupi-data")).expect("create Linux EduPi data");
+        fs::write(linux_data.join("WebKitCache/nested/cache.bin"), "cache").unwrap();
+        fs::write(linux_data.join("edupi-data/teacher.json"), "keep").unwrap();
+        fs::write(linux_data.join("ui-prefs.json"), "keep").unwrap();
+        clear_webview_caches_for_layout(
+            WebviewCacheLayout::Linux,
+            &linux_data,
+            None,
+            "com.example.edupi",
+        )
+        .unwrap();
+        assert!(!linux_data.join("WebKitCache").exists());
+        assert!(linux_data.join("edupi-data/teacher.json").is_file());
+        assert!(linux_data.join("ui-prefs.json").is_file());
+
+        let windows_data = temp.path().join("windows/app-data");
+        fs::create_dir_all(windows_data.join("EBWebView/profile-a/Cache")).unwrap();
+        fs::create_dir_all(windows_data.join("EBWebView/profile-a/Local Storage")).unwrap();
+        fs::create_dir_all(windows_data.join("EBWebView/profile-b/Cache")).unwrap();
+        fs::create_dir_all(windows_data.join("edupi-data")).unwrap();
+        fs::write(
+            windows_data.join("EBWebView/profile-a/Cache/cache.bin"),
+            "cache",
+        )
+        .unwrap();
+        fs::write(
+            windows_data.join("EBWebView/profile-a/Local Storage/state"),
+            "keep",
+        )
+        .unwrap();
+        fs::write(windows_data.join("edupi-data/teacher.json"), "keep").unwrap();
+        clear_webview_caches_for_layout(
+            WebviewCacheLayout::Windows,
+            &windows_data,
+            None,
+            "com.example.edupi",
+        )
+        .unwrap();
+        assert!(!windows_data.join("EBWebView/profile-a/Cache").exists());
+        assert!(!windows_data.join("EBWebView/profile-b/Cache").exists());
+        assert!(windows_data
+            .join("EBWebView/profile-a/Local Storage/state")
+            .is_file());
+        assert!(windows_data.join("edupi-data/teacher.json").is_file());
+
+        #[cfg(unix)]
+        {
+            let external_profile = temp.path().join("external-webview-profile");
+            fs::create_dir_all(external_profile.join("Cache")).unwrap();
+            fs::write(external_profile.join("Cache/external.bin"), "keep").unwrap();
+            std::os::unix::fs::symlink(
+                &external_profile,
+                windows_data.join("EBWebView/profile-link"),
+            )
+            .unwrap();
+            let error = clear_webview_caches_for_layout(
+                WebviewCacheLayout::Windows,
+                &windows_data,
+                None,
+                "com.example.edupi",
+            )
+            .unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+            assert!(external_profile.join("Cache/external.bin").is_file());
+        }
+
+        let mac_data = temp.path().join("mac/app-data");
+        let mac_home = temp.path().join("mac/home");
+        fs::create_dir_all(mac_data.join("edupi-data")).unwrap();
+        fs::create_dir_all(mac_home.join("Library/Caches/com.example.edupi/WebKit")).unwrap();
+        fs::create_dir_all(
+            mac_home.join("Library/WebKit/com.example.edupi/WebsiteData/LocalStorage"),
+        )
+        .unwrap();
+        fs::create_dir_all(mac_home.join("Library/WebKit/com.other.app")).unwrap();
+        fs::write(mac_data.join("edupi-data/teacher.json"), "keep").unwrap();
+        fs::write(mac_data.join("ui-prefs.json"), "keep").unwrap();
+        fs::write(
+            mac_home.join("Library/Caches/com.example.edupi/WebKit/cache.bin"),
+            "cache",
+        )
+        .unwrap();
+        fs::write(
+            mac_home
+                .join("Library/WebKit/com.example.edupi/WebsiteData/LocalStorage/teacher-state"),
+            "keep",
+        )
+        .unwrap();
+        fs::write(
+            mac_home.join("Library/WebKit/com.other.app/cache.bin"),
+            "keep",
+        )
+        .unwrap();
+        clear_webview_caches_for_layout(
+            WebviewCacheLayout::Macos,
+            &mac_data,
+            Some(&mac_home),
+            "com.example.edupi",
+        )
+        .unwrap();
+        assert!(!mac_home
+            .join("Library/Caches/com.example.edupi/WebKit")
+            .exists());
+        assert!(mac_home
+            .join("Library/WebKit/com.example.edupi/WebsiteData/LocalStorage/teacher-state")
+            .is_file());
+        assert!(mac_home
+            .join("Library/WebKit/com.other.app/cache.bin")
+            .is_file());
+        assert!(mac_data.join("edupi-data/teacher.json").is_file());
+        assert!(mac_data.join("ui-prefs.json").is_file());
+    }
+
     #[cfg(windows)]
     #[test]
     fn child_process_core_root_normalization_strips_verbatim_prefix_without_truncating_path() {
@@ -1667,7 +2027,15 @@ pub fn run() {
             let (url, server) = start_development_server(app.handle())?;
 
             app.manage(server);
+            // Reconcile stale hashed web assets before the first window load.
+            let webview_cache_reconciled = reconcile_webview_cache_for_version(app.handle());
             build_window(app.handle(), url)?;
+            // A failed window build must leave the version mismatch in place
+            // so the next launch retries cache reconciliation.
+            // A failed cache cleanup also stays pending for the next launch.
+            if webview_cache_reconciled {
+                write_last_version(app.handle());
+            }
 
             let quick_entry_item =
                 MenuItem::with_id(app, "quick_entry", "Quick Entry", true, None::<&str>)?;
