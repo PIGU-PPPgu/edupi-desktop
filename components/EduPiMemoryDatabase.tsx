@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { EducationContract, EducationEntityDeleteKind, EducationMemory } from "@/lib/edupi-education-contract";
-import { MEMORY_CATEGORIES, memoryCategoryRoute } from "@/lib/edupi-domain-navigation";
+import { MEMORY_CATEGORIES, memoryCategoryRoute, memorySemesterRoute } from "@/lib/edupi-domain-navigation";
+import { scopedMemoryIds, type EducationMemoryScopeProjection } from "@/lib/edupi-memory-scopes";
 import { appendTeacherInputSlot } from "@/lib/edupi-teacher-input-slot";
 import { isUserFacingMemory } from "@/lib/edupi-workbench";
 
@@ -18,9 +19,12 @@ function memoryUpdateReasonId(memoryId: string): string {
   return `memory-update-reason-${memoryId.replace(/[^A-Za-z0-9_-]/g, "-")}`;
 }
 
-export function EduPiMemoryDatabase({ data, query, selectedObjectId, onEducation, onStartAgent, onDeleteEntity }: { data: EducationContract; query: string; selectedObjectId: string | null; onEducation: (data: EducationContract) => void; onStartAgent: (prompt: string, mode?: "insert" | "replace") => void; onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<boolean> }) {
+export function EduPiMemoryDatabase({ data, memoryScopes, query, selectedObjectId, onEducation, onStartAgent, onDeleteEntity }: { data: EducationContract; memoryScopes: EducationMemoryScopeProjection | null; query: string; selectedObjectId: string | null; onEducation: (data: EducationContract) => void; onStartAgent: (prompt: string, mode?: "insert" | "replace") => void; onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<boolean> }) {
   const category = memoryCategoryRoute(selectedObjectId);
   const categoryLabel = MEMORY_CATEGORIES.find((item) => item.id === category)?.label || "学期";
+  const semesterId = memorySemesterRoute(selectedObjectId, memoryScopes?.active_semester_id || null);
+  const semester = memoryScopes?.semesters.find((item) => item.semester_id === semesterId) || null;
+  const visibleIds = useMemo(() => scopedMemoryIds(memoryScopes, semesterId, category), [category, memoryScopes, semesterId]);
   const [page, setPage] = useState(0);
   const [editor, setEditor] = useState<{ memoryId: string; draft: string; originalContent: string; revision: number } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -28,9 +32,10 @@ export function EduPiMemoryDatabase({ data, query, selectedObjectId, onEducation
   const [message, setMessage] = useState<{ memoryId: string; tone: "success" | "error"; text: string } | null>(null);
   const rows = useMemo(() => data.continuity.memories
     .filter((memory) => memory.state === "active" && isUserFacingMemory(memory) && memory.category === category)
+    .filter((memory) => !visibleIds || visibleIds.has(memory.id))
     .filter((memory) => !query || `${memory.content} ${memory.student || ""} ${memory.tags.join(" ")}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-    .sort((left, right) => String(right.updatedAt || right.createdAt || "").localeCompare(String(left.updatedAt || left.createdAt || ""))), [category, data.continuity.memories, query]);
-  useEffect(() => { setPage(0); setEditor(null); setMessage(null); }, [category, query]);
+    .sort((left, right) => String(right.updatedAt || right.createdAt || "").localeCompare(String(left.updatedAt || left.createdAt || ""))), [category, data.continuity.memories, query, visibleIds]);
+  useEffect(() => { setPage(0); setEditor(null); setMessage(null); }, [category, query, semesterId]);
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   useEffect(() => { setPage((current) => Math.min(current, Math.max(0, pages - 1))); }, [pages]);
   const visible = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -80,7 +85,7 @@ export function EduPiMemoryDatabase({ data, query, selectedObjectId, onEducation
   };
 
   return <main className="edupi-module-workspace edupi-database-workspace">
-    <header className="edupi-module-heading"><div><span>教育记忆 / {categoryLabel}</span><h1>{categoryLabel}记忆</h1><p>{rows.length} 条当前记忆</p></div></header>
+    <header className="edupi-module-heading"><div><span>教育记忆 / {semester?.label || "当前学期"}</span><h1>{categoryLabel}</h1><p>{rows.length} 条当前记忆</p></div></header>
     {message ? <p className={`edupi-memory-message is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p> : null}
     <section className="edupi-database" aria-label={`${categoryLabel}记忆数据库`}>
       <div className="edupi-database__head edupi-memory-db-grid"><span>记忆</span><span>关联对象</span><span>标签</span><span>累计</span><span>更新时间</span></div>

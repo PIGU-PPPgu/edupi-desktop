@@ -10,9 +10,10 @@ test("memory sidebar selects categories while the main database owns rows and pa
     read("./EduPiMemoryDatabase.tsx"),
     read("../lib/edupi-domain-navigation.ts"),
   ]);
-  for (const label of ["学期", "学生", "教学", "教师偏好", "学校"]) assert.match(navigation, new RegExp(`label: "${label}"`));
+  for (const label of ["学期事项", "学生", "教学", "教师偏好", "学校"]) assert.match(navigation, new RegExp(`label: "${label}"`));
+  assert.match(sider, /memoryScopes\?\.semesters\.map/);
   assert.match(sider, /MEMORY_CATEGORIES\.map/);
-  assert.match(sider, /onObject\(`memory:\$\{category\.id\}`\)/);
+  assert.match(sider, /memoryObjectId\(memorySemesterId, category\.id\)/);
   assert.doesNotMatch(sider, /onObject\(`memory:\$\{memory\.id\}`\)/);
   assert.match(memory, /PAGE_SIZE = 8/);
   assert.match(memory, /memoryCategoryRoute\(selectedObjectId\)/);
