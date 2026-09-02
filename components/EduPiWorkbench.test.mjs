@@ -180,7 +180,7 @@ test("keeps the existing Chat subtree mounted during background education refres
   assert.match(panel, /aria-busy=\{loading \? true : undefined\}/);
   assert.match(panel, /onClick=\{retryLoadWorkspace\}/);
   assert.match(panel, /title=\{loadError\}>重试/);
-  assert.match(panel, /className="edupi-teacher-shell is-loading"/);
+  assert.match(panel, /className=\{`edupi-teacher-shell is-loading\$\{desktopChrome\.isDesktop \? " has-desktop-drag-region" : ""\}`\}/);
   assert.match(panel, /<EduPiPersistentChatHost/);
   assert.equal((panel.match(/\{chatPanel\}/g) || []).length, 1);
   assert.match(panel, /mode=\{drawer === "agent" \? "drawer" : activeView === "chat" \? "main" : "hidden"\}/);

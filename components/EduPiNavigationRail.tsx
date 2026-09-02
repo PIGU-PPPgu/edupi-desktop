@@ -48,19 +48,18 @@ function UtilityIcon() {
 export function EduPiNavigationRail({ activeView, pendingReviewCount, runningAgentCount, memoryCount, workspaceLabel, collapsed, onSelect, onOpenAdmin, onOpenGuide, onCollapse }: Props) {
   const item = (view: WorkbenchView) => {
     const config = workbenchViews.find((entry) => entry.id === view)!;
-    return <button key={view} type="button" aria-label={config.label} className={activeView === view ? "is-active" : ""} aria-current={activeView === view ? "page" : undefined} onClick={() => onSelect(view)}><span className="edupi-teacher-rail__icon"><RailIcon view={view} /></span><span className="edupi-teacher-rail__text"><span>{config.label}</span><small>{config.shortLabel}</small></span>{view === "review" && pendingReviewCount > 0 ? <em>{pendingReviewCount}</em> : null}</button>;
+    return <button key={view} type="button" title={config.label} aria-label={config.label} className={activeView === view ? "is-active" : ""} aria-current={activeView === view ? "page" : undefined} onClick={() => onSelect(view)}><span className="edupi-teacher-rail__icon"><RailIcon view={view} /></span><span className="edupi-teacher-rail__text"><span>{config.label}</span><small>{config.shortLabel}</small></span>{view === "review" && pendingReviewCount > 0 ? <em>{pendingReviewCount}</em> : null}</button>;
   };
   return (
     <nav className={`edupi-teacher-rail${collapsed ? " is-collapsed" : ""}`} aria-label="EduPi 主导航">
-      <button type="button" className="edupi-teacher-rail__restore" onClick={onCollapse} aria-label="展开主导航"><span aria-hidden="true">›</span></button>
-      <div className="edupi-teacher-rail__brand"><span>π</span><div><strong>EduPi</strong><small>{workspaceLabel}</small></div><button type="button" className="edupi-teacher-rail__collapse" onClick={onCollapse} aria-label="收起主导航"><span aria-hidden="true">‹</span></button></div>
+      <div className="edupi-teacher-rail__brand"><span>π</span><div><strong>EduPi</strong><small>{workspaceLabel}</small></div><button type="button" className="edupi-teacher-rail__collapse" onClick={onCollapse} title={collapsed ? "展开主导航" : "收起主导航"} aria-label={collapsed ? "展开主导航" : "收起主导航"} aria-expanded={!collapsed}><span aria-hidden="true">{collapsed ? "›" : "‹"}</span></button></div>
       <div className="edupi-teacher-rail__items">
         {groups.map((group) => <section className="edupi-teacher-rail__group" key={group.label}><div className="edupi-teacher-rail__group-title">{group.label}</div>{group.views.map(item)}</section>)}
       </div>
-      <div className={`edupi-activity-pulse${runningAgentCount > 0 ? " is-running" : ""}`} aria-live="polite"><i aria-hidden="true" /><span>{runningAgentCount > 0 ? `${runningAgentCount} 项运行中` : `已记住 ${memoryCount}`}</span></div>
+      <div className={`edupi-activity-pulse${runningAgentCount > 0 ? " is-running" : ""}`} title={runningAgentCount > 0 ? `${runningAgentCount} 项运行中` : `已记住 ${memoryCount}`} aria-live="polite"><i aria-hidden="true" /><span>{runningAgentCount > 0 ? `${runningAgentCount} 项运行中` : `已记住 ${memoryCount}`}</span></div>
       <div className="edupi-teacher-rail__utilities">
-        <button type="button" aria-label="新手教程" onClick={onOpenGuide}><span className="edupi-teacher-rail__icon" aria-hidden="true">?</span><span className="edupi-teacher-rail__text">新手教程</span></button>
-        <button type="button" aria-label="管理中心" onClick={onOpenAdmin}><span className="edupi-teacher-rail__icon"><UtilityIcon /></span><span className="edupi-teacher-rail__text">管理中心</span></button>
+        <button type="button" title="新手教程" aria-label="新手教程" onClick={onOpenGuide}><span className="edupi-teacher-rail__icon" aria-hidden="true">?</span><span className="edupi-teacher-rail__text">新手教程</span></button>
+        <button type="button" title="管理中心" aria-label="管理中心" onClick={onOpenAdmin}><span className="edupi-teacher-rail__icon"><UtilityIcon /></span><span className="edupi-teacher-rail__text">管理中心</span></button>
       </div>
     </nav>
   );
