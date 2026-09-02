@@ -81,3 +81,24 @@ export async function listDirectories(directory: string): Promise<BrowsableDirec
     .filter((entry): entry is BrowsableDirectory => entry !== null)
     .sort((left, right) => left.name.localeCompare(right.name));
 }
+
+/** Source adaptation: abcwyc/pi-agent-desktop@9f6528b. */
+export function isPermissionError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    ((error as NodeJS.ErrnoException).code === "EACCES" ||
+      (error as NodeJS.ErrnoException).code === "EPERM")
+  );
+}
+
+export function directoryPermissionMessage(
+  directory: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  if (platform === "darwin") {
+    return `无法访问“${directory}”。请在“系统设置 → 隐私与安全性”中允许 EduPi 访问该文件夹，或检查文件夹读写权限后重试。`;
+  }
+  return `无法访问“${directory}”。请检查文件夹读写权限后重试。`;
+}

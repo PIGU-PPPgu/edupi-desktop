@@ -281,13 +281,16 @@ test("every packaged workflow checks out the exact pinned Core runtime", async (
   }
 });
 
-test("all packaged platform configs carry the bundled Core resource", async () => {
+test("all packaged platform configs carry the bundled Core and third-party notices", async () => {
   const [base, windows, linux, dev] = await Promise.all([
     readFile(join(root, "src-tauri", "tauri.conf.json"), "utf8"),
     readFile(join(root, "src-tauri", "tauri.windows.conf.json"), "utf8"),
     readFile(join(root, "src-tauri", "tauri.linux.conf.json"), "utf8"),
     readFile(join(root, "src-tauri", "tauri.dev.conf.json"), "utf8"),
   ]);
-  for (const source of [base, windows, linux]) assert.match(source, /resources\/edupi-core/);
+  for (const source of [base, windows, linux]) {
+    assert.match(source, /resources\/edupi-core/);
+    assert.match(source, /resources\/third-party/);
+  }
   assert.deepEqual(JSON.parse(dev).bundle.resources, []);
 });

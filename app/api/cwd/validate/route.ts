@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { statSync, type Stats } from "fs";
+import { readdirSync, statSync, type Stats } from "fs";
 import { userHome } from "@/lib/user-home";
 import { isAbsolute, resolve } from "path";
 import { allowFileRoot } from "@/lib/file-access";
+import { directoryPermissionMessage, isPermissionError } from "@/lib/directory-browser";
 
 function normalizeCwd(cwd: string): string {
   if (cwd === "~") return userHome();
@@ -25,12 +26,26 @@ export async function POST(req: Request) {
     let stat: Stats;
     try {
       stat = statSync(normalizedCwd);
-    } catch {
+    } catch (error) {
+      if (isPermissionError(error)) {
+        return NextResponse.json({ error: directoryPermissionMessage(cwd) }, { status: 403 });
+      }
       return NextResponse.json({ error: `Directory does not exist: ${cwd}` }, { status: 400 });
     }
 
     if (!stat.isDirectory()) {
       return NextResponse.json({ error: `Path is not a directory: ${cwd}` }, { status: 400 });
+    }
+
+    // A real read probe catches macOS TCC and ACL denials that stat/access
+    // checks alone do not exercise. Source: abcwyc/pi-agent-desktop@9f6528b.
+    try {
+      readdirSync(normalizedCwd);
+    } catch (error) {
+      if (isPermissionError(error)) {
+        return NextResponse.json({ error: directoryPermissionMessage(cwd) }, { status: 403 });
+      }
+      return NextResponse.json({ error: `Directory cannot be read: ${cwd}` }, { status: 400 });
     }
 
     allowFileRoot(normalizedCwd);

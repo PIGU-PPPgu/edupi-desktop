@@ -117,6 +117,14 @@ export function filterModelOptions(options: ModelOption[], query: string): Model
   ));
 }
 
+export function shouldUseNativeClipboardImageFallback(
+  itemCount: number,
+  plainText: string,
+  tauriDesktop: boolean,
+): boolean {
+  return itemCount === 0 && plainText === "" && tauriDesktop;
+}
+
 const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 const THINKING_LEVEL_DESC_KEYS: Record<typeof THINKING_LEVELS[number], string> = {
   auto: "chat.thinkingUseDefault", off: "chat.thinkingOff", minimal: "chat.thinkingMinimal", low: "chat.thinkingLow",
@@ -1132,10 +1140,27 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = Array.from(e.clipboardData?.items ?? []);
     const imageItems = items.filter((item) => item.type.startsWith("image/"));
-    if (!imageItems.length) return;
-    e.preventDefault();
-    const files = imageItems.map((item) => item.getAsFile()).filter((f): f is File => f !== null);
-    processImageFiles(files);
+    if (imageItems.length) {
+      e.preventDefault();
+      const files = imageItems.map((item) => item.getAsFile()).filter((f): f is File => f !== null);
+      processImageFiles(files);
+      return;
+    }
+    // WebKitGTK can expose an empty item list for an image. Use the native
+    // adapter only when the browser supplied neither items nor plain text.
+    // Source adaptation: abcwyc/pi-agent-desktop@deee754.
+    const plainText = e.clipboardData?.getData("text/plain") ?? "";
+    if (shouldUseNativeClipboardImageFallback(items.length, plainText, isTauriDesktop())) {
+      e.preventDefault();
+      void import("@/lib/desktop-native")
+        .then(({ readClipboardImageFileNative }) => readClipboardImageFileNative())
+        .then((file) => {
+          if (file) processImageFiles([file]);
+        })
+        .catch(() => {
+          // No native image is an ordinary empty paste.
+        });
+    }
   }, [processImageFiles]);
 
   useEffect(() => {
@@ -2280,13 +2305,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   </svg>
                   {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{thinkingDisplayLabel}</span>}
                 </button>
-                {thinkingDropdownOpen && (
+                {thinkingDropdownOpen && (() => {
+                  const vh = typeof window !== "undefined" ? window.visualViewport?.height ?? window.innerHeight : 800;
+                  const maxH = Math.max(120, vh * 0.6);
+                  return (
                   <div className="native-popover" style={{
                     position: "absolute", bottom: "calc(100% + 6px)", right: 0,
                     zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
                     borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
                     overflow: "hidden", minWidth: 180,
+                    maxHeight: maxH, display: "flex", flexDirection: "column",
                   }}>
+                    <div style={{ minHeight: 0, overflowY: "auto" }}>
                     {THINKING_LEVELS.filter((lvl) => {
                       if (!availableThinkingLevels) return true;
                       if (lvl === "auto") return true;
@@ -2326,8 +2356,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         </button>
                       );
                     })}
+                    </div>
                   </div>
-                )}
+                  );
+                })()}
               </div>
             )}
             {!isStreaming && onToolPresetChange && (
@@ -2367,13 +2399,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   </svg>
                   {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
                 </button>
-                {toolDropdownOpen && (
+                {toolDropdownOpen && (() => {
+                  const vh = typeof window !== "undefined" ? window.visualViewport?.height ?? window.innerHeight : 800;
+                  const maxH = Math.max(120, vh * 0.6);
+                  return (
                   <div className="native-popover" style={{
                     position: "absolute", bottom: "calc(100% + 6px)", right: 0,
                     zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
                     borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
                     overflow: "hidden", minWidth: 120,
+                    maxHeight: maxH, display: "flex", flexDirection: "column",
                   }}>
+                    <div style={{ minHeight: 0, overflowY: "auto" }}>
                     {TOOL_PRESETS.map((lvl) => {
                       const preset = TOOL_PRESET_MAP[lvl];
                       const isActive = (toolPreset ?? "default") === preset;
@@ -2403,8 +2440,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         </button>
                       );
                     })}
+                    </div>
                   </div>
-                )}
+                  );
+                })()}
               </div>
             )}
 

@@ -416,4 +416,38 @@ export async function relaunchAppNative(): Promise<void> {
   await relaunch();
 }
 
+/**
+ * Read an image from the native clipboard as a PNG `File`.
+ *
+ * WebKitGTK can omit browser clipboard items for images, so the caller uses
+ * this only after an empty desktop paste payload. Source adaptation:
+ * abcwyc/pi-agent-desktop@deee754; Tauri API:
+ * https://v2.tauri.app/reference/javascript/clipboard-manager/#readimage
+ */
+export async function readClipboardImageFileNative(): Promise<File | null> {
+  if (!isTauriDesktop()) return null;
+  try {
+    const { readImage } = await import("@tauri-apps/plugin-clipboard-manager");
+    const img = await readImage();
+    const rgba = await img.rgba();
+    const { width, height } = await img.size();
+    if (!width || !height || rgba.byteLength < width * height * 4) return null;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    const imageData = new ImageData(new Uint8ClampedArray(rgba), width, height);
+    context.putImageData(imageData, 0, 0);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob) return null;
+
+    const stamp = new Date().toISOString().replace(/[-:.]/g, "").slice(0, 14);
+    return new File([blob], `clipboard-${stamp}.png`, { type: "image/png" });
+  } catch {
+    return null;
+  }
+}
+
 export { isTauriDesktop };
