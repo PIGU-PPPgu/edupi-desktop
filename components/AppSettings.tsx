@@ -25,7 +25,17 @@ import {
   isTauriDesktop,
   type DesktopUpgradeProgress,
 } from "@/lib/desktop-updater";
-import { handleExternalLinkClick, quitAppNative, setCloseQuitsNative } from "@/lib/desktop-native";
+import {
+  getEduPiRootStatusNative,
+  handleExternalLinkClick,
+  quitAppNative,
+  relaunchAppNative,
+  resetEduPiDataRootNative,
+  selectDirectoryNative,
+  setCloseQuitsNative,
+  setEduPiDataRootNative,
+  type EduPiRootStatus,
+} from "@/lib/desktop-native";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
@@ -121,6 +131,72 @@ function ComputerUseSettingsCard() {
         {status?.screenRecording === false ? <button type="button" className="native-button" disabled={busy} onClick={() => void requestPermission("screen_recording")}>授权屏幕录制</button> : null}
       </div>
       {error ? <div className="computer-use-error" role="alert">{error}</div> : null}
+    </div>
+  </div>;
+}
+
+function EduPiDataSettingsCard() {
+  const { t } = useI18n();
+  const [status, setStatus] = useState<EduPiRootStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void getEduPiRootStatusNative()
+      .then((value) => { if (active) setStatus(value); })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : String(cause)); });
+    return () => { active = false; };
+  }, []);
+
+  const changeRoot = async () => {
+    if (!status?.canChangeDataRoot || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const selected = await selectDirectoryNative(status.dataRoot, t("appSettings.dataSelectTitle"));
+      if (!selected) return;
+      setStatus(await setEduPiDataRootNative(selected));
+      await relaunchAppNative();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resetRoot = async () => {
+    if (!status?.canChangeDataRoot || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setStatus(await resetEduPiDataRootNative());
+      await relaunchAppNative();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <div className="native-settings-card" style={sectionCardStyle}>
+    <div style={sectionTitleStyle}>{t("appSettings.dataSection")}</div>
+    <div style={{ marginTop: 8, display: "grid", gap: 5, fontSize: 11 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+        <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{t("appSettings.dataDirectory")}</span>
+        <code style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={status?.dataRoot}>{status?.dataRoot || "…"}</code>
+      </div>
+      <div style={{ color: "var(--text-muted)" }}>
+        {t("appSettings.dataSource", { source: status ? t(`appSettings.dataSource.${status.dataSource}`) : "…" })}
+        <span style={{ marginLeft: 10 }}>{t("appSettings.coreSource", { source: status ? t(`appSettings.coreSource.${status.coreSource}`) : "…" })}</span>
+      </div>
+      {status?.fallbackReason ? <div className="native-inline-alert is-error" role="status">{t("appSettings.dataFallback", { reason: status.fallbackReason })}</div> : null}
+      {status && !status.canChangeDataRoot ? <div style={sectionHintStyle}>{t("appSettings.dataEnvironmentLocked")}</div> : null}
+      {error ? <div className="native-inline-alert is-error" role="alert">{error}</div> : null}
+      <div style={{ display: "flex", gap: 8, marginTop: 5 }}>
+        <button type="button" className="native-button native-button-primary" disabled={!status?.canChangeDataRoot || busy} onClick={() => void changeRoot}>{t("appSettings.dataChoose")}</button>
+        <button type="button" className="native-button" disabled={!status?.canChangeDataRoot || busy} onClick={() => void resetRoot}>{t("appSettings.dataReset")}</button>
+      </div>
     </div>
   </div>;
 }
@@ -535,6 +611,10 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
               </ChoiceButton>
             </div>
           </div>
+
+          {desktop && (
+            <EduPiDataSettingsCard />
+          )}
 
           {desktop && (
             <ComputerUseSettingsCard />

@@ -11,7 +11,8 @@
     "resources": [
       "resources/server",
       "resources/node",
-      "resources/component-versions.json"
+      "resources/component-versions.json",
+      "resources/edupi-core"
     ],
     "windows": {
       "webviewInstallMode": {

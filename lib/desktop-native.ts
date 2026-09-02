@@ -102,7 +102,7 @@ async function readResponseBytesWithinLimit(
 }
 
 /** Native folder-selection dialog (desktop shell only). Resolves null when cancelled. */
-export async function selectDirectoryNative(defaultPath?: string): Promise<string | null> {
+export async function selectDirectoryNative(defaultPath?: string, title = "Select project folder"): Promise<string | null> {
   if (!isTauriDesktop()) {
     throw new Error("Native directory selection is only available in the desktop app.");
   }
@@ -111,9 +111,37 @@ export async function selectDirectoryNative(defaultPath?: string): Promise<strin
     directory: true,
     multiple: false,
     defaultPath,
-    title: "Select project folder",
+    title,
   });
   return typeof selection === "string" ? selection : null;
+}
+
+export type EduPiRootStatus = {
+  dataRoot: string;
+  dataSource: "environment" | "persisted" | "managed";
+  coreRoot: string;
+  coreSource: "environment" | "bundled";
+  fallbackReason: string | null;
+  canChangeDataRoot: boolean;
+  restartRequired: boolean;
+};
+
+async function invokeEduPiRootCommand<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  if (!isTauriDesktop()) throw new Error("EduPi root settings are only available in the desktop app.");
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<T>(command, args);
+}
+
+export function getEduPiRootStatusNative(): Promise<EduPiRootStatus> {
+  return invokeEduPiRootCommand<EduPiRootStatus>("get_edupi_root_status");
+}
+
+export function setEduPiDataRootNative(path: string): Promise<EduPiRootStatus> {
+  return invokeEduPiRootCommand<EduPiRootStatus>("set_edupi_data_root", { path });
+}
+
+export function resetEduPiDataRootNative(): Promise<EduPiRootStatus> {
+  return invokeEduPiRootCommand<EduPiRootStatus>("reset_edupi_data_root");
 }
 
 /** Native file-selection dialog. Resolves [] when cancelled. */

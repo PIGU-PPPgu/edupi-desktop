@@ -3,7 +3,7 @@ use std::{
     fs::{self, OpenOptions},
     io::{self, Read, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::Mutex,
     thread,
@@ -15,11 +15,13 @@ use std::os::unix::process::CommandExt as _;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt as _;
 
+use serde::Serialize;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     webview::{Color, NewWindowResponse},
-    AppHandle, Emitter, Manager, RunEvent, Theme, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    AppHandle, Emitter, Manager, RunEvent, Theme, Url, WebviewUrl, WebviewWindow,
+    WebviewWindowBuilder,
 };
 
 mod computer_use;
@@ -28,6 +30,24 @@ const WINDOW_LABEL: &str = "main";
 const DESKTOP_API_TOKEN_ENV: &str = "PI_DESKTOP_API_TOKEN";
 const DESKTOP_INSTANCE_ID_ENV: &str = "PI_DESKTOP_INSTANCE_ID";
 const DESKTOP_INSTANCE_ID_HEADER: &str = "x-pi-desktop-instance";
+const EDUPI_DATA_ROOT_ENV: &str = "EDUPI_DATA_ROOT";
+const EDUPI_PROJECT_ROOT_ENV: &str = "EDUPI_PROJECT_ROOT";
+const EDUPI_WORKSPACE_ENV: &str = "EDUPI_WORKSPACE";
+const EDUPI_CORE_ROOT_ENV: &str = "EDUPI_CORE_ROOT";
+const EDUPI_DATA_ALLOWED_ROOT_ENV: &str = "EDUPI_DATA_ALLOWED_ROOT";
+const EDUPI_CORE_ALLOWED_ROOT_ENV: &str = "EDUPI_CORE_ALLOWED_ROOT";
+const EDUPI_DATA_PREF_KEY: &str = "edupiDataRoot";
+const MANAGED_DATA_DIRECTORY: &str = "edupi-data";
+const FALLBACK_PERSISTED_MISSING: &str = "persisted_missing";
+const FALLBACK_PERSISTED_NO_KEY: &str = "persisted_no_key";
+const FALLBACK_PERSISTED_UNREADABLE: &str = "persisted_unreadable";
+const FALLBACK_PERSISTED_CORRUPT: &str = "persisted_corrupt";
+const FALLBACK_PERSISTED_NON_OBJECT: &str = "persisted_non_object";
+const FALLBACK_PERSISTED_INVALID: &str = "persisted_invalid";
+const FALLBACK_PERSISTED_RELATIVE: &str = "persisted_relative";
+const FALLBACK_PERSISTED_SYMLINK: &str = "persisted_symlink";
+const FALLBACK_PERSISTED_NOT_DIRECTORY: &str = "persisted_not_directory";
+const FALLBACK_PERSISTED_FILESYSTEM_ROOT: &str = "persisted_filesystem_root";
 #[cfg(not(feature = "custom-protocol"))]
 const DEV_SERVER_URL: &str = "http://127.0.0.1:30141";
 /// Preferred localhost port for the packaged Next server. Keeping this stable
@@ -50,6 +70,18 @@ struct DesktopServer {
 struct CloseQuits(Mutex<bool>);
 
 struct DesktopApiToken(String);
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EduPiRootStatus {
+    data_root: String,
+    data_source: String,
+    core_root: String,
+    core_source: String,
+    fallback_reason: Option<String>,
+    can_change_data_root: bool,
+    restart_required: bool,
+}
 
 fn generate_random_hex() -> Result<String, String> {
     let mut bytes = [0_u8; 32];
@@ -319,6 +351,43 @@ fn set_ui_theme(app: AppHandle, theme: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn get_edupi_root_status(app: AppHandle) -> Result<EduPiRootStatus, String> {
+    edupi_launch_roots(&app)
+        .map(|roots| roots.status)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn set_edupi_data_root(app: AppHandle, path: String) -> Result<EduPiRootStatus, String> {
+    let current = edupi_launch_roots(&app).map_err(|error| error.to_string())?;
+    if !current.status.can_change_data_root {
+        return Err("EduPi data root is controlled by an environment override".into());
+    }
+    let root = validate_selected_data_root(path).map_err(|error| error.to_string())?;
+    ensure_data_directories(&root).map_err(|error| error.to_string())?;
+    write_edupi_data_root_pref(&app, &root).map_err(|error| error.to_string())?;
+    let mut status = edupi_launch_roots(&app)
+        .map_err(|error| error.to_string())?
+        .status;
+    status.restart_required = true;
+    Ok(status)
+}
+
+#[tauri::command]
+fn reset_edupi_data_root(app: AppHandle) -> Result<EduPiRootStatus, String> {
+    let current = edupi_launch_roots(&app).map_err(|error| error.to_string())?;
+    if !current.status.can_change_data_root {
+        return Err("EduPi data root is controlled by an environment override".into());
+    }
+    remove_edupi_data_root_pref(&app).map_err(|error| error.to_string())?;
+    let mut status = edupi_launch_roots(&app)
+        .map_err(|error| error.to_string())?
+        .status;
+    status.restart_required = true;
+    Ok(status)
+}
+
 fn ui_prefs_path(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()
@@ -363,7 +432,29 @@ fn read_stored_theme(app: &AppHandle) -> Option<&'static str> {
 
 fn write_ui_prefs_theme(app: &AppHandle, theme: &str) -> Result<(), String> {
     let mut prefs = read_ui_prefs(app);
+    if !prefs.is_object() {
+        prefs = serde_json::json!({});
+    }
     prefs["theme"] = serde_json::Value::String(theme.to_string());
+    write_ui_prefs(app, &prefs)
+}
+
+fn write_edupi_data_root_pref(app: &AppHandle, root: &str) -> Result<(), String> {
+    let mut prefs = read_ui_prefs(app);
+    if !prefs.is_object() {
+        prefs = serde_json::json!({});
+    }
+    prefs[EDUPI_DATA_PREF_KEY] = serde_json::Value::String(root.to_string());
+    write_ui_prefs(app, &prefs)
+}
+
+fn remove_edupi_data_root_pref(app: &AppHandle) -> Result<(), String> {
+    let mut prefs = read_ui_prefs(app);
+    if let Some(object) = prefs.as_object_mut() {
+        object.remove(EDUPI_DATA_PREF_KEY);
+    } else {
+        prefs = serde_json::json!({});
+    }
     write_ui_prefs(app, &prefs)
 }
 
@@ -378,9 +469,38 @@ fn read_last_server_port(app: &AppHandle) -> Option<u16> {
 
 #[cfg(feature = "custom-protocol")]
 fn write_last_server_port(app: &AppHandle, port: u16) {
-    let mut prefs = read_ui_prefs(app);
-    prefs["serverPort"] = serde_json::Value::from(port);
-    let _ = write_ui_prefs(app, &prefs);
+    let Ok(path) = ui_prefs_path(app) else {
+        return;
+    };
+    let _ = update_server_port_in_prefs(&path, port);
+}
+
+#[cfg(feature = "custom-protocol")]
+fn update_server_port_in_prefs(path: &Path, port: u16) -> Result<bool, io::Error> {
+    let raw = match fs::read_to_string(path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let prefs = serde_json::json!({ "serverPort": port });
+            let updated = serde_json::to_string_pretty(&prefs).map_err(io::Error::other)?;
+            fs::write(path, updated)?;
+            return Ok(true);
+        }
+        Err(error) => return Err(error),
+    };
+    let mut prefs: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(value) => value,
+        Err(_) => return Ok(false),
+    };
+    let Some(object) = prefs.as_object_mut() else {
+        return Ok(false);
+    };
+    object.insert("serverPort".to_string(), serde_json::Value::from(port));
+    let updated = serde_json::to_string_pretty(&prefs).map_err(io::Error::other)?;
+    fs::write(path, updated)?;
+    Ok(true)
 }
 
 fn theme_background_color(theme: &str) -> Color {
@@ -537,25 +657,25 @@ fn server_process_path(node_path: &Path) -> Option<std::ffi::OsString> {
     env::join_paths(paths).ok()
 }
 
-#[cfg(feature = "custom-protocol")]
 struct EduPiLaunchRoots {
     data_root: String,
     core_root: String,
     core_allowed_root: String,
     data_allowed_root: String,
+    core_validation_mode: &'static str,
+    status: EduPiRootStatus,
 }
 
-#[cfg(feature = "custom-protocol")]
 fn first_configured_root(names: &[&str]) -> Option<(String, String)> {
     names.iter().find_map(|name| {
         env::var(name)
             .ok()
-            .filter(|value| !value.trim().is_empty())
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
             .map(|value| ((*name).to_string(), value))
     })
 }
 
-#[cfg(feature = "custom-protocol")]
 fn validate_edupi_directory(name: &str, value: String) -> Result<String, io::Error> {
     let path = PathBuf::from(&value);
     if !path.is_absolute() {
@@ -570,10 +690,9 @@ fn validate_edupi_directory(name: &str, value: String) -> Result<String, io::Err
             format!("{name} does not exist: {}", path.display()),
         ));
     }
-    Ok(value)
+    Ok(dunce::canonicalize(path)?.to_string_lossy().into_owned())
 }
 
-#[cfg(feature = "custom-protocol")]
 fn edupi_root_label(name: &str) -> &str {
     match name {
         "EDUPI_DATA_ROOT" => "EduPi data root",
@@ -583,32 +702,6 @@ fn edupi_root_label(name: &str) -> &str {
     }
 }
 
-#[cfg(feature = "custom-protocol")]
-fn edupi_project_root() -> Result<String, io::Error> {
-    let Some((name, value)) =
-        first_configured_root(&["EDUPI_DATA_ROOT", "EDUPI_PROJECT_ROOT", "EDUPI_WORKSPACE"])
-    else {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "EDUPI_PROJECT_ROOT is not configured; choose the EduPi workspace before starting the packaged app",
-        ));
-    };
-
-    validate_edupi_directory(edupi_root_label(&name), value)
-}
-
-#[cfg(feature = "custom-protocol")]
-fn edupi_core_root(data_root: &str) -> Result<String, io::Error> {
-    let Some((name, value)) =
-        first_configured_root(&["EDUPI_CORE_ROOT", "EDUPI_PROJECT_ROOT", "EDUPI_WORKSPACE"])
-    else {
-        return Ok(data_root.to_string());
-    };
-
-    validate_edupi_directory(edupi_root_label(&name), value)
-}
-
-#[cfg(feature = "custom-protocol")]
 fn default_allowed_root(root: &str) -> Result<String, io::Error> {
     let path = Path::new(root);
     if !path.is_absolute() {
@@ -627,7 +720,6 @@ fn default_allowed_root(root: &str) -> Result<String, io::Error> {
         })
 }
 
-#[cfg(feature = "custom-protocol")]
 fn edupi_allowed_root(name: &str, root: &str) -> Result<String, io::Error> {
     let value = first_configured_root(&[name])
         .map(|(_, value)| value)
@@ -636,17 +728,292 @@ fn edupi_allowed_root(name: &str, root: &str) -> Result<String, io::Error> {
     validate_edupi_directory(name, value)
 }
 
-#[cfg(feature = "custom-protocol")]
-fn edupi_launch_roots() -> Result<EduPiLaunchRoots, io::Error> {
-    let data_root = edupi_project_root()?;
-    let core_root = edupi_core_root(&data_root)?;
-    let data_allowed_root = edupi_allowed_root("EDUPI_DATA_ALLOWED_ROOT", &data_root)?;
-    let core_allowed_root = edupi_allowed_root("EDUPI_CORE_ALLOWED_ROOT", &core_root)?;
+fn is_filesystem_root(path: &Path) -> bool {
+    let text = path.to_string_lossy();
+    let is_separator = |value: char| value == '/' || value == '\\';
+    if text == "/" || text == "\\" || (!text.is_empty() && text.chars().all(is_separator)) {
+        return true;
+    }
+    let is_drive_root = |value: &str| {
+        let bytes = value.as_bytes();
+        bytes.len() == 3
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b':'
+            && is_separator(bytes[2] as char)
+    };
+    if is_drive_root(&text) {
+        return true;
+    }
+    if let Some(verbatim) = text.strip_prefix("\\\\?\\") {
+        if is_drive_root(verbatim) {
+            return true;
+        }
+        if let Some(unc) = verbatim
+            .strip_prefix("UNC\\")
+            .or_else(|| verbatim.strip_prefix("UNC/"))
+        {
+            let parts: Vec<_> = unc
+                .split(is_separator)
+                .filter(|part| !part.is_empty())
+                .collect();
+            return parts.len() == 2;
+        }
+    }
+    if let Some(unc) = text.strip_prefix("\\\\") {
+        let parts: Vec<_> = unc
+            .split(is_separator)
+            .filter(|part| !part.is_empty())
+            .collect();
+        return parts.len() == 2;
+    }
+    let mut components = path.components();
+    matches!(
+        components.next(),
+        Some(Component::RootDir) | Some(Component::Prefix(_))
+    ) && components.next().is_none()
+}
+
+fn validate_selected_data_root(value: String) -> Result<String, io::Error> {
+    let path = PathBuf::from(value);
+    if !path.is_absolute() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "selected EduPi data root must be an absolute directory",
+        ));
+    }
+    let metadata = fs::symlink_metadata(&path)?;
+    if metadata.file_type().is_symlink() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "selected EduPi data root cannot be a symlink",
+        ));
+    }
+    if !metadata.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "selected EduPi data root must be an existing directory",
+        ));
+    }
+    let canonical = dunce::canonicalize(path)?;
+    if is_filesystem_root(&canonical) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "selected EduPi data root cannot be a filesystem root",
+        ));
+    }
+    Ok(canonical.to_string_lossy().into_owned())
+}
+
+fn ensure_data_directories(root: &str) -> Result<(String, String, String), io::Error> {
+    let root_path = Path::new(root);
+    let edupi = root_path.join(".edupi");
+    if let Ok(metadata) = fs::symlink_metadata(&edupi) {
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "EduPi data directory is not a normal directory: {}",
+                    edupi.display()
+                ),
+            ));
+        }
+    }
+    fs::create_dir_all(&edupi)?;
+    let canonical_edupi = dunce::canonicalize(&edupi)?;
+    if !is_inside_path(root_path, &canonical_edupi) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "EduPi data directory escapes the data root: {}",
+                edupi.display()
+            ),
+        ));
+    }
+    for directory in ["memory", "output", "locks"] {
+        let path = edupi.join(directory);
+        if let Ok(metadata) = fs::symlink_metadata(&path) {
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!(
+                        "EduPi data directory is not a normal directory: {}",
+                        path.display()
+                    ),
+                ));
+            }
+        }
+        fs::create_dir_all(&path)?;
+        let canonical = dunce::canonicalize(&path)?;
+        if !is_inside_path(root_path, &canonical) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "EduPi data directory escapes the data root: {}",
+                    path.display()
+                ),
+            ));
+        }
+    }
+    Ok((
+        edupi.join("memory").to_string_lossy().into_owned(),
+        edupi.join("output").to_string_lossy().into_owned(),
+        edupi.join("locks").to_string_lossy().into_owned(),
+    ))
+}
+
+fn is_inside_path(root: &Path, candidate: &Path) -> bool {
+    candidate == root || candidate.starts_with(root)
+}
+
+fn managed_data_root(app: &AppHandle) -> Result<String, io::Error> {
+    let root = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| io::Error::other(error.to_string()))?
+        .join(MANAGED_DATA_DIRECTORY);
+    fs::create_dir_all(&root)?;
+    let root = dunce::canonicalize(root)?;
+    ensure_data_directories(&root.to_string_lossy())?;
+    Ok(root.to_string_lossy().into_owned())
+}
+
+fn persisted_data_root_from_prefs(path: &Path) -> Result<Result<String, &'static str>, io::Error> {
+    let raw = match fs::read_to_string(path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(Err(FALLBACK_PERSISTED_NO_KEY))
+        }
+        Err(_) => return Ok(Err(FALLBACK_PERSISTED_UNREADABLE)),
+    };
+    let prefs: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(value) => value,
+        Err(_) => return Ok(Err(FALLBACK_PERSISTED_CORRUPT)),
+    };
+    if !prefs.is_object() {
+        return Ok(Err(FALLBACK_PERSISTED_NON_OBJECT));
+    }
+    let Some(value) = prefs.get(EDUPI_DATA_PREF_KEY) else {
+        return Ok(Err(FALLBACK_PERSISTED_NO_KEY));
+    };
+    let Some(value) = value.as_str() else {
+        return Ok(Err(FALLBACK_PERSISTED_INVALID));
+    };
+    let path = PathBuf::from(value);
+    if !path.is_absolute() {
+        return Ok(Err(FALLBACK_PERSISTED_RELATIVE));
+    }
+    let metadata = match fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(Err(FALLBACK_PERSISTED_MISSING))
+        }
+        Err(_) => return Ok(Err(FALLBACK_PERSISTED_UNREADABLE)),
+    };
+    if metadata.file_type().is_symlink() {
+        return Ok(Err(FALLBACK_PERSISTED_SYMLINK));
+    }
+    if !metadata.is_dir() {
+        return Ok(Err(FALLBACK_PERSISTED_NOT_DIRECTORY));
+    }
+    let canonical = dunce::canonicalize(path)
+        .map_err(|_| io::Error::other("persisted root cannot be canonicalized"))?;
+    if is_filesystem_root(&canonical) {
+        return Ok(Err(FALLBACK_PERSISTED_FILESYSTEM_ROOT));
+    }
+    if ensure_data_directories(&canonical.to_string_lossy()).is_err() {
+        return Ok(Err(FALLBACK_PERSISTED_INVALID));
+    }
+    Ok(Ok(canonical.to_string_lossy().into_owned()))
+}
+
+fn persisted_data_root(app: &AppHandle) -> Result<Result<String, &'static str>, io::Error> {
+    let path = ui_prefs_path(app).map_err(io::Error::other)?;
+    persisted_data_root_from_prefs(&path)
+}
+
+fn resolve_data_root(app: &AppHandle) -> Result<(String, &'static str, Option<String>), io::Error> {
+    if let Some((name, value)) = first_configured_root(&[
+        EDUPI_DATA_ROOT_ENV,
+        EDUPI_PROJECT_ROOT_ENV,
+        EDUPI_WORKSPACE_ENV,
+    ]) {
+        let root = validate_edupi_directory(edupi_root_label(&name), value)?;
+        ensure_data_directories(&root)?;
+        return Ok((root, "environment", None));
+    }
+
+    match persisted_data_root(app)? {
+        Ok(root) => return Ok((root, "persisted", None)),
+        Err(FALLBACK_PERSISTED_NO_KEY) => {}
+        Err(reason) => {
+            let root = managed_data_root(app)?;
+            return Ok((root, "managed", Some(reason.to_string())));
+        }
+    }
+
+    Ok((managed_data_root(app)?, "managed", None))
+}
+
+fn bundled_core_root(app: &AppHandle) -> Result<String, io::Error> {
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|error| io::Error::other(error.to_string()))?;
+    let root = resource_dir.join("resources/edupi-core");
+    validate_edupi_directory(
+        "bundled EduPi Core root",
+        root.to_string_lossy().into_owned(),
+    )
+}
+
+fn resolve_core_root(app: &AppHandle) -> Result<(String, &'static str, &'static str), io::Error> {
+    if let Some((_, value)) = first_configured_root(&[EDUPI_CORE_ROOT_ENV]) {
+        return Ok((
+            validate_edupi_directory("EduPi Core root", value)?,
+            "environment",
+            "external",
+        ));
+    }
+    Ok((bundled_core_root(app)?, "bundled", "bundled"))
+}
+
+fn build_root_status(
+    data_root: String,
+    data_source: &str,
+    core_root: String,
+    core_source: &str,
+    fallback_reason: Option<String>,
+) -> EduPiRootStatus {
+    EduPiRootStatus {
+        data_root,
+        data_source: data_source.to_string(),
+        core_root,
+        core_source: core_source.to_string(),
+        fallback_reason,
+        can_change_data_root: data_source != "environment",
+        restart_required: false,
+    }
+}
+
+fn edupi_launch_roots(app: &AppHandle) -> Result<EduPiLaunchRoots, io::Error> {
+    let (data_root, data_source, fallback_reason) = resolve_data_root(app)?;
+    let (core_root, core_source, core_validation_mode) = resolve_core_root(app)?;
+    let data_allowed_root = edupi_allowed_root(EDUPI_DATA_ALLOWED_ROOT_ENV, &data_root)?;
+    let core_allowed_root = edupi_allowed_root(EDUPI_CORE_ALLOWED_ROOT_ENV, &core_root)?;
+    let status = build_root_status(
+        data_root.clone(),
+        data_source,
+        core_root.clone(),
+        core_source,
+        fallback_reason,
+    );
     Ok(EduPiLaunchRoots {
         data_root,
         core_root,
         core_allowed_root,
         data_allowed_root,
+        core_validation_mode,
+        status,
     })
 }
 
@@ -823,8 +1190,8 @@ fn start_packaged_server(
         .open(&log_path)?;
     let stderr = stdout.try_clone()?;
 
+    let roots = edupi_launch_roots(app)?;
     let port = choose_port(app)?;
-    let roots = edupi_launch_roots()?;
     let desktop_state_dir = app.path().app_config_dir()?;
     fs::create_dir_all(&desktop_state_dir)?;
     let mut command = Command::new(&node_path);
@@ -838,6 +1205,7 @@ fn start_packaged_server(
         .env("EDUPI_PROJECT_ROOT", &roots.data_root)
         .env("EDUPI_DATA_ROOT", &roots.data_root)
         .env("EDUPI_CORE_ROOT", &roots.core_root)
+        .env("EDUPI_CORE_VALIDATION_MODE", roots.core_validation_mode)
         .env("EDUPI_CORE_ALLOWED_ROOT", &roots.core_allowed_root)
         .env("EDUPI_DATA_ALLOWED_ROOT", &roots.data_allowed_root)
         .env("PI_DESKTOP_STATE_DIR", &desktop_state_dir)
@@ -872,8 +1240,40 @@ fn start_packaged_server(
 
 #[cfg(all(test, feature = "custom-protocol"))]
 mod tests {
-    use super::{child_process_compatible_path, default_allowed_root, response_has_instance_id};
+    use super::{
+        build_root_status, child_process_compatible_path, default_allowed_root,
+        ensure_data_directories, is_filesystem_root, persisted_data_root_from_prefs,
+        response_has_instance_id, update_server_port_in_prefs, validate_selected_data_root,
+        FALLBACK_PERSISTED_CORRUPT, FALLBACK_PERSISTED_MISSING, FALLBACK_PERSISTED_NON_OBJECT,
+        FALLBACK_PERSISTED_NOT_DIRECTORY, FALLBACK_PERSISTED_NO_KEY, FALLBACK_PERSISTED_SYMLINK,
+    };
+    use std::fs;
     use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    struct TempRoot(PathBuf);
+
+    impl TempRoot {
+        fn new(label: &str) -> Self {
+            let id = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+            let path =
+                std::env::temp_dir().join(format!("edupi-{label}-{}-{id}", std::process::id()));
+            fs::create_dir(&path).expect("create isolated test root");
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempRoot {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
 
     #[cfg(windows)]
     #[test]
@@ -911,8 +1311,294 @@ mod tests {
 
     #[test]
     fn allowed_roots_default_to_the_parent_of_an_absolute_root() {
+        #[cfg(unix)]
         assert_eq!(default_allowed_root("/tmp/edupi-data").unwrap(), "/tmp");
+        #[cfg(windows)]
+        assert_eq!(default_allowed_root(r"C:\edupi-data").unwrap(), r"C:\");
         assert!(default_allowed_root("relative/edupi-data").is_err());
+    }
+
+    #[test]
+    fn selected_directory_is_canonicalized_and_data_children_are_created() {
+        let temp = TempRoot::new("selected-data");
+        let selected = temp.path().join("selected");
+        fs::create_dir(&selected).expect("create selected directory");
+
+        let root = validate_selected_data_root(selected.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(Path::new(&root), dunce::canonicalize(&selected).unwrap());
+        let (memory, output, locks) = ensure_data_directories(&root).unwrap();
+        for directory in [memory, output, locks] {
+            assert!(
+                Path::new(&directory).is_dir(),
+                "created data directory: {directory}"
+            );
+            assert!(Path::new(&directory).starts_with(&root));
+        }
+    }
+
+    #[test]
+    fn selected_directory_rejects_a_filesystem_root() {
+        assert!(
+            validate_selected_data_root(Path::new("/").to_string_lossy().into_owned()).is_err()
+        );
+        assert!(is_filesystem_root(Path::new("/")));
+        for root in [
+            r"C:\",
+            "C:/",
+            r"\\server\share\",
+            r"\\?\C:\",
+            r"\\?\UNC\server\share\",
+        ] {
+            assert!(
+                is_filesystem_root(Path::new(root)),
+                "expected filesystem root: {root}"
+            );
+        }
+        for child in [
+            r"C:\Users\teacher",
+            "C:/Users/teacher",
+            r"\\server\share\folder",
+            r"\\?\C:\Users\teacher",
+            r"\\?\UNC\server\share\folder",
+        ] {
+            assert!(
+                !is_filesystem_root(Path::new(child)),
+                "ordinary child must remain allowed: {child}"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn selected_directory_rejects_a_symlink_root() {
+        let temp = TempRoot::new("selected-symlink");
+        let target = temp.path().join("target");
+        let link = temp.path().join("link");
+        fs::create_dir(&target).expect("create symlink target");
+        std::os::unix::fs::symlink(&target, &link).expect("create symlink");
+        let error = validate_selected_data_root(link.to_string_lossy().into_owned()).unwrap_err();
+        assert!(error.to_string().contains("symlink"));
+    }
+
+    #[test]
+    fn persisted_root_parser_accepts_valid_path_and_creates_children() {
+        let temp = TempRoot::new("persisted-valid");
+        let selected = temp.path().join("selected");
+        fs::create_dir(&selected).expect("create persisted directory");
+        let prefs = temp.path().join("ui-prefs.json");
+        fs::write(
+            &prefs,
+            serde_json::json!({ "edupiDataRoot": selected }).to_string(),
+        )
+        .expect("write prefs");
+
+        let result = persisted_data_root_from_prefs(&prefs).unwrap().unwrap();
+        assert_eq!(Path::new(&result), dunce::canonicalize(&selected).unwrap());
+        for child in ["memory", "output", "locks"] {
+            assert!(Path::new(&result).join(".edupi").join(child).is_dir());
+        }
+    }
+
+    #[test]
+    fn persisted_root_parser_reports_corrupt_and_missing_directory_reasons() {
+        let temp = TempRoot::new("persisted-reasons");
+        let corrupt = temp.path().join("corrupt.json");
+        fs::write(&corrupt, "{not-json").expect("write corrupt prefs");
+        assert_eq!(
+            persisted_data_root_from_prefs(&corrupt).unwrap(),
+            Err(FALLBACK_PERSISTED_CORRUPT)
+        );
+
+        let missing = temp.path().join("missing.json");
+        let missing_root = temp.path().join("not-present");
+        fs::write(
+            &missing,
+            serde_json::json!({ "edupiDataRoot": missing_root }).to_string(),
+        )
+        .expect("write missing prefs");
+        assert_eq!(
+            persisted_data_root_from_prefs(&missing).unwrap(),
+            Err(FALLBACK_PERSISTED_MISSING)
+        );
+
+        let no_key = temp.path().join("no-key.json");
+        fs::write(&no_key, serde_json::json!({ "theme": "dark" }).to_string())
+            .expect("write no-key prefs");
+        assert_eq!(
+            persisted_data_root_from_prefs(&no_key).unwrap(),
+            Err(FALLBACK_PERSISTED_NO_KEY)
+        );
+
+        let non_object = temp.path().join("non-object.json");
+        fs::write(&non_object, "[]").expect("write non-object prefs");
+        assert_eq!(
+            persisted_data_root_from_prefs(&non_object).unwrap(),
+            Err(FALLBACK_PERSISTED_NON_OBJECT)
+        );
+
+        let file = temp.path().join("file");
+        fs::write(&file, "not a directory").expect("write non-directory root");
+        let not_directory = temp.path().join("not-directory.json");
+        fs::write(
+            &not_directory,
+            serde_json::json!({ "edupiDataRoot": file }).to_string(),
+        )
+        .expect("write non-directory prefs");
+        assert_eq!(
+            persisted_data_root_from_prefs(&not_directory).unwrap(),
+            Err(FALLBACK_PERSISTED_NOT_DIRECTORY)
+        );
+
+        #[cfg(unix)]
+        {
+            let symlink = temp.path().join("symlink");
+            let symlink_prefs = temp.path().join("symlink.json");
+            std::os::unix::fs::symlink(temp.path(), &symlink).expect("create persisted symlink");
+            fs::write(
+                &symlink_prefs,
+                serde_json::json!({ "edupiDataRoot": symlink }).to_string(),
+            )
+            .expect("write symlink prefs");
+            assert_eq!(
+                persisted_data_root_from_prefs(&symlink_prefs).unwrap(),
+                Err(FALLBACK_PERSISTED_SYMLINK)
+            );
+        }
+    }
+
+    #[test]
+    fn root_status_preserves_fallback_reason_and_editability() {
+        let status = build_root_status(
+            "/tmp/managed".into(),
+            "managed",
+            "/tmp/core".into(),
+            "bundled",
+            Some(FALLBACK_PERSISTED_CORRUPT.into()),
+        );
+        assert_eq!(
+            status.fallback_reason.as_deref(),
+            Some(FALLBACK_PERSISTED_CORRUPT)
+        );
+        assert!(status.can_change_data_root);
+
+        let environment = build_root_status(
+            "/tmp/environment".into(),
+            "environment",
+            "/tmp/core".into(),
+            "environment",
+            None,
+        );
+        assert!(!environment.can_change_data_root);
+        assert_eq!(environment.fallback_reason, None);
+    }
+
+    #[test]
+    fn passive_server_port_persistence_preserves_invalid_preferences() {
+        let temp = TempRoot::new("port-prefs");
+        let corrupt = temp.path().join("corrupt.json");
+        let corrupt_bytes = b"{not-json";
+        fs::write(&corrupt, corrupt_bytes).expect("write corrupt prefs");
+        assert!(!update_server_port_in_prefs(&corrupt, 38471).unwrap());
+        assert_eq!(fs::read(&corrupt).unwrap(), corrupt_bytes);
+        assert_eq!(
+            persisted_data_root_from_prefs(&corrupt).unwrap(),
+            Err(FALLBACK_PERSISTED_CORRUPT)
+        );
+
+        let non_object = temp.path().join("non-object.json");
+        let non_object_bytes = b"[\"keep\"]";
+        fs::write(&non_object, non_object_bytes).expect("write non-object prefs");
+        assert!(!update_server_port_in_prefs(&non_object, 38471).unwrap());
+        assert_eq!(fs::read(&non_object).unwrap(), non_object_bytes);
+        assert_eq!(
+            persisted_data_root_from_prefs(&non_object).unwrap(),
+            Err(FALLBACK_PERSISTED_NON_OBJECT)
+        );
+    }
+
+    #[test]
+    fn passive_server_port_persistence_updates_only_valid_object_port() {
+        let temp = TempRoot::new("port-valid-prefs");
+        let prefs = temp.path().join("ui-prefs.json");
+        let selected = temp.path().join("selected-data");
+        fs::create_dir(&selected).expect("create selected data");
+        fs::write(
+            &prefs,
+            serde_json::json!({ "edupiDataRoot": selected, "theme": "dark" }).to_string(),
+        )
+        .expect("write valid prefs");
+
+        assert!(update_server_port_in_prefs(&prefs, 38471).unwrap());
+        let updated: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&prefs).unwrap()).unwrap();
+        assert_eq!(updated["serverPort"], 38471);
+        assert_eq!(updated["theme"], "dark");
+        assert_eq!(
+            updated["edupiDataRoot"],
+            selected.to_string_lossy().as_ref()
+        );
+    }
+
+    #[test]
+    fn passive_server_port_persistence_creates_a_valid_prefs_file_when_missing() {
+        let temp = TempRoot::new("port-missing-prefs");
+        let prefs = temp.path().join("nested").join("ui-prefs.json");
+
+        assert!(update_server_port_in_prefs(&prefs, 38471).unwrap());
+        let updated: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&prefs).unwrap()).unwrap();
+        assert_eq!(updated, serde_json::json!({ "serverPort": 38471 }));
+    }
+
+    #[test]
+    fn passive_startup_distinguishes_unconfigured_prefs_from_a_missing_configured_root() {
+        let temp = TempRoot::new("startup-order-prefs");
+        let absent = temp.path().join("absent").join("ui-prefs.json");
+
+        assert_eq!(
+            persisted_data_root_from_prefs(&absent).unwrap(),
+            Err(FALLBACK_PERSISTED_NO_KEY)
+        );
+        assert!(update_server_port_in_prefs(&absent, 38471).unwrap());
+        assert_eq!(
+            persisted_data_root_from_prefs(&absent).unwrap(),
+            Err(FALLBACK_PERSISTED_NO_KEY)
+        );
+
+        let missing_target = temp.path().join("missing-target");
+        let configured = temp.path().join("configured.json");
+        fs::write(
+            &configured,
+            serde_json::json!({ "edupiDataRoot": missing_target }).to_string(),
+        )
+        .expect("write configured missing-root prefs");
+        assert_eq!(
+            persisted_data_root_from_prefs(&configured).unwrap(),
+            Err(FALLBACK_PERSISTED_MISSING)
+        );
+        assert!(update_server_port_in_prefs(&configured, 38472).unwrap());
+        let updated: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&configured).unwrap()).unwrap();
+        assert_eq!(updated["serverPort"], 38472);
+        assert_eq!(
+            updated["edupiDataRoot"],
+            missing_target.to_string_lossy().as_ref()
+        );
+        assert_eq!(
+            persisted_data_root_from_prefs(&configured).unwrap(),
+            Err(FALLBACK_PERSISTED_MISSING)
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn child_process_core_root_normalization_strips_verbatim_prefix_without_truncating_path() {
+        let verbatim = Path::new(r"\\?\C:\Users\teacher\AppData\Local\EduPi\resources\edupi-core");
+        let normalized = child_process_compatible_path(verbatim);
+        let text = normalized.to_string_lossy();
+        assert!(!text.starts_with(r"\\?\"));
+        assert!(text.starts_with(r"C:\Users\teacher\AppData\Local\EduPi\"));
+        assert!(text.ends_with(r"resources\edupi-core"));
     }
 }
 
@@ -950,6 +1636,9 @@ pub fn run() {
             quit_app,
             show_main_window_cmd,
             set_ui_theme,
+            get_edupi_root_status,
+            set_edupi_data_root,
+            reset_edupi_data_root,
             computer_use::computer_use_status,
             computer_use::computer_use_set_enabled,
             computer_use::computer_use_emergency_stop,
@@ -980,7 +1669,8 @@ pub fn run() {
             app.manage(server);
             build_window(app.handle(), url)?;
 
-            let quick_entry_item = MenuItem::with_id(app, "quick_entry", "Quick Entry", true, None::<&str>)?;
+            let quick_entry_item =
+                MenuItem::with_id(app, "quick_entry", "Quick Entry", true, None::<&str>)?;
             let show_item = MenuItem::with_id(app, "show", "Show EduPi", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit EduPi", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&quick_entry_item, &show_item, &quit_item])?;
