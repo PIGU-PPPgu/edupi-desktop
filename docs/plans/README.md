@@ -159,3 +159,7 @@ Resume at **E4 — 课后口述到教学记忆**. Bind one short teacher voice/t
 ## Current resume pointer — 2026-09-02 Packaged Core bootstrap
 
 The packaged Core bootstrap is implemented in [2026-09-02-packaged-core-bootstrap.md](./2026-09-02-packaged-core-bootstrap.md). Desktop pins Core `ca623bdf93d781f57b7ad89956dcec9171ac7738` and component manifest `sha256:8431f854d95fd049f3c2e8a54a0885e058bb1b1a40a934acf18502ec2e322028`, stages the exact runtime closure, and resolves data roots in environment → persisted → managed order. Remaining release evidence is signed artifacts plus clean-machine Windows install/launch/update/uninstall verification.
+
+## Current resume pointer — 2026-09-02 QM-derived Pi harness seam
+
+The first source-attributed QM adaptation is recorded in [2026-09-02-qm-pi-harness-adapter.md](./2026-09-02-qm-pi-harness-adapter.md). It keeps Pi as the sole internal adapter and preserves all client contracts. Before enabling any alternate harness, replace the remaining `AgentSessionWrapper.inner` access with adapter-owned session/title operations.
