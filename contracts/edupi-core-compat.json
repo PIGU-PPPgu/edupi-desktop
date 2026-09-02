@@ -2,9 +2,9 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "673db19d8fc2a1e34b858e2c3d17f7935862b07c",
+    "core_commit": "2194a3db337457bbdf7c28e6cf4a32ea9c57f72e",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:d9500f266ed92052798ffc072648d635c3dfb5b673cf2affe35e13506914eed0"
+    "component_manifest_hash": "sha256:bb0598eb74d479ce6ba09b440d54f4a0d09bca9f6640e5cc124b701a22feac83"
   },
   "contract_identities": [
     {
@@ -50,7 +50,11 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/16",
     "https://github.com/PIGU-PPPgu/edupi/pull/17",
     "https://github.com/PIGU-PPPgu/edupi/pull/18",
-    "https://github.com/PIGU-PPPgu/edupi/pull/19"
+    "https://github.com/PIGU-PPPgu/edupi/pull/19",
+    "https://github.com/PIGU-PPPgu/edupi/pull/20",
+    "https://github.com/PIGU-PPPgu/edupi/pull/21",
+    "https://github.com/PIGU-PPPgu/edupi/pull/22",
+    "https://github.com/PIGU-PPPgu/edupi/pull/23"
   ],
-  "change_note": "Pinned merged Core PR #19 with scoped education-memory metadata and isolation projection"
+  "change_note": "Pinned merged Core PRs #20-#23 for teaching skills, connectors, persistent jobs and hosted multi-Harness routing"
 }
