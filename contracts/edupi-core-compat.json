@@ -2,9 +2,9 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "ca623bdf93d781f57b7ad89956dcec9171ac7738",
+    "core_commit": "d242a122bb42c619c316d1a422b3e73f3c507307",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:8431f854d95fd049f3c2e8a54a0885e058bb1b1a40a934acf18502ec2e322028"
+    "component_manifest_hash": "sha256:0885ff28d036dc166819e1e32adeaee3c065376874b4bf3cef71181e1f1f04f1"
   },
   "contract_identities": [
     {
@@ -48,7 +48,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/14",
     "https://github.com/PIGU-PPPgu/edupi/pull/15",
     "https://github.com/PIGU-PPPgu/edupi/pull/16",
-    "https://github.com/PIGU-PPPgu/edupi/pull/17"
+    "https://github.com/PIGU-PPPgu/edupi/pull/17",
+    "https://github.com/PIGU-PPPgu/edupi/pull/18"
   ],
-  "change_note": "Pinned the merged Core PR #17 runtime closure so packaged Desktop copies and verifies Typebox dependencies"
+  "change_note": "Pinned merged Core PR #18 with the Proactive Work Kernel and read-only kernel projection"
 }

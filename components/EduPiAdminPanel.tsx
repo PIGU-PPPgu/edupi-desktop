@@ -9,11 +9,19 @@ import type { EduPiWorkspaceBundle } from "@/lib/edupi-education-client";
 type AdminSnapshot = {
   context: TeacherContextSnapshot | null;
   education: EducationContract | null;
-  status: { core?: { status?: string }; projection?: { status?: string } } | null;
+  status: {
+    core?: { status?: string };
+    projection?: { status?: string };
+    kernel?: {
+      status?: string;
+      summary?: { total?: number; running?: number; failed?: number; needs_review?: number; succeeded?: number; skipped?: number };
+      runs?: Array<{ run_id?: string; trigger_id?: string; status?: string; updated_at?: string; result_summary?: string | null; attempt_count?: number }>;
+    };
+  } | null;
   models: { modelList?: Array<{ id: string; provider: string }>; defaultModel?: { provider: string; modelId: string } | null } | null;
 };
 
-export type AdminSectionId = "readiness" | "models" | "people" | "calendar" | "materials" | "tasks" | "system";
+export type AdminSectionId = "readiness" | "automation" | "models" | "people" | "calendar" | "materials" | "tasks" | "system";
 
 type Props = {
   onClose: () => void;
@@ -29,6 +37,7 @@ type Props = {
 
 export const ADMIN_SECTIONS: Array<{ id: AdminSectionId; label: string }> = [
   { id: "readiness", label: "EduPi 就绪度" },
+  { id: "automation", label: "自动运行" },
   { id: "models", label: "AI 与模型" },
   { id: "people", label: "教师与学生" },
   { id: "calendar", label: "校历与课表" },
@@ -128,6 +137,9 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
   ], [checklist, coreReady, modelReady]);
   const completeCount = readiness.filter((item) => item.complete).length;
   const education = snapshot.education;
+  const kernel = snapshot.status?.kernel;
+  const kernelSummary = kernel?.summary;
+  const kernelRuns = kernel?.runs ?? [];
   const defaultModel = snapshot.models?.defaultModel;
   const refresh = () => setRefreshKey((value) => value + 1);
   const leaveAdmin = (action: () => void) => {
@@ -158,6 +170,19 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
           <div className="edupi-admin-readiness__bar" aria-hidden="true"><span style={{ width: `${readiness.length ? (completeCount / readiness.length) * 100 : 0}%` }} /></div>
           <div className="edupi-admin-readiness__items">{readiness.map((item) => <button type="button" key={item.id} onClick={item.action}><i className={item.complete ? "is-complete" : ""} aria-hidden="true">{item.complete ? "✓" : "·"}</i><span>{item.label}</span><em>{item.complete ? "完成" : "去设置"}</em></button>)}</div>
         </section>
+      </section> : null}
+
+      {activeSection === "automation" ? <section className="edupi-admin-section">
+        <AdminSectionHeader title="自动运行" meta={kernel?.status === "ready" ? `最近 ${kernelRuns.length} 次` : "运行状态不可用"} onRefresh={refresh} />
+        <div className="edupi-admin-metrics"><AdminMetric value={kernelSummary?.running ?? "—"} label="运行中" /><AdminMetric value={kernelSummary?.needs_review ?? "—"} label="待确认" /><AdminMetric value={kernelSummary?.succeeded ?? "—"} label="已完成" /></div>
+        <div className="edupi-admin-runtime" role="list" aria-label="最近自动运行">
+          {kernelRuns.length > 0 ? kernelRuns.slice(0, 12).map((run) => <div role="listitem" key={run.run_id}>
+            <i className={`is-${run.status || "unknown"}`} aria-hidden="true" />
+            <span><strong>{run.trigger_id || "EduPi 任务"}</strong><small>{run.result_summary || `第 ${run.attempt_count || 1} 次执行`}</small></span>
+            <em>{run.status === "running" || run.status === "awaiting_delivery" ? "运行中" : run.status === "needs_review" ? "待确认" : run.status === "failed" ? "失败" : run.status === "succeeded" ? "完成" : "无内容"}</em>
+            {run.updated_at ? <time dateTime={run.updated_at}>{new Date(run.updated_at).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time> : null}
+          </div>) : <div className="is-empty" role="status">还没有运行记录</div>}
+        </div>
       </section> : null}
 
       {modelsMounted ? <section className="edupi-admin-section is-models" hidden={activeSection !== "models"}>
@@ -198,6 +223,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
         <div className="edupi-admin-list">
           <div><span><strong>EduPi Core</strong><small>{snapshot.status?.core?.status || "不可用"}</small></span><em className={coreConnected ? "is-ready" : ""}>{coreConnected ? "已连接" : "检查"}</em></div>
           <div><span><strong>教育投影</strong><small>{snapshot.status?.projection?.status || "不可用"}</small></span><em className={projectionConnected ? "is-ready" : ""}>{projectionConnected ? "已连接" : "检查"}</em></div>
+          <button type="button" onClick={() => setActiveSection("automation")}><span><strong>自动运行内核</strong><small>{kernel?.status || "不可用"}</small></span><em>{kernelSummary?.running ? `${kernelSummary.running} 项运行中` : "查看"}</em></button>
           <button type="button" onClick={onOpenSettings}><span><strong>应用与桌面设置</strong><small>外观、桌面行为与更新</small></span><em>打开</em></button>
         </div>
       </section> : null}

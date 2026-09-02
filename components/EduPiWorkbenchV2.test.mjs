@@ -105,6 +105,12 @@ test("review renders one selected decision and the rail exposes real EduPi activ
   assert.match(css, /@keyframes edupiActivityPulse/);
 });
 
+test("activity pulse includes proactive kernel runs", async () => {
+  const panel = await read("./EduPiEducationPanel.tsx");
+  assert.match(panel, /\/api\/edupi\/kernel/);
+  assert.match(panel, /runningSessionCount \+ runningKernelCount/);
+});
+
 test("narrow screens retain the object selector and exports neutralize spreadsheet formulas", async () => {
   const [css, student, sider] = await Promise.all([
     read("../app/edupi-workbench.css"),

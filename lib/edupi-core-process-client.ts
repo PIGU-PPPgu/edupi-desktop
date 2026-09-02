@@ -115,7 +115,7 @@ export async function callEduPiCore<T = unknown>({
   envelope,
   signal,
 }: {
-  operation: "health" | "snapshot" | "command";
+  operation: "health" | "snapshot" | "command" | "kernel";
   requestId: string;
   runtime: ResolvedEduPiCore;
   dataRoot?: ResolvedEduPiDataRoot;
