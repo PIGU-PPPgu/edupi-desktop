@@ -13,6 +13,8 @@ export async function POST(request: Request) {
     if (!/^[A-Za-z0-9_-]{8,128}$/u.test(clientId) || clientSecret.length < 16 || clientSecret.length > 128) return NextResponse.json({ ok: false, error: "Client ID 或 Client Secret 格式不正确" }, { status: 400 });
     const roots = resolveEduPiBridgeRoots();
     const result = await runCoreProcess<Record<string, unknown>>({ runtime: roots.runtime, dataRoot: roots.dataRoot, request: { ...identity, request_id: `dingtalk-configure-${Date.now().toString(36)}`, action: "configure", client_id: clientId, client_secret: clientSecret }, timeoutMs: 10_000 });
-    return result.ok === true ? NextResponse.json({ ok: true, status: "credentials_verified" }) : NextResponse.json({ ok: false, error: "钉钉连接验证失败" }, { status: 400 });
+    if (result.ok !== true) return NextResponse.json({ ok: false, error: "钉钉连接验证失败" }, { status: 400 });
+    const status = result.runtime_status === "connected" ? "connected" : "credentials_verified";
+    return NextResponse.json({ ok: true, status, runtimeStatus: result.runtime_status || null });
   } catch { return NextResponse.json({ ok: false, error: "钉钉连接验证失败" }, { status: 502 }); }
 }

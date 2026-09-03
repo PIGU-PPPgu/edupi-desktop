@@ -13,8 +13,8 @@
 
 ## Pinned runtime
 
-- Core commit: `01cd14735d482a7a25cb2fc0db373a07d9969cc3`
-- component manifest: `sha256:3fb9c667922dc25f807f37dc7120c6aeab7f3770df1f99b4998fc707d7f485ff`
+- Core commit: `e81d6b61951fb718907e726fed90450d4129b9a3`
+- component manifest: `sha256:381361cfc8ceffe0bd5366e1cbd585b626891b74d656b4e6cd8b5c9b2226ed6e`
 - Desktop merge: `7d4d3aaaf7fb24c297a2b901b37d27ca53e00877`
 
 ## Verification

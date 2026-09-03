@@ -60,7 +60,8 @@ export async function POST(request: Request) {
       const configured = await runCoreProcess<Record<string, unknown>>({ runtime: roots.runtime, dataRoot: roots.dataRoot, request: { protocol: "edupi-desktop-bridge", protocol_version: 1, producer: "edupi-desktop", operation: "connector-setup", request_id: `dingtalk-register-${Date.now().toString(36)}`, connector_id: "dingtalk", action: "configure", client_id: polled.client_id, client_secret: polled.client_secret }, timeoutMs: 10_000 });
       registrations.delete(body.registrationId);
       if (configured.ok !== true || configured.status !== "credentials_verified") return NextResponse.json({ ok: false, error: "应用已创建，但连接验证失败" }, { status: 502 });
-      return NextResponse.json({ ok: true, status: "credentials_verified", connectorId: "dingtalk" });
+      const finalStatus = configured.runtime_status === "connected" ? "connected" : "credentials_verified";
+      return NextResponse.json({ ok: true, status: finalStatus, connectorId: "dingtalk", runtimeStatus: configured.runtime_status || null });
     }
     return NextResponse.json({ ok: false, error: "操作无效" }, { status: 400 });
   } catch { return NextResponse.json({ ok: false, error: "钉钉一键授权暂不可用" }, { status: 502 }); }

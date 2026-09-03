@@ -17,4 +17,4 @@ EduPi implements the same task sequence with a versioned maximum functional perm
 
 The UI and registration code are original EduPi implementations. The permission-name snapshot is adapted from the MIT-licensed `riba2534/feishu-cli` repository at its pinned source revision; the Core repository records the attribution. Requesting permissions does not bypass tenant approval.
 
-DingTalk uses its official `DING_DWS_CLAW` QR registration sequence (`init → begin → poll`). Successful authorization is reported as `credentials_verified`; the UI must not call it connected until an EduPi Stream runtime is actually active.
+DingTalk uses its official `DING_DWS_CLAW` QR registration sequence (`init → begin → poll`). Successful authorization starts the bundled Stream runtime, which receives follow-up messages, loads the Core education projection, calls the configured model, and replies through DingTalk's session webhook. The UI reports `connected` only while the bridge process is alive.
