@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { EducationContract, EducationEntityDeleteKind, TeacherTask } from "@/lib/edupi-education-contract";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { studentRecordKey, studentRecordName } from "@/lib/edupi-student-roster-model";
@@ -80,8 +80,16 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   const activePatterns = students.reduce((total, student) => total + records(student.error_patterns).filter((item) => item.status !== "resolved").length, 0);
   const openFollowUps = data.tasks.filter((task) => task.trigger === "student_follow_up" && task.boardStage !== "done").length;
 
-  const importCsv = async (sourceName: string, csv: string) => {
-    const response = await fetch("/api/edupi/students/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourceName, csv }) });
+  useEffect(() => {
+    if (!message) return;
+    const timer = window.setTimeout(() => setMessage(null), message.tone === "error" ? 8_000 : 4_000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
+  const importRosterFile = async (file: File) => {
+    const body = new FormData();
+    body.append("file", file, file.name);
+    const response = await fetch("/api/edupi/students/import", { method: "POST", body });
     const result = await response.json() as { error?: string; data?: EducationContract; result?: { imported?: number } };
     if (!response.ok || !result.data) throw new Error(result.error || "学生档案更新失败。");
     onEducation(result.data);
@@ -92,7 +100,7 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
     event.target.value = "";
     if (!file || busy) return;
     setBusy(true); setMessage(null);
-    try { const result = await importCsv(file.name, await file.text()); setMessage({ tone: "success", text: `已导入 ${result.result?.imported ?? 0} 名学生` }); }
+    try { const result = await importRosterFile(file); setMessage({ tone: "success", text: `已导入 ${result.result?.imported ?? 0} 名学生` }); }
     catch (error) { setMessage({ tone: "error", text: error instanceof Error ? error.message : "学生名单导入失败。" }); }
     finally { setBusy(false); }
   };
@@ -153,7 +161,7 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   };
 
   return <main className={`edupi-module-workspace edupi-class-workspace${selected ? " has-student-drawer" : ""}`}>
-    <header className="edupi-module-heading edupi-student-heading"><div><span>{mode === "homeroom" ? "班级工作区" : "学生档案"}</span><h1>{mode === "homeroom" ? "班级" : "学生档案"}</h1><p>{classes} · {students.length} 名学生</p></div><div className="edupi-student-heading__actions"><button type="button" onClick={() => inputRef.current?.click()} disabled={busy}>{busy ? "导入中…" : "导入名单"}</button><button type="button" onClick={exportCurrent} disabled={data.students.length === 0}>导出档案</button><button type="button" onClick={exportTimeline} disabled={!selected}>导出轨迹</button></div><input ref={inputRef} type="file" accept=".csv,text/csv" hidden onChange={importFile} /></header>
+    <header className="edupi-module-heading edupi-student-heading"><div><span>{mode === "homeroom" ? "班级工作区" : "学生档案"}</span><h1>{mode === "homeroom" ? "班级" : "学生档案"}</h1><p>{classes} · {students.length} 名学生</p></div><div className="edupi-student-heading__actions"><button type="button" onClick={() => inputRef.current?.click()} disabled={busy}>{busy ? "导入中…" : "导入名单"}</button><button type="button" onClick={exportCurrent} disabled={data.students.length === 0}>导出档案</button><button type="button" onClick={exportTimeline} disabled={!selected}>导出轨迹</button></div><input ref={inputRef} type="file" accept=".csv,.tsv,.xlsx,.xls,.xlsm,.xlsb,text/csv,text/tab-separated-values,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={importFile} /></header>
     {message ? <p className={`edupi-student-message is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p> : null}
     <section className="edupi-class-summary-strip"><div><strong>{students.length}</strong><span>学生</span></div><div><strong>{activePatterns}</strong><span>观察中模式</span></div><div><strong>{openFollowUps}</strong><span>待跟进</span></div><div><strong>{data.continuity.familyContacts.length}</strong><span>家校档案</span></div></section>
     <section className="edupi-student-directory" aria-label="学生名单"><header><h2>学生</h2><span>按姓名排序</span></header><div>{students.map((student, index) => { const name = studentRecordName(student); const studentPatterns = records(student.error_patterns); const key = studentRecordKey(student, index); return <button type="button" key={key} className={key === selectedStudentId ? "is-selected" : ""} onClick={() => { setEditor(null); onStudent(student); }}><span className={`is-tint-${index % 4}`}>{name.slice(0, 1)}</span><strong>{name}</strong><small>{studentPatterns.filter((item) => item.status !== "resolved").length} 项观察</small></button>; })}</div>{students.length === 0 ? <button type="button" className="edupi-student-directory__empty" onClick={() => inputRef.current?.click()}>导入学生名单</button> : null}</section>

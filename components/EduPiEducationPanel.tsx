@@ -93,6 +93,8 @@ const reviewLabels: Record<TaskReviewAction, string> = {
   hold: "已暂缓",
   rollback: "已回滚",
 };
+const STATUS_MESSAGE_MS = 4_000;
+const ERROR_MESSAGE_MS = 8_000;
 
 function hasDroppedFiles(event: ReactDragEvent): boolean {
   return Array.from(event.dataTransfer.types).includes("Files");
@@ -191,6 +193,12 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [loadWorkspace, refreshKey]);
 
   useEffect(() => { if (initialModule === "context") setContextOpen(true); }, [initialModule]);
+
+  useEffect(() => {
+    if (!materialStagingMessage || materialStagingMessage.text.endsWith("…")) return;
+    const timer = window.setTimeout(() => setMaterialStagingMessage(null), materialStagingMessage.tone === "error" ? ERROR_MESSAGE_MS : STATUS_MESSAGE_MS);
+    return () => window.clearTimeout(timer);
+  }, [materialStagingMessage]);
 
   const submitEducationIntake = useCallback(async (body: Record<string, unknown>): Promise<EducationIntakeApiResult> => {
     if (educationIntakeBusy) throw new Error("材料正在接入 EduPi。");

@@ -6,6 +6,7 @@ import { emergencyStopComputerUseNative } from "@/lib/desktop-computer-use";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 
 export const COMPUTER_USE_CHANGED_EVENT = "edupi-computer-use-changed";
+export const COMPUTER_USE_STOP_NOTICE_MS = 4_000;
 
 export function announceComputerUseChanged(enabled: boolean): void {
   window.dispatchEvent(new CustomEvent<boolean>(COMPUTER_USE_CHANGED_EVENT, { detail: enabled }));
@@ -13,16 +14,22 @@ export function announceComputerUseChanged(enabled: boolean): void {
 
 export function EduPiComputerUseStop() {
   const [enabled, setEnabled] = useState(() => isTauriDesktop() && getPrefBool(APP_PREF_KEYS.computerUseEnabled, false));
+  const [visible, setVisible] = useState(enabled);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    const update = (event: Event) => setEnabled((event as CustomEvent<boolean>).detail === true);
+    const update = (event: Event) => { const next = (event as CustomEvent<boolean>).detail === true; setEnabled(next); setVisible(next); };
     window.addEventListener(COMPUTER_USE_CHANGED_EVENT, update);
     return () => window.removeEventListener(COMPUTER_USE_CHANGED_EVENT, update);
   }, []);
+  useEffect(() => {
+    if (!enabled || !visible || busy || error) return;
+    const timer = window.setTimeout(() => setVisible(false), COMPUTER_USE_STOP_NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [busy, enabled, error, visible]);
 
-  if (!enabled) return null;
+  if (!enabled || !visible) return null;
   return <button type="button" className="edupi-computer-stop" disabled={busy} title={error ? "原生急停失败，请重试" : undefined} onClick={() => {
     setBusy(true);
     setError(false);

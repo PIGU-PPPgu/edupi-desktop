@@ -43,3 +43,11 @@ Harnss was reviewed for its persistent workspace composition: a project/session 
 No Harnss source code or ACP runtime was copied into EduPi. The daily command surface, optional object browser, task inspector, and Agent drawer in EduPi are independently authored against the existing Pi AgentSession and EduPi safe-store APIs. Harnss is also documented by its maintainers as early-stage and pending a rewrite, so it is a layout and interaction reference rather than a platform dependency.
 
 None of these reference applications is represented as fully migrated. A future full-platform migration would require its server APIs, data model, authentication, persistence, and runtime lifecycle to be moved and verified together.
+
+## SheetJS Community Edition
+
+Student roster file import uses SheetJS Community Edition `0.20.3` to read XLSX, XLS, XLSM, and XLSB workbooks. The dependency is installed from SheetJS's official versioned CDN tarball and is used only on the server-side import boundary.
+
+- Source: https://git.sheetjs.com/sheetjs/sheetjs
+- Package: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
+- License: Apache License 2.0
