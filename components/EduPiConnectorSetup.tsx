@@ -3,64 +3,48 @@
 import { useState } from "react";
 import { openExternal } from "@/lib/desktop-native";
 
-const FEISHU_PERMISSIONS = { scopes: { tenant: ["im:message", "im:message:send_as_bot", "im:chat", "im:resource", "contact:user.base:readonly", "calendar:calendar", "drive:drive", "docx:document"] } };
-const FEISHU_EVENTS = ["im.message.receive_v1", "im.chat.member.bot.added_v1"];
-const FEISHU_CALLBACKS = ["card.action.trigger"];
+const FEISHU_ADDONS = { preset: true, scopes: { tenant: ["im:message", "im:message:send_as_bot", "im:chat", "im:resource", "contact:user.base:readonly", "calendar:calendar", "drive:drive", "docx:document"], user: ["offline_access", "calendar:calendar:read", "drive:drive", "docx:document"] }, events: { items: { tenant: ["im.message.receive_v1", "im.chat.member.bot.added_v1"] } }, callbacks: { items: ["card.action.trigger"] } };
+const DINGTALK_CONNECTOR_COMMAND = "npx -y @dingtalk-real-ai/dingtalk-connector install";
+const GUIDES: Record<string, { title: string; note: string }> = { email: { title: "邮箱", note: "向邮箱管理员申请 IMAP/SMTP 或 OAuth 应用信息。" }, sis: { title: "教务系统", note: "向学校教务管理员申请课表、校历和名单接口。" }, cloud_drive: { title: "云盘", note: "选择学校正在使用的云盘，再授权指定材料目录。" } };
 
-const CONNECTOR_GUIDE: Record<string, { title: string; note: string; url?: string }> = {
-  dingtalk: { title: "钉钉", note: "创建企业内部应用，取得 Client ID 与 Client Secret。", url: "https://open-dev.dingtalk.com/" },
-  email: { title: "邮箱", note: "向邮箱管理员申请 IMAP/SMTP 或 OAuth 应用信息。" },
-  sis: { title: "教务系统", note: "向学校教务管理员申请课表、校历和名单接口。" },
-  cloud_drive: { title: "云盘", note: "选择学校正在使用的云盘，再授权指定材料目录。" },
-};
+async function copyText(value: string): Promise<void> { await navigator.clipboard.writeText(value); }
 
-async function copyText(value: string): Promise<void> {
-  await navigator.clipboard.writeText(value);
+function SetupHeader({ title, status, onClose }: { title: string; status: string; onClose: () => void }) {
+  return <header><div><span>连接设置</span><h2>{title}</h2><small>{status === "configured" ? "已连接，可重新绑定" : "约 3 分钟"}</small></div><button type="button" onClick={onClose} aria-label="关闭连接设置">×</button></header>;
 }
 
-export function EduPiConnectorSetup({ connectorId, status, onClose, onConfigured }: { connectorId: string; status: string; onClose: () => void; onConfigured: () => void }) {
-  const [appId, setAppId] = useState("");
-  const [appSecret, setAppSecret] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
-  const copy = async (label: string, value: string) => {
-    try { await copyText(value); setCopied(label); setMessage(null); }
-    catch { setMessage("复制失败，请允许剪贴板访问后重试"); }
-  };
-  if (connectorId !== "feishu") {
-    const guide = CONNECTOR_GUIDE[connectorId] || { title: connectorId, note: "该连接器需要管理员提供接入信息。" };
-    return <section className="edupi-connector-setup" aria-label={`${guide.title}连接设置`}>
-      <header><div><span>连接设置</span><h2>{guide.title}</h2><small>{status === "configured" ? "已连接" : "未配置"}</small></div><button type="button" onClick={onClose} aria-label="关闭连接设置">×</button></header>
-      <p>{guide.note}</p>
-      {guide.url ? <button className="edupi-admin-primary" type="button" onClick={() => void openExternal(guide.url!)}>打开开发者平台</button> : null}
-    </section>;
-  }
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (busy) return;
-    setBusy(true); setMessage(null);
-    try {
-      const response = await fetch("/api/edupi/connectors/feishu", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ appId, appSecret }) });
-      const result = await response.json() as { ok?: boolean; error?: string };
-      if (!response.ok || !result.ok) throw new Error(result.error || "连接验证失败");
-      setAppSecret(""); setMessage("验证通过，飞书已连接"); onConfigured();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "连接验证失败"); }
-    finally { setBusy(false); }
-  };
+function FeishuSetup({ status, onClose, onConfigured }: { status: string; onClose: () => void; onConfigured: () => void }) {
+  const [appId, setAppId] = useState(""); const [appSecret, setAppSecret] = useState("");
+  const [registrationId, setRegistrationId] = useState<string | null>(null); const [busy, setBusy] = useState(false); const [message, setMessage] = useState<string | null>(null); const [copied, setCopied] = useState(false);
+  const openLink = async (url: string) => { try { await openExternal(url); setMessage(null); } catch { setMessage("系统未能打开链接，请检查默认浏览器"); } };
+  const startRegistration = async () => { setBusy(true); setMessage(null); try { const response = await fetch("/api/edupi/connectors/feishu/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "start" }) }); const result = await response.json() as { ok?: boolean; error?: string; registrationId?: string; verificationUrl?: string }; if (!response.ok || !result.ok || !result.registrationId || !result.verificationUrl) throw new Error(result.error || "一键授权启动失败"); setRegistrationId(result.registrationId); await openLink(result.verificationUrl); setMessage("在飞书确认完整权限后，返回这里检查结果"); } catch (error) { setMessage(error instanceof Error ? error.message : "一键授权启动失败"); } finally { setBusy(false); } };
+  const pollRegistration = async () => { if (!registrationId) return; setBusy(true); try { const response = await fetch("/api/edupi/connectors/feishu/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "poll", registrationId }) }); const result = await response.json() as { ok?: boolean; error?: string; status?: string }; if (response.status === 202) { setMessage("飞书还在等待确认"); return; } if (!response.ok || !result.ok || result.status !== "configured") throw new Error(result.error || "授权尚未完成"); setRegistrationId(null); setMessage("飞书应用已创建并连接"); onConfigured(); } catch (error) { setMessage(error instanceof Error ? error.message : "授权检查失败"); } finally { setBusy(false); } };
+  const submitManual = async (event: React.FormEvent) => { event.preventDefault(); if (busy) return; setBusy(true); setMessage(null); try { const response = await fetch("/api/edupi/connectors/feishu", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ appId, appSecret }) }); const result = await response.json() as { ok?: boolean; error?: string }; if (!response.ok || !result.ok) throw new Error(result.error || "连接验证失败"); setAppSecret(""); setMessage("验证通过，飞书已连接"); onConfigured(); } catch (error) { setMessage(error instanceof Error ? error.message : "连接验证失败"); } finally { setBusy(false); } };
   return <section className="edupi-connector-setup" aria-label="飞书连接设置">
-    <header><div><span>连接设置</span><h2>飞书机器人</h2><small>{status === "configured" ? "已连接，可重新绑定" : "约 5 分钟"}</small></div><button type="button" onClick={onClose} aria-label="关闭连接设置">×</button></header>
-    <ol>
-      <li><strong>创建企业自建应用并添加机器人</strong><button type="button" onClick={() => void openExternal("https://open.feishu.cn/app")}>打开飞书开放平台 ↗</button></li>
-      <li><strong>批量导入最小权限</strong><span>8 项</span><button type="button" onClick={() => void copy("权限 JSON", JSON.stringify(FEISHU_PERMISSIONS, null, 2))}>{copied === "权限 JSON" ? "已复制" : "复制权限 JSON"}</button></li>
-      <li><strong>使用长连接接收事件</strong><span>2 个事件 · 1 个回调</span><button type="button" onClick={() => void copy("事件清单", [...FEISHU_EVENTS, ...FEISHU_CALLBACKS].join("\n"))}>{copied === "事件清单" ? "已复制" : "复制事件清单"}</button></li>
-      <li><strong>创建版本并发布应用</strong><button type="button" onClick={() => void openExternal("https://moonshot.feishu.cn/wiki/Aa4EwFLCGiwdntklc9vcPZdsn9c")}>查看参考流程 ↗</button></li>
-    </ol>
-    <form onSubmit={submit}>
-      <label>App ID<input value={appId} onChange={(event) => setAppId(event.target.value)} placeholder="cli_..." maxLength={68} autoComplete="off" /></label>
-      <label>App Secret<input type="password" value={appSecret} onChange={(event) => setAppSecret(event.target.value)} maxLength={128} autoComplete="off" /></label>
-      {message ? <p role="status">{message}</p> : null}
-      <button className="edupi-admin-primary" type="submit" disabled={busy || !appId.trim() || appSecret.length < 16}>{busy ? "验证中…" : "验证并保存"}</button>
-    </form>
+    <SetupHeader title="飞书机器人" status={status} onClose={onClose} />
+    <div className="edupi-connector-setup__primary"><div><strong>完整权限一键接入</strong><span>创建应用、机器人、权限、事件与回调</span></div><button className="edupi-admin-primary" type="button" disabled={busy} onClick={() => void (registrationId ? pollRegistration() : startRegistration())}>{busy ? "处理中…" : registrationId ? "检查授权结果" : "一键创建并授权"}</button></div>
+    <ol><li><strong>平台全功能模板</strong><span>PersonalAgent 默认完整权限 + EduPi 权限</span><button type="button" onClick={() => void copyText(JSON.stringify(FEISHU_ADDONS, null, 2)).then(() => setCopied(true)).catch(() => setMessage("复制失败"))}>{copied ? "已复制" : "复制完整权限"}</button></li><li><strong>长连接事件与卡片回调</strong><span>2 个事件 · 1 个回调</span><button type="button" onClick={() => void openLink("https://open.feishu.cn/app")}>打开开放平台 ↗</button></li><li><strong>Mira 同类流程参考</strong><button type="button" onClick={() => void openLink("https://moonshot.feishu.cn/wiki/Aa4EwFLCGiwdntklc9vcPZdsn9c")}>打开参考文档 ↗</button></li></ol>
+    {message ? <p className="edupi-connector-setup__message" role="status">{message}</p> : null}
+    <details><summary>已有应用手动绑定</summary><form onSubmit={submitManual}><label>App ID<input value={appId} onChange={(event) => setAppId(event.target.value)} placeholder="cli_..." maxLength={68} autoComplete="off" /></label><label>App Secret<input type="password" value={appSecret} onChange={(event) => setAppSecret(event.target.value)} maxLength={128} autoComplete="off" /></label><button className="edupi-admin-primary" type="submit" disabled={busy || !appId.trim() || appSecret.length < 16}>验证并保存</button></form></details>
   </section>;
+}
+
+function DingTalkSetup({ status, onClose, onConfigured }: { status: string; onClose: () => void; onConfigured: () => void }) {
+  const [clientId, setClientId] = useState(""); const [clientSecret, setClientSecret] = useState(""); const [busy, setBusy] = useState(false); const [message, setMessage] = useState<string | null>(null); const [copied, setCopied] = useState(false);
+  const openLink = async (url: string) => { try { await openExternal(url); setMessage(null); } catch { setMessage("系统未能打开链接，请检查默认浏览器"); } };
+  const submit = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); setMessage(null); try { const response = await fetch("/api/edupi/connectors/dingtalk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId, clientSecret }) }); const result = await response.json() as { ok?: boolean; error?: string }; if (!response.ok || !result.ok) throw new Error(result.error || "连接验证失败"); setClientSecret(""); setMessage("凭据已验证，钉钉 Stream 连接信息已保存"); onConfigured(); } catch (error) { setMessage(error instanceof Error ? error.message : "连接验证失败"); } finally { setBusy(false); } };
+  return <section className="edupi-connector-setup" aria-label="钉钉连接设置">
+    <SetupHeader title="钉钉机器人" status={status} onClose={onClose} />
+    <div className="edupi-connector-setup__primary"><div><strong>官方 Agent 自动连接</strong><span>创建机器人并使用 Stream 模式接收消息</span></div><button className="edupi-admin-primary" type="button" onClick={() => void openLink("https://open.dingtalk.com/")}>打开钉钉 AI 连接 ↗</button></div>
+    <ol><li><strong>安装官方连接器</strong><span>{DINGTALK_CONNECTOR_COMMAND}</span><button type="button" onClick={() => void copyText(DINGTALK_CONNECTOR_COMMAND).then(() => setCopied(true)).catch(() => setMessage("复制失败"))}>{copied ? "已复制" : "复制安装命令"}</button></li><li><strong>机器人开发教程</strong><button type="button" onClick={() => void openLink("https://open.dingtalk.com/tutorial/")}>打开官方教程 ↗</button></li></ol>
+    <form onSubmit={submit}><label>Client ID<input value={clientId} onChange={(event) => setClientId(event.target.value)} maxLength={128} autoComplete="off" /></label><label>Client Secret<input type="password" value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} maxLength={128} autoComplete="off" /></label><button className="edupi-admin-primary" type="submit" disabled={busy || clientId.length < 8 || clientSecret.length < 16}>{busy ? "验证中…" : "验证并保存"}</button></form>
+    {message ? <p className="edupi-connector-setup__message" role="status">{message}</p> : null}
+  </section>;
+}
+
+export function EduPiConnectorSetup(props: { connectorId: string; status: string; onClose: () => void; onConfigured: () => void }) {
+  if (props.connectorId === "feishu") return <FeishuSetup {...props} />;
+  if (props.connectorId === "dingtalk") return <DingTalkSetup {...props} />;
+  const guide = GUIDES[props.connectorId] || { title: props.connectorId, note: "该连接器需要管理员提供接入信息。" };
+  return <section className="edupi-connector-setup" aria-label={`${guide.title}连接设置`}><SetupHeader title={guide.title} status={props.status} onClose={props.onClose} /><p>{guide.note}</p></section>;
 }

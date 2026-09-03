@@ -8,7 +8,7 @@ Make EduPi Desktop launch from Finder/Start Menu without `EDUPI_*` environment v
 
 - The previous `0.3.0` packaged startup could abort with `SIGABRT` before the user selected a workspace because Rust required `EDUPI_PROJECT_ROOT` and the server had no bundled Core.
 - The installed `0.3.0` Desktop pinned Core `5538021f171a647d87562d91e5ab953f794e2331`; the immediately preceding Desktop source pinned `6e806f4e0af4232d95aa7353ed7a46cea4c7032a` before the paired Core PR #17.
-- The paired Core runtime is now `162d08576834615e9323ff0c7a5765e2fa626437` with component manifest `sha256:1c6d368e560df1241ca75e1345c75571cacd956e7ad09670e14c7b55b1a0c708`; its closure contains all six platform foundations, verified Feishu setup, and Typebox `1.3.8`.
+- The paired Core runtime is now `6d98157fa76a5828d0c1e5f43b781ca05bd3f833` with component manifest `sha256:42949c1213a9d1c954324ec788d4990646f2826a351b9f0f44304c24e0452bbf`; its closure contains full-template Feishu and DingTalk Stream onboarding plus Typebox `1.3.8`.
 
 ## Root and bundle contract
 
