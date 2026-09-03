@@ -4,17 +4,17 @@
 
 | Stage | Core checkpoint | Desktop checkpoint | Runtime evidence |
 | --- | --- | --- | --- |
-| Proactive Work Kernel | [Core PR #18](https://github.com/PIGU-PPPgu/edupi/pull/18) | [Desktop PR #24](https://github.com/PIGU-PPPgu/edupi-desktop/pull/24) | idempotent fire keys, leases, retry ceiling, delivery uncertainty hold, redacted logs, visible runs |
-| Scoped Education Memory | [Core PR #19](https://github.com/PIGU-PPPgu/edupi/pull/19) | [Desktop PR #25](https://github.com/PIGU-PPPgu/edupi-desktop/pull/25) | real teacher data: 2 semesters, 8 contexts, 31 bindings; prior term excludes current-term fact |
-| Teaching Skill Lifecycle | [Core PR #20](https://github.com/PIGU-PPPgu/edupi/pull/20) | [Desktop PR #26](https://github.com/PIGU-PPPgu/edupi-desktop/pull/26) | draft/trial/validated/published/retired projection; only route-verified published skills are reusable |
-| Connectors | [Core PR #21](https://github.com/PIGU-PPPgu/edupi/pull/21) | [Desktop PR #26](https://github.com/PIGU-PPPgu/edupi-desktop/pull/26) | Feishu/DingTalk/email/SIS/cloud-drive capability registry; normalized inbound facts; outbound remains pending review |
-| Persistent Agent Computer | [Core PR #22](https://github.com/PIGU-PPPgu/edupi/pull/22) | [Desktop PR #26](https://github.com/PIGU-PPPgu/edupi-desktop/pull/26) | restart-safe document/OCR/PPT/long-task queue, idempotency, lease recovery, bounded retries, artifact index |
-| Hosted Core & Multi Harness | [Core PR #23](https://github.com/PIGU-PPPgu/edupi/pull/23) | [Desktop PR #26](https://github.com/PIGU-PPPgu/edupi-desktop/pull/26) | tenant-isolated local/hosted Core modes and workload routing across Pi/custom Harness adapters |
+| Proactive Work Kernel | [Core PR #18](https://github.com/PIGU-PPPgu/edupi/pull/18) | [Desktop PR #24](https://github.com/PIGU-PPPgu/edupi-desktop-internal/pull/24) | idempotent fire keys, leases, retry ceiling, delivery uncertainty hold, redacted logs, visible runs |
+| Scoped Education Memory | [Core PR #19](https://github.com/PIGU-PPPgu/edupi/pull/19) | [Desktop PR #25](https://github.com/PIGU-PPPgu/edupi-desktop-internal/pull/25) | real teacher data: 2 semesters, 8 contexts, 31 bindings; prior term excludes current-term fact |
+| Teaching Skill Lifecycle | [Core PR #20](https://github.com/PIGU-PPPgu/edupi/pull/20) | [Desktop PR #26](https://github.com/PIGU-PPPgu/edupi-desktop-internal/pull/26) | draft/trial/validated/published/retired projection; only route-verified published skills are reusable |
+| Connectors | [Core PR #21](https://github.com/PIGU-PPPgu/edupi/pull/21) | [Desktop PR #26](https://github.com/PIGU-PPPgu/edupi-desktop-internal/pull/26) | Feishu/DingTalk/email/SIS/cloud-drive capability registry; normalized inbound facts; outbound remains pending review |
+| Persistent Agent Computer | [Core PR #22](https://github.com/PIGU-PPPgu/edupi/pull/22) | [Desktop PR #26](https://github.com/PIGU-PPPgu/edupi-desktop-internal/pull/26) | restart-safe document/OCR/PPT/long-task queue, idempotency, lease recovery, bounded retries, artifact index |
+| Hosted Core & Multi Harness | [Core PR #23](https://github.com/PIGU-PPPgu/edupi/pull/23) | [Desktop PR #26](https://github.com/PIGU-PPPgu/edupi-desktop-internal/pull/26) | tenant-isolated local/hosted Core modes and workload routing across Pi/custom Harness adapters |
 
 ## Pinned runtime
 
-- Core commit: `2194a3db337457bbdf7c28e6cf4a32ea9c57f72e`
-- component manifest: `sha256:bb0598eb74d479ce6ba09b440d54f4a0d09bca9f6640e5cc124b701a22feac83`
+- Core commit: `162d08576834615e9323ff0c7a5765e2fa626437`
+- component manifest: `sha256:1c6d368e560df1241ca75e1345c75571cacd956e7ad09670e14c7b55b1a0c708`
 - Desktop merge: `7d4d3aaaf7fb24c297a2b901b37d27ca53e00877`
 
 ## Verification
