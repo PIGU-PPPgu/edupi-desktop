@@ -7,6 +7,7 @@ import type { WorkbenchView } from "@/lib/edupi-workbench";
 import type { EduPiWorkspaceBundle } from "@/lib/edupi-education-client";
 import { useDesktopChrome, WindowControls } from "./desktop";
 import { EduPiConnectorSetup } from "./EduPiConnectorSetup";
+import { startWindowDragging } from "@/lib/desktop-window";
 
 type AdminSnapshot = {
   context: TeacherContextSnapshot | null;
@@ -162,7 +163,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
   };
 
   return <section className={`edupi-admin-panel${desktopChrome.isDesktop ? " has-desktop-drag-region" : ""}`} aria-label="EduPi 管理中心">
-    {desktopChrome.isDesktop ? <div className="edupi-window-drag-region" {...desktopChrome.dragRegionProps}><WindowControls /></div> : null}
+    {desktopChrome.isDesktop ? <div className="edupi-window-drag-region" {...desktopChrome.dragRegionProps} onMouseDown={(event) => { if (event.button === 0 && event.target === event.currentTarget) void startWindowDragging(); }}><WindowControls /></div> : null}
     <aside className="edupi-admin-sidebar">
       <header><span className="edupi-admin-sidebar__mark" aria-hidden="true">π</span><div><strong>EduPi</strong><small>后台管理</small></div></header>
       <nav aria-label="后台管理">

@@ -22,6 +22,7 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.match(admin, /ADMIN_SECTIONS/);
   assert.match(admin, /has-desktop-drag-region/);
   assert.match(admin, /edupi-window-drag-region/);
+  assert.match(admin, /startWindowDragging/);
   assert.match(admin, /EduPiConnectorSetup/);
   assert.match(admin, /setSelectedConnector/);
   assert.match(admin, /initialSection\?: AdminSectionId/);
