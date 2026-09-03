@@ -46,16 +46,21 @@ function list(value: string | undefined): string[] {
   return items;
 }
 
-export function parseStudentRosterCsv(source: string): StudentRosterRow[] {
-  if (typeof source !== "string" || !source.trim()) throw new StudentRosterError("invalid_csv", "CSV 内容为空。");
-  const rows = csvRows(source.replace(/^\uFEFF/, ""));
-  if (rows.length < 2) throw new StudentRosterError("invalid_csv", "CSV 至少需要表头和一名学生。");
-  const columns = rows[0].map(headerKey);
+function cellText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
+
+export function parseStudentRosterRows(sourceRows: unknown[][]): StudentRosterRow[] {
+  if (!Array.isArray(sourceRows) || sourceRows.length < 2) throw new StudentRosterError("invalid_csv", "名单至少需要表头和一名学生。");
+  const rows = sourceRows.map((row) => Array.isArray(row) ? row.map(cellText) : []);
+  const headerIndex = rows.slice(0, 20).findIndex((row) => row.map(headerKey).includes("name"));
+  if (headerIndex < 0) throw new StudentRosterError("missing_name", "名单需要“姓名”列。");
+  const columns = rows[headerIndex].map(headerKey);
   const nameIndex = columns.indexOf("name");
-  if (nameIndex < 0) throw new StudentRosterError("missing_name", "CSV 需要“姓名”列。");
   const traitsIndex = columns.indexOf("traits");
   const parentNotesIndex = columns.indexOf("parentNotes");
-  const students = rows.slice(1).filter((row) => row.some(Boolean)).map((row) => ({
+  const students = rows.slice(headerIndex + 1).filter((row) => row.some(Boolean)).map((row) => ({
     name: (row[nameIndex] || "").trim(),
     traits: traitsIndex >= 0 ? list(row[traitsIndex]) : [],
     parentNotes: parentNotesIndex >= 0 ? list(row[parentNotesIndex]) : [],
@@ -66,6 +71,11 @@ export function parseStudentRosterCsv(source: string): StudentRosterRow[] {
   const corePayloadBytes = new TextEncoder().encode(JSON.stringify(students.map((student) => ({ name: student.name, traits: student.traits, parent_notes: student.parentNotes })))).byteLength;
   if (corePayloadBytes > 200 * 1024) throw new StudentRosterError("too_large", "名单内容过大，请拆分后导入。");
   return students;
+}
+
+export function parseStudentRosterCsv(source: string): StudentRosterRow[] {
+  if (typeof source !== "string" || !source.trim()) throw new StudentRosterError("invalid_csv", "CSV 内容为空。");
+  return parseStudentRosterRows(csvRows(source.replace(/^\uFEFF/, "")));
 }
 
 export function studentRecordKey(student: Record<string, unknown>, index = 0): string {
