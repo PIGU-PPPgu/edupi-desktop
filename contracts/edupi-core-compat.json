@@ -2,9 +2,9 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "01cd14735d482a7a25cb2fc0db373a07d9969cc3",
+    "core_commit": "542d9f5ecff463b40e955778fa8af42a78b4ac8d",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:3fb9c667922dc25f807f37dc7120c6aeab7f3770df1f99b4998fc707d7f485ff"
+    "component_manifest_hash": "sha256:ea64a99cfaea87a1b3929c91a8635ace165d5beec854531d87533a9ae0c34fed"
   },
   "contract_identities": [
     {
@@ -57,7 +57,9 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/23",
     "https://github.com/PIGU-PPPgu/edupi/pull/24",
     "https://github.com/PIGU-PPPgu/edupi/pull/25",
-    "https://github.com/PIGU-PPPgu/edupi/pull/26"
+    "https://github.com/PIGU-PPPgu/edupi/pull/26",
+    "https://github.com/PIGU-PPPgu/edupi/pull/27",
+    "https://github.com/PIGU-PPPgu/edupi/pull/28"
   ],
-  "change_note": "Pinned merged Core PR #26 for Feishu maximum scope requests and truthful DingTalk setup state"
+  "change_note": "Pinned merged Core PR #28 for live DingTalk replies plus read-compatible pre-review storage formats"
 }

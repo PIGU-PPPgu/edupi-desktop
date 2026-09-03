@@ -215,6 +215,10 @@ export function AppShell() {
     setMobileSidebarReady(true);
   }, []);
   useEffect(() => {
+    if (!desktopMode) return;
+    void fetch("/api/edupi/connectors/dingtalk/runtime", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "ensure" }) }).catch(() => {});
+  }, [desktopMode]);
+  useEffect(() => {
     if (!rightPanelOpen) return;
     reclampSidebarWidth();
     reclampRightPanelWidth();
