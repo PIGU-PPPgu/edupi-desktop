@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 const source = fs.readFileSync(new URL("./route.ts", import.meta.url), "utf8");
-test("one-click Feishu registration uses the full PersonalAgent template without exposing credentials", () => {
+test("one-click Feishu registration loads the pinned maximum scope manifest without exposing credentials", () => {
   assert.match(source, /archetype: "PersonalAgent"/);
   assert.match(source, /preset: true/);
+  assert.match(source, /maximum_requested/);
+  assert.match(source, /requestedScopeCount/);
+  assert.match(source, /loadRegistrationAddons/);
   assert.match(source, /createOnly/);
   assert.match(source, /authorization_required/);
   assert.match(source, /connector-setup/);

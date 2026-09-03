@@ -2,9 +2,9 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "6d98157fa76a5828d0c1e5f43b781ca05bd3f833",
+    "core_commit": "01cd14735d482a7a25cb2fc0db373a07d9969cc3",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:42949c1213a9d1c954324ec788d4990646f2826a351b9f0f44304c24e0452bbf"
+    "component_manifest_hash": "sha256:3fb9c667922dc25f807f37dc7120c6aeab7f3770df1f99b4998fc707d7f485ff"
   },
   "contract_identities": [
     {
@@ -56,7 +56,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/22",
     "https://github.com/PIGU-PPPgu/edupi/pull/23",
     "https://github.com/PIGU-PPPgu/edupi/pull/24",
-    "https://github.com/PIGU-PPPgu/edupi/pull/25"
+    "https://github.com/PIGU-PPPgu/edupi/pull/25",
+    "https://github.com/PIGU-PPPgu/edupi/pull/26"
   ],
-  "change_note": "Pinned merged Core PR #25 for Feishu full-template and DingTalk Stream onboarding"
+  "change_note": "Pinned merged Core PR #26 for Feishu maximum scope requests and truthful DingTalk setup state"
 }
