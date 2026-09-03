@@ -736,6 +736,7 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
     let mut builder = WebviewWindowBuilder::new(app, WINDOW_LABEL, WebviewUrl::External(app_url))
         .title("EduPi")
         .inner_size(1440.0, 900.0)
+        .center()
         .min_inner_size(900.0, 600.0)
         .resizable(true)
         // Pi Agent already handles browser drag/drop for image attachments.
