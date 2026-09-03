@@ -5,6 +5,8 @@ import type { EducationContract } from "@/lib/edupi-education-contract";
 import type { OnboardingChecklistItem, TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import type { WorkbenchView } from "@/lib/edupi-workbench";
 import type { EduPiWorkspaceBundle } from "@/lib/edupi-education-client";
+import { useDesktopChrome, WindowControls } from "./desktop";
+import { EduPiConnectorSetup } from "./EduPiConnectorSetup";
 
 type AdminSnapshot = {
   context: TeacherContextSnapshot | null;
@@ -85,11 +87,13 @@ function AdminMetric({ value, label }: { value: string | number; label: string }
 }
 
 export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, onNavigate, onOpenSettings, modelSettingsDirty, modelsPanel, initialSection = "readiness", refreshToken = 0 }: Props) {
+  const desktopChrome = useDesktopChrome();
   const [activeSection, setActiveSection] = useState<AdminSectionId>(initialSection);
   const [modelsMounted, setModelsMounted] = useState(false);
   const [snapshot, setSnapshot] = useState<AdminSnapshot>({ context: null, education: null, status: null, models: null, platform: null });
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [selectedConnector, setSelectedConnector] = useState<string | null>(null);
   const firstNavRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const workspaceRef = useRef<HTMLElement>(null);
@@ -157,7 +161,8 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
     action();
   };
 
-  return <section className="edupi-admin-panel" aria-label="EduPi 管理中心">
+  return <section className={`edupi-admin-panel${desktopChrome.isDesktop ? " has-desktop-drag-region" : ""}`} aria-label="EduPi 管理中心">
+    {desktopChrome.isDesktop ? <div className="edupi-window-drag-region" {...desktopChrome.dragRegionProps}><WindowControls /></div> : null}
     <aside className="edupi-admin-sidebar">
       <header><span className="edupi-admin-sidebar__mark" aria-hidden="true">π</span><div><strong>EduPi</strong><small>后台管理</small></div></header>
       <nav aria-label="后台管理">
@@ -204,7 +209,8 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
       {activeSection === "connections" ? <section className="edupi-admin-section">
         <AdminSectionHeader title="连接与后台" meta="飞书 · 钉钉 · 邮箱 · 教务 · 云盘" onRefresh={refresh} />
         <div className="edupi-admin-metrics"><AdminMetric value={snapshot.platform?.connectors?.connectors?.filter((item) => item.status === "configured").length ?? 0} label="已配置连接" /><AdminMetric value={snapshot.platform?.agentComputer?.summary?.running ?? 0} label="后台运行" /><AdminMetric value={snapshot.platform?.agentComputer?.summary?.completed ?? 0} label="完成作业" /></div>
-        <div className="edupi-admin-list">{snapshot.platform?.connectors?.connectors?.map((connector) => <div key={connector.connector_id}><span><strong>{connector.label || connector.connector_id}</strong><small>{connector.capabilities?.join(" · ")}</small></span><em className={connector.status === "configured" ? "is-ready" : ""}>{connector.status === "configured" ? "已连接" : "未配置"}</em></div>)}</div>
+        <div className="edupi-admin-list">{snapshot.platform?.connectors?.connectors?.map((connector) => <button type="button" key={connector.connector_id} onClick={() => setSelectedConnector(connector.connector_id || null)}><span><strong>{connector.label || connector.connector_id}</strong><small>{connector.capabilities?.join(" · ")}</small></span><em className={connector.status === "configured" ? "is-ready" : ""}>{connector.status === "configured" ? "已连接" : "设置 ›"}</em></button>)}</div>
+        {selectedConnector ? <EduPiConnectorSetup connectorId={selectedConnector} status={snapshot.platform?.connectors?.connectors?.find((item) => item.connector_id === selectedConnector)?.status || "not_configured"} onClose={() => setSelectedConnector(null)} onConfigured={refresh} /> : null}
       </section> : null}
 
       {activeSection === "platform" ? <section className="edupi-admin-section">

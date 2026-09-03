@@ -2,9 +2,9 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "2194a3db337457bbdf7c28e6cf4a32ea9c57f72e",
+    "core_commit": "162d08576834615e9323ff0c7a5765e2fa626437",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:bb0598eb74d479ce6ba09b440d54f4a0d09bca9f6640e5cc124b701a22feac83"
+    "component_manifest_hash": "sha256:1c6d368e560df1241ca75e1345c75571cacd956e7ad09670e14c7b55b1a0c708"
   },
   "contract_identities": [
     {
@@ -54,7 +54,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/20",
     "https://github.com/PIGU-PPPgu/edupi/pull/21",
     "https://github.com/PIGU-PPPgu/edupi/pull/22",
-    "https://github.com/PIGU-PPPgu/edupi/pull/23"
+    "https://github.com/PIGU-PPPgu/edupi/pull/23",
+    "https://github.com/PIGU-PPPgu/edupi/pull/24"
   ],
-  "change_note": "Pinned merged Core PRs #20-#23 for teaching skills, connectors, persistent jobs and hosted multi-Harness routing"
+  "change_note": "Pinned merged Core PR #24 for verified Feishu connector setup and permission manifest"
 }

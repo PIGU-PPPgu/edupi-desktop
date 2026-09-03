@@ -11,6 +11,11 @@
   color: var(--text);
 }
 
+.edupi-admin-panel.has-desktop-drag-region { grid-template-rows: 28px minmax(0, 1fr); }
+.edupi-admin-panel.has-desktop-drag-region > .edupi-window-drag-region { grid-row: 1; grid-column: 1 / -1; }
+.edupi-admin-panel.has-desktop-drag-region > .edupi-admin-sidebar,
+.edupi-admin-panel.has-desktop-drag-region > .edupi-admin-workspace { grid-row: 2; }
+
 .edupi-admin-panel button {
   min-height: 34px;
   padding: 0 11px;
@@ -243,6 +248,24 @@
 .edupi-admin-list em { color: var(--text-muted); font-size: 11px; font-style: normal; white-space: nowrap; }
 .edupi-admin-list em.is-ready { color: #18805a; }
 
+.edupi-connector-setup { margin-top: 18px; padding: 18px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); }
+.edupi-connector-setup > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.edupi-connector-setup > header > div { display: grid; gap: 3px; }
+.edupi-connector-setup > header span { color: var(--accent); font-size: 10px; font-weight: 700; }
+.edupi-connector-setup h2 { margin: 0; font-size: 18px; }
+.edupi-connector-setup small,
+.edupi-connector-setup > p { color: var(--text-muted); font-size: 11px; }
+.edupi-connector-setup ol { display: grid; margin: 14px 0 0; padding: 0; list-style: none; counter-reset: setup-step; }
+.edupi-connector-setup li { display: grid; min-height: 54px; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 14px; border-bottom: 1px solid var(--border); counter-increment: setup-step; }
+.edupi-connector-setup li strong::before { margin-right: 8px; color: var(--text-muted); content: counter(setup-step, decimal-leading-zero); }
+.edupi-connector-setup li span { grid-column: 1; padding-left: 26px; color: var(--text-muted); font-size: 10px; }
+.edupi-connector-setup li button { grid-column: 2; grid-row: 1 / span 2; }
+.edupi-connector-setup form { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: 10px; margin-top: 18px; }
+.edupi-connector-setup form label { display: grid; gap: 5px; color: var(--text-muted); font-size: 10px; }
+.edupi-connector-setup form input { height: 36px; min-width: 0; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+.edupi-connector-setup form p { grid-column: 1 / -1; margin: 0; color: var(--text-muted); font-size: 11px; }
+.edupi-connector-setup form .edupi-admin-primary { margin-top: 0; }
+
 .edupi-admin-runtime {
   overflow: hidden;
   margin-top: 14px;
@@ -312,6 +335,7 @@
     height: calc(100dvh - 140px) !important;
     max-height: calc(100dvh - 140px) !important;
   }
+  .edupi-connector-setup form { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 520px) {
