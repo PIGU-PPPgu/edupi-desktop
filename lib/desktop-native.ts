@@ -185,7 +185,12 @@ export async function openExternal(url: string): Promise<void> {
   }
 
   const { invoke } = await import("@tauri-apps/api/core");
-  await invoke("open_external_url", { url: trimmed });
+  try {
+    await invoke("open_external_url", { url: trimmed });
+  } catch (error) {
+    const opened = window.open(trimmed, "_blank", "noopener,noreferrer");
+    if (!opened) throw error;
+  }
 }
 
 /** Open a local path with the OS default application. */

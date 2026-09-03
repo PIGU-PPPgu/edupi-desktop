@@ -7,7 +7,7 @@ The setup flow is informed by Moonshot Mira's published onboarding documentation
 
 EduPi implements the same task sequence with its own narrower capability set:
 
-- 8 tenant permissions required by the current EduPi Feishu bridge;
+- the Feishu PersonalAgent default full template plus EduPi tenant/user permissions;
 - 2 long-connection events;
 - 1 card callback;
 - fixed-link handoff to the official Feishu developer console;

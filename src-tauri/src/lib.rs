@@ -190,28 +190,35 @@ impl Drop for DesktopServer {
     }
 }
 
-fn open_external(url: &Url) {
+fn open_external(url: &Url) -> Result<(), String> {
     if !matches!(url.scheme(), "http" | "https" | "mailto") {
-        return;
+        return Err("Unsupported external URL scheme".into());
     }
 
     #[cfg(target_os = "macos")]
     {
-        let _ = Command::new("/usr/bin/open").arg(url.as_str()).spawn();
+        let status = Command::new("/usr/bin/open").arg(url.as_str()).status().map_err(|error| error.to_string())?;
+        return status.success().then_some(()).ok_or_else(|| "System URL opener failed".into());
     }
 
     #[cfg(target_os = "windows")]
     {
-        let _ = Command::new("rundll32.exe")
+        Command::new("rundll32.exe")
             .args(["url.dll,FileProtocolHandler", url.as_str()])
             .creation_flags(CREATE_NO_WINDOW)
-            .spawn();
+            .spawn()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        let _ = Command::new("xdg-open").arg(url.as_str()).spawn();
+        Command::new("xdg-open").arg(url.as_str()).spawn().map_err(|error| error.to_string())?;
+        return Ok(());
     }
+
+    #[allow(unreachable_code)]
+    Err("Opening external URLs is unsupported".into())
 }
 
 fn open_path_with_default_app(path: &Path) -> Result<(), String> {
@@ -303,8 +310,7 @@ fn open_external_url(url: String) -> Result<(), String> {
     if !matches!(parsed.scheme(), "http" | "https" | "mailto") {
         return Err("Only http, https, and mailto URLs can be opened externally".into());
     }
-    open_external(&parsed);
-    Ok(())
+    open_external(&parsed)
 }
 
 #[tauri::command]
@@ -745,12 +751,12 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
             if same_origin(url, &navigation_origin) {
                 true
             } else {
-                open_external(url);
+                let _ = open_external(url);
                 false
             }
         })
         .on_new_window(|url, _features| {
-            open_external(&url);
+            let _ = open_external(&url);
             NewWindowResponse::Deny
         })
         .on_document_title_changed(|window, title| {
