@@ -2,9 +2,9 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "f9851dbb82daa5b861c30a3aed3e1ea0a7c0d7f8",
+    "core_commit": "cd68ca6d207f295f759d60dcc86a6be1656b3b32",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:c9434e3cd3fc4dc417f71856df5909464036a2c3873f029e689c99a713ef47d3"
+    "component_manifest_hash": "sha256:03055a399d8e0f6d743823da36a48bc350b93c438c52367b83efbd7a3e245e10"
   },
   "contract_identities": [
     {
@@ -62,7 +62,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/28",
     "https://github.com/PIGU-PPPgu/edupi/pull/29",
     "https://github.com/PIGU-PPPgu/edupi/pull/30",
-    "https://github.com/PIGU-PPPgu/edupi/pull/31"
+    "https://github.com/PIGU-PPPgu/edupi/pull/31",
+    "https://github.com/PIGU-PPPgu/edupi/pull/32"
   ],
-  "change_note": "Pinned Core PR #31 for class-scoped student learning evidence in lesson preparation, including roster class imports; retains bundled preparation runtime and source-linked student records from PRs #29/#30."
+  "change_note": "Pinned Core PR #32 for immediate execution of one requested preparation task with replay-safe draft reuse; retains scoped student evidence and roster class imports from PR #31."
 }
