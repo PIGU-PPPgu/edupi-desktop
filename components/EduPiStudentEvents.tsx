@@ -16,7 +16,7 @@ export function EduPiStudentEvents({student,onAgent}:{student:string|null;onAgen
     const query=new URLSearchParams({kind,offset:String(page*20),...(student?{student}:{})});
     fetch(`/api/edupi/student-events?${query}`,{signal:controller.signal,cache:"no-store"}).then(async response=>{
       const result=await response.json();if(!response.ok)throw new Error(result.error||"读取失败");
-      if(!controller.signal.aborted){setRecords(result.records);setTotal(result.total);}
+      if(!controller.signal.aborted){setRecords(result.records);setTotal(result.total);setSelectedRecord(current=>result.records.some((record:StudentEvent)=>record.id===current)?current:null);}
     }).catch(reason=>{if(!controller.signal.aborted)setError(reason.message);}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return()=>controller.abort();
   },[student,kind,page,refresh]);
