@@ -272,9 +272,10 @@ test("every packaged workflow checks out the exact pinned Core runtime", async (
   ]);
   for (const workflow of workflows) {
     assert.match(workflow, /contracts\/edupi-core-compat\.json/);
-    assert.match(workflow, /git init \.edupi-core-runtime/);
-    assert.match(workflow, /git -C \.edupi-core-runtime fetch --depth 1 origin "\$core_commit"/);
-    assert.match(workflow, /git -C \.edupi-core-runtime checkout --detach "\$core_commit"/);
+    assert.match(workflow, /repository: PIGU-PPPgu\/edupi/);
+    assert.match(workflow, /ref: \$\{\{ steps\.core\.outputs\.commit \}\}/);
+    assert.match(workflow, /token: \$\{\{ secrets\.EDUPI_CORE_READ_TOKEN \}\}/);
+    assert.match(workflow, /persist-credentials: false/);
     assert.match(workflow, /npm ci --ignore-scripts --prefix \.edupi-core-runtime/);
     assert.match(workflow, /EDUPI_CORE_ROOT: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/);
     assert.doesNotMatch(workflow, /git checkout (main|master|latest)/i);
