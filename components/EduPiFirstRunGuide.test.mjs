@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { createJiti } from "jiti";
 
 const guide = await readFile(new URL("./EduPiFirstRunGuide.tsx", import.meta.url), "utf8");
 const shell = await readFile(new URL("./AppShell.tsx", import.meta.url), "utf8");
@@ -8,7 +9,21 @@ const prefs = await readFile(new URL("../lib/app-prefs.ts", import.meta.url), "u
 const css = await readFile(new URL("../app/edupi-first-run.css", import.meta.url), "utf8");
 const rail = await readFile(new URL("./EduPiNavigationRail.tsx", import.meta.url), "utf8");
 
-test("the first-run guide walks through five real setup surfaces without blocking them", () => {
+test("setup readiness follows saved roster and actual preparation artifacts", async () => {
+  const { isGuideStepReady } = await createJiti(import.meta.url, {jsx:{runtime:"automatic"},tsconfigPaths:true}).import("./EduPiFirstRunGuide.tsx");
+  const bundle = {context:{configured:false,checklist:[]},data:{students:[],timetable:[],workCases:[]}};
+  assert.equal(isGuideStepReady(1,bundle),false);
+  assert.equal(isGuideStepReady(2,bundle),false);
+  bundle.data.students.push({name:"测试学生"});
+  assert.equal(isGuideStepReady(2,bundle),true);
+  bundle.data.workCases.push({kind:"teaching_before_class",artifactIds:[],currentState:"planned"});
+  assert.equal(isGuideStepReady(5,bundle),false);
+  bundle.data.workCases[0].artifactIds.push("artifact-1");
+  bundle.data.workCases[0].currentState="draft_ready";
+  assert.equal(isGuideStepReady(5,bundle),true);
+});
+
+test("the first-run guide includes roster and preparation and checks saved results", () => {
   assert.match(guide, /"连接模型"/);
   assert.match(guide, /"确认教师资料"/);
   assert.match(guide, /"导入校历与课表"/);
@@ -16,7 +31,9 @@ test("the first-run guide walks through five real setup surfaces without blockin
   assert.match(guide, /"进入今天"/);
   assert.match(guide, /onOpenCalendar/);
   assert.match(guide, /onOpenMaterials/);
-  assert.match(guide, /完成，下一步/);
+  assert.match(guide, /检查并继续/);
+  assert.match(guide, /"导入学生名单"/);
+  assert.match(guide, /"第一次备课"/);
   assert.match(guide, /const \[opened, setOpened\] = useState\(false\)/);
   assert.match(guide, /STEPS\.length/);
   assert.match(guide, />稍后再说</);

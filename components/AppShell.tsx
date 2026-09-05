@@ -2090,6 +2090,8 @@ export function AppShell() {
         onOpenContext={() => { setEduPiAdminOpen(false); openEducationModule("context"); }}
         onOpenCalendar={() => openEducationView("calendar")}
         onOpenMaterials={() => openEducationView("materials")}
+        onOpenStudents={() => openEducationView("students")}
+        onOpenTeaching={() => openEducationView("teaching")}
         onEnterToday={() => openEducationModule("home")}
         onComplete={finishFirstRunGuide}
         onSkip={finishFirstRunGuide}
