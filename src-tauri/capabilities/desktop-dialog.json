@@ -12,6 +12,8 @@
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-read-image",
+    "core:image:allow-rgba",
+    "core:image:allow-size",
     "notification:default",
     "allow-open-external-url",
     "allow-open-path",
