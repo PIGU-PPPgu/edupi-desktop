@@ -4,8 +4,8 @@ import { useState } from "react";
 import { parseStudentRosterRows } from "@/lib/edupi-student-roster-model";
 
 export type RosterPreview = { sourceName: string; sheets: Array<{ name: string; rows: string[][] }> };
-const fields = ["姓名", "学生特征", "家校备注"];
-const aliases = [["姓名", "学生姓名", "学生", "name", "studentname"], ["特征", "特点", "性格特征", "traits", "tags"], ["家长备注", "家校备注", "家长沟通", "parentnotes", "notes"]];
+const fields = ["姓名", "学生特征", "家校备注", "班级"];
+const aliases = [["姓名", "学生姓名", "学生", "name", "studentname"], ["特征", "特点", "性格特征", "traits", "tags"], ["家长备注", "家校备注", "家长沟通", "parentnotes", "notes"], ["班级","班级名称","class","classname"]];
 const normalize = (value: string) => value.trim().toLowerCase().replace(/[\s_-]+/g, "");
 function detect(rows: string[][]) {
   const header = Math.max(0, rows.slice(0, 20).findIndex((row) => row.some((cell) => aliases[0].includes(normalize(cell)))));
@@ -20,14 +20,14 @@ export function EduPiRosterPreview({ preview, busy, onCancel, onImport }: { prev
   const headers = rows[mapping.header] || [];
   const mapped = rows.slice(mapping.header + 1).filter((row) => row.some((cell) => cell.trim())).map((row) => mapping.columns.map((column) => column < 0 ? "" : row[column] || ""));
   let error = "";
-  try { parseStudentRosterRows([["姓名", "特征", "家校备注"], ...mapped]); }
+  try { parseStudentRosterRows([["姓名", "特征", "家校备注","班级"], ...mapped]); }
   catch (reason) { error = reason instanceof Error ? reason.message : "请检查字段对应"; }
   if (mapping.columns[0] < 0) error = "请选择姓名列";
   const selectedColumns = mapping.columns.filter((column) => column >= 0);
   if (new Set(selectedColumns).size !== selectedColumns.length) error = "各字段请选择不同的列";
   const pages = Math.max(1, Math.ceil(mapped.length / 10));
   const currentPage = Math.min(page, pages - 1);
-  const submit = () => onImport([["姓名", "特征", "家校备注"], ...mapped].map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\r\n"));
+  const submit = () => onImport([["姓名", "特征", "家校备注","班级"], ...mapped].map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\r\n"));
   return <section className="edupi-roster-preview" aria-label="名单导入预览">
     <header><h2>导入预览</h2><button type="button" disabled={busy} onClick={onCancel}>取消</button></header>
     <p>{preview.sourceName} · {mapped.length} 名学生</p>

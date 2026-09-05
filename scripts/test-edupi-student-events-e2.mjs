@@ -10,7 +10,8 @@ for(const key of ["EDUPI_MEMORY_DIR","EDUPI_OUTPUT_DIR","EDUPI_LOCK_DIR"])fs.mkd
 try{
   const jiti=createJiti(import.meta.url,{tsconfigPaths:true});
   const {importStudentRoster}=await jiti.import("../lib/edupi-student-roster-server.ts");
-  await importStudentRoster({students:[{name:"测试甲",traits:[],parentNotes:[]},{name:"测试乙",traits:[],parentNotes:[]}],sourceName:"fixture"});
+  await importStudentRoster({students:[{name:"测试甲",traits:[],parentNotes:[],className:"703"},{name:"测试乙",traits:[],parentNotes:[],className:"704"}],sourceName:"fixture"});
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root,".edupi","memory","student_profiles.json"),"utf8")).students["测试甲"].class_name,"703");
   const {createStudentEventTool}=await jiti.import("../lib/edupi-student-event-tool.ts");
   const {GET,POST}=await jiti.import("../app/api/edupi/student-events/route.ts");
   const tool=createStudentEventTool(root);

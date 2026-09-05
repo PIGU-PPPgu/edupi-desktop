@@ -1,4 +1,4 @@
-export type StudentRosterRow = { name: string; traits: string[]; parentNotes: string[] };
+export type StudentRosterRow = { name: string; traits: string[]; parentNotes: string[]; className?:string };
 
 export class StudentRosterError extends Error {
   constructor(public readonly code: "invalid_csv" | "missing_name" | "duplicate_name" | "too_many_students" | "too_large", message: string) {
@@ -31,11 +31,12 @@ function csvRows(source: string): string[][] {
   return rows.filter((items) => items.some(Boolean));
 }
 
-function headerKey(value: string): "name" | "traits" | "parentNotes" | null {
+function headerKey(value: string): "name" | "traits" | "parentNotes" | "className" | null {
   const key = value.trim().toLocaleLowerCase().replace(/[\s_-]+/g, "");
   if (["姓名", "学生姓名", "学生", "name", "studentname"].includes(key)) return "name";
   if (["特征", "特点", "性格特征", "traits", "tags"].includes(key)) return "traits";
   if (["家长备注", "家校备注", "家长沟通", "parentnotes", "notes"].includes(key)) return "parentNotes";
+  if (["班级","班级名称","class","classname"].includes(key)) return "className";
   return null;
 }
 
@@ -60,15 +61,18 @@ export function parseStudentRosterRows(sourceRows: unknown[][]): StudentRosterRo
   const nameIndex = columns.indexOf("name");
   const traitsIndex = columns.indexOf("traits");
   const parentNotesIndex = columns.indexOf("parentNotes");
+  const classIndex=columns.indexOf("className");
   const students = rows.slice(headerIndex + 1).filter((row) => row.some(Boolean)).map((row) => ({
     name: (row[nameIndex] || "").trim(),
     traits: traitsIndex >= 0 ? list(row[traitsIndex]) : [],
     parentNotes: parentNotesIndex >= 0 ? list(row[parentNotesIndex]) : [],
+    ...(classIndex>=0&&row[classIndex]?{className:row[classIndex].trim()}:{}),
   }));
   if (students.length === 0 || students.some((student) => !student.name || student.name.length > 120)) throw new StudentRosterError("missing_name", "学生姓名不能为空且不能超过 120 字。");
   if (students.length > 500) throw new StudentRosterError("too_many_students", "一次最多导入 500 名学生。");
+  if(students.some(student=>student.className&&student.className.length>120))throw new StudentRosterError("too_large","班级名称不能超过 120 字。");
   if (new Set(students.map((student) => student.name)).size !== students.length) throw new StudentRosterError("duplicate_name", "名单中存在重复姓名，请先合并。");
-  const corePayloadBytes = new TextEncoder().encode(JSON.stringify(students.map((student) => ({ name: student.name, traits: student.traits, parent_notes: student.parentNotes })))).byteLength;
+  const corePayloadBytes = new TextEncoder().encode(JSON.stringify(students.map((student) => ({ name: student.name, traits: student.traits, parent_notes: student.parentNotes,...(student.className?{class_name:student.className}:{}) })))).byteLength;
   if (corePayloadBytes > 200 * 1024) throw new StudentRosterError("too_large", "名单内容过大，请拆分后导入。");
   return students;
 }

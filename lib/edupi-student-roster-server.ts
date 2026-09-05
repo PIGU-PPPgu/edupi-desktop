@@ -58,7 +58,7 @@ export async function importStudentRoster({ students, sourceName, signal }: { st
       request_id: requestId,
       action: "import",
       source_name: sourceName,
-      students: students.map((student) => ({ name: student.name, traits: student.traits, parent_notes: student.parentNotes })),
+      students: students.map((student) => ({ name: student.name, traits: student.traits, parent_notes: student.parentNotes,...(student.className?{class_name:student.className}:{}) })),
     },
   });
   if (response.ok !== true || response.operation !== "students" || response.external_send !== false || response.imported !== students.length) throw new Error(response.code || "学生名单导入失败。");
