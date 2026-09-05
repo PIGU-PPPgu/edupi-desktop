@@ -4,7 +4,7 @@ import { BRIDGE_COMMAND_TYPES, type CoreCommandType } from "./edupi-bridge-contr
 export type EduPiCompatManifest = {
   compat_manifest_version: "1.0";
   core_repository: "edupi";
-  core_runtime: { core_commit: "542d9f5ecff463b40e955778fa8af42a78b4ac8d"; component_manifest_path: "contracts/edupi-desktop-component-manifest.json"; component_manifest_hash: "sha256:ea64a99cfaea87a1b3929c91a8635ace165d5beec854531d87533a9ae0c34fed" };
+  core_runtime: { core_commit: "201f7913f23e0b8a4cc94f9ad799995e8deb82b3"; component_manifest_path: "contracts/edupi-desktop-component-manifest.json"; component_manifest_hash: "sha256:d1e52c814bebe723c1bd206adefe9d815e543c678e221cca0a3e8963cf6f32c7" };
   contract_identities: Array<{ contract_id: "edupi-bridge-v1.1"; contract_version: "1.1"; schema_hash: "sha256:30d10113b6c7e7b2d3ad4eb54e34d47e8d03e848e9fbbabd1c81cf5db36727df"; fixture_manifest_path: "fixtures/bridge/v1.1/fixture-manifest.json"; fixture_manifest_hash: "sha256:2143fe0c4ab271d251134f137304c9dbef0a1b33517d8e8159c8adfb6dcb43c4"; supported_commands: CoreCommandType[]; supported_projections: ["education_workspace"]; depends_on: string[] }>;
   cumulative_projection_manifest: null | Record<string, unknown>;
   supported_commands: CoreCommandType[];
