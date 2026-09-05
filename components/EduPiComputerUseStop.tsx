@@ -29,8 +29,8 @@ export function EduPiComputerUseStop() {
     return () => window.clearTimeout(timer);
   }, [busy, enabled, error, visible]);
 
-  if (!enabled || !visible) return null;
-  return <button type="button" className="edupi-computer-stop" disabled={busy} title={error ? "原生急停失败，请重试" : undefined} onClick={() => {
+  if (!enabled) return null;
+  return <button type="button" className={`edupi-computer-stop${!visible && !busy && !error ? " is-compact" : ""}`} aria-label="停止桌面控制" disabled={busy} title={error ? "停止失败，点击重试" : "停止桌面控制"} onClick={() => {
     setBusy(true);
     setError(false);
     void emergencyStopComputerUseNative()
@@ -41,5 +41,5 @@ export function EduPiComputerUseStop() {
       })
       .catch(() => setError(true))
       .finally(() => setBusy(false));
-  }}><span aria-hidden="true" />{busy ? "正在停止…" : error ? "停止失败，重试" : "停止桌面控制"}</button>;
+  }}><span aria-hidden="true" />{busy ? "正在停止…" : error ? "停止失败，重试" : visible ? "停止桌面控制" : null}</button>;
 }

@@ -6,6 +6,7 @@ const source = fs.readFileSync(new URL("./EduPiComputerUseStop.tsx", import.meta
 test("desktop control stop notice auto-collapses instead of permanently covering the workspace", () => {
   assert.match(source, /COMPUTER_USE_STOP_NOTICE_MS = 4_000/);
   assert.match(source, /setTimeout\(\(\) => setVisible\(false\)/);
-  assert.match(source, /if \(!enabled \|\| !visible\) return null/);
+  assert.match(source, /if \(!enabled\) return null/);
+  assert.match(source, /is-compact/);
   assert.match(source, /announceComputerUseChanged\(false\)/);
 });
