@@ -5,7 +5,7 @@ import { filterTimetableSlots, type CalendarItemSelection } from "@/lib/edupi-ca
 import { isRecognizedTimetableNote } from "@/lib/edupi-recognition-markers";
 import { INSIGHT_CATEGORIES, INSIGHT_STATUSES, MATERIAL_CATEGORIES, MEMORY_CATEGORIES, TEACHING_SECTIONS, filterSubjectKnowledgeItems, insightCategory, matchesWorkspaceQuery as match, materialCategoryCount, memoryCategoryRoute, memoryObjectId, memorySemesterRoute, routePart, type InsightCategoryId, type InsightStatusId, type MaterialCategoryId } from "@/lib/edupi-domain-navigation";
 import { scopedMemoryIds, type EducationMemoryScopeProjection } from "@/lib/edupi-memory-scopes";
-import { groupTasksByCategory, TASK_CATEGORY_CONFIG } from "@/lib/edupi-task-category";
+import { groupTasksByCategory, taskCategory, TASK_CATEGORY_CONFIG } from "@/lib/edupi-task-category";
 import { studentRecordKey, studentRecordName } from "@/lib/edupi-student-roster-model";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { confirmedTaskArtifacts, isTaskActionable, isUserFacingMemory, recordLabel, taskArtifacts, taskDisplayTitle, taskKey, taskStatusLabel, taskStatusTone, taskTypeLabel, type TaskStage, type WorkbenchView } from "@/lib/edupi-workbench";
@@ -91,7 +91,7 @@ export function EduPiObjectSider({ view, data, context, memoryScopes, query, onQ
   ];
   const pendingReview = pending.filter((task) => isTaskReviewable(task, workCaseForTask(data, task.id)));
   const reviewed = tasks.filter((task) => task.boardStage === "done" || (task.status !== "planned" && task.status !== "hold"));
-  const teachingTasks = tasks.filter((task) => task.trigger === "teaching_before_class" || task.trigger === "teaching_adjustment_candidate" || Boolean(task.materialId) || Boolean(task.topic));
+  const teachingTasks = tasks.filter((task) => taskCategory(task) === "teaching");
   const homeroomTasks = tasks.filter((task) => task.trigger === "student_follow_up");
   const materials = tasks.filter((task) => task.materialId || task.trigger === "teaching_adjustment_candidate");
   const intakeMaterials = (data.intakeTargets ?? []).filter((target) => target.projectionKind === "material_intake" && target.status === "accepted").slice().reverse();

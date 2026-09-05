@@ -10,6 +10,7 @@ export const TASK_CATEGORY_CONFIG: ReadonlyArray<{ id: TaskCategoryId; label: st
 ];
 
 type TaskCategoryInput = {
+  title?: string | null;
   trigger?: string | null;
   student?: string | null;
   materialId?: string | null;
@@ -19,7 +20,7 @@ type TaskCategoryInput = {
 
 export function taskCategory(task: TaskCategoryInput): TaskCategoryId {
   if (task.trigger === "student_follow_up" || task.student) return "student";
-  if (task.trigger === "teaching_adjustment_candidate" || task.topic) return "teaching";
+  if (task.trigger === "teaching_before_class" || task.trigger === "teaching_adjustment_candidate" || task.topic || /备课|教案|课前准备|教学准备/.test(task.title || "")) return "teaching";
   if (task.trigger === "calendar_event_internal") return "calendar";
   if (task.trigger === "festival") return "activity";
   if (task.materialId || task.materialKind) return "material";

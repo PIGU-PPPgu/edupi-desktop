@@ -83,7 +83,7 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   assert.match(teaching, /continuity\.subjectKnowledge/);
   assert.match(await read("./EduPiStudentWorkspace.tsx"), /continuity\.familyContacts/);
   assert.match(growth, /continuity\.documents/);
-  assert.match(teaching, /task\.trigger === "teaching_adjustment_candidate"/);
+  assert.match(teaching, /taskCategory\(task\) === "teaching"/);
   assert.match(await read("./EduPiStudentWorkspace.tsx"), /task\.student === selectedName/);
   for (const label of ["教学首页", "课程表", "教学重点", "备课任务", "教学记忆"]) assert.match(`${teaching}\n${await read("../lib/edupi-domain-navigation.ts")}`, new RegExp(label));
   for (const section of ["交给 EduPi", "EduPi 已经准备好", "今天要判断", "接下来", "值得留意"]) assert.match(`${workspaceViews}\n${await read("./EduPiTodayWork.tsx")}`, new RegExp(section));
