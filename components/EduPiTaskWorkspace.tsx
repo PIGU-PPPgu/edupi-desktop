@@ -88,6 +88,7 @@ export function EduPiTaskWorkspace(props: Props) {
           onOpenAgent={props.onOpenAgent}
           onOpenFile={props.onOpenFile}
           onStage={props.onStage}
+          canPrepare={Boolean(props.workCase && ["teaching_before_class", "calendar_preparation"].includes(props.workCase.kind))}
           />
         </section>
       </div>
