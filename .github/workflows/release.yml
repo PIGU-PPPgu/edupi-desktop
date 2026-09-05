@@ -56,16 +56,21 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Check out the pinned EduPi Core runtime
+      - name: Read the pinned EduPi Core revision
+        id: core
         shell: bash
         run: |
-          set -euo pipefail
-          core_commit="$(node -p "require('./contracts/edupi-core-compat.json').core_runtime.core_commit")"
-          git init .edupi-core-runtime
-          git -C .edupi-core-runtime remote add origin https://github.com/PIGU-PPPgu/edupi.git
-          git -C .edupi-core-runtime fetch --depth 1 origin "$core_commit"
-          git -C .edupi-core-runtime checkout --detach "$core_commit"
-          npm ci --ignore-scripts --prefix .edupi-core-runtime
+          echo "commit=$(node -p "require('./contracts/edupi-core-compat.json').core_runtime.core_commit")" >> "$GITHUB_OUTPUT"
+      - name: Check out the pinned EduPi Core runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: PIGU-PPPgu/edupi
+          ref: ${{ steps.core.outputs.commit }}
+          path: .edupi-core-runtime
+          token: ${{ secrets.EDUPI_CORE_READ_TOKEN }}
+          persist-credentials: false
+      - name: Install Core runtime dependencies
+        run: npm ci --ignore-scripts --prefix .edupi-core-runtime
 
       - name: Configure updater public key
         env:
