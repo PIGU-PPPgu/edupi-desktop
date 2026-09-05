@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { parseFormDataWithinLimit, parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
 import { readEducationContract } from "@/lib/edupi-education-server";
-import { parseStudentRosterFile } from "@/lib/edupi-student-roster-file";
+import { parseStudentRosterFile, previewStudentRosterFile } from "@/lib/edupi-student-roster-file";
 import { parseStudentRosterCsv, StudentRosterError, type StudentRosterRow } from "@/lib/edupi-student-roster-model";
 import { importStudentRoster } from "@/lib/edupi-student-roster-server";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
@@ -30,7 +30,9 @@ export async function POST(request: Request) {
       const file = form.get("file");
       if (!(file instanceof File) || !file.name || file.name.length > 240) return NextResponse.json({ error: "请选择名单文件。" }, { status: 400 });
       sourceName = file.name;
-      students = parseStudentRosterFile(new Uint8Array(await file.arrayBuffer()), sourceName);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (new URL(request.url).searchParams.get("preview") === "1") return NextResponse.json({ sourceName, sheets: previewStudentRosterFile(bytes, sourceName) });
+      students = parseStudentRosterFile(bytes, sourceName);
     } else {
       return NextResponse.json({ error: "请上传名单文件。" }, { status: 415 });
     }

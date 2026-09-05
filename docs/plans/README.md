@@ -2,6 +2,8 @@
 
 ## Current direction — 2026-09-05
 
+User clarification: the original three consecutive product PRs remain the active execution line. Follow [连续三阶段执行](./2026-09-05-three-pr-execution.md); the student network is additive, not a replacement.
+
 The teacher approved the next three product stages and added conversation-driven student learning and peer-interaction networks. Continue from [学生教育网络与桌面端下一轮计划](./2026-09-05-student-education-network.md). This plan connects existing observation capture, semester scopes and the mathematics graph to Core-owned student evidence and Desktop views. Graph implementation and real conversation verification are still pending; do not treat the plan as delivered functionality.
 
 This directory is the durable execution index for the EduPi Desktop half of the dual-spiral roadmap. Desktop is the visible, controllable body: it presents Core-owned state, explains evidence and review, and issues typed commands. Core remains the brain and single canonical truth store.

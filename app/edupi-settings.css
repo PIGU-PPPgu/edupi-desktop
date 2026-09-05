@@ -13,3 +13,4 @@
 .edupi-computer-stop { position: fixed; z-index: 2000; right: 14px; top: calc(12px + env(safe-area-inset-top)); display: inline-flex; height: 32px; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid color-mix(in srgb, #c65353 45%, var(--border)); border-radius: 7px; background: var(--bg-panel); color: #b43e3e; box-shadow: 0 5px 18px rgba(40, 20, 20, .12); cursor: pointer; font-size: 11px; font-weight: 650; }
 .edupi-computer-stop > span { width: 7px; height: 7px; border-radius: 2px; background: currentColor; }
 .edupi-computer-stop:disabled { cursor: wait; opacity: .7; }
+.edupi-computer-stop.is-compact { width: 28px; height: 28px; padding: 0; justify-content: center; box-shadow: none; }
