@@ -172,7 +172,7 @@ test("tracks education import tools by call id and refreshes only once on comple
   assert.match(startSource, /educationToolCallsRef\.current\.set\(id, name\)/);
   assert.match(endSource, /const name = educationToolCallsRef\.current\.get\(id\)/);
   assert.match(endSource, /educationToolCallsRef\.current\.delete\(id\)/);
-  assert.match(endSource, /if \(name === "calendar_import" \|\| name === "timetable_import"\) \{[\s\S]*?onEducationImportCompleted\?\.\(name\)/);
+  assert.match(endSource, /if \(name === "calendar_import" \|\| name === "timetable_import" \|\| name === "edupi_create_task"\) \{[\s\S]*?onEducationImportCompleted\?\.\(name\)/);
   assert.match(resetSource, /educationToolCallsRef\.current\.clear\(\)/);
   assert.match(unmountSource, /educationToolCallsRef\.current\.clear\(\)/);
   assert.match(chatWindowSource, /onEducationImportCompleted\?: \(toolName: EducationImportToolName\) => void/);

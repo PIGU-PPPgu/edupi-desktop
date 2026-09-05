@@ -30,7 +30,7 @@ test("teaching home is driven by Core before-class tasks and work cases", () => 
   assert.match(workspace, /weekPreparationIds\.has\(workCase\.taskId\)/);
   assert.match(workspace, /isTaskReviewable\(task, workCase\)/);
   assert.match(workspace, /teachingPreparationSummary\(task\)/);
-  assert.match(sider, /task\.trigger === "teaching_before_class"/);
+  assert.match(sider, /taskCategory\(task\) === "teaching"/);
 });
 
 test("teaching task detail uses the same Core work case and distinguishes class date from deadline", () => {

@@ -195,6 +195,12 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   useEffect(() => { if (initialModule === "context") setContextOpen(true); }, [initialModule]);
 
   useEffect(() => {
+    const refresh = () => { void loadWorkspace().catch(() => {}); };
+    window.addEventListener("edupi-preparation-updated", refresh);
+    return () => window.removeEventListener("edupi-preparation-updated", refresh);
+  }, [loadWorkspace]);
+
+  useEffect(() => {
     if (!materialStagingMessage || materialStagingMessage.text.endsWith("…")) return;
     const timer = window.setTimeout(() => setMaterialStagingMessage(null), materialStagingMessage.tone === "error" ? ERROR_MESSAGE_MS : STATUS_MESSAGE_MS);
     return () => window.clearTimeout(timer);
