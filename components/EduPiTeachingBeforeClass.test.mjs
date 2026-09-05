@@ -13,11 +13,13 @@ const jiti = createJiti(import.meta.url, {
 const { EduPiTaskWorkspace } = await jiti.import("./EduPiTaskWorkspace.tsx");
 const { isTaskReviewable } = await jiti.import("../lib/edupi-work-case.ts");
 
-const [workspace, sider, taskWorkspace, taskStage, panel] = await Promise.all([
+const [workspace, sider, taskWorkspace, taskStage, preparationAction, preparationRoute, panel] = await Promise.all([
   readFile(new URL("./EduPiTeachingWorkspace.tsx", import.meta.url), "utf8"),
   readFile(new URL("./EduPiObjectSider.tsx", import.meta.url), "utf8"),
   readFile(new URL("./EduPiTaskWorkspace.tsx", import.meta.url), "utf8"),
   readFile(new URL("./EduPiTaskStage.tsx", import.meta.url), "utf8"),
+  readFile(new URL("./EduPiTaskPreparationAction.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../app/api/edupi/preparation/route.ts", import.meta.url), "utf8"),
   readFile(new URL("./EduPiEducationPanel.tsx", import.meta.url), "utf8"),
 ]);
 
@@ -47,6 +49,16 @@ test("next-lesson preparation opens the existing task flow and never fabricates 
   assert.match(workspace, /nextTeachingTask \? onTask\(nextTeachingTask\)/);
   assert.match(workspace, /workCaseStateLabel/);
   assert.doesNotMatch(workspace, /setInterval|setTimeout|Math\.random|localStorage/);
+});
+
+test("eligible task details can start exact Core preparation without opening chat", () => {
+  assert.match(taskWorkspace, /\["teaching_before_class", "calendar_preparation"\]\.includes\(props\.workCase\.kind\)/);
+  assert.match(taskStage, /<EduPiTaskPreparationAction taskId=\{task\.id\}/);
+  assert.match(preparationAction, /JSON\.stringify\(\{ action: "run", taskId \}\)/);
+  assert.match(preparationAction, /window\.dispatchEvent\(new Event\("edupi-preparation-updated"\)\)/);
+  assert.match(preparationAction, /onReadyRef\.current\(\)/);
+  assert.match(preparationRoute, /item\.taskId === body\.taskId/);
+  assert.match(preparationRoute, /startPreparation\(\{ taskId: body\.taskId \}\)/);
 });
 
 const task = {
@@ -134,4 +146,9 @@ test("enables review navigation and teacher actions only for a fully evidenced w
   assert.doesNotMatch(html, /data-stage="review"[^>]*disabled/);
   assert.match(html, /aria-label="教师审核动作"/);
   assert.match(html, />接受<\/button>/);
+});
+
+test("shows direct preparation only on supported Core work cases", () => {
+  assert.match(renderTaskWorkspace(workCase([]), "run"), />立即准备<\/button>/);
+  assert.doesNotMatch(renderTaskWorkspace({ ...workCase([]), kind: "student_follow_up" }, "run"), />立即准备<\/button>/);
 });

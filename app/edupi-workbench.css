@@ -359,6 +359,10 @@ html.dark .edupi-teacher-shell {
 .edupi-roster-preview > footer { flex-wrap: wrap; font-size: 12px; }
 .edupi-preparation-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 12px; color: var(--ep-muted); }
 .edupi-preparation-status button { padding: 5px 10px; border: 1px solid var(--ep-border); border-radius: 5px; background: var(--ep-surface); color: var(--ep-text); cursor: pointer; }
+.edupi-task-preparation-action {display:flex;align-items:center;gap:10px;margin:12px 0;padding:10px 12px;border:1px solid var(--ep-border);border-radius:6px;background:var(--ep-surface-soft);font-size:11px;color:var(--ep-muted);}
+.edupi-task-preparation-action button {padding:7px 12px;border:1px solid var(--ep-text);border-radius:5px;background:var(--ep-text);color:var(--ep-surface);cursor:pointer;}
+.edupi-task-preparation-action button:disabled {opacity:.5;cursor:wait;}
+.edupi-task-preparation-action button:focus-visible {outline:2px solid var(--ep-blue);outline-offset:2px;}
 .edupi-student-events-toggle {display:flex;gap:12px;align-items:center;margin:14px 0;font-size:12px;}
 .edupi-student-events {border:1px solid var(--ep-border);border-radius:7px;padding:14px;margin-bottom:16px;background:var(--ep-surface);font-size:12px;}
 .edupi-student-events header,.edupi-student-events footer {display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}

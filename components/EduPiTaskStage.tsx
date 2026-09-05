@@ -11,6 +11,7 @@ import {
   taskSourceLabel,
   type TaskStage,
 } from "@/lib/edupi-workbench";
+import { EduPiTaskPreparationAction } from "./EduPiTaskPreparationAction";
 
 export type ReviewPayload = {
   note?: string;
@@ -36,13 +37,14 @@ type Props = {
   onOpenAgent: () => void;
   onOpenFile: (path: string) => void;
   onStage: (stage: TaskStage) => void;
+  canPrepare: boolean;
 };
 
 function BriefStage({ task, contextLabel }: { task: TeacherTask; contextLabel: string }) {
   return <div className="edupi-stage-brief"><dl><div><dt>任务来源</dt><dd>{taskSourceLabel(task)}</dd></div><div><dt>班级 / 学科</dt><dd>{contextLabel}</dd></div><div><dt>截止节点</dt><dd>{task.dueDate || "日期待确认"}</dd></div><div><dt>工作范围</dt><dd>教师内部</dd></div></dl><section><h3>预期产物</h3><ul>{(task.deliverables.length ? task.deliverables : ["待教师补充"]).map((item) => <li key={item}>{item}</li>)}</ul></section></div>;
 }
 
-function RunStage({ task, agentSession, busy, error, onOpenAgent }: { task: TeacherTask; agentSession: TaskSessionBinding | null; busy: boolean; error: string | null; onOpenAgent: () => void }) {
+function RunStage({ task, agentSession, busy, error, onOpenAgent, canPrepare, onStage }: { task: TeacherTask; agentSession: TaskSessionBinding | null; busy: boolean; error: string | null; onOpenAgent: () => void; canPrepare: boolean; onStage: (stage: TaskStage) => void }) {
   const steps = taskAgentSteps(task);
   const runtime = agentSession?.status === "running"
     ? { title: "Agent 正在运行", action: "查看进行中", tone: "running" }
@@ -51,7 +53,7 @@ function RunStage({ task, agentSession, busy, error, onOpenAgent }: { task: Teac
       : agentSession?.status === "missing"
         ? { title: "协作记录需要恢复", action: "恢复协作", tone: "missing" }
         : { title: "尚未建立协作会话", action: "开始协作", tone: "unbound" };
-  return <div className="edupi-stage-run"><div className={`edupi-agent-session is-${runtime.tone}`}><span className="edupi-agent-session__dot" aria-hidden="true" /><div><strong>{runtime.title}</strong><small>{agentSession ? `Session ${agentSession.sessionId.slice(0, 8)}` : "将为此任务建立独立 Session"}</small></div><button type="button" disabled={busy} onClick={onOpenAgent}>{busy ? "正在准备" : runtime.action}</button></div>{error ? <div className="edupi-agent-session__error" role="alert">{error}</div> : null}<div className="edupi-stage-toolbar"><span>教学工作流</span></div><ol>{steps.map((step) => <li key={step.id} className={`is-${step.state}`}><span className="edupi-run-step__state">{step.state === "done" ? "✓" : step.state === "active" ? "●" : "○"}</span><div><strong>{step.title}</strong><p>{step.detail}</p><small>材料：{step.material}</small></div><em>{step.state === "done" ? "已完成" : step.state === "active" ? "当前步骤" : "待执行"}</em></li>)}</ol></div>;
+  return <div className="edupi-stage-run"><div className={`edupi-agent-session is-${runtime.tone}`}><span className="edupi-agent-session__dot" aria-hidden="true" /><div><strong>{runtime.title}</strong><small>{agentSession ? `Session ${agentSession.sessionId.slice(0, 8)}` : "将为此任务建立独立 Session"}</small></div><button type="button" disabled={busy} onClick={onOpenAgent}>{busy ? "正在准备" : runtime.action}</button></div>{canPrepare && task.id ? <EduPiTaskPreparationAction taskId={task.id} onReady={() => onStage("artifact")} /> : null}{error ? <div className="edupi-agent-session__error" role="alert">{error}</div> : null}<div className="edupi-stage-toolbar"><span>教学工作流</span></div><ol>{steps.map((step) => <li key={step.id} className={`is-${step.state}`}><span className="edupi-run-step__state">{step.state === "done" ? "✓" : step.state === "active" ? "●" : "○"}</span><div><strong>{step.title}</strong><p>{step.detail}</p><small>材料：{step.material}</small></div><em>{step.state === "done" ? "已完成" : step.state === "active" ? "当前步骤" : "待执行"}</em></li>)}</ol></div>;
 }
 
 function EvidenceStage({ task, workspace, onOpenFile }: { task: TeacherTask; workspace: string; onOpenFile: (path: string) => void }) {
@@ -115,7 +117,7 @@ function ReviewStage({ task, enabled, blocked, reason, busy, message, onReview, 
 
 export function EduPiTaskStage(props: Props) {
   if (props.stage === "brief") return <BriefStage task={props.task} contextLabel={props.contextLabel} />;
-  if (props.stage === "run") return <RunStage task={props.task} agentSession={props.agentSession} busy={props.taskSessionBusy} error={props.taskSessionError} onOpenAgent={props.onOpenAgent} />;
+  if (props.stage === "run") return <RunStage task={props.task} agentSession={props.agentSession} busy={props.taskSessionBusy} error={props.taskSessionError} onOpenAgent={props.onOpenAgent} canPrepare={props.canPrepare} onStage={props.onStage} />;
   if (props.stage === "evidence") return <EvidenceStage task={props.task} workspace={props.workspace} onOpenFile={props.onOpenFile} />;
   if (props.stage === "artifact") return <ArtifactStage task={props.task} reviewable={!props.reviewBlocked} onStage={props.onStage} />;
   return <ReviewStage task={props.task} enabled={props.reviewEnabled} blocked={props.reviewBlocked} reason={props.reviewReason} busy={props.reviewBusy} message={props.reviewMessage} onReview={props.onReview} onOpenAgent={props.onOpenAgent} taskSessionBusy={props.taskSessionBusy} taskSessionError={props.taskSessionError} />;
