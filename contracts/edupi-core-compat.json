@@ -59,7 +59,10 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/25",
     "https://github.com/PIGU-PPPgu/edupi/pull/26",
     "https://github.com/PIGU-PPPgu/edupi/pull/27",
-    "https://github.com/PIGU-PPPgu/edupi/pull/28"
+    "https://github.com/PIGU-PPPgu/edupi/pull/28",
+    "https://github.com/PIGU-PPPgu/edupi/pull/29",
+    "https://github.com/PIGU-PPPgu/edupi/pull/30",
+    "https://github.com/PIGU-PPPgu/edupi/pull/31"
   ],
-  "change_note": "Pinned merged Core PR #28 for live DingTalk replies plus read-compatible pre-review storage formats"
+  "change_note": "Pinned Core PR #31 for class-scoped student learning evidence in lesson preparation, including roster class imports; retains bundled preparation runtime and source-linked student records from PRs #29/#30."
 }

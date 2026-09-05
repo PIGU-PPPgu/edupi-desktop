@@ -6,6 +6,7 @@ import {EduPiStudentGraph} from "./EduPiStudentGraph";
 export function EduPiStudentEvents({student,onAgent}:{student:string|null;onAgent:(prompt:string,mode?:"insert"|"replace")=>void}){
   const [kind,setKind]=useState("learning");const [page,setPage]=useState(0);
   const [view,setView]=useState("list");const [selectedRecord,setSelectedRecord]=useState<string|null>(null);
+  useEffect(()=>setSelectedRecord(null),[student,kind,page]);
   const [records,setRecords]=useState<StudentEvent[]>([]);const [total,setTotal]=useState(0);
   const [refresh,setRefresh]=useState(0);const [error,setError]=useState<string|null>(null);const [loading,setLoading]=useState(true);
   const [editing,setEditing]=useState<StudentEvent|null>(null);const [deleting,setDeleting]=useState<string|null>(null);const [busy,setBusy]=useState(false);
@@ -26,6 +27,7 @@ export function EduPiStudentEvents({student,onAgent}:{student:string|null;onAgen
       const response=await fetch("/api/edupi/student-events",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       const result=await response.json();if(!response.ok)throw new Error(result.error||"保存失败");
       setEditing(null);setDeleting(null);setRefresh(value=>value+1);
+      if(action==="delete_event")setSelectedRecord(null);
     }catch(reason){setError(reason instanceof Error?reason.message:"保存失败");}finally{setBusy(false);}
   };
   return <section className="edupi-student-events" aria-label="学生学习与互动记录">
