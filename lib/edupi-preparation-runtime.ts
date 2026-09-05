@@ -15,7 +15,9 @@ export function startPreparation() {
   const { runtime: core, dataRoot } = resolveEduPiBridgeRoots();
   const packagedWorker = path.join(process.cwd(), "preparation-worker.mjs");
   const worker = existsSync(packagedWorker) ? packagedWorker : path.join(process.cwd(), "desktop/preparation-worker.mjs");
-  const env: NodeJS.ProcessEnv = { NODE_ENV: "production", PATH: process.env.PATH, HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE, APPDATA: process.env.APPDATA, LANG: process.env.LANG, TZ: process.env.TZ || "Asia/Shanghai", PI_CODING_AGENT_DIR: process.env.PI_CODING_AGENT_DIR, EDUPI_CORE_ROOT: core.root, EDUPI_PROJECT_ROOT: dataRoot.root, EDUPI_MEMORY_DIR: dataRoot.memoryDir, EDUPI_OUTPUT_DIR: dataRoot.outputDir, EDUPI_LOCK_DIR: dataRoot.lockDir };
+  const env: NodeJS.ProcessEnv = { ...process.env, NODE_ENV: "production", TZ: process.env.TZ || "Asia/Shanghai", EDUPI_CORE_ROOT: core.root, EDUPI_PROJECT_ROOT: dataRoot.root, EDUPI_MEMORY_DIR: dataRoot.memoryDir, EDUPI_OUTPUT_DIR: dataRoot.outputDir, EDUPI_LOCK_DIR: dataRoot.lockDir };
+  delete env.PI_DESKTOP_API_TOKEN;
+  delete env.PI_DESKTOP_INSTANCE_ID;
   const child = spawn(process.execPath, [worker], { cwd: process.cwd(), env, stdio: ["pipe", "pipe", "ignore"] });
   state.running = true;
   state.status = { ...state.status, state: "running", updatedAt: new Date().toISOString(), error: null };

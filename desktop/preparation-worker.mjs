@@ -5,7 +5,7 @@ import { createAgentSession, createExtensionRuntime, getAgentDir, ModelRuntime, 
 // The parent owns this worker's lifetime; closing the desktop server ends it.
 process.stdin.resume();
 process.stdin.on("end", () => process.exit(0));
-const emit = (result) => process.stdout.write(JSON.stringify(result) + "\n");
+const emit = (result) => new Promise((resolve, reject) => process.stdout.write(JSON.stringify(result) + "\n", (error) => error ? reject(error) : resolve()));
 try {
   const cwd = process.env.EDUPI_PROJECT_ROOT;
   const root = process.env.EDUPI_CORE_ROOT;
@@ -39,9 +39,9 @@ try {
   const result = await run({ horizonDays: 2, runModel, outputDir: process.env.EDUPI_OUTPUT_DIR });
   const prepared = (result.execution_results || []).filter((item) => item.status === "draft_ready" && !item.replayed).length;
   const ok = !(result.failed_count > 0);
-  emit({ ok, prepared, skipped: result.skipped_count || 0, ...(ok ? {} : { code: "preparation_failed" }) });
+  await emit({ ok, prepared, skipped: result.skipped_count || 0, ...(ok ? {} : { code: "preparation_failed" }) });
   process.exit(ok ? 0 : 1);
 } catch (error) {
-  emit({ ok: false, code: error?.code === "model_unavailable" || error?.message === "model_unavailable" ? "model_unavailable" : "preparation_failed" });
+  await emit({ ok: false, code: error?.code === "model_unavailable" || error?.message === "model_unavailable" ? "model_unavailable" : "preparation_failed" });
   process.exit(1);
 }
