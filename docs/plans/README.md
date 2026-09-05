@@ -1,5 +1,9 @@
 # EduPi Desktop implementation plans
 
+## Current direction — 2026-09-06
+
+Continue from [requested preparation execution](./2026-09-06-requested-preparation.md). Chat can now find and start one existing timetable/calendar preparation task before its due date. The next product slice is typed teacher-created preparation templates and artifact contracts, not another navigation layer.
+
 ## Current direction — 2026-09-05
 
 Continue the network phase with [local graph and preparation evidence](./2026-09-05-local-graph-preparation.md): bounded event-based graph, roster class import and scoped learning evidence in preparation. Retain the explicit identity and topic-matching limitations.

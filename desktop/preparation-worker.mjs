@@ -36,9 +36,10 @@ try {
       return { output, provider: model.provider, model: model.id, session_id: session.sessionId };
     } finally { session.dispose(); }
   };
-  const result = await run({ horizonDays: 2, runModel, outputDir: process.env.EDUPI_OUTPUT_DIR });
+  const requestedTaskId=process.env.EDUPI_PREPARE_TASK_ID||null;
+  const result = await run({ horizonDays: 2, runModel, outputDir: process.env.EDUPI_OUTPUT_DIR,requestedTaskId });
   const prepared = (result.execution_results || []).filter((item) => item.status === "draft_ready" && !item.replayed).length;
-  const ok = !(result.failed_count > 0);
+  const ok = !(result.failed_count > 0) && (!requestedTaskId || (result.execution_results||[]).some(item=>item.task_id===requestedTaskId&&item.status==="draft_ready"));
   await emit({ ok, prepared, skipped: result.skipped_count || 0, ...(ok ? {} : { code: "preparation_failed" }) });
   process.exit(ok ? 0 : 1);
 } catch (error) {
