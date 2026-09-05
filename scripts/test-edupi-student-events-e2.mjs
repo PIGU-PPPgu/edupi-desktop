@@ -20,6 +20,9 @@ try{
   const read=async()=>{const response=await GET(new Request("http://localhost/api/edupi/student-events?student=测试甲",{headers:{host:"localhost",origin:"http://localhost"}}));assert.equal(response.status,200);return response.json();};
   const first=await read();assert.equal(first.total,2);assert.equal(first.records[0].source.message_id,"fixture-message");
   const item=first.records[0];
+  const controller=new AbortController();controller.abort();
+  await assert.rejects(()=>tool.execute("abort",{action:"update",event_id:item.id,expected_revision:0,summary:"不应保存"},controller.signal,undefined,ctx),/abort/i);
+  assert.equal((await read()).records[0].summary,item.summary);
   const request=body=>new Request("http://localhost/api/edupi/student-events",{method:"POST",headers:{host:"localhost",origin:"http://localhost","Content-Type":"application/json"},body:JSON.stringify(body)});
   assert.equal((await POST(request({action:"update_event",event_id:item.id,expected_revision:0,summary:"在课堂上互相讲解",topic:"移项",observed_on:"2026-09-05"}))).status,200);
   assert.equal((await read()).records[0].revision,1);
