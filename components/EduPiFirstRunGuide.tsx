@@ -29,7 +29,7 @@ const STEPS = [
 export function isGuideStepReady(step: number, bundle: EduPiWorkspaceBundle): boolean {
   if (step === 1) return Boolean(bundle.context.configured);
   if (step === 2) return bundle.data.students.length > 0;
-  if (step === 3) return bundle.data.timetable.length > 0;
+  if (step === 3) return bundle.data.timetable.length > 0 && bundle.data.calendar.length > 0;
   if (step === 4) return bundle.context.checklist.some((item) => item.id === "material" && item.status === "complete");
   if (step === 5) return bundle.data.workCases.some((item) => item.kind === "teaching_before_class" && item.artifactIds.length > 0 && ["draft_ready", "accepted", "modified", "completed"].includes(item.currentState));
   return false;
@@ -81,7 +81,8 @@ export function EduPiFirstRunGuide({
       try {
         let ready;
         if (step === 0) {
-          const response = await fetch("/api/models", {cache:"no-store"});
+          const workspace = await readEduPiWorkspace();
+          const response = await fetch(`/api/models?cwd=${encodeURIComponent(workspace.data.workspace)}`, {cache:"no-store"});
           if (!response.ok) throw new Error("配置读取失败，请重试");
           const models = await response.json() as { defaultModel?: { provider: string; modelId: string }; modelList?: Array<{provider:string;id:string}> };
           ready = Boolean(models.defaultModel && models.modelList?.some((model) => model.provider === models.defaultModel?.provider && model.id === models.defaultModel?.modelId));
