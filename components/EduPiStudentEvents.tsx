@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import type { StudentEvent } from "@/lib/edupi-student-events";
 import {EduPiStudentGraph} from "./EduPiStudentGraph";
+import {buildStudentGraph} from "@/lib/edupi-student-graph";
 
 export function EduPiStudentEvents({student,onAgent}:{student:string|null;onAgent:(prompt:string,mode?:"insert"|"replace")=>void}){
   const [kind,setKind]=useState("learning");const [page,setPage]=useState(0);
@@ -16,7 +17,7 @@ export function EduPiStudentEvents({student,onAgent}:{student:string|null;onAgen
     const query=new URLSearchParams({kind,offset:String(page*20),...(student?{student}:{})});
     fetch(`/api/edupi/student-events?${query}`,{signal:controller.signal,cache:"no-store"}).then(async response=>{
       const result=await response.json();if(!response.ok)throw new Error(result.error||"读取失败");
-      if(!controller.signal.aborted){setRecords(result.records);setTotal(result.total);setSelectedRecord(current=>result.records.some((record:StudentEvent)=>record.id===current)?current:null);}
+      if(!controller.signal.aborted){setRecords(result.records);setTotal(result.total);setSelectedRecord(current=>buildStudentGraph(result.records).records.some(record=>record.id===current)?current:null);}
     }).catch(reason=>{if(!controller.signal.aborted)setError(reason.message);}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return()=>controller.abort();
   },[student,kind,page,refresh]);
