@@ -5,6 +5,7 @@ import { isApiRequestAllowed, hasJsonContentType } from "@/lib/request-security"
 
 export const dynamic="force-dynamic";
 export async function GET(request:Request) {
+  if(!isApiRequestAllowed(request))return NextResponse.json({error:"请求无效"},{status:403});
   const query=new URL(request.url).searchParams;
   const kind=query.get("kind");const offset=Number(query.get("offset")||0);
   if ((kind&&!['learning','interaction'].includes(kind)) || !Number.isSafeInteger(offset) || offset<0) return NextResponse.json({error:"筛选条件无效"},{status:400});

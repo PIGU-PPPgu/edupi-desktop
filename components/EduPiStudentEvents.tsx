@@ -9,7 +9,7 @@ export function EduPiStudentEvents({student,onAgent}:{student:string|null;onAgen
   const [editing,setEditing]=useState<StudentEvent|null>(null);const [deleting,setDeleting]=useState<string|null>(null);const [busy,setBusy]=useState(false);
   useEffect(()=>{const changed=()=>setRefresh(value=>value+1);window.addEventListener("edupi-student-records-changed",changed);return()=>window.removeEventListener("edupi-student-records-changed",changed);},[]);
   useEffect(()=>{
-    const controller=new AbortController();setLoading(true);setError(null);
+    const controller=new AbortController();setLoading(true);setError(null);setRecords([]);setTotal(0);
     const query=new URLSearchParams({kind,offset:String(page*20),...(student?{student}:{})});
     fetch(`/api/edupi/student-events?${query}`,{signal:controller.signal,cache:"no-store"}).then(async response=>{
       const result=await response.json();if(!response.ok)throw new Error(result.error||"读取失败");

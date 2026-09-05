@@ -17,7 +17,7 @@ try{
   const ctx={cwd:root,sessionManager:{getSessionId:()=>"fixture-session",getBranch:()=>[{id:"fixture-message",type:"message",message:{role:"user",content:"测试甲移项出错，测试乙帮助他讲解。"}}]}};
   const input={action:"record",records:[{kind:"learning",students:["测试甲"],summary:"移项出错",topic:"移项"},{kind:"interaction",students:["测试乙","测试甲"],summary:"测试乙帮助测试甲讲解",topic:"移项"}]};
   assert.equal((await tool.execute("call",input,undefined,undefined,ctx)).details.record_ids.length,2);
-  const read=async()=>{const response=await GET(new Request("http://localhost/api/edupi/student-events?student=测试甲"));assert.equal(response.status,200);return response.json();};
+  const read=async()=>{const response=await GET(new Request("http://localhost/api/edupi/student-events?student=测试甲",{headers:{host:"localhost",origin:"http://localhost"}}));assert.equal(response.status,200);return response.json();};
   const first=await read();assert.equal(first.total,2);assert.equal(first.records[0].source.message_id,"fixture-message");
   const item=first.records[0];
   const request=body=>new Request("http://localhost/api/edupi/student-events",{method:"POST",headers:{host:"localhost",origin:"http://localhost","Content-Type":"application/json"},body:JSON.stringify(body)});
