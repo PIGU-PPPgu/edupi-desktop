@@ -2,6 +2,8 @@
 
 ## Current direction — 2026-09-05
 
+Continue the network phase with [local graph and preparation evidence](./2026-09-05-local-graph-preparation.md): bounded event-based graph, roster class import and scoped learning evidence in preparation. Retain the explicit identity and topic-matching limitations.
+
 The original Desktop PRs #36/#37/#38 are merged. Student-network work now starts with [source-linked student records](./2026-09-05-student-records-checkpoint.md); this is an evidence-recording slice, not the completed graphical network or preparation retrieval integration.
 
 User clarification: the original three consecutive product PRs remain the active execution line. Follow [连续三阶段执行](./2026-09-05-three-pr-execution.md); the student network is additive, not a replacement.
