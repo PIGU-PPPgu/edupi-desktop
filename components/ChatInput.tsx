@@ -118,11 +118,11 @@ export function filterModelOptions(options: ModelOption[], query: string): Model
 }
 
 export function shouldUseNativeClipboardImageFallback(
-  itemCount: number,
+  imageFileCount: number,
   plainText: string,
   tauriDesktop: boolean,
 ): boolean {
-  return itemCount === 0 && plainText === "" && tauriDesktop;
+  return imageFileCount === 0 && plainText === "" && tauriDesktop;
 }
 
 const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
@@ -1140,17 +1140,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = Array.from(e.clipboardData?.items ?? []);
     const imageItems = items.filter((item) => item.type.startsWith("image/"));
-    if (imageItems.length) {
+    const itemFiles = imageItems.map((item) => item.getAsFile()).filter((f): f is File => f !== null);
+    const files = itemFiles.length ? itemFiles : Array.from(e.clipboardData?.files ?? []).filter((file) => file.type.startsWith("image/"));
+    if (files.length) {
       e.preventDefault();
-      const files = imageItems.map((item) => item.getAsFile()).filter((f): f is File => f !== null);
       processImageFiles(files);
       return;
     }
-    // WebKitGTK can expose an empty item list for an image. Use the native
-    // adapter only when the browser supplied neither items nor plain text.
+    // WebKit may expose image metadata without a readable File. Use the
+    // native adapter when no image File or plain text is available.
     // Source adaptation: abcwyc/pi-agent-desktop@deee754.
     const plainText = e.clipboardData?.getData("text/plain") ?? "";
-    if (shouldUseNativeClipboardImageFallback(items.length, plainText, isTauriDesktop())) {
+    if (shouldUseNativeClipboardImageFallback(files.length, plainText, isTauriDesktop())) {
       e.preventDefault();
       void import("@/lib/desktop-native")
         .then(({ readClipboardImageFileNative }) => readClipboardImageFileNative())

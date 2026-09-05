@@ -8,13 +8,13 @@ const jiti = createJiti(import.meta.url, {
   tsconfigPaths: true,
 });
 
-test("native clipboard image fallback is exclusive to an empty desktop paste payload", async () => {
+test("native clipboard image fallback handles an unreadable image without intercepting text", async () => {
   const { shouldUseNativeClipboardImageFallback } = await jiti.import("./ChatInput.tsx");
 
   assert.equal(shouldUseNativeClipboardImageFallback(1, "", true), false, "browser image item wins");
   assert.equal(shouldUseNativeClipboardImageFallback(0, "teacher text", true), false, "plain text paste is untouched");
   assert.equal(shouldUseNativeClipboardImageFallback(0, "", false), false, "web paste never invokes Tauri");
-  assert.equal(shouldUseNativeClipboardImageFallback(0, "", true), true, "empty desktop payload uses native fallback");
+  assert.equal(shouldUseNativeClipboardImageFallback(0, "", true), true, "no readable image File uses native fallback, including metadata-only payloads");
 });
 
 test("thinking and tool popovers keep the upstream 60vh internal scroll boundary", async () => {
