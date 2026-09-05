@@ -359,6 +359,19 @@ html.dark .edupi-teacher-shell {
 .edupi-roster-preview > footer { flex-wrap: wrap; font-size: 12px; }
 .edupi-preparation-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 12px; color: var(--ep-muted); }
 .edupi-preparation-status button { padding: 5px 10px; border: 1px solid var(--ep-border); border-radius: 5px; background: var(--ep-surface); color: var(--ep-text); cursor: pointer; }
+.edupi-student-events-toggle {display:flex;gap:12px;align-items:center;margin:14px 0;font-size:12px;}
+.edupi-student-events {border:1px solid var(--ep-border);border-radius:7px;padding:14px;margin-bottom:16px;background:var(--ep-surface);font-size:12px;}
+.edupi-student-events header,.edupi-student-events footer {display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+.edupi-student-events button,.edupi-student-events-toggle button {border:1px solid var(--ep-border);border-radius:5px;padding:6px 10px;background:var(--ep-surface);color:var(--ep-text);cursor:pointer;}
+.edupi-student-events button[aria-pressed=true] {background:var(--ep-surface-soft);color:var(--ep-blue);}
+.edupi-student-events article {padding:14px 0;border-bottom:1px solid var(--ep-border);}
+.edupi-student-events article p {white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;}
+.edupi-student-events details {margin-top:10px;color:var(--ep-muted);}
+.edupi-student-events__actions {display:flex;gap:8px;margin-top:8px;}
+.edupi-student-events form {display:grid;gap:10px;margin-top:10px;}
+.edupi-student-events label {display:grid;gap:5px;}
+.edupi-student-events input,.edupi-student-events textarea {border:1px solid var(--ep-border);border-radius:5px;padding:8px;background:var(--ep-surface);color:var(--ep-text);font:inherit;}
+.edupi-student-events footer {margin-top:12px;}
 .edupi-student-profile { padding-top: 20px; }
 .edupi-student-profile__identity { display: grid; min-height: 84px; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; gap: 14px; border-bottom: 1px solid var(--ep-border); }
 .edupi-student-profile__identity > span { display: grid; width: 48px; height: 48px; place-items: center; border-radius: 50%; background: var(--ep-blue-soft); color: var(--ep-blue); font-size: 18px; font-weight: 700; }

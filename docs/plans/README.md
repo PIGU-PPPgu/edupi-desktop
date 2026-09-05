@@ -2,6 +2,8 @@
 
 ## Current direction — 2026-09-05
 
+The original Desktop PRs #36/#37/#38 are merged. Student-network work now starts with [source-linked student records](./2026-09-05-student-records-checkpoint.md); this is an evidence-recording slice, not the completed graphical network or preparation retrieval integration.
+
 User clarification: the original three consecutive product PRs remain the active execution line. Follow [连续三阶段执行](./2026-09-05-three-pr-execution.md); the student network is additive, not a replacement.
 
 The teacher approved the next three product stages and added conversation-driven student learning and peer-interaction networks. Continue from [学生教育网络与桌面端下一轮计划](./2026-09-05-student-education-network.md). This plan connects existing observation capture, semester scopes and the mathematics graph to Core-owned student evidence and Desktop views. Graph implementation and real conversation verification are still pending; do not treat the plan as delivered functionality.

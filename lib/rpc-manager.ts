@@ -19,6 +19,7 @@ import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS } from "./custom-u
 import { EDUPI_ROOT, extensionPaths } from "./edupi-runtime";
 import { createEduPiAppControlTool } from "./edupi-desktop-tool";
 import { createEduPiTaskTool } from "./edupi-task-tool";
+import { createStudentEventTool } from "./edupi-student-event-tool";
 import type { DesktopControlInput } from "./edupi-desktop-control";
 import { createEduPiComputerUseTool } from "./edupi-computer-tool";
 import { parseComputerUseBridgeResult, type ComputerUseBridgeResult, type ComputerUseInput } from "./edupi-computer-use";
@@ -1388,7 +1389,7 @@ export async function startRpcSession(
       ...(toolsOption !== undefined ? { tools: toolsOption } : {}),
       customTools: [
         defineTool(createBashToolDefinition(sessionCwd, { shellPath: services.settingsManager.getShellPath(), spawnHook: redactDesktopSpawnContext })),
-        ...(resolve(sessionCwd) === EDUPI_ROOT ? [createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
+        ...(resolve(sessionCwd) === EDUPI_ROOT ? [createStudentEventTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
           projectRoot: EDUPI_ROOT,
           requestAction: (action, signal) => requestEduPiAppAction(action, signal),
         }), createEduPiComputerUseTool({
