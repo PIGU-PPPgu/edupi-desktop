@@ -49,6 +49,7 @@ test("the signed release workflow is manual-only", async () => {
   assert.match(release, /on:\s*\n\s*workflow_dispatch:/);
   assert.doesNotMatch(release, /\bpush:/);
   assert.ok(release.indexOf("name: Verify application quality") < release.indexOf("name: Check out the pinned EduPi Core runtime"));
+  assert.match(release, /tauriScript: npx tauri/);
 });
 
 test("signed releases and updater metadata belong to the EduPi Desktop repository", async () => {
