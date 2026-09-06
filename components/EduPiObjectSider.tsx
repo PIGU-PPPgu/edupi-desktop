@@ -102,6 +102,7 @@ export function EduPiObjectSider({ view, data, context, memoryScopes, query, onQ
   const timetable = filterTimetableSlots(data.timetable, query);
   const subjectKnowledge = filterSubjectKnowledgeItems(data.continuity.subjectKnowledge, query);
   const memories = data.continuity.memories.filter((memory) => memory.state === "active" && isUserFacingMemory(memory) && match(`${memory.content} ${memory.student || ""} ${memory.tags.join(" ")}`, query));
+  const observations = data.observations.filter((observation) => match(`${observation.text} ${observation.subject || ""} ${observation.classId || ""} ${observation.studentIds.join(" ")}`, query));
   const insights = data.continuity.insights.filter((insight) => !insight.content.startsWith("[主题候选]") && match(`${insight.content} ${insight.evidenceIds.join(" ")}`, query)).sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
   const signals = data.continuity.signals.filter((signal) => match(`${signal.content} ${signal.related.join(" ")}`, query)).sort((left, right) => right.strength - left.strength);
   const documents = data.continuity.documents.filter((document) => match(`${document.title} ${document.excerpt}`, query));
@@ -114,13 +115,15 @@ export function EduPiObjectSider({ view, data, context, memoryScopes, query, onQ
   const [insightCategoryRoute = "learning", insightStatusRoute = "all"] = routePart(selectedObjectId, "insights", "learning:all").split(":") as [InsightCategoryId, InsightStatusId];
   const growthCategory = routePart(selectedObjectId, "growth", "teacher");
   const materialCategoryRoute = routePart(selectedObjectId, "materials", "all");
-  const insightCategoryCount = (category: InsightCategoryId) => insights.filter((item) => insightCategory(item.content) === category).length + signals.filter((item) => insightCategory(item.content) === category).length;
+  const insightCategoryCount = (category: InsightCategoryId) => observations.filter((item) => insightCategory(item.text) === category).length + insights.filter((item) => insightCategory(item.content) === category).length + signals.filter((item) => insightCategory(item.content) === category).length;
   const insightStatusCount = (status: InsightStatusId) => {
+    const categoryObservations = observations.filter((item) => insightCategory(item.text) === insightCategoryRoute);
     const categoryInsights = insights.filter((item) => insightCategory(item.content) === insightCategoryRoute);
     const categorySignals = signals.filter((item) => insightCategory(item.content) === insightCategoryRoute);
+    if (status === "observation") return categoryObservations.length;
     if (status === "signal") return categorySignals.length;
     if (status === "surfaced" || status === "brewing") return categoryInsights.filter((item) => item.status === status).length;
-    return categoryInsights.length + categorySignals.length;
+    return categoryObservations.length + categoryInsights.length + categorySignals.length;
   };
   const materialCount = (category: MaterialCategoryId) => materialCategoryCount(category, materials, intakeMaterials.length);
   const tasksByCategory = groupTasksByCategory(tasks);

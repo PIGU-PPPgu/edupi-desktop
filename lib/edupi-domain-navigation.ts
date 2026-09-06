@@ -24,9 +24,10 @@ export const INSIGHT_CATEGORIES: ReadonlyArray<{ id: InsightCategoryId; label: s
   { id: "teaching", label: "教学改进" },
   { id: "edupi", label: "EduPi 后台" },
 ];
-export type InsightStatusId = "all" | "surfaced" | "brewing" | "signal";
+export type InsightStatusId = "all" | "observation" | "surfaced" | "brewing" | "signal";
 export const INSIGHT_STATUSES: ReadonlyArray<{ id: InsightStatusId; label: string }> = [
   { id: "all", label: "全部" },
+  { id: "observation", label: "原始观察" },
   { id: "surfaced", label: "已浮出" },
   { id: "brewing", label: "酝酿中" },
   { id: "signal", label: "弱信号" },
