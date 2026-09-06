@@ -185,6 +185,7 @@ export class AgentSessionWrapper {
   private _alive = true;
   private artifactWrites = Promise.resolve();
   private artifactBaseline = new Map<string, string>();
+  private artifactTaskId: string | null = null;
 
   constructor(public readonly inner: AgentSessionLike) {}
 
@@ -261,15 +262,20 @@ export class AgentSessionWrapper {
       if (resolve(this.cwd) === EDUPI_ROOT) {
         if (event.type === "agent_start") this.artifactBaseline = snapshotGeneratedFiles(this.cwd);
         if (event.type === "tool_execution_end" && !event.isError) {
+          if (event.toolName === "edupi_create_task") {
+            const result = event.result as { details?: { taskId?: string } } | undefined;
+            if (typeof result?.details?.taskId === "string") this.artifactTaskId = result.details.taskId;
+          }
           const files = snapshotGeneratedFiles(this.cwd);
           const args = event.args as { path?: string } | undefined;
           const changed = [...files].filter(([file, stamp]) => this.artifactBaseline.get(file) !== stamp).map(([file]) => file);
           if ((event.toolName === "write" || event.toolName === "edit") && typeof args?.path === "string") changed.push(resolve(this.cwd, args.path));
           this.artifactBaseline = files;
           const sessionId = this.sessionId;
+          const taskId = this.artifactTaskId;
           for (const filePath of new Set(changed)) {
             this.artifactWrites = this.artifactWrites.then(async () => {
-              await generatedArtifactsRequest("register", { file_path: filePath, session_id: sessionId });
+              await generatedArtifactsRequest("register", { file_path: filePath, session_id: sessionId, task_id: taskId });
             }).catch(() => {
               this.emit({ type: "artifact_registration_failed", message: "文件已写入，但材料登记失败，请重试。", filePath });
             });
