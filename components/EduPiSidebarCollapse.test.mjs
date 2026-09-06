@@ -17,6 +17,7 @@ test("primary and secondary EduPi sidebars collapse in place", async () => {
   assert.match(panel, /is-navigation-collapsed/);
   assert.match(rail, /aria-label=\{collapsed \? "展开主导航" : "收起主导航"\}/);
   assert.match(rail, /title=\{config\.label\}/);
+  assert.match(rail, /edupi-teacher-rail__version/);
 
   assert.match(panel, /edupi-object-sider-strip/);
   assert.match(panel, /aria-label="展开列表"/);
@@ -27,6 +28,7 @@ test("primary and secondary EduPi sidebars collapse in place", async () => {
   assert.match(css, /\.edupi-teacher-rail\.is-collapsed \.edupi-teacher-rail__items\s*\{[^}]*display:\s*block/s);
   assert.match(css, /\.edupi-teacher-rail\.is-collapsed button\s*\{[^}]*min-height:\s*40px/s);
   assert.match(css, /\.edupi-teacher-rail\.is-collapsed \.edupi-teacher-rail__text\s*\{[^}]*display:\s*none/s);
+  assert.match(css, /\.edupi-teacher-rail\.is-collapsed \.edupi-teacher-rail__version\s*\{[^}]*display:\s*block/s);
   assert.doesNotMatch(css, /\.edupi-teacher-rail\.is-collapsed\s*>\s*:not\([^)]*restore[^)]*\)\s*\{[^}]*display:\s*none/s);
   assert.match(css, /\.edupi-teacher-body\.has-object-sider\.is-object-sider-collapsed\s*\{[^}]*grid-template-columns:\s*18px minmax\(0, 1fr\)/s);
   assert.match(css, /\.edupi-object-sider-strip\s*\{[^}]*border-right:\s*1px solid var\(--ep-border\)/s);
