@@ -206,7 +206,8 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   useEffect(() => {
     const refresh = () => { void loadWorkspace().catch(() => {}); };
     window.addEventListener("edupi-preparation-updated", refresh);
-    return () => window.removeEventListener("edupi-preparation-updated", refresh);
+    window.addEventListener("edupi-artifacts-updated", refresh);
+    return () => { window.removeEventListener("edupi-preparation-updated", refresh); window.removeEventListener("edupi-artifacts-updated", refresh); };
   }, [loadWorkspace]);
 
   useEffect(() => {

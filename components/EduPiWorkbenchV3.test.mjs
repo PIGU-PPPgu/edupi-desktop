@@ -98,7 +98,7 @@ test("growth and materials use explicit databases and right-side material detail
   assert.match(materials, /edupi-material-drawer/);
   assert.match(materials, /补充 \/ 修订/);
   assert.match(materials, /PAGE_SIZE = 8/);
-  assert.match(materials, /item\.subject\} \$\{item\.source\} \$\{item\.summary/);
+  assert.match(await read("../lib/edupi-material-rows.ts"), /item\.subject\} \$\{item\.source\} \$\{item\.summary/);
   assert.match(materials, /edupi-material-message/);
   assert.match(materials, /const categoryLabel = MATERIAL_CATEGORIES\.find/);
   assert.match(materials, /<span>材料<\/span><h1>\{categoryLabel\}<\/h1>/);

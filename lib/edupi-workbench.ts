@@ -84,6 +84,7 @@ export function taskDisplayTitle(task: TeacherTask): string {
 /** Translate the execution snapshot into a short teacher-facing status. */
 export function taskContentStatusLabel(task: TeacherTask): string | null {
   const status = task.contentStatus?.trim().toLocaleLowerCase().replace(/[\s-]+/g, "_");
+  if (status === "unavailable") return "文件索引暂不可用";
   if (status === "generation_failed" || status === "failed" || status === "error") return "准备失败";
   if (status === "draft_ready" || status === "candidate_ready" || status === "ready") return "待你确认";
   if (status === "generating" || status === "queued" || status === "running") return "正在准备";

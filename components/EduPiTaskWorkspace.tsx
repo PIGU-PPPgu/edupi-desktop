@@ -6,6 +6,7 @@ import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { taskDisplayTitle, taskStatusLabel, taskStatusTone, taskTypeLabel, type TaskStage } from "@/lib/edupi-workbench";
 import { isTaskReviewable, workCaseStateLabel } from "@/lib/edupi-work-case";
 import { EduPiTaskStage, type ReviewPayload } from "./EduPiTaskStage";
+import { EduPiConversationFiles } from "./EduPiConversationFiles";
 
 type Props = {
   task: TeacherTask;
@@ -71,6 +72,7 @@ export function EduPiTaskWorkspace(props: Props) {
         </nav>
         <section className="edupi-task-workspace__surface" aria-label={stageLabel}>
           <h2 className="edupi-visually-hidden">{stageLabel}</h2>
+          {props.stage === "artifact" && props.task.id ? <EduPiConversationFiles key={props.task.id} taskId={props.task.id} sessionId={props.agentSession?.sessionId || ""} cwd={props.workspace} onOpen={props.onOpenFile} /> : null}
           <EduPiTaskStage
           task={props.task}
           stage={props.stage}

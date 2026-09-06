@@ -6,6 +6,7 @@ import { MEMORY_CATEGORIES, memoryCategoryRoute, memorySemesterRoute } from "@/l
 import { scopedMemoryIds, type EducationMemoryScopeProjection } from "@/lib/edupi-memory-scopes";
 import { appendTeacherInputSlot } from "@/lib/edupi-teacher-input-slot";
 import { isUserFacingMemory } from "@/lib/edupi-workbench";
+import { EduPiMemoryHistory } from "./EduPiMemoryHistory";
 
 const PAGE_SIZE = 8;
 
@@ -39,13 +40,13 @@ export function EduPiMemoryDatabase({ data, memoryScopes, query, selectedObjectI
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   useEffect(() => { setPage((current) => Math.min(current, Math.max(0, pages - 1))); }, [pages]);
   const visible = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const saveMemory = async (memory: EducationMemory) => {
-    const draft = editor?.memoryId === memory.id ? editor.draft.trim() : "";
-    if (!editor || !draft || draft === editor.originalContent || saving) return;
+  const saveMemory = async (memory: EducationMemory, restoredContent?: string) => {
+    const draft = restoredContent ?? (editor?.memoryId === memory.id ? editor.draft.trim() : "");
+    if (!draft || draft === memory.content || saving) return;
     setSaving(true);
     setMessage(null);
     try {
-      const response = await fetch(`/api/edupi/memories/${encodeURIComponent(memory.id)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: editor.revision, content: draft }) });
+      const response = await fetch(`/api/edupi/memories/${encodeURIComponent(memory.id)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: restoredContent !== undefined ? memory.revision : editor!.revision, content: draft }) });
       const result = await response.json() as { error?: string; code?: string; data?: EducationContract };
       if (!response.ok || !result.data) throw new Error(result.error || (result.code === "stale_revision" ? "记忆已更新，请刷新后重试" : "记忆保存失败"));
       const savedMemory = result.data.continuity.memories.find((item) => item.id === memory.id);
@@ -92,6 +93,7 @@ export function EduPiMemoryDatabase({ data, memoryScopes, query, selectedObjectI
       {visible.map((memory) => <details className="edupi-database-row" key={memory.id}>
         <summary className="edupi-memory-db-grid"><strong>{memory.content}</strong><span>{memory.student || categoryLabel}</span><span>{memory.tags.slice(0, 3).join(" · ") || "—"}</span><span>{memory.count} 次</span><time>{shortDate(memory.updatedAt || memory.createdAt)}</time></summary>
         <div className="edupi-database-row__detail"><div><span>创建</span><strong>{shortDate(memory.createdAt)}</strong></div><div><span>状态</span><strong>当前事实 · 版本 {memory.revision}</strong></div><div><span>完整标签</span><strong>{memory.tags.join("、") || "无"}</strong></div>{editor?.memoryId === memory.id ? <form className="edupi-memory-editor" onSubmit={(event) => { event.preventDefault(); void saveMemory(memory); }}><textarea value={editor.draft} rows={3} maxLength={4000} autoFocus aria-label="修改记忆内容" onChange={(event) => setEditor({ ...editor, draft: event.target.value })} /><footer><button type="button" disabled={saving} onClick={() => setEditor(null)}>取消</button><button type="submit" className="is-primary" disabled={saving || !editor.draft.trim() || editor.draft.trim() === editor.originalContent}>{saving ? "保存中…" : "保存"}</button></footer></form> : <footer className="edupi-memory-actions"><button type="button" aria-disabled={!data.capabilities.memoryUpdate.enabled} aria-describedby={!data.capabilities.memoryUpdate.enabled ? memoryUpdateReasonId(memory.id) : undefined} onClick={() => { if (!data.capabilities.memoryUpdate.enabled) return; setMessage(null); setEditor({ memoryId: memory.id, draft: memory.content, originalContent: memory.content, revision: memory.revision }); }}>手动修改</button>{!data.capabilities.memoryUpdate.enabled ? <span id={memoryUpdateReasonId(memory.id)} className="edupi-visually-hidden">{data.capabilities.memoryUpdate.reason}</span> : null}<button type="button" onClick={() => openMemoryAgent(memory)}>AI 协作</button>{data.capabilities.entityDelete.enabled && data.capabilities.entityDelete.targetKinds.includes("memory") ? <button type="button" className="is-delete" disabled={Boolean(deletingId)} onClick={() => void deleteMemory(memory)}>{deletingId === memory.id ? "删除中…" : "删除"}</button> : null}</footer>}</div>
+        <EduPiMemoryHistory id={memory.id} revision={memory.revision} onRestore={data.capabilities.memoryUpdate.enabled ? content => saveMemory(memory, content) : undefined} />
       </details>)}
       {visible.length === 0 ? <div className="edupi-database__empty">此分类暂无记忆</div> : null}
     </section>

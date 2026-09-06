@@ -1369,6 +1369,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "prompt_error":
         addNotice({ type: "error", message: (event.errorMessage as string | undefined) ?? "Command failed" });
         break;
+      case "artifact_registration_failed":
+        addNotice({ type: "error", message: (event.message as string | undefined) ?? "文件已写入，但材料登记失败。" });
+        break;
       case "extension_error":
         addNotice({
           type: "error",

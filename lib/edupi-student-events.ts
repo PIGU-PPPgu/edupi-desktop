@@ -3,6 +3,7 @@ import { resolveEduPiBridgeRoots } from "./edupi-core-snapshot";
 import { runCoreProcess } from "./edupi-core-process-client";
 
 export type StudentEvent = {
+  canonical_topic?: string | null;
   id:string;kind:"learning"|"interaction";students:string[];summary:string;topic:string|null;observed_on:string|null;
   recorded_at:string;updated_at:string;revision:number;
   source:{session_id:string;message_id:string;text:string};

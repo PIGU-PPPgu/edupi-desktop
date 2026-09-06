@@ -4,6 +4,7 @@ import typescript from "eslint-config-next/typescript";
 const eslintConfig = [
   {
     ignores: [
+      "vendor/pptxgenjs/**",
       ".next-desktop/**",
       "src-tauri/resources/server/**",
       "src-tauri/resources/edupi-core/**",

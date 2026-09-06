@@ -20,6 +20,6 @@ test("workspace, chat, material, and calendar drawers share Escape and focus res
 
 test("student drawer closes with Escape and restores the invoking control", async () => {
   const students = await read("./EduPiStudentWorkspace.tsx");
-  assert.match(students, /event\.key !== "Escape"/);
-  assert.match(students, /previouslyFocused\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(students, /useModalDismiss<HTMLElement>/);
+  assert.match(students, /ref=\{studentDrawerRef\}/);
 });
