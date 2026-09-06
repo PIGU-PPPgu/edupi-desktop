@@ -1,11 +1,10 @@
 # Desktop upstream synchronization
 
-EduPi Desktop keeps three repository roles separate:
+EduPi Desktop keeps the source/release boundary explicit while using one maintained repository:
 
 | Role | Repository | Allowed use |
 | --- | --- | --- |
-| EduPi source | `PIGU-PPPgu/edupi-desktop` | Checkout base, review PRs, and reviewed source history |
-| Public releases | `PIGU-PPPgu/edupi-releases` | Signed installers, updater metadata, and component manifests |
+| EduPi source and releases | `PIGU-PPPgu/edupi-desktop` | Reviewed source history plus signed installers, updater metadata, and component manifests |
 | Desktop upstream | `abcwyc/pi-agent-desktop` | Read-only change detection, merge input, license, and attribution |
 
 `abcwyc/pi-agent-desktop` is not an EduPi source, download, updater, signing, or release destination.
@@ -31,7 +30,7 @@ The workflow does not have release or signing secrets and must never:
 - sign or build a release artifact;
 - create, edit, upload, or publish a GitHub Release;
 - dispatch `release.yml` or any other release workflow;
-- reference `EDUPI_RELEASE_TOKEN`, Tauri signing keys, or updater signing keys.
+- reference Tauri signing keys or updater signing keys.
 
 Release-destination sentinels guard the signed-release workflow, Tauri updater endpoint, component manifest, version resolution, update checks, and application repository link. If an upstream merge restores `abcwyc/pi-agent-desktop` as an active update or release target, the candidate fails before it can be pushed.
 
@@ -42,7 +41,7 @@ Passing automation proves only that the candidate is build-time consistent with 
 - EduPi teacher workflows and safety boundaries;
 - branding, repository links, and update UI;
 - Tauri capabilities and desktop permissions;
-- source and public-release separation;
+- source review and Release publishing boundaries;
 - upstream license and attribution changes;
 - any useful upstream CI change, ported separately without copying an unreviewed workflow onto the sync branch;
 - every conflict resolution and any unexpected file deletion.

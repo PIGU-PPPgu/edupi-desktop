@@ -35,7 +35,7 @@ export const APP_UPDATE_PROJECTS: readonly AppUpdateProject[] = [
   {
     id: "edupi-desktop",
     name: APP_DISTRIBUTION_NAME,
-    repository: "PIGU-PPPgu/edupi-releases",
+    repository: "PIGU-PPPgu/edupi-desktop",
     currentVersion: APP_VERSION,
   },
 ];
