@@ -1653,7 +1653,7 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
       memory: dataSource(".edupi/memory", sourceCounts.memory.present, memories.length, sourceCounts.memory.observedAt),
       insights: dataSource(".edupi/memory/subconscious.json", sourceCounts.insights.present, signals.length + insights.length + themes.length, sourceCounts.insights.observedAt),
       growth: dataSource(".edupi/output", sourceCounts.documents.present || sourceCounts.insights.present, documents.length + themes.length, [sourceCounts.documents.observedAt, sourceCounts.insights.observedAt].filter((value): value is string => Boolean(value)).sort().at(-1) || null),
-      materials: dataSource(".edupi/output/material_candidates.json", sourceCounts.materials.present || intakeTargets.some((target) => target.projectionKind === "material_intake") || tasks.some((task) => Boolean(task.materialId)), Math.max(sourceCounts.materials.count, intakeTargets.filter((target) => target.projectionKind === "material_intake").length + tasks.filter((task) => Boolean(task.materialId)).length), sourceCounts.materials.observedAt),
+      materials: dataSource(".edupi/output", sourceCounts.materials.present || sourceCounts.documents.present || intakeTargets.some((target) => target.projectionKind === "material_intake") || tasks.some((task) => Boolean(task.materialId)), Math.max(sourceCounts.materials.count + documents.length, intakeTargets.filter((target) => target.projectionKind === "material_intake").length + tasks.filter((task) => Boolean(task.materialId)).length + documents.length), [sourceCounts.materials.observedAt, sourceCounts.documents.observedAt].filter((value): value is string => Boolean(value)).sort().at(-1) || null),
       documents: dataSource(".edupi/output", sourceCounts.documents.present, documents.length, sourceCounts.documents.observedAt),
     },
     capabilities: {
@@ -1752,7 +1752,7 @@ export function buildEducationContract(input: ContractInput = {}): EducationCont
       memory: dataSource(".edupi/memory", memories.length > 0, memories.length),
       insights: dataSource(".edupi/memory/subconscious.json", signals.length > 0 || insights.length > 0 || themes.length > 0, signals.length + insights.length + themes.length),
       growth: dataSource(".edupi/output", documents.length > 0 || themes.length > 0, documents.length + themes.length),
-      materials: dataSource(".edupi/output/material_candidates.json", intakeTargets.some((target) => target.projectionKind === "material_intake") || tasks.some((task) => Boolean(task.materialId)), intakeTargets.filter((target) => target.projectionKind === "material_intake").length + tasks.filter((task) => Boolean(task.materialId)).length),
+      materials: dataSource(".edupi/output", documents.length > 0 || intakeTargets.some((target) => target.projectionKind === "material_intake") || tasks.some((task) => Boolean(task.materialId)), documents.length + intakeTargets.filter((target) => target.projectionKind === "material_intake").length + tasks.filter((task) => Boolean(task.materialId)).length),
       documents: dataSource(".edupi/output", documents.length > 0, documents.length),
     },
     capabilities: {

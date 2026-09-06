@@ -21,4 +21,12 @@ test("long-term workspaces expose real source state instead of ambiguous empty s
   assert.match(growth, /数据已连接，暂无专业成长记录/);
   assert.match(materials, /dataSources\.materials/);
   assert.match(materials, /材料索引尚未接入/);
+  assert.match(materials, /data\.continuity\.documents\.map/);
+  assert.match(materials, /taskArtifactFile/);
+  assert.match(materials, /EduPi 生成/);
+  assert.match(materials, /onOpenFile\(selected\.filePath/);
+  assert.match(materials, /openPathNative/);
+  assert.match(materials, /revealItemInDirNative/);
+  assert.match(materials, /显示所在文件夹/);
+  assert.match(sider, /documents\.map\(\(item\) => \(\{ materialKind: item\.kind, title: item\.title \}\)\)/);
 });

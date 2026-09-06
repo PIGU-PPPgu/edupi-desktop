@@ -125,7 +125,7 @@ export function EduPiObjectSider({ view, data, context, memoryScopes, query, onQ
     if (status === "surfaced" || status === "brewing") return categoryInsights.filter((item) => item.status === status).length;
     return categoryObservations.length + categoryInsights.length + categorySignals.length;
   };
-  const materialCount = (category: MaterialCategoryId) => materialCategoryCount(category, materials, intakeMaterials.length);
+  const materialCount = (category: MaterialCategoryId) => materialCategoryCount(category, [...materials, ...documents.map((item) => ({ materialKind: item.kind, title: item.title }))], intakeMaterials.length);
   const tasksByCategory = groupTasksByCategory(tasks);
   const taskRows = (rows: TeacherTask[], stage: TaskStage) => rows.map((task) => <TaskRow key={taskKey(task)} task={task} selected={taskKey(task) === selectedTaskKey} onClick={() => onTask(task, stage)} />);
 
