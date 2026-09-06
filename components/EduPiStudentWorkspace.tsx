@@ -92,6 +92,22 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
     return () => window.clearTimeout(timer);
   }, [message]);
 
+  useEffect(() => {
+    if (!selectedStudentId) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setEditor(null);
+      onStudent(null);
+    };
+    window.addEventListener("keydown", closeOnEscape, true);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape, true);
+      if (previouslyFocused && document.contains(previouslyFocused)) previouslyFocused.focus({ preventScroll: true });
+    };
+  }, [onStudent, selectedStudentId]);
+
   const importRosterFile = async (file: File) => {
     const body = new FormData();
     body.append("file", file, file.name);

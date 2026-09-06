@@ -17,6 +17,7 @@ import {
   type CalendarViewMode,
 } from "@/lib/edupi-calendar-model";
 import { EduPiTimetableGrid } from "./EduPiTimetableGrid";
+import { useModalDismiss } from "@/hooks/useModalDismiss";
 
 type Props = {
   data: EducationContract;
@@ -245,6 +246,7 @@ function isNonTaskSelection(selection: CalendarItemSelection): selection is NonT
 }
 
 function CalendarDetailDrawer({ data, selection, onClose, onEdit, onDelete, deleteBusy = false, editor }: { data: EducationContract; selection: NonTaskCalendarSelection; onClose: () => void; onEdit?: () => void; onDelete?: () => void; deleteBusy?: boolean; editor?: ReactNode }) {
+  const drawerRef = useModalDismiss<HTMLElement>(onClose);
   const rows: Array<{ label: string; value: string }> = [];
   let title = selection.title;
   if (selection.kind === "calendar") {
@@ -271,7 +273,7 @@ function CalendarDetailDrawer({ data, selection, onClose, onEdit, onDelete, dele
       ["备注", visibleTimetableNote(item.notes) || selection.detail],
     ] as Array<[string, unknown]>) { const text = rawText(value); if (text) rows.push({ label, value: text }); }
   }
-  return <aside className="edupi-calendar-detail" aria-label={`${title}详情`}><header><div><span>{selection.kind === "calendar" ? "校历节点" : "课程安排"}</span><h2>{title}</h2></div><div className="edupi-calendar-detail__actions">{onEdit && !editor ? <button type="button" className="is-edit" onClick={onEdit}>编辑</button> : null}{onDelete && !editor ? <button type="button" className="is-delete" disabled={deleteBusy} onClick={onDelete}>{deleteBusy ? "删除中…" : "删除"}</button> : null}<button type="button" onClick={onClose} aria-label="关闭详情" autoFocus>×</button></div></header>{editor ? <div className="edupi-calendar-detail__editor">{editor}</div> : <dl>{rows.map((row) => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>}</aside>;
+  return <aside ref={drawerRef} className="edupi-calendar-detail" role="dialog" aria-modal="true" aria-label={`${title}详情`}><header><div><span>{selection.kind === "calendar" ? "校历节点" : "课程安排"}</span><h2>{title}</h2></div><div className="edupi-calendar-detail__actions">{onEdit && !editor ? <button type="button" className="is-edit" onClick={onEdit}>编辑</button> : null}{onDelete && !editor ? <button type="button" className="is-delete" disabled={deleteBusy} onClick={onDelete}>{deleteBusy ? "删除中…" : "删除"}</button> : null}<button type="button" data-autofocus onClick={onClose} aria-label="关闭详情">×</button></div></header>{editor ? <div className="edupi-calendar-detail__editor">{editor}</div> : <dl>{rows.map((row) => <div key={row.label}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>}</aside>;
 }
 
 function IntakeComposer({ mode, anchorDate, calendarEvent, timetableSlot, busy, embedded = false, onClose, onImportCalendar, onImportTimetable }: {
@@ -371,18 +373,6 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
-
-  useEffect(() => {
-    if (!selection) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setEditingCalendarId(null);
-      setEditingTimetableId(null);
-      onSelect(null);
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onSelect, selection]);
 
   const changePeriod = (direction: -1 | 1) => setAnchorDate(shiftCalendarAnchor(view, anchorDate, direction));
   const selectDate = (date: string) => {

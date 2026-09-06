@@ -30,7 +30,7 @@ const AppSettings = dynamic(() => import("./AppSettings").then((m) => m.AppSetti
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { BranchNavigator } from "./BranchNavigator";
 import { UpdateReminder } from "./UpdateReminder";
-import { announceComputerUseChanged, EduPiComputerUseStop } from "./EduPiComputerUseStop";
+import { announceComputerUseChanged } from "./EduPiComputerUseStop";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -2083,7 +2083,6 @@ export function AppShell() {
       onNavigate={openEducationView}
       onOpenSettings={() => setAppSettingsOpen(true)}
     />}
-    <EduPiComputerUseStop />
     {firstRunGuideOpen && (
       <EduPiFirstRunGuide
         onOpenModels={() => openEduPiAdmin("models")}
