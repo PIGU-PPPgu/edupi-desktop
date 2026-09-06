@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { desktopTargetTriple } from "./desktop-platform.mjs";
 import { buildPackagedCoreBundle } from "./packaged-core-bundle.mjs";
 import { piPackageDirNames } from "./pi-packages.mjs";
+import { removeUnusedMuslSharp } from "./packaged-sharp.mjs";
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const desktopBuildDir = join(rootDir, ".next-desktop");
@@ -240,6 +241,7 @@ async function bundleNodeRuntime() {
 
 await runNextBuild();
 await assembleServer();
+await removeUnusedMuslSharp(serverResourcesDir);
 
 const deduped = await dedupeNestedPackages();
 if (deduped > 0) console.log(`Removed ${deduped} redundant nested package cop${deduped === 1 ? "y" : "ies"}`);
