@@ -50,6 +50,7 @@ import { readEduPiWorkspace } from "@/lib/edupi-education-client";
 import { deleteEducationEntity } from "@/lib/edupi-entity-delete-client";
 import type { EducationMemoryScopeProjection } from "@/lib/edupi-memory-scopes";
 import { readEduPiTeachingSkills, type EduPiTeachingSkillLifecycle } from "@/lib/edupi-platform-client";
+import { normalizeKernelState, readEduPiKernel, type EduPiKernelState } from "@/lib/edupi-kernel-client";
 
 type Props = {
   initialModule?: EducationModule;
@@ -120,6 +121,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const [teachingSkills, setTeachingSkills] = useState<EduPiTeachingSkillLifecycle>({ status: "unavailable", generatedAt: null, skills: [] });
   const [runningSessionCount, setRunningSessionCount] = useState(0);
   const [runningKernelCount, setRunningKernelCount] = useState(0);
+  const [kernelState, setKernelState] = useState<EduPiKernelState>({ status: "unavailable", updatedAt: null, running: 0, runs: [] });
   const runningAgentCount = runningSessionCount + runningKernelCount;
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -158,18 +160,21 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, []);
 
   const loadWorkspace = useCallback(async (signal?: AbortSignal) => {
-    const [workspace, scopeResponse, nextTeachingSkills] = await Promise.all([
+    const [workspace, scopeResponse, nextTeachingSkills, nextKernelState] = await Promise.all([
       readEduPiWorkspace({ signal }),
       fetch("/api/edupi/memory-scopes", { cache: "no-store", signal })
         .then(async (response) => response.ok ? await response.json() as { projection?: EducationMemoryScopeProjection } : null)
         .catch(() => null),
       readEduPiTeachingSkills(signal),
+      readEduPiKernel(signal),
     ]);
     const { context: nextContext, data: nextEducation } = workspace;
     setContext(nextContext);
     setEducation(nextEducation);
     setMemoryScopes(scopeResponse?.projection?.projection_kind === "scoped_education_memory" ? scopeResponse.projection : null);
     setTeachingSkills(nextTeachingSkills);
+    setKernelState(nextKernelState);
+    setRunningKernelCount(nextKernelState.running);
     return nextEducation;
   }, []);
 
@@ -320,9 +325,8 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       if (document.visibilityState === "visible") {
         try {
           const response = await fetch("/api/edupi/kernel", { cache: "no-store", signal: controller.signal });
-          const payload = response.ok ? await response.json() as { projection?: { summary?: { running?: unknown } } } : null;
-          const running = payload?.projection?.summary?.running;
-          if (!controller.signal.aborted) setRunningKernelCount(Number.isInteger(running) && Number(running) >= 0 ? Number(running) : 0);
+          const next = response.ok ? normalizeKernelState(await response.json()) : { status: "unavailable" as const, updatedAt: null, running: 0, runs: [] };
+          if (!controller.signal.aborted) { setKernelState(next); setRunningKernelCount(next.running); }
         } catch (error) {
           if (!(error instanceof DOMException && error.name === "AbortError") && !controller.signal.aborted) setRunningKernelCount(0);
         }
@@ -904,7 +908,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
             </div> : null}
             {activeView === "tasks" && activeTask ? <EduPiTaskWorkspace task={activeTask} workCase={workCaseForTask(education, activeTask.id)} stage={taskStage} workspace={education.workspace} context={context} reviewEnabled={education.capabilities.taskReview.enabled} reviewReason={education.capabilities.taskReview.reason} reviewBusy={reviewBusy} reviewMessage={reviewMessage} agentSession={activeTask.id ? education.taskSessions[activeTask.id] ?? null : null} taskSessionBusy={taskSessionBusy} taskSessionError={taskSessionError} onStage={selectStage} onReview={reviewTask} onOpenAgent={openAgent} onOpenFile={openFile} /> : null}
             {activeView === "tasks" && !activeTask ? <main className="edupi-module-workspace"><header className="edupi-module-heading"><div><h1>暂无任务</h1></div><button type="button" onClick={openUpload}>上传材料</button></header></main> : null}
-            {activeView !== "chat" && activeView !== "tasks" && activeView !== "review" ? <EduPiWorkspaceViews view={activeView} data={education} context={context} memoryScopes={memoryScopes} teachingSkills={teachingSkills} query={query} selectedStudentId={selectedStudentId} selectedObjectId={selectedObjectId} runningAgentCount={runningAgentCount} stagedMaterials={stagedMaterials} stagingBusy={materialStagingBusy || educationIntakeBusy} intakeBusy={educationIntakeBusy} stagingMessage={materialStagingMessage?.text ?? null} calendarSelection={calendarSelection} onCalendarSelection={setCalendarSelection} onTask={selectTask} onTaskDetail={openTaskDetail} onEducation={setEducation} onStudent={selectStudent} onObject={selectObject} onNavigate={selectView} onUpload={openUpload} onIntakeMaterial={intakeStagedMaterial} onRemoveStagedMaterial={removeStagedMaterialEntry} onImportCalendar={importCalendarEvent} onImportTimetable={importTimetableSlot} onOpenContext={() => setContextOpen(true)} onOpenAdmin={onOpenAdmin} onOpenFile={openFile} onStartAgent={(prompt, mode) => startAgent(prompt, mode)} onCreateTask={createBoardTask} onMoveTask={moveBoardTask} onDeleteEntity={deleteEntity} /> : null}
+            {activeView !== "chat" && activeView !== "tasks" && activeView !== "review" ? <EduPiWorkspaceViews view={activeView} data={education} context={context} memoryScopes={memoryScopes} teachingSkills={teachingSkills} kernelState={kernelState} query={query} selectedStudentId={selectedStudentId} selectedObjectId={selectedObjectId} runningAgentCount={runningAgentCount} stagedMaterials={stagedMaterials} stagingBusy={materialStagingBusy || educationIntakeBusy} intakeBusy={educationIntakeBusy} stagingMessage={materialStagingMessage?.text ?? null} calendarSelection={calendarSelection} onCalendarSelection={setCalendarSelection} onTask={selectTask} onTaskDetail={openTaskDetail} onEducation={setEducation} onStudent={selectStudent} onObject={selectObject} onNavigate={selectView} onUpload={openUpload} onIntakeMaterial={intakeStagedMaterial} onRemoveStagedMaterial={removeStagedMaterialEntry} onImportCalendar={importCalendarEvent} onImportTimetable={importTimetableSlot} onOpenContext={() => setContextOpen(true)} onOpenAdmin={onOpenAdmin} onOpenFile={openFile} onStartAgent={(prompt, mode) => startAgent(prompt, mode)} onCreateTask={createBoardTask} onMoveTask={moveBoardTask} onDeleteEntity={deleteEntity} /> : null}
           </div>
           {inspectorAvailable ? <EduPiInspector open={inspectorOpen} data={education} task={activeTask} onClose={toggleInspector} onOpenAgent={openAgent} onStage={selectStage} /> : null}
         </div>
