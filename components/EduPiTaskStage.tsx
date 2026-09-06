@@ -81,11 +81,13 @@ function ReviewStage({ task, enabled, blocked, reason, busy, message, onReview, 
   const [title, setTitle] = useState(task.title);
   const [dueDate, setDueDate] = useState(task.dueDate || "");
   const [deliverables, setDeliverables] = useState(task.deliverables.join("\n"));
+  const [changingDecision, setChangingDecision] = useState(false);
   useEffect(() => {
     setNote("");
     setTitle(task.title);
     setDueDate(task.dueDate || "");
     setDeliverables(task.deliverables.join("\n"));
+    setChangingDecision(false);
   }, [task]);
   const submit = (action: TaskReviewAction) => onReview(action, {
     note: note.trim() || undefined,
@@ -93,13 +95,15 @@ function ReviewStage({ task, enabled, blocked, reason, busy, message, onReview, 
   });
   const decisionRequiresNote = !note.trim();
   const canRollback = task.reviewHistory.length > 0 && task.reviewHistory.at(-1)?.action !== "rollback";
-  const reviewFields = enabled && !blocked ? (
+  const decisionRecorded = task.status !== "planned";
+  const showDecisionEditor = enabled && !blocked && (!decisionRecorded || changingDecision);
+  const reviewFields = showDecisionEditor ? (
     <div className="edupi-review-fields">
       <label>审核意见<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="补充判断依据" /></label>
       <details><summary>修改内容</summary><div className="edupi-review-edit-grid"><label>任务标题<input value={title} onChange={(event) => setTitle(event.target.value)} /></label><label>截止日期<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label><label>教学产物<textarea rows={4} value={deliverables} onChange={(event) => setDeliverables(event.target.value)} /></label></div></details>
     </div>
   ) : null;
-  const reviewActions = enabled && !blocked ? (
+  const reviewActions = showDecisionEditor ? (
     <div className="edupi-review-actions" aria-label="教师审核动作">
       <button type="button" className="is-primary" disabled={!enabled || busy !== null} onClick={() => void submit("accept")}>{busy === "accept" ? "正在记录" : "接受"}</button>
       <button type="button" disabled={!enabled || busy !== null || !title.trim()} onClick={() => void submit("modify")}>{busy === "modify" ? "正在记录" : "修改后接受"}</button>
@@ -107,12 +111,12 @@ function ReviewStage({ task, enabled, blocked, reason, busy, message, onReview, 
       <button type="button" className="is-danger" disabled={!enabled || busy !== null || decisionRequiresNote} onClick={() => void submit("reject")}>{busy === "reject" ? "正在记录" : "拒绝"}</button>
       <button type="button" className="is-quiet" disabled={!enabled || busy !== null || !canRollback} onClick={() => void submit("rollback")}>{busy === "rollback" ? "正在回滚" : "回滚"}</button>
     </div>
-  ) : blocked ? null : (
+  ) : blocked || enabled ? null : (
     <div className="edupi-review-actions" aria-label="AI 协作动作">
       <button type="button" className="is-primary" disabled={taskSessionBusy} onClick={onOpenAgent}>{taskSessionBusy ? "正在准备" : "在 AI 协作中处理"}</button>
     </div>
   );
-  return <div className="edupi-stage-review">{reviewFields}{blocked || !enabled ? <div className="edupi-review-notice" role="status">{reason}</div> : null}{reviewActions}{blocked ? null : !enabled && taskSessionError ? <div className="edupi-agent-session__error" role="alert">{taskSessionError}</div> : null}{message ? <div className="edupi-review-message" role="status">{message}</div> : null}<section className="edupi-review-history"><h3>审核历史<span>{task.reviewHistory.length}</span></h3>{task.reviewHistory.slice().reverse().map((entry, index) => <div key={`${historyText(entry, "review_id", String(index))}:${index}`}><strong>{reviewActionLabel(historyText(entry, "action"))}</strong><span>{historyText(entry, "reviewed_at")}</span><p>{historyText(entry, "note", "无备注")}</p></div>)}{task.reviewHistory.length === 0 ? <p className="edupi-review-history__empty">暂无审核记录</p> : null}</section></div>;
+  return <div className="edupi-stage-review">{decisionRecorded && !changingDecision ? <section className={`edupi-review-decision is-${task.status}`} role="status"><div><strong>{{ accepted: "已接受", modified: "已修改", rejected: "已拒绝", hold: "已暂缓", planned: "待审核" }[task.status]}</strong><span>{task.reviewedAt || "审核结果已记录"}{task.reviewer ? ` · ${task.reviewer}` : ""}</span></div>{enabled && !blocked ? <button type="button" disabled={busy !== null} onClick={() => setChangingDecision(true)}>修改决定</button> : null}</section> : null}{reviewFields}{blocked || !enabled ? <div className="edupi-review-notice" role="status">{reason}</div> : null}{reviewActions}{blocked ? null : !enabled && taskSessionError ? <div className="edupi-agent-session__error" role="alert">{taskSessionError}</div> : null}{message ? <div className="edupi-review-message" role="status">{message}</div> : null}<section className="edupi-review-history"><h3>审核历史<span>{task.reviewHistory.length}</span></h3>{task.reviewHistory.slice().reverse().map((entry, index) => <div key={`${historyText(entry, "review_id", String(index))}:${index}`}><strong>{reviewActionLabel(historyText(entry, "action"))}</strong><span>{historyText(entry, "reviewed_at")}</span><p>{historyText(entry, "note", "无备注")}</p></div>)}{task.reviewHistory.length === 0 ? <p className="edupi-review-history__empty">暂无审核记录</p> : null}</section></div>;
 }
 
 export function EduPiTaskStage(props: Props) {

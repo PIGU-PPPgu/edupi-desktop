@@ -930,6 +930,11 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-today-work__details dt { color: var(--ep-muted); font-size: 10px; }
 .edupi-today-work__details dd { margin: 0; color: var(--ep-text); font-family: var(--font-mono); font-size: 9px; overflow-wrap: anywhere; }
 .edupi-today-work__actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 9px; }
+.edupi-today-work__decision { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 10px; margin-top: 9px; padding: 5px 7px 5px 9px; border-radius: 6px; background: var(--ep-surface-soft); color: var(--ep-muted); font-size: 11px; }
+.edupi-today-work__decision.is-accepted, .edupi-today-work__decision.is-modified { background: var(--ep-green-soft); color: var(--ep-green); }
+.edupi-today-work__decision.is-rejected, .edupi-today-work__decision.is-suppressed { background: var(--ep-red-soft); color: var(--ep-red); }
+.edupi-today-work__decision.is-held, .edupi-today-work__decision.is-snoozed { background: var(--ep-orange-soft); color: var(--ep-orange); }
+.edupi-today-work__decision button { height: 24px; padding: 0 7px; border: 1px solid currentColor; border-radius: 5px; background: transparent; color: inherit; cursor: pointer; font-size: 10px; }
 .edupi-today-work__actions button,
 .edupi-today-work__editor-actions button { min-width: 0; min-height: 30px; padding: 0 7px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface); color: var(--ep-text); cursor: pointer; font-size: 11px; }
 .edupi-today-work__actions button:hover,
@@ -1225,6 +1230,14 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-review-actions button.is-danger { border-color: color-mix(in srgb, var(--ep-red) 55%, var(--ep-border)); color: var(--ep-red); }
 .edupi-review-actions button.is-quiet { margin-left: auto; color: var(--ep-muted); }
 .edupi-review-actions button:disabled { cursor: not-allowed; opacity: .45; }
+.edupi-review-decision { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--ep-border); border-radius: 7px; background: var(--ep-surface-soft); }
+.edupi-review-decision > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.edupi-review-decision strong { color: var(--ep-text); font-size: 13px; }
+.edupi-review-decision span { color: var(--ep-muted); font-size: 11px; }
+.edupi-review-decision button { height: 30px; padding: 0 10px; border: 1px solid var(--ep-border-strong); border-radius: 6px; background: var(--ep-surface); color: var(--ep-text); cursor: pointer; font-size: 11px; }
+.edupi-review-decision.is-accepted, .edupi-review-decision.is-modified { border-color: color-mix(in srgb, var(--ep-green) 28%, var(--ep-border)); background: var(--ep-green-soft); }
+.edupi-review-decision.is-rejected { border-color: color-mix(in srgb, var(--ep-red) 28%, var(--ep-border)); background: var(--ep-red-soft); }
+.edupi-review-decision.is-hold { border-color: color-mix(in srgb, var(--ep-orange) 28%, var(--ep-border)); background: var(--ep-orange-soft); }
 .edupi-review-history { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--ep-border); }
 .edupi-review-history h3 { display: flex; justify-content: space-between; }
 .edupi-review-history h3 span { color: var(--ep-dim); font-weight: 500; }
