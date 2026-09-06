@@ -761,12 +761,14 @@ function ModelDetail({
   model,
   onChange,
   onDelete,
+  onUse,
 }: {
   providerName: string;
   provider: ProviderEntry;
   model: ModelEntry;
   onChange: (m: ModelEntry) => void;
   onDelete: () => void;
+  onUse: () => Promise<void>;
 }) {
   const [testState, setTestState] = useState<ModelTestState>({ phase: "idle" });
   const { t } = useI18n();
@@ -913,6 +915,7 @@ function ModelDetail({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
          <SectionTitle>{t("i18n.model")}</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button className="native-button" disabled={!model.id.trim()} onClick={() => void onUse()}>保存并设为默认</button>
           {testSummary && (
             <span
               title={testSummary}
@@ -1353,7 +1356,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
 
 // ── API Key detail ────────────────────────────────────────────────────────────
 
-function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRefresh: () => void }) {
+function ApiKeyDetail({ provider, onRefresh, onAddModel }: { provider: ApiKeyProvider; onRefresh: () => void; onAddModel: () => void }) {
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -1458,6 +1461,9 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
 
       {error && <p style={{ margin: 0, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
 
+      {provider.configured && (
+        <button className="native-button" onClick={onAddModel}>配置模型名称与连接测试</button>
+      )}
       {provider.configured && (
         <ConfirmDangerButton
           className="native-button native-button-danger"
@@ -1575,7 +1581,7 @@ function FirstModelSetup({
   };
 
   const handleTestAndSave = async () => {
-    const chosen = models.find((model) => model.id === modelId);
+    const chosen = models.find((model) => model.id === modelId.trim()) || (modelId.trim() ? { id: modelId.trim() } : null);
     if (!preset || !transientProvider || !chosen || busy) return;
     setBusy(true);
     setError(null);
@@ -1698,6 +1704,7 @@ function FirstModelSetup({
           {error && <p role="alert" style={{ margin: 0, color: "var(--danger)", fontSize: 12 }}>{error}</p>}
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
             <button className="native-button" onClick={() => { setStage("provider"); setError(null); }} disabled={busy}>返回</button>
+            <button className="native-button" onClick={() => { setStage("verify"); setError(null); }} disabled={busy || !apiKey.trim()}>手动填写模型名</button>
             <button className="native-button native-button-primary" onClick={handleDiscover} disabled={busy || !preset || !apiKey.trim()}>
               {busy ? "读取中…" : "读取模型"}
             </button>
@@ -1709,9 +1716,8 @@ function FirstModelSetup({
         <section aria-labelledby="model-setup-test-title" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <h2 id="model-setup-test-title" style={{ margin: 0, fontSize: 18, color: "var(--text)" }}>选择测试模型</h2>
           <Field label="模型">
-            <select className="native-select" value={modelId} onChange={(event) => setModelId(event.target.value)} style={inputStyle}>
-              {models.map((model) => <option key={model.id} value={model.id}>{model.name ? `${model.name} · ${model.id}` : model.id}</option>)}
-            </select>
+            <input list="edupi-setup-models" value={modelId} onChange={(event) => setModelId(event.target.value)} placeholder="填写厂商提供的模型 ID" style={inputStyle} />
+            <datalist id="edupi-setup-models">{models.map((model) => <option key={model.id} value={model.id}>{model.name || model.id}</option>)}</datalist>
           </Field>
           {error && <p role="alert" style={{ margin: 0, color: "var(--danger)", fontSize: 12 }}>{error}</p>}
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
@@ -2101,7 +2107,7 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
     if (selection.type === "apikey") {
       const p = apiKeyProviders.find((p) => p.id === selection.providerId);
       if (!p) return null;
-      return <ApiKeyDetail key={p.id} provider={p} onRefresh={handleAuthChanged} />;
+      return <ApiKeyDetail key={p.id} provider={p} onRefresh={handleAuthChanged} onAddModel={() => addModel(p.id)} />;
     }
     if (selection.type === "provider") {
       const provider = config.providers?.[selection.name];
@@ -2129,6 +2135,20 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
         model={model}
         onChange={(m) => updateModel(selection.providerName, selection.index, m)}
         onDelete={() => removeModel(selection.providerName, selection.index)}
+        onUse={async () => {
+          setSaveError(null);
+          try {
+            const save = await fetch("/api/models-config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
+            const saved = await save.json();
+            if (!save.ok || saved.error) throw new Error(saved.error || "模型保存失败");
+            savedSnapshotRef.current = JSON.stringify(config);
+            const response = await fetch("/api/models-config/default", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: selection.providerName, modelId: model.id.trim() }) });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.error || "默认模型设置失败");
+            setSavedOk(true);
+            onSaved?.();
+          } catch (error) { setSaveError(error instanceof Error ? error.message : "默认模型设置失败"); }
+        }}
       />
     );
   })();
