@@ -19,6 +19,7 @@ import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS } from "./custom-u
 import { EDUPI_ROOT, extensionPaths } from "./edupi-runtime";
 import { createEduPiAppControlTool } from "./edupi-desktop-tool";
 import { createEduPiTaskTool } from "./edupi-task-tool";
+import { generatedArtifactsRequest, snapshotGeneratedFiles } from "./edupi-generated-artifacts";
 import { createStudentEventTool } from "./edupi-student-event-tool";
 import { createPrepareTaskTool } from "./edupi-prepare-task-tool";
 import type { DesktopControlInput } from "./edupi-desktop-control";
@@ -182,6 +183,8 @@ export class AgentSessionWrapper {
   private onDestroyCallback: (() => void) | null = null;
   private shutdownPromise: Promise<void> | null = null;
   private _alive = true;
+  private artifactWrites = Promise.resolve();
+  private artifactBaseline = new Map<string, string>();
 
   constructor(public readonly inner: AgentSessionLike) {}
 
@@ -255,6 +258,24 @@ export class AgentSessionWrapper {
 
   start(): void {
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
+      if (resolve(this.cwd) === EDUPI_ROOT) {
+        if (event.type === "agent_start") this.artifactBaseline = snapshotGeneratedFiles(this.cwd);
+        if (event.type === "tool_execution_end" && !event.isError) {
+          const files = snapshotGeneratedFiles(this.cwd);
+          const args = event.args as { path?: string } | undefined;
+          const changed = [...files].filter(([file, stamp]) => this.artifactBaseline.get(file) !== stamp).map(([file]) => file);
+          if ((event.toolName === "write" || event.toolName === "edit") && typeof args?.path === "string") changed.push(resolve(this.cwd, args.path));
+          this.artifactBaseline = files;
+          const sessionId = this.sessionId;
+          for (const filePath of new Set(changed)) {
+            this.artifactWrites = this.artifactWrites.then(async () => {
+              await generatedArtifactsRequest("register", { file_path: filePath, session_id: sessionId });
+            }).catch(() => {
+              this.emit({ type: "artifact_registration_failed", message: "文件已写入，但材料登记失败，请重试。", filePath });
+            });
+          }
+        }
+      }
       if (event.type === "agent_end") {
         invalidateSessionListCache();
       }
@@ -472,7 +493,8 @@ export class AgentSessionWrapper {
           ...(promptImages?.length ? { images: promptImages } : {}),
           ...(streamingBehavior ? { streamingBehavior } : {}),
           source: "rpc",
-        }).then(() => {
+        }).then(async () => {
+          await this.artifactWrites;
           this.promptRunning = false;
           this.resetIdleTimer();
           if (!streamingBehavior) this.emit({ type: "prompt_done" });
