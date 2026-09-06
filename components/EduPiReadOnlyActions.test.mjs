@@ -10,9 +10,9 @@ test("read-only task review offers active EduPi collaboration", async () => {
   assert.match(source, /在 AI 协作中处理/);
   assert.match(source, /onClick=\{onOpenAgent\}/);
   assert.match(source, /blocked: boolean/);
-  assert.match(source, /enabled && !blocked \?/);
-  assert.match(source, /const reviewFields = enabled && !blocked \? \(/);
-  assert.match(source, /\) : blocked \? null : \(/);
+  assert.match(source, /const showDecisionEditor = enabled && !blocked/);
+  assert.match(source, /const reviewFields = showDecisionEditor \? \(/);
+  assert.match(source, /\) : blocked \|\| enabled \? null : \(/);
   assert.match(source, /\{reviewFields\}/);
   assert.match(source, /taskSessionBusy: boolean/);
   assert.match(source, /disabled=\{taskSessionBusy\}/);

@@ -145,6 +145,7 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
   const capability = data.capabilities.workCandidateReview;
   const busy = useSyncExternalStore(subscribeTodayWorkMutation, getTodayWorkMutationSnapshot, getTodayWorkMutationSnapshot);
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [changingDecisionId, setChangingDecisionId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const editorCurrent = isTodayWorkEditorCurrent(editor, data.workCandidates, capability.enabled);
 
@@ -167,6 +168,7 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
       const result = await submitTodayWorkReview({ candidate, decision, patch, note });
       onEducation(result.data);
       setEditor(null);
+      setChangingDecisionId(null);
       setFeedback({ kind: "success", text: actionSuccess(decision, result.receiptId) });
     } catch (error) {
       if (error instanceof TodayWorkReviewError) {
@@ -251,12 +253,16 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
 
   const renderCandidate = (candidate: EducationWorkCandidate, actionable: boolean) => {
     const isEditing = editorCurrent && editor?.candidateId === candidate.candidateId;
+    const decisionRecorded = candidate.status !== "pending_review";
+    const changingDecision = changingDecisionId === candidate.candidateId;
+    const showActions = actionable && (!decisionRecorded || changingDecision);
     return <article className={`edupi-today-work__item is-${candidate.status}`} key={candidate.candidateId}>
       <header className="edupi-today-work__item-header"><div><span>{candidateMeta(candidate)}</span><h4>{candidate.title}</h4></div><strong className={`edupi-today-work__status is-${candidate.status}`}>{STATUS_LABELS[candidate.status]}</strong></header>
       <p className="edupi-today-work__summary">{candidate.summary}</p>
       <div className="edupi-today-work__reason"><span>原因</span>{workCandidateReasonLabel(candidate.reason)}</div>
       <details className="edupi-today-work__details"><summary>来源与依据</summary><dl><div><dt>来源</dt><dd>{candidate.sourceIds.join("、")}</dd></div><div><dt>依据</dt><dd>{candidate.evidenceIds.join("、")}</dd></div><div><dt>下一步</dt><dd>{NEXT_CYCLE_LABELS[candidate.nextCycleState] || candidate.nextCycleState}</dd></div><div><dt>候选 ID</dt><dd>{candidate.candidateId}</dd></div></dl></details>
-      {actionable && capability.enabled ? <div className="edupi-today-work__actions">
+      {decisionRecorded && !changingDecision ? <div className={`edupi-today-work__decision is-${candidate.status}`} role="status"><span>{STATUS_LABELS[candidate.status]}{candidate.teacherReview.reviewedAt ? ` · ${candidate.teacherReview.reviewedAt}` : ""}</span>{capability.enabled ? <button type="button" disabled={busy} onClick={() => setChangingDecisionId(candidate.candidateId)}>修改决定</button> : null}</div> : null}
+      {showActions && capability.enabled ? <div className="edupi-today-work__actions">
         <button type="button" className="is-primary" disabled={busy} onClick={() => void review(candidate, "accept")}>接受</button>
         <button type="button" disabled={busy} onClick={() => isEditing && editor?.mode === "modify" ? cancelEditor() : openEditor(candidate, "modify")}>{isEditing && editor?.mode === "modify" ? "收起调整" : "调整"}</button>
         <button type="button" disabled={busy} onClick={() => void review(candidate, "hold")}>暂缓</button>
@@ -272,7 +278,7 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
     const candidates = groups[group];
     return <section className={`edupi-today-work__group is-${group}`} aria-labelledby={`edupi-today-work-${group}`} key={group}>
       <header><h3 id={`edupi-today-work-${group}`}>{GROUP_LABELS[group]}</h3><span>{candidates.length} 项</span></header>
-      <div className="edupi-today-work__items">{candidates.map((candidate) => renderCandidate(candidate, group === "now" || group === "later"))}</div>
+      <div className="edupi-today-work__items">{candidates.map((candidate) => renderCandidate(candidate, true))}</div>
       {candidates.length === 0 ? <p className="edupi-today-work__empty">这里暂时没有事项</p> : null}
     </section>;
   };

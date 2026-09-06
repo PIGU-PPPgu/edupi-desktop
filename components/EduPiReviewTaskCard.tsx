@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { TaskReviewAction, TeacherTask } from "@/lib/edupi-education-contract";
 
 type Props = {
@@ -30,9 +31,12 @@ function evidenceLines(evidence: Record<string, unknown>): Array<[string, string
 }
 
 export function EduPiReviewTaskCard({ task, enabled, busy, onAction }: Props) {
+  const [changingDecision, setChangingDecision] = useState(false);
   const history = task.reviewHistory.slice(-3).reverse();
   const isMaterial = task.trigger === "teaching_adjustment_candidate";
   const isHold = task.status === "hold";
+  const decisionRecorded = task.status !== "planned";
+  useEffect(() => setChangingDecision(false), [task.id, task.revision, task.status]);
   return (
     <article className="edupi-review-card">
       <div className="edupi-review-card__main">
@@ -58,11 +62,11 @@ export function EduPiReviewTaskCard({ task, enabled, busy, onAction }: Props) {
         </details>
         {history.length > 0 ? <details className="edupi-review-history"><summary>最近审核记录（{task.reviewHistory.length}）</summary><div>{history.map((event, index) => <p key={`${String(event.review_id || event.reviewed_at)}-${index}`}>{value(event.action)} → {value(event.next_status)} · {value(event.reviewer)} · {value(event.note, "无备注")}</p>)}</div></details> : null}
       </div>
-      <div className="edupi-review-actions" aria-label="任务审核动作">
+      {decisionRecorded && !changingDecision ? <div className={`edupi-review-decision is-${task.status}`} role="status"><div><strong>{taskStatus(task.status)}</strong><span>{task.reviewedAt || "审核结果已记录"}</span></div>{enabled ? <button type="button" disabled={busy} onClick={() => setChangingDecision(true)}>修改决定</button> : null}</div> : <div className="edupi-review-actions" aria-label="任务审核动作">
         <button type="button" disabled={!enabled || busy} onClick={() => onAction("accept")}>接受</button>
         <button type="button" disabled={!enabled || busy} onClick={() => onAction("hold")}>暂缓</button>
         <button type="button" disabled={!enabled || busy} onClick={() => onAction(isHold ? "rollback" : "reject")}>{isHold ? "撤销暂缓" : "拒绝"}</button>
-      </div>
+      </div>}
     </article>
   );
 }
