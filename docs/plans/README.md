@@ -4,6 +4,8 @@
 
 Follow [产品闭环 PR 路线图 R01–R16](./2026-09-06-product-closure-roadmap.md). The first priority is automatic registration and visibility of files generated in chat. This roadmap consolidates remaining user-reported gaps after v0.3.4; older checkpoints retain their evidence and limitations. Update the roadmap with actual implementation PR links and acceptance results after each slice.
 
+The active `next_entry_point` is R01 in that roadmap, extended by the user's R16 model configuration and R17 visible student networks. This explicitly supersedes every older “Current direction”, “resume pointer”, and `next_entry_point` below for execution order. Those entries remain historical evidence, not competing instructions. On resumption, read the active roadmap first; keep architectural ownership rules and prior evidence intact.
+
 ## Current direction — 2026-09-06
 
 Continue from [requested preparation execution](./2026-09-06-requested-preparation.md). Chat can now find and start one existing timetable/calendar preparation task before its due date. The next product slice is typed teacher-created preparation templates and artifact contracts, not another navigation layer.
