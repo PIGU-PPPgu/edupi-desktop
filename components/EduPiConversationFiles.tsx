@@ -5,8 +5,8 @@ import type { GeneratedArtifact } from "@/lib/edupi-generated-artifacts";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { revealItemInDirNative } from "@/lib/desktop-native";
 
-export function EduPiConversationFiles({ sessionId, cwd, onOpen }: { sessionId: string; cwd: string; onOpen?: (path: string) => void }) {
-  const [open, setOpen] = useState(false);
+export function EduPiConversationFiles({ sessionId, taskId, cwd, onOpen }: { sessionId: string; taskId?: string; cwd: string; onOpen?: (path: string) => void }) {
+  const [open, setOpen] = useState(Boolean(taskId));
   const [files, setFiles] = useState<GeneratedArtifact[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -17,10 +17,10 @@ export function EduPiConversationFiles({ sessionId, cwd, onOpen }: { sessionId: 
     fetch("/api/edupi/artifacts", { signal: controller.signal, cache: "no-store" }).then(async response => {
       if (!response.ok) throw new Error("文件索引暂不可用");
       const result = await response.json();
-      setFiles((result.artifacts || []).filter((file: GeneratedArtifact) => file.session_id === sessionId));
+      setFiles((result.artifacts || []).filter((file: GeneratedArtifact) => taskId ? file.task_id === taskId : file.session_id === sessionId));
     }).catch(error => { if (!controller.signal.aborted) setMessage(error.message); });
     return () => controller.abort();
-  }, [open, sessionId, refresh]);
+  }, [open, sessionId, taskId, refresh]);
   const sync = async () => {
     setBusy(true); setMessage("");
     try {
@@ -40,7 +40,7 @@ export function EduPiConversationFiles({ sessionId, cwd, onOpen }: { sessionId: 
         return <div key={file.artifact_id} style={{ display: "flex", gap: 8, marginBottom: 6 }}><button className="native-button" onClick={() => onOpen?.(fullPath)}>{file.title}</button>{isTauriDesktop() ? <button className="native-button" aria-label={`${file.title}所在文件夹`} onClick={() => void revealItemInDirNative(fullPath).catch(() => setMessage("文件夹打开失败"))}>文件夹</button> : null}</div>;
       })}
       {files.length === 0 ? <p>暂无已登记文件</p> : null}
-      <button className="native-button" disabled={busy} onClick={() => void sync()}>{busy ? "同步中…" : "同步对话文件"}</button>
+      {sessionId ? <button className="native-button" disabled={busy} onClick={() => void sync()}>{busy ? "同步中…" : "同步对话文件"}</button> : null}
       {message ? <p role="status">{message}</p> : null}
     </section> : null}
   </div>;
