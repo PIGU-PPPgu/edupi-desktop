@@ -6,7 +6,7 @@ import {buildStudentGraph} from "@/lib/edupi-student-graph";
 
 export function EduPiStudentEvents({student,onAgent}:{student:string|null;onAgent:(prompt:string,mode?:"insert"|"replace")=>void}){
   const [kind,setKind]=useState("learning");const [page,setPage]=useState(0);
-  const [view,setView]=useState("list");const [selectedRecord,setSelectedRecord]=useState<string|null>(null);
+  const [view,setView]=useState(student ? "graph" : "list");const [selectedRecord,setSelectedRecord]=useState<string|null>(null);
   useEffect(()=>setSelectedRecord(null),[student,kind,page]);
   const [records,setRecords]=useState<StudentEvent[]>([]);const [total,setTotal]=useState(0);
   const [refresh,setRefresh]=useState(0);const [error,setError]=useState<string|null>(null);const [loading,setLoading]=useState(true);
@@ -32,9 +32,9 @@ export function EduPiStudentEvents({student,onAgent}:{student:string|null;onAgen
     }catch(reason){setError(reason instanceof Error?reason.message:"保存失败");}finally{setBusy(false);}
   };
   return <section className="edupi-student-events" aria-label="学生学习与互动记录">
-    <header><div role="group" aria-label="记录类型">{[["learning","学习表现"],["interaction","同伴互动"]].map(([value,label])=><button key={value} type="button" aria-pressed={kind===value} onClick={()=>{setKind(value);setPage(0);setEditing(null);}}>{label}</button>)}</div><button type="button" onClick={()=>onAgent(`请帮我记录${student?student:"学生"}的${kind==="learning"?"学习表现":"同伴互动"}，使用学生记录工具保存。\n\n我观察到（在这里输入或口述）：`,"replace")}>对话记录</button></header>
+    <header><div role="group" aria-label="记录类型">{[["learning",student ? "知识图谱" : "学习表现"],["interaction",student ? "人际互动网络" : "同伴互动"]].map(([value,label])=><button key={value} type="button" aria-pressed={kind===value} onClick={()=>{setKind(value);setPage(0);setEditing(null);}}>{label}</button>)}</div><button type="button" onClick={()=>onAgent(`请帮我记录${student?student:"学生"}的${kind==="learning"?"学习表现":"同伴互动"}，使用学生记录工具保存。\n\n我观察到（在这里输入或口述）：`,"replace")}>对话记录</button></header>
     {error?<p role="alert">{error}<button type="button" onClick={()=>setRefresh(value=>value+1)}>重试</button></p>:null}
-    <div className="edupi-student-graph-toggle" role="group" aria-label="记录视图">{[["list","列表"],["graph","局部图"]].map(([value,label])=><button key={value} type="button" aria-pressed={view===value} onClick={()=>{setView(value);setSelectedRecord(null);setEditing(null);}}>{label}</button>)}</div>
+    <div className="edupi-student-graph-toggle" role="group" aria-label="记录视图">{[["list","列表"],["graph","网络图"]].map(([value,label])=><button key={value} type="button" aria-pressed={view===value} onClick={()=>{setView(value);setSelectedRecord(null);setEditing(null);}}>{label}</button>)}</div>
     {!loading&&records.length>0&&view==="graph"?<EduPiStudentGraph records={records} selectedId={selectedRecord} onSelect={setSelectedRecord}/>:null}
     {loading?<p role="status">读取中…</p>:records.length===0?<p>暂无记录</p>:(view==="graph"?records.filter(record=>record.id===selectedRecord):records).map(item=><article key={item.id}>
       <header><strong>{item.students.join("、")}</strong><time>{item.observed_on||"日期未明确"}</time></header>
