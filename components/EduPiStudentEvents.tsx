@@ -6,6 +6,7 @@ import {buildStudentGraph} from "@/lib/edupi-student-graph";
 
 export function EduPiStudentEvents({student,onAgent}:{student:string|null;onAgent:(prompt:string,mode?:"insert"|"replace")=>void}){
   const [kind,setKind]=useState("learning");const [page,setPage]=useState(0);
+  const [from,setFrom]=useState("");const [to,setTo]=useState("");
   const [view,setView]=useState(student ? "graph" : "list");const [selectedRecord,setSelectedRecord]=useState<string|null>(null);
   useEffect(()=>setSelectedRecord(null),[student,kind,page]);
   const [records,setRecords]=useState<StudentEvent[]>([]);const [total,setTotal]=useState(0);
@@ -14,13 +15,13 @@ export function EduPiStudentEvents({student,onAgent}:{student:string|null;onAgen
   useEffect(()=>{const changed=()=>setRefresh(value=>value+1);window.addEventListener("edupi-student-records-changed",changed);return()=>window.removeEventListener("edupi-student-records-changed",changed);},[]);
   useEffect(()=>{
     const controller=new AbortController();setLoading(true);setError(null);setRecords([]);setTotal(0);
-    const query=new URLSearchParams({kind,offset:String(page*20),...(student?{student}:{})});
+    const query=new URLSearchParams({kind,offset:String(page*20),...(student?{student}:{}),...(from?{from}:{}),...(to?{to}:{})});
     fetch(`/api/edupi/student-events?${query}`,{signal:controller.signal,cache:"no-store"}).then(async response=>{
       const result=await response.json();if(!response.ok)throw new Error(result.error||"读取失败");
       if(!controller.signal.aborted){setRecords(result.records);setTotal(result.total);setSelectedRecord(current=>buildStudentGraph(result.records).records.some(record=>record.id===current)?current:null);}
     }).catch(reason=>{if(!controller.signal.aborted)setError(reason.message);}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return()=>controller.abort();
-  },[student,kind,page,refresh]);
+  },[student,kind,page,refresh,from,to]);
   const save=async(item:StudentEvent,action:"update_event"|"delete_event")=>{
     setBusy(true);setError(null);
     try{
@@ -34,6 +35,7 @@ export function EduPiStudentEvents({student,onAgent}:{student:string|null;onAgen
   return <section className="edupi-student-events" aria-label="学生学习与互动记录">
     <header><div role="group" aria-label="记录类型">{[["learning",student ? "知识图谱" : "学习表现"],["interaction",student ? "人际互动网络" : "同伴互动"]].map(([value,label])=><button key={value} type="button" aria-pressed={kind===value} onClick={()=>{setKind(value);setPage(0);setEditing(null);}}>{label}</button>)}</div><button type="button" onClick={()=>onAgent(`请帮我记录${student?student:"学生"}的${kind==="learning"?"学习表现":"同伴互动"}，使用学生记录工具保存。\n\n我观察到（在这里输入或口述）：`,"replace")}>对话记录</button></header>
     {error?<p role="alert">{error}<button type="button" onClick={()=>setRefresh(value=>value+1)}>重试</button></p>:null}
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}><label>从 <input type="date" value={from} onChange={event=>{setFrom(event.target.value);setPage(0);}}/></label><label>到 <input type="date" value={to} min={from||undefined} onChange={event=>{setTo(event.target.value);setPage(0);}}/></label></div>
     <div className="edupi-student-graph-toggle" role="group" aria-label="记录视图">{[["list","列表"],["graph","网络图"]].map(([value,label])=><button key={value} type="button" aria-pressed={view===value} onClick={()=>{setView(value);setSelectedRecord(null);setEditing(null);}}>{label}</button>)}</div>
     {!loading&&records.length>0&&view==="graph"?<EduPiStudentGraph records={records} selectedId={selectedRecord} onSelect={setSelectedRecord}/>:null}
     {loading?<p role="status">读取中…</p>:records.length===0?<p>暂无记录</p>:(view==="graph"?records.filter(record=>record.id===selectedRecord):records).map(item=><article key={item.id}>
