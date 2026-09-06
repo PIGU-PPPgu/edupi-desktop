@@ -2,6 +2,7 @@
 
 import type { WorkbenchView } from "@/lib/edupi-workbench";
 import { workbenchViews } from "@/lib/edupi-workbench";
+import { APP_VERSION_DISPLAY } from "@/lib/branding";
 
 type Props = {
   activeView: WorkbenchView;
@@ -59,7 +60,7 @@ export function EduPiNavigationRail({ activeView, pendingReviewCount, runningAge
       <div className={`edupi-activity-pulse${runningAgentCount > 0 ? " is-running" : ""}`} title={runningAgentCount > 0 ? `${runningAgentCount} 项运行中` : `已记住 ${memoryCount}`} aria-live="polite"><i aria-hidden="true" /><span>{runningAgentCount > 0 ? `${runningAgentCount} 项运行中` : `已记住 ${memoryCount}`}</span></div>
       <div className="edupi-teacher-rail__utilities">
         <button type="button" title="新手教程" aria-label="新手教程" onClick={onOpenGuide}><span className="edupi-teacher-rail__icon" aria-hidden="true">?</span><span className="edupi-teacher-rail__text">新手教程</span></button>
-        <button type="button" title="管理中心" aria-label="管理中心" onClick={onOpenAdmin}><span className="edupi-teacher-rail__icon"><UtilityIcon /></span><span className="edupi-teacher-rail__text">管理中心</span></button>
+        <button type="button" title={`管理中心 · v${APP_VERSION_DISPLAY}`} aria-label={`管理中心，当前版本 v${APP_VERSION_DISPLAY}`} onClick={onOpenAdmin}><span className="edupi-teacher-rail__icon"><UtilityIcon /></span><span className="edupi-teacher-rail__text">管理中心</span><span className="edupi-teacher-rail__version">v{APP_VERSION_DISPLAY}</span></button>
       </div>
     </nav>
   );

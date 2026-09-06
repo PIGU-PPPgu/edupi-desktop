@@ -35,6 +35,8 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.match(admin, /coreConnected && projectionConnected/);
   assert.match(admin, /className="edupi-admin-sidebar"/);
   assert.match(admin, /className="edupi-admin-workspace"/);
+  assert.match(admin, /APP_VERSION_DISPLAY/);
+  assert.match(admin, /当前安装版本/);
   assert.match(admin, /aria-current=\{activeSection === section\.id \? "page" : undefined\}/);
   assert.match(admin, /modelsPanel/);
   assert.doesNotMatch(admin, /role="dialog"|aria-modal="true"/);
@@ -54,7 +56,8 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.doesNotMatch(admin, /snapshot\.models\?\.modelList\?\.length \|\| 0/);
   assert.doesNotMatch(admin, /配置模块即将接入/);
 
-  assert.match(rail, /aria-label="管理中心"/);
+  assert.match(rail, /APP_VERSION_DISPLAY/);
+  assert.match(rail, /当前版本 v/);
   assert.doesNotMatch(rail, /aria-label="教育设置"|aria-label="应用设置"/);
   assert.match(panel, /onOpenAdmin/);
   assert.match(panel, /打开管理中心/);
