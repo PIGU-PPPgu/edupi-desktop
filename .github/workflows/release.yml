@@ -54,6 +54,16 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify application quality
+        run: |
+          npm test
+          npx tsc --noEmit
+          npm run lint
+          npm run security:audit
+
       - name: Read the pinned EduPi Core revision
         id: core
         shell: bash
@@ -94,16 +104,6 @@ jobs:
             libgtk-3-dev \
             libwebkit2gtk-4.1-dev \
             librsvg2-dev
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Verify application quality
-        run: |
-          npm test
-          npx tsc --noEmit
-          npm run lint
-          npm run security:audit
 
       - name: Verify bundled component releases
         env:
