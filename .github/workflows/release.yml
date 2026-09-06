@@ -2,6 +2,12 @@ name: Publish signed desktop release
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Build all platforms or retry one platform
+        type: choice
+        default: all
+        options: [all, macos, windows, linux]
 
 permissions:
   contents: write
@@ -16,25 +22,8 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        include:
-          - runner: macos-15
-            target: aarch64-apple-darwin
-            args: --target aarch64-apple-darwin
-            apple_signing_identity: "-"
-          - runner: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
-            args: --target x86_64-unknown-linux-gnu --bundles deb,appimage
-            apple_signing_identity: ""
-          # Restored after the file-tracer fix in eacaca3/7f2a1c0: a literal
-          # homedir() reaching an fs call made @vercel/nft glob the whole
-          # Windows profile at build time, which failed on its junction loops.
-          # Verified through desktop:prepare by windows-build-debug.yml before
-          # re-enabling; Tauri bundling and signing are first exercised here.
-          - runner: windows-latest
-            target: x86_64-pc-windows-msvc
-            args: --target x86_64-pc-windows-msvc --bundles nsis
-            apple_signing_identity: ""
-    runs-on: ${{ matrix.runner }}
+        target: ${{ fromJSON(inputs.platform == 'linux' && '["x86_64-unknown-linux-gnu"]' || inputs.platform == 'windows' && '["x86_64-pc-windows-msvc"]' || inputs.platform == 'macos' && '["aarch64-apple-darwin"]' || '["aarch64-apple-darwin","x86_64-unknown-linux-gnu","x86_64-pc-windows-msvc"]') }}
+    runs-on: ${{ matrix.target == 'aarch64-apple-darwin' && 'macos-15' || matrix.target == 'x86_64-pc-windows-msvc' && 'windows-latest' || 'ubuntu-24.04' }}
     steps:
       - name: Check out EduPi Desktop
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -105,6 +94,7 @@ jobs:
             libgtk-3-dev \
             libpipewire-0.3-dev \
             libclang-dev \
+            libgbm-dev \
             libwebkit2gtk-4.1-dev \
             librsvg2-dev
 
@@ -131,7 +121,7 @@ jobs:
           PI_AGENT_DESKTOP_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ matrix.apple_signing_identity }}
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && '-' || '' }}
         with:
           owner: PIGU-PPPgu
           repo: edupi-desktop
@@ -152,7 +142,7 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           tauriScript: npx tauri
-          args: ${{ matrix.args }}
+          args: --target ${{ matrix.target }} --bundles ${{ runner.os == 'macOS' && 'app,dmg' || runner.os == 'Windows' && 'nsis' || 'deb,appimage' }}
 
   manifest:
     needs: build
@@ -167,6 +157,16 @@ jobs:
           RELEASE_REPOSITORY: PIGU-PPPgu/edupi-desktop
         run: |
           version="$(node -p "require('./src-tauri/pi-agent-desktop-package.json').version")"
+          gh release download "v$version" --pattern latest.json --output latest.json --repo "$RELEASE_REPOSITORY"
+          RELEASE_VERSION="$version" node --input-type=module -e '
+            import fs from "node:fs";
+            const manifest = JSON.parse(fs.readFileSync("latest.json", "utf8"));
+            if (manifest.version !== process.env.RELEASE_VERSION) throw new Error("Wrong updater version");
+            for (const platform of ["darwin-aarch64", "windows-x86_64", "linux-x86_64"]) {
+              const entry = manifest.platforms?.[platform];
+              if (!entry?.signature || !entry.url?.startsWith(`https://github.com/PIGU-PPPgu/edupi-desktop/releases/download/v${manifest.version}/`)) throw new Error(`Missing signed update: ${platform}`);
+            }
+          '
           gh release upload "v$version" src-tauri/resources/component-versions.json --clobber --repo "$RELEASE_REPOSITORY"
           gh release edit "v$version" --draft=false --latest --repo "$RELEASE_REPOSITORY"
 
