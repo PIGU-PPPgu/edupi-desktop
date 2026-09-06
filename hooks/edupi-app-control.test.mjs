@@ -24,7 +24,6 @@ test("global computer use keeps native execution behind opt-in, approval, snapsh
   const tool = await read("../lib/edupi-computer-tool.ts");
   const contract = await read("../lib/edupi-computer-use.ts");
   const settings = await read("../components/AppSettings.tsx");
-  const stop = await read("../components/EduPiComputerUseStop.tsx");
   const native = await read("../src-tauri/src/computer_use.rs");
   assert.match(native, /blocking_show/);
   assert.match(tool, /name: "edupi_computer_use"/);
@@ -34,7 +33,8 @@ test("global computer use keeps native execution behind opt-in, approval, snapsh
   assert.match(native, /That desktop snapshot is stale/);
   assert.match(native, /request_expired\(expires_at_ms\)/);
   assert.match(settings, /默认关闭。开启后，每次读取或操作仍需你确认。/);
-  assert.match(stop, /停止桌面控制/);
+  assert.match(settings, /emergencyStopComputerUseNative/);
+  assert.match(settings, /停止控制/);
 });
 
 test("app control never exposes arbitrary selectors, scripts, URLs, review, or external-send actions", async () => {
