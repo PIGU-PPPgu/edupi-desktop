@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: edupi-desktop-release
@@ -44,11 +44,9 @@ jobs:
         env:
           UPDATER_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
-          RELEASE_TOKEN: ${{ secrets.EDUPI_RELEASE_TOKEN }}
         run: |
           test -n "$UPDATER_PRIVATE_KEY"
           test -n "$UPDATER_PUBLIC_KEY"
-          test -n "$RELEASE_TOKEN"
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -119,14 +117,14 @@ jobs:
       - name: Build, sign, and upload updater artifacts
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5
         env:
-          GITHUB_TOKEN: ${{ secrets.EDUPI_RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           PI_AGENT_DESKTOP_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ matrix.apple_signing_identity }}
         with:
           owner: PIGU-PPPgu
-          repo: edupi-releases
+          repo: edupi-desktop
           releaseCommitish: main
           tagName: v__VERSION__
           releaseName: EduPi Desktop v__VERSION__
@@ -153,8 +151,8 @@ jobs:
 
       - name: Upload component manifest to the release
         env:
-          GH_TOKEN: ${{ secrets.EDUPI_RELEASE_TOKEN }}
-          RELEASE_REPOSITORY: PIGU-PPPgu/edupi-releases
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPOSITORY: PIGU-PPPgu/edupi-desktop
         run: |
           version="$(node -p "require('./src-tauri/pi-agent-desktop-package.json').version")"
           gh release upload "v$version" src-tauri/resources/component-versions.json --clobber --repo "$RELEASE_REPOSITORY"

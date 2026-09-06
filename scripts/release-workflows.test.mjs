@@ -50,18 +50,19 @@ test("the signed release workflow is manual-only", async () => {
   assert.doesNotMatch(release, /\bpush:/);
 });
 
-test("signed releases and updater metadata belong to the EduPi binary repository", async () => {
+test("signed releases and updater metadata belong to the EduPi Desktop repository", async () => {
   const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
   const tauriConfig = JSON.parse(await readFile(join(root, "src-tauri", "tauri.conf.json"), "utf8"));
 
-  assert.match(release, /EDUPI_RELEASE_TOKEN/);
+  assert.doesNotMatch(release, /EDUPI_RELEASE_TOKEN/);
+  assert.match(release, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/);
   assert.match(release, /owner:\s*PIGU-PPPgu/);
-  assert.match(release, /repo:\s*edupi-releases/);
+  assert.match(release, /repo:\s*edupi-desktop/);
   assert.match(release, /releaseCommitish:\s*main/);
   assert.match(release, /--repo "\$RELEASE_REPOSITORY"/);
   assert.doesNotMatch(release, /abcwyc\/pi-agent-desktop/);
   assert.deepEqual(tauriConfig.plugins.updater.endpoints, [
-    "https://github.com/PIGU-PPPgu/edupi-releases/releases/latest/download/latest.json",
+    "https://github.com/PIGU-PPPgu/edupi-desktop/releases/latest/download/latest.json",
   ]);
   assert.equal(tauriConfig.identifier, "com.abcwyc.pi-agent");
 });

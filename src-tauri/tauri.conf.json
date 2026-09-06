@@ -37,7 +37,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/PIGU-PPPgu/edupi-releases/releases/latest/download/latest.json"
+        "https://github.com/PIGU-PPPgu/edupi-desktop/releases/latest/download/latest.json"
       ],
       "pubkey": ""
     }

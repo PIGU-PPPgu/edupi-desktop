@@ -20,7 +20,7 @@
 
 ![Pi Agent dark mode](./docs/screenshots/pi-agent-dark@2x.png)
 
-**[⬇️ Download EduPi Desktop (macOS / Windows / Linux)](https://github.com/PIGU-PPPgu/edupi-releases/releases)**
+**[⬇️ Download EduPi Desktop (macOS / Windows / Linux)](https://github.com/PIGU-PPPgu/edupi-desktop/releases)**
 
 Source repository: [PIGU-PPPgu/edupi-desktop](https://github.com/PIGU-PPPgu/edupi-desktop)
 
@@ -28,7 +28,7 @@ Source repository: [PIGU-PPPgu/edupi-desktop](https://github.com/PIGU-PPPgu/edup
 
 ### Install The Desktop App
 
-Builds are available from [EduPi Desktop releases](https://github.com/PIGU-PPPgu/edupi-releases/releases):
+Builds are available from [EduPi Desktop releases](https://github.com/PIGU-PPPgu/edupi-desktop/releases):
 
 - Apple Silicon Mac: download the `aarch64.dmg`, open it, and drag the app into `Applications`. Official releases do not build for Intel Macs.
 - Linux x64: download the `.deb` package and install it with your distribution's package manager.
@@ -61,14 +61,14 @@ Model keys and session data stay on your machine. The file-browsing API only all
 
 ## Update Checks And Upgrades
 
-EduPi checks the latest stable desktop release from `PIGU-PPPgu/edupi-releases` at most once every seven days. The bundled component manifest also records the reviewed versions of:
+EduPi checks the latest stable desktop release from `PIGU-PPPgu/edupi-desktop` at most once every seven days. The bundled component manifest also records the reviewed versions of:
 
 - `earendil-works/pi`
 - `agegr/pi-web`
 
 The versioning and upgrade rules are:
 
-1. The latest stable release in `PIGU-PPPgu/edupi-releases` is the only source used for desktop update reminders and downloads.
+1. The latest stable release in `PIGU-PPPgu/edupi-desktop` is the only source used for desktop update reminders and downloads.
 2. The upgrade button in Settings becomes enabled only when the installed desktop app version is older.
 3. When several components need updating, the release automation syncs and verifies them in the order `pi → pi-web → pi-agent-desktop`.
 4. Nothing patches an individual JavaScript package inside an installed app. The app downloads one complete signed build containing all three components at their latest versions.
