@@ -71,7 +71,7 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.match(appShell, /onAskStudentUpdate=\{askEduPiToUpdateStudents\}/);
   assert.match(appShell, /onOpenSettings=\{\(\) => setAppSettingsOpen\(true\)\}/);
   assert.match(appShell, /params\.set\("view", view\)/);
-  assert.match(workspace, /EduPi 就绪度/);
+  assert.doesNotMatch(workspace, /edupi-dashboard-readiness/);
   assert.match(workspace, /onOpenAdmin/);
   assert.match(workspace, /onRemoveStagedMaterial/);
   assert.match(materials, />移除</);

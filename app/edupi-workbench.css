@@ -746,13 +746,6 @@ html.dark .edupi-dashboard-next { background: color-mix(in srgb, var(--ep-orange
 .edupi-dashboard-next > span,
 .edupi-dashboard-next em { color: var(--ep-orange); font-size: 11px; font-style: normal; }
 .edupi-dashboard-next strong { font-size: 12px; }
-.edupi-dashboard-readiness { display: flex; min-height: 46px; align-items: center; justify-content: space-between; gap: 16px; margin-top: 12px; padding: 8px 12px; border: 1px solid var(--ep-border); border-radius: 8px; background: var(--ep-surface); }
-.edupi-dashboard-readiness > div:first-child { display: grid; gap: 2px; }
-.edupi-dashboard-readiness span { color: var(--ep-muted); font-size: 10px; }
-.edupi-dashboard-readiness strong { font-size: 12px; }
-.edupi-dashboard-readiness > div:last-child { display: flex; flex-wrap: wrap; gap: 6px; }
-.edupi-dashboard-readiness button { min-height: 30px; padding: 0 9px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface-soft); color: var(--ep-text); cursor: pointer; font-size: 10px; }
-.edupi-dashboard-readiness button:first-child { border-color: var(--ep-blue); background: var(--ep-blue); color: white; }
 
 .edupi-dashboard-board { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; margin-top: 16px; align-items: start; }
 .edupi-dashboard-main-column { min-width: 0; }
@@ -869,6 +862,10 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-today-main,
 .edupi-today-side { display: grid; min-width: 0; gap: 14px; }
 .edupi-daily-brief > p { margin: 0; padding: 13px 14px 15px; color: var(--ep-text); font-size: 13px; line-height: 1.65; }
+.edupi-daily-brief > footer { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 14px; border-top: 1px solid var(--ep-border); color: var(--ep-muted); font-size: 10px; }
+.edupi-daily-brief > footer strong { color: var(--ep-dim); font-weight: 550; }
+.edupi-daily-brief.is-fresh > footer strong { color: var(--ep-green); }
+.edupi-daily-brief.is-failed > footer strong { color: var(--ep-red); }
 .edupi-today-layout .edupi-workstream,
 .edupi-today-layout .edupi-today-dock { border-radius: 7px; }
 .edupi-attention-note > button { display: flex; width: 100%; padding: 14px; flex-direction: column; gap: 7px; border: 0; background: transparent; color: var(--ep-text); cursor: pointer; text-align: left; }

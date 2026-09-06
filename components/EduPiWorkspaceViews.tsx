@@ -23,6 +23,7 @@ import type { MaterialStagingDescriptor } from "@/lib/edupi-material-staging-cli
 import type { TaskBoardLaneId } from "@/lib/edupi-task-board";
 import type { EducationMemoryScopeProjection } from "@/lib/edupi-memory-scopes";
 import type { EduPiTeachingSkillLifecycle } from "@/lib/edupi-platform-client";
+import type { EduPiKernelState } from "@/lib/edupi-kernel-client";
 
 type Props = {
   view: Exclude<WorkbenchView, "chat" | "tasks" | "review">;
@@ -30,6 +31,7 @@ type Props = {
   context: TeacherContextSnapshot | null;
   memoryScopes: EducationMemoryScopeProjection | null;
   teachingSkills: EduPiTeachingSkillLifecycle;
+  kernelState: EduPiKernelState;
   query: string;
   selectedStudentId: string | null;
   selectedObjectId: string | null;
@@ -62,11 +64,6 @@ type Props = {
 
 function includesQuery(value: string, query: string): boolean {
   return !query || value.toLocaleLowerCase().includes(query.toLocaleLowerCase());
-}
-
-function shortDate(value: string): string {
-  const date = new Date(value.includes("T") ? value : `${value}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
 function workspaceFile(workspace: string, relativePath: string): string {
@@ -142,24 +139,26 @@ function SectionHeader({ title, meta, action, onAction }: { title: string; meta?
   return <header className="edupi-page-section__header"><div><h2>{title}</h2>{meta ? <span>{meta}</span> : null}</div>{action && onAction ? <button type="button" onClick={onAction}>{action}</button> : null}</header>;
 }
 
-function DashboardView({ data, context, runningAgentCount, onEducation, onTaskDetail, onNavigate, onUpload, onOpenContext, onOpenAdmin, onOpenFile, onStartAgent }: Pick<Props, "data" | "context" | "runningAgentCount" | "onEducation" | "onTaskDetail" | "onNavigate" | "onUpload" | "onOpenContext" | "onOpenAdmin" | "onOpenFile" | "onStartAgent">) {
+function DashboardView({ data, context, kernelState, runningAgentCount, onEducation, onTaskDetail, onNavigate, onUpload, onOpenContext, onOpenFile, onStartAgent }: Pick<Props, "data" | "context" | "kernelState" | "runningAgentCount" | "onEducation" | "onTaskDetail" | "onNavigate" | "onUpload" | "onOpenContext" | "onOpenFile" | "onStartAgent">) {
   const today = localIsoDate();
   const currentWeek = data.calendar.find((event) => Boolean(event.date && event.date <= today && (event.endDate || event.date) >= today && /第\d+周/.test(event.name)));
   const upcoming = data.calendar.filter((event) => Boolean(event.date && (event.endDate || event.date) >= today && event !== currentWeek)).slice(0, 5);
-  const latestBrief = data.continuity.documents.find((document) => document.kind === "daily");
+  const latestBrief = data.continuity.documents.filter((document) => document.kind === "daily").sort((left, right) => String(right.date || "").localeCompare(String(left.date || "")))[0];
+  const latestBriefDate = latestBrief?.date ? localIsoDate(new Date(latestBrief.date)) : null;
+  const latestBriefRun = kernelState.runs.filter((run) => run.triggerId === "morning_brief").sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+  const briefIsFresh = latestBriefDate === today;
+  const briefStatus = briefIsFresh
+    ? "今日已生成"
+    : latestBriefRun?.status === "running" || latestBriefRun?.status === "awaiting_delivery"
+      ? "正在生成"
+      : latestBriefRun?.status === "failed"
+        ? "生成失败"
+        : latestBrief
+          ? `上次生成 ${latestBriefDate || "日期未知"}`
+          : kernelState.status === "unavailable" ? "自动运行未接入" : "今日尚未生成";
   const latestInsight = data.continuity.insights.filter((insight) => insight.status === "surfaced" && !insight.content.startsWith("[主题候选]")).at(-1);
-  const nextSetup = context?.checklist.find((item) => item.status === "next");
-  const setupTotal = context?.checklist.length || 5;
-  const setupComplete = context?.checklist.filter((item) => item.status === "complete").length || 0;
   const dateLabel = new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "long" }).format(new Date());
   const contextLabel = [context?.school, context?.grade, context?.subject].filter(Boolean).join(" · ") || "教育上下文待设置";
-
-  const openSetup = () => {
-    if (!nextSetup || nextSetup.id === "identity") return onOpenContext();
-    if (nextSetup.id === "calendar" || nextSetup.id === "timetable") return onNavigate("calendar");
-    if (nextSetup.id === "roster") return onNavigate("students");
-    onUpload();
-  };
 
   return <main className="edupi-module-workspace edupi-dashboard-workspace">
     <header className="edupi-dashboard-heading">
@@ -167,12 +166,12 @@ function DashboardView({ data, context, runningAgentCount, onEducation, onTaskDe
       <div className="edupi-dashboard-heading__actions"><button type="button" onClick={onOpenContext}>教学上下文</button><button type="button" className="is-primary" onClick={onUpload}>上传材料</button></div>
     </header>
     <CommandCenter runningAgentCount={runningAgentCount} onStartAgent={onStartAgent} />
-    <section className="edupi-dashboard-readiness" aria-label="EduPi 就绪度"><div><span>EduPi 就绪度 {setupComplete}/{setupTotal}</span><strong>{nextSetup ? `下一步：${nextSetup.label}` : "教育资料已就绪"}</strong></div><div>{nextSetup ? <button type="button" onClick={openSetup}>现在补充</button> : null}<button type="button" onClick={onOpenAdmin}>管理中心</button></div></section>
     <div className="edupi-today-layout">
       <div className="edupi-today-main">
-        <section className="edupi-page-section edupi-daily-brief">
-          <SectionHeader title="EduPi 已经准备好" meta={latestBrief?.date ? shortDate(latestBrief.date) : undefined} action={latestBrief ? "打开原文" : undefined} onAction={latestBrief ? () => onOpenFile(workspaceFile(data.workspace, latestBrief.path)) : undefined} />
+        <section className={`edupi-page-section edupi-daily-brief${briefIsFresh ? " is-fresh" : latestBriefRun?.status === "failed" ? " is-failed" : " is-stale"}`}>
+          <SectionHeader title="早安简报" meta={briefStatus} action={latestBrief ? briefIsFresh ? "打开简报" : "查看上次简报" : undefined} onAction={latestBrief ? () => onOpenFile(workspaceFile(data.workspace, latestBrief.path)) : undefined} />
           {latestBrief ? <p>{latestBrief.excerpt}</p> : <div className="edupi-module-empty">今天还没有生成简报</div>}
+          <footer><span>自动运行</span><strong>{latestBriefRun ? `${latestBriefRun.triggerId} · ${latestBriefRun.status}` : kernelState.status === "unavailable" ? "状态不可用" : "尚无运行记录"}</strong></footer>
         </section>
         <EduPiTodayWork data={data} onEducation={onEducation} onWorkCaseDetail={(workCase) => { const task = data.tasks.find((item) => item.id === workCase.taskId); if (task) onTaskDetail(task); }} />
       </div>
@@ -202,7 +201,7 @@ function ArtifactsView({ data, query, onTask }: Pick<Props, "data" | "query" | "
 }
 
 export function EduPiWorkspaceViews(props: Props) {
-  if (props.view === "dashboard") return <DashboardView data={props.data} context={props.context} runningAgentCount={props.runningAgentCount} onEducation={props.onEducation} onTaskDetail={props.onTaskDetail} onNavigate={props.onNavigate} onUpload={props.onUpload} onOpenContext={props.onOpenContext} onOpenAdmin={props.onOpenAdmin} onOpenFile={props.onOpenFile} onStartAgent={props.onStartAgent} />;
+  if (props.view === "dashboard") return <DashboardView data={props.data} context={props.context} kernelState={props.kernelState} runningAgentCount={props.runningAgentCount} onEducation={props.onEducation} onTaskDetail={props.onTaskDetail} onNavigate={props.onNavigate} onUpload={props.onUpload} onOpenContext={props.onOpenContext} onOpenFile={props.onOpenFile} onStartAgent={props.onStartAgent} />;
   if (props.view === "workspace") return <EduPiWorkspaceBoard data={props.data} query={props.query} onTaskDetail={props.onTaskDetail} onCreateTask={props.onCreateTask} onMoveTask={props.onMoveTask} />;
   if (props.view === "teaching") return <EduPiTeachingWorkspace data={props.data} context={props.context} query={props.query} selectedObjectId={props.selectedObjectId} onObject={props.onObject} onTask={(task) => props.onTask(task, "brief")} onNavigate={props.onNavigate} onStartAgent={props.onStartAgent} onCalendarSelection={props.onCalendarSelection} />;
   if (props.view === "homeroom" || props.view === "students") return <EduPiStudentWorkspace mode={props.view} data={props.data} context={props.context} query={props.query} selectedStudentId={props.selectedStudentId} onStudent={props.onStudent} onEducation={props.onEducation} onTask={(task) => props.onTask(task, "brief")} onStartAgent={props.onStartAgent} onDeleteEntity={props.onDeleteEntity} />;
