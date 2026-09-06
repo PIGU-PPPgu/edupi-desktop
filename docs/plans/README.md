@@ -1,5 +1,9 @@
 # EduPi Desktop implementation plans
 
+## Active closure roadmap — 2026-09-06
+
+Follow [产品闭环 PR 路线图 R01–R16](./2026-09-06-product-closure-roadmap.md). The first priority is automatic registration and visibility of files generated in chat. This roadmap consolidates remaining user-reported gaps after v0.3.4; older checkpoints retain their evidence and limitations. Update the roadmap with actual implementation PR links and acceptance results after each slice.
+
 ## Current direction — 2026-09-06
 
 Continue from [requested preparation execution](./2026-09-06-requested-preparation.md). Chat can now find and start one existing timetable/calendar preparation task before its due date. The next product slice is typed teacher-created preparation templates and artifact contracts, not another navigation layer.
