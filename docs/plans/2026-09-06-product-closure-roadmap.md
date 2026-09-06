@@ -14,6 +14,8 @@
 - R16 模型子项：Desktop [#58](https://github.com/PIGU-PPPgu/edupi-desktop/pull/58)，草稿。手动模型 ID、默认选择与配置入口已实现；9 项定向回归、类型与 ESLint 通过；浏览器点击已有自定义模型的测试，得到 HTTP 200 / OK。首次空配置全过程与安装版仍待验收。
 - R17：Desktop [#57](https://github.com/PIGU-PPPgu/edupi-desktop/pull/57)，草稿。学生详情默认显示网络，提供知识图谱/人际互动网络切换；类型和 ESLint 通过；筛选与视觉验收待完成。
 - 其他项目仍按原表待开始；R07 按用户反馈已验收，本轮跳过。以上草稿不改变 v0.3.4 已安装版本，也不代表整项完成。
+- 真实工作区诊断新增：Core `buildEducationWorkspace` 成功，但 `buildSnapshotForState` 报 `invalid_state: state.executions[1].artifacts path is not deterministic for its task`，导致 workspace 返回 503。不得覆盖教师数据或简单放宽所有写入校验；先复现异常产物记录的读取影响，再补局部故障可见性与可恢复的迁移。此项与 R01 一起优先处理。
+- 模型浏览器验收已得到 `已连接 · 5427ms · HTTP 200 · OK`，证明现有自定义模型测试入口可实际调用；尚未声称全新用户配置或默认模型切换已验收。
 
 | 完成 | 新增编号 | 验收条件 | 实现 PR / 状态 |
 | --- | --- | --- | --- |
