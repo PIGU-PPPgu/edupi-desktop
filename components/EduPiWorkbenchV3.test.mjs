@@ -90,7 +90,8 @@ test("growth and materials use explicit databases and right-side material detail
   const [growth, materials, sider] = await Promise.all([read("./EduPiGrowthWorkspace.tsx"), read("./EduPiMaterialsWorkspace.tsx"), read("./EduPiObjectSider.tsx")]);
   assert.match(growth, /教师专业成长/);
   assert.match(growth, /EduPi 能力成长/);
-  assert.match(growth, /用于改进 EduPi 的工作方式/);
+  assert.match(growth, /teachingSkills\.skills/);
+  assert.match(growth, /复用状态/);
   assert.match(growth, /confirmedTaskArtifacts\(data\.tasks, query\)/);
   assert.match(sider, /documents\.length \+ confirmedGrowthArtifacts\.length/);
   assert.match(materials, /edupi-material-db-grid/);
