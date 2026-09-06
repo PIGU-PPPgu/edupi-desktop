@@ -48,6 +48,7 @@ test("the signed release workflow is manual-only", async () => {
   const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
   assert.match(release, /on:\s*\n\s*workflow_dispatch:/);
   assert.doesNotMatch(release, /\bpush:/);
+  assert.ok(release.indexOf("name: Verify application quality") < release.indexOf("name: Check out the pinned EduPi Core runtime"));
 });
 
 test("signed releases and updater metadata belong to the EduPi Desktop repository", async () => {
