@@ -1,10 +1,40 @@
-import { readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import { resolveEduPiBridgeRoots } from "./edupi-core-snapshot";
 import { runCoreProcess } from "./edupi-core-process-client";
 
 export type GeneratedArtifact = { artifact_id: string; title: string; relative_path: string; session_id: string; task_id: string | null; updated_at: string; size_bytes: number };
 const extensions = new Set([".md", ".txt", ".docx", ".pdf", ".pptx", ".xlsx", ".csv", ".html"]);
+
+export function completedSessionFiles(entries: Array<Record<string, unknown>>, root: string): string[] {
+  const writes = new Map<string, string>();
+  const completed = new Set<string>();
+  for (const entry of entries) {
+    const message = entry.message as { role?: string; content?: Array<{ type?: string; name?: string; id?: string; arguments?: { path?: string } }>; toolCallId?: string; isError?: boolean } | undefined;
+    if (message?.role === "assistant" && Array.isArray(message.content)) {
+      for (const block of message.content) {
+        if (block.type === "toolCall" && (block.name === "write" || block.name === "edit") && block.id && typeof block.arguments?.path === "string") {
+          const file = resolve(root, block.arguments.path);
+          if (extensions.has(extname(file).toLowerCase())) writes.set(block.id, file);
+        }
+      }
+    }
+    if (message?.role === "toolResult" && !message.isError && message.toolCallId && writes.has(message.toolCallId)) completed.add(writes.get(message.toolCallId)!);
+  }
+  return [...completed];
+}
+
+export async function recoverSessionArtifacts(sessionFile: string, root: string, sessionId: string) {
+  const entries = readFileSync(sessionFile, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  const paths = completedSessionFiles(entries, root);
+  const failed: string[] = [];
+  let registered = 0;
+  for (const file of paths) {
+    try { await generatedArtifactsRequest("register", { file_path: file, session_id: sessionId }); registered++; }
+    catch { failed.push(file); }
+  }
+  return { registered, failedCount: failed.length };
+}
 
 export async function generatedArtifactsRequest(action: "list" | "register", fields: Record<string, unknown> = {}) {
   const roots = resolveEduPiBridgeRoots();

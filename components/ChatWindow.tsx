@@ -6,6 +6,7 @@ import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { MessageView } from "./MessageView";
+import { EduPiConversationFiles } from "./EduPiConversationFiles";
 import { ConversationNavigator, type ConversationTurnLocation } from "./ConversationNavigator";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { useI18n } from "@/hooks/useI18n";
@@ -872,6 +873,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {onEduPiAction && (session?.id || sessionIdRef.current) && messageCwd ? <EduPiConversationFiles sessionId={(session?.id || sessionIdRef.current)!} cwd={messageCwd} onOpen={onOpenFile} /> : null}
       {isDragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex animate-[drop-zone-in_0.15s_ease_both] items-center justify-center bg-[var(--accent-soft)] backdrop-blur-[1px]">
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
