@@ -2,6 +2,12 @@ name: Publish signed desktop release
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Build all platforms or retry one platform
+        type: choice
+        default: all
+        options: [all, macos, windows, linux]
 
 permissions:
   contents: write
@@ -16,6 +22,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
+        exclude: ${{ fromJSON(inputs.platform == 'linux' && '[{"runner":"macos-15"},{"runner":"windows-latest"}]' || inputs.platform == 'windows' && '[{"runner":"macos-15"},{"runner":"ubuntu-24.04"}]' || inputs.platform == 'macos' && '[{"runner":"windows-latest"},{"runner":"ubuntu-24.04"}]' || '[]') }}
         include:
           - runner: macos-15
             target: aarch64-apple-darwin
@@ -105,6 +112,7 @@ jobs:
             libgtk-3-dev \
             libpipewire-0.3-dev \
             libclang-dev \
+            libgbm-dev \
             libwebkit2gtk-4.1-dev \
             librsvg2-dev
 
@@ -167,6 +175,16 @@ jobs:
           RELEASE_REPOSITORY: PIGU-PPPgu/edupi-desktop
         run: |
           version="$(node -p "require('./src-tauri/pi-agent-desktop-package.json').version")"
+          gh release download "v$version" --pattern latest.json --output latest.json --repo "$RELEASE_REPOSITORY"
+          RELEASE_VERSION="$version" node --input-type=module -e '
+            import fs from "node:fs";
+            const manifest = JSON.parse(fs.readFileSync("latest.json", "utf8"));
+            if (manifest.version !== process.env.RELEASE_VERSION) throw new Error("Wrong updater version");
+            for (const platform of ["darwin-aarch64", "windows-x86_64", "linux-x86_64"]) {
+              const entry = manifest.platforms?.[platform];
+              if (!entry?.signature || !entry.url?.startsWith(`https://github.com/PIGU-PPPgu/edupi-desktop/releases/download/v${manifest.version}/`)) throw new Error(`Missing signed update: ${platform}`);
+            }
+          '
           gh release upload "v$version" src-tauri/resources/component-versions.json --clobber --repo "$RELEASE_REPOSITORY"
           gh release edit "v$version" --draft=false --latest --repo "$RELEASE_REPOSITORY"
 
