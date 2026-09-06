@@ -46,7 +46,7 @@ export function startPreparation({taskId=null}:{taskId?:string|null}={}) {
 export function ensurePreparation() {
   const state = runtime();
   if (!state.timer) {
-    state.timer = setInterval(() => { try { startPreparation(); } catch { state.status = { ...state.status, state: "error", error: "教育工作区暂不可用" }; } }, 60 * 60_000);
+    state.timer = setInterval(() => { try { startPreparation(); } catch { state.status = { ...state.status, state: "error", error: "教育工作区暂不可用" }; } }, 5 * 60_000);
     state.timer.unref();
     startPreparation();
   }
