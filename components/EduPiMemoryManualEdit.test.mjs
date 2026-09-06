@@ -10,7 +10,7 @@ test("memory rows separate direct manual editing from optional AI collaboration"
   assert.match(source, /edupi-memory-editor/);
   assert.match(source, /<textarea/);
   assert.match(source, /\/api\/edupi\/memories\/\$\{encodeURIComponent\(memory\.id\)\}/);
-  assert.match(source, /expectedRevision: editor\.revision/);
+  assert.match(source, /expectedRevision: restoredContent !== undefined \? memory\.revision : editor!\.revision/);
   assert.match(source, /revision: memory\.revision/);
   assert.match(source, /onEducation\(result\.data\)/);
   assert.match(source, /onEducation\(result\.data\);\s*setPage\(0\)/);

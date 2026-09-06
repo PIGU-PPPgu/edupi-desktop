@@ -4,6 +4,7 @@ import { parseJsonWithinLimit } from "@/lib/bounded-form-data";
 import { isApiRequestAllowed, hasJsonContentType } from "@/lib/request-security";
 import { EDUPI_ROOT } from "@/lib/edupi-runtime";
 import { invalidateModelsCache } from "@/lib/models-cache";
+import { resolveVisibleModels } from "@/lib/model-scope";
 
 export async function POST(request: Request) {
   if (!isApiRequestAllowed(request) || !hasJsonContentType(request)) return NextResponse.json({error:"请求无效"},{status:403});
@@ -14,6 +15,11 @@ export async function POST(request: Request) {
     const model = runtime.getModel(body.provider, body.modelId);
     if (!model) return NextResponse.json({error:"请先在模型配置中保存该模型"},{status:400});
     const settings = SettingsManager.create(EDUPI_ROOT, getAgentDir());
+    const patterns = settings.getEnabledModels();
+    if (patterns?.length) {
+      const scope = await resolveVisibleModels(runtime, patterns);
+      if (!scope.visible.some(item => item.provider === body.provider && item.id === body.modelId)) settings.setEnabledModels([...patterns, `${body.provider}/${body.modelId}`]);
+    }
     settings.setDefaultModelAndProvider(body.provider, body.modelId);
     await settings.flush();
     invalidateModelsCache();

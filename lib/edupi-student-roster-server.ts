@@ -61,6 +61,7 @@ export async function importStudentRoster({ students, sourceName, signal }: { st
       students: students.map((student) => ({ name: student.name, traits: student.traits, parent_notes: student.parentNotes,...(student.className?{class_name:student.className}:{}) })),
     },
   });
+  if (response.code === "ambiguous_student") throw new Error("同名学生的班级不同，请核对身份，避免覆盖原档案。");
   if (response.ok !== true || response.operation !== "students" || response.external_send !== false || response.imported !== students.length) throw new Error(response.code || "学生名单导入失败。");
   return response;
 }

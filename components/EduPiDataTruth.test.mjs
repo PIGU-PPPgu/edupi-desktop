@@ -8,7 +8,7 @@ test("long-term workspaces expose real source state instead of ambiguous empty s
   const [insights, growth, materials, sider] = await Promise.all([
     read("./EduPiInsightDatabase.tsx"),
     read("./EduPiGrowthWorkspace.tsx"),
-    read("./EduPiMaterialsWorkspace.tsx"),
+    Promise.all([read("./EduPiMaterialsWorkspace.tsx"), read("../lib/edupi-material-rows.ts")]).then(parts => parts.join("\n")),
     read("./EduPiObjectSider.tsx"),
   ]);
 
@@ -28,5 +28,5 @@ test("long-term workspaces expose real source state instead of ambiguous empty s
   assert.match(materials, /openPathNative/);
   assert.match(materials, /revealItemInDirNative/);
   assert.match(materials, /显示所在文件夹/);
-  assert.match(sider, /documents\.map\(\(item\) => \(\{ materialKind: item\.kind, title: item\.title \}\)\)/);
+  assert.match(sider, /buildMaterialRows\(data, query\)/);
 });

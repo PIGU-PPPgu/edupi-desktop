@@ -8,6 +8,7 @@ import type { EduPiWorkspaceBundle } from "@/lib/edupi-education-client";
 import { APP_VERSION_DISPLAY } from "@/lib/branding";
 import { useDesktopChrome, WindowControls } from "./desktop";
 import { EduPiConnectorSetup } from "./EduPiConnectorSetup";
+import { EduPiBackgroundJobs } from "./EduPiBackgroundJobs";
 import { startWindowDragging } from "@/lib/desktop-window";
 
 type AdminSnapshot = {
@@ -213,6 +214,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
         <div className="edupi-admin-metrics"><AdminMetric value={snapshot.platform?.connectors?.connectors?.filter((item) => item.status === "configured" || item.status === "connected").length ?? 0} label="已配置连接" /><AdminMetric value={snapshot.platform?.agentComputer?.summary?.running ?? 0} label="后台运行" /><AdminMetric value={snapshot.platform?.agentComputer?.summary?.completed ?? 0} label="完成作业" /></div>
         <div className="edupi-admin-list">{snapshot.platform?.connectors?.connectors?.map((connector) => { const ready = connector.status === "configured" || connector.status === "connected"; return <button type="button" key={connector.connector_id} onClick={() => setSelectedConnector(connector.connector_id || null)}><span><strong>{connector.label || connector.connector_id}</strong><small>{connector.capabilities?.join(" · ")}</small></span><em className={ready ? "is-ready" : ""}>{ready ? "已连接" : connector.status === "credentials_verified" ? "正在启动" : "设置 ›"}</em></button>; })}</div>
         {selectedConnector ? <EduPiConnectorSetup connectorId={selectedConnector} status={snapshot.platform?.connectors?.connectors?.find((item) => item.connector_id === selectedConnector)?.status || "not_configured"} onClose={() => setSelectedConnector(null)} onConfigured={refresh} /> : null}
+        <EduPiBackgroundJobs data={snapshot.education} onMaterials={() => onNavigate("materials")} />
       </section> : null}
 
       {activeSection === "platform" ? <section className="edupi-admin-section">

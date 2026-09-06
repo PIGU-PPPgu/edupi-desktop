@@ -3,7 +3,7 @@
 import type { EducationContract, EducationMemoryCandidate, EducationObservation, TeacherTask } from "@/lib/edupi-education-contract";
 import { filterTimetableSlots, type CalendarItemSelection } from "@/lib/edupi-calendar-model";
 import { isRecognizedTimetableNote } from "@/lib/edupi-recognition-markers";
-import { INSIGHT_CATEGORIES, INSIGHT_STATUSES, MATERIAL_CATEGORIES, MEMORY_CATEGORIES, TEACHING_SECTIONS, filterSubjectKnowledgeItems, insightCategory, matchesWorkspaceQuery as match, materialCategoryCount, memoryCategoryRoute, memoryObjectId, memorySemesterRoute, routePart, type InsightCategoryId, type InsightStatusId, type MaterialCategoryId } from "@/lib/edupi-domain-navigation";
+import { INSIGHT_CATEGORIES, INSIGHT_STATUSES, MATERIAL_CATEGORIES, MEMORY_CATEGORIES, TEACHING_SECTIONS, filterSubjectKnowledgeItems, insightCategory, matchesWorkspaceQuery as match, memoryCategoryRoute, memoryObjectId, memorySemesterRoute, routePart, type InsightCategoryId, type InsightStatusId, type MaterialCategoryId } from "@/lib/edupi-domain-navigation";
 import { scopedMemoryIds, type EducationMemoryScopeProjection } from "@/lib/edupi-memory-scopes";
 import type { EduPiTeachingSkillLifecycle } from "@/lib/edupi-platform-client";
 import { groupTasksByCategory, taskCategory, TASK_CATEGORY_CONFIG } from "@/lib/edupi-task-category";
@@ -12,6 +12,7 @@ import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { confirmedTaskArtifacts, isTaskActionable, isUserFacingMemory, recordLabel, taskArtifacts, taskDisplayTitle, taskKey, taskStatusLabel, taskStatusTone, taskTypeLabel, type TaskStage, type WorkbenchView } from "@/lib/edupi-workbench";
 import { isTaskReviewable, workCaseForTask } from "@/lib/edupi-work-case";
 import { EduPiContentSider } from "./EduPiContentSider";
+import { buildMaterialRows } from "@/lib/edupi-material-rows";
 
 type Props = {
   view: WorkbenchView;
@@ -81,7 +82,7 @@ function ObjectStudentRow({ student, index, selected, onClick }: { student: Reco
   const patterns = Array.isArray(student.error_patterns) ? student.error_patterns : [];
   const trajectory = Array.isArray(student.trajectory) ? student.trajectory : [];
   const latest = patterns.find((item) => item && typeof item === "object") as Record<string, unknown> | undefined;
-  return <button type="button" className={`edupi-object-row edupi-object-student${selected ? " is-selected" : ""}`} onClick={onClick}><span className={`edupi-object-student__avatar is-tint-${index % 4}`}>{name.slice(0, 1)}</span><span className="edupi-object-row__copy"><strong>{name}</strong><small>{latest ? recordLabel(latest, ["description", "desc"], "学习观察") : `${patterns.length} 个模式 · ${trajectory.length} 个节点`}</small></span><em>›</em></button>;
+  return <button type="button" className={`edupi-object-row edupi-object-student${selected ? " is-selected" : ""}`} onClick={onClick}><span className={`edupi-object-student__avatar is-tint-${index % 4}`}>{name.slice(0, 1)}</span><span className="edupi-object-row__copy"><strong>{name}</strong><small>{typeof student.class_name === "string" ? `${student.class_name} · ` : ""}{latest ? recordLabel(latest, ["description", "desc"], "学习观察") : `${patterns.length} 个模式 · ${trajectory.length} 个节点`}</small></span><em>›</em></button>;
 }
 
 export function EduPiObjectSider({ view, data, context, memoryScopes, teachingSkills, query, onQuery, selectedStudentId, onStudent, selectedObjectId, onObject, selectedTaskKey, onTask, onReviewTarget, selectedCalendarSourceId, onCalendarItem, onUpload, onCollapse }: Props) {
@@ -95,8 +96,7 @@ export function EduPiObjectSider({ view, data, context, memoryScopes, teachingSk
   const reviewed = tasks.filter((task) => task.boardStage === "done" || (task.status !== "planned" && task.status !== "hold"));
   const teachingTasks = tasks.filter((task) => taskCategory(task) === "teaching");
   const homeroomTasks = tasks.filter((task) => task.trigger === "student_follow_up");
-  const materials = tasks.filter((task) => task.materialId || task.trigger === "teaching_adjustment_candidate");
-  const intakeMaterials = (data.intakeTargets ?? []).filter((target) => target.projectionKind === "material_intake" && target.status === "accepted").slice().reverse();
+  const materials = buildMaterialRows(data, query);
   const artifacts = tasks.filter((task) => taskArtifacts(task).length > 0);
   const confirmedGrowthArtifacts = confirmedTaskArtifacts(data.tasks, query);
   const students = data.students.filter((student) => match(recordLabel(student, ["name", "student_name", "display_name"], ""), query));
@@ -126,7 +126,7 @@ export function EduPiObjectSider({ view, data, context, memoryScopes, teachingSk
     if (status === "surfaced" || status === "brewing") return categoryInsights.filter((item) => item.status === status).length;
     return categoryObservations.length + categoryInsights.length + categorySignals.length;
   };
-  const materialCount = (category: MaterialCategoryId) => materialCategoryCount(category, [...materials, ...documents.map((item) => ({ materialKind: item.kind, title: item.title }))], intakeMaterials.length);
+  const materialCount = (category: MaterialCategoryId) => category === "all" ? materials.length : materials.filter(item => item.category === category).length;
   const tasksByCategory = groupTasksByCategory(tasks);
   const taskRows = (rows: TeacherTask[], stage: TaskStage) => rows.map((task) => <TaskRow key={taskKey(task)} task={task} selected={taskKey(task) === selectedTaskKey} onClick={() => onTask(task, stage)} />);
 
@@ -142,8 +142,9 @@ export function EduPiObjectSider({ view, data, context, memoryScopes, teachingSk
       {view === "memory" ? <><section className="edupi-object-group"><GroupTitle count={memoryScopes?.semesters.length}>学期</GroupTitle>{memoryScopes?.semesters.map((semester) => <CategoryRow key={semester.semester_id} label={semester.label} count={semester.memory_count} selected={memorySemesterId === semester.semester_id} onClick={() => onObject(memoryObjectId(semester.semester_id, memoryCategory))} />)}{!memoryScopes ? <div className="edupi-object-empty">当前学期</div> : null}</section><section className="edupi-object-group"><GroupTitle count={scopedMemories.length}>记忆分类</GroupTitle>{MEMORY_CATEGORIES.map((category) => <CategoryRow key={category.id} label={category.label} count={scopedMemories.filter((item) => item.category === category.id).length} selected={memoryCategory === category.id} onClick={() => onObject(memoryObjectId(memorySemesterId, category.id))} />)}</section></> : null}
       {view === "insights" ? <><section className="edupi-object-group"><GroupTitle>一级分类</GroupTitle>{INSIGHT_CATEGORIES.map((category) => <CategoryRow key={category.id} label={category.label} count={insightCategoryCount(category.id)} selected={insightCategoryRoute === category.id} onClick={() => onObject(`insights:${category.id}:${insightStatusRoute}`)} />)}</section><section className="edupi-object-group"><GroupTitle>状态筛选</GroupTitle>{INSIGHT_STATUSES.map((status) => <CategoryRow key={status.id} label={status.label} count={insightStatusCount(status.id)} selected={insightStatusRoute === status.id} onClick={() => onObject(`insights:${insightCategoryRoute}:${status.id}`)} />)}</section></> : null}
       {view === "growth" ? <section className="edupi-object-group"><GroupTitle>成长对象</GroupTitle><CategoryRow label="教师专业成长" count={documents.length + confirmedGrowthArtifacts.length} selected={growthCategory === "teacher"} onClick={() => onObject("growth:teacher")} /><CategoryRow label="EduPi 能力成长" count={teachingSkills.skills.length} selected={growthCategory === "edupi"} onClick={() => onObject("growth:edupi")} /></section> : null}
-      {view === "materials" ? <section className="edupi-object-group"><div className="edupi-object-group__actions"><GroupTitle count={materials.length + intakeMaterials.length}>材料分类</GroupTitle><button type="button" onClick={onUpload}>上传</button></div>{MATERIAL_CATEGORIES.map((category) => <CategoryRow key={category.id} label={category.label} count={materialCount(category.id)} selected={materialCategoryRoute === category.id} onClick={() => onObject(`materials:${category.id}`)} />)}</section> : null}
+      {view === "materials" ? <section className="edupi-object-group"><div className="edupi-object-group__actions"><GroupTitle count={materials.length}>材料分类</GroupTitle><button type="button" onClick={onUpload}>上传</button></div>{MATERIAL_CATEGORIES.map((category) => <CategoryRow key={category.id} label={category.label} count={materialCount(category.id)} selected={materialCategoryRoute === category.id} onClick={() => onObject(`materials:${category.id}`)} />)}</section> : null}
       {view === "artifacts" ? <section className="edupi-object-group"><GroupTitle count={artifacts.reduce((total, task) => total + taskArtifacts(task).length, 0)}>最近产物</GroupTitle>{taskRows(artifacts, "artifact")}{artifacts.length === 0 ? <div className="edupi-object-empty">暂无教学产物</div> : null}</section> : null}
+      {view === "insights" ? <section className="edupi-object-group"><GroupTitle>学生记录</GroupTitle><CategoryRow label="学生学习与互动" selected={Boolean(selectedObjectId?.startsWith("insights:student_records"))} onClick={() => onObject("insights:student_records")} /></section> : null}
     </EduPiContentSider>
   );
 }

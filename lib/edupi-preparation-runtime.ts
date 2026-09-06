@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { resolveEduPiBridgeRoots } from "./edupi-core-snapshot";
+import { pumpBackgroundJobs } from "./edupi-background-jobs";
 
 type PreparationStatus = { state: "idle" | "running" | "ready" | "error"; updatedAt: string | null; prepared: number; error: string | null; taskId?:string|null };
 type Runtime = { status: PreparationStatus; timer?: ReturnType<typeof setInterval>; running?: boolean };
@@ -44,6 +45,7 @@ export function startPreparation({taskId=null}:{taskId?:string|null}={}) {
 }
 
 export function ensurePreparation() {
+  void pumpBackgroundJobs().catch(() => {});
   const state = runtime();
   if (!state.timer) {
     state.timer = setInterval(() => { try { startPreparation(); } catch { state.status = { ...state.status, state: "error", error: "教育工作区暂不可用" }; } }, 5 * 60_000);

@@ -16,9 +16,10 @@ import { PRODUCT_NAME } from "./branding";
 import type { AgentSessionLike, ExtensionUiContextLike, ToolInfo } from "./pi-types";
 import type { ExtensionUiRequest, ExtensionUiResponse, ExtensionWidgetItem } from "./types";
 import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS } from "./custom-ui-terminal";
-import { EDUPI_ROOT, extensionPaths } from "./edupi-runtime";
+import { EDUPI_ROOT, extensionPaths, prepareEducationResources } from "./edupi-runtime";
 import { createEduPiAppControlTool } from "./edupi-desktop-tool";
 import { createEduPiTaskTool } from "./edupi-task-tool";
+import { createEduPiPresentationTool } from "./edupi-presentation-tool";
 import { generatedArtifactsRequest, snapshotGeneratedFiles } from "./edupi-generated-artifacts";
 import { createStudentEventTool } from "./edupi-student-event-tool";
 import { createPrepareTaskTool } from "./edupi-prepare-task-tool";
@@ -27,6 +28,7 @@ import { createEduPiComputerUseTool } from "./edupi-computer-tool";
 import { parseComputerUseBridgeResult, type ComputerUseBridgeResult, type ComputerUseInput } from "./edupi-computer-use";
 import { createDesktopSafeBashOperations, redactDesktopSpawnContext } from "./desktop-shell-security";
 import { createEduPiTeacherContextAppendSystemPromptOverride } from "./edupi-teacher-context-prompt";
+import { withEducationModel } from "./edupi-model-context";
 
 // ============================================================================
 // Types
@@ -495,11 +497,11 @@ export class AgentSessionWrapper {
         const streamingBehavior = command.streamingBehavior as "steer" | "followUp" | undefined;
         this.promptRunning = true;
         notifyRunningChange();
-        this.inner.prompt(command.message as string, {
+        withEducationModel(this.inner, () => this.inner.prompt(command.message as string, {
           ...(promptImages?.length ? { images: promptImages } : {}),
           ...(streamingBehavior ? { streamingBehavior } : {}),
           source: "rpc",
-        }).then(async () => {
+        })).then(async () => {
           await this.artifactWrites;
           this.promptRunning = false;
           this.resetIdleTimer();
@@ -1387,6 +1389,7 @@ export async function startRpcSession(
       agentDir,
       resourceLoaderOptions: {
         additionalExtensionPaths: extensionPaths,
+        additionalSkillPaths: resolve(sessionCwd) === EDUPI_ROOT ? [prepareEducationResources()] : [],
         ...(teacherContextAppendSystemPromptOverride
           ? { appendSystemPromptOverride: teacherContextAppendSystemPromptOverride }
           : {}),
@@ -1418,7 +1421,7 @@ export async function startRpcSession(
       ...(toolsOption !== undefined ? { tools: toolsOption } : {}),
       customTools: [
         defineTool(createBashToolDefinition(sessionCwd, { shellPath: services.settingsManager.getShellPath(), spawnHook: redactDesktopSpawnContext })),
-        ...(resolve(sessionCwd) === EDUPI_ROOT ? [createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
+        ...(resolve(sessionCwd) === EDUPI_ROOT ? [createEduPiPresentationTool(EDUPI_ROOT), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
           projectRoot: EDUPI_ROOT,
           requestAction: (action, signal) => requestEduPiAppAction(action, signal),
         }), createEduPiComputerUseTool({

@@ -14,7 +14,11 @@ export async function POST(request: Request) {
   if (!isApiRequestAllowed(request)) return NextResponse.json({ error: "请求来源无效" }, { status: 403 });
   if (!hasJsonContentType(request)) return NextResponse.json({ error: "需要 JSON 请求" }, { status: 415 });
   try {
-    const body = await parseJsonWithinLimit(request, 4096) as { sessionId?: unknown };
+    const body = await parseJsonWithinLimit(request, 4096) as { sessionId?: unknown; action?: unknown; artifactId?: unknown };
+    if (body?.action === "archive" || body?.action === "restore") {
+      if (typeof body.artifactId !== "string" || !/^[a-f0-9-]{36}$/i.test(body.artifactId)) return NextResponse.json({ error: "材料标识无效" }, { status: 400 });
+      return NextResponse.json(await generatedArtifactsRequest(body.action, { artifact_id: body.artifactId }));
+    }
     if (typeof body?.sessionId !== "string" || body.sessionId.length > 160) return NextResponse.json({ error: "会话无效" }, { status: 400 });
     const file = await resolveSessionPath(body.sessionId);
     const header = file ? readSessionHeader(file) : null;

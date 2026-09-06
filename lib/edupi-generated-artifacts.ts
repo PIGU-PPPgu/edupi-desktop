@@ -2,8 +2,16 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import { resolveEduPiBridgeRoots } from "./edupi-core-snapshot";
 import { runCoreProcess } from "./edupi-core-process-client";
+import type { EducationContract } from "./edupi-education-contract";
 
-export type GeneratedArtifact = { artifact_id: string; title: string; relative_path: string; session_id: string; task_id: string | null; updated_at: string; size_bytes: number };
+export type GeneratedArtifact = { artifact_id: string; title: string; relative_path: string; available?: boolean; session_id: string; task_id: string | null; updated_at: string; size_bytes: number };
+
+export async function workspaceResourcesRequest() {
+  const roots = resolveEduPiBridgeRoots();
+  const result = await runCoreProcess<{ ok: boolean; artifacts: GeneratedArtifact[] | null; teacherMaterials: EducationContract["teacherMaterials"]; studentMetadata: Array<{ student_id: string; name: string; class_name: string | null }> }>({ ...roots, timeoutMs: 5000, request: { protocol: "edupi-desktop-bridge", protocol_version: 1, producer: "edupi-desktop", request_id: crypto.randomUUID(), operation: "workspace-resources" } });
+  if (!result.ok) throw new Error("工作区资源暂不可用");
+  return result;
+}
 const extensions = new Set([".md", ".txt", ".docx", ".pdf", ".pptx", ".xlsx", ".csv", ".html"]);
 
 export function completedSessionFiles(entries: Array<Record<string, unknown>>, root: string): string[] {
@@ -36,9 +44,9 @@ export async function recoverSessionArtifacts(sessionFile: string, root: string,
   return { registered, failedCount: failed.length };
 }
 
-export async function generatedArtifactsRequest(action: "list" | "register", fields: Record<string, unknown> = {}) {
+export async function generatedArtifactsRequest(action: "list" | "register" | "archive" | "restore", fields: Record<string, unknown> = {}) {
   const roots = resolveEduPiBridgeRoots();
-  const response = await runCoreProcess<{ ok: boolean; artifacts?: GeneratedArtifact[]; artifact?: GeneratedArtifact }>({
+  const response = await runCoreProcess<{ ok: boolean; artifacts?: GeneratedArtifact[]; artifact?: GeneratedArtifact; teacherMaterials?: EducationContract["teacherMaterials"] }>({
     ...roots, timeoutMs: 5000,
     request: { protocol: "edupi-desktop-bridge", protocol_version: 1, producer: "edupi-desktop", request_id: crypto.randomUUID(), operation: "generated-artifacts", action, ...fields },
   });

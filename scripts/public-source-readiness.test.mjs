@@ -71,6 +71,7 @@ test("public security reporting and canonical source links are present", async (
 test("historical Desktop PR links point to the preserved internal archive", async () => {
   for (const path of trackedFiles("*.md", "*.json")) {
     const source = await readFile(join(root, path), "utf8");
-    assert.doesNotMatch(source, /github\.com\/PIGU-PPPgu\/edupi-desktop\/pull\/\d+/);
+    // PR #46 consolidated releases; later PRs are current public work, not archive links.
+    assert.doesNotMatch(source, /github\.com\/PIGU-PPPgu\/edupi-desktop\/pull\/(?:[1-9]|[1-3]\d|4[0-5])(?:\D|$)/);
   }
 });
