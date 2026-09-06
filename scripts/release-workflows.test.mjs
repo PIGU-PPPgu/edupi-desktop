@@ -196,16 +196,17 @@ test("release workflow publishes Apple Silicon, Linux x64, and Windows x64 insta
 
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /max-parallel: 1/);
-  assert.match(workflow, /runner: macos-15/);
-  assert.match(workflow, /target: aarch64-apple-darwin/);
-  assert.match(workflow, /runner: ubuntu-24\.04/);
-  assert.match(workflow, /target: x86_64-unknown-linux-gnu/);
-  assert.match(workflow, /--bundles deb/);
+  assert.match(workflow, /'macos-15'/);
+  assert.match(workflow, /\["aarch64-apple-darwin"\]/);
+  assert.match(workflow, /'ubuntu-24\.04'/);
+  assert.match(workflow, /\["x86_64-unknown-linux-gnu"\]/);
+  assert.match(workflow, /'deb,appimage'/);
   assert.match(workflow, /libwebkit2gtk-4\.1-dev/);
   assert.match(workflow, /libayatana-appindicator3-dev/);
-  assert.match(workflow, /runner: windows-latest/);
-  assert.match(workflow, /target: x86_64-pc-windows-msvc/);
-  assert.match(workflow, /--bundles nsis/);
+  assert.match(workflow, /'windows-latest'/);
+  assert.match(workflow, /\["x86_64-pc-windows-msvc"\]/);
+  assert.match(workflow, /'nsis'/);
+  assert.match(workflow, /Missing signed update/);
   assert.doesNotMatch(workflow, /x86_64-apple-darwin/);
   assert.doesNotMatch(workflow, /macos-15-intel/);
   assert.match(workflow, /includeUpdaterJson: true/);
