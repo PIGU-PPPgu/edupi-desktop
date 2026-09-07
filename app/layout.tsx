@@ -3,6 +3,7 @@ import { Noto_Sans_Mono } from "next/font/google";
 import { PwaRegistration } from "@/components/PwaRegistration";
 import "katex/dist/katex.min.css";
 import "./globals.css";
+import "./edupi-motion.css";
 // Fork-local restyle layer — must come after globals.css so its
 // equal-specificity rules win the cascade. See app/native-theme.css.
 import "./native-theme.css";

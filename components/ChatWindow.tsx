@@ -8,6 +8,7 @@ import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistant
 import { MessageView } from "./MessageView";
 import { EduPiConversationFiles } from "./EduPiConversationFiles";
 import { EduPiReminderInbox } from "./EduPiReminderInbox";
+import { EduPiRuntimeFlow } from "./EduPiRuntimeFlow";
 import { ConversationNavigator, type ConversationTurnLocation } from "./ConversationNavigator";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { useI18n } from "@/hooks/useI18n";
@@ -879,6 +880,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onDrop={handleDrop}
     >
       {onEduPiAction ? <EduPiReminderInbox onAction={onEduPiAction} onContinue={onContinueReminder} /> : null}
+      {onEduPiAction ? <EduPiRuntimeFlow running={sessionBusy} toolRunning={bashRunning} compacting={isCompacting} /> : null}
       {reminderTitle ? <div role="status" style={{ padding: "8px 12px", color: "var(--text-muted)" }}>{reminderTitle}</div> : null}
       {onEduPiAction && (session?.id || sessionIdRef.current) && messageCwd ? <EduPiConversationFiles sessionId={(session?.id || sessionIdRef.current)!} cwd={messageCwd} onOpen={onOpenFile} /> : null}
       {isDragOver && (
