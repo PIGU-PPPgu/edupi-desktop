@@ -7,8 +7,8 @@ export function reminderEvents(tasks: TeacherTask[], workspace: string, now = ne
   const result: Record<string, ReminderEvent> = completionSnapshot(activeTasks, workspace);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
   for (const task of activeTasks) {
-    if (!task.id || task.dueDate !== today || ["rejected", "hold", "accepted"].includes(task.status) || task.contentStatus === "draft_ready") continue;
-    result[`due:${task.id}`] = { taskId: task.id, title: task.title, completion: "due", identity: `due:${today}` };
+    if (!task.id || !task.dueDate || task.dueDate > today || ["rejected", "hold", "accepted"].includes(task.status) || task.contentStatus === "draft_ready") continue;
+    result[`due:${task.id}`] = { taskId: task.id, title: task.title, completion: "due", identity: `due:${task.dueDate}` };
   }
   return result;
 }

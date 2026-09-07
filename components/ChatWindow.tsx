@@ -231,7 +231,12 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
 }
 
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, onContinueReminder, reminderText, reminderTitle, reminderDraftKey, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
-  useEffect(() => { if (reminderText) chatInputRef?.current?.insertIfEmpty(reminderText); }, [reminderText, chatInputRef, newSessionCwd, session?.id]);
+  const appliedReminderText = useRef<string | null>(null);
+  useEffect(() => {
+    if (!reminderText || !chatInputRef?.current || appliedReminderText.current === reminderText) return;
+    chatInputRef.current.insertIfEmpty(reminderText);
+    appliedReminderText.current = reminderText;
+  }, [reminderText, chatInputRef, newSessionCwd, session?.id]);
   const { t } = useI18n();
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
 

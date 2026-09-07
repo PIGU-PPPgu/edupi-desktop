@@ -44,7 +44,7 @@ export function EduPiReminderInbox({ onAction, onContinue }: { onAction: (action
       {error ? <p role="alert">{error}</p> : null}
       {!visible.length && !error ? <p>暂无待处理提醒</p> : null}
       {visible.slice(currentPage * 8, currentPage * 8 + 8).map(item => <details key={item.id} onToggle={event => { if (event.currentTarget.open && !item.read) void change(item.id, "read"); }}>
-        <summary>{item.title} · {item.withdrawn ? "已撤下" : item.kind === "ready" ? "已准备" : item.kind === "due" ? "今日到期" : "准备失败"}</summary>
+        <summary>{item.title} · {item.withdrawn ? "已撤下" : item.kind === "ready" ? "已准备" : item.kind === "due" ? "已到期" : "准备失败"}</summary>
         <time>{new Date(item.snoozedUntil || item.createdAt).toLocaleString("zh-CN")}</time>
         <button className="native-button" disabled={busy} onClick={async () => {
           setBusy(true);

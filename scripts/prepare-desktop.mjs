@@ -67,6 +67,8 @@ async function assembleServer() {
     join(serverResourcesDir, "desktop-server.cjs"),
   );
   await copyFile(join(rootDir, "desktop", "preparation-worker.mjs"), join(serverResourcesDir, "preparation-worker.mjs"));
+  await copyFile(join(rootDir, "desktop", "model-output-repair.mjs"), join(serverResourcesDir, "model-output-repair.mjs"));
+  await copyFile(join(rootDir, "desktop", "preparation-materials.mjs"), join(serverResourcesDir, "preparation-materials.mjs"));
 
   const staticSource = join(desktopBuildDir, "static");
   const staticDestination = join(serverResourcesDir, ".next-desktop", "static");

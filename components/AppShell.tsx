@@ -8,6 +8,7 @@ import { useEduPiCompletionMonitor } from "@/hooks/useEduPiCompletionMonitor";
 import { useEduPiReminderNotifications } from "@/hooks/useEduPiReminderNotifications";
 import { bindReminderSession } from "@/lib/edupi-reminder-session";
 import { reminderPrompt } from "@/lib/edupi-reminder-prompt";
+import { readEduPiWorkspace } from "@/lib/edupi-education-client";
 import { SessionSidebar } from "./SessionSidebar";
 import { EduPiAdminPanel, type AdminSectionId } from "./EduPiAdminPanel";
 import { EduPiEducationPanel } from "./EduPiEducationPanel";
@@ -1020,6 +1021,16 @@ export function AppShell() {
 
   // Show chat area if a session is selected, or if we have a cwd to start a new session in
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
+  useEffect(() => {
+    if (!edupiChatActive || selectedSession || effectiveNewSessionCwd || !initialSessionRestored) return;
+    const controller = new AbortController();
+    void readEduPiWorkspace({ signal: controller.signal }).then(async bundle => {
+      const response = await fetch("/api/cwd/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd: bundle.data.workspace }), signal: controller.signal });
+      if (!response.ok) throw new Error("教育工作区无法打开");
+      if (!controller.signal.aborted) setNewSessionCwd(bundle.data.workspace);
+    }).catch(() => { /* Education panel exposes workspace errors and retry. */ });
+    return () => controller.abort();
+  }, [edupiChatActive, selectedSession, effectiveNewSessionCwd, initialSessionRestored]);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
   const projectTrustCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
   const showPlaceholder = initialSessionRestored && !showChat;

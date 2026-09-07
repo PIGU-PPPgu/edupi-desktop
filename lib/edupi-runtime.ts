@@ -1,8 +1,9 @@
 import { DefaultResourceLoader } from "@earendil-works/pi-coding-agent";
 import { resolve } from "node:path";
-import { copyFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, realpathSync } from "node:fs";
 
-export const EDUPI_ROOT = resolve(process.env.EDUPI_DATA_ROOT || process.env.EDUPI_PROJECT_ROOT || "../edupi");
+const configuredDataRoot = resolve(process.env.EDUPI_DATA_ROOT || process.env.EDUPI_PROJECT_ROOT || "../edupi");
+export const EDUPI_ROOT = existsSync(configuredDataRoot) ? realpathSync(configuredDataRoot) : configuredDataRoot;
 export const EDUPI_CODE_ROOT = resolve(process.env.EDUPI_CORE_ROOT || process.env.EDUPI_PROJECT_ROOT || "../edupi");
 
 export function prepareEducationResources(dataRoot = EDUPI_ROOT, codeRoot = EDUPI_CODE_ROOT): string {
