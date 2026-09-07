@@ -880,7 +880,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onDrop={handleDrop}
     >
       {onEduPiAction ? <EduPiReminderInbox onAction={onEduPiAction} onContinue={onContinueReminder} /> : null}
-      {onEduPiAction ? <EduPiRuntimeFlow running={sessionBusy} toolRunning={bashRunning} compacting={isCompacting} /> : null}
+      {onEduPiAction ? <EduPiRuntimeFlow running={sessionBusy} toolRunning={bashRunning} compacting={isCompacting} activeTools={agentPhase?.kind === "running_tools" ? agentPhase.tools.map(tool => tool.name) : []} /> : null}
       {reminderTitle ? <div role="status" style={{ padding: "8px 12px", color: "var(--text-muted)" }}>{reminderTitle}</div> : null}
       {onEduPiAction && (session?.id || sessionIdRef.current) && messageCwd ? <EduPiConversationFiles sessionId={(session?.id || sessionIdRef.current)!} cwd={messageCwd} onOpen={onOpenFile} /> : null}
       {isDragOver && (

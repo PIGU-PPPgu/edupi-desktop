@@ -1,4 +1,6 @@
 /* Adapted from Archify assets/template.html. See third-party/archify. */
+.edupi-graph-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.edupi-graph-controls output { min-width: 42px; text-align: center; font-size: 12px; color: var(--text-muted); }
 @keyframes edupi-edge-flow {
   0% { stroke-dasharray: 10 8; stroke-dashoffset: 54; opacity: .42; }
   88%, 99.9% { stroke-dasharray: 10 8; stroke-dashoffset: 0; opacity: 1; }

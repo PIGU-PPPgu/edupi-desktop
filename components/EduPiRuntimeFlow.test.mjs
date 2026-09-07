@@ -9,7 +9,9 @@ test("runtime flow is absent when idle and reflects actual flags", () => {
   const render = props => renderToStaticMarkup(createElement(EduPiRuntimeFlow, props));
   assert.equal(render({ running: false, toolRunning: false, compacting: false }), "");
   assert.match(render({ running: true, toolRunning: false, compacting: false }), /处理中/);
-  assert.match(render({ running: true, toolRunning: true, compacting: false }), /执行工具/);
+  assert.match(render({ running: true, toolRunning: true, compacting: false }), /执行命令/);
+  assert.match(render({ running: true, toolRunning: false, compacting: false, activeTools: ["read", "write"] }), /执行工具：read、write/);
+  assert.equal(render({ running: false, toolRunning: false, compacting: false, activeTools: ["read"] }), "");
   assert.match(render({ running: true, toolRunning: false, compacting: true }), /整理上下文/);
 });
 test("graph motion is finite and reduced-motion is respected", async () => {
