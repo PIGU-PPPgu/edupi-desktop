@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 
 export type CoreRuntimeIdentity = {
   core_commit: string;
-  component_manifest_path: "contracts/edupi-desktop-component-manifest.json";
+  component_manifest_path: "contracts/edupi-core-runtime-component-manifest.json";
   component_manifest_hash: string;
 };
 
@@ -15,6 +15,7 @@ export type ResolvedEduPiCore = {
   root: string;
   cwd: string;
   entrypoint: string;
+  oneShotEntrypoint: string;
   componentManifestPath: string;
   componentManifestHash: string;
   coreCommit: string;
@@ -209,7 +210,7 @@ export function resolveEduPiCoreRoot({
   const root = fs.realpathSync(configuredRoot);
   const allowed = fs.realpathSync(allowedRoot);
   if (!isInside(allowed, root)) throw new Error("Core root is outside allowed root");
-  if (runtimeIdentity.component_manifest_path !== "contracts/edupi-desktop-component-manifest.json") throw new Error("Unexpected component manifest path");
+  if (runtimeIdentity.component_manifest_path !== "contracts/edupi-core-runtime-component-manifest.json") throw new Error("Unexpected component manifest path");
 
   if (validationMode === "external") {
     const head = execFileSync("git", ["-C", root, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
@@ -231,20 +232,27 @@ export function resolveEduPiCoreRoot({
   const calculatedHash = sha256(Buffer.from(JSON.stringify(canonicalize(payload)), "utf8"));
   if (recordedHash !== calculatedHash || recordedHash !== runtimeIdentity.component_manifest_hash) throw new Error("Component manifest hash mismatch");
 
-  if (manifest.entrypoint !== "scripts/desktop_bridge_port.mjs") throw new Error("Component manifest entrypoint is invalid");
+  if (manifest.entrypoint !== "scripts/core_runtime_daemon.mjs") throw new Error("Component manifest entrypoint is invalid");
   if (!Array.isArray(manifest.modules) || !Array.isArray(manifest.assets) || !Array.isArray(manifest.runtime_dependencies)) {
     throw new Error("Component manifest is missing a required file or dependency list");
   }
   const modules = manifest.modules as ComponentManifestFile[];
   const assets = manifest.assets as ComponentManifestFile[];
   const runtimeDependencies = manifest.runtime_dependencies as RuntimeDependencyManifest[];
+  if (runtimeDependencies.length > 0) {
+    const resolvedNodeModules = fs.realpathSync(path.join(root, "node_modules"));
+    if (!isInside(allowed, resolvedNodeModules)) throw new Error("Core runtime dependencies are outside the allowed root");
+  }
   const seenPaths = new Set<string>();
   const seenPackages = new Set<string>();
   for (const entry of [...modules, ...assets]) verifyManifestFile(root, entry, seenPaths);
   for (const dependency of runtimeDependencies) verifyRuntimeDependency(root, dependency, seenPaths, seenPackages);
 
-  const entrypointRelative = "scripts/desktop_bridge_port.mjs";
-  if (!modules.some((entry) => entry.path === entrypointRelative)) throw new Error("Component manifest omits fixed entrypoint");
+  const entrypointRelative = "scripts/core_runtime_daemon.mjs";
+  const oneShotEntrypointRelative = "scripts/desktop_bridge_port.mjs";
+  if (!modules.some((entry) => entry.path === entrypointRelative)) throw new Error("Component manifest omits daemon entrypoint");
+  if (!modules.some((entry) => entry.path === oneShotEntrypointRelative)) throw new Error("Component manifest omits rollback entrypoint");
   const entrypoint = validateContainedRegularFile({ allowedRoot: root, candidate: path.join(root, entrypointRelative) });
-  return { root, cwd: root, entrypoint, componentManifestPath, componentManifestHash: recordedHash, coreCommit: runtimeIdentity.core_commit, validationMode };
+  const oneShotEntrypoint = validateContainedRegularFile({ allowedRoot: root, candidate: path.join(root, oneShotEntrypointRelative) });
+  return { root, cwd: root, entrypoint, oneShotEntrypoint, componentManifestPath, componentManifestHash: recordedHash, coreCommit: runtimeIdentity.core_commit, validationMode };
 }

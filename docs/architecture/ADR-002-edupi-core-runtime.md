@@ -520,3 +520,116 @@ Exact user decision: `确认 ADR-002 五项决策` (2026-09-02).
 ADR-002 is accepted. Task 5 and Task 6 may proceed within this contract, while
 their implementation and evidence remain separate; this record does not claim
 that a daemon, fencing, or HarnessAdapter already exists.
+
+## Task 7 security and lifecycle refinement — 2026-09-06
+
+Task 7 keeps the accepted ownership model and narrows its process boundary.
+Tauri starts a separate local supervisor/broker before starting Next. The
+broker alone receives the raw Core bearer token and passes it only to the
+resident Core child. Next receives a different, process-scoped client
+capability for the broker; it never receives the raw Core authority.
+
+The broker capability is deliberately narrower than Runtime Protocol v1. It
+accepts only bridge reads `health` and `snapshot`, and bridge mutations
+`command`, `students`, and `delete`. Lifecycle calls, event enqueue, connector
+configuration, provider access, channel access, and external delivery are not
+delegated to Next. The capability is captured once before application startup,
+removed from ambient environment state, frozen for the process lifetime, and
+removed from Agent/tool subprocess environments. This is a process-boundary
+reduction, not a claim that arbitrary code already executing inside the
+trusted Next process is OS-sandboxed from the narrow capability. Brokered
+health rewrites `supported_operations` to this same five-operation set, so the
+status projection cannot advertise direct one-shot capabilities that the
+broker will reject.
+
+The broker binds its stable loopback proxy and emits `supervisor_ready` before
+starting Core. Tauri waits only for that broker identity before starting Next,
+so the recovery UI is available while Core is starting, restarting, or failed.
+Every later Core `ready` or `restarted` envelope is checked by Tauri against a
+direct authenticated health request that binds the supervisor session, Core
+commit, component manifest, data-root fingerprint, instance nonce, and fencing
+generation. Next never substitutes a local education writer when the broker or
+Core is unavailable.
+
+The release mode is fixed for one Tauri session. Daemon mode keeps one Core
+child behind the broker. One-shot rollback mode remains brokered, serializes
+each allowed bridge request, and starts no resident Core daemon. Switching
+modes requires a true stop followed by a new session, preserving the accepted
+no-dual-writer rollback order.
+
+Shutdown now has one broker-owned 20-second total deadline. It rejects new
+proxy intake, drains or force-reaps the Core/one-shot children, closes the
+proxy, and then exits. Tauri allows a 25-second transport/reap margin before
+terminating the broker process group, and stops Next only after this Core
+boundary. Both broker and Core arm parent-death supervision before Core startup
+can retain writer authority; readiness parsing and response reads are bounded
+before allocation or acceptance. Each brokered one-shot also arms an
+independent worker-thread parent watchdog before it can acquire legacy writer
+admission. The watchdog can terminate the process even when the one-shot main
+thread is blocked in synchronous storage work.
+
+Inbound headers and request bodies retain a five-second deadline. That deadline
+does not govern an already validated operation response: read operations receive
+their five-second operation deadline plus transport grace, while bridge
+mutations and lifecycle drain/shutdown receive their fifteen-second operation
+deadline plus transport grace. Core and the broker's Core-facing request each
+allow one second beyond the operation deadline; the Next-facing client allows
+two seconds, while the broker socket has a final three-second safety bound. A
+client connection is therefore not silently cut at five seconds or at the same
+instant as an admitted mutation's typed deadline response.
+
+Runtime Protocol v1 adds the exact `bridge_call` operation for the three
+reviewed bridge mutations while retaining `bridge_read` for the two reviewed
+reads. The paired identity is schema
+`sha256:315be5504ecffa382213d90211fc6263664bdcfcbb7974edb5994d0c3e7aaef2`
+and Core daemon component
+`sha256:3a9522bec208e38328ec2be91c7c170f1308fe412db63394d1c1c1c77c4c45e1`.
+This refinement closes deterministic Desktop supervision only. Provider-backed
+execution, network/channel activation, external sending, and the paired G1
+continuity E2 remain later gates; defaults remain `activation_pending` and
+`external_send=false`.
+
+## Task 8 deterministic G1 continuity refinement — 2026-09-07
+
+Task 8 keeps production event intake closed. The ordinary daemon factory still
+reports `activation_pending`; only the explicitly branded, test-only Task 8
+driver can supply a deterministic HarnessAdapter. That driver is excluded from
+both production component manifests and has no AgentSession, provider, channel,
+network, or external-send path.
+
+Calendar-work execution state now retains an optional, bounded transition
+history of at most 50 entries. Existing records without the field derive their
+legacy transition view, while new and retried executions persist the exact
+attempt-specific sequence. Validation canonicalizes timestamps to UTC, rejects
+duplicate projected identities, enforces the per-attempt state machine and
+requires the final transition to agree with the execution status. A later
+attempt can begin only after the preceding attempt is failed or stale. The work
+case projection sorts by the parsed instant and consumes the stored order
+without exposing its internal marker. A retry can therefore preserve `queued →
+running → failed → queued → running → draft_ready` even when adjacent
+transitions share a timestamp.
+
+The paired deterministic E2 injects one due timer, observes retryable
+`model_unavailable`, kills and recovers Core, verifies attempt 2 reaches four
+real hashed artifacts, restarts Core again, then restarts the complete Desktop
+broker. Event, task, work-case, execution, receipt, artifact identities, source,
+and transition order remain stable. The same object timeline was observed in
+the browser; its running-session endpoint measured zero active Chat sessions,
+with no connected channel and `external_send=false`.
+
+Regression verification also closed a carrier readiness race: Feishu now starts
+its heartbeat scheduler and installs SIGINT/SIGTERM handlers before publishing
+`ready`. Startup remains crash-only before that synchronous publication
+boundary, while an observable ready carrier can always run the admitted graceful
+shutdown path.
+
+The paired Runtime schema remains
+`sha256:315be5504ecffa382213d90211fc6263664bdcfcbb7974edb5994d0c3e7aaef2`.
+Current daemon and one-shot component identities are respectively
+`sha256:0b168afb90b6d05e5c06e0fe984cd266a3f90d8c2240c0dccda520a2c274005d`
+and
+`sha256:ded08a3140f3e7aa5eb7c0604aabc308aa019473a4c12987837aab155df6f85c`.
+This is deterministic local E2 evidence for G1 continuity, not provider-backed
+teacher evidence, external delivery evidence, a packaged cross-platform proof,
+or a product-wide L4 claim. Production defaults remain `activation_pending` and
+`external_send=false`.

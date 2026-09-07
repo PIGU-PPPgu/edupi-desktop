@@ -47,13 +47,13 @@ test("copies only the pinned Core closure and bundled validation works without .
     assert.equal(fs.existsSync(path.join(destination, ".git")), false);
     assert.equal(fs.existsSync(path.join(destination, "fixtures/bridge/v1.1/fixture-manifest.json")), true);
     const manifest = JSON.parse(fs.readFileSync(path.join(destination, compat.core_runtime.component_manifest_path), "utf8"));
-    const expectedFiles = [
+    const expectedFiles = [...new Set([
       compat.core_runtime.component_manifest_path,
       ...manifest.modules.map((entry) => entry.path),
       ...manifest.assets.map((entry) => entry.path),
       ...manifest.runtime_dependencies.flatMap((dependency) => dependency.files.map((entry) => entry.path)),
       compat.contract_identities[0].fixture_manifest_path,
-    ].sort();
+    ])].sort();
     assert.deepEqual(listFiles(destination).sort(), expectedFiles);
     const typebox = manifest.runtime_dependencies.find((dependency) => dependency.name === "typebox");
     const typeboxValue = typebox.files.find((entry) => entry.path === "node_modules/typebox/build/value/index.mjs");

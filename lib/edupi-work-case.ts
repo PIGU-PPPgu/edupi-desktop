@@ -42,6 +42,7 @@ export function isTaskReviewable(task: TeacherTask, workCase: EducationWorkCase 
   const projectedArtifacts = taskArtifacts(task);
   if (projectedArtifacts.length === 0) return false;
   if (!workCase) return !taskRequiresWorkCase(task);
+  if (workCase.kind === "capability_package" && !["draft_ready", "modified"].includes(workCase.currentState)) return false;
   return workCase.artifactIds.length > 0;
 }
 

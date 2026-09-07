@@ -1323,6 +1323,1054 @@
                   "const": false,
                   "type": "boolean"
                 },
+                "fact_spine": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "accepted_facts": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "confidence": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "basis": {
+                                "anyOf": [
+                                  {
+                                    "const": "explicit",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "model_assisted",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "inferred",
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              "score": {
+                                "maximum": 1,
+                                "minimum": 0,
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "basis",
+                              "score"
+                            ],
+                            "type": "object"
+                          },
+                          "conflict_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 500,
+                            "type": "array"
+                          },
+                          "entity_id": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "external_send": {
+                            "const": false,
+                            "type": "boolean"
+                          },
+                          "fact_id": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "fact_kind": {
+                            "anyOf": [
+                              {
+                                "const": "error_pattern",
+                                "type": "string"
+                              },
+                              {
+                                "const": "progress",
+                                "type": "string"
+                              },
+                              {
+                                "const": "behavior",
+                                "type": "string"
+                              },
+                              {
+                                "const": "general",
+                                "type": "string"
+                              },
+                              {
+                                "const": "safety",
+                                "type": "string"
+                              },
+                              {
+                                "const": "academic",
+                                "type": "string"
+                              },
+                              {
+                                "const": "material",
+                                "type": "string"
+                              },
+                              {
+                                "const": "evidence",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "observation_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 500,
+                            "type": "array"
+                          },
+                          "predicate": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "revision": {
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "source_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 500,
+                            "type": "array"
+                          },
+                          "status": {
+                            "anyOf": [
+                              {
+                                "const": "candidate",
+                                "type": "string"
+                              },
+                              {
+                                "const": "pending_review",
+                                "type": "string"
+                              },
+                              {
+                                "const": "held",
+                                "type": "string"
+                              },
+                              {
+                                "const": "accepted",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "subject_ref": {
+                            "anyOf": [
+                              {
+                                "maxLength": 160,
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "topic_ref": {
+                            "anyOf": [
+                              {
+                                "maxLength": 160,
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "value": {
+                            "maxLength": 4000,
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "fact_id",
+                          "entity_id",
+                          "fact_kind",
+                          "predicate",
+                          "value",
+                          "subject_ref",
+                          "topic_ref",
+                          "confidence",
+                          "status",
+                          "source_ids",
+                          "observation_ids",
+                          "conflict_ids",
+                          "revision",
+                          "external_send"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 500,
+                      "type": "array"
+                    },
+                    "conflicts": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "conflict_id": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "entity_id": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "external_send": {
+                            "const": false,
+                            "type": "boolean"
+                          },
+                          "fact_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 2,
+                            "minItems": 2,
+                            "type": "array",
+                            "uniqueItems": true
+                          },
+                          "predicate": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "revision": {
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "source_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 500,
+                            "type": "array"
+                          },
+                          "status": {
+                            "const": "pending_review",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "conflict_id",
+                          "entity_id",
+                          "predicate",
+                          "fact_ids",
+                          "source_ids",
+                          "status",
+                          "revision",
+                          "external_send"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 500,
+                      "type": "array"
+                    },
+                    "entities": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "canonical_name": {
+                            "maxLength": 240,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "entity_id": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "entity_kind": {
+                            "anyOf": [
+                              {
+                                "const": "teacher",
+                                "type": "string"
+                              },
+                              {
+                                "const": "term",
+                                "type": "string"
+                              },
+                              {
+                                "const": "class",
+                                "type": "string"
+                              },
+                              {
+                                "const": "student",
+                                "type": "string"
+                              },
+                              {
+                                "const": "parent",
+                                "type": "string"
+                              },
+                              {
+                                "const": "subject",
+                                "type": "string"
+                              },
+                              {
+                                "const": "topic",
+                                "type": "string"
+                              },
+                              {
+                                "const": "lesson_occurrence",
+                                "type": "string"
+                              },
+                              {
+                                "const": "calendar_event",
+                                "type": "string"
+                              },
+                              {
+                                "const": "material",
+                                "type": "string"
+                              },
+                              {
+                                "const": "artifact",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "external_send": {
+                            "const": false,
+                            "type": "boolean"
+                          },
+                          "revision": {
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "status": {
+                            "const": "active",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "entity_id",
+                          "entity_kind",
+                          "canonical_name",
+                          "status",
+                          "revision",
+                          "external_send"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 500,
+                      "type": "array"
+                    },
+                    "external_send": {
+                      "const": false,
+                      "type": "boolean"
+                    },
+                    "fact_candidates": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "confidence": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "basis": {
+                                "anyOf": [
+                                  {
+                                    "const": "explicit",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "model_assisted",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "inferred",
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              "score": {
+                                "maximum": 1,
+                                "minimum": 0,
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "basis",
+                              "score"
+                            ],
+                            "type": "object"
+                          },
+                          "conflict_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 500,
+                            "type": "array"
+                          },
+                          "entity_id": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "external_send": {
+                            "const": false,
+                            "type": "boolean"
+                          },
+                          "fact_id": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "fact_kind": {
+                            "anyOf": [
+                              {
+                                "const": "error_pattern",
+                                "type": "string"
+                              },
+                              {
+                                "const": "progress",
+                                "type": "string"
+                              },
+                              {
+                                "const": "behavior",
+                                "type": "string"
+                              },
+                              {
+                                "const": "general",
+                                "type": "string"
+                              },
+                              {
+                                "const": "safety",
+                                "type": "string"
+                              },
+                              {
+                                "const": "academic",
+                                "type": "string"
+                              },
+                              {
+                                "const": "material",
+                                "type": "string"
+                              },
+                              {
+                                "const": "evidence",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "observation_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 500,
+                            "type": "array"
+                          },
+                          "predicate": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "revision": {
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "source_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 500,
+                            "type": "array"
+                          },
+                          "status": {
+                            "anyOf": [
+                              {
+                                "const": "candidate",
+                                "type": "string"
+                              },
+                              {
+                                "const": "pending_review",
+                                "type": "string"
+                              },
+                              {
+                                "const": "held",
+                                "type": "string"
+                              },
+                              {
+                                "const": "accepted",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "subject_ref": {
+                            "anyOf": [
+                              {
+                                "maxLength": 160,
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "topic_ref": {
+                            "anyOf": [
+                              {
+                                "maxLength": 160,
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "value": {
+                            "maxLength": 4000,
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "fact_id",
+                          "entity_id",
+                          "fact_kind",
+                          "predicate",
+                          "value",
+                          "subject_ref",
+                          "topic_ref",
+                          "confidence",
+                          "status",
+                          "source_ids",
+                          "observation_ids",
+                          "conflict_ids",
+                          "revision",
+                          "external_send"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 500,
+                      "type": "array"
+                    },
+                    "generated_at": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "hypotheses": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "confidence": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "basis": {
+                                "anyOf": [
+                                  {
+                                    "const": "explicit",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "model_assisted",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "inferred",
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              "score": {
+                                "maximum": 1,
+                                "minimum": 0,
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "basis",
+                              "score"
+                            ],
+                            "type": "object"
+                          },
+                          "entity_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 50,
+                            "type": "array"
+                          },
+                          "external_send": {
+                            "const": false,
+                            "type": "boolean"
+                          },
+                          "hypothesis_id": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "observation_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 500,
+                            "type": "array"
+                          },
+                          "revision": {
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "source_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 500,
+                            "type": "array"
+                          },
+                          "statement": {
+                            "maxLength": 4000,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "status": {
+                            "anyOf": [
+                              {
+                                "const": "pending_review",
+                                "type": "string"
+                              },
+                              {
+                                "const": "held",
+                                "type": "string"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "hypothesis_id",
+                          "statement",
+                          "entity_ids",
+                          "source_ids",
+                          "observation_ids",
+                          "confidence",
+                          "status",
+                          "revision",
+                          "external_send"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 500,
+                      "type": "array"
+                    },
+                    "legacy_shadow": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "content": {
+                            "maxLength": 1000,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "external_send": {
+                            "const": false,
+                            "type": "boolean"
+                          },
+                          "legacy_id": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "read_only": {
+                            "const": true,
+                            "type": "boolean"
+                          },
+                          "source_kind": {
+                            "const": "legacy_class_memory",
+                            "type": "string"
+                          },
+                          "state": {
+                            "anyOf": [
+                              {
+                                "const": "active",
+                                "type": "string"
+                              },
+                              {
+                                "const": "superseded",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "student": {
+                            "anyOf": [
+                              {
+                                "maxLength": 120,
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "legacy_id",
+                          "student",
+                          "content",
+                          "state",
+                          "source_kind",
+                          "read_only",
+                          "external_send"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 500,
+                      "type": "array"
+                    },
+                    "next_lesson_fact_ids": {
+                      "items": {
+                        "maxLength": 160,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 500,
+                      "type": "array"
+                    },
+                    "observations": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "actor_ref": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "content_hash": {
+                            "maxLength": 160,
+                            "pattern": "^sha256:[A-Za-z0-9_-]+$",
+                            "type": "string"
+                          },
+                          "entity_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 50,
+                            "type": "array"
+                          },
+                          "external_send": {
+                            "const": false,
+                            "type": "boolean"
+                          },
+                          "observation_id": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "observed_at": {
+                            "maxLength": 64,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "raw_text": {
+                            "maxLength": 4000,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "revision": {
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "source_id": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "source_kind": {
+                            "anyOf": [
+                              {
+                                "const": "teacher_utterance",
+                                "type": "string"
+                              },
+                              {
+                                "const": "material",
+                                "type": "string"
+                              },
+                              {
+                                "const": "calendar",
+                                "type": "string"
+                              },
+                              {
+                                "const": "timetable",
+                                "type": "string"
+                              },
+                              {
+                                "const": "legacy",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "source_revision": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "status": {
+                            "anyOf": [
+                              {
+                                "const": "active",
+                                "type": "string"
+                              },
+                              {
+                                "const": "stale",
+                                "type": "string"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "observation_id",
+                          "source_kind",
+                          "source_id",
+                          "source_revision",
+                          "raw_text",
+                          "content_hash",
+                          "observed_at",
+                          "actor_ref",
+                          "entity_ids",
+                          "status",
+                          "revision",
+                          "external_send"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 500,
+                      "type": "array"
+                    },
+                    "projection_kind": {
+                      "const": "education_fact_v1",
+                      "type": "string"
+                    },
+                    "projection_version": {
+                      "const": "1.0",
+                      "type": "string"
+                    },
+                    "state_hash": {
+                      "maxLength": 160,
+                      "pattern": "^sha256:[A-Za-z0-9_-]+$",
+                      "type": "string"
+                    },
+                    "student_views": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "accepted_fact_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 500,
+                            "type": "array"
+                          },
+                          "external_send": {
+                            "const": false,
+                            "type": "boolean"
+                          },
+                          "name": {
+                            "maxLength": 240,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "pending_fact_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 500,
+                            "type": "array"
+                          },
+                          "student_id": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "student_id",
+                          "name",
+                          "accepted_fact_ids",
+                          "pending_fact_ids",
+                          "external_send"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 500,
+                      "type": "array"
+                    },
+                    "teaching_view": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "accepted_fact_ids": {
+                          "items": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "maxItems": 500,
+                          "type": "array"
+                        },
+                        "by_subject": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "fact_ids": {
+                                "items": {
+                                  "maxLength": 160,
+                                  "minLength": 1,
+                                  "type": "string"
+                                },
+                                "maxItems": 500,
+                                "type": "array"
+                              },
+                              "subject_ref": {
+                                "maxLength": 160,
+                                "minLength": 1,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "subject_ref",
+                              "fact_ids"
+                            ],
+                            "type": "object"
+                          },
+                          "maxItems": 500,
+                          "type": "array"
+                        },
+                        "external_send": {
+                          "const": false,
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "accepted_fact_ids",
+                        "by_subject",
+                        "external_send"
+                      ],
+                      "type": "object"
+                    },
+                    "uses": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "consumer_kind": {
+                            "anyOf": [
+                              {
+                                "const": "student_projection",
+                                "type": "string"
+                              },
+                              {
+                                "const": "teaching_projection",
+                                "type": "string"
+                              },
+                              {
+                                "const": "next_lesson",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "consumer_ref": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "external_send": {
+                            "const": false,
+                            "type": "boolean"
+                          },
+                          "fact_ids": {
+                            "items": {
+                              "maxLength": 160,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 500,
+                            "type": "array"
+                          },
+                          "use_id": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "use_key": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "used_at": {
+                            "maxLength": 64,
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "use_id",
+                          "use_key",
+                          "consumer_kind",
+                          "consumer_ref",
+                          "fact_ids",
+                          "used_at",
+                          "external_send"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 500,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "projection_kind",
+                    "projection_version",
+                    "state_hash",
+                    "generated_at",
+                    "entities",
+                    "observations",
+                    "accepted_facts",
+                    "fact_candidates",
+                    "hypotheses",
+                    "conflicts",
+                    "student_views",
+                    "teaching_view",
+                    "next_lesson_fact_ids",
+                    "uses",
+                    "legacy_shadow",
+                    "external_send"
+                  ],
+                  "type": "object"
+                },
                 "freshness": {
                   "additionalProperties": false,
                   "properties": {
@@ -1477,6 +2525,14 @@
                           },
                           {
                             "const": "documents",
+                            "type": "string"
+                          },
+                          {
+                            "const": "education_facts",
+                            "type": "string"
+                          },
+                          {
+                            "const": "capability_work",
                             "type": "string"
                           }
                         ]
@@ -8646,6 +9702,74 @@
                     "minimum": 0,
                     "type": "integer"
                   },
+                  "artifacts": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "artifact_id": {
+                          "maxLength": 160,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "evidence_ids": {
+                          "items": {
+                            "maxLength": 160,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "maxItems": 500,
+                          "type": "array"
+                        },
+                        "external_send": {
+                          "const": false,
+                          "type": "boolean"
+                        },
+                        "key": {
+                          "maxLength": 160,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "relative_path": {
+                          "maxLength": 1024,
+                          "minLength": 1,
+                          "pattern": "^\\.edupi/output/",
+                          "type": "string"
+                        },
+                        "revision": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "sha256": {
+                          "maxLength": 160,
+                          "pattern": "^sha256:[A-Za-z0-9_-]+$",
+                          "type": "string"
+                        },
+                        "title": {
+                          "maxLength": 240,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": {
+                          "const": "markdown",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "artifact_id",
+                        "key",
+                        "title",
+                        "type",
+                        "relative_path",
+                        "sha256",
+                        "revision",
+                        "evidence_ids",
+                        "external_send"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 50,
+                    "type": "array"
+                  },
                   "case_kind": {
                     "anyOf": [
                       {
@@ -8654,6 +9778,10 @@
                       },
                       {
                         "const": "teaching_before_class",
+                        "type": "string"
+                      },
+                      {
+                        "const": "capability_package",
                         "type": "string"
                       }
                     ]

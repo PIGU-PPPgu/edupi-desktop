@@ -1124,8 +1124,12 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-artifact-list h3 { margin: 0; font-size: 13px; }
 .edupi-artifact-list p { margin: 5px 0; overflow: hidden; color: var(--ep-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .edupi-artifact-list small { color: var(--ep-dim); font-size: 11px; }
-.edupi-artifact-list article > span { padding: 4px 7px; border-radius: 6px; background: var(--ep-orange-soft); color: var(--ep-orange); font-size: 11px; }
-.edupi-artifact-list article > span.is-confirmed { background: var(--ep-green-soft); color: var(--ep-green); }
+.edupi-artifact-list article > footer { display: grid; justify-items: end; gap: 7px; }
+.edupi-artifact-list article > footer span { padding: 4px 7px; border-radius: 6px; background: var(--ep-orange-soft); color: var(--ep-orange); font-size: 11px; }
+.edupi-artifact-list article > footer span.is-confirmed { background: var(--ep-green-soft); color: var(--ep-green); }
+.edupi-artifact-list article > footer button { border: 0; background: transparent; color: var(--ep-blue); cursor: pointer; font-size: 11px; font-weight: 650; }
+.edupi-artifact-list article > footer button:hover { text-decoration: underline; }
+.edupi-artifact-list article > footer button:focus-visible { border-radius: 4px; outline: 2px solid var(--ep-blue); outline-offset: 2px; }
 
 .edupi-review-fields { display: grid; gap: 12px; }
 .edupi-review-fields label,
@@ -1587,7 +1591,7 @@ details[open] > .edupi-disclosure-detail { animation: edupi-expand-in .17s ease-
   .edupi-stage-brief dl > div:last-child { border-bottom: 0; }
   .edupi-review-edit-grid label:last-child { grid-column: auto; }
   .edupi-artifact-list article { grid-template-columns: 38px minmax(0, 1fr); }
-  .edupi-artifact-list article > span { grid-column: 2; width: max-content; }
+  .edupi-artifact-list article > footer { grid-column: 2; justify-items: start; }
   .edupi-context-modal { padding: 10px; }
   .edupi-context-modal__panel { max-height: calc(100dvh - 20px); }
   .edupi-task-detail-drawer { width: 100%; }

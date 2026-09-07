@@ -1,10 +1,12 @@
 use std::{
+    collections::HashSet,
     env,
     fs::{self, OpenOptions},
-    io::{self, Read, Write},
+    io::{self, BufRead, Read, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream},
     path::{Component, Path, PathBuf},
     process::{Child, Command, Stdio},
+    sync::mpsc,
     sync::Mutex,
     thread,
     time::{Duration, Instant},
@@ -16,6 +18,8 @@ use std::os::unix::process::CommandExt as _;
 use std::os::windows::process::CommandExt as _;
 
 use serde::Serialize;
+use serde_json::Value as JsonValue;
+use sha2::{Digest, Sha256};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -36,6 +40,7 @@ const EDUPI_WORKSPACE_ENV: &str = "EDUPI_WORKSPACE";
 const EDUPI_CORE_ROOT_ENV: &str = "EDUPI_CORE_ROOT";
 const EDUPI_DATA_ALLOWED_ROOT_ENV: &str = "EDUPI_DATA_ALLOWED_ROOT";
 const EDUPI_CORE_ALLOWED_ROOT_ENV: &str = "EDUPI_CORE_ALLOWED_ROOT";
+const EDUPI_CORE_RELEASE_MODE_ENV: &str = "EDUPI_CORE_RELEASE_MODE";
 const EDUPI_DATA_PREF_KEY: &str = "edupiDataRoot";
 const MANAGED_DATA_DIRECTORY: &str = "edupi-data";
 const FALLBACK_PERSISTED_MISSING: &str = "persisted_missing";
@@ -62,8 +67,16 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const LIGHT_WINDOW_BG: Color = Color(247, 247, 245, 255);
 const DARK_WINDOW_BG: Color = Color(28, 28, 30, 255);
 
+const PINNED_CORE_COMMIT: &str = "a77d6940bd939a20f42d84f433c1b0c3bb8fea1a";
+const PINNED_CORE_MANIFEST_HASH: &str =
+    "sha256:d195f2c1b83c447a5fd8a9b5a4db5f9d5c388c3113ab590ebd7a76e7c93e8c1c";
+const PINNED_CORE_SCHEMA_HASH: &str =
+    "sha256:315be5504ecffa382213d90211fc6263664bdcfcbb7974edb5994d0c3e7aaef2";
+const EMBEDDED_CORE_COMPAT_MANIFEST: &str = include_str!("../../contracts/edupi-core-compat.json");
+
 struct DesktopServer {
     child: Mutex<Option<Child>>,
+    core_child: Mutex<Option<Child>>,
 }
 
 /// When true, closing the main window quits the app; otherwise it hides to tray.
@@ -125,16 +138,30 @@ impl DesktopServer {
     fn empty() -> Self {
         Self {
             child: Mutex::new(None),
+            core_child: Mutex::new(None),
         }
     }
 
     fn running(child: Child) -> Self {
         Self {
             child: Mutex::new(Some(child)),
+            core_child: Mutex::new(None),
+        }
+    }
+
+    fn running_with_core(child: Child, core_child: Option<Child>) -> Self {
+        Self {
+            child: Mutex::new(Some(child)),
+            core_child: Mutex::new(core_child),
         }
     }
 
     fn stop(&self) {
+        if let Ok(mut core_guard) = self.core_child.lock() {
+            if let Some(mut child) = core_guard.take() {
+                stop_core_supervisor_process(&mut child);
+            }
+        }
         let Ok(mut guard) = self.child.lock() else {
             return;
         };
@@ -144,6 +171,25 @@ impl DesktopServer {
 
         terminate_process_tree(&mut child);
     }
+}
+
+fn stop_core_supervisor_process(child: &mut Child) {
+    if let Some(stdin) = child.stdin.as_mut() {
+        let _ = stdin.write_all(b"stop\n");
+        let _ = stdin.flush();
+    }
+    // The broker owns one 20-second Core drain/force deadline. Give it a small
+    // transport/reap margin, then fall back to killing the complete process
+    // group before Next is stopped.
+    let deadline = Instant::now() + Duration::from_secs(25);
+    while Instant::now() < deadline {
+        match child.try_wait() {
+            Ok(Some(_)) => return,
+            Ok(None) => thread::sleep(Duration::from_millis(50)),
+            Err(_) => break,
+        }
+    }
+    terminate_process_tree(child);
 }
 
 fn terminate_process_tree(child: &mut Child) {
@@ -657,6 +703,459 @@ fn server_process_path(node_path: &Path) -> Option<std::ffi::OsString> {
     env::join_paths(paths).ok()
 }
 
+#[cfg(feature = "custom-protocol")]
+struct CoreProxyReady {
+    endpoint: String,
+    supervisor_session_id: String,
+}
+
+#[cfg(feature = "custom-protocol")]
+#[derive(Clone)]
+struct CoreMonitorIdentity {
+    proxy_endpoint: String,
+    core_endpoint: String,
+    core_token: String,
+    schema_hash: String,
+    supervisor_session_id: String,
+    core_commit: String,
+    component_manifest_hash: String,
+}
+
+#[cfg(feature = "custom-protocol")]
+fn read_bounded_json_line<R: BufRead>(reader: &mut R) -> io::Result<Option<JsonValue>> {
+    const MAX_LINE_BYTES: usize = 64 * 1024;
+    let mut bytes = Vec::with_capacity(1024);
+    loop {
+        let available = reader.fill_buf()?;
+        if available.is_empty() {
+            if bytes.is_empty() {
+                return Ok(None);
+            }
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "Core supervisor emitted an unterminated envelope",
+            ));
+        }
+        if let Some(index) = available.iter().position(|byte| *byte == b'\n') {
+            if bytes.len() + index > MAX_LINE_BYTES {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Core supervisor envelope is oversized",
+                ));
+            }
+            bytes.extend_from_slice(&available[..index]);
+            reader.consume(index + 1);
+            let text = std::str::from_utf8(&bytes)
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Core supervisor envelope is not UTF-8"))?;
+            let value = serde_json::from_str(text)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            return Ok(Some(value));
+        }
+        if bytes.len() + available.len() > MAX_LINE_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Core supervisor envelope is oversized",
+            ));
+        }
+        let length = available.len();
+        bytes.extend_from_slice(available);
+        reader.consume(length);
+    }
+}
+
+#[cfg(feature = "custom-protocol")]
+fn has_exact_json_keys(value: &JsonValue, expected: &[&str]) -> bool {
+    let Some(object) = value.as_object() else {
+        return false;
+    };
+    object.len() == expected.len() && expected.iter().all(|key| object.contains_key(*key))
+}
+
+#[cfg(feature = "custom-protocol")]
+fn is_sha256_identity(value: &str) -> bool {
+    value.len() == 71
+        && value.starts_with("sha256:")
+        && value[7..].bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+#[cfg(feature = "custom-protocol")]
+fn monitor_core_envelope(value: &JsonValue, identity: &CoreMonitorIdentity) -> bool {
+    let status = value.get("status").and_then(JsonValue::as_str);
+    if status == Some("failed") {
+        return has_exact_json_keys(value, &["status", "code", "external_send"])
+            && value.get("external_send").and_then(JsonValue::as_bool) == Some(false);
+    }
+    if !matches!(status, Some("ready" | "restarted"))
+        || !has_exact_json_keys(
+            value,
+            &[
+                "status",
+                "child_pid",
+                "endpoint",
+                "protocol",
+                "protocol_version",
+                "schema_hash",
+                "supervisor_session_id",
+                "core_commit",
+                "component_manifest_hash",
+                "data_root_fingerprint",
+                "instance_nonce",
+                "fencing_generation",
+                "external_send",
+            ],
+        )
+        || value.get("endpoint").and_then(JsonValue::as_str)
+            != Some(identity.proxy_endpoint.as_str())
+        || value.get("protocol").and_then(JsonValue::as_str) != Some("edupi-core-runtime")
+        || value.get("protocol_version").and_then(JsonValue::as_u64) != Some(1)
+        || value.get("schema_hash").and_then(JsonValue::as_str)
+            != Some(identity.schema_hash.as_str())
+        || value.get("supervisor_session_id").and_then(JsonValue::as_str)
+            != Some(identity.supervisor_session_id.as_str())
+        || value.get("core_commit").and_then(JsonValue::as_str)
+            != Some(identity.core_commit.as_str())
+        || value.get("component_manifest_hash").and_then(JsonValue::as_str)
+            != Some(identity.component_manifest_hash.as_str())
+        || value.get("child_pid").and_then(JsonValue::as_u64).is_none_or(|pid| pid == 0)
+        || value.get("external_send").and_then(JsonValue::as_bool) != Some(false)
+    {
+        return false;
+    }
+    let Some(fingerprint) = value.get("data_root_fingerprint").and_then(JsonValue::as_str) else {
+        return false;
+    };
+    let Some(nonce) = value.get("instance_nonce").and_then(JsonValue::as_str) else {
+        return false;
+    };
+    let Some(generation) = value.get("fencing_generation").and_then(JsonValue::as_u64) else {
+        return false;
+    };
+    is_sha256_identity(fingerprint)
+        && nonce.len() >= 8
+        && generation > 0
+        && core_health_matches(
+            &identity.core_endpoint,
+            &identity.core_token,
+            &identity.schema_hash,
+            &identity.supervisor_session_id,
+            &identity.core_commit,
+            &identity.component_manifest_hash,
+            fingerprint,
+            nonce,
+            generation,
+        )
+        .unwrap_or(false)
+}
+
+#[cfg(feature = "custom-protocol")]
+fn start_supervisor_output_monitor(
+    stdout: impl Read + Send + 'static,
+    app: AppHandle,
+    identity: Option<CoreMonitorIdentity>,
+) -> mpsc::Receiver<io::Result<JsonValue>> {
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let mut reader = std::io::BufReader::new(stdout);
+        let first = match read_bounded_json_line(&mut reader) {
+            Ok(Some(value)) => Ok(value),
+            Ok(None) => Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "Core supervisor exited before broker readiness",
+            )),
+            Err(error) => Err(error),
+        };
+        let continue_monitoring = first.is_ok();
+        let _ = sender.send(first);
+        if !continue_monitoring {
+            return;
+        }
+        loop {
+            match read_bounded_json_line(&mut reader) {
+                Ok(Some(value)) => {
+                    if let Some(expected) = identity.as_ref() {
+                        if !monitor_core_envelope(&value, expected) {
+                            app.exit(1);
+                            return;
+                        }
+                    } else if value.get("status").and_then(JsonValue::as_str) != Some("failed") {
+                        // One-shot mode has no resident Core identity stream.
+                        app.exit(1);
+                        return;
+                    }
+                }
+                Ok(None) => return,
+                Err(_) => {
+                    app.exit(1);
+                    return;
+                }
+            }
+        }
+    });
+    receiver
+}
+
+#[cfg(feature = "custom-protocol")]
+fn start_core_supervisor(
+    app: &tauri::AppHandle,
+    node_path: &Path,
+    roots: &EduPiLaunchRoots,
+    release_mode: &str,
+    desktop_state_dir: &Path,
+    client_port: u16,
+    core_port: Option<u16>,
+) -> Result<(Child, CoreProxyReady, String, String), Box<dyn std::error::Error>> {
+    let resource_dir = child_process_compatible_path(&app.path().resource_dir()?);
+    let supervisor_script = resource_dir.join("resources/server/core-supervisor.cjs");
+    if !supervisor_script.is_file() {
+        return Err(io::Error::new(io::ErrorKind::NotFound, "Core supervisor is missing").into());
+    }
+    let client_token = generate_random_hex().map_err(io::Error::other)?;
+    let core_token = if release_mode == "daemon" {
+        Some(generate_random_hex().map_err(io::Error::other)?)
+    } else {
+        None
+    };
+    let session = generate_random_hex().map_err(io::Error::other)?;
+    let attestation = generate_random_hex().map_err(io::Error::other)?;
+    let mut command = Command::new(node_path);
+    command
+        .arg(&supervisor_script)
+        .current_dir(&resource_dir)
+        .env("EDUPI_CORE_RELEASE_MODE", release_mode)
+        .env("EDUPI_CORE_ROOT", &roots.core_root)
+        .env("EDUPI_DATA_ROOT", &roots.data_root)
+        .env("EDUPI_CORE_CLIENT_TOKEN", &client_token)
+        .env("EDUPI_CORE_CLIENT_PORT", client_port.to_string())
+        .env("EDUPI_CORE_SUPERVISOR_SESSION", &session)
+        .env("EDUPI_CORE_COMMIT", PINNED_CORE_COMMIT)
+        .env("EDUPI_CORE_COMPONENT_MANIFEST_HASH", PINNED_CORE_MANIFEST_HASH)
+        .env("EDUPI_CORE_SCHEMA_HASH", PINNED_CORE_SCHEMA_HASH)
+        .env("PI_DESKTOP_STATE_DIR", desktop_state_dir)
+        .env("PI_WEB_PARENT_PID", std::process::id().to_string())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    if let (Some(port), Some(token)) = (core_port, core_token.as_ref()) {
+        command
+            .env("EDUPI_CORE_PORT", port.to_string())
+            .env("EDUPI_CORE_TOKEN", token);
+    }
+    if let Some(path) = server_process_path(node_path) {
+        command.env("PATH", path);
+    }
+    #[cfg(unix)]
+    command.process_group(0);
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
+    let mut child = command.spawn()?;
+    let Some(stdout) = child.stdout.take() else {
+        terminate_process_tree(&mut child);
+        return Err(io::Error::other("Core supervisor stdout unavailable").into());
+    };
+    let proxy_endpoint = format!("http://127.0.0.1:{client_port}/runtime/v1");
+    let monitor_identity = match (core_port, core_token) {
+        (Some(port), Some(token)) => Some(CoreMonitorIdentity {
+            proxy_endpoint: proxy_endpoint.clone(),
+            core_endpoint: format!("http://127.0.0.1:{port}/runtime/v1"),
+            core_token: token,
+            schema_hash: PINNED_CORE_SCHEMA_HASH.to_string(),
+            supervisor_session_id: session.clone(),
+            core_commit: PINNED_CORE_COMMIT.to_string(),
+            component_manifest_hash: PINNED_CORE_MANIFEST_HASH.to_string(),
+        }),
+        _ => None,
+    };
+    let receiver = start_supervisor_output_monitor(stdout, app.clone(), monitor_identity);
+    let ready = match receiver.recv_timeout(SERVER_START_TIMEOUT) {
+        Ok(Ok(value)) => value,
+        Ok(Err(error)) => {
+            terminate_process_tree(&mut child);
+            return Err(error.into());
+        }
+        Err(_) => {
+            terminate_process_tree(&mut child);
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "Core broker readiness timeout",
+            )
+            .into());
+        }
+    };
+    if !has_exact_json_keys(
+        &ready,
+        &[
+            "status",
+            "mode",
+            "endpoint",
+            "protocol",
+            "protocol_version",
+            "schema_hash",
+            "supervisor_session_id",
+            "core_commit",
+            "component_manifest_hash",
+            "external_send",
+        ],
+    )
+        || ready.get("status").and_then(JsonValue::as_str) != Some("supervisor_ready")
+        || ready.get("mode").and_then(JsonValue::as_str) != Some(release_mode)
+        || ready.get("endpoint").and_then(JsonValue::as_str) != Some(proxy_endpoint.as_str())
+        || ready.get("protocol").and_then(JsonValue::as_str) != Some("edupi-core-runtime")
+        || ready.get("protocol_version").and_then(JsonValue::as_u64) != Some(1)
+        || ready.get("schema_hash").and_then(JsonValue::as_str)
+            != Some(PINNED_CORE_SCHEMA_HASH)
+        || ready.get("supervisor_session_id").and_then(JsonValue::as_str)
+            != Some(session.as_str())
+        || ready.get("core_commit").and_then(JsonValue::as_str) != Some(PINNED_CORE_COMMIT)
+        || ready.get("component_manifest_hash").and_then(JsonValue::as_str)
+            != Some(PINNED_CORE_MANIFEST_HASH)
+        || ready.get("external_send").and_then(JsonValue::as_bool) != Some(false)
+    {
+        terminate_process_tree(&mut child);
+        return Err(io::Error::other("Core broker identity mismatch").into());
+    }
+    Ok((
+        child,
+        CoreProxyReady {
+            endpoint: proxy_endpoint,
+            supervisor_session_id: session,
+        },
+        client_token,
+        attestation,
+    ))
+}
+
+#[cfg(feature = "custom-protocol")]
+fn core_health_matches(
+    endpoint: &str,
+    token: &str,
+    schema_hash: &str,
+    session: &str,
+    commit: &str,
+    manifest_hash: &str,
+    data_fingerprint: &str,
+    instance_nonce: &str,
+    fencing_generation: u64,
+) -> io::Result<bool> {
+    let parsed = endpoint
+        .strip_prefix("http://127.0.0.1:")
+        .and_then(|value| value.strip_suffix("/runtime/v1"))
+        .ok_or_else(|| io::Error::other("invalid Core endpoint"))?;
+    let port: u16 = parsed
+        .parse()
+        .map_err(|_| io::Error::other("invalid Core port"))?;
+    let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
+    let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(2))?;
+    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+    let body = serde_json::json!({"protocol":"edupi-core-runtime","protocol_version":1,"schema_hash":schema_hash,"request_id":"tauri-health","operation":"health","payload":null}).to_string();
+    let request = format!("POST /runtime/v1 HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\nAuthorization: Bearer {token}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+    stream.write_all(request.as_bytes())?;
+    let mut response = Vec::new();
+    let mut chunk = [0_u8; 8192];
+    while response.len() <= 4_259_840 {
+        let read = stream.read(&mut chunk)?;
+        if read == 0 {
+            break;
+        }
+        response.extend_from_slice(&chunk[..read]);
+    }
+    if response.len() > 4_259_840 {
+        return Ok(false);
+    }
+    let Ok(text) = std::str::from_utf8(&response) else {
+        return Ok(false);
+    };
+    let Some((headers, body)) = text.split_once("\r\n\r\n") else {
+        return Ok(false);
+    };
+    if !headers.starts_with("HTTP/1.1 200 ") {
+        return Ok(false);
+    }
+    let lengths = headers
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            line.split_once(':').and_then(|(name, value)| {
+                name.eq_ignore_ascii_case("content-length")
+                    .then_some(value.trim())
+            })
+        })
+        .collect::<Vec<_>>();
+    if lengths.len() != 1
+        || lengths[0].parse::<usize>().ok() != Some(body.as_bytes().len())
+    {
+        return Ok(false);
+    }
+    let value: serde_json::Value =
+        serde_json::from_str(body).map_err(|_| io::Error::other("invalid Core health response"))?;
+    Ok(
+        has_exact_json_keys(
+            &value,
+            &[
+                "protocol",
+                "protocol_version",
+                "schema_hash",
+                "request_id",
+                "operation",
+                "ok",
+                "result",
+                "error_code",
+                "external_send",
+            ],
+        ) && value.get("ok").and_then(serde_json::Value::as_bool) == Some(true)
+            && value.get("protocol").and_then(serde_json::Value::as_str)
+                == Some("edupi-core-runtime")
+            && value
+                .get("protocol_version")
+                .and_then(serde_json::Value::as_u64)
+                == Some(1)
+            && value.get("schema_hash").and_then(serde_json::Value::as_str) == Some(schema_hash)
+            && value.get("request_id").and_then(serde_json::Value::as_str)
+                == Some("tauri-health")
+            && value.get("operation").and_then(serde_json::Value::as_str) == Some("health")
+            && value.get("error_code").is_some_and(JsonValue::is_null)
+            && value
+                .get("external_send")
+                .and_then(serde_json::Value::as_bool)
+                == Some(false)
+            && value
+                .get("result")
+                .and_then(|result| result.get("lifecycle"))
+                .and_then(serde_json::Value::as_str)
+                == Some("ready")
+            && value
+                .get("result")
+                .and_then(|result| result.get("supervisor_session_id"))
+                .and_then(serde_json::Value::as_str)
+                == Some(session)
+            && value
+                .get("result")
+                .and_then(|result| result.get("core_commit"))
+                .and_then(serde_json::Value::as_str)
+                == Some(commit)
+            && value
+                .get("result")
+                .and_then(|result| result.get("component_manifest_hash"))
+                .and_then(serde_json::Value::as_str)
+                == Some(manifest_hash)
+            && value
+                .get("result")
+                .and_then(|result| result.get("data_root_fingerprint"))
+                .and_then(serde_json::Value::as_str)
+                == Some(data_fingerprint)
+            && value
+                .get("result")
+                .and_then(|result| result.get("instance_nonce"))
+                .and_then(serde_json::Value::as_str)
+                == Some(instance_nonce)
+            && value
+                .get("result")
+                .and_then(|result| result.get("fencing_generation"))
+                .and_then(serde_json::Value::as_u64)
+                == Some(fencing_generation),
+    )
+}
+
 struct EduPiLaunchRoots {
     data_root: String,
     core_root: String,
@@ -691,6 +1190,311 @@ fn validate_edupi_directory(name: &str, value: String) -> Result<String, io::Err
         ));
     }
     Ok(dunce::canonicalize(path)?.to_string_lossy().into_owned())
+}
+
+fn canonical_json(value: &JsonValue) -> JsonValue {
+    match value {
+        JsonValue::Array(values) => JsonValue::Array(values.iter().map(canonical_json).collect()),
+        JsonValue::Object(object) => {
+            let mut sorted = serde_json::Map::new();
+            let mut keys = object.keys().collect::<Vec<_>>();
+            keys.sort();
+            for key in keys {
+                sorted.insert(key.clone(), canonical_json(&object[key]));
+            }
+            JsonValue::Object(sorted)
+        }
+        other => other.clone(),
+    }
+}
+
+fn core_path_is_safe(value: &str) -> bool {
+    !value.is_empty()
+        && !Path::new(value).is_absolute()
+        && !value.contains(':')
+        && !value.split('/').any(|part| part.is_empty() || part == "..")
+}
+
+fn core_file_hash(path: &Path) -> Result<(u64, String), io::Error> {
+    let bytes = fs::read(path)?;
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    Ok((
+        bytes.len() as u64,
+        format!("sha256:{:x}", hasher.finalize()),
+    ))
+}
+
+fn core_file_within(
+    root: &Path,
+    allowed_root: &Path,
+    path: &Path,
+    allow_node_modules_symlink: bool,
+) -> Result<PathBuf, io::Error> {
+    let lexical = path.to_path_buf();
+    let resolved = dunce::canonicalize(&lexical)?;
+    if !resolved.starts_with(root) {
+        if !(allow_node_modules_symlink && resolved.starts_with(allowed_root)) {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "Core closure escapes allowed root",
+            ));
+        }
+    }
+    let mut current = root.to_path_buf();
+    for component in lexical.strip_prefix(root).unwrap_or(&lexical).components() {
+        let Component::Normal(part) = component else {
+            continue;
+        };
+        current.push(part);
+        let metadata = fs::symlink_metadata(&current)?;
+        if metadata.file_type().is_symlink()
+            && !(allow_node_modules_symlink && current == root.join("node_modules"))
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "Core closure contains a disallowed symlink",
+            ));
+        }
+    }
+    if !fs::metadata(&lexical)?.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Core closure entry is not a regular file",
+        ));
+    }
+    Ok(resolved)
+}
+
+fn validate_core_manifest_metadata(
+    object: &serde_json::Map<String, JsonValue>,
+) -> Result<(), io::Error> {
+    if object
+        .get("component_manifest_version")
+        .and_then(JsonValue::as_str)
+        != Some("1")
+        || object.get("algorithm").and_then(JsonValue::as_str)
+            != Some("sha256-canonical-component-payload-v1")
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Core manifest version or algorithm mismatch",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_core_dependency_metadata(dependency: &JsonValue) -> Result<(), io::Error> {
+    let dep = dependency
+        .as_object()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Core dependency invalid"))?;
+    let name = dep.get("name").and_then(JsonValue::as_str).ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "Core dependency name missing")
+    })?;
+    let version = dep
+        .get("version")
+        .and_then(JsonValue::as_str)
+        .unwrap_or_default();
+    if version.split('.').count() != 3
+        || version.chars().any(|character| {
+            !(character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '+'))
+        })
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Core dependency version invalid",
+        ));
+    }
+    let expected_root = format!("node_modules/{name}");
+    if dep.get("root").and_then(JsonValue::as_str) != Some(expected_root.as_str()) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Core dependency root invalid",
+        ));
+    }
+    let files = dep
+        .get("files")
+        .and_then(JsonValue::as_array)
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "Core dependency files missing")
+        })?;
+    let package_json = format!("{expected_root}/package.json");
+    if !files
+        .iter()
+        .any(|entry| entry.get("path").and_then(JsonValue::as_str) == Some(package_json.as_str()))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Core dependency package.json missing",
+        ));
+    }
+    for entry in files {
+        let path = entry
+            .get("path")
+            .and_then(JsonValue::as_str)
+            .unwrap_or_default();
+        if !core_path_is_safe(path)
+            || (path != expected_root && !path.starts_with(&format!("{expected_root}/")))
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Core dependency file escapes its package root",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn verify_core_component_closure(
+    root: &Path,
+    allowed_root: &Path,
+    validation_mode: &str,
+) -> Result<(), io::Error> {
+    if !matches!(validation_mode, "external" | "bundled") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Core validation mode is invalid",
+        ));
+    }
+    let manifest_path = root.join("contracts/edupi-core-runtime-component-manifest.json");
+    let manifest_path = core_file_within(root, allowed_root, &manifest_path, false)?;
+    let manifest_bytes = fs::read(&manifest_path)?;
+    let manifest: JsonValue = serde_json::from_slice(&manifest_bytes)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+    let object = manifest.as_object().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "Core manifest is not an object")
+    })?;
+    validate_core_manifest_metadata(object)?;
+    let recorded = object
+        .get("component_manifest_hash")
+        .and_then(JsonValue::as_str)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Core manifest hash missing"))?;
+    let mut payload = manifest.clone();
+    payload
+        .as_object_mut()
+        .unwrap()
+        .remove("component_manifest_hash");
+    let canonical = serde_json::to_vec(&canonical_json(&payload))
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+    let mut hasher = Sha256::new();
+    hasher.update(canonical);
+    let calculated = format!("sha256:{:x}", hasher.finalize());
+    if recorded != calculated || recorded != PINNED_CORE_MANIFEST_HASH {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Core manifest hash mismatch",
+        ));
+    }
+    if object.get("entrypoint").and_then(JsonValue::as_str)
+        != Some("scripts/core_runtime_daemon.mjs")
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Core daemon entrypoint mismatch",
+        ));
+    }
+    let modules = object
+        .get("modules")
+        .and_then(JsonValue::as_array)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Core modules missing"))?;
+    let assets = object
+        .get("assets")
+        .and_then(JsonValue::as_array)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Core assets missing"))?;
+    let dependencies = object
+        .get("runtime_dependencies")
+        .and_then(JsonValue::as_array)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Core dependencies missing"))?;
+    let mut seen = HashSet::new();
+    let mut verify_entry = |entry: &JsonValue,
+                            allow_node_modules_symlink: bool|
+     -> Result<(), io::Error> {
+        let entry_object = entry
+            .as_object()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Core entry invalid"))?;
+        let relative = entry_object
+            .get("path")
+            .and_then(JsonValue::as_str)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Core entry path missing"))?;
+        if !core_path_is_safe(relative) || !seen.insert(relative.to_string()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Core entry path invalid or duplicated",
+            ));
+        }
+        let path = root.join(relative);
+        let resolved = core_file_within(root, allowed_root, &path, allow_node_modules_symlink)?;
+        let (size, hash) = core_file_hash(&resolved)?;
+        if entry_object.get("size").and_then(JsonValue::as_u64) != Some(size)
+            || entry_object.get("sha256").and_then(JsonValue::as_str) != Some(hash.as_str())
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Core entry bytes mismatch",
+            ));
+        }
+        Ok(())
+    };
+    for entry in modules.iter().chain(assets.iter()) {
+        verify_entry(entry, false)?;
+    }
+    let mut packages = HashSet::new();
+    for dependency in dependencies {
+        validate_core_dependency_metadata(dependency)?;
+        let dep = dependency.as_object().unwrap();
+        let name = dep.get("name").and_then(JsonValue::as_str).unwrap();
+        if !packages.insert(name.to_string()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Core dependency duplicated",
+            ));
+        }
+        let files = dep
+            .get("files")
+            .and_then(JsonValue::as_array)
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "Core dependency files missing")
+            })?;
+        for entry in files {
+            verify_entry(entry, true)?;
+        }
+    }
+    let daemon = root.join("scripts/core_runtime_daemon.mjs");
+    let rollback = root.join("scripts/desktop_bridge_port.mjs");
+    if !seen.contains("scripts/core_runtime_daemon.mjs")
+        || !seen.contains("scripts/desktop_bridge_port.mjs")
+        || !daemon.is_file()
+        || !rollback.is_file()
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Core entrypoints are not pinned",
+        ));
+    }
+    let schema_hash = root.join("contracts/edupi-core-runtime-v1-hash.json");
+    let schema_record: JsonValue = serde_json::from_slice(&fs::read(schema_hash)?)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+    if schema_record.get("schema_hash").and_then(JsonValue::as_str) != Some(PINNED_CORE_SCHEMA_HASH)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Core schema hash mismatch",
+        ));
+    }
+    if validation_mode == "external" {
+        let head = Command::new("git")
+            .args(["-C", root.to_string_lossy().as_ref(), "rev-parse", "HEAD"])
+            .output()?;
+        if !head.status.success()
+            || String::from_utf8_lossy(&head.stdout).trim() != PINNED_CORE_COMMIT
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Core commit mismatch",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn edupi_root_label(name: &str) -> &str {
@@ -968,13 +1772,11 @@ fn bundled_core_root(app: &AppHandle) -> Result<String, io::Error> {
 
 fn resolve_core_root(app: &AppHandle) -> Result<(String, &'static str, &'static str), io::Error> {
     if let Some((_, value)) = first_configured_root(&[EDUPI_CORE_ROOT_ENV]) {
-        return Ok((
-            validate_edupi_directory("EduPi Core root", value)?,
-            "environment",
-            "external",
-        ));
+        let root = validate_edupi_directory("EduPi Core root", value)?;
+        return Ok((root, "environment", "external"));
     }
-    Ok((bundled_core_root(app)?, "bundled", "bundled"))
+    let root = bundled_core_root(app)?;
+    Ok((root, "bundled", "bundled"))
 }
 
 fn build_root_status(
@@ -1000,6 +1802,11 @@ fn edupi_launch_roots(app: &AppHandle) -> Result<EduPiLaunchRoots, io::Error> {
     let (core_root, core_source, core_validation_mode) = resolve_core_root(app)?;
     let data_allowed_root = edupi_allowed_root(EDUPI_DATA_ALLOWED_ROOT_ENV, &data_root)?;
     let core_allowed_root = edupi_allowed_root(EDUPI_CORE_ALLOWED_ROOT_ENV, &core_root)?;
+    verify_core_component_closure(
+        Path::new(&core_root),
+        Path::new(&core_allowed_root),
+        core_validation_mode,
+    )?;
     let status = build_root_status(
         data_root.clone(),
         data_source,
@@ -1052,6 +1859,21 @@ fn choose_port(app: &AppHandle) -> io::Result<u16> {
     drop(listener);
     write_last_server_port(app, chosen);
     Ok(chosen)
+}
+
+#[cfg(feature = "custom-protocol")]
+fn choose_core_port(excluded: &[u16]) -> io::Result<u16> {
+    for _ in 0..32 {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
+        let port = listener.local_addr()?.port();
+        if !excluded.contains(&port) {
+            return Ok(port);
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::AddrNotAvailable,
+        "unable to allocate a distinct Core port",
+    ))
 }
 
 #[cfg(feature = "custom-protocol")]
@@ -1191,9 +2013,39 @@ fn start_packaged_server(
     let stderr = stdout.try_clone()?;
 
     let roots = edupi_launch_roots(app)?;
+    let release_mode =
+        env::var(EDUPI_CORE_RELEASE_MODE_ENV).unwrap_or_else(|_| "daemon".to_string());
+    if release_mode != "daemon" && release_mode != "one-shot" {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "EDUPI_CORE_RELEASE_MODE must be daemon or one-shot",
+        )
+        .into());
+    }
     let port = choose_port(app)?;
     let desktop_state_dir = app.path().app_config_dir()?;
     fs::create_dir_all(&desktop_state_dir)?;
+    let client_port = choose_core_port(&[port])?;
+    let core_port = if release_mode == "daemon" {
+        Some(choose_core_port(&[port, client_port])?)
+    } else {
+        None
+    };
+    let url: Url = format!("http://127.0.0.1:{port}").parse()?;
+    // Every fallible path/setup needed by Next is resolved before the broker
+    // starts. From this point until DesktopServer takes ownership, explicit
+    // cleanup covers each error.
+    let (core_process, core_ready, core_client_token, core_attestation) =
+        start_core_supervisor(
+            app,
+            &node_path,
+            &roots,
+            &release_mode,
+            &desktop_state_dir,
+            client_port,
+            core_port,
+        )?;
+    let core_child = Some(core_process);
     let mut command = Command::new(&node_path);
     command
         .arg(&server_script)
@@ -1212,6 +2064,20 @@ fn start_packaged_server(
         .env("PI_WEB_PARENT_PID", std::process::id().to_string())
         .env(DESKTOP_API_TOKEN_ENV, desktop_api_token)
         .env(DESKTOP_INSTANCE_ID_ENV, desktop_instance_id)
+        .env("EDUPI_CORE_RELEASE_MODE", &release_mode)
+        .env("EDUPI_CORE_SCHEMA_HASH", PINNED_CORE_SCHEMA_HASH)
+        .env("EDUPI_CORE_COMMIT", PINNED_CORE_COMMIT)
+        .env(
+            "EDUPI_CORE_COMPONENT_MANIFEST_HASH",
+            PINNED_CORE_MANIFEST_HASH,
+        )
+        .env("EDUPI_CORE_ATTESTATION", &core_attestation)
+        .env(
+            "EDUPI_CORE_SUPERVISOR_SESSION",
+            &core_ready.supervisor_session_id,
+        )
+        .env("EDUPI_CORE_ENDPOINT", &core_ready.endpoint)
+        .env("EDUPI_CORE_CLIENT_TOKEN", &core_client_token)
         .stdin(Stdio::null())
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr));
@@ -1219,35 +2085,49 @@ fn start_packaged_server(
     if let Some(path) = server_process_path(&node_path) {
         command.env("PATH", path);
     }
-
     #[cfg(unix)]
     command.process_group(0);
     #[cfg(windows)]
     command.creation_flags(CREATE_NO_WINDOW);
 
-    let mut child = command.spawn()?;
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            if let Some(mut core) = core_child {
+                stop_core_supervisor_process(&mut core);
+            }
+            return Err(error.into());
+        }
+    };
 
     let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
     if let Err(error) = wait_for_server(&mut child, address, desktop_instance_id, &log_path) {
+        if let Some(mut core) = core_child {
+            stop_core_supervisor_process(&mut core);
+        }
         let server = DesktopServer::running(child);
         server.stop();
         return Err(error.into());
     }
 
-    let url = format!("http://127.0.0.1:{port}").parse()?;
-    Ok((url, DesktopServer::running(child)))
+    Ok((url, DesktopServer::running_with_core(child, core_child)))
 }
 
 #[cfg(all(test, feature = "custom-protocol"))]
 mod tests {
     use super::{
-        build_root_status, child_process_compatible_path, default_allowed_root,
-        ensure_data_directories, is_filesystem_root, persisted_data_root_from_prefs,
-        response_has_instance_id, update_server_port_in_prefs, validate_selected_data_root,
+        build_root_status, child_process_compatible_path, core_file_within, core_path_is_safe,
+        default_allowed_root, ensure_data_directories, is_filesystem_root,
+        persisted_data_root_from_prefs, response_has_instance_id, update_server_port_in_prefs,
+        read_bounded_json_line, validate_core_dependency_metadata, validate_core_manifest_metadata,
+        validate_selected_data_root, verify_core_component_closure, EMBEDDED_CORE_COMPAT_MANIFEST,
         FALLBACK_PERSISTED_CORRUPT, FALLBACK_PERSISTED_MISSING, FALLBACK_PERSISTED_NON_OBJECT,
         FALLBACK_PERSISTED_NOT_DIRECTORY, FALLBACK_PERSISTED_NO_KEY, FALLBACK_PERSISTED_SYMLINK,
+        PINNED_CORE_COMMIT, PINNED_CORE_MANIFEST_HASH, PINNED_CORE_SCHEMA_HASH,
     };
+    use serde_json::Value as JsonValue;
     use std::fs;
+    use std::io::Cursor;
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -1273,6 +2153,115 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn task7_core_pin_and_manifest_paths_are_strict() {
+        assert_eq!(PINNED_CORE_COMMIT.len(), 40);
+        assert!(PINNED_CORE_COMMIT
+            .chars()
+            .all(|value| value.is_ascii_hexdigit()));
+        assert!(PINNED_CORE_MANIFEST_HASH.starts_with("sha256:"));
+        assert!(PINNED_CORE_SCHEMA_HASH.starts_with("sha256:"));
+        assert!(core_path_is_safe("scripts/core_runtime_daemon.mjs"));
+        assert!(core_path_is_safe("node_modules/typebox/package.json"));
+        assert!(!core_path_is_safe("../outside.mjs"));
+        assert!(!core_path_is_safe("/absolute.mjs"));
+        assert!(!core_path_is_safe("scripts//duplicate.mjs"));
+        let manifest: serde_json::Value =
+            serde_json::from_str(EMBEDDED_CORE_COMPAT_MANIFEST).unwrap();
+        let runtime = manifest.get("core_runtime").unwrap();
+        assert_eq!(
+            runtime
+                .get("core_commit")
+                .and_then(serde_json::Value::as_str),
+            Some(PINNED_CORE_COMMIT)
+        );
+        assert_eq!(
+            runtime
+                .get("component_manifest_path")
+                .and_then(serde_json::Value::as_str),
+            Some("contracts/edupi-core-runtime-component-manifest.json")
+        );
+        assert_eq!(
+            runtime
+                .get("component_manifest_hash")
+                .and_then(serde_json::Value::as_str),
+            Some(PINNED_CORE_MANIFEST_HASH)
+        );
+    }
+
+    #[test]
+    fn task7_external_core_closure_matches_the_desktop_pin_when_configured() {
+        let Some(root) = std::env::var_os("EDUPI_CORE_ROOT") else {
+            return;
+        };
+        let Some(allowed) = std::env::var_os("EDUPI_CORE_ALLOWED_ROOT") else {
+            return;
+        };
+        let result =
+            verify_core_component_closure(Path::new(&root), Path::new(&allowed), "external");
+        let node_modules = Path::new(&root).join("node_modules");
+        let resolves_outside = dunce::canonicalize(&node_modules)
+            .map(|resolved| {
+                !resolved.starts_with(dunce::canonicalize(Path::new(&allowed)).unwrap())
+            })
+            .unwrap_or(false);
+        if resolves_outside {
+            assert!(result.is_err());
+        } else {
+            result.unwrap();
+        }
+    }
+
+    #[test]
+    fn task7_manifest_and_dependency_metadata_reject_drift() {
+        let mut wrong_manifest = serde_json::Map::new();
+        wrong_manifest.insert(
+            "component_manifest_version".into(),
+            JsonValue::String("2".into()),
+        );
+        wrong_manifest.insert("algorithm".into(), JsonValue::String("wrong".into()));
+        assert!(validate_core_manifest_metadata(&wrong_manifest).is_err());
+        let escaped = serde_json::json!({"name":"typebox","version":"1.3.8","root":"node_modules/typebox","files":[{"path":"node_modules/other/file.mjs"},{"path":"node_modules/typebox/package.json"}]});
+        assert!(validate_core_dependency_metadata(&escaped).is_err());
+        let missing_package = serde_json::json!({"name":"typebox","version":"1.3.8","root":"node_modules/typebox","files":[{"path":"node_modules/typebox/index.mjs"}]});
+        assert!(validate_core_dependency_metadata(&missing_package).is_err());
+    }
+
+    #[test]
+    fn task7_supervisor_envelopes_are_bounded_before_json_parsing() {
+        let mut valid = Cursor::new(b"{\"status\":\"supervisor_ready\"}\n".to_vec());
+        assert_eq!(
+            read_bounded_json_line(&mut valid)
+                .unwrap()
+                .unwrap()["status"],
+            "supervisor_ready"
+        );
+
+        let mut oversized = vec![b'x'; (64 * 1024) + 1];
+        oversized.push(b'\n');
+        assert!(read_bounded_json_line(&mut Cursor::new(oversized)).is_err());
+
+        let mut unterminated = Cursor::new(b"{\"status\":\"ready\"}".to_vec());
+        assert!(read_bounded_json_line(&mut unterminated).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn task7_node_modules_symlink_outside_allowed_root_is_rejected() {
+        let temp = TempRoot::new("core-node-modules-symlink");
+        let allowed = temp.path().join("allowed");
+        let root = allowed.join("core");
+        let outside = temp.path().join("outside");
+        fs::create_dir_all(root.join("node_modules")).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(outside.join("file.mjs"), "x").unwrap();
+        fs::remove_dir(root.join("node_modules")).unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("node_modules")).unwrap();
+        assert!(
+            core_file_within(&root, &allowed, &root.join("node_modules/file.mjs"), true).is_err()
+        );
     }
 
     #[cfg(windows)]

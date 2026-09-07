@@ -1,7 +1,7 @@
 # EduPi 可验证 L4 收口计划
 
 日期：2026-09-02
-状态：Phase 1 · Task 5 complete · Task 6 in progress（6A store foundation、6B1 daemon/protocol与6B2 deterministic Harness/G1 Core slice complete；6C not started）
+状态：Phase 1 · Task 5 complete · Task 6 in progress（6A store foundation、6B1 daemon/protocol、6B2 deterministic Harness/G1 Core slice、6C-A writer-admission foundation、6C-B managed callers与6C-C1 writer-enforcement foundation complete；6C-C2/C3 raw/extension/maintenance matrix 与 Task7 not started）
 目标：不用增加新页面、新技能数量或新的拟人层级，把 EduPi 从端到端 L2/L3 推进到三条可重复、可恢复、可审计的局部 L4 教师闭环。
 
 ## 1. 权威、边界与启动条件
@@ -293,7 +293,7 @@ Checkpoint 0 用户决策（2026-09-02）：`确认价值账本`。
 
 #### Task 4：制定 Core Runtime Contract v1（ADR-002）
 
-**当前状态：** 已完成。ADR-002 已在 Core/Desktop 镜像并于 2026-09-02 接受；Task 5 已按该合同完成，Task 6 正在进行中（6A store foundation、6B1 daemon/protocol 与 6B2 deterministic Harness/G1 Core slice complete；6C not started）。
+**当前状态：** 已完成。ADR-002 已在 Core/Desktop 镜像并于 2026-09-02 接受；Task 5 已按该合同完成，Task 6 正在进行中（6A store foundation、6B1 daemon/protocol、6B2 deterministic Harness/G1 Core slice、6C-A writer-admission foundation 与 6C-B managed callers complete；6C-C raw/extension enforcement not started）。
 
 **描述：** 定义一个 data root 只允许一个 Core writer、生命周期状态、adapter 注册、事件输入、健康、关闭、版本协商和失败恢复。区分载体与运行宿主。
 
@@ -331,7 +331,7 @@ Checkpoint 0 用户决策（2026-09-02）：`确认价值账本`。
 
 #### Task 6：实现单实例 Core daemon 与持久事件队列
 
-**当前状态：** 进行中，父任务未完成。Task 6A、Task 6B1 与 Task 6B2 的 Core-only deterministic evidence 已通过；Task 6C 尚未开始。父任务的验收框保持未勾选。Task 6 负责实际 daemon ↔ one-shot parity、single-writer fencing、持久队列和 G1 常驻执行；Task 5 不预支这些证明。
+**当前状态：** 进行中，父任务未完成。Task 6A、Task 6B1、Task 6B2 的 Core-only deterministic evidence、6C-A writer-admission foundation、6C-B managed caller evidence 与 6C-C1 writer-enforcement foundation 已通过；6C-C2/C3 raw/extension/maintenance matrix not started。父任务的验收框保持未勾选。Task 6 负责实际 daemon ↔ one-shot parity、single-writer fencing、持久队列和 G1 常驻执行；Task 5 不预支这些证明。
 
 **描述：** 创建 loopback-only、由 Tauri 在 supervisor session 内稳定的 rendezvous endpoint 与独立 Core token 的常驻 Core 进程；持有 data-root lease，并用可恢复队列接受规范化 `teacher_event` 和内部 timer event。首轮只执行合并后的 G1 能力。
 
@@ -343,7 +343,7 @@ Checkpoint 0 用户决策（2026-09-02）：`确认价值账本`。
 - [ ] adapter 断开不停止内部任务；
 - [ ] token、路径、教师内容不进入日志。
 
-**验证：** single-instance、queue replay、crash injection、auth、path containment、model-unavailable tests；Task 6A 已以固定 300 条 benchmark 选择 SQLite foundation，Task 6B1 daemon/protocol 与 Task 6B2 deterministic Harness/G1 Core evidence 已通过，Task 6C caller evidence 仍未完成。
+**验证：** single-instance、queue replay、crash injection、auth、path containment、model-unavailable tests；Task 6A 已以固定 300 条 benchmark 选择 SQLite foundation，Task 6B1 daemon/protocol、Task 6B2 deterministic Harness/G1 Core evidence 与 6C-B managed caller evidence 已通过，6C-C raw/extension caller evidence 仍未完成。
 
 **依赖：** Task 5。
 **可能涉及：** Task 6A 的 Core store foundation、Task 6B 的 daemon/protocol/Harness/G1、Task 6C 的 caller audit/enforcement。
@@ -374,7 +374,7 @@ Checkpoint 0 用户决策（2026-09-02）：`确认价值账本`。
 
 #### Task 6B：实现 daemon、runtime protocol、deterministic HarnessAdapter 与 G1 orchestration
 
-**当前状态：** 进行中。Task 6B1 的 Core-only daemon/runtime protocol slice 与 Task 6B2 的 deterministic Harness/G1 Core slice 已完成并有独立证据；Task 6C 尚未开始，不得由 6A/6B 证据预支 caller enforcement 或 production activation。
+**当前状态：** 进行中。Task 6B1 的 Core-only daemon/runtime protocol slice、Task 6B2 的 deterministic Harness/G1 Core slice、6C-A writer-admission foundation 与 6C-B managed callers 已完成并有独立证据；6C-C raw/extension enforcement not started，不得由 6A/6B/6C-A/6C-B 证据预支 production activation。
 
 **描述：** 在 6A store foundation 上实现 loopback-only daemon 与独立 runtime protocol/rendezvous，接入 deterministic result-only HarnessAdapter，并完成 bounded G1 queue/claim/execution/replay continuity。不得把 6A store、fixture 或模型自述升级成 daemon/G1 evidence。
 
@@ -391,13 +391,13 @@ Checkpoint 0 用户决策（2026-09-02）：`确认价值账本`。
 
 #### Task 6B2：deterministic result-only Harness 与 activated G1 queue/claim/execution/replay
 
-**当前状态：** 已完成（仅 isolated Core deterministic slice；父 Task 6 仍为进行中，Task 6C 未开始）。
+**当前状态：** 已完成（仅 isolated Core deterministic slice；父 Task 6 仍为进行中，6C-A writer-admission foundation 与 6C-B managed callers complete；6C-C raw/extension enforcement not started）。
 
 **描述：** 在独立 branded activation capability 下接入严格 bounded/versioned result-only Harness lease/result contract 与现有 calendar/teacher work-case semantics。默认 CLI/factory 不接收此 object capability，继续保持 `enqueue_event`、internal timer 与 G1 `activation_pending`；不启动生产 wall-clock timer，不接入 provider/network/channel/Desktop。
 
 **验收证据：** strict Harness binding/UTF-8 bounds、exact layout/root/generation/provenance gate、scoped synchronous `BEGIN IMMEDIATE` mutation guard、canonical candidate sync/work-case projection、exact timer/event replay、queue/Harness/calendar deadline equality、model-unavailable retryability、source-change fail-closed、drain settlement、four crash/takeover phases and stable receipt/artifact identities 均由 Core focused tests passed。Default daemon remains activation-pending; activated daemon only exists behind explicit validated test injection.
 
-**验证：** `npm run test:core-runtime-g1`、`npm run test:core-runtime-daemon`、`npm run test:core-runtime-store`、`npm run benchmark:core-runtime-store`、`npm run typecheck`、`npm run check:core-runtime-contract`、`npm run check:core-runtime-manifest`、`node scripts/test_desktop_bridge_port.mjs` 与 Core/Desktop `git diff --check`。No provider-backed or external-send claim. Because 6B2 intentionally changed three modules in the Core one-shot closure, Core regenerated its Desktop component characterization from the Phase0/Task5 baseline SHA `322b01af27fa6f29ecd6e3fcb8b1050df99085c93c8682ce15d30f32328dc72e` / identity `sha256:8431f854d95fd049f3c2e8a54a0885e058bb1b1a40a934acf18502ec2e322028` to the current SHA `13427f0f27ca75b542dd6502012c1b034997a68f7704badb53f529424423d563` / identity `sha256:573bdb99852a9cdd6fa9d85dd84d28218324c0a9157300799273e96155e22223`; Desktop `edupi-core-compat.json` and runtime remain pinned until Task7 pairs the new Core commit/hash.
+**验证：** `npm run test:core-runtime-g1`、`npm run test:core-runtime-daemon`、`npm run test:core-runtime-store`、`npm run benchmark:core-runtime-store`、`npm run typecheck`、`npm run check:core-runtime-contract`、`npm run check:core-runtime-manifest`、`node scripts/test_desktop_bridge_port.mjs` 与 Core/Desktop `git diff --check`。No provider-backed or external-send claim. At the 6B2 checkpoint, Core's intentional Desktop characterization was `13427f0f27ca75b542dd6502012c1b034997a68f7704badb53f529424423d563` / identity `sha256:573bdb99852a9cdd6fa9d85dd84d28218324c0a9157300799273e96155e22223`; the current 6C-B managed-caller characterization is recorded below. The Phase0/Task5 baseline remains `322b01af27fa6f29ecd6e3fcb8b1050df99085c93c8682ce15d30f32328dc72e` / identity `sha256:8431f854d95fd049f3c2e8a54a0885e058bb1b1a40a934acf18502ec2e322028`; Desktop `edupi-core-compat.json` and runtime remain pinned until Task7 pairs the new Core commit/hash.
 
 **依赖：** Task 6A。
 **可能涉及：** Core Harness/G1/daemon/protocol and bounded existing-store seams; no Desktop runtime or caller enforcement.
@@ -429,15 +429,67 @@ Checkpoint 0 用户决策（2026-09-02）：`确认价值账本`。
 
 #### Task 6C：完成 caller audit 与 legacy mutation enforcement
 
-**当前状态：** 未开始；不得由 6A/6B 单独宣称 entire-data-root single-writer completion。
+**当前状态：** 进行中；6C-A writer-admission foundation、6C-B managed caller enforcement 与 6C-C1 writer-enforcement foundation 已完成，6C-C2/C3 raw/extension/maintenance caller audit/enforcement 未开始；不得由 6A/6B/6C-A/6C-B/6C-C1 单独宣称 entire-data-root single-writer completion。
 
 **描述：** 建立当前 one-shot/Feishu/extension/raw writer matrix，把每个 reachable mutation route either through the daemon or fail closed；保留可验证 rollback boundary，避免 daemon 与旧 writer 同时活跃。
+
+#### Task 6C-C1：writer-enforcement foundation
+
+**当前状态：** 已完成（bounded C1 foundation only；Task 6C-C2/C3、Task 7 与
+shared product C1 E2 decision remain unimplemented）。
+
+**描述：** 在 6C-A admission boundary 上加入 active live-binding assertion，
+使 raw `createCoreRuntimeStore` 在 outer admission 之前 fail closed；为
+JavaScript/TypeScript safe-store 写路径加入 concrete destination gate、
+`O_NOFOLLOW|O_EXCL` unique temporary files、backup 与 owned cleanup；保持
+`safeLoad`/snapshot 只读和 generic `withLock` 可用。C1 capability 与
+application-runtime tests use real-admission child processes so tsx loader
+boundaries cannot become a bypass。
+
+**验证：** Core focused writer-enforcement/admission/storage/store/G1/managed
+caller checks、300-row benchmark、Core full `npm test`、typecheck、two
+contract/two manifest read-only checks、bridge-port check、Desktop
+`node --test lib/edupi-core-process-client.test.mjs` 与 Core/Desktop
+`git diff --check` passed；the exact current hashes, byte sizes and bigint
+`mtimeNs` are recorded in Core
+`docs/loop/evidence/2026-09-05-core-runtime-writer-enforcement-foundation.md`。
+`npm audit` remains nonzero only for existing advisories; no dependency or
+lockfile change。
+
+**边界：** 本切片只声明 C1 writer-enforcement foundation，不声明整个
+Task 6C、whole-root single-writer、provider/model/network、production G1、
+external delivery、Task 7 Desktop/Tauri supervision 或产品 C1 E2。C2/C3
+raw/manual/maintenance/E4/matrix work remains unimplemented and must be
+separately reviewed。
+
+#### Task 6C-A：Core daemon lifetime writer-admission foundation
+
+**当前状态：** 已完成（仅 admission foundation；6C-B managed caller slice 已完成，6C-C raw/extension caller audit/enforcement 与 Task 7 Desktop supervision 未开始）。
+
+**描述：** 在 verified local data root 的固定 `.edupi/runtime/core-runtime-writer-admission-v1.sqlite` 上，以一个持有 `BEGIN IMMEDIATE` 的 crash-released SQLite lease 原子仲裁 daemon 与未来 `legacy_*` writer。daemon 先完成 pre-admission root prepare，再 acquire admission，随后才打开/ready inner Task 6A store；close/startup cleanup 按 inner authority 成功 release 后才释放 admission。此切片不改变 Runtime Protocol v1、bridge/one-shot contract 或默认 `activation_pending` gate。
+
+**验收证据：** 空 root barrier-controlled daemon/legacy contenders 恰有一个持有 lease、失败者得到 typed `writer_admission_unavailable`；正常 release 后可重入；child `SIGKILL` 后由 SQLite/OS lock recovery，无 stale-file cleanup；首启 crash 后 schema 可 bootstrap；malformed/extra schema、root mismatch、admission/sidecar symlink 与 unsupported root fail closed 且不修复；pre-admission 对既有 `.edupi`/runtime/inner DB/WAL/SHM/admission DB 的 bytes/mtime/mode 保持不变。daemon listen failure 释放 admission，tampered inner authority close 拒绝并保持 admission，child probe 仍 blocked；prepared-root fingerprint 与 inner store fingerprint/database identity 必须一致。
+
+**验证：** `npm run test:core-runtime-writer-admission`、`node --disable-warning=ExperimentalWarning scripts/test_core_runtime_daemon.mjs`、`npm run test:core-runtime-store`、`npm run test:core-runtime-daemon`、`npm test`、`npm run typecheck`、`npm run benchmark:core-runtime-store`、bridge/C1 parity、重复 daemon/restart、contract/manifest SHA+bigint mtime read-only proof、audit 与 Core/Desktop `git diff --check`；Core daemon manifest 在 6C-A checkpoint 的 identity 为 `sha256:79027b42faf2ca0d2559dc930a182eaa751101a86f6e75e10aad602f0186dbb0` / file `sha256:da654021a302d9a3035d091e2c3ae3b9b95ebfcc33924a71eb8960a9135a7cbe`（31 modules）；当前 6C-B managed caller 变更后的 daemon/one-shot identities 记录于下方 6C-B subsection。Runtime schema `sha256:692afe4905463d1a4bd3347fa61fa23d63c44b7b3df764c236d272170e7f5b6b` unchanged；Desktop compatibility remains pinned until Task 7 pairing。
+
+**边界：** 本切片不完成 legacy caller matrix/enforcement（6C-B/6C-C）、Desktop/Tauri supervision（Task 7）、provider/model/channel/network、生产 G1 activation、whole-root writer claim 或 external delivery；`external_send=false`。
+
+#### Task 6C-B：managed one-shot 与 carrier admission enforcement
+
+**当前状态：** 已完成（managed entrypoints only；6C-C raw/extension/direct writer audit 与 Task 7 Desktop supervision 未开始）。
+
+**描述：** 将 6C-A lifetime writer admission 接入现有 one-shot bridge 的 mutating operations，以及 reusable/Feishu carrier 的整个启动与 quiescent shutdown 生命周期。只读 bridge projection/health/manifest 不 acquire；不改变 Runtime Protocol v1、默认 `activation_pending` 或外部发送边界。
+
+**验收证据：** active daemon 下 `command`、`delete`、`students`、`connector-setup/configure` 在 handler lock/state/network 之前 fail closed，temporary state 保持不变且 connector verifier call 为零；真实 reusable custom-channel carrier 与 daemon/second carrier 互斥并在 returned close 后可重入；Feishu startup 在 admission 前不写 status/加载 model/channel；application runtime 停止 intake、等待 in-flight message、idempotent close；Feishu scheduler 的 serialized tick 与 bounded drain、late no-detach emission、双方 exact `excludeTools: ["bash", "edit", "write"]` 均由 Core focused test 覆盖。
+
+**验证：** `npm run test:core-runtime-managed-callers`、carrier/application/connector/preflight、bridge/C1 parity、`npm run test:core-runtime-writer-admission`、`npm run test:core-runtime-store`、`npm run test:core-runtime-g1`、`npm test`、`npm run typecheck`、`npm run benchmark:core-runtime-store`、contract/manifest read-only SHA+bigint `mtimeNs` proof、audit 与 Core/Desktop `git diff --check` 均通过。current Core daemon manifest identity `sha256:4822e5207c253a44358ab796b81d051ae1c026835730fd9ab24704047cffa512`（file `sha256:41f12e619fe63e18e2a0d820724881872c7252e809301f7c6e8095dde2deeae0`），Desktop one-shot characterization identity `sha256:012b4d674575c8f913539db2f89bf6918f6dbf91e2f4ae61a081503a6bcef820`（file `sha256:110dbc0d2f70dc67085f5156ad648c4aa9476cd03a9b06bf16531c1177d0fb5e`），bridge entrypoint `sha256:8de6f82418e9339c6d6ad6e7871e9de193cfd14ac8f888af06421cb62d6d5cc8`；Phase0/Task5 one-shot baseline remains historical and Desktop compatibility stays pinned until Task7 pairing.
+
+**边界：** 6C-B 不包含 extension/safe-store/raw/manual cross-file writer enforcement（6C-C），不启动 provider/network production flow，不完成 Desktop/Tauri supervision，不声明 whole-root single-writer、production G1、E3/E4/E5、teacher usefulness 或 L4。
 
 **验收标准：**
 
 - [ ] one-shot、carrier scheduler/Feishu、extension/direct cross-file writers 均已审计并路由或 fail closed；
 - [ ] enforcement gate 证明同一 data root 没有 legacy dual writer，rollback/re-enable 顺序可验证；
-- [ ] Desktop supervision and caller contracts consume only the reviewed daemon boundary；
 
 **验证：** caller matrix/source audit, enforcement tests, rollback rehearsal and paired Desktop review; 6A queue evidence is supporting evidence only.
 **依赖：** Task 6B。
@@ -453,6 +505,7 @@ Checkpoint 0 用户决策（2026-09-02）：`确认价值账本`。
 - [ ] Desktop 启动可证明 daemon 实例身份；
 - [ ] Chat Agent 空闲销毁后 Core 仍为 ready；
 - [ ] Desktop/daemon 任一方异常退出时不会留下无主 writer；
+- [ ] Desktop supervision and caller contracts consume only the reviewed daemon boundary；
 - [ ] 退出与升级路径可停止、恢复或回滚；
 - [ ] Web 模式在没有 supervisor 时显示明确 unavailable，不伪装常驻。
 
@@ -735,3 +788,609 @@ Desktop：
 - 至少一个 Markdown 场景技能已成为有 schema、checker、失败状态和产物回执的能力包；
 - 未使用的高层机制已有冻结或淘汰决定；
 - 产品是否达到整体 L4 由真实教师证据决定，而不是由计划、架构图或代码数量决定。
+
+## 11. C1 writer-enforcement correction (2026-09-05, append-only)
+
+The earlier Task 6C-C1 `complete` wording remains historical.  A fresh review
+opened a bounded Core fix-first window (`fix-in-progress`) for four gaps: an
+open Core store could outlive its exact outer admission, admission pathname and
+sidecar identities were not fully pinned, JS/TS safe-save had parent and
+backup-source TOCTOU windows, and an unknown-fstat cleanup could unlink an
+unidentified pathname.  This did not start C2/C3 or change the Desktop runtime
+contract.
+
+The corrected Core evidence supersedes that interim status: exact outer-lease
+store binding, pre/post-open admission identity checks, all-sidecar snapshots,
+canonical ancestor/parent fences, no-follow/fstat backup reads, target-inode
+publication checks, generic redacted I/O errors, and orphan-on-unknown-fstat
+cleanup are covered by local deterministic tests.  A real local Pi
+`DefaultResourceLoader`/Jiti test loads a temporary-root TypeScript extension
+that imports the repository safe-store, succeeds while the ESM admission is
+held, and fails after release; the temporary fixture never enters the repo
+extension tree.
+
+Core writer-admission, writer-enforcement, safe-store fencing,
+extension-loader, storage-contract, managed-callers, store, and G1 suites;
+Core `npm test`, typecheck, benchmark, bridge checks, two contract/manifest
+checks; Desktop `node --test lib/edupi-core-process-client.test.mjs` (6 passed,
+1 skipped, 0 failed); and both `git diff --check` runs passed.  Core/Desktop
+manifest identities were regenerated once after source stabilization and are
+recorded in the linked Core evidence.  Node v22 has no `renameat`/`renameat2`,
+so the implementation documents canonical realpath/inode fencing as the
+strongest available boundary rather than claiming absolute cross-process
+openat safety.  `external_send=false`; Task 6C-C2/C3 and Task 7 remain open.
+
+The paired Core worktree's `docs/loop/evidence/2026-09-05-core-runtime-writer-enforcement-foundation.md`
+records the exact commands, outputs, hashes, residual limitations, and rollback.
+
+Final fresh Sol/Max reviewer v2 returned `ship` with no P0/P1/P2/P3 findings
+after independently inspecting the corrected code/tests and rerunning the Jiti
+test without `--import tsx`.  Behavioral read-only review metadata: model
+`gpt-5.6-sol`, reasoning `max`, sandbox `danger-full-access`, permission
+`disabled`; parent verification found identical before/after Core/Desktop
+fingerprints.
+
+## Task 6C-C2 Core handoff — 2026-09-05 (append-only)
+
+The paired Core worktree completed the bounded C2 raw/extension/maintenance/
+E4 enforcement slice. Exact live admission now guards canonical raw sinks and
+JS/TS safe-store destinations; setup, setup:web, rhythm, and education-info
+use one exact-target maintenance preloader; evolution writes and external
+actions are frozen; E4 rejects before log/stream/spawn/provider work.
+Education snapshots are read-only and admitted recovery owns pending-material
+rename. Core C2 focused output, full Core npm test, typecheck, 300-row
+benchmark, bridge/parity, two contract/manifest checks, Desktop process-client
+(6 passed, 1 skipped, 0 failed), and both diff checks passed. C3's versioned
+matrix/detector/rollback rehearsal and Task 7 remain pending; external_send
+remains false.
+Evidence: the paired Core
+docs/loop/evidence/2026-09-05-core-runtime-raw-writer-enforcement.md.
+
+Current one-time post-stabilization component identities are Core
+sha256:dfb3ca7a9759e8cc6eec215189458e6854050b2c3a98b1d151a2144f9f8b33a2 and
+Desktop sha256:829ae80ca75717966b5abeebab0cc4e24072481ff8b31f383e0757d6a228b799.
+The final fresh Sol/Max v2 review remains ship with no P0/P1/P2/P3 findings;
+the reviewer reran the Jiti test without --import tsx, used
+gpt-5.6-sol/max with danger-full-access and permission disabled, and parent
+verified identical before/after Core/Desktop fingerprints.
+
+## Task 6C-C2 correction — 2026-09-05 (append-only)
+
+The earlier C2 `passed` wording is historical/suspended for the fresh
+fix-first correction window. Core now proves strict canonical education
+material recovery, a frozen default evolution extension, immutable-startup
+maintenance preloader validation, canonical-only safe-store writes,
+rollback-safe Feishu/DingTalk connector pairs with fail-closed pending-marker
+recovery, lease-loss-safe temp cleanup, and bounded relative public/log paths.
+The focused C2 and evolution-freeze suites, all affected/full Core checks,
+single post-stabilization Core/Desktop manifest refresh, Desktop process-client
+check, and both diff checks passed; `external_send=false` and
+`activation_pending` remain. C3's versioned matrix/detector/rollback work is
+still pending. Detailed evidence and current component hashes are recorded in
+Core `docs/loop/evidence/2026-09-05-core-runtime-raw-writer-enforcement.md`.
+
+## Task 6C-C2 P2 final superseding record — 2026-09-06 (append-only)
+
+The earlier P2 `evidence_pending` note is superseded: the macOS canonical
+`/var` ancestor-alias correction is green, full Core `npm test` and focused G1
+passed exit 0, and all C2/C1/enforcement/fencing, typecheck, benchmark,
+immutable double checks, bridge, Desktop process-client (6 passed, 1 skipped,
+0 failed), and both diff checks passed. Current manifest identities and
+residuals are recorded in Core
+`docs/loop/evidence/2026-09-05-core-runtime-raw-writer-enforcement.md`;
+C3 remains pending and `external_send=false`.
+
+## Task 6C-C2 P2 correction — 2026-09-05 (append-only)
+
+Fresh reviewer v2 suspended the corrected C2 status for two bounded fixes:
+preserve pre-existing connector registry backups during pair publication and
+reject rogue cached lock bindings before safeSave can create them. The
+superseding Core evidence is appended after verification; C3 remains pending.
+
+## Task 6C-C2 P2 superseding record — 2026-09-06 (append-only)
+
+Both P2 corrections are focused-green: connector pair publication preserves
+pre-existing registry `.bak` bytes/modes across Feishu/DingTalk failure
+boundaries, and JS/TS safeSave rejects rogue cached lock bindings before lock
+directory creation while canonical writes remain valid. C2 focused,
+connector/safe-store/C1, typecheck, benchmark, immutable double checks, bridge,
+and Desktop process-client (6 passed/1 skipped/0 failed) passed; both diff
+checks passed. The attempted full Core `npm test` exited 1 in the existing G1
+activation path (`database_unavailable`), reproduced by focused G1, so the
+broader handoff remains `evidence_pending`; C3 remains pending.
+
+Current Core/Desktop manifest identities and detailed residuals are recorded in
+Core `docs/loop/evidence/2026-09-05-core-runtime-raw-writer-enforcement.md`.
+
+## Task 6C-C2 v3 fix-first window — 2026-09-06 (append-only)
+
+Fresh Sol v3 review (`gpt-5.6-sol/max`) suspended the prior C2 evidence for
+one P1 safe-store binding issue: an exact expected lock path replaced by an
+outside symlink could pass lexical validation. Core is correcting this by
+validating each existing canonical binding component while retaining the
+legitimate macOS ancestor alias, with normalized dead-PID JS/TS lock-symlink
+regressions. Final superseding status follows clean verification; C3 remains
+pending.
+
+Source-stable manifest identities for this fix-first window are Core component
+`sha256:813995b6819937a129db97ff49cb3bd89f8d878d26dc67c8275dd935cf91258a`
+(manifest file SHA `sha256:2c02a54a87be8a2ff9580fd0c69d064dbef18139b78c52d1d50ecede50e68ab8`,
+302141 bytes, 33 modules/5 assets, `mtimeNs=1788626517008540218`) and Desktop
+component `sha256:8301340f757adc28165e614427ca22268c9eb5d85cca3b8b7ba1bc1963cf7c30`
+(manifest file SHA `sha256:fc17520c9fda1179a273b590f23f618b7c576bb1a5eb6519a12237e27dd1211c`,
+300622 bytes, 28 modules/2 assets, `mtimeNs=1788626528905524447`).
+
+## Task 6C-C2 v4 fix-first window — 2026-09-06 (append-only)
+
+Fresh Sol v4 runtime evidence suspended the v3 window for a P1 in which a
+direct production `application_runtime.trace` `withLock` caller could follow
+an outside lock-directory symlink after module load. Core now fences the JS/TS
+lock binding inside `withLock` and acquire/release before every lock filesystem
+boundary; invalidation rejects before callbacks and release retains the owned
+orphan. Generic no-admission coordination and the valid macOS `/var` ancestor
+alias remain compatible. Direct JS/TS primitive, production trace, stale
+sentinel, and release-orphan regressions plus focused/full checks are green;
+C3 remains pending and `external_send=false`.
+
+Source-stable manifest identities: Core component
+`sha256:79e36329901a719f68e33dac2bbdfffb22a1934999c4f91cee28bd2515eb15d3`
+(file SHA `sha256:f4f922f6efde3d5151ab2328d805dc4c34db29f016d463f649d23c9bb5965d71`,
+302141 bytes, 33 modules/5 assets, `mtimeNs=1788628918655729925`) and Desktop
+component `sha256:9f1570229edf88e8e237682b9b4608455c931018725f74fe74a527e0622a2d73`
+(file SHA `sha256:4f446bcd3ee300150e97fc802b1877c878639d33bc6ee58ea00142b3049bd788`,
+300622 bytes, 28 modules/2 assets, `mtimeNs=1788628946656237626`).
+
+## Task 6C-C2 terminal reconciliation — 2026-09-06 (append-only)
+
+Fresh Sol v5 runtime review (`gpt-5.6-sol/max`, `danger-full-access`,
+permission disabled, behavioral read-only) found no P0/P1/P2/P3 issues;
+VERDICT: `ship`. Parent verified identical before/after reviewer fingerprints:
+Core diff `ba59a72f…` with untracked `ad3a11a3…`, Desktop diff
+`38299475…`, and both HEADs unchanged. This terminal record supersedes prior
+C2 fix-first entries without rewriting historical records.
+
+Final C2 checks passed: full Core `npm test`; C2 direct-lock/runtime, G1,
+enforcement, fencing, typecheck; 300/300/300 benchmark with SQLite integrity;
+bridge/Desktop process-client; double immutable contract/manifest checks; and
+Core/Desktop diff checks. Defaults remain `external_send=false` and
+`activation_pending`.
+
+Current manifests are Core component
+`sha256:79e36329901a719f68e33dac2bbdfffb22a1934999c4f91cee28bd2515eb15d3`
+file `sha256:f4f922f6efde3d5151ab2328d805dc4c34db29f016d463f649d23c9bb5965d71`
+and Desktop component
+`sha256:9f1570229edf88e8e237682b9b4608455c931018725f74fe74a527e0622a2d73`
+file `sha256:4f446bcd3ee300150e97fc802b1877c878639d33bc6ee58ea00142b3049bd788`.
+
+Residuals: documented Node `renameat`/`renameat2` limitation, C3 versioned
+matrix/detector equality plus rollback rehearsal, provider/network/external
+sending, and `npm audit`. Next entry point: C3 versioned matrix/detector
+equality and rollback rehearsal.
+
+## Task 6C-C3 final verification — 2026-09-06 (append-only)
+
+C3 implementation gates passed: the read-only TypeScript compiler-scanner
+detector and explicit reviewed matrix match in both directions (286 facts, 73
+package commands, 18 configured extensions, one executable opaque launcher;
+matrix SHA `sha256:c817930970afed12443062e50d3ec95172dff1170517e5d0a9b844ed8d9c61fa`).
+The real daemon/legacy rollback rehearsal completed 11 ordered phases with
+`writer_count_max=1`, proving both daemon→legacy and legacy→daemon exclusion,
+release, and new-generation re-enable. Full Core `npm test`, C1/C2,
+typecheck, benchmark (300/300/300 with SQLite integrity), bridge/Desktop,
+immutable double checks, and diff checks passed. No C3 runtime closure bytes
+changed; `external_send=false` and `activation_pending` remain. Final review is
+the next entry point; Task 7 and `npm audit` remain pending.
+
+## Task 6C-C3 wording reconciliation — 2026-09-06 (append-only)
+
+The earlier C3 record's “skips symlinked paths” wording is superseded: both
+recursive source enumerators now reject source-root, intermediate, and file
+symlinks with bounded errors. The nested fixture proves this, and the focused
+C3 rerun remains green with 286 facts, 73 commands, 18 configured extensions,
+one executable opaque launcher, and matrix SHA
+`sha256:c817930970afed12443062e50d3ec95172dff1170517e5d0a9b844ed8d9c61fa`.
+Task 7 remains pending.
+
+## Task 6C-C3 dynamic SQLite correction — 2026-09-06 (append-only)
+
+Dynamic `await import("node:sqlite")` resolution is now covered: production
+`core_runtime_writer_admission.mjs` and `core_runtime_store.mjs` each expose
+exactly one `node:sqlite.DatabaseSync` fact. The reviewed matrix is 288 facts,
+73 commands, 18 configured extensions, and one executable opaque launcher,
+SHA `sha256:92310a9de44e6af663fe6e36651cd1ad7a06816d5d395a7932e513a06d998fd2`.
+Focused C3, full Core `npm test`, typecheck, benchmark, bridge/Desktop,
+immutable double checks, and diff checks passed; manifests remain unchanged,
+`external_send=false`/`activation_pending`, and final review plus Task 7 remain
+pending.
+
+## Task 6C-C3 four-review-corrections window — 2026-09-06 (append-only)
+
+Latest Sol/Max review remains `fix-first` pending fresh final re-review. Core's
+reversible correction freezes `scripts/pi-edupi` before environment/Pi access
+with exit 78 and bounded `pi_launcher_frozen`/`external_send=false`; the
+fake-Pi and hostile-env regression passed. The read-only scanner now inventories
+link/ftruncate/writev pairs and direct, bracketed, and assignment-alias
+`require("fs")` calls. The reviewed policy is exact path+operation with no PATH
+fallback, and unfamiliar operations in known paths fail closed. The real
+daemon rehearsal now proves a bounded silent-child readiness deadline kills and
+reaps the child (`readiness_timeout_reaped=true`).
+
+The reviewed matrix is
+`sha256:78a62789a66bc0108012e9f3ab95c4403c2780a447457c4829f49f84f4d19c07`
+with 288 findings, 73 package commands, 18 configured extensions, and one
+frozen opaque launcher (policies: findings 203 admitted/53 read_only/6
+runtime_bootstrap/5 managed_lifetime/10 managed_maintenance/2
+frozen_fail_closed/6 build_only/2 os_temp_only/1 read_only_coordination;
+commands 56 test_only/9 build_only/4 managed_maintenance/2 managed_lifetime/1
+frozen_fail_closed/1 read_only; extensions 13 admitted/4 read_only/1
+frozen_fail_closed). Focused C3, full Core `npm test` exit 0, typecheck,
+300/300/300 benchmark with SQLite integrity, C1/C2/daemon/G1 gates,
+bridge/parity, Desktop process-client (6 passed/1 skipped/0 failed), immutable
+double checks, and Core/Desktop diff checks passed. No runtime manifests were
+regenerated; `external_send=false`/`activation_pending` remain. Fresh final
+review, provider/network/external sending, audit, and Task 7 remain pending.
+
+## Task 6C terminal reconciliation — 2026-09-06 (append-only)
+
+Fresh final Sol v2 review runtime was `gpt-5.6-sol/max` with
+`danger-full-access`, permission disabled, and behavioral read-only review.
+It returned **No P0–P3 findings**; verdict: `ship`. Parent verified identical
+reviewer before/after fingerprints: Core HEAD `0f13438…`, diff `3c60bccd…`,
+untracked `815042e8…`; Desktop HEAD `2793d74…`, diff `d627345f…`, with no
+untracked files. This terminal record supersedes prior C3 fix-first records
+without rewriting history.
+
+Task 6C is complete. Final Core matrix
+`sha256:78a62789a66bc0108012e9f3ab95c4403c2780a447457c4829f49f84f4d19c07`
+has 288 findings, 73 package commands, 18 configured extensions, and one
+opaque launcher. Focused C3 includes `launcher_frozen=true` and
+`readiness_timeout_reaped=true`; full Core `npm test`, typecheck, benchmark,
+C1/C2, daemon/G1, bridge/Desktop, immutable checks, and Core/Desktop diff
+checks passed. Runtime manifests remain unchanged; `external_send=false` and
+`activation_pending` remain.
+
+Residuals: the documented Node `renameat` limitation,
+provider/network/external sending, and audit. Next entry point: Task 7 only;
+this plan does not claim L4 or product completion.
+
+## Task 7 implementation verification — 2026-09-06 (append-only)
+
+Task 7 is `implementation_verified` pending its fresh final review. The final
+design supersedes the rejected first supervision draft: Tauri starts a
+process-isolated broker and waits only for its stable proxy identity before
+starting Next; Core may still be starting, restarting, or failed. The raw Core
+token never enters Next. Next receives one frozen broker capability restricted
+to bridge `health`, `snapshot`, `command`, `students`, and `delete`; runtime
+lifecycle, enqueue, connector configuration, provider/channel, and external-send
+operations are not delegated.
+
+Daemon mode keeps one supervised Core child and validates every ready/restarted
+identity with a direct authenticated Core health request. One-shot rollback is
+also brokered, serial, and has no resident daemon. Core parent-death supervision
+is armed before startup authority, the broker has one 20-second stop deadline,
+and Tauri gives it a 25-second reap margin before process-tree termination. Web
+without an attested supervisor returns explicit unavailable and never starts a
+fallback writer.
+
+Verification passed: Core full `npm test`, typecheck, 300/300/300 benchmark,
+double immutable contract/manifest checks, and the C3 288/74/18/1 matrix with
+`writer_count_max=1`; Desktop focused Task 7 tests 62/62, TypeScript, lint, and
+two 23/23 Rust runs. Desktop full `npm test` ran 867 tests with 861 passed, 5
+skipped, and one known public-source failure caused solely by the earlier
+append-only plan's maintainer-machine path record. Task 7 added no new machine
+path and does not rewrite that history. Core evidence is
+`docs/loop/evidence/2026-09-06-core-runtime-task7.md`.
+
+Paired identities are Core commit
+`0f13438af117569f6f1ae896a7ee5bc771cb8c9e`, Runtime schema
+`sha256:315be5504ecffa382213d90211fc6263664bdcfcbb7974edb5994d0c3e7aaef2`,
+and Core daemon component
+`sha256:3a9522bec208e38328ec2be91c7c170f1308fe412db63394d1c1c1c77c4c45e1`.
+No `next build`, `desktop:prepare`, packaged app, provider, network, channel, or
+external send was run. Defaults remain `activation_pending` and
+`external_send=false`; Task 8 and any L4 claim remain blocked on the fresh Task
+7 review.
+
+## Task 7 first-review correction — 2026-09-06 (append-only)
+
+The first fresh final review returned `fix-first`; its verdict is superseded.
+It found that an active one-shot could outlive a killed broker and that the Core
+HTTP socket's five-second inbound timeout could cut off a valid 5–15 second
+mutation response. The corrected one-shot arms an independent worker-thread
+parent watchdog before writer admission, and Core now separates inbound body
+timeout from operation response timeout with a one-second transport margin.
+
+Focused evidence now proves broker kill during a real blocked one-shot mutation
+releases admission twice in about 1.1 seconds, and a real 5.75-second daemon
+mutation returns the same successful response before its fifteen-second command
+deadline. Daemon/one-shot component identities are respectively
+`sha256:3a9522bec208e38328ec2be91c7c170f1308fe412db63394d1c1c1c77c4c45e1`
+and
+`sha256:eae0e255a2336c7121c2112aba6b4e914b3e9c8b37e7c0e29b935ebf08f8795c`.
+
+Post-correction Core full/focused/typecheck/benchmark/immutable checks, Desktop
+focused 63/63, TypeScript/lint, Desktop full 868 with only the unchanged
+historical path finding, and both Rust 23/23 runs passed. Task 7 returns to
+`implementation_verified` and still requires a new fresh `ship` review. Task 8,
+provider/channel/network/external sending, and any L4 claim remain blocked.
+
+## Task 7 second-review correction — 2026-09-06 (append-only)
+
+The second fresh review returned `fix-first`; its verdict is superseded. The
+broker now validates and narrows Core bridge health to the exact five operations
+it permits, so real supervised health and the actual status route report
+`ready`. Transport clocks are ordered outside the operation clock: one second
+of Core-facing grace, two seconds for Next callers, and a three-second final
+broker-socket bound. A complete Core→broker→Next regression preserves the typed
+`bridge_timeout` emitted at 15.05 seconds and observes it at about 15.2 seconds
+instead of reporting an outer timeout.
+
+Desktop focused Task 7 tests now pass 64/64; TypeScript and lint pass; full
+Desktop runs 869 tests with 863 passed, 5 skipped, and only the unchanged
+historical path finding. Core production bytes and the daemon/one-shot identities
+remain unchanged from the first correction. Task 7 is
+`implementation_verified` pending another fresh final review; Task 8 and any L4
+claim remain blocked, with `activation_pending` and `external_send=false`.
+
+## Task 7 terminal reconciliation — 2026-09-06 (append-only)
+
+The new fresh final Sol/Max review returned `ship` with no findings. It used the
+exact `sol_advisor_new_sol_reviewer` role on `gpt-5.6-sol/max`, observed
+`danger-full-access` with permission disabled, and remained behaviorally
+read-only. Parent verification found identical before/after fingerprints:
+Desktop HEAD `2793d74c…`, diff `f196cd46…`, untracked `e3346e49…`; Core HEAD
+`0f13438…`, diff `687091b6…`, untracked `6801c7f0…`.
+
+Task 7 deterministic local Desktop supervision is complete. Final evidence is
+Core full/focused/typecheck/benchmark/immutable checks; Desktop focused 64/64,
+TypeScript/lint, full 869 with only the historical plan-path finding; two Rust
+23/23 runs; exact manifest/pin/ADR parity; and all prior review findings closed.
+Defaults remain `activation_pending` and `external_send=false`.
+
+This does not claim a packaged/signed cross-platform installed app,
+provider/network/channel activation, Task 8 G1 continuity E2, or product L4.
+The next authorized implementation entry point is Task 8 only.
+
+## Task 8 implementation verification — 2026-09-07 (append-only)
+
+Task 8 is `implementation_verified` pending a fresh final review. A branded,
+test-only Core driver injects the frozen due timer while the normal production
+daemon remains `activation_pending`. Attempt 1 records retryable
+`model_unavailable`; Core recovery completes attempt 2. A second Core restart
+and a complete Desktop broker restart preserve the exact event, task, work case,
+execution, receipt, four artifact IDs, four artifact hashes, and the transition
+sequence `queued → running → failed → queued → running → draft_ready`. Three
+consecutive paired runs were identical. The runner started no Chat runtime, the
+browser readiness check measured zero running sessions, no channel was
+connected, and `external_send=false` throughout.
+
+The minimum production glue is a bounded, backward-compatible transition
+history in the existing calendar-work execution state and projection. It does
+not create a second contract or rewrite PR C domain output. Full regression also
+closed the Feishu observable-ready/signal-handler race and two nondeterministic
+test-harness timing/token defects without changing the accepted capability
+boundary.
+
+Core full/focused/typecheck/benchmark/contract/manifest/C3 checks passed. Desktop
+supervisor passed 8/8, Task 8 passed 3/3, bridge contract passed 7/7,
+TypeScript/lint and both Rust 23/23 root variants passed. Browser verification
+showed the same task, six transitions, four verified outputs, no Chat session,
+and closed external send with an empty warning/error console. Desktop full
+`npm test` ran 872 tests with 866 passed, 5 skipped, and only the unchanged
+historical append-only plan-path failure.
+
+Detailed paired identities and acceptance mapping are recorded in Core
+`docs/loop/evidence/2026-09-07-core-runtime-task8-g1-continuity.md`. This is
+deterministic local G1 continuity E2, not provider-backed teacher evidence,
+packaged cross-platform proof, or product-wide L4. Final review remains the
+Checkpoint 1 acceptance gate.
+
+## Task 8 first-review correction — 2026-09-07 (append-only)
+
+The first fresh final review returned `fix-first` for two P2s and is superseded.
+Core now rejects impossible same-attempt transition order, duplicate projected
+transition identities, attempt gaps, and chronological reversal after
+canonicalizing offset timestamps. It retains the real stale-source recovery edge
+and still derives legacy records without explicit history.
+
+Desktop E2 now rejects duplicate matching tasks, work cases, executions,
+artifact IDs, paths, and extra artifact files. The persisted event binding is
+part of the restart identity. The non-browser runner says only that it started no
+Chat runtime; the visible checkpoint queries `/api/agent/running` and measured
+zero active sessions.
+
+Post-correction Core full/focused/typecheck/benchmark/contract/manifest/C3,
+three identical paired E2 runs, Desktop supervisor 8/8, Task 8 plus bridge
+10/10, TypeScript/lint, browser, full 872 with only the historical path finding,
+and both Rust 23/23 variants passed. Task 8 is again
+`implementation_verified` pending a new fresh final review. Production remains
+`activation_pending`, `external_send=false`, and product-wide L4 unclaimed.
+
+## Task 8 terminal reconciliation — 2026-09-07 (append-only)
+
+The new fresh-context final review returned **No P0–P3 findings** and verdict
+`ship`. It confirmed the two earlier P2s are closed: transition history now has
+canonical time and exact state/identity invariants, and paired E2 now proves
+event/cardinality/complete-file/Chat-runtime claims at their stated boundary.
+Parent reviewer before/after fingerprints were identical for both repositories.
+
+Task 8 is complete. Checkpoint 1's deterministic engineering criteria are met:
+the teacher did not re-request generation, no Chat runtime was started, the
+visible checkpoint measured zero running sessions, exact artifacts/source/
+receipt/restart evidence is present, failure never became ready, and the Core
+architecture value ledger records Runtime Spine participation.
+
+Phase 1 engineering implementation is therefore complete and Phase 2 Task 9 is
+the next entry point. This checkpoint does not activate the production timer or
+provider, and it does not claim real-teacher E4/E5, external delivery, packaged
+cross-platform operation, or product-wide L4. Defaults remain
+`activation_pending` and `external_send=false`.
+
+## Tasks 9-17 implementation verification — 2026-09-07 (append-only)
+
+Tasks 9-16 are implementation-verified pending fresh final review. Task 9 fixes
+the cross-type legacy merge without breaking same-fact accumulation. Tasks
+10-12 add Education Fact v1, a strict G2 compiler, one shared Core projection,
+and a read-only Desktop consumer. Tasks 13-15 add executable Capability v1, the
+single safety-education summary package, and a source/revision-bound G3
+scheduler with receipt-backed feedback. Task 16 records 26 kill decisions with
+no deletion.
+
+The paired G2 E2 preserves one fact identity across three students, student and
+teaching views, next-lesson recall, modification, use records, two fresh Core
+snapshot processes, and Desktop envelope validation. The paired G3 daemon E2
+records a due timer, retryable model outage, supervised Core restart, two
+checked artifacts, Desktop bridge review, an unapplied policy candidate, and
+complete Desktop restart. A real browser independently opened both artifact
+files, observed eight supervised transitions, zero Chat sessions, no
+warning/error response, and `external_send=false`.
+
+Core full tests, typecheck, 300/300/300 benchmark, runtime/bridge/component
+identities, and C3 305/77/18/1 passed. Desktop paired G1/G2/G3, supervisor 8/8,
+TypeScript, lint, browser, and both Rust 23/23 allowed-root variants passed. The
+Desktop full suite ran 876 tests with 870 passed, 5 skipped, and only the
+unchanged historical append-only plan-path finding.
+
+Task 17's schema, scorecard, empty baseline, and runbook are implemented. Its
+product acceptance is deliberately `evidence_pending`: synthetic checkpoints
+do not count, and readiness requires independently registered evidence files
+with verified material/decision/restart/failure/reject/withdraw hashes. No real
+teacher material, timing, or decision was invented. Detailed evidence is in Core
+`docs/loop/evidence/2026-09-07-tasks9-17-fact-capability-baseline.md`.
+
+Current identities are bridge
+`sha256:41798fb7b5a2b30f09c2dcf07687193a0efbeade93667f47e6fd0c33e70760a3`,
+Fact v1
+`sha256:f9ed89a97d80c6cafa8d6689b50674b4b15e920e83119eea902d677c00293f55`,
+Capability v1
+`sha256:b6766441dae1b734c55b90d279dec26894e41096649622c9e97aa3c0093f412a`,
+daemon
+`sha256:c60fc7cdb1b2f2837f631f0d9c3488a0e15032aac0876217bc6ff689124cfc0f`,
+and one-shot
+`sha256:e58164d5059652e60204311ed3891512afec50c99ee23516be3151a5f75fba29`.
+Production remains `activation_pending`; provider, carrier, network, external
+send, packaged release, product-wide L4, and E5 remain unclaimed.
+
+## Tasks 9-17 second-review correction — 2026-09-07 (append-only)
+
+The follow-up review returned `fix-first` for three P1 and five P2 findings. The
+correction now persists bounded retry backoff, records adapter timeout at its own
+deadline, binds generic capability scope and calendar dates, cross-validates
+review receipts against transitions and artifact diffs, and returns the exact
+persisted bridge receipt after unrelated work advances. Task 17 evidence now
+requires unique normalized physical files plus task/run/decision/restart/example
+semantics. The kill ledger covers every documented frozen or retired path,
+including all six duplicate report skills. Fact acceptance also discovers
+conflicts between candidates proposed before either review, and Fact ingestion
+accepts the tested multi-megabyte 501-observation state while bounding the wire
+projection.
+
+Post-correction Core full tests, typecheck, frozen contracts/manifests,
+`307/77/18/1` writer audit, and 300/300/300 storage benchmark passed. Desktop
+paired G2/G3, TypeScript, lint, full 876 with only the unchanged historical
+plan-path finding, and both Rust 23/23 root variants passed. Current daemon and
+one-shot identities are
+`sha256:452ab2fe3ec69e57b80a860381fd62dd371e8fec170169229de35c69e294f41f`
+and
+`sha256:8a379d43e4512b2488596ccdd565be4721984b5bee20181ef3219504f7a5190c`.
+Tasks 9-16 return to `implementation_verified` pending final review. Task 17's
+engineering harness is implemented, while product acceptance remains
+`evidence_pending`. Production stays `activation_pending` and
+`external_send=false`.
+
+## Tasks 9-17 terminal-review correction — 2026-09-07 (append-only)
+
+The fresh terminal review returned `fix-first` for three P1 boundary cases.
+Nested roster names now use unique longest-owner matching, so a quote about
+`王小明` cannot bind to `小明`. Restoring a deleted accepted fact re-discovers
+current conflicts and requires explicit supersession. Capability mutation and
+its immutable bridge replay receipt now commit atomically in the same state;
+the replay-only binding is excluded from projection identity and remains exact
+after unrelated work advances.
+
+Focused Fact, G2, G3 scheduler, bridge, and Task 17 checks pass. The writer
+inventory returns to `305/77/18/1`. Final daemon and one-shot identities are
+`sha256:a340f82e03f9b9291ae2d9e43ad0b1c231865b33127507d5818a0ee135bac0f6`
+and
+`sha256:8b7f196d7e6bb14b34aef4514cf0558ea1d9c57b79053d7100359180c7096475`.
+Tasks 9-16 remain pending one final read-only review; Task 17 product acceptance
+remains `evidence_pending`. Production remains `activation_pending` and
+`external_send=false`.
+
+## Tasks 9-17 second terminal-review correction — 2026-09-07 (append-only)
+
+The next fresh review returned `fix-first` for two P1 evidence-integrity cases.
+G2 now rejects model-declared unresolved names that are absent from the original
+utterance or already resolve to the roster, preventing invented held
+hypotheses. Capability restart validation recomputes the before/after snapshot
+identity from each persisted state-hash prefix, so another format-valid hash
+cannot silently replace the bound value.
+
+Focused regressions pass. Final daemon and one-shot identities are
+`sha256:12d914d74ea2485adea480bb59a37d3b4e4b4d7cdfc4ef706038d3f0f270b03c`
+and
+`sha256:8ab960dc616b0654863fe41bac7044dffdca1bbb22c6819c400a379c6c177ba3`.
+Tasks 9-16 await another final read-only review; Task 17 remains
+`evidence_pending`, production remains `activation_pending`, and
+`external_send=false`.
+
+## Tasks 9-17 full-hash identity correction — 2026-09-07 (append-only)
+
+The next fresh review returned `fix-first` because the 128-bit snapshot ID could
+not verify the untouched suffix of a 256-bit state hash. Core and Desktop now
+carry all 64 state-hash hex characters in snapshot identities. Restart
+validation checks every bit, with suffix-only tamper cases for both before and
+after receipt bindings.
+
+The schema remains unchanged because snapshot IDs are opaque bounded IDs. Final
+daemon and one-shot identities are
+`sha256:d195f2c1b83c447a5fd8a9b5a4db5f9d5c388c3113ab590ebd7a76e7c93e8c1c`
+and
+`sha256:64b2f689066750a4d0c11c40beed5ac1ca2f365042f57d479821d728fa094e0c`.
+Tasks 9-16 await another read-only review. Task 17 remains
+`evidence_pending`; production remains `activation_pending` and
+`external_send=false`.
+
+## Tasks 9-17 unresolved-owner correction — 2026-09-07 (append-only)
+
+The next fresh review returned `fix-first` for the nested-name unresolved path.
+Both model-declared unresolved values and candidate fallback now require an
+independent occurrence not owned by a longer roster alias, while exact aliases
+shared by multiple students remain genuine ambiguity. Focused tests cover a
+roster containing only `王小明` and reject attempts to create an unresolved
+`小明` hypothesis. Runtime identities remain unchanged because the G2 compiler
+is outside the resident bridge component closure.
+
+Tasks 9-16 await another final read-only review. Task 17 remains
+`evidence_pending`; production remains `activation_pending` and
+`external_send=false`.
+
+## Tasks 9-17 terminal reconciliation — 2026-09-07 (append-only)
+
+The final fresh, read-only review returned **No P0–P3 findings; ship** and wrote
+nothing. Reviewer before/after fingerprints were identical: Core HEAD
+`0f13438a…`, diff `769f49a2…`, untracked `ebf55b9c…`; Desktop HEAD
+`2793d74c…`, diff `d018fa8f…`, untracked `003ac2cf…`.
+
+Tasks 9-16 are complete at deterministic local E2. Task 17's engineering
+harness is complete, including the schema, scorecard, structured evidence
+validator, runbook, and visible G3 evidence path. Its product criterion remains
+`evidence_pending` until real/redacted teacher materials, measured baseline and
+review times, teacher decisions, restart proof, and observed
+failure/reject/withdraw examples exist.
+
+Final daemon and one-shot identities are
+`sha256:d195f2c1b83c447a5fd8a9b5a4db5f9d5c388c3113ab590ebd7a76e7c93e8c1c`
+and
+`sha256:64b2f689066750a4d0c11c40beed5ac1ca2f365042f57d479821d728fa094e0c`.
+Production remains `activation_pending`; no provider, carrier, network,
+external send, or original production Core mutation occurred.
+
+## Tasks 9-17 source publication — 2026-09-07 (append-only)
+
+The reviewed Core closure was committed as
+`a77d6940bd939a20f42d84f433c1b0c3bb8fea1a` and pushed only to
+`codex/verifiable-l4-closure`. Desktop now pins that published commit and its
+daemon component
+`sha256:d195f2c1b83c447a5fd8a9b5a4db5f9d5c388c3113ab590ebd7a76e7c93e8c1c`.
+No protected branch or production runtime was changed.

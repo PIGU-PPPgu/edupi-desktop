@@ -4,8 +4,8 @@ import { BRIDGE_COMMAND_TYPES, type CoreCommandType } from "./edupi-bridge-contr
 export type EduPiCompatManifest = {
   compat_manifest_version: "1.0";
   core_repository: "edupi";
-  core_runtime: { core_commit: "ca623bdf93d781f57b7ad89956dcec9171ac7738"; component_manifest_path: "contracts/edupi-desktop-component-manifest.json"; component_manifest_hash: "sha256:8431f854d95fd049f3c2e8a54a0885e058bb1b1a40a934acf18502ec2e322028" };
-  contract_identities: Array<{ contract_id: "edupi-bridge-v1.1"; contract_version: "1.1"; schema_hash: "sha256:30d10113b6c7e7b2d3ad4eb54e34d47e8d03e848e9fbbabd1c81cf5db36727df"; fixture_manifest_path: "fixtures/bridge/v1.1/fixture-manifest.json"; fixture_manifest_hash: "sha256:2143fe0c4ab271d251134f137304c9dbef0a1b33517d8e8159c8adfb6dcb43c4"; supported_commands: CoreCommandType[]; supported_projections: ["education_workspace"]; depends_on: string[] }>;
+  core_runtime: { core_commit: "a77d6940bd939a20f42d84f433c1b0c3bb8fea1a"; component_manifest_path: "contracts/edupi-core-runtime-component-manifest.json"; component_manifest_hash: "sha256:d195f2c1b83c447a5fd8a9b5a4db5f9d5c388c3113ab590ebd7a76e7c93e8c1c" };
+  contract_identities: Array<{ contract_id: "edupi-bridge-v1.1"; contract_version: "1.1"; schema_hash: "sha256:41798fb7b5a2b30f09c2dcf07687193a0efbeade93667f47e6fd0c33e70760a3"; fixture_manifest_path: "fixtures/bridge/v1.1/fixture-manifest.json"; fixture_manifest_hash: "sha256:b2b00ae6252d953c285260e8794b81c7ada3b0bb7132f67802e4bee99ae3bbfb"; supported_commands: CoreCommandType[]; supported_projections: ["education_workspace"]; depends_on: string[] }>;
   cumulative_projection_manifest: null | Record<string, unknown>;
   supported_commands: CoreCommandType[];
   supported_projections: string[];
@@ -18,9 +18,9 @@ export type EduPiCompatManifest = {
 export function loadEduPiCompatManifest(): EduPiCompatManifest {
   const manifest = manifestJson as unknown as EduPiCompatManifest;
   if (manifest.compat_manifest_version !== "1.0" || manifest.core_repository !== "edupi") throw new Error("Invalid EduPi compatibility manifest");
-  if (!manifest.core_runtime || manifest.core_runtime.core_commit !== "ca623bdf93d781f57b7ad89956dcec9171ac7738" || manifest.core_runtime.component_manifest_path !== "contracts/edupi-desktop-component-manifest.json" || manifest.core_runtime.component_manifest_hash !== "sha256:8431f854d95fd049f3c2e8a54a0885e058bb1b1a40a934acf18502ec2e322028") throw new Error("Invalid EduPi core_runtime identity");
+  if (!manifest.core_runtime || manifest.core_runtime.core_commit !== "a77d6940bd939a20f42d84f433c1b0c3bb8fea1a" || manifest.core_runtime.component_manifest_path !== "contracts/edupi-core-runtime-component-manifest.json" || manifest.core_runtime.component_manifest_hash !== "sha256:d195f2c1b83c447a5fd8a9b5a4db5f9d5c388c3113ab590ebd7a76e7c93e8c1c") throw new Error("Invalid EduPi core_runtime identity");
   const identity = manifest.contract_identities[0];
-  if (manifest.contract_identities.length !== 1 || identity.contract_id !== "edupi-bridge-v1.1" || identity.contract_version !== "1.1" || identity.schema_hash !== "sha256:30d10113b6c7e7b2d3ad4eb54e34d47e8d03e848e9fbbabd1c81cf5db36727df" || identity.fixture_manifest_path !== "fixtures/bridge/v1.1/fixture-manifest.json" || identity.fixture_manifest_hash !== "sha256:2143fe0c4ab271d251134f137304c9dbef0a1b33517d8e8159c8adfb6dcb43c4") throw new Error("Invalid EduPi contract identities");
+  if (manifest.contract_identities.length !== 1 || identity.contract_id !== "edupi-bridge-v1.1" || identity.contract_version !== "1.1" || identity.schema_hash !== "sha256:41798fb7b5a2b30f09c2dcf07687193a0efbeade93667f47e6fd0c33e70760a3" || identity.fixture_manifest_path !== "fixtures/bridge/v1.1/fixture-manifest.json" || identity.fixture_manifest_hash !== "sha256:b2b00ae6252d953c285260e8794b81c7ada3b0bb7132f67802e4bee99ae3bbfb") throw new Error("Invalid EduPi contract identities");
   const supportedCommands = ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage", "update_memory"] as const;
   const hasExactCommands = (value: unknown): boolean => Array.isArray(value)
     && value.length === supportedCommands.length

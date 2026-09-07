@@ -11,6 +11,59 @@ function resolveConfiguredRoot(value) {
   return value ? path.resolve(value) : "";
 }
 
+const CORE_RENDEZVOUS_KEYS = [
+  "EDUPI_CORE_RELEASE_MODE",
+  "EDUPI_CORE_ENDPOINT",
+  "EDUPI_CORE_CLIENT_TOKEN",
+  "EDUPI_CORE_TOKEN",
+  "EDUPI_CORE_SUPERVISOR_SESSION",
+  "EDUPI_CORE_SCHEMA_HASH",
+  "EDUPI_CORE_COMMIT",
+  "EDUPI_CORE_COMPONENT_MANIFEST_HASH",
+  "EDUPI_CORE_DATA_ROOT_FINGERPRINT",
+  "EDUPI_CORE_INSTANCE_NONCE",
+  "EDUPI_CORE_FENCING_GENERATION",
+  "EDUPI_CORE_ATTESTATION",
+];
+
+function captureCoreRendezvousUnsafe(environment = process.env) {
+  const mode = (environment.EDUPI_CORE_RELEASE_MODE || "").trim();
+  if (!mode && !environment.EDUPI_CORE_ATTESTATION) return null;
+  if (mode !== "daemon" && mode !== "one-shot") throw new Error("Core supervisor unavailable");
+  if (environment.EDUPI_CORE_TOKEN) throw new Error("Core supervisor unavailable");
+  const hash = (value) => typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value) ? value : (() => { throw new Error("Core supervisor unavailable"); })();
+  const opaque = (value) => typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:@/+~=-]{7,511}$/.test(value) ? value : (() => { throw new Error("Core supervisor unavailable"); })();
+  const commit = (value) => typeof value === "string" && /^[a-f0-9]{40}$/i.test(value) ? value : (() => { throw new Error("Core supervisor unavailable"); })();
+  const rendezvous = {
+    mode,
+    endpoint: (() => {
+      let endpoint;
+      try { endpoint = new URL(environment.EDUPI_CORE_ENDPOINT); } catch { throw new Error("Core supervisor unavailable"); }
+      if (endpoint.protocol !== "http:" || endpoint.hostname !== "127.0.0.1" || endpoint.pathname !== "/runtime/v1" || endpoint.search || endpoint.hash) throw new Error("Core supervisor unavailable");
+      return environment.EDUPI_CORE_ENDPOINT;
+    })(),
+    capability_token: opaque(environment.EDUPI_CORE_CLIENT_TOKEN),
+    supervisor_session_id: opaque(environment.EDUPI_CORE_SUPERVISOR_SESSION),
+    schema_hash: hash(environment.EDUPI_CORE_SCHEMA_HASH),
+    core_commit: commit(environment.EDUPI_CORE_COMMIT),
+    component_manifest_hash: hash(environment.EDUPI_CORE_COMPONENT_MANIFEST_HASH),
+    attestation: opaque(environment.EDUPI_CORE_ATTESTATION),
+  };
+  const retained = { ...rendezvous };
+  delete retained.attestation;
+  Object.defineProperty(globalThis, Symbol.for("edupi.core.bridge-capability.v1"), { configurable: false, enumerable: false, value: Object.freeze(retained), writable: false });
+  for (const key of CORE_RENDEZVOUS_KEYS) delete environment[key];
+  return rendezvous;
+}
+
+function captureCoreRendezvous(environment = process.env) {
+  try {
+    return captureCoreRendezvousUnsafe(environment);
+  } finally {
+    for (const key of CORE_RENDEZVOUS_KEYS) delete environment[key];
+  }
+}
+
 function resolveEduPiLaunchRoots(environment = process.env) {
   const dataRoot = resolveConfiguredRoot(
     firstConfigured(environment, ["EDUPI_DATA_ROOT", "EDUPI_PROJECT_ROOT", "EDUPI_WORKSPACE"]),
@@ -34,6 +87,7 @@ function resolveEduPiLaunchRoots(environment = process.env) {
 
 if (require.main === module) {
   Object.assign(process.env, resolveEduPiLaunchRoots());
+  captureCoreRendezvous();
 
   const expectedParentPid = Number.parseInt(process.env.PI_WEB_PARENT_PID ?? "", 10);
 
@@ -63,4 +117,4 @@ if (require.main === module) {
   require("./server.js");
 }
 
-module.exports = { resolveEduPiLaunchRoots };
+module.exports = { resolveEduPiLaunchRoots, captureCoreRendezvous };

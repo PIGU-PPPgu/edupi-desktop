@@ -67,9 +67,21 @@ export type EducationWorkTransition = {
   externalSend: false;
 };
 
+export type EducationWorkArtifact = {
+  id: string;
+  key: string;
+  title: string;
+  type: "markdown";
+  relativePath: string;
+  sha256: string;
+  revision: number;
+  evidenceIds: string[];
+  externalSend: false;
+};
+
 export type EducationWorkCase = {
   id: string;
-  kind: "calendar_preparation" | "teaching_before_class";
+  kind: "calendar_preparation" | "teaching_before_class" | "capability_package";
   triggerId: string;
   taskId: string;
   title: string;
@@ -80,6 +92,7 @@ export type EducationWorkCase = {
   transitionRevision: number;
   sourceIds: string[];
   artifactIds: string[];
+  artifacts: EducationWorkArtifact[];
   transitions: EducationWorkTransition[];
   externalSend: false;
 };
@@ -357,6 +370,38 @@ export type EducationDocument = {
   excerpt: string;
 };
 
+export type EducationFactView = {
+  factId: string;
+  entityId: string;
+  factKind: string;
+  predicate: string;
+  value: string;
+  subjectRef: string | null;
+  topicRef: string | null;
+  status: "candidate" | "pending_review" | "held" | "accepted";
+  sourceIds: string[];
+  observationIds: string[];
+  conflictIds: string[];
+  revision: number;
+  externalSend: false;
+};
+
+export type EducationFactSpine = {
+  stateHash: string;
+  generatedAt: string;
+  acceptedFacts: EducationFactView[];
+  factCandidates: EducationFactView[];
+  studentViews: Array<{ studentId: string; name: string; acceptedFactIds: string[]; pendingFactIds: string[] }>;
+  teachingView: { acceptedFactIds: string[]; bySubject: Array<{ subjectRef: string; factIds: string[] }> };
+  nextLessonFactIds: string[];
+  uses: Array<{ useId: string; useKey: string; consumerKind: string; consumerRef: string; factIds: string[]; usedAt: string }>;
+  legacyShadow: Array<{ legacyId: string; student: string | null; content: string; state: "active" | "superseded"; readOnly: true }>;
+  observations: Array<Record<string, unknown>>;
+  hypotheses: Array<Record<string, unknown>>;
+  conflicts: Array<Record<string, unknown>>;
+  externalSend: false;
+};
+
 export type EducationContract = {
   scope: "teacher_internal";
   externalSend: false;
@@ -382,6 +427,7 @@ export type EducationContract = {
   calendar: CalendarFact[];
   tasks: TeacherTask[];
   taskSessions: Record<string, TaskSessionBinding>;
+  factSpine: EducationFactSpine | null;
   continuity: {
     memories: EducationMemory[];
     signals: EducationSignal[];
@@ -909,7 +955,8 @@ function normalizeWorkCases(value: unknown, tasks: TeacherTask[]): EducationWork
   const taskIds = new Set<string>();
   for (const item of value) {
     const entry = strictRecord(item);
-    if (!entry || !hasExactKeys(entry, ["work_case_id", "case_kind", "trigger_id", "task_id", "title", "current_state", "due_date", "execution_revision", "artifact_revision", "transition_revision", "source_ids", "artifact_ids", "transitions", "external_send"])) return [];
+    const baseKeys = ["work_case_id", "case_kind", "trigger_id", "task_id", "title", "current_state", "due_date", "execution_revision", "artifact_revision", "transition_revision", "source_ids", "artifact_ids", "transitions", "external_send"];
+    if (!entry || !(hasExactKeys(entry, baseKeys) || hasExactKeys(entry, [...baseKeys, "artifacts"]))) return [];
     const id = strictText(entry.work_case_id, 160);
     const triggerId = strictText(entry.trigger_id, 160);
     const taskId = strictText(entry.task_id, 160);
@@ -917,8 +964,28 @@ function normalizeWorkCases(value: unknown, tasks: TeacherTask[]): EducationWork
     const dueDate = nullableStrictDateOnly(entry.due_date);
     const sourceIds = boundedUniqueStrings(entry.source_ids, "work_case.source_ids", 50);
     const artifactIds = boundedUniqueStrings(entry.artifact_ids, "work_case.artifact_ids", 50);
+    const artifacts: EducationWorkArtifact[] = [];
+    if (entry.artifacts !== undefined) {
+      if (!Array.isArray(entry.artifacts) || entry.artifacts.length > 50) return [];
+      const metadataIds = new Set<string>();
+      for (const itemArtifact of entry.artifacts) {
+        const artifact = strictRecord(itemArtifact);
+        if (!artifact || !hasExactKeys(artifact, ["artifact_id", "key", "title", "type", "relative_path", "sha256", "revision", "evidence_ids", "external_send"])) return [];
+        const artifactId = strictText(artifact.artifact_id, 160);
+        const key = strictText(artifact.key, 160);
+        const artifactTitle = strictText(artifact.title, 240);
+        const relativePath = strictText(artifact.relative_path, 1024);
+        const sha256 = strictText(artifact.sha256, 160);
+        const evidenceIds = boundedUniqueStrings(artifact.evidence_ids, "work_case.artifact.evidence_ids", 500);
+        if (!artifactId || metadataIds.has(artifactId) || !key || !artifactTitle || artifact.type !== "markdown"
+          || !relativePath?.startsWith(".edupi/output/") || !/^sha256:[a-f0-9]{64}$/u.test(sha256 || "")
+          || !Number.isInteger(artifact.revision) || Number(artifact.revision) < 1 || !evidenceIds || artifact.external_send !== false) return [];
+        metadataIds.add(artifactId);
+        artifacts.push({ id: artifactId, key, title: artifactTitle, type: "markdown", relativePath, sha256: sha256!, revision: Number(artifact.revision), evidenceIds, externalSend: false });
+      }
+    }
     const task = taskId ? taskById.get(taskId) : null;
-    if (!id || !triggerId || !taskId || !title || (entry.case_kind !== "calendar_preparation" && entry.case_kind !== "teaching_before_class")
+    if (!id || !triggerId || !taskId || !title || (entry.case_kind !== "calendar_preparation" && entry.case_kind !== "teaching_before_class" && entry.case_kind !== "capability_package")
       || !WORK_CASE_STATES.has(entry.current_state as EducationWorkCaseState)
       || dueDate === undefined || entry.external_send !== false
       || !Number.isInteger(entry.execution_revision) || Number(entry.execution_revision) < 0
@@ -927,7 +994,9 @@ function normalizeWorkCases(value: unknown, tasks: TeacherTask[]): EducationWork
       || !sourceIds || sourceIds.length !== 1 || sourceIds[0] !== triggerId || !artifactIds
       || !task || task.sourceEventId !== triggerId || task.title !== title || task.dueDate !== dueDate
       || (entry.case_kind === "teaching_before_class") !== (task.trigger === "teaching_before_class")
-      || caseIds.has(id) || taskIds.has(taskId) || !Array.isArray(entry.transitions) || entry.transitions.length > 50) return [];
+      || (entry.case_kind === "capability_package") !== (task.trigger === "capability_package")
+      || caseIds.has(id) || taskIds.has(taskId) || !Array.isArray(entry.transitions) || entry.transitions.length > 50
+      || (entry.artifacts !== undefined && (entry.case_kind !== "capability_package" || !artifactIds || JSON.stringify(artifacts.map((artifact) => artifact.id)) !== JSON.stringify(artifactIds)))) return [];
     const transitions: EducationWorkTransition[] = [];
     const transitionIds = new Set<string>();
     let previousSequence = 0;
@@ -950,7 +1019,7 @@ function normalizeWorkCases(value: unknown, tasks: TeacherTask[]): EducationWork
       || (transitions.length > 0 && transitions.at(-1)!.sequence !== Number(entry.transition_revision))) return [];
     caseIds.add(id);
     taskIds.add(taskId);
-    cases.push({ id, kind: entry.case_kind, triggerId, taskId, title, currentState: entry.current_state as EducationWorkCaseState, dueDate, executionRevision: Number(entry.execution_revision), artifactRevision: Number(entry.artifact_revision), transitionRevision: Number(entry.transition_revision), sourceIds, artifactIds, transitions, externalSend: false });
+    cases.push({ id, kind: entry.case_kind, triggerId, taskId, title, currentState: entry.current_state as EducationWorkCaseState, dueDate, executionRevision: Number(entry.execution_revision), artifactRevision: Number(entry.artifact_revision), transitionRevision: Number(entry.transition_revision), sourceIds, artifactIds, artifacts, transitions, externalSend: false });
   }
   return cases;
 }
@@ -1520,6 +1589,89 @@ function coreSourceSummary(workspace: RawRecord, sourceId: string): { present: b
   };
 }
 
+function normalizeFactView(value: unknown): EducationFactView | null {
+  const fact = record(value);
+  const factId = text(fact.fact_id);
+  const entityId = text(fact.entity_id);
+  const factKind = text(fact.fact_kind);
+  const predicate = text(fact.predicate);
+  const content = text(fact.value);
+  const status = fact.status === "candidate" || fact.status === "pending_review" || fact.status === "held" || fact.status === "accepted"
+    ? fact.status : null;
+  if (!factId || !entityId || !factKind || !predicate || !content || !status || fact.external_send !== false) return null;
+  return {
+    factId,
+    entityId,
+    factKind,
+    predicate,
+    value: content,
+    subjectRef: text(fact.subject_ref),
+    topicRef: text(fact.topic_ref),
+    status,
+    sourceIds: stringArray(fact.source_ids),
+    observationIds: stringArray(fact.observation_ids),
+    conflictIds: stringArray(fact.conflict_ids),
+    revision: Math.max(0, Math.trunc(finiteNumber(fact.revision))),
+    externalSend: false,
+  };
+}
+
+function normalizeFactSpine(value: unknown): EducationFactSpine | null {
+  const spine = record(value);
+  const stateHash = text(spine.state_hash);
+  const generatedAt = text(spine.generated_at);
+  if (spine.projection_kind !== "education_fact_v1" || spine.projection_version !== "1.0"
+    || spine.external_send !== false || !stateHash || !generatedAt) return null;
+  const acceptedFacts = objectArray(spine.accepted_facts).map(normalizeFactView).filter((fact): fact is EducationFactView => fact?.status === "accepted");
+  const factCandidates = objectArray(spine.fact_candidates).map(normalizeFactView).filter((fact): fact is EducationFactView => fact !== null && fact.status !== "accepted");
+  const studentViews = objectArray(spine.student_views).flatMap((entry) => {
+    const studentId = text(entry.student_id);
+    const name = text(entry.name);
+    return studentId && name ? [{ studentId, name, acceptedFactIds: stringArray(entry.accepted_fact_ids), pendingFactIds: stringArray(entry.pending_fact_ids) }] : [];
+  });
+  const teaching = record(spine.teaching_view);
+  const teachingView = {
+    acceptedFactIds: stringArray(teaching.accepted_fact_ids),
+    bySubject: objectArray(teaching.by_subject).flatMap((entry) => {
+      const subjectRef = text(entry.subject_ref);
+      return subjectRef ? [{ subjectRef, factIds: stringArray(entry.fact_ids) }] : [];
+    }),
+  };
+  const uses = objectArray(spine.uses).flatMap((entry) => {
+    const useId = text(entry.use_id);
+    const useKey = text(entry.use_key);
+    const consumerKind = text(entry.consumer_kind);
+    const consumerRef = text(entry.consumer_ref);
+    const usedAt = text(entry.used_at);
+    return useId && useKey && consumerKind && consumerRef && usedAt
+      ? [{ useId, useKey, consumerKind, consumerRef, factIds: stringArray(entry.fact_ids), usedAt }]
+      : [];
+  });
+  const legacyShadow = objectArray(spine.legacy_shadow).flatMap((entry) => {
+    const legacyId = text(entry.legacy_id);
+    const content = text(entry.content);
+    const state = entry.state === "superseded" ? "superseded" as const : "active" as const;
+    return legacyId && content && entry.read_only === true
+      ? [{ legacyId, student: text(entry.student), content, state, readOnly: true as const }]
+      : [];
+  });
+  return {
+    stateHash,
+    generatedAt,
+    acceptedFacts,
+    factCandidates,
+    studentViews,
+    teachingView,
+    nextLessonFactIds: stringArray(spine.next_lesson_fact_ids),
+    uses,
+    legacyShadow,
+    observations: objectArray(spine.observations),
+    hypotheses: objectArray(spine.hypotheses),
+    conflicts: objectArray(spine.conflicts),
+    externalSend: false,
+  };
+}
+
 export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, options: {
   workspacePath: string;
   taskSessions?: unknown;
@@ -1548,6 +1700,7 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
   const workCandidateReceipts = normalizeWorkCandidateReceipts(snapshotPayload?.receipts);
   const workCandidateReviewHistory = normalizeWorkCandidateReviewHistory(snapshotPayload?.review_history);
   const workCases = normalizeWorkCases(snapshotPayload?.work_cases, tasks);
+  const factSpine = normalizeFactSpine(workspace.fact_spine);
   const continuity = record(workspace.continuity);
   const memories = normalizeMemories({
     semester: { entries: objectArray(continuity.memories).filter((item) => item.category === "semester").map((item) => ({ ...item, id: item.memory_id, created_at: item.created_at, updated_at: item.updated_at })) },
@@ -1602,6 +1755,7 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
     calendar,
     tasks,
     taskSessions,
+    factSpine,
     continuity: {
       memories,
       signals,
@@ -1697,6 +1851,7 @@ export function buildEducationContract(input: ContractInput = {}): EducationCont
     calendar,
     tasks,
     taskSessions,
+    factSpine: null,
     continuity: {
       memories,
       signals,

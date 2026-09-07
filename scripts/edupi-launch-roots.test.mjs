@@ -97,6 +97,38 @@ test("server launcher normalizes legacy roots before requiring the server", () =
   assert.equal(observed.state, "");
 });
 
+test("server launcher captures the attested Core rendezvous before requiring server.js", () => {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "edupi-launch-rendezvous-"));
+  const launcherPath = path.join(tempRoot, "server-launcher.cjs");
+  const serverPath = path.join(tempRoot, "server.js");
+  copyFileSync(path.join(root, "desktop/server-launcher.cjs"), launcherPath);
+  writeFileSync(serverPath, "const value = globalThis[Symbol.for('edupi.core.bridge-capability.v1')]; process.stdout.write(JSON.stringify({ mode: value?.mode, capability: value?.capability_token, envCapability: process.env.EDUPI_CORE_CLIENT_TOKEN, rawToken: process.env.EDUPI_CORE_TOKEN }));\n");
+  const environment = {
+    ...process.env,
+    EDUPI_CORE_RELEASE_MODE: "daemon",
+    EDUPI_CORE_ENDPOINT: "http://127.0.0.1:42001/runtime/v1",
+    EDUPI_CORE_CLIENT_TOKEN: "bridge-capability-12345678",
+    EDUPI_CORE_SUPERVISOR_SESSION: "core-session-12345678",
+    EDUPI_CORE_SCHEMA_HASH: `sha256:${"1".repeat(64)}`,
+    EDUPI_CORE_COMMIT: "a".repeat(40),
+    EDUPI_CORE_COMPONENT_MANIFEST_HASH: `sha256:${"2".repeat(64)}`,
+    EDUPI_CORE_ATTESTATION: "attestation-12345678",
+  };
+  const observed = JSON.parse(execFileSync(process.execPath, [launcherPath], { cwd: tempRoot, env: environment, encoding: "utf8" }));
+  assert.equal(observed.mode, "daemon");
+  assert.equal(observed.capability, "bridge-capability-12345678");
+  assert.equal(observed.envCapability, undefined);
+  assert.equal(observed.rawToken, undefined);
+  assert.throws(
+    () => execFileSync(process.execPath, [launcherPath], {
+      cwd: tempRoot,
+      env: { ...environment, EDUPI_CORE_TOKEN: "raw-authority-must-not-enter-next" },
+      encoding: "utf8",
+    }),
+    /Core supervisor unavailable/,
+  );
+});
+
 test("explicit allowed roots are forwarded and launcher watchdog entrypoints remain intact", async () => {
   const dataRoot = path.join(tmpdir(), "edupi-data-root");
   const coreRoot = path.join(tmpdir(), "edupi-core-root");
@@ -142,4 +174,10 @@ test("explicit allowed roots are forwarded and launcher watchdog entrypoints rem
   assert.match(rust, /get_edupi_root_status/);
   assert.match(rust, /set_edupi_data_root/);
   assert.match(rust, /reset_edupi_data_root/);
+  const packagedServer = rust.slice(
+    rust.indexOf("fn start_packaged_server("),
+    rust.indexOf("#[cfg(all(test, feature = \"custom-protocol\"))]"),
+  );
+  assert.match(packagedServer, /\.env\("EDUPI_CORE_CLIENT_TOKEN", &core_client_token\)/);
+  assert.doesNotMatch(packagedServer, /\.env\("EDUPI_CORE_TOKEN"/);
 });
