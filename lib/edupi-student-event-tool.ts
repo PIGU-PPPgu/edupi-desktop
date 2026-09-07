@@ -6,21 +6,22 @@ import { studentEventRequest } from "./edupi-student-events";
 const parameters=Type.Object({
   action:Type.Union([Type.Literal("list"),Type.Literal("record"),Type.Literal("update")]),
   student:Type.Optional(Type.String()),
+  student_id:Type.Optional(Type.String()),
   offset:Type.Optional(Type.Integer({minimum:0})),
   event_id:Type.Optional(Type.String()),expected_revision:Type.Optional(Type.Integer({minimum:0})),
   summary:Type.Optional(Type.String({maxLength:2000})),topic:Type.Optional(Type.String({maxLength:120})),observed_on:Type.Optional(Type.String()),
-  records:Type.Optional(Type.Array(Type.Object({kind:Type.Union([Type.Literal("learning"),Type.Literal("interaction")]),students:Type.Array(Type.String()),summary:Type.String(),topic:Type.Optional(Type.String()),observed_on:Type.Optional(Type.String({description:"已明确的日期 YYYY-MM-DD；不确定时省略"}))}),{minItems:1,maxItems:20})),
+  records:Type.Optional(Type.Array(Type.Object({kind:Type.Union([Type.Literal("learning"),Type.Literal("interaction")]),student_ids:Type.Optional(Type.Array(Type.String())),students:Type.Optional(Type.Array(Type.String())),class_name:Type.Optional(Type.String()),summary:Type.String(),topic:Type.Optional(Type.String()),observed_on:Type.Optional(Type.String({description:"已明确的日期 YYYY-MM-DD；不确定时省略"}))}),{minItems:1,maxItems:20})),
 });
 export function createStudentEventTool(projectRoot:string){
   return defineTool({
     name:"edupi_student_records",label:"学生学习与互动记录",parameters,executionMode:"sequential",
-    description:"读取或记录学生学习表现和同伴互动，正式保存到学生档案。所有学生姓名必须与名单一致。一条对话的全部观察一次提交。记录具体事件、方向和时间，不把一次事件推断为永久性格、好友或敌对关系；不确定的人名先澄清。",
+    description:"读取或记录学生学习表现和同伴互动，正式保存到学生档案。先 list 获取名单 ID，再用 student_ids 记录，按 student_id 查询；同名学生必须指定 ID。旧唯一姓名仍兼容。一条对话的全部观察一次提交。记录具体事件、方向和时间，不把一次事件推断为永久性格、好友或敌对关系；不确定的人名先澄清。",
     promptGuidelines:["只记录教师明确报告已发生的事情；假设、否定和引用不当作已发生事实。日期不明确就省略。","修订已有记录先 list 取得事件 ID 和 revision，再 update；不要另建一条替代修改。"],
     promptSnippet:"edupi_student_records: 老师叙述学生学习或同伴互动时保存有来源的具体记录；也可检索已有记录",
     execute:async(_call,params,signal,_update,ctx)=>{
       if(resolve(ctx.cwd)!==resolve(projectRoot))throw new Error("请在 EduPi 工作区记录学生情况");
       if(params.action==="list"){
-        const result=await studentEventRequest({action:"list_events",student:params.student,offset:params.offset},signal);
+        const result=await studentEventRequest({action:"list_events",student:params.student,student_id:params.student_id,offset:params.offset},signal);
         return {content:[{type:"text",text:JSON.stringify(result)}],details:result};
       }
       if(params.action==="update"){

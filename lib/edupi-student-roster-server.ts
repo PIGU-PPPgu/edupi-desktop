@@ -12,11 +12,14 @@ type StudentRosterResponse = {
   total?: number;
   external_send?: boolean;
   student_name?: string;
+  student_id?: string;
   updated_at?: string;
 };
 
 export type StudentProfileUpdateInput = {
   name: string;
+  studentId?: string;
+  className?: string | null;
   traits: string[];
   parentNotes: string[];
   expectedUpdatedAt: string;
@@ -38,7 +41,7 @@ export function buildStudentProfileUpdateRequest(input: StudentProfileUpdateInpu
     request_id: requestId,
     action: "update",
     expected_updated_at: input.expectedUpdatedAt,
-    student: { name: input.name, traits: input.traits, parent_notes: input.parentNotes },
+    student: { name: input.name, traits: input.traits, parent_notes: input.parentNotes, ...(input.studentId ? {student_id:input.studentId} : {}), ...(input.className !== undefined ? {class_name:input.className} : {}) },
   } as const;
 }
 
@@ -80,5 +83,6 @@ export async function updateStudentProfile({ signal, ...input }: StudentProfileU
   if (response.operation !== "students" || response.external_send !== false || response.updated !== 1 || response.student_name !== input.name || typeof response.updated_at !== "string") {
     throw new StudentProfileUpdateError("invalid_response", "学生档案修改结果无效。");
   }
+  if (input.studentId && response.student_id !== input.studentId) throw new StudentProfileUpdateError("invalid_response", "学生身份不匹配。");
   return response;
 }

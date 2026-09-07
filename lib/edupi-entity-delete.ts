@@ -75,13 +75,13 @@ function itemId(kind: EntityDeleteKind, value: unknown): string | null {
   const candidate = kind === "calendar" ? item.event_id
     : kind === "timetable" ? item.slot_id
       : kind === "memory" ? item.memory_id
-        : kind === "student" ? item.name
+        : kind === "student" ? item.student_id || item.name
           : item.task_id;
   return typeof candidate === "string" ? candidate : null;
 }
 
 function hasTarget(workspace: RawRecord, kind: EntityDeleteKind, id: string): boolean {
-  return itemsFor(workspace, kind).some((item) => itemId(kind, item) === id);
+  return itemsFor(workspace, kind).some((item) => itemId(kind, item) === id || kind === "student" && Boolean(item && typeof item === "object" && (item as RawRecord).name === id));
 }
 
 function hasTargetInPayload(payload: RawRecord, kind: EntityDeleteKind, id: string): boolean {

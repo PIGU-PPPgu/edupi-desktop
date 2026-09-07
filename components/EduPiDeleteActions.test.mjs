@@ -30,7 +30,7 @@ test("every directly editable teacher object exposes the shared Core delete acti
   assert.match(memories, /setPage\(\(current\) => Math\.min\(current, Math\.max\(0, pages - 1\)\)\)/);
 
   assert.match(students, /onDeleteEntity/);
-  assert.match(students, /onDeleteEntity\("student", selectedName, selectedName\)/);
+  assert.match(students, /onDeleteEntity\("student", selectedStudentId \|\| selectedName, label\)/);
   assert.match(students, /"删除"/);
 
   assert.match(tasks, /onDelete/);
@@ -44,9 +44,13 @@ test("every directly editable teacher object exposes the shared Core delete acti
 
 test("delete controls require an explicit named confirmation and show progress", async () => {
   const [panel, calendar, students] = await Promise.all([read("./EduPiEducationPanel.tsx"), read("./EduPiCalendarWorkspace.tsx"), read("./EduPiStudentWorkspace.tsx")]);
-  assert.match(panel, /window\.confirm\(`确定删除“\$\{label\}”吗？`\)/);
+  const confirmation = await read("./EduPiDeleteConfirmation.tsx");
+  assert.match(confirmation, /role="alertdialog"/);
+  assert.match(confirmation, /删除“\{label\}”？/);
+  assert.match(confirmation, /onResolve\(false\)/);
+  assert.match(confirmation, /onResolve\(true\)/);
   assert.match(panel, /Promise<boolean>/);
-  assert.match(panel, /window\.confirm[\s\S]+?return false/);
+  assert.match(panel, /if \(!confirmed\) return false/);
   assert.match(panel, /return true/);
   assert.match(calendar, /const deleted = await onDeleteEntity/);
   assert.match(calendar, /if \(deleted\) closeDetail\(\)/);

@@ -376,6 +376,7 @@ export type EducationContract = {
   requiresTeacherReview: true;
   workspace: string;
   students: Array<Record<string, unknown>>;
+  studentNameCounts?: Record<string, number>;
   timetable: Array<Record<string, unknown>>;
   observations: EducationObservation[];
   memoryCandidates: EducationMemoryCandidate[];

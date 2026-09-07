@@ -4,19 +4,14 @@ import crypto from "node:crypto";
 import { validateOfficeArchive } from "./office-archive.mjs";
 import { presentationText, pdfText } from "./preparation-source-text.mjs";
 
-export async function preparationClassContext(root, candidate) {
+export async function preparationClassContext(root, candidate, students) {
   const read = async name => { try { return JSON.parse(await readFile(path.join(root,".edupi/memory",name),"utf8")); } catch (error) { if (error.code === "ENOENT") return null; throw error; } };
   const timetable = await read("timetable.json");
   const ids = new Set(candidate.evidence_ids || []);
   const slots = (timetable?.slots || []).filter(slot => ids.has(slot.id || slot.slot_id));
   if (slots.length !== 1) return null;
   const slot = slots[0];
-  const profiles = await read("student_profiles.json");
-  let deleted;
-  try { deleted = JSON.parse(await readFile(path.join(root,".edupi/output/entity_delete_state.json"),"utf8")); }
-  catch (error) { if (error.code !== "ENOENT") throw error; }
-  const deletedStudents = new Set((deleted?.records || []).filter(item => item.target_kind === "student").map(item => item.target_id));
-  const count = profiles ? Object.entries(profiles.students || {}).filter(([name, student]) => !deletedStudents.has(name) && student.class_name === slot.class_name).length : null;
+  const count = students.filter(student => student.class_name === slot.class_name).length;
   return { subject: slot.subject, className: slot.class_name, registeredStudentCount: count, note: "已登记人数仅表示系统中的档案数量，不等于全班实际人数；未提供的资料不能断言不存在。" };
 }
 

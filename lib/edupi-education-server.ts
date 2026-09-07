@@ -51,9 +51,12 @@ export async function projectEducationContract(snapshot: EducationSnapshot): Pro
     entityDeleteEnabled: true,
   });
   const generated = await workspaceResourcesRequest().catch(() => null);
+  const studentNames = new Map<string,number>();
+  for (const student of generated?.studentMetadata || []) studentNames.set(student.name,(studentNames.get(student.name) || 0) + 1);
   return {
     ...contract,
     students: contract.students.map(student => ({ ...student, class_name: generated?.studentMetadata.find(item => item.student_id === student.student_id)?.class_name || null })),
+    studentNameCounts: Object.fromEntries(studentNames),
     generatedArtifacts: generated?.artifacts || [],
     teacherMaterials: generated?.teacherMaterials || [],
     generatedArtifactsUnavailable: generated === null || generated.artifacts === null,

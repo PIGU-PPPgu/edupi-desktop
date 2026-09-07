@@ -23,11 +23,9 @@ test("preparation reads referenced material bodies rather than titles", async ()
     assert.deepEqual(await preparationMaterials(root,{evidence_ids:[]}),[]);
     await mkdir(path.join(root,".edupi/memory"),{recursive:true});
     await writeFile(path.join(root,".edupi/memory/timetable.json"),JSON.stringify({slots:[{id:"slot",subject:"数学",class_name:"703"}]}));
-    await writeFile(path.join(root,".edupi/memory/student_profiles.json"),JSON.stringify({students:{甲:{class_name:"703"},乙:{class_name:"704"}}}));
-    assert.equal((await preparationClassContext(root,{evidence_ids:["slot"]})).registeredStudentCount,1);
-    await writeFile(path.join(root,".edupi/output/entity_delete_state.json"),JSON.stringify({records:[{target_kind:"student",target_id:"甲"}]}));
-    assert.equal((await preparationClassContext(root,{evidence_ids:["slot"]})).registeredStudentCount,0);
-    assert.equal(await preparationClassContext(root,{evidence_ids:[]}),null);
+    assert.equal((await preparationClassContext(root,{evidence_ids:["slot"]},[{student_id:"a",class_name:"703"},{student_id:"b",class_name:"704"}])).registeredStudentCount,1);
+    assert.equal((await preparationClassContext(root,{evidence_ids:["slot"]},[])).registeredStudentCount,0);
+    assert.equal(await preparationClassContext(root,{evidence_ids:[]},[]),null);
     await writeFile(path.join(root,"lesson.md"),"字".repeat(13000));
     const bounded = await preparationMaterials(root,{material_id:"lesson"});
     assert.equal(bounded[0].text.length,12000); assert.equal(bounded[0].truncated,true);

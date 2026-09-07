@@ -25,6 +25,7 @@ import { EduPiNavigationRail } from "./EduPiNavigationRail";
 import { EduPiObjectSider } from "./EduPiObjectSider";
 import { EduPiTaskDetailDrawer } from "./EduPiTaskDetailDrawer";
 import { EduPiTaskWorkspace } from "./EduPiTaskWorkspace";
+import { EduPiDeleteConfirmation } from "./EduPiDeleteConfirmation";
 import type { ReviewPayload } from "./EduPiTaskStage";
 import { submitTodayWorkReview, TodayWorkReviewError } from "@/lib/edupi-today-work";
 import { EduPiWorkspaceDrawer } from "./EduPiWorkspaceDrawer";
@@ -148,6 +149,15 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const [taskDetailTask, setTaskDetailTask] = useState<TeacherTask | null>(null);
   const [agentTask, setAgentTask] = useState<TeacherTask | null>(null);
   const [deleteBusy, setDeleteBusy] = useState<string | null>(null);
+  const [deleteLabel,setDeleteLabel]=useState<string|null>(null);
+  const deleteResolver=useRef<((confirmed:boolean)=>void)|null>(null);
+  const resolveDeleteConfirmation=(confirmed:boolean)=>{
+    const resolve=deleteResolver.current;
+    deleteResolver.current=null;
+    setDeleteLabel(null);
+    resolve?.(confirmed);
+  };
+  useEffect(()=>()=>{deleteResolver.current?.(false);deleteResolver.current=null;},[]);
   const taskSessionOpeningRef = useRef(false);
   const contextModalRef = useRef<HTMLDivElement>(null);
   const materialUploadInputRef = useRef<HTMLInputElement>(null);
@@ -755,7 +765,9 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const deleteEntity = useCallback(async (kind: EducationEntityDeleteKind, id: string, label: string): Promise<boolean> => {
     const key = `${kind}:${id}`;
     if (deleteBusy || !education?.capabilities.entityDelete.enabled || !education.capabilities.entityDelete.targetKinds.includes(kind)) return false;
-    if (!window.confirm(`确定删除“${label}”吗？`)) return false;
+    if (deleteResolver.current) return false;
+    const confirmed=await new Promise<boolean>(resolve=>{deleteResolver.current=resolve;setDeleteLabel(label);});
+    if (!confirmed) return false;
     setDeleteBusy(key);
     setMaterialStagingMessage({ tone: "success", text: "删除中…" });
     try {
@@ -940,6 +952,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       </div>
       {taskDetail ? <EduPiTaskDetailDrawer task={taskDetail} workCase={workCaseForTask(education, taskDetail.id)} workspace={education.workspace} onClose={closeTaskDetail} onOpenFile={openTaskFile} onOpenTask={selectTask} onOpenAgent={openAgentForTask} onDelete={(task) => { if (task.id) void deleteEntity("task", task.id, task.title).catch(() => {}); }} deleteBusy={deleteBusy === `task:${taskDetail.id}`} /> : null}
       <EduPiQuickEntry open={quickEntryOpen} education={education} onClose={onCloseQuickEntry} onSelect={selectQuickEntry} />
+      {deleteLabel ? <EduPiDeleteConfirmation label={deleteLabel} onResolve={resolveDeleteConfirmation} /> : null}
       {drawer === "file" ? <FileWorkspaceDrawer kind="file" task={activeView === "tasks" || activeView === "review" ? activeTask : undefined} filePath={previewPath} fileTitle={education?.generatedArtifacts?.find(file => previewPath?.replaceAll("\\", "/").endsWith(`/${file.relative_path.replaceAll("\\", "/")}`))?.title} filePanel={previewPath ? renderFilePreview(previewPath) : null} onClose={closeDrawer} onPreparePrompt={onPrepareAgentPrompt} /> : null}
       <input ref={materialUploadInputRef} type="file" multiple hidden accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx" onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void stageBrowserFiles(files); }} />
       {materialStagingMessage && activeView !== "materials" ? <div className={`edupi-material-staging-toast is-${materialStagingMessage.tone}`} role={materialStagingMessage.tone === "error" ? "alert" : "status"} aria-live="polite">{materialStagingMessage.text}</div> : null}
