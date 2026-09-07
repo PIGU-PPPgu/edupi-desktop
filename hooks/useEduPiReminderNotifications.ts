@@ -18,7 +18,12 @@ export function useEduPiReminderNotifications() {
         const result = await response.json();
         if (controller.signal.aborted) return;
         const items = result.notifications || [];
-        if (items.length) await notifyDesktop({ title: "EduPi 提醒", body: items.length === 1 ? `${items[0].title}，请查看提醒` : `${items.length} 项待处理，请查看提醒` });
+        if (items.length) {
+          const status = await notifyDesktop({ title: "EduPi 提醒", body: items.length === 1 ? `${items[0].title}，请查看提醒` : `${items.length} 项待处理，请查看提醒` });
+          if (status !== "attempted") for (const item of items) {
+            await fetch("/api/edupi/reminders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id, type: "release_notification", attemptedAt: item.notificationAttemptedAt }), signal: controller.signal });
+          }
+        }
       } catch { /* Persistent inbox remains available after network or notification failure. */ }
       finally { if (!controller.signal.aborted) timer = setTimeout(() => void poll(), 30000); }
     };

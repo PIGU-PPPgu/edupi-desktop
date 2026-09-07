@@ -22,23 +22,25 @@ async function ensurePermission(): Promise<boolean> {
 export async function notifyDesktop(options: {
   title: string;
   body: string;
-}): Promise<void> {
-  if (!isTauriDesktop() || !desktopNotificationsEnabled()) return;
+}): Promise<"attempted" | "skipped" | "failed"> {
+  if (!isTauriDesktop() || !desktopNotificationsEnabled()) return "skipped";
 
   try {
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
     const focused = await getCurrentWindow().isFocused();
-    if (focused) return;
+    if (focused) return "skipped";
   } catch {
     // If focus cannot be determined, still notify.
   }
 
   try {
-    if (!(await ensurePermission())) return;
+    if (!(await ensurePermission())) return "skipped";
     const { sendNotification } = await import("@tauri-apps/plugin-notification");
     sendNotification({ title: options.title, body: options.body });
+    return "attempted";
   } catch (error) {
     console.error("Desktop notification failed:", error);
+    return "failed";
   }
 }
 

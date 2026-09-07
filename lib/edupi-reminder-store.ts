@@ -6,7 +6,7 @@ import type { ReminderEvent } from "./edupi-reminder-events";
 
 export type Reminder = { id: string; taskId: string; title: string; kind: "ready" | "failed" | "due"; identity: string; createdAt: string; read: boolean; handled: boolean; snoozedUntil: string | null; notificationAttemptedAt?: string; withdrawn?: boolean };
 type Store = { version: 1; items: Reminder[]; notifications?: Reminder[] };
-export async function updateReminderStore(file: string, snapshot: Record<string, ReminderEvent>, action?: { id: string; type: "read" | "handled" | "snooze" | "claim_notifications" }, now = Date.now()): Promise<Store> {
+export async function updateReminderStore(file: string, snapshot: Record<string, ReminderEvent>, action?: { id: string; type: "read" | "handled" | "snooze" | "claim_notifications" | "release_notification"; attemptedAt?: string }, now = Date.now()): Promise<Store> {
   await mkdir(dirname(file), { recursive: true });
   const release = await lockfile.lock(dirname(file), { lockfilePath: `${file}.lock`, retries: 5 });
   const temporary = `${file}.${randomUUID()}.tmp`;
@@ -28,6 +28,7 @@ export async function updateReminderStore(file: string, snapshot: Record<string,
     if (action && action.type !== "claim_notifications") {
       const item = state.items.find(item => item.id === action.id);
       if (!item) throw new Error("提醒不存在");
+      if (action.type === "release_notification" && action.attemptedAt === item.notificationAttemptedAt) delete item.notificationAttemptedAt;
       if (action.type === "read") item.read = true;
       if (action.type === "handled") { item.handled = true; item.read = true; }
       if (action.type === "snooze") { item.snoozedUntil = new Date(now + 60 * 60_000).toISOString(); item.read = true; }

@@ -7,6 +7,7 @@ import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useEduPiCompletionMonitor } from "@/hooks/useEduPiCompletionMonitor";
 import { useEduPiReminderNotifications } from "@/hooks/useEduPiReminderNotifications";
 import { bindReminderSession } from "@/lib/edupi-reminder-session";
+import { reminderPrompt } from "@/lib/edupi-reminder-prompt";
 import { SessionSidebar } from "./SessionSidebar";
 import { EduPiAdminPanel, type AdminSectionId } from "./EduPiAdminPanel";
 import { EduPiEducationPanel } from "./EduPiEducationPanel";
@@ -827,7 +828,7 @@ export function AppShell() {
     const key = result === "existing" ? sessionId! : reminderKey;
     if (draft && (draft.value || draft.images.length)) { setDraft(key, draft); setReminderDraft({ taskId, text: draft.value, title: task.title }); }
     else {
-      const text = `关于${task.title || "这项任务"}：\n${task.summary || ""}\n\n我想补充：\n`;
+      const text = reminderPrompt(task);
       setDraft(key, { value: text, images: [] });
       setReminderDraft({ taskId, text, title: task.title });
     }
