@@ -42,6 +42,7 @@ export async function pumpBackgroundJobs() {
             const candidates = ok ? (await generatedArtifactsRequest("list")).artifacts?.filter(file => file.session_id === realSessionId) || [] : [];
             const files = [];
             for (const file of candidates) {
+              if (file.available === false) continue;
               const extension = path.extname(file.relative_path).toLowerCase();
               if (job.job_type === "ppt" && extension !== ".pptx") continue;
               if (file.size_bytes <= 0 || file.size_bytes > 50 * 1024 * 1024) continue;
