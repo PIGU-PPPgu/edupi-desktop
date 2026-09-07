@@ -1,6 +1,8 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import { validateOfficeArchive } from "./office-archive.mjs";
+import { presentationText, pdfText } from "./preparation-source-text.mjs";
 
 export async function preparationClassContext(root, candidate) {
   const read = async name => { try { return JSON.parse(await readFile(path.join(root,".edupi/memory",name),"utf8")); } catch (error) { if (error.code === "ENOENT") return null; throw error; } };
@@ -39,10 +41,14 @@ export async function preparationMaterials(root, candidate) {
       const extension = path.extname(file).toLowerCase();
       if ([".md", ".txt", ".csv"].includes(extension)) text = bytes.toString("utf8");
       else if (extension === ".docx") {
+        validateOfficeArchive(bytes);
         const mammoth = await import("mammoth");
         text = (await (mammoth.default || mammoth).extractRawText({ buffer: bytes })).value;
-      } else return { ...source, unavailable: "此格式尚未提取正文" };
-      return { ...source, text: text.slice(0,12000), truncated: text.length > 12000 };
+      } else if (extension === ".pptx") text = await presentationText(bytes);
+      else if (extension === ".pdf") text = await pdfText(bytes);
+      else return { ...source, unavailable: "此格式尚未提取正文" };
+      if (!text.trim()) return { ...source, unavailable: "未提取到文字，需要识别图片内容" };
+      return { ...source, text: text.slice(0,12000), truncated: text.length > 12000, ...(extension === ".pptx" || extension === ".pdf" ? { note: "仅提取文字，未识别图片与图表。" } : {}) };
     } catch { return { ...source, unavailable: "材料无法读取" }; }
   }));
 }

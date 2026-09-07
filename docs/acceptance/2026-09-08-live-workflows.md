@@ -41,7 +41,7 @@
 - 页面验收发现四个标题无文件按钮；修复统一索引后，教学产物页实际显示四份可点击文件。材料模块也显示相同四份，打开“本节教案”的路径与教学页一致，正文为新版本。旧版四份未混入最新列表。
 - 预览默认隐藏 EduPi 内部元数据，标题显示“本节教案”；切换 Source 后元数据仍在。实际点击关闭按钮返回成功，1280×720 截图检查无溢出。
 - 定向自动验证：`node scripts/test_requested_preparation.mjs`、`node scripts/test_generated_artifacts.mjs` 通过，覆盖四份文件、关联任务、可读路径、过期/移除后隐藏。`node --test scripts/preparation-materials.test.mjs scripts/model-output-repair.test.mjs` 六项通过，覆盖 Word 正文、范围、截断、删除档案人数与一次 JSON 修复。
-- 这次用短篇固定题验证文件链路与答案，未证明所有学科内容质量；PDF/PPT 来源正文尚不支持本备课读取器，界面整套安装版未验收。
+- 这次用短篇固定题验证文件链路与答案，未证明所有学科内容质量；PDF/PPT 后续证据见下方，界面整套安装版未验收。
 
 ## 简报提醒与续聊
 
@@ -51,6 +51,14 @@
 - 点击继续聊，预填标题、简报摘录、来源文件及“我想补充”输入位置；实际发送后收到“简报续聊成功”。
 - 绑定接口读取到 `document:daily:2026-09-08` → `01a07cdd-9942-71ec-9b84-e9f0ddfca733`。离开后经提醒返回同一会话；停止开发服务、重新启动、刷新后原消息与回复仍在。
 - 重启后提醒接口仍只有一条简报提醒、绑定不变。系统通知及应用完全退出后的调度未验证。
+
+## PPT 与 PDF 来源读取
+
+- 生成两页真实 PPTX 隔离材料，课堂要求改为黄色方格纸；工作进程实际重新生成四份文件，返回 prepared=1，会话 `01a07ce8-d417-7178-9bbc-bf611d05e3ad`。教案、学案和清单均使用黄色方格纸，答案三组相对面仍正确。
+- `node --test scripts/preparation-source-text.test.mjs scripts/preparation-materials.test.mjs` 五项通过，未跳过。PPT 调换实际 presentation 顺序后文本顺序正确，XML 字符正确解码；PDF 使用实际 PDF 字节，经本机 pdftotext 得到正文。
+- Office 压缩目录限制抽出共享函数，原 Word 入口继续使用，原回归测试保留。没有新建第二套独立限制。
+- 本机 PDF 文字提取通过，未打包 pdftotext 到 Windows；图片与图表未做视觉理解。材料清单明确说明只读了 PPT 两页文字。不能据此勾完 OCR 或安装版。
+- XML 解析依赖固定到维护分支 0.8.15，依据 [上游安全修复记录](https://github.com/xmldom/xmldom/blob/master/CHANGELOG.md#0815)。新增独立目录的依赖复制/加载测试通过；这不替代安装包启动验收。
 
 ## 证据边界
 

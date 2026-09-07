@@ -19,6 +19,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import type { CalendarImportEvent, TimetableImportSlot } from "./edupi-education-intake";
 import type { MaterialStagingDescriptor } from "./edupi-material-staging";
 import { extractTextContent } from "./session-scan";
+import { validateOfficeArchive } from "../desktop/office-archive.mjs";
 
 const execFileAsync = promisify(execFile);
 const MAX_TEXT_CHARS = 30_000;
@@ -26,10 +27,6 @@ const MAX_RESULT_ITEMS = 200;
 const MAX_MODEL_IMAGES = 3;
 const MAX_MODEL_IMAGE_BYTES = 10 * 1024 * 1024;
 const MODEL_TIMEOUT_MS = 90_000;
-const MAX_DOCX_ENTRIES = 2_000;
-const MAX_DOCX_CENTRAL_BYTES = 2 * 1024 * 1024;
-const MAX_DOCX_UNCOMPRESSED_BYTES = 50 * 1024 * 1024;
-const MAX_DOCX_ENTRY_BYTES = 25 * 1024 * 1024;
 const MAX_RECOGNITION_CACHE_BYTES = 256 * 1024;
 const DOCX_WORKER_TIMEOUT_MS = 20_000;
 const DOCX_WORKER_HEAP_MB = 128;
@@ -272,43 +269,8 @@ function boundedExtractedText(value: string): string {
 }
 
 export function validateDocxArchive(bytes: Buffer): void {
-  const minimumEnd = 22;
-  const searchStart = Math.max(0, bytes.length - (65_535 + minimumEnd));
-  let endOffset = -1;
-  for (let offset = bytes.length - minimumEnd; offset >= searchStart; offset -= 1) {
-    if (bytes.readUInt32LE(offset) === 0x06054b50) { endOffset = offset; break; }
-  }
-  if (endOffset < 0) throw new MaterialRecognitionError("extract_unavailable", "DOCX 压缩目录无效。");
-  const disk = bytes.readUInt16LE(endOffset + 4);
-  const centralDisk = bytes.readUInt16LE(endOffset + 6);
-  const entriesOnDisk = bytes.readUInt16LE(endOffset + 8);
-  const entries = bytes.readUInt16LE(endOffset + 10);
-  const centralSize = bytes.readUInt32LE(endOffset + 12);
-  const centralOffset = bytes.readUInt32LE(endOffset + 16);
-  if (disk !== 0 || centralDisk !== 0 || entriesOnDisk !== entries || entries === 0 || entries === 0xffff
-    || entries > MAX_DOCX_ENTRIES || centralSize === 0xffffffff || centralSize > MAX_DOCX_CENTRAL_BYTES
-    || centralOffset + centralSize > endOffset) {
-    throw new MaterialRecognitionError("extract_unavailable", "DOCX 压缩目录无效。");
-  }
-  let offset = centralOffset;
-  let totalUncompressed = 0;
-  for (let index = 0; index < entries; index += 1) {
-    if (offset + 46 > centralOffset + centralSize || bytes.readUInt32LE(offset) !== 0x02014b50) {
-      throw new MaterialRecognitionError("extract_unavailable", "DOCX 压缩目录无效。");
-    }
-    const flags = bytes.readUInt16LE(offset + 8);
-    const uncompressedSize = bytes.readUInt32LE(offset + 24);
-    const nameLength = bytes.readUInt16LE(offset + 28);
-    const extraLength = bytes.readUInt16LE(offset + 30);
-    const commentLength = bytes.readUInt16LE(offset + 32);
-    if ((flags & 1) !== 0 || uncompressedSize === 0xffffffff || uncompressedSize > MAX_DOCX_ENTRY_BYTES) {
-      throw new MaterialRecognitionError("too_large", "DOCX 解压规模超过限制。");
-    }
-    totalUncompressed += uncompressedSize;
-    if (totalUncompressed > MAX_DOCX_UNCOMPRESSED_BYTES) throw new MaterialRecognitionError("too_large", "DOCX 解压规模超过限制。");
-    offset += 46 + nameLength + extraLength + commentLength;
-  }
-  if (offset !== centralOffset + centralSize) throw new MaterialRecognitionError("extract_unavailable", "DOCX 压缩目录无效。");
+  try { validateOfficeArchive(bytes); }
+  catch (error) { throw new MaterialRecognitionError(error && typeof error === "object" && "code" in error && error.code === "too_large" ? "too_large" : "extract_unavailable", error instanceof Error ? error.message : "Office 压缩目录无效。"); }
 }
 
 function imageMime(extension: string): string | null {
