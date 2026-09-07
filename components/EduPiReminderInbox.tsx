@@ -12,6 +12,7 @@ export function EduPiReminderInbox({ onAction, onContinue }: { onAction: (action
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState("pending");
+  const [page, setPage] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
     const load = async () => {
@@ -32,16 +33,18 @@ export function EduPiReminderInbox({ onAction, onContinue }: { onAction: (action
       setItems((await response.json()).items);
     } catch { setError("提醒保存失败"); }
   };
-  const pending = items.filter(item => !item.handled && !item.snoozedUntil);
-  const visible = items.filter(item => filter === "handled" ? item.handled : filter === "snoozed" ? !item.handled && Boolean(item.snoozedUntil) : !item.handled && !item.snoozedUntil).reverse();
+  const pending = items.filter(item => !item.withdrawn && !item.handled && !item.snoozedUntil);
+  const visible = items.filter(item => filter === "handled" ? item.handled || item.withdrawn : filter === "snoozed" ? !item.withdrawn && !item.handled && Boolean(item.snoozedUntil) : !item.withdrawn && !item.handled && !item.snoozedUntil).reverse();
+  const pageCount = Math.max(1, Math.ceil(visible.length / 8));
+  const currentPage = Math.min(page, pageCount - 1);
   return <section aria-label="提醒" style={{ padding: "8px 12px" }}>
     <button className="native-button" aria-expanded={open} onClick={() => setOpen(!open)}>提醒 {pending.filter(item => !item.read).length || ""}</button>
     {open ? <div style={{ maxHeight: 320, overflowY: "auto" }}>
-      <select aria-label="提醒状态" value={filter} onChange={event => setFilter(event.target.value)}><option value="pending">待处理</option><option value="snoozed">稍后提醒</option><option value="handled">已处理</option></select>
+      <select aria-label="提醒状态" value={filter} onChange={event => { setFilter(event.target.value); setPage(0); }}><option value="pending">待处理</option><option value="snoozed">稍后提醒</option><option value="handled">历史提醒</option></select>
       {error ? <p role="alert">{error}</p> : null}
       {!visible.length && !error ? <p>暂无待处理提醒</p> : null}
-      {visible.map(item => <details key={item.id} onToggle={event => { if (event.currentTarget.open && !item.read) void change(item.id, "read"); }}>
-        <summary>{item.title} · {item.kind === "ready" ? "已准备" : item.kind === "due" ? "今日到期" : "准备失败"}</summary>
+      {visible.slice(currentPage * 8, currentPage * 8 + 8).map(item => <details key={item.id} onToggle={event => { if (event.currentTarget.open && !item.read) void change(item.id, "read"); }}>
+        <summary>{item.title} · {item.withdrawn ? "已撤下" : item.kind === "ready" ? "已准备" : item.kind === "due" ? "今日到期" : "准备失败"}</summary>
         <time>{new Date(item.snoozedUntil || item.createdAt).toLocaleString("zh-CN")}</time>
         <button className="native-button" disabled={busy} onClick={async () => {
           setBusy(true);
@@ -53,6 +56,7 @@ export function EduPiReminderInbox({ onAction, onContinue }: { onAction: (action
         <button className="native-button" onClick={() => void change(item.id, "snooze")}>一小时后提醒</button>
         <button className="native-button" onClick={() => void change(item.id, "handled")}>已处理</button>
       </details>)}
+      {pageCount > 1 ? <nav aria-label="提醒分页"><button className="native-button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1} / {pageCount}</span><button className="native-button" disabled={currentPage === pageCount - 1} onClick={() => setPage(currentPage + 1)}>下一页</button></nav> : null}
     </div> : null}
   </section>;
 }

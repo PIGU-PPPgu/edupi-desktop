@@ -817,10 +817,14 @@ export function AppShell() {
     const task = data.tasks.find((item: { id: string }) => item.id === taskId);
     if (!task) throw new Error("事项已移除");
     const sessionId = data.taskSessions[taskId]?.sessionId || null;
-    const draftKey = sessionId || `new:${data.workspace}`;
+    const workspaceDraftKey = `new:${data.workspace}`;
+    const workspaceDraft = getDraft(workspaceDraftKey);
+    const reminderKey = `reminder:${data.workspace}:${taskId}`;
+    const draftKey = sessionId || reminderKey;
     const draft = getDraft(draftKey);
     const result = await handleActivateEducationAgentSession({ taskId, sessionId, cwd: data.workspace, view: "tasks", stage: "run", signal: new AbortController().signal });
-    const key = result === "existing" ? sessionId! : `new:${data.workspace}`;
+    if (workspaceDraft) setDraft(workspaceDraftKey, workspaceDraft);
+    const key = result === "existing" ? sessionId! : reminderKey;
     if (draft && (draft.value || draft.images.length)) { setDraft(key, draft); setReminderDraft({ taskId, text: draft.value, title: task.title }); }
     else {
       const text = `关于${task.title || "这项任务"}：\n${task.summary || ""}\n\n我想补充：\n`;
@@ -1278,6 +1282,7 @@ export function AppShell() {
       onContinueReminder={continueReminder}
       reminderText={reminderDraft?.taskId === searchParams.get("task") ? reminderDraft.text : undefined}
       reminderTitle={reminderDraft?.taskId === searchParams.get("task") ? reminderDraft.title : undefined}
+      reminderDraftKey={!selectedSession && searchParams.get("task") && effectiveNewSessionCwd ? `reminder:${effectiveNewSessionCwd}:${searchParams.get("task")}` : undefined}
       onEduPiComputerAction={handleEduPiComputerAction}
       onOpenFile={handleOpenLinkedFile}
       onProjectFilesImported={handleProjectFilesImported}
@@ -1957,6 +1962,7 @@ export function AppShell() {
               onContinueReminder={continueReminder}
               reminderText={reminderDraft?.taskId === searchParams.get("task") ? reminderDraft.text : undefined}
               reminderTitle={reminderDraft?.taskId === searchParams.get("task") ? reminderDraft.title : undefined}
+              reminderDraftKey={!selectedSession && searchParams.get("task") && effectiveNewSessionCwd ? `reminder:${effectiveNewSessionCwd}:${searchParams.get("task")}` : undefined}
               onEduPiComputerAction={handleEduPiComputerAction}
               onOpenFile={handleOpenLinkedFile}
               onProjectFilesImported={handleProjectFilesImported}

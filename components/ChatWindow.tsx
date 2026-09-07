@@ -52,6 +52,7 @@ interface Props {
   onContinueReminder?: (taskId: string) => Promise<void>;
   reminderText?: string;
   reminderTitle?: string;
+  reminderDraftKey?: string;
   onEduPiComputerAction?: (action: ComputerUseInput, expiresAt?: number) => ComputerUseBridgeResult | Promise<ComputerUseBridgeResult>;
 }
 
@@ -229,7 +230,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
   );
 }
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, onContinueReminder, reminderText, reminderTitle, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, onContinueReminder, reminderText, reminderTitle, reminderDraftKey, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
   useEffect(() => { if (reminderText) chatInputRef?.current?.insertIfEmpty(reminderText); }, [reminderText, chatInputRef, newSessionCwd, session?.id]);
   const { t } = useI18n();
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
@@ -859,7 +860,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       soundEnabled={soundEnabled}
       onSoundToggle={onSoundToggle}
       onAudioUnlock={unlockAudio}
-      draftKey={session?.id ?? (newSessionCwd ? `new:${newSessionCwd}` : undefined)}
+      draftKey={session?.id ?? reminderDraftKey ?? (newSessionCwd ? `new:${newSessionCwd}` : undefined)}
       cwd={session?.cwd ?? newSessionCwd}
       autoFocus={isNew}
       extensionStatuses={extensionStatuses}
