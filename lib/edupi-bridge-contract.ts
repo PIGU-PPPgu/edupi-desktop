@@ -131,7 +131,7 @@ export function computeSnapshotIdentity(value: Record<string, unknown>): { snaps
   const canonical = canonicalSnapshotIdentityState(value);
   const state_hash = `sha256:${crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex")}`;
   return {
-    snapshot_id: `snapshot_${state_hash.slice("sha256:".length, "sha256:".length + 32)}`,
+    snapshot_id: `snapshot_${state_hash.slice("sha256:".length)}`,
     state_hash,
   };
 }

@@ -66,6 +66,10 @@ async function assembleServer() {
     join(rootDir, "desktop", "server-launcher.cjs"),
     join(serverResourcesDir, "desktop-server.cjs"),
   );
+  await copyFile(
+    join(rootDir, "desktop", "core-supervisor.cjs"),
+    join(serverResourcesDir, "core-supervisor.cjs"),
+  );
   await copyFile(join(rootDir, "desktop", "preparation-worker.mjs"), join(serverResourcesDir, "preparation-worker.mjs"));
 
   const staticSource = join(desktopBuildDir, "static");

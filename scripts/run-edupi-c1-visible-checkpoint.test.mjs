@@ -35,7 +35,14 @@ function makeDataRoot(parent) {
 }
 
 test("rejects a missing or relative Core root before touching the filesystem", () => {
-  assert.throws(() => validateCoreRoot({ coreRoot: undefined }), /EDUPI_CORE_ROOT is required/);
+  const previous = process.env.EDUPI_CORE_ROOT;
+  delete process.env.EDUPI_CORE_ROOT;
+  try {
+    assert.throws(() => validateCoreRoot({ coreRoot: undefined }), /EDUPI_CORE_ROOT is required/);
+  } finally {
+    if (previous === undefined) delete process.env.EDUPI_CORE_ROOT;
+    else process.env.EDUPI_CORE_ROOT = previous;
+  }
   assert.throws(() => validateCoreRoot({ coreRoot: "./core" }), /absolute path/);
 });
 

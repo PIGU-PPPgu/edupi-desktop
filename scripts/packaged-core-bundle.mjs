@@ -149,12 +149,14 @@ async function verifyRuntimeFileClosure(sourceRoot, manifest) {
 
 export async function buildPackagedCoreBundle({
   coreRoot = process.env.EDUPI_CORE_ROOT,
+  coreAllowedRoot = process.env.EDUPI_CORE_ALLOWED_ROOT,
   desktopRoot: requestedDesktopRoot = desktopRoot,
   destinationRoot,
 } = {}) {
   const configuredCoreRoot = requireAbsolute(coreRoot, "EDUPI_CORE_ROOT");
   const resolvedDesktopRoot = fs.realpathSync(requireAbsolute(requestedDesktopRoot, "Desktop root"));
   const sourceRoot = fs.realpathSync(configuredCoreRoot);
+  const sourceAllowedRoot = fs.realpathSync(coreAllowedRoot || path.dirname(sourceRoot));
   if (!fs.statSync(sourceRoot).isDirectory()) throw new Error("EDUPI_CORE_ROOT must be a directory");
   const destination = path.resolve(destinationRoot || path.join(resolvedDesktopRoot, "src-tauri", "resources", "edupi-core"));
   if (!isInside(resolvedDesktopRoot, destination)) throw new Error("Bundled Core destination must be inside Desktop root");
@@ -165,7 +167,7 @@ export async function buildPackagedCoreBundle({
   const contractIdentity = identity.contract_identities[0];
   const external = resolveEduPiCoreRoot({
     configuredRoot: sourceRoot,
-    allowedRoot: path.dirname(sourceRoot),
+    allowedRoot: sourceAllowedRoot,
     runtimeIdentity,
     validationMode: "external",
   });

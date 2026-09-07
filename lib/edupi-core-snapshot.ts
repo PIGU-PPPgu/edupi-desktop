@@ -35,7 +35,7 @@ type CoreHealth = {
   supported_operations?: unknown;
 };
 
-const CORE_OPERATIONS = ["health", "snapshot", "command", "students", "delete", "kernel", "memory-scopes", "teaching-skills", "connectors", "agent-computer", "platform", "connector-setup"] as const;
+const CORE_OPERATIONS = ["health", "snapshot", "command", "students", "delete", "workspace-resources", "generated-artifacts", "kernel"] as const;
 
 export type CoreProactiveWorkRun = {
   run_id: string;

@@ -237,6 +237,7 @@ function receiptForCommand(value: unknown, envelope: RawRecord, supportedCommand
   }
   const decision = command.decision as TaskReviewDecision;
   const taskId = String(command.task_id);
+  const capabilityTask = /^capability_task_[a-f0-9]{32}$/u.test(taskId);
   if (status !== expectedStatus[decision] || receipt.reason_code !== null
     || !exactList(receipt.applied_ids, decision === "reject" ? [] : [taskId])
     || !exactList(receipt.rejected_ids, decision === "reject" ? [taskId] : [])
@@ -255,7 +256,9 @@ function receiptForCommand(value: unknown, envelope: RawRecord, supportedCommand
   const rollback = record(receipt.rollback);
   if (!rollback || (decision === "rollback"
     ? rollback.available !== false || rollback.rollback_id !== null
-    : rollback.available !== true || typeof rollback.rollback_id !== "string" || !rollback.rollback_id)) {
+    : capabilityTask
+      ? rollback.available !== false || rollback.rollback_id !== null
+      : rollback.available !== true || typeof rollback.rollback_id !== "string" || !rollback.rollback_id)) {
     throw new TaskReviewError("invalid_envelope", "Core 任务审核回滚绑定无效。");
   }
   return receipt;
@@ -266,6 +269,7 @@ function verifyRefreshedTask(payload: CoreEducationSnapshotPayload, beforeTask: 
   const command = record(envelope.command);
   if (!command) throw new TaskReviewError("invalid_envelope", "任务审核命令不可用。");
   const task = taskFromPayload(payload as unknown as RawRecord, String(command.task_id));
+  const capabilityTask = /^capability_task_[a-f0-9]{32}$/u.test(String(command.task_id));
   const decision = command.decision as TaskReviewDecision;
   const expectedRevision = Number(command.expected_revision) + 1;
   const beforeHistory = reviewHistory(beforeTask);
@@ -286,7 +290,7 @@ function verifyRefreshedTask(payload: CoreEducationSnapshotPayload, beforeTask: 
   if (decision === "rollback") {
     if (latest.rollback_of !== command.rollback_id || record(latest.after)?.status !== task.status) throw new TaskReviewError("invalid_envelope", "Core 刷新后的回滚记录无效。");
   } else {
-    if (task.status !== expectedTaskStatus[decision] || latest.review_id !== record(receipt.rollback)?.rollback_id) throw new TaskReviewError("invalid_envelope", "Core 刷新后的任务状态无效。");
+    if (task.status !== expectedTaskStatus[decision] || (!capabilityTask && latest.review_id !== record(receipt.rollback)?.rollback_id)) throw new TaskReviewError("invalid_envelope", "Core 刷新后的任务状态无效。");
   }
   const patch = record(command.patch);
   if (decision === "modify" && patch) {

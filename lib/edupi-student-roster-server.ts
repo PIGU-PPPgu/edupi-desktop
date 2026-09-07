@@ -1,4 +1,4 @@
-import { runCoreProcess } from "./edupi-core-process-client";
+import { EDUPI_CORE_CLIENT_MUTATION_TIMEOUT_MS, runCoreProcess } from "./edupi-core-process-client";
 import { resolveEduPiBridgeRoots } from "./edupi-core-snapshot";
 import type { StudentRosterRow } from "./edupi-student-roster-model";
 
@@ -48,7 +48,7 @@ export async function importStudentRoster({ students, sourceName, signal }: { st
   const response = await runCoreProcess<StudentRosterResponse>({
     runtime: roots.runtime,
     dataRoot: roots.dataRoot,
-    timeoutMs: 15_000,
+    timeoutMs: EDUPI_CORE_CLIENT_MUTATION_TIMEOUT_MS,
     signal,
     request: {
       protocol: "edupi-desktop-bridge",
@@ -72,7 +72,7 @@ export async function updateStudentProfile({ signal, ...input }: StudentProfileU
   const response = await runCoreProcess<StudentRosterResponse>({
     runtime: roots.runtime,
     dataRoot: roots.dataRoot,
-    timeoutMs: 15_000,
+    timeoutMs: EDUPI_CORE_CLIENT_MUTATION_TIMEOUT_MS,
     signal,
     request: buildStudentProfileUpdateRequest(input, requestId),
   });

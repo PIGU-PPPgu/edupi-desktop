@@ -16,6 +16,7 @@ import { bindTaskSessionFile, readTaskSessionFile } from "./edupi-task-session-s
 import { projectTaskSessionBindings } from "./edupi-task-sessions";
 import { getLiveSessionSnapshots, getRpcSession, getRunningRpcSessionIds } from "./rpc-manager";
 import { listAllSessions } from "./session-reader";
+import { allowFileRoot } from "./file-access";
 import { workspaceResourcesRequest } from "./edupi-generated-artifacts";
 
 
@@ -34,6 +35,7 @@ function requiredText(value: unknown, field: string, max = 240): string {
 type EducationSnapshot = Awaited<ReturnType<typeof readEduPiEducationSnapshot>>;
 
 export async function projectEducationContract(snapshot: EducationSnapshot): Promise<EducationContract> {
+  allowFileRoot(snapshot.dataRoot.root);
   const [taskSessionStore, scannedSessions] = await Promise.all([
     readTaskSessionFile(taskSessionFile(snapshot.dataRoot.root)),
     listAllSessions(),

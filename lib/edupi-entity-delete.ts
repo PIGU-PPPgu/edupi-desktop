@@ -120,7 +120,7 @@ export async function issueEntityDelete(
   const requestId = `entity-delete-${randomUUID()}`;
   const request = buildEntityDeleteRequest({ kind: input.kind, id: input.id, snapshotId, note: input.note }, requestId);
   const callCore = dependencies.callCore || (async (nextRequest, currentSnapshot, signal) => {
-    const [{ runCoreProcess }, { resolveEduPiBridgeRoots }] = await Promise.all([
+    const [{ EDUPI_CORE_CLIENT_MUTATION_TIMEOUT_MS, runCoreProcess }, { resolveEduPiBridgeRoots }] = await Promise.all([
       import("./edupi-core-process-client.ts"),
       import("./edupi-core-snapshot.ts"),
     ]);
@@ -129,7 +129,7 @@ export async function issueEntityDelete(
       runtime: roots.runtime,
       dataRoot: roots.dataRoot,
       request: nextRequest,
-      timeoutMs: 15_000,
+      timeoutMs: EDUPI_CORE_CLIENT_MUTATION_TIMEOUT_MS,
       signal,
     });
   });

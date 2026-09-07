@@ -529,9 +529,9 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
           decision: action,
           expectedRevision: activeTask.revision,
           patch: action === "modify" ? {
-            title: payload.title,
-            dueDate: payload.dueDate ?? null,
-            deliverables: payload.deliverables,
+            title: activeTask.trigger === "capability_package" ? activeTask.title : payload.title,
+            dueDate: activeTask.trigger === "capability_package" ? activeTask.dueDate : payload.dueDate ?? null,
+            deliverables: activeTask.trigger === "capability_package" ? activeTask.deliverables : payload.deliverables,
           } : null,
           note: payload.note ?? null,
         }),

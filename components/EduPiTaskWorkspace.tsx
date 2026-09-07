@@ -75,6 +75,7 @@ export function EduPiTaskWorkspace(props: Props) {
           {props.stage === "artifact" && props.task.id ? <EduPiConversationFiles key={props.task.id} taskId={props.task.id} sessionId={props.agentSession?.sessionId || ""} cwd={props.workspace} onOpen={props.onOpenFile} /> : null}
           <EduPiTaskStage
           task={props.task}
+          workCase={props.workCase}
           stage={props.stage}
           workspace={props.workspace}
           contextLabel={contextLabel}

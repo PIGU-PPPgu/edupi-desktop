@@ -75,7 +75,7 @@ function readCompatManifest() {
   const runtime = record(manifest?.core_runtime);
   if (!runtime
     || typeof runtime.core_commit !== "string"
-    || runtime.component_manifest_path !== "contracts/edupi-desktop-component-manifest.json"
+    || runtime.component_manifest_path !== "contracts/edupi-core-runtime-component-manifest.json"
     || typeof runtime.component_manifest_hash !== "string") {
     throw new Error("Desktop compatibility manifest has no valid pinned Core identity");
   }
@@ -89,19 +89,33 @@ function readCompatManifest() {
   };
 }
 
-function safeRegularFile(root, candidate, label) {
+function safeRegularFile(root, candidate, label, { allowedRoot = root, allowNodeModulesSymlink = false } = {}) {
   if (!isDescendantPath(root, candidate)) throw new Error(`${label} is outside the Core root`);
+  let current = root;
+  for (const [index, component] of path.relative(root, candidate).split(path.sep).filter(Boolean).entries()) {
+    current = path.join(current, component);
+    const stat = fs.lstatSync(current);
+    if (!stat.isSymbolicLink()) continue;
+    if (allowNodeModulesSymlink && index === 0 && component === "node_modules") continue;
+    throw new Error(`${label} contains a disallowed symlink`);
+  }
   const resolved = fs.realpathSync(candidate);
-  if (!isDescendantPath(root, resolved)) throw new Error(`${label} is outside the Core root`);
+  if (!isDescendantPath(root, resolved)
+    && !(allowNodeModulesSymlink && isDescendantPath(allowedRoot, resolved))) {
+    throw new Error(`${label} is outside the allowed Core root`);
+  }
   if (!fs.statSync(resolved).isFile()) throw new Error(`${label} must be a regular file`);
   return resolved;
 }
 
-function verifyManifestEntry(root, entry) {
+function verifyManifestEntry(root, allowedRoot, entry, allowNodeModulesSymlink = false) {
   if (!record(entry) || typeof entry.path !== "string" || path.isAbsolute(entry.path) || entry.path.split(/[\\/]+/).includes("..")) {
     throw new Error("Core component manifest contains an invalid path");
   }
-  const file = safeRegularFile(root, path.join(root, entry.path), `Core component ${entry.path}`);
+  const file = safeRegularFile(root, path.join(root, entry.path), `Core component ${entry.path}`, {
+    allowedRoot,
+    allowNodeModulesSymlink,
+  });
   const bytes = fs.readFileSync(file);
   if (entry.size !== bytes.byteLength) throw new Error(`Core component size mismatch: ${entry.path}`);
   if (entry.sha256 !== sha256(bytes)) throw new Error(`Core component hash mismatch: ${entry.path}`);
@@ -145,16 +159,25 @@ export function validateCoreRoot({
   }
   const modules = Array.isArray(manifest.modules) ? manifest.modules : [];
   const assets = Array.isArray(manifest.assets) ? manifest.assets : [];
-  const entries = [...modules, ...assets];
+  const dependencies = Array.isArray(manifest.runtime_dependencies) ? manifest.runtime_dependencies : [];
+  const entries = [...modules, ...assets, ...dependencies.flatMap((dependency) => Array.isArray(dependency?.files) ? dependency.files : [])];
   const entryPaths = entries.map((entry) => entry?.path);
   if (entryPaths.some((entry) => typeof entry !== "string") || new Set(entryPaths).size !== entryPaths.length) {
     throw new Error("Core component manifest contains duplicate or invalid entries");
   }
-  for (const entry of entries) verifyManifestEntry(root, entry);
-  if (!modules.some((entry) => entry.path === "scripts/desktop_bridge_port.mjs")) {
-    throw new Error("Core component manifest omits the fixed bridge entrypoint");
+  for (const entry of [...modules, ...assets]) verifyManifestEntry(root, allowed, entry);
+  for (const dependency of dependencies) {
+    if (!dependency || typeof dependency.name !== "string" || typeof dependency.root !== "string" || !Array.isArray(dependency.files)) throw new Error("Core runtime dependency metadata is invalid");
+    const prefix = `${dependency.root}/`;
+    if (dependency.files.some((entry) => typeof entry?.path !== "string" || (entry.path !== dependency.root && !entry.path.startsWith(prefix)))) throw new Error("Core runtime dependency escapes its package root");
+    if (!dependency.files.some((entry) => entry.path === `${dependency.root}/package.json`)) throw new Error("Core runtime dependency omits package.json");
+    for (const entry of dependency.files) verifyManifestEntry(root, allowed, entry, true);
   }
-  const entrypoint = safeRegularFile(root, path.join(root, "scripts/desktop_bridge_port.mjs"), "Core fixed bridge entrypoint");
+  if (!modules.some((entry) => entry.path === "scripts/core_runtime_daemon.mjs") || !modules.some((entry) => entry.path === "scripts/desktop_bridge_port.mjs")) {
+    throw new Error("Core component manifest omits the daemon or rollback entrypoint");
+  }
+  const entrypoint = safeRegularFile(root, path.join(root, "scripts/core_runtime_daemon.mjs"), "Core daemon entrypoint");
+  const oneShotEntrypoint = safeRegularFile(root, path.join(root, "scripts/desktop_bridge_port.mjs"), "Core rollback entrypoint");
   return {
     root,
     allowedRoot: allowed,
@@ -162,6 +185,7 @@ export function validateCoreRoot({
     componentManifestPath,
     componentManifestHash: recordedHash,
     entrypoint,
+    oneShotEntrypoint,
   };
 }
 
@@ -545,6 +569,7 @@ export async function cleanupVisibleCheckpoint(workspace, {
 }
 
 function invokeCoreBridge(runtime, workspace, operation, requestId) {
+  if (typeof runtime.oneShotEntrypoint !== "string" || !runtime.oneShotEntrypoint) throw new Error("Core rollback entrypoint is unavailable");
   const request = {
     protocol: "edupi-desktop-bridge",
     protocol_version: 1,
@@ -552,7 +577,7 @@ function invokeCoreBridge(runtime, workspace, operation, requestId) {
     operation,
     request_id: requestId,
   };
-  const result = spawnSync(process.execPath, [runtime.entrypoint], {
+  const result = spawnSync(process.execPath, [runtime.oneShotEntrypoint], {
     cwd: runtime.root,
     shell: false,
     input: JSON.stringify(request),

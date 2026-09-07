@@ -3350,7 +3350,7 @@ dependencies = [
 
 [[package]]
 name = "pi-agent-desktop"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "dunce",
  "getrandom 0.3.4",
@@ -3362,6 +3362,7 @@ dependencies = [
  "notify-rust",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-clipboard-manager",
