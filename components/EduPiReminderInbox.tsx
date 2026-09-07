@@ -2,9 +2,12 @@
 import { useEffect, useState } from "react";
 import type { Reminder } from "@/lib/edupi-reminder-store";
 import type { DesktopControlInput } from "@/lib/edupi-desktop-control";
+import { useSearchParams } from "next/navigation";
 
 export function EduPiReminderInbox({ onAction, onContinue }: { onAction: (action: DesktopControlInput) => boolean | Promise<boolean>; onContinue?: (taskId: string) => Promise<void> }) {
-  const [open, setOpen] = useState(false);
+  const params = useSearchParams();
+  const [open, setOpen] = useState(params.get("reminders") === "1");
+  useEffect(() => { if (params.get("reminders") === "1") setOpen(true); }, [params]);
   const [items, setItems] = useState<Reminder[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);

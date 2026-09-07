@@ -3,6 +3,7 @@
 import type { WorkbenchView } from "@/lib/edupi-workbench";
 import { workbenchViews } from "@/lib/edupi-workbench";
 import { APP_VERSION_DISPLAY } from "@/lib/branding";
+import { useRouter } from "next/navigation";
 
 type Props = {
   activeView: WorkbenchView;
@@ -47,6 +48,7 @@ function UtilityIcon() {
 }
 
 export function EduPiNavigationRail({ activeView, pendingReviewCount, runningAgentCount, memoryCount, workspaceLabel, collapsed, onSelect, onOpenAdmin, onOpenGuide, onCollapse }: Props) {
+  const router = useRouter();
   const item = (view: WorkbenchView) => {
     const config = workbenchViews.find((entry) => entry.id === view)!;
     return <button key={view} type="button" title={config.label} aria-label={config.label} className={activeView === view ? "is-active" : ""} aria-current={activeView === view ? "page" : undefined} onClick={() => onSelect(view)}><span className="edupi-teacher-rail__icon"><RailIcon view={view} /></span><span className="edupi-teacher-rail__text"><span>{config.label}</span><small>{config.shortLabel}</small></span>{view === "review" && pendingReviewCount > 0 ? <em>{pendingReviewCount}</em> : null}</button>;
@@ -59,6 +61,7 @@ export function EduPiNavigationRail({ activeView, pendingReviewCount, runningAge
       </div>
       <div className={`edupi-activity-pulse${runningAgentCount > 0 ? " is-running" : ""}`} title={runningAgentCount > 0 ? `${runningAgentCount} 项运行中` : `已记住 ${memoryCount}`} aria-live="polite"><i aria-hidden="true" /><span>{runningAgentCount > 0 ? `${runningAgentCount} 项运行中` : `已记住 ${memoryCount}`}</span></div>
       <div className="edupi-teacher-rail__utilities">
+        <button type="button" title="提醒" aria-label="提醒" onClick={() => router.replace("/?edupi=1&module=home&view=chat&reminders=1", { scroll: false })}><span className="edupi-teacher-rail__icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 9a6 6 0 0 1 12 0v6l2 3H4l2-3V9Z"/><path d="M10 21h4"/></svg></span><span className="edupi-teacher-rail__text">提醒</span></button>
         <button type="button" title="新手教程" aria-label="新手教程" onClick={onOpenGuide}><span className="edupi-teacher-rail__icon" aria-hidden="true">?</span><span className="edupi-teacher-rail__text">新手教程</span></button>
         <button type="button" title={`管理中心 · v${APP_VERSION_DISPLAY}`} aria-label={`管理中心，当前版本 v${APP_VERSION_DISPLAY}`} onClick={onOpenAdmin}><span className="edupi-teacher-rail__icon"><UtilityIcon /></span><span className="edupi-teacher-rail__text">管理中心</span><span className="edupi-teacher-rail__version">v{APP_VERSION_DISPLAY}</span></button>
       </div>
