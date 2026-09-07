@@ -26,6 +26,7 @@ import { EduPiObjectSider } from "./EduPiObjectSider";
 import { EduPiTaskDetailDrawer } from "./EduPiTaskDetailDrawer";
 import { EduPiTaskWorkspace } from "./EduPiTaskWorkspace";
 import type { ReviewPayload } from "./EduPiTaskStage";
+import { submitTodayWorkReview, TodayWorkReviewError } from "@/lib/edupi-today-work";
 import { EduPiWorkspaceDrawer } from "./EduPiWorkspaceDrawer";
 import { EduPiWorkspaceViews } from "./EduPiWorkspaceViews";
 import { EduPiC1Review } from "./EduPiC1Review";
@@ -422,6 +423,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     }
     return requested ?? tasks.find((task) => task.boardStage !== "done" && task.status === "planned") ?? tasks[0];
   }, [activeView, education, selectedTaskKey, tasks]);
+  const activeWorkReview = Boolean(education?.workCandidates.some(item => item.taskId === activeTask?.id));
   const pendingCount = tasks.filter((task) => isTaskActionable(task) && isTaskReviewable(task, education ? workCaseForTask(education, task.id) : null)).length;
   const c1PendingCount = (education?.observations ?? []).filter((item) => item.teacherReview.state === "pending_review" || item.teacherReview.state === "held").length
     + (education?.memoryCandidates ?? []).filter((item) => item.teacherReview.state === "pending_review" || item.teacherReview.state === "held").length;
@@ -519,10 +521,19 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [activeView, inspectorOpen, objectSider, selectedStudentId, updateLocation]);
 
   const reviewTask = useCallback(async (action: TaskReviewAction, payload: ReviewPayload) => {
-    if (!activeTask?.id || !education?.capabilities.taskReview.enabled) return;
+    if (!activeTask?.id || !education) return;
+    const candidate = education.workCandidates.find(item => item.taskId === activeTask.id);
+    if (!(candidate ? education.capabilities.workCandidateReview.enabled : education.capabilities.taskReview.enabled)) return;
     setReviewBusy(action);
     setReviewMessage(null);
     try {
+      if (candidate) {
+        if (action === "rollback") throw new Error("请使用修改决定调整审核结果");
+        const result = await submitTodayWorkReview({ candidate, decision: action, ...(action === "modify" ? {patch:{title:payload.title,dueAt:payload.dueDate ?? null}} : {}), note:payload.note });
+        setEducation(result.data);
+        setReviewMessage(reviewLabels[action]);
+        return;
+      }
       const response = await fetch(`/api/edupi/tasks/${encodeURIComponent(activeTask.id)}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -544,11 +555,12 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       if (nextTask) setSelectedTaskKey(taskKey(nextTask));
       setReviewMessage(reviewLabels[action]);
     } catch (error) {
+      if (error instanceof TodayWorkReviewError && error.data) setEducation(error.data);
       setReviewMessage(error instanceof Error ? error.message : String(error));
     } finally {
       setReviewBusy(null);
     }
-  }, [activeTask, education?.capabilities.taskReview.enabled]);
+  }, [activeTask, education]);
 
   const rememberStaged = useCallback((items: MaterialStagingDescriptor[]) => {
     setStagedMaterials((current) => {
@@ -915,11 +927,11 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
             <EduPiPersistentChatHost mode={drawer === "agent" ? "drawer" : activeView === "chat" ? "main" : "hidden"} task={drawer === "agent" ? currentAgentTask : null} onClose={closeDrawer} onPreparePrompt={onPrepareAgentPrompt}>{chatPanel}</EduPiPersistentChatHost>
             {activeView === "review" ? <div className="edupi-review-surface">
             {reviewMode === "board" ? <EduPiReviewBoard data={education} query={query} onTask={(task) => selectTask(task, "review")} onReviewTarget={focusC1Review} /> : null}
-            {reviewMode === "task" && activeTask ? <section className="edupi-c1-review-task-bridge"><div className="edupi-c1-review-task-bridge__heading"><h2>任务审核</h2><span>{pendingCount} 项</span></div><EduPiTaskWorkspace task={activeTask} workCase={workCaseForTask(education, activeTask.id)} stage={taskStage} workspace={education.workspace} context={context} reviewEnabled={education.capabilities.taskReview.enabled} reviewReason={education.capabilities.taskReview.reason} reviewBusy={reviewBusy} reviewMessage={reviewMessage} agentSession={activeTask.id ? education.taskSessions[activeTask.id] ?? null : null} taskSessionBusy={taskSessionBusy} taskSessionError={taskSessionError} onStage={selectStage} onReview={reviewTask} onOpenAgent={openAgent} onOpenFile={openFile} /></section> : null}
+            {reviewMode === "task" && activeTask ? <section className="edupi-c1-review-task-bridge"><div className="edupi-c1-review-task-bridge__heading"><h2>任务审核</h2><span>{pendingCount} 项</span></div><EduPiTaskWorkspace workReview={activeWorkReview} files={education.generatedArtifacts} task={activeTask} workCase={workCaseForTask(education, activeTask.id)} stage={taskStage} workspace={education.workspace} context={context} reviewEnabled={(activeWorkReview ? education.capabilities.workCandidateReview : education.capabilities.taskReview).enabled} reviewReason={(activeWorkReview ? education.capabilities.workCandidateReview : education.capabilities.taskReview).reason} reviewBusy={reviewBusy} reviewMessage={reviewMessage} agentSession={activeTask.id ? education.taskSessions[activeTask.id] ?? null : null} taskSessionBusy={taskSessionBusy} taskSessionError={taskSessionError} onStage={selectStage} onReview={reviewTask} onOpenAgent={openAgent} onOpenFile={openFile} /></section> : null}
             {reviewMode === "c1" ? <EduPiC1Review data={education} reviewerId={context?.name || "teacher"} onRefresh={loadWorkspace} query={query} selectedTarget={selectedC1Target} /> : null}
             {reviewMode === "task" && !activeTask ? <section className="edupi-c1-review-task-empty"><span>任务审核</span><strong>暂无待审核任务</strong></section> : null}
             </div> : null}
-            {activeView === "tasks" && activeTask ? <EduPiTaskWorkspace task={activeTask} workCase={workCaseForTask(education, activeTask.id)} stage={taskStage} workspace={education.workspace} context={context} reviewEnabled={education.capabilities.taskReview.enabled} reviewReason={education.capabilities.taskReview.reason} reviewBusy={reviewBusy} reviewMessage={reviewMessage} agentSession={activeTask.id ? education.taskSessions[activeTask.id] ?? null : null} taskSessionBusy={taskSessionBusy} taskSessionError={taskSessionError} onStage={selectStage} onReview={reviewTask} onOpenAgent={openAgent} onOpenFile={openFile} /> : null}
+            {activeView === "tasks" && activeTask ? <EduPiTaskWorkspace workReview={activeWorkReview} files={education.generatedArtifacts} task={activeTask} workCase={workCaseForTask(education, activeTask.id)} stage={taskStage} workspace={education.workspace} context={context} reviewEnabled={(activeWorkReview ? education.capabilities.workCandidateReview : education.capabilities.taskReview).enabled} reviewReason={(activeWorkReview ? education.capabilities.workCandidateReview : education.capabilities.taskReview).reason} reviewBusy={reviewBusy} reviewMessage={reviewMessage} agentSession={activeTask.id ? education.taskSessions[activeTask.id] ?? null : null} taskSessionBusy={taskSessionBusy} taskSessionError={taskSessionError} onStage={selectStage} onReview={reviewTask} onOpenAgent={openAgent} onOpenFile={openFile} /> : null}
             {activeView === "tasks" && !activeTask ? <main className="edupi-module-workspace"><header className="edupi-module-heading"><div><h1>暂无任务</h1></div><button type="button" onClick={openUpload}>上传材料</button></header></main> : null}
             {activeView !== "chat" && activeView !== "tasks" && activeView !== "review" ? <EduPiWorkspaceViews view={activeView} data={education} context={context} memoryScopes={memoryScopes} teachingSkills={teachingSkills} kernelState={kernelState} query={query} selectedStudentId={selectedStudentId} selectedObjectId={selectedObjectId} runningAgentCount={runningAgentCount} stagedMaterials={stagedMaterials} stagingBusy={materialStagingBusy || educationIntakeBusy} intakeBusy={educationIntakeBusy} stagingMessage={materialStagingMessage?.text ?? null} calendarSelection={calendarSelection} onCalendarSelection={setCalendarSelection} onTask={selectTask} onTaskDetail={openTaskDetail} onEducation={setEducation} onStudent={selectStudent} onObject={selectObject} onNavigate={selectView} onUpload={openUpload} onIntakeMaterial={intakeStagedMaterial} onRemoveStagedMaterial={removeStagedMaterialEntry} onImportCalendar={importCalendarEvent} onImportTimetable={importTimetableSlot} onOpenContext={() => setContextOpen(true)} onOpenAdmin={onOpenAdmin} onOpenFile={openFile} onStartAgent={(prompt, mode) => startAgent(prompt, mode)} onCreateTask={createBoardTask} onMoveTask={moveBoardTask} onDeleteEntity={deleteEntity} /> : null}
           </div>

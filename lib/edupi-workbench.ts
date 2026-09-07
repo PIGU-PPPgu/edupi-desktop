@@ -110,14 +110,14 @@ export function taskPresentation(task: TeacherTask): TaskPresentation {
   if (task.boardRevision > 0 && task.boardStage === "todo") return { label: "待开始", tone: "warning" };
   const contentStatus = taskContentStatusLabel(task);
   if (contentStatus === "准备失败") return { label: contentStatus, tone: "danger" };
-  if (contentStatus === "正在准备" || contentStatus === "待你确认") return { label: contentStatus, tone: "warning" };
-  if (task.boardStage === "progress") return { label: "正在准备", tone: "warning" };
-  if (task.boardStage === "review") return { label: "待你确认", tone: "warning" };
-  if (task.boardStage === "todo") return task.status === "hold" ? { label: "已暂缓", tone: "neutral" } : { label: "待开始", tone: task.status === "planned" ? "warning" : "neutral" };
   if (task.status === "accepted") return { label: "已接受", tone: "success" };
   if (task.status === "modified") return { label: "修改后接受", tone: "success" };
   if (task.status === "rejected") return { label: "已拒绝", tone: "danger" };
   if (task.status === "hold") return { label: "已暂缓", tone: "neutral" };
+  if (contentStatus === "正在准备" || contentStatus === "待你确认") return { label: contentStatus, tone: "warning" };
+  if (task.boardStage === "progress") return { label: "正在准备", tone: "warning" };
+  if (task.boardStage === "review") return { label: "待你确认", tone: "warning" };
+  if (task.boardStage === "todo") return { label: "待开始", tone: "warning" };
   return { label: "待审核", tone: "warning" };
 }
 

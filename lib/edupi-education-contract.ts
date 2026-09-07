@@ -1581,6 +1581,11 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
   const workCandidates = normalizeWorkCandidateTargets(snapshotPayload?.review_targets, tasks, snapshotPayload);
   const workCandidateReceipts = normalizeWorkCandidateReceipts(snapshotPayload?.receipts);
   const workCandidateReviewHistory = normalizeWorkCandidateReviewHistory(snapshotPayload?.review_history);
+  for (const candidate of workCandidates) {
+    const task = tasks.find(item => item.id === candidate.taskId);
+    const history = workCandidateReviewHistory.filter(item => item.target?.targetId === candidate.candidateId);
+    if (task && history.length) task.reviewHistory = history.map(item => ({ review_id:item.reviewId, action:item.decision, reviewed_at:item.reviewedAt, note:item.teacherReview.note, reviewer:item.teacherReview.reviewerId }));
+  }
   const workCases = normalizeWorkCases(snapshotPayload?.work_cases, tasks);
   const continuity = record(workspace.continuity);
   const memories = normalizeMemories({
