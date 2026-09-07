@@ -4,7 +4,7 @@ import { dirname } from "node:path";
 import lockfile from "proper-lockfile";
 import type { ReminderEvent } from "./edupi-reminder-events";
 
-export type Reminder = { id: string; taskId: string; title: string; kind: "ready" | "failed" | "due"; identity: string; createdAt: string; read: boolean; handled: boolean; snoozedUntil: string | null; notificationAttemptedAt?: string; withdrawn?: boolean };
+export type Reminder = { id: string; taskId: string; title: string; kind: "ready" | "failed" | "due" | "brief"; identity: string; createdAt: string; read: boolean; handled: boolean; snoozedUntil: string | null; notificationAttemptedAt?: string; withdrawn?: boolean };
 type Store = { version: 1; items: Reminder[]; notifications?: Reminder[] };
 export async function updateReminderStore(file: string, snapshot: Record<string, ReminderEvent>, action?: { id: string; type: "read" | "handled" | "snooze" | "claim_notifications" | "release_notification"; attemptedAt?: string }, now = Date.now()): Promise<Store> {
   await mkdir(dirname(file), { recursive: true });

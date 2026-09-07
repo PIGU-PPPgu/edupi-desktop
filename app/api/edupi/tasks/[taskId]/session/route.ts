@@ -10,7 +10,7 @@ export async function GET(
   const { taskId } = await params;
   const data = await readEducationContract();
   const task = data.tasks.find((item) => item.id === taskId);
-  if (!task) return NextResponse.json({ error: "教学任务不存在" }, { status: 404 });
+  if (!task && !data.continuity.documents.some(item => `document:${item.id}` === taskId)) return NextResponse.json({ error: "事项不存在" }, { status: 404 });
   return NextResponse.json({ binding: data.taskSessions[taskId] ?? null });
 }
 

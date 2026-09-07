@@ -786,6 +786,16 @@ export function AppShell() {
       router.replace(`/?${params.toString()}`, { scroll: false });
       return true;
     }
+    if (action.action === "open_document") {
+      const response = await fetch("/api/edupi/workspace", { cache: "no-store" });
+      if (!response.ok) return false;
+      const { data } = await response.json();
+      if (!data.continuity.documents.some((item: { id: string }) => item.id === action.documentId)) return false;
+      params.set("module", "home"); params.set("view", "dashboard"); params.set("document", action.documentId);
+      params.delete("task"); params.delete("stage");
+      router.replace(`/?${params.toString()}`, { scroll: false });
+      return true;
+    }
     if (action.action === "open_task") {
       const response = await fetch("/api/edupi/education", { cache: "no-store" });
       const data = response.ok ? await response.json() as { tasks?: Array<{ id: string | null }> } : {};
@@ -817,7 +827,9 @@ export function AppShell() {
     if (!response.ok) throw new Error("事项读取失败");
     const { data } = await response.json();
     const task = data.tasks.find((item: { id: string }) => item.id === taskId);
-    if (!task) throw new Error("事项已移除");
+    const document = data.continuity.documents.find((item: { id: string }) => `document:${item.id}` === taskId);
+    if (!task && !document) throw new Error("事项已移除");
+    const title = task?.title || document.title;
     const sessionId = data.taskSessions[taskId]?.sessionId || null;
     const workspaceDraftKey = `new:${data.workspace}`;
     const workspaceDraft = getDraft(workspaceDraftKey);
@@ -827,11 +839,12 @@ export function AppShell() {
     const result = await handleActivateEducationAgentSession({ taskId, sessionId, cwd: data.workspace, view: "tasks", stage: "run", signal: new AbortController().signal });
     if (workspaceDraft) setDraft(workspaceDraftKey, workspaceDraft);
     const key = result === "existing" ? sessionId! : reminderKey;
-    if (draft && (draft.value || draft.images.length)) { setDraft(key, draft); setReminderDraft({ taskId, text: draft.value, title: task.title }); }
+    if (draft && (draft.value || draft.images.length)) { setDraft(key, draft); setReminderDraft({ taskId, text: draft.value, title }); }
+    else if (result === "existing") setReminderDraft({ taskId, text: "", title });
     else {
-      const text = reminderPrompt(task);
+      const text = task ? reminderPrompt(task) : `关于${document.title}：\n${document.excerpt}\n来源文件：${document.path}\n\n我想补充：\n`;
       setDraft(key, { value: text, images: [] });
-      setReminderDraft({ taskId, text, title: task.title });
+      setReminderDraft({ taskId, text, title });
     }
     const params = new URLSearchParams({ edupi: "1", module: "home", view: "chat", task: taskId });
     if (result === "existing" && sessionId) params.set("session", sessionId);

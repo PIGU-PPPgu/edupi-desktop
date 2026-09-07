@@ -44,7 +44,7 @@ export function EduPiReminderInbox({ onAction, onContinue }: { onAction: (action
       {error ? <p role="alert">{error}</p> : null}
       {!visible.length && !error ? <p>暂无待处理提醒</p> : null}
       {visible.slice(currentPage * 8, currentPage * 8 + 8).map(item => <details key={item.id} onToggle={event => { if (event.currentTarget.open && !item.read) void change(item.id, "read"); }}>
-        <summary>{item.title} · {item.withdrawn ? "已撤下" : item.kind === "ready" ? "已准备" : item.kind === "due" ? "已到期" : "准备失败"}</summary>
+        <summary>{item.title} · {item.withdrawn ? "已撤下" : item.kind === "brief" ? "简报已更新" : item.kind === "ready" ? "已准备" : item.kind === "due" ? "已到期" : "准备失败"}</summary>
         <time>{new Date(item.snoozedUntil || item.createdAt).toLocaleString("zh-CN")}</time>
         <button className="native-button" disabled={busy} onClick={async () => {
           setBusy(true);
@@ -52,7 +52,12 @@ export function EduPiReminderInbox({ onAction, onContinue }: { onAction: (action
           catch (error) { setError(error instanceof Error ? error.message : "协作打开失败"); }
           finally { setBusy(false); }
         }}>继续聊</button>
-        <button className="native-button" onClick={() => void onAction({ action: "open_task", taskId: item.taskId, stage: "artifact" })}>查看事项</button>
+        <button className="native-button" onClick={async () => {
+          try {
+            const opened = await onAction(item.kind === "brief" ? { action: "open_document", documentId: item.taskId.slice("document:".length) } : { action: "open_task", taskId: item.taskId, stage: "artifact" });
+            if (!opened) throw new Error("事项暂不可用");
+          } catch { setError("事项暂不可用"); }
+        }}>查看事项</button>
         <button className="native-button" onClick={() => void change(item.id, "snooze")}>一小时后提醒</button>
         <button className="native-button" onClick={() => void change(item.id, "handled")}>已处理</button>
       </details>)}

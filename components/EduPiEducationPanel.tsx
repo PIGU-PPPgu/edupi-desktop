@@ -669,6 +669,17 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     setDrawer("file");
   }, []);
 
+  const reminderDocumentId = searchParams.get("document");
+  useEffect(() => {
+    if (!reminderDocumentId || !education) return;
+    const document = education.continuity.documents.find(item => item.id === reminderDocumentId);
+    if (!document) return;
+    openFile(`${education.workspace.replace(/[\\/]$/, "")}/${document.path}`);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("document");
+    router.replace(`/?${params.toString()}`, { scroll: false });
+  }, [reminderDocumentId, education, openFile, searchParams, router]);
+
   const openTaskDetail = useCallback((task: TeacherTask) => {
     cancelActivation();
     setDrawer(null);

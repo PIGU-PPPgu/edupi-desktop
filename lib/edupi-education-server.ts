@@ -58,7 +58,7 @@ export async function projectEducationContract(snapshot: EducationSnapshot): Pro
     teacherMaterials: generated?.teacherMaterials || [],
     generatedArtifactsUnavailable: generated === null || generated.artifacts === null,
     taskSessions: projectTaskSessionBindings(taskSessionStore, {
-      taskIds: new Set(contract.tasks.map((task) => task.id).filter((id): id is string => Boolean(id))),
+      taskIds: new Set([...contract.tasks.map((task) => task.id).filter((id): id is string => Boolean(id)), ...contract.continuity.documents.map(document => `document:${document.id}`)]),
       knownSessionIds,
       runningSessionIds: new Set(getRunningRpcSessionIds()),
     }),
@@ -229,7 +229,8 @@ export async function bindEducationTaskSession(input: { taskId: unknown; session
   const root = snapshot.dataRoot.root;
   const current = await readEducationContract();
   const task = current.tasks.find((item) => item.id === taskId);
-  if (!task || task.externalSend || task.scope !== "teacher_internal" || !task.requiresTeacherReview || task.audience.some((item) => item !== "teacher")) {
+  const document = current.continuity.documents.find(item => `document:${item.id}` === taskId);
+  if (!document && (!task || task.externalSend || task.scope !== "teacher_internal" || !task.requiresTeacherReview || task.audience.some((item) => item !== "teacher"))) {
     throw new Error("该任务不满足 teacher_internal 会话绑定边界");
   }
 

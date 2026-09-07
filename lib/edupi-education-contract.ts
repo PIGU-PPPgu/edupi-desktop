@@ -1300,11 +1300,12 @@ function normalizeDocuments(value: unknown): EducationDocument[] {
     const title = text(raw.title);
     const excerpt = stripFrontMatter(text(raw.excerpt) ?? "");
     if ((kind !== "daily" && kind !== "weekly" && kind !== "insight" && kind !== "dream") || !path?.startsWith(".edupi/output/") || !title || !excerpt) return [];
+    const reportDate = kind === "daily" ? path.match(/\/(\d{4}-\d{2}-\d{2})\.md$/)?.[1] : null;
     return [{
-      id: text(raw.id) || `document:${index}`,
+      id: reportDate ? `daily:${reportDate}` : text(raw.id) || text(raw.document_id) || `document:${index}`,
       kind,
       title,
-      date: timestamp(raw.date),
+      date: reportDate || timestamp(raw.date),
       path,
       excerpt,
     } satisfies EducationDocument];

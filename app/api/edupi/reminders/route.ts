@@ -9,7 +9,7 @@ import { parseJsonWithinLimit } from "@/lib/bounded-form-data";
 export const dynamic = "force-dynamic";
 async function result(action?: { id: string; type: "read" | "handled" | "snooze" | "claim_notifications" | "release_notification"; attemptedAt?: string }) {
   const { data } = await readEducationWorkspaceBundle();
-  const state = await updateReminderStore(path.join(data.workspace, ".edupi", "desktop", "reminders.json"), reminderEvents(data.tasks, data.workspace), action);
+  const state = await updateReminderStore(path.join(data.workspace, ".edupi", "desktop", "reminders.json"), reminderEvents(data.tasks, data.workspace, new Date(), data.continuity.documents), action);
   return NextResponse.json({ items: state.items, notifications: state.notifications, workspace: data.workspace, taskSessions: data.taskSessions });
 }
 export async function GET() {
