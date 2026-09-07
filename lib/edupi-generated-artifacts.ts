@@ -14,6 +14,24 @@ export async function workspaceResourcesRequest() {
 }
 const extensions = new Set([".md", ".txt", ".docx", ".pdf", ".pptx", ".xlsx", ".csv", ".html"]);
 
+export function nativeToolArtifactPath(event: { type: string; toolName?: unknown; isError?: unknown; result?: unknown }): string | null {
+  if (event.type !== "tool_execution_end" || event.isError || (event.toolName !== "edupi_make_document" && event.toolName !== "edupi_make_ppt")) return null;
+  const result = event.result as { details?: { path?: unknown } } | undefined;
+  return typeof result?.details?.path === "string" ? result.details.path : null;
+}
+
+export function writtenToolArtifactPath(event: { type: string; toolCallId?: unknown; toolName?: unknown; args?: unknown; isError?: unknown }, root: string, pending: Map<string, string>): string | null {
+  if (typeof event.toolCallId !== "string") return null;
+  if (event.type === "tool_execution_start" && (event.toolName === "write" || event.toolName === "edit")) {
+    const args = event.args as { path?: unknown } | undefined;
+    if (typeof args?.path === "string" && extensions.has(extname(args.path).toLowerCase())) pending.set(event.toolCallId, resolve(root, args.path));
+  }
+  if (event.type !== "tool_execution_end") return null;
+  const file = pending.get(event.toolCallId);
+  pending.delete(event.toolCallId);
+  return !event.isError && file ? file : null;
+}
+
 export function completedSessionFiles(entries: Array<Record<string, unknown>>, root: string): string[] {
   const writes = new Map<string, string>();
   const completed = new Set<string>();
@@ -21,7 +39,7 @@ export function completedSessionFiles(entries: Array<Record<string, unknown>>, r
     const message = entry.message as { role?: string; content?: Array<{ type?: string; name?: string; id?: string; arguments?: { path?: string } }>; toolCallId?: string; isError?: boolean } | undefined;
     if (message?.role === "assistant" && Array.isArray(message.content)) {
       for (const block of message.content) {
-        if (block.type === "toolCall" && (block.name === "write" || block.name === "edit") && block.id && typeof block.arguments?.path === "string") {
+        if (block.type === "toolCall" && ["write", "edit", "edupi_make_ppt", "edupi_make_document"].includes(block.name || "") && block.id && typeof block.arguments?.path === "string") {
           const file = resolve(root, block.arguments.path);
           if (extensions.has(extname(file).toLowerCase())) writes.set(block.id, file);
         }
@@ -54,7 +72,7 @@ export async function generatedArtifactsRequest(action: "list" | "register" | "a
   return response;
 }
 
-export function snapshotGeneratedFiles(root: string): Map<string, string> {
+export function snapshotGeneratedFiles(root: string, outputDirectory?: string): Map<string, string> {
   const files = new Map<string, string>();
   const visit = (directory: string, depth: number) => {
     if (depth > 6 || files.size >= 2000) return;
@@ -67,6 +85,6 @@ export function snapshotGeneratedFiles(root: string): Map<string, string> {
       try { const stat = statSync(file); files.set(file, `${stat.mtimeMs}:${stat.size}`); } catch { /* File can be moved by the active tool. */ }
     }
   };
-  for (const directory of [".edupi/output", "教学产物", "deliverables", "output"]) visit(resolve(root, directory), 0);
+  for (const directory of outputDirectory ? [outputDirectory] : [".edupi/output", "教学产物", "deliverables", "output"]) visit(resolve(root, directory), 0);
   return files;
 }
