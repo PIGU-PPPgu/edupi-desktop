@@ -85,8 +85,8 @@ async function callBrokerRequest<T>({
   const operation = request.operation;
   const requestId = request.request_id;
   if (typeof operation !== "string" || typeof requestId !== "string") throw new EduPiCoreProcessError("invalid_request", "Core bridge request identity is invalid");
-  const outerOperation = ["command", "students", "delete"].includes(operation) ? "bridge_call" : "bridge_read";
-  if (outerOperation === "bridge_read" && !["health", "snapshot"].includes(operation)) throw new EduPiCoreProcessError("unsupported_operation", "Core operation is unavailable");
+  const outerOperation = ["command", "students", "delete", "generated-artifacts"].includes(operation) ? "bridge_call" : "bridge_read";
+  if (outerOperation === "bridge_read" && !["health", "snapshot", "workspace-resources", "kernel"].includes(operation)) throw new EduPiCoreProcessError("unsupported_operation", "Core operation is unavailable");
   const runtimeRequest = {
     protocol: CORE_RUNTIME_PROTOCOL,
     protocol_version: CORE_RUNTIME_PROTOCOL_VERSION,

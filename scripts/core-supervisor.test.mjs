@@ -297,7 +297,7 @@ test("daemon broker starts before Core, reconnects clients, and releases authori
     rendezvous = await installClientCapability(environment, proxyReady.endpoint);
     const health = await rendezvous.client.callEduPiCore({ operation: "health", requestId: "supervisor-client-health", runtime: rendezvous.runtime, dataRoot: rendezvous.dataRoot });
     assert.equal(health.ok, true);
-    assert.deepEqual(health.supported_operations, ["health", "snapshot", "command", "students", "delete"]);
+    assert.deepEqual(health.supported_operations, ["health", "snapshot", "command", "students", "delete", "workspace-resources", "generated-artifacts", "kernel"]);
     const validatedHealth = await rendezvous.snapshotClient.readEduPiCoreHealth({
       requestId: "supervisor-validated-health",
       roots: { runtime: rendezvous.runtime, dataRoot: rendezvous.dataRoot },
@@ -494,7 +494,7 @@ test("one-shot rollback remains brokered and never starts a resident Core", { sk
     capability = await installClientCapability(environment, ready.endpoint);
     const health = await capability.client.callEduPiCore({ operation: "health", requestId: "one-shot-health", runtime: capability.runtime, dataRoot: capability.dataRoot });
     assert.equal(health.ok, true);
-    assert.deepEqual(health.supported_operations, ["health", "snapshot", "command", "students", "delete"]);
+    assert.deepEqual(health.supported_operations, ["health", "snapshot", "command", "students", "delete", "workspace-resources", "generated-artifacts", "kernel"]);
     const students = await capability.client.runCoreProcess({
       runtime: capability.runtime,
       dataRoot: capability.dataRoot,

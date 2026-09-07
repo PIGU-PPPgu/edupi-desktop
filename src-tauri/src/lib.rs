@@ -67,11 +67,11 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const LIGHT_WINDOW_BG: Color = Color(247, 247, 245, 255);
 const DARK_WINDOW_BG: Color = Color(28, 28, 30, 255);
 
-const PINNED_CORE_COMMIT: &str = "554b50e252e45b370cb1cafdb875dab67382806e";
+const PINNED_CORE_COMMIT: &str = "5f5b98bd372efe90b58dab931f08938a739ed91d";
 const PINNED_CORE_MANIFEST_HASH: &str =
-    "sha256:24329fcff6c80d30cb6a3237738e7d18867398fb8f8aef33a2773a7a0cc417a6";
+    "sha256:be39338497f9bfd0f538a7351424c0d3cd49388e0dd2a4f0d5b16a7a7049062a";
 const PINNED_CORE_SCHEMA_HASH: &str =
-    "sha256:315be5504ecffa382213d90211fc6263664bdcfcbb7974edb5994d0c3e7aaef2";
+    "sha256:b6f325d73d0afc0410e27f1dbfefb846412d911ea4e94f2d3ed3a9d1dcfb4357";
 const EMBEDDED_CORE_COMPAT_MANIFEST: &str = include_str!("../../contracts/edupi-core-compat.json");
 
 struct DesktopServer {

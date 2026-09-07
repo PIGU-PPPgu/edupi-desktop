@@ -30,9 +30,9 @@ const BRIDGE_PROTOCOL = "edupi-desktop-bridge";
 const BRIDGE_VERSION = 1;
 const BRIDGE_PRODUCER = "edupi-desktop";
 const BRIDGE_CONTRACT_VERSION = "1.1";
-const BRIDGE_READS = new Set(["health", "snapshot"]);
-const BRIDGE_CALLS = new Set(["command", "students", "delete"]);
-const BROKER_SUPPORTED_OPERATIONS = Object.freeze(["health", "snapshot", "command", "students", "delete"]);
+const BRIDGE_READS = new Set(["health", "snapshot", "workspace-resources", "kernel"]);
+const BRIDGE_CALLS = new Set(["command", "students", "delete", "generated-artifacts"]);
+const BROKER_SUPPORTED_OPERATIONS = Object.freeze(["health", "snapshot", "command", "students", "delete", "workspace-resources", "generated-artifacts", "kernel"]);
 const LOOPBACK_ADDRESSES = new Set(["127.0.0.1", "::ffff:127.0.0.1"]);
 
 function fail(code) {
