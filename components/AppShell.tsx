@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useEduPiCompletionMonitor } from "@/hooks/useEduPiCompletionMonitor";
 import { useEduPiReminderNotifications } from "@/hooks/useEduPiReminderNotifications";
+import { bindReminderSession } from "@/lib/edupi-reminder-session";
 import { SessionSidebar } from "./SessionSidebar";
 import { EduPiAdminPanel, type AdminSectionId } from "./EduPiAdminPanel";
 import { EduPiEducationPanel } from "./EduPiEducationPanel";
@@ -622,6 +623,8 @@ export function AppShell() {
     params.set("edupi", "1");
     params.set("view", "chat");
     params.delete("session");
+    params.delete("task");
+    params.delete("reminders");
     router.replace(`/?${params.toString()}`, { scroll: false });
   }, [router, searchParams]);
 
@@ -656,6 +659,11 @@ export function AppShell() {
     router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
   }, [router, hydrateSelectedSession]);
 
+  const [pendingReminderBinding, setPendingReminderBinding] = useState<{ taskId: string; sessionId: string } | null>(null);
+  const retryReminderBinding = useCallback(async (binding: { taskId: string; sessionId: string }) => {
+    try { await bindReminderSession(binding.taskId, binding.sessionId); setPendingReminderBinding(null); }
+    catch { setPendingReminderBinding(binding); }
+  }, []);
   const handleEducationSessionCreated = useCallback((session: SessionInfo) => {
     setNewSessionCwd(null);
     setSelectedSession(session);
@@ -664,8 +672,10 @@ export function AppShell() {
     const params = new URLSearchParams(searchParams.toString());
     params.set("edupi", "1");
     params.set("session", session.id);
+    const taskId = params.get("task");
+    if (taskId && params.get("view") === "chat") void retryReminderBinding({ taskId, sessionId: session.id });
     router.replace(`/?${params.toString()}`, { scroll: false });
-  }, [hydrateSelectedSession, router, searchParams]);
+  }, [hydrateSelectedSession, router, searchParams, retryReminderBinding]);
 
   const handleActivateEducationAgentSession = useCallback(async ({ taskId, sessionId, cwd, view, stage, signal }: { taskId: string; sessionId: string | null; cwd: string; view: "tasks" | "review"; stage: TaskStage; signal: AbortSignal }): Promise<"existing" | "new"> => {
     const requestId = educationActivationRequestIdRef.current + 1;
@@ -1247,6 +1257,8 @@ export function AppShell() {
   );
 
   const edupiChatWindow = (
+    <>
+    {pendingReminderBinding ? <div role="alert">对话已保存，任务关联失败 <button type="button" className="native-button" onClick={() => void retryReminderBinding(pendingReminderBinding)}>重试关联</button></div> : null}
     <ChatWindow
       key={`edupi-chat-${sessionKey}`}
       session={selectedSession}
@@ -1272,6 +1284,7 @@ export function AppShell() {
       emptyTitle="新建对话"
       emptySubtitle="从教学任务、材料或课堂问题开始。"
     />
+    </>
   );
 
   return (
