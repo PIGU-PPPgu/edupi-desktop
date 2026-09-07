@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useEduPiCompletionMonitor } from "@/hooks/useEduPiCompletionMonitor";
+import { useEduPiReminderNotifications } from "@/hooks/useEduPiReminderNotifications";
 import { SessionSidebar } from "./SessionSidebar";
 import { EduPiAdminPanel, type AdminSectionId } from "./EduPiAdminPanel";
 import { EduPiEducationPanel } from "./EduPiEducationPanel";
@@ -16,7 +17,7 @@ import type { DesktopControlInput } from "@/lib/edupi-desktop-control";
 import type { ComputerUseBridgeResult, ComputerUseInput } from "@/lib/edupi-computer-use";
 import { runComputerUseFromAgent, setComputerUseEnabledNative } from "@/lib/desktop-computer-use";
 import { ChatWindow } from "./ChatWindow";
-import { clearDraft } from "@/lib/draft-store";
+import { clearDraft, getDraft, setDraft } from "@/lib/draft-store";
 import { TabBar, type Tab } from "./TabBar";
 
 // Heavy, rarely-used surfaces are code-split out of the main bundle. The
@@ -798,6 +799,30 @@ export function AppShell() {
     return true;
   }, [router, searchParams]);
 
+  const [reminderDraft, setReminderDraft] = useState<{ taskId: string; text: string; title: string } | null>(null);
+  const continueReminder = useCallback(async (taskId: string) => {
+    const response = await fetch("/api/edupi/workspace", { cache: "no-store" });
+    if (!response.ok) throw new Error("事项读取失败");
+    const { data } = await response.json();
+    const task = data.tasks.find((item: { id: string }) => item.id === taskId);
+    if (!task) throw new Error("事项已移除");
+    const sessionId = data.taskSessions[taskId]?.sessionId || null;
+    const draftKey = sessionId || `new:${data.workspace}`;
+    const draft = getDraft(draftKey);
+    const result = await handleActivateEducationAgentSession({ taskId, sessionId, cwd: data.workspace, view: "tasks", stage: "run", signal: new AbortController().signal });
+    const key = result === "existing" ? sessionId! : `new:${data.workspace}`;
+    if (draft && (draft.value || draft.images.length)) { setDraft(key, draft); setReminderDraft({ taskId, text: draft.value, title: task.title }); }
+    else {
+      const text = `关于${task.title || "这项任务"}：\n${task.summary || ""}\n\n我想补充：\n`;
+      setDraft(key, { value: text, images: [] });
+      setReminderDraft({ taskId, text, title: task.title });
+    }
+    const params = new URLSearchParams({ edupi: "1", module: "home", view: "chat", task: taskId });
+    if (result === "existing" && sessionId) params.set("session", sessionId);
+    router.replace(`/?${params.toString()}`, { scroll: false });
+    chatInputRef.current?.focus();
+  }, [handleActivateEducationAgentSession, router]);
+
   const handleEduPiComputerAction = useCallback((action: ComputerUseInput, expiresAt?: number): Promise<ComputerUseBridgeResult> => {
     return runComputerUseFromAgent(action, expiresAt);
   }, []);
@@ -817,7 +842,8 @@ export function AppShell() {
   const handleEducationProjectionChanged = useCallback(() => {
     setEducationRefreshKey((key) => key + 1);
   }, []);
-  useEduPiCompletionMonitor({ onRefresh: handleEducationProjectionChanged });
+  useEduPiCompletionMonitor({ onRefresh: handleEducationProjectionChanged, notifications: false });
+  useEduPiReminderNotifications();
 
   const handleProjectFilesImported = useCallback(() => {
     setExplorerRefreshKey((k) => k + 1);
@@ -1237,6 +1263,9 @@ export function AppShell() {
       onContextUsageChange={handleContextUsageChange}
       onEducationImportCompleted={handleEducationImportCompleted}
       onEduPiAction={handleEduPiAppAction}
+      onContinueReminder={continueReminder}
+      reminderText={reminderDraft?.taskId === searchParams.get("task") ? reminderDraft.text : undefined}
+      reminderTitle={reminderDraft?.taskId === searchParams.get("task") ? reminderDraft.title : undefined}
       onEduPiComputerAction={handleEduPiComputerAction}
       onOpenFile={handleOpenLinkedFile}
       onProjectFilesImported={handleProjectFilesImported}
@@ -1912,6 +1941,9 @@ export function AppShell() {
               onContextUsageChange={handleContextUsageChange}
               onEducationImportCompleted={handleEducationImportCompleted}
               onEduPiAction={handleEduPiAppAction}
+              onContinueReminder={continueReminder}
+              reminderText={reminderDraft?.taskId === searchParams.get("task") ? reminderDraft.text : undefined}
+              reminderTitle={reminderDraft?.taskId === searchParams.get("task") ? reminderDraft.title : undefined}
               onEduPiComputerAction={handleEduPiComputerAction}
               onOpenFile={handleOpenLinkedFile}
               onProjectFilesImported={handleProjectFilesImported}

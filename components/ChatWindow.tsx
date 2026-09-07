@@ -48,6 +48,9 @@ interface Props {
   onProjectFilesImported?: () => void;
   onEducationImportCompleted?: (toolName: EducationImportToolName) => void;
   onEduPiAction?: (action: DesktopControlInput) => boolean | Promise<boolean>;
+  onContinueReminder?: (taskId: string) => Promise<void>;
+  reminderText?: string;
+  reminderTitle?: string;
   onEduPiComputerAction?: (action: ComputerUseInput, expiresAt?: number) => ComputerUseBridgeResult | Promise<ComputerUseBridgeResult>;
 }
 
@@ -225,7 +228,8 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
   );
 }
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, onContinueReminder, reminderText, reminderTitle, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
+  useEffect(() => { if (reminderText) chatInputRef?.current?.insertIfEmpty(reminderText); }, [reminderText, chatInputRef, newSessionCwd, session?.id]);
   const { t } = useI18n();
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
 
@@ -874,7 +878,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {onEduPiAction ? <EduPiReminderInbox onAction={onEduPiAction} /> : null}
+      {onEduPiAction ? <EduPiReminderInbox onAction={onEduPiAction} onContinue={onContinueReminder} /> : null}
+      {reminderTitle ? <div role="status" style={{ padding: "8px 12px", color: "var(--text-muted)" }}>{reminderTitle}</div> : null}
       {onEduPiAction && (session?.id || sessionIdRef.current) && messageCwd ? <EduPiConversationFiles sessionId={(session?.id || sessionIdRef.current)!} cwd={messageCwd} onOpen={onOpenFile} /> : null}
       {isDragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex animate-[drop-zone-in_0.15s_ease_both] items-center justify-center bg-[var(--accent-soft)] backdrop-blur-[1px]">
