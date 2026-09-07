@@ -1,5 +1,25 @@
 # EduPi Desktop implementation plans
 
+## Active closure roadmap — 2026-09-06
+
+Follow [产品闭环 PR 路线图 R01–R16](./2026-09-06-product-closure-roadmap.md). The first priority is automatic registration and visibility of files generated in chat. This roadmap consolidates remaining user-reported gaps after v0.3.4; older checkpoints retain their evidence and limitations. Update the roadmap with actual implementation PR links and acceptance results after each slice.
+
+The active `next_entry_point` is R01 in that roadmap, extended by the user's R16 model configuration and R17 visible student networks. This explicitly supersedes every older “Current direction”, “resume pointer”, and `next_entry_point` below for execution order. Those entries remain historical evidence, not competing instructions. On resumption, read the active roadmap first; keep architectural ownership rules and prior evidence intact.
+
+## Current direction — 2026-09-06
+
+Continue from [requested preparation execution](./2026-09-06-requested-preparation.md). Chat can now find and start one existing timetable/calendar preparation task before its due date. The next product slice is typed teacher-created preparation templates and artifact contracts, not another navigation layer.
+
+## Current direction — 2026-09-05
+
+Continue the network phase with [local graph and preparation evidence](./2026-09-05-local-graph-preparation.md): bounded event-based graph, roster class import and scoped learning evidence in preparation. Retain the explicit identity and topic-matching limitations.
+
+The original Desktop PRs #36/#37/#38 are merged. Student-network work now starts with [source-linked student records](./2026-09-05-student-records-checkpoint.md); this is an evidence-recording slice, not the completed graphical network or preparation retrieval integration.
+
+User clarification: the original three consecutive product PRs remain the active execution line. Follow [连续三阶段执行](./2026-09-05-three-pr-execution.md); the student network is additive, not a replacement.
+
+The teacher approved the next three product stages and added conversation-driven student learning and peer-interaction networks. Continue from [学生教育网络与桌面端下一轮计划](./2026-09-05-student-education-network.md). This plan connects existing observation capture, semester scopes and the mathematics graph to Core-owned student evidence and Desktop views. Graph implementation and real conversation verification are still pending; do not treat the plan as delivered functionality.
+
 This directory is the durable execution index for the EduPi Desktop half of the dual-spiral roadmap. Desktop is the visible, controllable body: it presents Core-owned state, explains evidence and review, and issues typed commands. Core remains the brain and single canonical truth store.
 
 The shared append-only checkpoint ledger is the Core file docs/loop/DUAL_SPIRAL_CHECKPOINTS.md. It is the only shared record allowed to mark a Core/Desktop checkpoint passed.
@@ -158,4 +178,8 @@ Resume at **E4 — 课后口述到教学记忆**. Bind one short teacher voice/t
 
 ## Current resume pointer — 2026-09-02 Packaged Core bootstrap
 
-The packaged Core bootstrap is implemented in [2026-09-02-packaged-core-bootstrap.md](./2026-09-02-packaged-core-bootstrap.md). Desktop pins Core `ca623bdf93d781f57b7ad89956dcec9171ac7738` and component manifest `sha256:8431f854d95fd049f3c2e8a54a0885e058bb1b1a40a934acf18502ec2e322028`, stages the exact runtime closure, and resolves data roots in environment → persisted → managed order. Remaining release evidence is signed artifacts plus clean-machine Windows install/launch/update/uninstall verification.
+The packaged Core bootstrap is implemented in [2026-09-02-packaged-core-bootstrap.md](./2026-09-02-packaged-core-bootstrap.md). Desktop pins Core `542d9f5ecff463b40e955778fa8af42a78b4ac8d` and component manifest `sha256:ea64a99cfaea87a1b3929c91a8635ace165d5beec854531d87533a9ae0c34fed`, stages the exact runtime closure, and resolves data roots in environment → persisted → managed order. Remaining release evidence is signed artifacts plus clean-machine Windows install/launch/update/uninstall verification.
+
+## Current resume pointer — 2026-09-02 QM-derived Pi harness seam
+
+The first source-attributed QM adaptation is recorded in [2026-09-02-qm-pi-harness-adapter.md](./2026-09-02-qm-pi-harness-adapter.md). It keeps Pi as the sole internal adapter and preserves all client contracts. Before enabling any alternate harness, replace the remaining `AgentSessionWrapper.inner` access with adapter-owned session/title operations.

@@ -57,8 +57,12 @@ test("class and student modules select one student and expose real import and ex
   assert.match(views, /mode=\{props\.view\}/);
   for (const label of ["导入名单", "导出档案", "导出轨迹", "学习模式", "成长轨迹", "家校记录", "相关任务"]) assert.match(student, new RegExp(label));
   assert.match(student, /\/api\/edupi\/students\/import/);
+  assert.match(student, /\.xlsx/);
+  assert.match(student, /new FormData\(\)/);
   assert.match(student, /\^id\$\|_id\$\|_ids\$\|hash\|path/);
   assert.match(route, /importStudentRoster/);
+  assert.match(route, /parseStudentRosterFile/);
+  assert.match(route, /parseFormDataWithinLimit/);
   assert.match(route, /readEducationContract/);
 });
 
@@ -103,6 +107,26 @@ test("review renders one selected decision and the rail exposes real EduPi activ
   assert.match(rail, /memoryCount/);
   assert.match(rail, /edupi-activity-pulse/);
   assert.match(css, /@keyframes edupiActivityPulse/);
+});
+
+test("activity pulse includes proactive kernel runs", async () => {
+  const panel = await read("./EduPiEducationPanel.tsx");
+  assert.match(panel, /\/api\/edupi\/kernel/);
+  assert.match(panel, /runningSessionCount \+ runningKernelCount/);
+});
+
+test("education memory uses Core semesters before category and pagination", async () => {
+  const [panel, sider, database] = await Promise.all([
+    read("./EduPiEducationPanel.tsx"),
+    read("./EduPiObjectSider.tsx"),
+    read("./EduPiMemoryDatabase.tsx"),
+  ]);
+  assert.match(panel, /\/api\/edupi\/memory-scopes/);
+  assert.match(sider, /memoryScopes\?\.semesters/);
+  assert.match(sider, />学期</);
+  assert.match(database, /semester\?\.label/);
+  assert.match(database, /scopedMemoryIds/);
+  assert.match(database, /edupi-database-pagination/);
 });
 
 test("narrow screens retain the object selector and exports neutralize spreadsheet formulas", async () => {

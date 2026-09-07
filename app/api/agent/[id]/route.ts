@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveSessionPath } from "@/lib/session-reader";
-import { startRpcSession, getRpcSession } from "@/lib/rpc-manager";
+import { getRpcSession } from "@/lib/rpc-manager";
+import { startHarnessSession } from "@/lib/harness/runtime";
 
 // POST /api/agent/[id] - Send a command to an existing session
 export async function POST(
@@ -24,7 +25,7 @@ export async function POST(
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    const { session } = await startRpcSession(id, filePath, undefined);
+    const { session } = await startHarnessSession(id, filePath, undefined);
     const result = await session.send(body);
 
     return NextResponse.json({ success: true, data: result });

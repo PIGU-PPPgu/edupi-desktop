@@ -157,6 +157,7 @@ export function validateContainedRegularFile({
 
 type ComponentManifestFile = { path?: unknown; sha256?: unknown; size?: unknown };
 type RuntimeDependencyManifest = { name?: unknown; version?: unknown; root?: unknown; files?: unknown };
+const verifiedFiles = new Map<string, { stamp: string; hash: string; size: number }>();
 
 function verifyManifestFile(root: string, entry: ComponentManifestFile, seenPaths: Set<string>, allowNodeModulesSymlink = false): void {
   const entryPath = entry?.path;
@@ -167,9 +168,15 @@ function verifyManifestFile(root: string, entry: ComponentManifestFile, seenPath
   if (seenPaths.has(entryPath)) throw new Error(`Duplicate component manifest path: ${entryPath}`);
   seenPaths.add(entryPath);
   const resolved = validateContainedRegularFile({ allowedRoot: root, candidate: path.join(root, entryPath), allowNodeModulesSymlink });
+  const stat = fs.statSync(resolved, { bigint: true });
+  const stamp = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
+  const cached = verifiedFiles.get(resolved);
+  if (cached?.stamp === stamp && cached.hash === entryHash && cached.size === entrySize) return;
   const bytes = fs.readFileSync(resolved);
   if (entrySize !== bytes.byteLength) throw new Error(`Component size mismatch: ${entryPath}`);
   if (entryHash !== sha256(bytes)) throw new Error(`Component hash mismatch: ${entryPath}`);
+  if (verifiedFiles.size >= 8192) verifiedFiles.clear();
+  verifiedFiles.set(resolved, { stamp, hash: entryHash, size: entrySize });
 }
 
 function verifyRuntimeDependency(root: string, dependency: RuntimeDependencyManifest, seenPaths: Set<string>, seenPackages: Set<string>): void {

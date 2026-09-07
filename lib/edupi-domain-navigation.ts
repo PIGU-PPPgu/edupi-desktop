@@ -10,7 +10,7 @@ export const TEACHING_SECTIONS: ReadonlyArray<{ id: TeachingSectionId; label: st
 ];
 
 export const MEMORY_CATEGORIES: ReadonlyArray<{ id: EducationMemoryCategory; label: string }> = [
-  { id: "semester", label: "学期" },
+  { id: "semester", label: "学期事项" },
   { id: "class", label: "学生" },
   { id: "teaching", label: "教学" },
   { id: "preferences", label: "教师偏好" },
@@ -24,9 +24,10 @@ export const INSIGHT_CATEGORIES: ReadonlyArray<{ id: InsightCategoryId; label: s
   { id: "teaching", label: "教学改进" },
   { id: "edupi", label: "EduPi 后台" },
 ];
-export type InsightStatusId = "all" | "surfaced" | "brewing" | "signal";
+export type InsightStatusId = "all" | "observation" | "surfaced" | "brewing" | "signal";
 export const INSIGHT_STATUSES: ReadonlyArray<{ id: InsightStatusId; label: string }> = [
   { id: "all", label: "全部" },
+  { id: "observation", label: "原始观察" },
   { id: "surfaced", label: "已浮出" },
   { id: "brewing", label: "酝酿中" },
   { id: "signal", label: "弱信号" },
@@ -68,8 +69,17 @@ export function routePart(value: string | null | undefined, prefix: string, fall
 }
 
 export function memoryCategoryRoute(value: string | null | undefined): EducationMemoryCategory {
-  const requested = routePart(value, "memory", "semester");
+  const requested = routePart(value, "memory", "semester").split(":").at(-1) || "semester";
   return MEMORY_CATEGORIES.some((category) => category.id === requested) ? requested as EducationMemoryCategory : "semester";
+}
+
+export function memorySemesterRoute(value: string | null | undefined, fallback: string | null): string | null {
+  const parts = routePart(value, "memory", "").split(":").filter(Boolean);
+  return parts.length >= 2 ? parts[0] : fallback;
+}
+
+export function memoryObjectId(semesterId: string | null, category: EducationMemoryCategory): string {
+  return semesterId ? `memory:${semesterId}:${category}` : `memory:${category}`;
 }
 
 export function viewKeepsObjectItem(view: string): boolean {

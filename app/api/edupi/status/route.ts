@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { EduPiCoreProcessError } from "@/lib/edupi-core-process-client";
-import { EduPiSnapshotError, readEduPiCoreHealth, readEduPiEducationSnapshot, resolveEduPiBridgeRoots } from "@/lib/edupi-core-snapshot";
+import { EduPiSnapshotError, readEduPiCoreHealth, readEduPiEducationSnapshot, readEduPiKernelProjection, resolveEduPiBridgeRoots } from "@/lib/edupi-core-snapshot";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +8,10 @@ export async function GET() {
   try {
     const roots = resolveEduPiBridgeRoots();
     const { health } = await readEduPiCoreHealth({ roots, requestId: `desktop-status-health-${Date.now().toString(36)}` });
-    const snapshot = await readEduPiEducationSnapshot({ roots, requestId: `desktop-status-snapshot-${Date.now().toString(36)}` });
+    const [snapshot, kernel] = await Promise.all([
+      readEduPiEducationSnapshot({ roots, requestId: `desktop-status-snapshot-${Date.now().toString(36)}` }),
+      readEduPiKernelProjection({ roots, requestId: `desktop-status-kernel-${Date.now().toString(36)}` }),
+    ]);
     const workspace = snapshot.workspace;
     const counts = {
       students: Array.isArray(workspace.students) ? workspace.students.length : 0,
@@ -32,6 +35,7 @@ export async function GET() {
         supportedProjections,
       },
       projection: { status: "ready", reason: null, projection: "education_workspace", counts },
+      kernel: { status: "ready", ...kernel.projection },
     });
   } catch (error) {
     const reason = error instanceof EduPiCoreProcessError
@@ -45,6 +49,7 @@ export async function GET() {
       requiresTeacherReview: true,
       core: { status: "unavailable", reason, supportedCommands: [], supportedProjections: [] },
       projection: { status: "unavailable", reason: `${reason}；未使用本地 JSON 回退` },
+      kernel: { status: "unavailable", summary: { total: 0, running: 0, failed: 0, needs_review: 0, succeeded: 0, skipped: 0 }, runs: [] },
     });
   }
 }

@@ -30,7 +30,7 @@ const AppSettings = dynamic(() => import("./AppSettings").then((m) => m.AppSetti
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { BranchNavigator } from "./BranchNavigator";
 import { UpdateReminder } from "./UpdateReminder";
-import { announceComputerUseChanged, EduPiComputerUseStop } from "./EduPiComputerUseStop";
+import { announceComputerUseChanged } from "./EduPiComputerUseStop";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -214,6 +214,11 @@ export function AppShell() {
   useEffect(() => {
     setMobileSidebarReady(true);
   }, []);
+  useEffect(() => {
+    if (!desktopMode) return;
+    void fetch("/api/edupi/connectors/dingtalk/runtime", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "ensure" }) }).catch(() => {});
+    void fetch("/api/edupi/preparation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "ensure" }) }).catch(() => {});
+  }, [desktopMode]);
   useEffect(() => {
     if (!rightPanelOpen) return;
     reclampSidebarWidth();
@@ -2078,13 +2083,14 @@ export function AppShell() {
       onNavigate={openEducationView}
       onOpenSettings={() => setAppSettingsOpen(true)}
     />}
-    <EduPiComputerUseStop />
     {firstRunGuideOpen && (
       <EduPiFirstRunGuide
         onOpenModels={() => openEduPiAdmin("models")}
         onOpenContext={() => { setEduPiAdminOpen(false); openEducationModule("context"); }}
         onOpenCalendar={() => openEducationView("calendar")}
         onOpenMaterials={() => openEducationView("materials")}
+        onOpenStudents={() => openEducationView("students")}
+        onOpenTeaching={() => openEducationView("teaching")}
         onEnterToday={() => openEducationModule("home")}
         onComplete={finishFirstRunGuide}
         onSkip={finishFirstRunGuide}

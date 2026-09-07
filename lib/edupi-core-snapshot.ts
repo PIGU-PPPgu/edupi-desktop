@@ -4,6 +4,7 @@ import { isWindowsAbsolutePath } from "./file-access";
 import { activeBridgeIdentity } from "./edupi-bridge-manifest";
 import { consumeCoreEnvelope } from "./edupi-bridge-consumer";
 import type { BridgeErrorCode } from "./edupi-bridge-contract";
+import type { EducationMemoryScopeProjection } from "./edupi-memory-scopes";
 import { resolveEduPiCoreRoot, resolveEduPiDataRoot, type ResolvedEduPiCore, type ResolvedEduPiDataRoot } from "./edupi-core-root";
 
 export type CoreEducationWorkspace = Record<string, unknown>;
@@ -34,7 +35,24 @@ type CoreHealth = {
   supported_operations?: unknown;
 };
 
-const CORE_OPERATIONS = ["health", "snapshot", "command", "students", "delete"] as const;
+const CORE_OPERATIONS = ["health", "snapshot", "command", "students", "delete", "kernel", "memory-scopes", "teaching-skills", "connectors", "agent-computer", "platform", "connector-setup"] as const;
+
+export type CoreProactiveWorkRun = {
+  run_id: string;
+  trigger_id: string;
+  status: "running" | "awaiting_delivery" | "failed" | "needs_review" | "succeeded" | "skipped";
+  updated_at: string;
+  result_summary: string | null;
+  attempt_count: number;
+};
+
+export type CoreProactiveWorkProjection = {
+  projection_kind: "proactive_work_kernel";
+  state_version: number;
+  updated_at: string;
+  summary: { total: number; running: number; failed: number; needs_review: number; succeeded: number; skipped: number };
+  runs: CoreProactiveWorkRun[];
+};
 
 export function isEduPiAbsolutePath(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && (isAbsolute(value) || isWindowsAbsolutePath(value));
@@ -154,4 +172,65 @@ export async function readEduPiCoreHealth({
     throw new EduPiSnapshotError("health_identity", "Core health identity mismatch");
   }
   return { health, runtime: resolved.runtime, dataRoot: resolved.dataRoot };
+}
+
+export async function readEduPiKernelProjection({
+  requestId = `desktop-kernel-${Date.now().toString(36)}`,
+  signal,
+  roots,
+}: {
+  requestId?: string;
+  signal?: AbortSignal;
+  roots?: EduPiBridgeRoots;
+} = {}): Promise<{ projection: CoreProactiveWorkProjection; runtime: ResolvedEduPiCore; dataRoot: ResolvedEduPiDataRoot }> {
+  const resolved = roots || resolveEduPiBridgeRoots();
+  let response: Record<string, unknown>;
+  try {
+    response = await callEduPiCore<Record<string, unknown>>({ operation: "kernel", requestId, runtime: resolved.runtime, dataRoot: resolved.dataRoot, signal });
+  } catch (error) {
+    if (error instanceof EduPiCoreProcessError) throw new EduPiSnapshotError(error.code, "Core proactive work projection unavailable");
+    throw new EduPiSnapshotError("process", "Core proactive work projection unavailable");
+  }
+  const projection = response.projection as CoreProactiveWorkProjection | undefined;
+  const summary = projection?.summary;
+  if (response.ok !== true
+    || response.operation !== "kernel"
+    || projection?.projection_kind !== "proactive_work_kernel"
+    || !Array.isArray(projection.runs)
+    || !summary
+    || ![summary.total, summary.running, summary.failed, summary.needs_review, summary.succeeded, summary.skipped].every(Number.isInteger)) {
+    throw new EduPiSnapshotError("projection_unavailable", "Core proactive work projection unavailable");
+  }
+  return { projection, runtime: resolved.runtime, dataRoot: resolved.dataRoot };
+}
+
+export async function readEduPiMemoryScopes({
+  requestId = `desktop-memory-scopes-${Date.now().toString(36)}`,
+  signal,
+  roots,
+}: {
+  requestId?: string;
+  signal?: AbortSignal;
+  roots?: EduPiBridgeRoots;
+} = {}): Promise<{ projection: EducationMemoryScopeProjection; runtime: ResolvedEduPiCore; dataRoot: ResolvedEduPiDataRoot }> {
+  const resolved = roots || resolveEduPiBridgeRoots();
+  let response: Record<string, unknown>;
+  try {
+    response = await callEduPiCore<Record<string, unknown>>({ operation: "memory-scopes", requestId, runtime: resolved.runtime, dataRoot: resolved.dataRoot, signal });
+  } catch (error) {
+    if (error instanceof EduPiCoreProcessError) throw new EduPiSnapshotError(error.code, "Core memory scope projection unavailable");
+    throw new EduPiSnapshotError("process", "Core memory scope projection unavailable");
+  }
+  const projection = response.projection as EducationMemoryScopeProjection | undefined;
+  if (response.ok !== true
+    || response.operation !== "memory-scopes"
+    || projection?.projection_kind !== "scoped_education_memory"
+    || projection.projection_version !== 1
+    || !Array.isArray(projection.contexts)
+    || !Array.isArray(projection.semesters)
+    || !Array.isArray(projection.bindings)
+    || projection.external_send !== false) {
+    throw new EduPiSnapshotError("projection_unavailable", "Core memory scope projection unavailable");
+  }
+  return { projection, runtime: resolved.runtime, dataRoot: resolved.dataRoot };
 }

@@ -213,6 +213,9 @@
 .edupi-review-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .edupi-review-actions button { padding: 5px 8px; border: 1px solid var(--separator); border-radius: 6px; background: var(--surface); color: var(--text-muted); cursor: pointer; font-size: 11px; }
 .edupi-review-actions button:hover:not(:disabled) { border-color: #3f6ee8; color: #315fcf; }
+.edupi-review-decision { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border: 1px solid var(--separator); border-radius: 7px; background: var(--bg-subtle); }
+.edupi-review-decision > div { display: flex; flex-direction: column; gap: 2px; }
+.edupi-review-decision span { color: var(--text-muted); font-size: 10px; }
 .edupi-review-message { margin: 12px 0; padding: 9px 11px; border-radius: 7px; background: color-mix(in srgb, #3f6ee8 8%, var(--surface)); color: #315fcf; font-size: 12px; }
 .edupi-review-disabled { margin-top: 14px; color: var(--text-muted); font-size: 12px; }
 .edupi-education-loading, .edupi-education-error { padding: 80px 0; color: var(--text-muted); text-align: center; font-size: 13px; }

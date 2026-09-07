@@ -8,7 +8,7 @@ Make EduPi Desktop launch from Finder/Start Menu without `EDUPI_*` environment v
 
 - The previous `0.3.0` packaged startup could abort with `SIGABRT` before the user selected a workspace because Rust required `EDUPI_PROJECT_ROOT` and the server had no bundled Core.
 - The installed `0.3.0` Desktop pinned Core `5538021f171a647d87562d91e5ab953f794e2331`; the immediately preceding Desktop source pinned `6e806f4e0af4232d95aa7353ed7a46cea4c7032a` before the paired Core PR #17.
-- The paired Core runtime is now `ca623bdf93d781f57b7ad89956dcec9171ac7738` with component manifest `sha256:8431f854d95fd049f3c2e8a54a0885e058bb1b1a40a934acf18502ec2e322028`; its closure contains Typebox `1.3.8` and 1,367 hashed files.
+- The paired Core runtime is now `542d9f5ecff463b40e955778fa8af42a78b4ac8d` with component manifest `sha256:ea64a99cfaea87a1b3929c91a8635ace165d5beec854531d87533a9ae0c34fed`; its closure contains the live DingTalk Stream reply runtime, supervisor, official SDK dependencies, read-compatible pre-review state formats, Feishu maximum-scope requests, and Typebox `1.3.8`.
 
 ## Root and bundle contract
 
@@ -25,14 +25,14 @@ Make EduPi Desktop launch from Finder/Start Menu without `EDUPI_*` environment v
 
 ## Verification record
 
-- `EDUPI_CORE_ROOT=/Users/iguppp/.openclaw/workspace/edupi-worktrees/entity-delete node --test lib/edupi-core-root.test.mjs lib/edupi-core-snapshot.test.mjs scripts/packaged-core-bundle.test.mjs scripts/edupi-launch-roots.test.mjs scripts/desktop-platform.test.mjs scripts/release-workflows.test.mjs` — passed (51 passed, 1 skipped).
-- `EDUPI_CORE_ROOT=/Users/iguppp/.openclaw/workspace/edupi-worktrees/entity-delete npm run desktop:prepare` — passed; generated Core bundle contains 1,386 files.
+- `EDUPI_CORE_ROOT=<core-checkout> node --test lib/edupi-core-root.test.mjs lib/edupi-core-snapshot.test.mjs scripts/packaged-core-bundle.test.mjs scripts/edupi-launch-roots.test.mjs scripts/desktop-platform.test.mjs scripts/release-workflows.test.mjs` — passed (51 passed, 1 skipped).
+- `EDUPI_CORE_ROOT=<core-checkout> npm run desktop:prepare` — passed; generated Core bundle contains 1,386 files.
 - Bundled Core health and temporary-data snapshot — passed without `.git` and without Desktop `node_modules` resolution.
 - `node_modules/.bin/tsc --noEmit`, `npm run lint`, and `git diff --check` — passed.
 - `cargo test --manifest-path src-tauri/Cargo.toml --lib` — passed (18 tests, including persisted-root fallback and startup preference-preservation regressions); a clean checkout must run `desktop:prepare` before Tauri resource validation because the generated Core directory is ignored.
 - Local Apple Silicon DMG `0.3.1` built successfully and was installed with a recoverable `/Applications/EduPi 0.3.0 Backup.app` copy.
-- Finder/LaunchServices cold start with every `EDUPI_*` launch variable unset produced no new crash report. The bundled server returned Core/projection `ready` with component manifest `sha256:8431f854d95fd049f3c2e8a54a0885e058bb1b1a40a934acf18502ec2e322028`.
-- Managed-root first launch opened on `~/Library/Application Support/com.abcwyc.pi-agent/edupi-data` with an empty valid projection. Persisted-root cold restart against `/Users/iguppp/.openclaw/workspace/edupi` then projected 吴老师 / 数学 / 七年级, 5 students, 6 timetable periods, 29 calendar nodes, 183 tasks, and 126 `teaching_before_class` tasks.
+- Finder/LaunchServices cold start with every `EDUPI_*` launch variable unset produced no new crash report. The bundled server returned Core/projection `ready` with the then-current packaged component manifest; each later Core checkpoint must repeat this packaged launch verification.
+- Managed-root first launch opened on `~/Library/Application Support/com.abcwyc.pi-agent/edupi-data` with an empty valid projection. Persisted-root cold restart against `<teacher-data-root>` then projected 吴老师 / 数学 / 七年级, 5 students, 6 timetable periods, 29 calendar nodes, 183 tasks, and 126 `teaching_before_class` tasks.
 
 ## Remaining evidence
 

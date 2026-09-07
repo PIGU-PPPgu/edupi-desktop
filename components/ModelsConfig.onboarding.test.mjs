@@ -29,7 +29,9 @@ test("official first-run keys stay in AuthStorage instead of models.json", async
   );
 
   assert.match(setupSource, /\/api\/auth\/api-key\//);
-  assert.doesNotMatch(setupSource, /method:\s*"PUT"/);
+  const savedDefinition = setupSource.slice(setupSource.indexOf("const updated ="), setupSource.indexOf("const defaultResponse ="));
+  assert.match(savedDefinition, /models: savedModels/);
+  assert.doesNotMatch(savedDefinition, /apiKey|transientProvider/);
   assert.doesNotMatch(setupSource, /nextConfig|setConfig\(/);
   assert.match(setupSource, /transientProvider/);
   assert.match(setupSource, /onUseAdvanced/);

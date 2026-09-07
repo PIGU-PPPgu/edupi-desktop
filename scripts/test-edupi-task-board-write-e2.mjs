@@ -61,6 +61,17 @@ try {
   assert.equal(final.tasks.find((item) => item.id === task.id).boardStage, "done");
   assert.equal(final.tasks.find((item) => item.id === secondTask.id).boardStage, "todo");
   assert.equal(fs.existsSync(path.join(dataRoot, ".edupi", "output", "task_board_state.json")), true);
+  const { createEduPiTaskTool } = await jiti.import("../lib/edupi-task-tool.ts");
+  const { taskCategory } = await jiti.import("../lib/edupi-task-category.ts");
+  const tool = createEduPiTaskTool({ projectRoot: dataRoot });
+  const chatResult = await tool.execute("chat-create-1", { title: "703班认识几何体备课", due_date: "2026-09-07" }, undefined, undefined, { cwd: dataRoot, sessionManager: { getBranch: () => [{ id: "teacher-chat-1", type: "message", message: {role:"user",content:"请建立703班备课任务"} }] } });
+  const afterChat = await (await GET()).json();
+  const chatTask = afterChat.tasks.find((item) => item.id === chatResult.details.taskId);
+  assert.ok(chatTask, "chat task must be present in the same Desktop projection");
+  assert.equal(taskCategory(chatTask), "teaching", "chat task must be visible in teaching preparation");
+  assert.equal(chatTask.boardStage, "todo");
+  const reloaded = await (await GET()).json();
+  assert.ok(reloaded.tasks.some((item) => item.id === chatTask.id));
   console.log(JSON.stringify({ status: "passed", created: 2, moved: ["progress", "review", "done"], invalid_transition_no_write: true, restart_reload: true }, null, 2));
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });

@@ -22,6 +22,7 @@ export const APP_PREF_KEYS = {
   edupiNavigationRailCollapsed: "edupi-navigation-rail-collapsed",
   edupiObjectSiderCollapsed: "edupi-object-sider-collapsed",
   edupiFirstRunGuideComplete: "edupi-first-run-guide-complete",
+  edupiFirstRunGuideStep: "edupi-first-run-guide-step",
 } as const;
 
 export type AppPrefKey = (typeof APP_PREF_KEYS)[keyof typeof APP_PREF_KEYS];

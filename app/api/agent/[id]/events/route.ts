@@ -1,5 +1,6 @@
 import { resolveSessionPath } from "@/lib/session-reader";
-import { getRpcSession, startRpcSession } from "@/lib/rpc-manager";
+import { getRpcSession } from "@/lib/rpc-manager";
+import { startHarnessSession } from "@/lib/harness/runtime";
 import { projectAgentEventForClient } from "@/lib/agent-event-wire";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export async function GET(
       return new Response("Session not found", { status: 404 });
     }
     try {
-      ({ session } = await startRpcSession(id, filePath, undefined));
+      ({ session } = await startHarnessSession(id, filePath, undefined));
     } catch (error) {
       return new Response(`Failed to start agent: ${error}`, { status: 500 });
     }

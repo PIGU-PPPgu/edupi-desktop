@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stat } from "fs/promises";
+import type { Stats } from "fs";
 import {
+  directoryPermissionMessage,
+  type BrowsableDirectory,
   getBrowseStartDirectory,
   getParentDirectory,
+  isPermissionError,
   listDirectories,
   listWindowsDrives,
   resolveDirectory,
@@ -28,16 +32,35 @@ export async function GET(request: NextRequest) {
     let resolved: string;
     try {
       resolved = await resolveDirectory(candidate);
-    } catch {
+    } catch (error) {
+      if (isPermissionError(error)) {
+        return NextResponse.json({ error: directoryPermissionMessage(candidate) }, { status: 403 });
+      }
       return NextResponse.json({ error: "Directory does not exist" }, { status: 404 });
     }
 
-    const directoryStat = await stat(resolved);
+    let directoryStat: Stats;
+    try {
+      directoryStat = await stat(resolved);
+    } catch (error) {
+      if (isPermissionError(error)) {
+        return NextResponse.json({ error: directoryPermissionMessage(resolved) }, { status: 403 });
+      }
+      return NextResponse.json({ error: "Directory does not exist" }, { status: 404 });
+    }
     if (!directoryStat.isDirectory()) {
       return NextResponse.json({ error: "Path is not a directory" }, { status: 400 });
     }
 
-    const directories = await listDirectories(resolved);
+    let directories: BrowsableDirectory[];
+    try {
+      directories = await listDirectories(resolved);
+    } catch (error) {
+      if (isPermissionError(error)) {
+        return NextResponse.json({ error: directoryPermissionMessage(resolved) }, { status: 403 });
+      }
+      return NextResponse.json({ error: String(error) }, { status: 500 });
+    }
 
     return NextResponse.json({
       path: resolved,

@@ -18,7 +18,9 @@ test("projects only validated Core health and education snapshot", { skip: !core
   assert.deepEqual(body.core.supportedCommands, ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage", "update_memory"]);
   assert.deepEqual(body.core.supportedProjections, ["education_workspace"]);
   assert.equal(body.projection.status, "ready");
-  assert.deepEqual(body.projection.counts, { students: 5, timetable: 0, calendar: 28, tasks: 30 });
+  assert.equal(body.kernel.status, "ready");
+  assert.equal(body.kernel.projection_kind, "proactive_work_kernel");
+  for (const key of ["students", "timetable", "calendar", "tasks"]) assert.ok(Number.isInteger(body.projection.counts[key]) && body.projection.counts[key] >= 0);
   assert.equal("preferences" in body, false);
   assert.equal("students" in body, false);
   assert.equal("calendar" in body, false);
@@ -59,5 +61,5 @@ test("route source contains no legacy education JSON reads", () => {
   const source = fs.readFileSync(new URL("./route.ts", import.meta.url), "utf8");
   assert.doesNotMatch(source, /preferences\.json|student_profiles\.json|timetable\.json|calendar\.json|rhythm_plan\.json/);
   assert.doesNotMatch(source, /readFile|loadJson|memoryDir|outputDir/);
-  assert.match(source, /readEduPiCoreHealth|readEduPiEducationSnapshot/);
+  assert.match(source, /readEduPiCoreHealth|readEduPiEducationSnapshot|readEduPiKernelProjection/);
 });

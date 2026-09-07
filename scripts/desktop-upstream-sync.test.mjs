@@ -188,7 +188,7 @@ test("desktop upstream automation cannot push main, sign, or release", () => {
 test("readmes use EduPi source and downloads while retaining upstream attribution", () => {
   for (const [path, source] of Object.entries(readmes)) {
     assert.match(source, /https:\/\/github\.com\/PIGU-PPPgu\/edupi-desktop/);
-    assert.match(source, /https:\/\/github\.com\/PIGU-PPPgu\/edupi-releases\/releases/);
+    assert.match(source, /https:\/\/github\.com\/PIGU-PPPgu\/edupi-desktop\/releases/);
     assert.match(source, /https:\/\/github\.com\/abcwyc\/pi-agent-desktop/);
     assert.doesNotMatch(
       source,
@@ -252,7 +252,7 @@ test("release destination sentinel rejects a different action owner", async () =
 test("release destination sentinel rejects a different action repository", async () => {
   const files = await readReleaseDestinationFiles(root);
   files[".github/workflows/release.yml"] = files[".github/workflows/release.yml"].replace(
-    "repo: edupi-releases",
+    "repo: edupi-desktop",
     "repo: pi-agent-desktop",
   );
 

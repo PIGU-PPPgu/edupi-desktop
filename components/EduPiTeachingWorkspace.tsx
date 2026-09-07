@@ -8,6 +8,8 @@ import { isUserFacingMemory, taskDisplayTitle, taskKey, taskStatusLabel } from "
 import { buildTeachingPriorityConversationPrompt } from "@/lib/edupi-teaching-priority-prompt";
 import { isTaskReviewable, workCaseForTask, workCaseStateLabel } from "@/lib/edupi-work-case";
 import { EduPiTimetableGrid } from "./EduPiTimetableGrid";
+import { taskCategory } from "@/lib/edupi-task-category";
+import { EduPiPreparationStatus } from "./EduPiPreparationStatus";
 
 function shortDate(value: string | null): string {
   if (!value) return "—";
@@ -48,7 +50,7 @@ export function EduPiTeachingWorkspace({ data, context, query, selectedObjectId,
   const knowledge = filterSubjectKnowledgeItems(data.continuity.subjectKnowledge, query);
   const beforeClassTasks = data.tasks.filter((task) => task.trigger === "teaching_before_class");
   const teachingCases = data.workCases.filter((workCase) => workCase.kind === "teaching_before_class");
-  const tasks = data.tasks.filter((task) => (task.trigger === "teaching_before_class" || task.trigger === "teaching_adjustment_candidate" || task.materialId || task.topic) && (!query || `${task.title} ${task.topic || ""}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
+  const tasks = data.tasks.filter((task) => taskCategory(task) === "teaching" && (!query || `${task.title} ${task.topic || ""}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
   const memories = data.continuity.memories.filter((memory) => memory.state === "active" && memory.category === "teaching" && isUserFacingMemory(memory) && (!query || `${memory.content} ${memory.tags.join(" ")}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
   const weekday = new Date().getDay() || 7;
   const orderedSlots = data.timetable.slice().sort((left, right) => Number(left.day_of_week) - Number(right.day_of_week) || Number(left.period) - Number(right.period));
@@ -71,7 +73,7 @@ export function EduPiTeachingWorkspace({ data, context, query, selectedObjectId,
   const selectCourse = (selection: CalendarItemSelection) => { onCalendarSelection(selection); onNavigate("calendar"); };
   const openNextPreparation = () => nextTeachingTask ? onTask(nextTeachingTask) : onStartAgent(`请为${nextSubject}准备下一节课的重点、材料和课堂检查点，结合现有学情与教育记忆，先给我可审核候选。`);
 
-  const header = <header className="edupi-module-heading edupi-teaching-heading"><div>{section !== "home" ? <button type="button" className="edupi-back-link" onClick={() => onObject("teaching:home")}>← 教学首页</button> : <span>教学工作区</span>}<h1>{section === "home" ? "教学" : section === "schedule" ? "课程表" : section === "knowledge" ? "教学重点" : section === "tasks" ? "备课任务" : "教学记忆"}</h1><p>{subjectLabel}</p></div><div className="edupi-teaching-heading__actions"><button type="button" onClick={() => onStartAgent(priorityPrompt, "replace")}>对话补充重点</button><button type="button" className="is-primary" onClick={openNextPreparation}>{nextTeachingTask ? "查看下一节准备" : "准备下一节课"}</button></div></header>;
+  const header = <><header className="edupi-module-heading edupi-teaching-heading"><div>{section !== "home" ? <button type="button" className="edupi-back-link" onClick={() => onObject("teaching:home")}>← 教学首页</button> : <span>教学工作区</span>}<h1>{section === "home" ? "教学" : section === "schedule" ? "课程表" : section === "knowledge" ? "教学重点" : section === "tasks" ? "备课任务" : "教学记忆"}</h1><p>{subjectLabel}</p></div><div className="edupi-teaching-heading__actions"><button type="button" onClick={() => onStartAgent(priorityPrompt, "replace")}>对话补充重点</button><button type="button" className="is-primary" onClick={openNextPreparation}>{nextTeachingTask ? "查看下一节准备" : "准备下一节课"}</button></div></header><EduPiPreparationStatus /></>;
 
   if (section === "schedule") return <main className="edupi-module-workspace edupi-teaching-workspace">{header}<EduPiTimetableGrid slots={slots} onSelect={selectCourse} /></main>;
   if (section === "knowledge") return <main className="edupi-module-workspace edupi-teaching-workspace">{header}<section className="edupi-database"><div className="edupi-database__head edupi-teaching-knowledge-grid"><span>主题</span><span>共性问题</span><span>需关注学生</span><span>掌握度</span></div>{knowledge.map((item) => <details className="edupi-database-row" key={item.id}><summary className="edupi-teaching-knowledge-grid"><strong>{item.topic}</strong><span>{item.commonErrors[0]?.description || "暂无"}</span><span>{item.strugglingStudents.join("、") || "—"}</span><span>{item.mastery === null ? "—" : `${Math.round(item.mastery * 100)}%`}</span></summary><div className="edupi-database-row__detail"><div><span>学科</span><strong>{item.subject}</strong></div><div><span>前置知识</span><strong>{item.prerequisites.join("、") || "—"}</strong></div><div><span>最近更新</span><strong>{shortDate(item.updatedAt)}</strong></div></div></details>)}</section></main>;

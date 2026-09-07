@@ -402,7 +402,20 @@ export type EducationFactSpine = {
   externalSend: false;
 };
 
+export type EducationDataSourceStatus = "ready" | "empty" | "unavailable";
+
+export type EducationDataSource = {
+  path: string;
+  present: boolean;
+  count: number;
+  observedAt: string | null;
+  status: EducationDataSourceStatus;
+};
+
 export type EducationContract = {
+  teacherMaterials?: Array<{ material_id: string; title: string; kind: string; subject: string | null; class_id: string | null; relative_path: string; available?: boolean }>;
+  generatedArtifactsUnavailable?: boolean;
+  generatedArtifacts?: Array<{ artifact_id: string; title: string; relative_path: string; available?: boolean; session_id: string; task_id: string | null; updated_at: string; size_bytes: number }>;
   scope: "teacher_internal";
   externalSend: false;
   requiresTeacherReview: true;
@@ -439,11 +452,15 @@ export type EducationContract = {
     lastDreamAt: string | null;
   };
   dataSources: {
-    calendar: { path: ".edupi/memory/calendar.json"; present: boolean; count: number };
-    tasks: { path: ".edupi/output/rhythm_plan.json"; present: boolean; count: number };
-    memory: { path: ".edupi/memory"; present: boolean; count: number };
-    insights: { path: ".edupi/memory/subconscious.json"; present: boolean; count: number };
-    documents: { path: ".edupi/output"; present: boolean; count: number };
+    students: EducationDataSource;
+    timetable: EducationDataSource;
+    calendar: EducationDataSource;
+    tasks: EducationDataSource;
+    memory: EducationDataSource;
+    insights: EducationDataSource;
+    growth: EducationDataSource;
+    materials: EducationDataSource;
+    documents: EducationDataSource;
   };
   capabilities: {
     taskReview: {
@@ -1581,11 +1598,25 @@ function workCandidateReviewCapability(snapshotPayload: RawRecord | undefined, s
   };
 }
 
-function coreSourceSummary(workspace: RawRecord, sourceId: string): { present: boolean; count: number } {
+function coreSourceSummary(workspace: RawRecord, sourceId: string): { present: boolean; count: number; observedAt: string | null } {
   const summary = objectArray(workspace.source_summaries).find((item) => item.source_id === sourceId);
   return {
     present: summary?.present === true,
     count: Math.max(0, Math.trunc(finiteNumber(summary?.item_count))),
+    observedAt: timestamp(summary?.observed_at),
+  };
+}
+
+function dataSource(path: string, present: boolean, count: number, observedAt: string | null = null): EducationDataSource {
+  const safeCount = Math.max(0, Math.trunc(count));
+  return { path, present, count: safeCount, observedAt, status: !present ? "unavailable" : safeCount > 0 ? "ready" : "empty" };
+}
+
+function combineSourceSummaries(summaries: Array<{ present: boolean; count: number; observedAt: string | null }>): { present: boolean; count: number; observedAt: string | null } {
+  return {
+    present: summaries.some((summary) => summary.present),
+    count: summaries.reduce((total, summary) => total + summary.count, 0),
+    observedAt: summaries.map((summary) => summary.observedAt).filter((value): value is string => Boolean(value)).sort().at(-1) || null,
   };
 }
 
@@ -1694,6 +1725,8 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
   const teacherContextCandidates = normalizeTeacherContextCandidates(snapshotPayload?.review_targets, snapshotPayload);
   const teacherContextReceipts = normalizeC1Receipts(snapshotPayload?.receipts, ["review_teacher_context"]);
   const teacherContextReviewHistory = normalizeReviewHistory(snapshotPayload?.review_history, ["review_teacher_context"]);
+  const students = objectArray(workspace.students);
+  const timetable = normalizeTimetable(workspace.timetable);
   const calendar = objectArray(workspace.calendar).map(normalizeCalendarEvent);
   const tasks = objectArray(workspace.tasks).map(normalizeTask);
   const workCandidates = normalizeWorkCandidateTargets(snapshotPayload?.review_targets, tasks, snapshotPayload);
@@ -1723,10 +1756,13 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
   const documents = normalizeDocuments(continuity.documents);
   const taskSessions = normalizeTaskSessions(options.taskSessions, new Set(tasks.map((task) => task.id).filter((id): id is string => Boolean(id))));
   const sourceCounts = {
+    students: coreSourceSummary(workspace, "student_profiles"),
+    timetable: coreSourceSummary(workspace, "timetable"),
     calendar: coreSourceSummary(workspace, "calendar"),
     tasks: coreSourceSummary(workspace, "rhythm_plan"),
-    memory: coreSourceSummary(workspace, "semester_memory"),
+    memory: combineSourceSummaries(["class_memory", "teaching_memory", "semester_memory", "preferences_memory", "school_memory"].map((sourceId) => coreSourceSummary(workspace, sourceId))),
     insights: coreSourceSummary(workspace, "subconscious"),
+    materials: coreSourceSummary(workspace, "material_candidates"),
     documents: coreSourceSummary(workspace, "documents"),
   };
   const disabled = (reason = CORE_PROJECTION_UNAVAILABLE) => ({ enabled: false as const, mode: "read_only" as const, reason });
@@ -1735,8 +1771,8 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
     externalSend: false,
     requiresTeacherReview: true,
     workspace: options.workspacePath,
-    students: objectArray(workspace.students),
-    timetable: normalizeTimetable(workspace.timetable),
+    students,
+    timetable,
     observations,
     memoryCandidates,
     c1Memories,
@@ -1767,11 +1803,15 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
       lastDreamAt: timestamp(continuity.last_dream),
     },
     dataSources: {
-      calendar: { path: ".edupi/memory/calendar.json", present: sourceCounts.calendar.present, count: calendar.length },
-      tasks: { path: ".edupi/output/rhythm_plan.json", present: sourceCounts.tasks.present, count: tasks.length },
-      memory: { path: ".edupi/memory", present: memories.length > 0 || sourceCounts.memory.present, count: memories.length },
-      insights: { path: ".edupi/memory/subconscious.json", present: sourceCounts.insights.present, count: signals.length + insights.length },
-      documents: { path: ".edupi/output", present: sourceCounts.documents.present, count: documents.length },
+      students: dataSource(".edupi/memory/student_profiles.json", sourceCounts.students.present, students.length, sourceCounts.students.observedAt),
+      timetable: dataSource(".edupi/memory/timetable.json", sourceCounts.timetable.present, timetable.length, sourceCounts.timetable.observedAt),
+      calendar: dataSource(".edupi/memory/calendar.json", sourceCounts.calendar.present, calendar.length, sourceCounts.calendar.observedAt),
+      tasks: dataSource(".edupi/output/rhythm_plan.json", sourceCounts.tasks.present, tasks.length, sourceCounts.tasks.observedAt),
+      memory: dataSource(".edupi/memory", sourceCounts.memory.present, memories.length, sourceCounts.memory.observedAt),
+      insights: dataSource(".edupi/memory/subconscious.json", sourceCounts.insights.present, signals.length + insights.length + themes.length, sourceCounts.insights.observedAt),
+      growth: dataSource(".edupi/output", sourceCounts.documents.present || sourceCounts.insights.present, documents.length + themes.length, [sourceCounts.documents.observedAt, sourceCounts.insights.observedAt].filter((value): value is string => Boolean(value)).sort().at(-1) || null),
+      materials: dataSource(".edupi/output", sourceCounts.materials.present || sourceCounts.documents.present || intakeTargets.some((target) => target.projectionKind === "material_intake") || tasks.some((task) => Boolean(task.materialId)), Math.max(sourceCounts.materials.count + documents.length, intakeTargets.filter((target) => target.projectionKind === "material_intake").length + tasks.filter((task) => Boolean(task.materialId)).length + documents.length), [sourceCounts.materials.observedAt, sourceCounts.documents.observedAt].filter((value): value is string => Boolean(value)).sort().at(-1) || null),
+      documents: dataSource(".edupi/output", sourceCounts.documents.present, documents.length, sourceCounts.documents.observedAt),
     },
     capabilities: {
       taskReview: taskReviewCapability(snapshotPayload, options.supportedCommands),
@@ -1863,31 +1903,15 @@ export function buildEducationContract(input: ContractInput = {}): EducationCont
       lastDreamAt: timestamp(record(input.subconscious).last_dream),
     },
     dataSources: {
-      calendar: {
-        path: ".edupi/memory/calendar.json",
-        present: input.calendarPresent === true,
-        count: calendar.length,
-      },
-      tasks: {
-        path: ".edupi/output/rhythm_plan.json",
-        present: input.tasksPresent === true,
-        count: tasks.length,
-      },
-      memory: {
-        path: ".edupi/memory",
-        present: memories.length > 0,
-        count: memories.length,
-      },
-      insights: {
-        path: ".edupi/memory/subconscious.json",
-        present: signals.length > 0 || insights.length > 0 || themes.length > 0,
-        count: signals.length + insights.length,
-      },
-      documents: {
-        path: ".edupi/output",
-        present: documents.length > 0,
-        count: documents.length,
-      },
+      students: dataSource(".edupi/memory/student_profiles.json", students.length > 0, students.length),
+      timetable: dataSource(".edupi/memory/timetable.json", timetable.length > 0, timetable.length),
+      calendar: dataSource(".edupi/memory/calendar.json", input.calendarPresent === true, calendar.length),
+      tasks: dataSource(".edupi/output/rhythm_plan.json", input.tasksPresent === true, tasks.length),
+      memory: dataSource(".edupi/memory", memories.length > 0, memories.length),
+      insights: dataSource(".edupi/memory/subconscious.json", signals.length > 0 || insights.length > 0 || themes.length > 0, signals.length + insights.length + themes.length),
+      growth: dataSource(".edupi/output", documents.length > 0 || themes.length > 0, documents.length + themes.length),
+      materials: dataSource(".edupi/output", documents.length > 0 || intakeTargets.some((target) => target.projectionKind === "material_intake") || tasks.some((task) => Boolean(task.materialId)), documents.length + intakeTargets.filter((target) => target.projectionKind === "material_intake").length + tasks.filter((task) => Boolean(task.materialId)).length),
+      documents: dataSource(".edupi/output", documents.length > 0, documents.length),
     },
     capabilities: {
       taskReview: taskReviewCapability(snapshotPayload, input.supportedCommands),

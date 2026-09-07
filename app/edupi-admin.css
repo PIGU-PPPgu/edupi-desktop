@@ -11,6 +11,11 @@
   color: var(--text);
 }
 
+.edupi-admin-panel.has-desktop-drag-region { grid-template-rows: 28px minmax(0, 1fr); }
+.edupi-admin-panel.has-desktop-drag-region > .edupi-window-drag-region { grid-row: 1; grid-column: 1 / -1; }
+.edupi-admin-panel.has-desktop-drag-region > .edupi-admin-sidebar,
+.edupi-admin-panel.has-desktop-drag-region > .edupi-admin-workspace { grid-row: 2; }
+
 .edupi-admin-panel button {
   min-height: 34px;
   padding: 0 11px;
@@ -243,6 +248,66 @@
 .edupi-admin-list em { color: var(--text-muted); font-size: 11px; font-style: normal; white-space: nowrap; }
 .edupi-admin-list em.is-ready { color: #18805a; }
 
+.edupi-connector-setup { margin-top: 18px; padding: 18px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); }
+.edupi-connector-setup > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.edupi-connector-setup > header > div { display: grid; gap: 3px; }
+.edupi-connector-setup > header span { color: var(--accent); font-size: 10px; font-weight: 700; }
+.edupi-connector-setup h2 { margin: 0; font-size: 18px; }
+.edupi-connector-setup small,
+.edupi-connector-setup > p { color: var(--text-muted); font-size: 11px; }
+.edupi-connector-setup ol { display: grid; margin: 14px 0 0; padding: 0; list-style: none; counter-reset: setup-step; }
+.edupi-connector-setup li { display: grid; min-height: 54px; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 14px; border-bottom: 1px solid var(--border); counter-increment: setup-step; }
+.edupi-connector-setup li strong::before { margin-right: 8px; color: var(--text-muted); content: counter(setup-step, decimal-leading-zero); }
+.edupi-connector-setup li span { grid-column: 1; padding-left: 26px; color: var(--text-muted); font-size: 10px; }
+.edupi-connector-setup li button { grid-column: 2; grid-row: 1 / span 2; }
+.edupi-connector-setup form { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: 10px; margin-top: 18px; }
+.edupi-connector-setup form label { display: grid; gap: 5px; color: var(--text-muted); font-size: 10px; }
+.edupi-connector-setup form input { height: 36px; min-width: 0; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+.edupi-connector-setup form p { grid-column: 1 / -1; margin: 0; color: var(--text-muted); font-size: 11px; }
+.edupi-connector-setup form .edupi-admin-primary { margin-top: 0; }
+.edupi-connector-setup__primary { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 14px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); border-radius: 7px; background: color-mix(in srgb, var(--accent) 6%, var(--bg-panel)); }
+.edupi-connector-setup__primary > div { display: grid; gap: 4px; }
+.edupi-connector-setup__primary strong { font-size: 13px; }
+.edupi-connector-setup__primary span { color: var(--text-muted); font-size: 10px; }
+.edupi-connector-setup__primary .edupi-admin-primary { margin: 0; white-space: nowrap; }
+.edupi-connector-setup__message { margin: 12px 0 0; color: var(--text-muted); font-size: 11px; }
+.edupi-connector-setup details { margin-top: 14px; border-top: 1px solid var(--border); }
+.edupi-connector-setup details summary { padding-top: 12px; color: var(--text-muted); cursor: pointer; font-size: 11px; }
+
+.edupi-admin-runtime {
+  overflow: hidden;
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+
+.edupi-admin-runtime > div {
+  display: grid;
+  min-height: 58px;
+  grid-template-columns: 8px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.edupi-admin-runtime > div:last-child { border-bottom: 0; }
+.edupi-admin-runtime > div > i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
+.edupi-admin-runtime > div > i.is-running,
+.edupi-admin-runtime > div > i.is-awaiting_delivery { background: var(--accent); animation: edupiActivityPulse 1.4s ease-out infinite; }
+.edupi-admin-runtime > div > i.is-succeeded { background: #18805a; }
+.edupi-admin-runtime > div > i.is-failed,
+.edupi-admin-runtime > div > i.is-needs_review { background: #b66a00; }
+.edupi-admin-runtime > div > span { display: grid; min-width: 0; gap: 3px; }
+.edupi-admin-runtime strong,
+.edupi-admin-runtime small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edupi-admin-runtime strong { font-size: 12px; font-weight: 600; }
+.edupi-admin-runtime small,
+.edupi-admin-runtime em,
+.edupi-admin-runtime time { color: var(--text-muted); font-size: 10px; font-style: normal; }
+.edupi-admin-runtime > .is-empty { display: flex; justify-content: center; color: var(--text-muted); font-size: 11px; }
+
 .edupi-admin-primary {
   margin-top: 18px;
   border-color: var(--text) !important;
@@ -272,10 +337,14 @@
   .edupi-admin-metrics { grid-template-columns: 1fr; }
   .edupi-admin-metrics > div { min-height: 74px; border-right: 0; border-bottom: 1px solid var(--border); }
   .edupi-admin-metrics > div:last-child { border-bottom: 0; }
+  .edupi-admin-runtime > div { grid-template-columns: 8px minmax(0, 1fr) auto; }
+  .edupi-admin-runtime time { display: none; }
   .edupi-admin-embedded-models .models-settings-embedded {
     height: calc(100dvh - 140px) !important;
     max-height: calc(100dvh - 140px) !important;
   }
+  .edupi-connector-setup form { grid-template-columns: 1fr; }
+  .edupi-connector-setup__primary { align-items: stretch; flex-direction: column; }
 }
 
 @media (max-width: 520px) {

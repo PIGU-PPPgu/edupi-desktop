@@ -1,52 +1,43 @@
-# Design QA — EduPi 课程表 V3
+# EduPi desktop chrome and icon rail — design QA
 
-source visual truth path: `/var/folders/xk/qmn_r8g93ljb7b5vqzq3rd040000gn/T/codex-clipboard-9100b5aa-5cdb-488f-9982-ed95bd4584f2.png`
+- Source visual truth: user-attached `codex-clipboard-53c28811-ad08-469b-b3cf-9d5de6fbd465.png` (session path intentionally omitted; 2880 × 1800 px).
+- Expanded implementation: `/tmp/edupi-expanded-qa.png` (1440 × 900 px).
+- Collapsed implementation: `/tmp/edupi-collapsed-qa.png` (1440 × 900 px).
+- Combined comparison: `/tmp/edupi-design-qa-comparison.png` (source normalized above expanded and collapsed implementations).
+- CSS viewport: 1440 × 900.
+- Density normalization: the 2× source was downsampled from 2880 × 1800 to 1440 × 900; implementation captures were 1× at the same CSS size.
+- State: light theme, AI 协作, expanded and collapsed primary navigation.
 
-implementation screenshot path: `output/design-qa/timetable-v3-normalized.png`
+**Findings**
 
-combined comparison path: `output/design-qa/timetable-comparison-normalized.png`
+- No actionable P0/P1/P2 differences remain.
+- The expanded rail preserves the source hierarchy, 220 px track, typography, neutral palette, borders, session sidebar and main composer placement.
+- The collapsed state now uses a conventional 58 px icon rail. All 11 module buttons remain visible; active state, pending-review badge, activity indicator, tutorial and management controls remain available. Labels are hidden visually and retained through titles and accessible names.
+- Packaged desktop mode adds a separate 28 px first grid row carrying the existing Tauri drag-region contract. It participates in layout rather than covering buttons with an absolute overlay.
 
-viewport: 1600 × 1000 CSS px, Codex in-app browser
+**Required Fidelity Surfaces**
 
-source pixels: 1862 × 1060
+- Fonts and typography: unchanged from the source-aligned EduPi system stack; weights, truncation and hierarchy remain stable.
+- Spacing and layout rhythm: expanded proportions are unchanged. The collapsed 58 px rail uses centered 40 px controls and consistent vertical spacing. Desktop-only content begins below the new 28 px drag row.
+- Colors and tokens: uses the existing `--ep-*` tokens; no new palette, gradient or shadow system was introduced.
+- Image and icon quality: no raster assets were required. Existing product navigation icons are reused at their authored size; no replacement placeholders were introduced.
+- Copy and content: module names and teacher content are unchanged. Collapsed labels move into native title/ARIA affordances instead of being deleted.
 
-implementation capture: 1044 × 728 canvas; in-app clip returned the rendered component in the left 522 px because of capture-density scaling. The component region was cropped to 522 × 728 and both source and implementation were scaled to 1200 px width for comparison.
+**Interaction Evidence**
 
-state: 教学工作区 → 课程表；真实 6 条数学 / 703 课程数据
+- Collapse: 220 px → 58 px.
+- Expand: 58 px → 220 px.
+- Collapsed module icons: 11/11 visible.
+- Browser console: zero errors and warnings.
+- Desktop drag contract: `data-tauri-drag-region`, `core:window:allow-start-dragging`, and packaged-app build are all verified. Automated physical window movement was unavailable because macOS did not expose the EduPi window to the accessibility driver during this run.
 
-## Full-view comparison
+**Comparison History**
 
-- Information architecture matches the reference: one period column, Monday–Friday columns, ten period rows, and a visible lunch break before period six.
-- The six course positions match the supplied schedule exactly: Tuesday/Thursday/Friday period 1; Monday/Wednesday/Friday period 2.
-- The implementation intentionally omits the teacher-name title inside the grid because the containing EduPi page already owns the page title and navigation.
-- The reference uses a document-style black table. The implementation keeps the same geometry but maps it to EduPi tokens: light borders, neutral surface and restrained green course cells.
+1. Earlier P1: collapsing reduced the rail to 22 px and hid every module. Fixed with the persistent 58 px icon rail; post-fix capture shows all navigation icons and utilities.
+2. Earlier P1: EduPi mode hid AppShell's normal top bar and therefore exposed no drag surface. Fixed with the desktop-only 28 px grid row; controls are shifted below it rather than occluded.
 
-## Focused region comparison
+**Follow-up Polish**
 
-The timetable itself was captured without the surrounding navigation. Dense table details were readable at normalized width: weekday headings, period labels, subject, class, empty cells and lunch divider were all compared.
-
-## Required fidelity surfaces
-
-- Fonts and typography: Chinese system sans-serif in both; implementation uses smaller UI optical weights appropriate to the Desktop workbench. No clipped or wrapped labels.
-- Spacing and layout rhythm: column and row rhythm follows the reference; period six starts after a clear 12 px lunch divider.
-- Colors and visual tokens: intentional EduPi/Notion adaptation; semantic course fill has adequate contrast and does not replace structure with decoration.
-- Image quality and assets: the source contains no required raster assets, logos or non-standard icons inside the timetable.
-- Copy and content: weekday, period, subject and class labels match the reference data.
-
-## Interaction evidence
-
-- Existing course cells open the calendar route/detail flow.
-- Teaching secondary navigation opens the full course table and exposes `← 教学首页` on subpages.
-- Calendar `课程表` content mode opens the same ten-period grid and keeps right-side editing.
-- Browser console: 0 errors, 0 warnings.
-
-## Comparison history
-
-1. Initial capture contained a density-scaled blank right half from the in-app clip.
-2. Normalized to the rendered component crop; no P0/P1/P2 structure or fidelity findings remained.
-
-## Follow-up polish
-
-- P3: optional printing/export styling can use stronger black borders when a teacher chooses “打印课表”.
+- P3: the expand/collapse control displays the normal focus ring immediately after keyboard or automated activation. This is intentional accessibility feedback and disappears when focus moves.
 
 final result: passed

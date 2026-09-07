@@ -3,7 +3,7 @@
 This repository is a working fork of the MIT-licensed `abcwyc/pi-agent-desktop` / `agegr/pi-web` desktop shell.
 
 - EduPi source: [PIGU-PPPgu/edupi-desktop](https://github.com/PIGU-PPPgu/edupi-desktop)
-- Signed desktop downloads: [PIGU-PPPgu/edupi-releases](https://github.com/PIGU-PPPgu/edupi-releases/releases)
+- Signed desktop downloads: [PIGU-PPPgu/edupi-desktop](https://github.com/PIGU-PPPgu/edupi-desktop/releases)
 
 ## EduPi integration status
 

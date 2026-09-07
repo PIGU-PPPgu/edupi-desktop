@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { dirname } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 import { createJiti } from "jiti";
 
 /**
@@ -69,4 +70,9 @@ test("windows and linux draw their own buttons", () => {
     assert.equal(chrome.isDesktop && !chrome.isMacOS, true, `platform ${platform}`);
     assert.equal(chrome.dragRegionProps["data-tauri-drag-region"], true, `platform ${platform}`);
   }
+});
+
+test("cold starts center the window instead of restoring an unreachable title bar", () => {
+  const rust = readFileSync(new URL("../../src-tauri/src/lib.rs", import.meta.url), "utf8");
+  assert.match(rust, /\.inner_size\(1440\.0, 900\.0\)\s*\.center\(\)/);
 });

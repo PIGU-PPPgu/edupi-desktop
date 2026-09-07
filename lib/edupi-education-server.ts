@@ -17,6 +17,7 @@ import { projectTaskSessionBindings } from "./edupi-task-sessions";
 import { getLiveSessionSnapshots, getRpcSession, getRunningRpcSessionIds } from "./rpc-manager";
 import { listAllSessions } from "./session-reader";
 import { allowFileRoot } from "./file-access";
+import { workspaceResourcesRequest } from "./edupi-generated-artifacts";
 
 
 export function taskSessionFile(dataRoot: string): string {
@@ -51,8 +52,13 @@ export async function projectEducationContract(snapshot: EducationSnapshot): Pro
     supportedCommands: activeBridgeIdentity().contract.supported_commands,
     entityDeleteEnabled: true,
   });
+  const generated = await workspaceResourcesRequest().catch(() => null);
   return {
     ...contract,
+    students: contract.students.map(student => ({ ...student, class_name: generated?.studentMetadata.find(item => item.student_id === student.student_id)?.class_name || null })),
+    generatedArtifacts: generated?.artifacts || [],
+    teacherMaterials: generated?.teacherMaterials || [],
+    generatedArtifactsUnavailable: generated === null || generated.artifacts === null,
     taskSessions: projectTaskSessionBindings(taskSessionStore, {
       taskIds: new Set(contract.tasks.map((task) => task.id).filter((id): id is string => Boolean(id))),
       knownSessionIds,

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { generateSessionTitle } from "@/lib/session-title";
-import { getRpcSession, startRpcSession } from "@/lib/rpc-manager";
+import { getRpcSession } from "@/lib/rpc-manager";
+import { startHarnessSession } from "@/lib/harness/runtime";
 import { invalidateSessionListCache, resolveSessionPath } from "@/lib/session-reader";
 
 export async function POST(
@@ -19,7 +20,7 @@ export async function POST(
     const existing = getRpcSession(id);
     const { session } = existing?.isAlive()
       ? { session: existing }
-      : await startRpcSession(id, filePath, undefined);
+      : await startHarnessSession(id, filePath, undefined);
 
     // globalThis keeps wrappers alive across dev hot reloads; older instances
     // may predate waitUntilReady(), but those have already completed startup.

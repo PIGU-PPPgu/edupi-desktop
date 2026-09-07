@@ -11,6 +11,7 @@
       "resources/server",
       "resources/node",
       "resources/component-versions.json",
+      "resources/third-party",
       "resources/edupi-core"
     ],
     "linux": {

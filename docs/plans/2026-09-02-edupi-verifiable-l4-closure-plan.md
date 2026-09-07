@@ -20,7 +20,7 @@
 
 - Desktop：`89cecc8`；工作树在规划时干净；
 - Desktop 当前固定 Core：`dae43405f5057e3b7032def28267d258c9066a8e`；
-- `/Users/iguppp/.openclaw/workspace/edupi` 在规划时存在大量未提交工作，不能作为实现工作树；
+- `<production-core-root>` 在规划时存在大量未提交工作，不能作为实现工作树；
 - 实现开始时必须从 PR A/B/C 合并后的明确提交创建新的干净 Core 与 Desktop worktree；不得清理、重置或复用上述脏 Core 工作树。
 
 明确不做：

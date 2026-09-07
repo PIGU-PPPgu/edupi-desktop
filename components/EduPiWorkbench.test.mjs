@@ -83,10 +83,10 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   assert.match(teaching, /continuity\.subjectKnowledge/);
   assert.match(await read("./EduPiStudentWorkspace.tsx"), /continuity\.familyContacts/);
   assert.match(growth, /continuity\.documents/);
-  assert.match(teaching, /task\.trigger === "teaching_adjustment_candidate"/);
+  assert.match(teaching, /taskCategory\(task\) === "teaching"/);
   assert.match(await read("./EduPiStudentWorkspace.tsx"), /task\.student === selectedName/);
   for (const label of ["教学首页", "课程表", "教学重点", "备课任务", "教学记忆"]) assert.match(`${teaching}\n${await read("../lib/edupi-domain-navigation.ts")}`, new RegExp(label));
-  for (const section of ["交给 EduPi", "EduPi 已经准备好", "今天要判断", "接下来", "值得留意"]) assert.match(`${workspaceViews}\n${await read("./EduPiTodayWork.tsx")}`, new RegExp(section));
+  for (const section of ["交给 EduPi", "早安简报", "今天要判断", "接下来", "值得留意"]) assert.match(`${workspaceViews}\n${await read("./EduPiTodayWork.tsx")}`, new RegExp(section));
   assert.match(workspaceViews, /onStartAgent/);
   assert.match(workspaceViews, /event !== currentWeek/);
   assert.match(panel, /showObjectSider/);
@@ -180,7 +180,7 @@ test("keeps the existing Chat subtree mounted during background education refres
   assert.match(panel, /aria-busy=\{loading \? true : undefined\}/);
   assert.match(panel, /onClick=\{retryLoadWorkspace\}/);
   assert.match(panel, /title=\{loadError\}>重试/);
-  assert.match(panel, /className="edupi-teacher-shell is-loading"/);
+  assert.match(panel, /className=\{`edupi-teacher-shell is-loading\$\{desktopChrome\.isDesktop \? " has-desktop-drag-region" : ""\}`\}/);
   assert.match(panel, /<EduPiPersistentChatHost/);
   assert.equal((panel.match(/\{chatPanel\}/g) || []).length, 1);
   assert.match(panel, /mode=\{drawer === "agent" \? "drawer" : activeView === "chat" \? "main" : "hidden"\}/);

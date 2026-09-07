@@ -20,7 +20,7 @@
 
 ![Pi Agent 深色模式界面](./docs/screenshots/pi-agent-dark@2x.png)
 
-**[⬇️ 下载 EduPi Desktop（macOS / Windows / Linux）](https://github.com/PIGU-PPPgu/edupi-releases/releases)**
+**[⬇️ 下载 EduPi Desktop（macOS / Windows / Linux）](https://github.com/PIGU-PPPgu/edupi-desktop/releases)**
 
 源码仓库：[PIGU-PPPgu/edupi-desktop](https://github.com/PIGU-PPPgu/edupi-desktop)
 
@@ -28,7 +28,7 @@
 
 ### 安装桌面 App
 
-发布版本可从 [EduPi Desktop Releases](https://github.com/PIGU-PPPgu/edupi-releases/releases) 下载：
+发布版本可从 [EduPi Desktop Releases](https://github.com/PIGU-PPPgu/edupi-desktop/releases) 下载：
 
 - Apple Silicon Mac：下载 `aarch64.dmg`，打开后将 App 拖入 `Applications`。正式 Release 不构建 Intel Mac 版本。
 - Windows x64：下载名称以 `x64-setup.exe` 结尾的安装程序并运行。安装器会在需要时安装 Microsoft WebView2。
@@ -59,14 +59,14 @@ Pi Agent 默认读取 Pi 的本地数据目录：
 
 ## 版本检查与升级
 
-EduPi 最多每七天检查一次 `PIGU-PPPgu/edupi-releases` 中的最新稳定桌面版。打包组件清单同时记录已审核的：
+EduPi 最多每七天检查一次 `PIGU-PPPgu/edupi-desktop` 中的最新稳定桌面版。打包组件清单同时记录已审核的：
 
 - `earendil-works/pi`
 - `agegr/pi-web`
 
 版本与升级规则如下：
 
-1. `PIGU-PPPgu/edupi-releases` 中的最新稳定 Release 是桌面升级提醒和下载的唯一来源。
+1. `PIGU-PPPgu/edupi-desktop` 中的最新稳定 Release 是桌面升级提醒和下载的唯一来源。
 2. 三个组件中任意一个版本落后，设置中的统一升级按钮都会启用。
 3. 如果多个组件需要更新，发布自动化按 `pi → pi-web → pi-agent-desktop` 的顺序同步和验证。
 4. 用户侧不会修改已安装 App 内的单个 JavaScript 包，而是下载一个同时包含三个最新版组件的完整签名 App。

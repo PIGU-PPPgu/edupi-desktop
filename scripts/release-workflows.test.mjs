@@ -48,20 +48,23 @@ test("the signed release workflow is manual-only", async () => {
   const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
   assert.match(release, /on:\s*\n\s*workflow_dispatch:/);
   assert.doesNotMatch(release, /\bpush:/);
+  assert.ok(release.indexOf("name: Verify application quality") < release.indexOf("name: Check out the pinned EduPi Core runtime"));
+  assert.match(release, /tauriScript: npx tauri/);
 });
 
-test("signed releases and updater metadata belong to the EduPi binary repository", async () => {
+test("signed releases and updater metadata belong to the EduPi Desktop repository", async () => {
   const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
   const tauriConfig = JSON.parse(await readFile(join(root, "src-tauri", "tauri.conf.json"), "utf8"));
 
-  assert.match(release, /EDUPI_RELEASE_TOKEN/);
+  assert.doesNotMatch(release, /EDUPI_RELEASE_TOKEN/);
+  assert.match(release, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/);
   assert.match(release, /owner:\s*PIGU-PPPgu/);
-  assert.match(release, /repo:\s*edupi-releases/);
+  assert.match(release, /repo:\s*edupi-desktop/);
   assert.match(release, /releaseCommitish:\s*main/);
   assert.match(release, /--repo "\$RELEASE_REPOSITORY"/);
   assert.doesNotMatch(release, /abcwyc\/pi-agent-desktop/);
   assert.deepEqual(tauriConfig.plugins.updater.endpoints, [
-    "https://github.com/PIGU-PPPgu/edupi-releases/releases/latest/download/latest.json",
+    "https://github.com/PIGU-PPPgu/edupi-desktop/releases/latest/download/latest.json",
   ]);
   assert.equal(tauriConfig.identifier, "com.abcwyc.pi-agent");
 });
@@ -193,16 +196,17 @@ test("release workflow publishes Apple Silicon, Linux x64, and Windows x64 insta
 
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /max-parallel: 1/);
-  assert.match(workflow, /runner: macos-15/);
-  assert.match(workflow, /target: aarch64-apple-darwin/);
-  assert.match(workflow, /runner: ubuntu-24\.04/);
-  assert.match(workflow, /target: x86_64-unknown-linux-gnu/);
-  assert.match(workflow, /--bundles deb/);
+  assert.match(workflow, /'macos-15'/);
+  assert.match(workflow, /\["aarch64-apple-darwin"\]/);
+  assert.match(workflow, /'ubuntu-24\.04'/);
+  assert.match(workflow, /\["x86_64-unknown-linux-gnu"\]/);
+  assert.match(workflow, /'deb,appimage'/);
   assert.match(workflow, /libwebkit2gtk-4\.1-dev/);
   assert.match(workflow, /libayatana-appindicator3-dev/);
-  assert.match(workflow, /runner: windows-latest/);
-  assert.match(workflow, /target: x86_64-pc-windows-msvc/);
-  assert.match(workflow, /--bundles nsis/);
+  assert.match(workflow, /'windows-latest'/);
+  assert.match(workflow, /\["x86_64-pc-windows-msvc"\]/);
+  assert.match(workflow, /'nsis'/);
+  assert.match(workflow, /Missing signed update/);
   assert.doesNotMatch(workflow, /x86_64-apple-darwin/);
   assert.doesNotMatch(workflow, /macos-15-intel/);
   assert.match(workflow, /includeUpdaterJson: true/);
@@ -272,22 +276,28 @@ test("every packaged workflow checks out the exact pinned Core runtime", async (
   ]);
   for (const workflow of workflows) {
     assert.match(workflow, /contracts\/edupi-core-compat\.json/);
-    assert.match(workflow, /git init \.edupi-core-runtime/);
-    assert.match(workflow, /git -C \.edupi-core-runtime fetch --depth 1 origin "\$core_commit"/);
-    assert.match(workflow, /git -C \.edupi-core-runtime checkout --detach "\$core_commit"/);
+    assert.match(workflow, /repository: PIGU-PPPgu\/edupi/);
+    assert.match(workflow, /ref: \$\{\{ steps\.core\.outputs\.commit \}\}/);
+    assert.match(workflow, /token: \$\{\{ secrets\.EDUPI_CORE_READ_TOKEN \}\}/);
+    assert.match(workflow, /persist-credentials: false/);
+    assert.match(workflow, /git -C \.edupi-core-runtime config core\.autocrlf false/);
+    assert.match(workflow, /git -C \.edupi-core-runtime checkout-index --all --force/);
     assert.match(workflow, /npm ci --ignore-scripts --prefix \.edupi-core-runtime/);
     assert.match(workflow, /EDUPI_CORE_ROOT: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/);
     assert.doesNotMatch(workflow, /git checkout (main|master|latest)/i);
   }
 });
 
-test("all packaged platform configs carry the bundled Core resource", async () => {
+test("all packaged platform configs carry the bundled Core and third-party notices", async () => {
   const [base, windows, linux, dev] = await Promise.all([
     readFile(join(root, "src-tauri", "tauri.conf.json"), "utf8"),
     readFile(join(root, "src-tauri", "tauri.windows.conf.json"), "utf8"),
     readFile(join(root, "src-tauri", "tauri.linux.conf.json"), "utf8"),
     readFile(join(root, "src-tauri", "tauri.dev.conf.json"), "utf8"),
   ]);
-  for (const source of [base, windows, linux]) assert.match(source, /resources\/edupi-core/);
+  for (const source of [base, windows, linux]) {
+    assert.match(source, /resources\/edupi-core/);
+    assert.match(source, /resources\/third-party/);
+  }
   assert.deepEqual(JSON.parse(dev).bundle.resources, []);
 });

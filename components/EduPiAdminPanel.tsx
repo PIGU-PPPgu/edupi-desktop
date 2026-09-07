@@ -5,15 +5,34 @@ import type { EducationContract } from "@/lib/edupi-education-contract";
 import type { OnboardingChecklistItem, TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import type { WorkbenchView } from "@/lib/edupi-workbench";
 import type { EduPiWorkspaceBundle } from "@/lib/edupi-education-client";
+import { APP_VERSION_DISPLAY } from "@/lib/branding";
+import { useDesktopChrome, WindowControls } from "./desktop";
+import { EduPiConnectorSetup } from "./EduPiConnectorSetup";
+import { EduPiBackgroundJobs } from "./EduPiBackgroundJobs";
+import { startWindowDragging } from "@/lib/desktop-window";
 
 type AdminSnapshot = {
   context: TeacherContextSnapshot | null;
   education: EducationContract | null;
-  status: { core?: { status?: string }; projection?: { status?: string } } | null;
+  status: {
+    core?: { status?: string };
+    projection?: { status?: string };
+    kernel?: {
+      status?: string;
+      summary?: { total?: number; running?: number; failed?: number; needs_review?: number; succeeded?: number; skipped?: number };
+      runs?: Array<{ run_id?: string; trigger_id?: string; status?: string; updated_at?: string; result_summary?: string | null; attempt_count?: number }>;
+    };
+  } | null;
   models: { modelList?: Array<{ id: string; provider: string }>; defaultModel?: { provider: string; modelId: string } | null } | null;
+  platform: {
+    teachingSkills?: { summary?: Record<string, number>; skills?: Array<{ skill_id?: string; title?: string; lifecycle_state?: string; trial_count?: number; can_reuse?: boolean }> };
+    connectors?: { connectors?: Array<{ connector_id?: string; label?: string; status?: string; capabilities?: string[] }> };
+    agentComputer?: { summary?: Record<string, number>; jobs?: Array<{ job_id?: string; title?: string; job_type?: string; status?: string }> };
+    platform?: { tenant_count?: number; multi_harness_ready?: boolean; tenants?: Array<{ tenant_id?: string; label?: string; core_mode?: string; device_count?: number; harness_count?: number }> };
+  } | null;
 };
 
-export type AdminSectionId = "readiness" | "models" | "people" | "calendar" | "materials" | "tasks" | "system";
+export type AdminSectionId = "readiness" | "automation" | "teachingSkills" | "connections" | "platform" | "models" | "people" | "calendar" | "materials" | "tasks" | "system";
 
 type Props = {
   onClose: () => void;
@@ -29,6 +48,10 @@ type Props = {
 
 export const ADMIN_SECTIONS: Array<{ id: AdminSectionId; label: string }> = [
   { id: "readiness", label: "EduPi 就绪度" },
+  { id: "automation", label: "自动运行" },
+  { id: "teachingSkills", label: "教学能力" },
+  { id: "connections", label: "连接与后台" },
+  { id: "platform", label: "学校平台" },
   { id: "models", label: "AI 与模型" },
   { id: "people", label: "教师与学生" },
   { id: "calendar", label: "校历与课表" },
@@ -67,11 +90,13 @@ function AdminMetric({ value, label }: { value: string | number; label: string }
 }
 
 export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, onNavigate, onOpenSettings, modelSettingsDirty, modelsPanel, initialSection = "readiness", refreshToken = 0 }: Props) {
+  const desktopChrome = useDesktopChrome();
   const [activeSection, setActiveSection] = useState<AdminSectionId>(initialSection);
   const [modelsMounted, setModelsMounted] = useState(false);
-  const [snapshot, setSnapshot] = useState<AdminSnapshot>({ context: null, education: null, status: null, models: null });
+  const [snapshot, setSnapshot] = useState<AdminSnapshot>({ context: null, education: null, status: null, models: null, platform: null });
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [selectedConnector, setSelectedConnector] = useState<string | null>(null);
   const firstNavRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const workspaceRef = useRef<HTMLElement>(null);
@@ -98,14 +123,15 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
     const controller = new AbortController();
     setLoading(true);
     void (async () => {
-      const [bundle, status] = await Promise.all([
+      const [bundle, status, platform] = await Promise.all([
         readJson<EduPiWorkspaceBundle>("/api/edupi/workspace", controller.signal),
         readJson<AdminSnapshot["status"]>("/api/edupi/status", controller.signal),
+        readJson<AdminSnapshot["platform"]>("/api/edupi/platform", controller.signal),
       ]);
       const context = bundle?.context ?? null;
       const education = bundle?.data ?? null;
       const models = await readJson<AdminSnapshot["models"]>(education?.workspace ? `/api/models?cwd=${encodeURIComponent(education.workspace)}` : "/api/models", controller.signal);
-      if (!controller.signal.aborted) setSnapshot({ context, education, status, models });
+      if (!controller.signal.aborted) setSnapshot({ context, education, status, models, platform });
     })().finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [refreshKey, refreshToken]);
@@ -128,6 +154,9 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
   ], [checklist, coreReady, modelReady]);
   const completeCount = readiness.filter((item) => item.complete).length;
   const education = snapshot.education;
+  const kernel = snapshot.status?.kernel;
+  const kernelSummary = kernel?.summary;
+  const kernelRuns = kernel?.runs ?? [];
   const defaultModel = snapshot.models?.defaultModel;
   const refresh = () => setRefreshKey((value) => value + 1);
   const leaveAdmin = (action: () => void) => {
@@ -135,7 +164,8 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
     action();
   };
 
-  return <section className="edupi-admin-panel" aria-label="EduPi 管理中心">
+  return <section className={`edupi-admin-panel${desktopChrome.isDesktop ? " has-desktop-drag-region" : ""}`} aria-label="EduPi 管理中心">
+    {desktopChrome.isDesktop ? <div className="edupi-window-drag-region" {...desktopChrome.dragRegionProps} onMouseDown={(event) => { if (event.button === 0 && event.target === event.currentTarget) void startWindowDragging(); }}><WindowControls /></div> : null}
     <aside className="edupi-admin-sidebar">
       <header><span className="edupi-admin-sidebar__mark" aria-hidden="true">π</span><div><strong>EduPi</strong><small>后台管理</small></div></header>
       <nav aria-label="后台管理">
@@ -158,6 +188,39 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
           <div className="edupi-admin-readiness__bar" aria-hidden="true"><span style={{ width: `${readiness.length ? (completeCount / readiness.length) * 100 : 0}%` }} /></div>
           <div className="edupi-admin-readiness__items">{readiness.map((item) => <button type="button" key={item.id} onClick={item.action}><i className={item.complete ? "is-complete" : ""} aria-hidden="true">{item.complete ? "✓" : "·"}</i><span>{item.label}</span><em>{item.complete ? "完成" : "去设置"}</em></button>)}</div>
         </section>
+      </section> : null}
+
+      {activeSection === "automation" ? <section className="edupi-admin-section">
+        <AdminSectionHeader title="自动运行" meta={kernel?.status === "ready" ? `最近 ${kernelRuns.length} 次` : "运行状态不可用"} onRefresh={refresh} />
+        <div className="edupi-admin-metrics"><AdminMetric value={kernelSummary?.running ?? "—"} label="运行中" /><AdminMetric value={kernelSummary?.needs_review ?? "—"} label="待确认" /><AdminMetric value={kernelSummary?.succeeded ?? "—"} label="已完成" /></div>
+        <div className="edupi-admin-runtime" role="list" aria-label="最近自动运行">
+          {kernelRuns.length > 0 ? kernelRuns.slice(0, 12).map((run) => <div role="listitem" key={run.run_id}>
+            <i className={`is-${run.status || "unknown"}`} aria-hidden="true" />
+            <span><strong>{run.trigger_id || "EduPi 任务"}</strong><small>{run.result_summary || `第 ${run.attempt_count || 1} 次执行`}</small></span>
+            <em>{run.status === "running" || run.status === "awaiting_delivery" ? "运行中" : run.status === "needs_review" ? "待确认" : run.status === "failed" ? "失败" : run.status === "succeeded" ? "完成" : "无内容"}</em>
+            {run.updated_at ? <time dateTime={run.updated_at}>{new Date(run.updated_at).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time> : null}
+          </div>) : <div className="is-empty" role="status">还没有运行记录</div>}
+        </div>
+      </section> : null}
+
+      {activeSection === "teachingSkills" ? <section className="edupi-admin-section">
+        <AdminSectionHeader title="教学能力" meta="草稿 · 试用 · 验证 · 发布" onRefresh={refresh} />
+        <div className="edupi-admin-metrics"><AdminMetric value={snapshot.platform?.teachingSkills?.summary?.published ?? 0} label="已发布" /><AdminMetric value={snapshot.platform?.teachingSkills?.summary?.trial ?? 0} label="试用中" /><AdminMetric value={snapshot.platform?.teachingSkills?.summary?.validated ?? 0} label="已验证" /></div>
+        <div className="edupi-admin-list">{snapshot.platform?.teachingSkills?.skills?.slice(0, 20).map((skill) => <div key={skill.skill_id}><span><strong>{skill.title || "教学方法"}</strong><small>{skill.trial_count || 0} 次试用</small></span><em className={skill.can_reuse ? "is-ready" : ""}>{skill.lifecycle_state || "draft"}</em></div>)}{!snapshot.platform?.teachingSkills?.skills?.length ? <div><span><strong>暂无教学能力候选</strong></span><em>0</em></div> : null}</div>
+      </section> : null}
+
+      {activeSection === "connections" ? <section className="edupi-admin-section">
+        <AdminSectionHeader title="连接与后台" meta="飞书 · 钉钉 · 邮箱 · 教务 · 云盘" onRefresh={refresh} />
+        <div className="edupi-admin-metrics"><AdminMetric value={snapshot.platform?.connectors?.connectors?.filter((item) => item.status === "configured" || item.status === "connected").length ?? 0} label="已配置连接" /><AdminMetric value={snapshot.platform?.agentComputer?.summary?.running ?? 0} label="后台运行" /><AdminMetric value={snapshot.platform?.agentComputer?.summary?.completed ?? 0} label="完成作业" /></div>
+        <div className="edupi-admin-list">{snapshot.platform?.connectors?.connectors?.map((connector) => { const ready = connector.status === "configured" || connector.status === "connected"; return <button type="button" key={connector.connector_id} onClick={() => setSelectedConnector(connector.connector_id || null)}><span><strong>{connector.label || connector.connector_id}</strong><small>{connector.capabilities?.join(" · ")}</small></span><em className={ready ? "is-ready" : ""}>{ready ? "已连接" : connector.status === "credentials_verified" ? "正在启动" : "设置 ›"}</em></button>; })}</div>
+        {selectedConnector ? <EduPiConnectorSetup connectorId={selectedConnector} status={snapshot.platform?.connectors?.connectors?.find((item) => item.connector_id === selectedConnector)?.status || "not_configured"} onClose={() => setSelectedConnector(null)} onConfigured={refresh} /> : null}
+        <EduPiBackgroundJobs data={snapshot.education} onMaterials={() => onNavigate("materials")} />
+      </section> : null}
+
+      {activeSection === "platform" ? <section className="edupi-admin-section">
+        <AdminSectionHeader title="学校平台" meta={snapshot.platform?.platform?.multi_harness_ready ? "多 Harness 已就绪" : "Pi Harness"} onRefresh={refresh} />
+        <div className="edupi-admin-metrics"><AdminMetric value={snapshot.platform?.platform?.tenant_count ?? 0} label="学校租户" /><AdminMetric value={snapshot.platform?.platform?.tenants?.reduce((sum, item) => sum + (item.device_count || 0), 0) ?? 0} label="设备" /><AdminMetric value={snapshot.platform?.platform?.tenants?.reduce((sum, item) => sum + (item.harness_count || 0), 0) ?? 0} label="Harness" /></div>
+        <div className="edupi-admin-list">{snapshot.platform?.platform?.tenants?.map((tenant) => <div key={tenant.tenant_id}><span><strong>{tenant.label || tenant.tenant_id}</strong><small>{tenant.device_count || 0} 台设备 · {tenant.harness_count || 0} 个 Harness</small></span><em className="is-ready">{tenant.core_mode === "hosted" ? "托管 Core" : "本地 Core"}</em></div>)}</div>
       </section> : null}
 
       {modelsMounted ? <section className="edupi-admin-section is-models" hidden={activeSection !== "models"}>
@@ -196,8 +259,10 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
       {activeSection === "system" ? <section className="edupi-admin-section">
         <AdminSectionHeader title="系统" meta={education?.workspace || "数据目录待连接"} onRefresh={refresh} />
         <div className="edupi-admin-list">
+          <div><span><strong>EduPi Desktop</strong><small>当前安装版本</small></span><em>v{APP_VERSION_DISPLAY}</em></div>
           <div><span><strong>EduPi Core</strong><small>{snapshot.status?.core?.status || "不可用"}</small></span><em className={coreConnected ? "is-ready" : ""}>{coreConnected ? "已连接" : "检查"}</em></div>
           <div><span><strong>教育投影</strong><small>{snapshot.status?.projection?.status || "不可用"}</small></span><em className={projectionConnected ? "is-ready" : ""}>{projectionConnected ? "已连接" : "检查"}</em></div>
+          <button type="button" onClick={() => setActiveSection("automation")}><span><strong>自动运行内核</strong><small>{kernel?.status || "不可用"}</small></span><em>{kernelSummary?.running ? `${kernelSummary.running} 项运行中` : "查看"}</em></button>
           <button type="button" onClick={onOpenSettings}><span><strong>应用与桌面设置</strong><small>外观、桌面行为与更新</small></span><em>打开</em></button>
         </div>
       </section> : null}

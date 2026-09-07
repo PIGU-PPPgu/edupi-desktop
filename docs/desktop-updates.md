@@ -10,19 +10,18 @@ EduPi Desktop 使用 Tauri 的完整包更新。教师安装一次正式签名�
 
 普通 Git commit 不会直接更新教师电脑。只有完整质量门通过并发布为 GitHub Release 的版本才会被客户端识别。
 
-## 仓库边界
+## 单仓库发布边界
 
-- 公开源码：`PIGU-PPPgu/edupi-desktop`
-- 公开二进制发布：`PIGU-PPPgu/edupi-releases`
-- 客户端清单：`https://github.com/PIGU-PPPgu/edupi-releases/releases/latest/download/latest.json`
+- 源码与公开二进制发布：`PIGU-PPPgu/edupi-desktop`
+- 客户端清单：`https://github.com/PIGU-PPPgu/edupi-desktop/releases/latest/download/latest.json`
 
-源码仓库公开代码与审阅记录；独立发布仓库只保存 DMG、Windows 安装程序、Linux 包、updater 压缩包/签名、`latest.json` 与组件版本清单。客户端必须能够匿名读取发布仓库，否则普通教师无法检查或下载更新。
+同一个仓库保存源码、审阅记录和 GitHub Releases。DMG、Windows 安装程序、Linux 包、updater 压缩包/签名、`latest.json` 与组件版本清单都发布到该仓库的 Release；客户端可以匿名检查和下载更新。
 
 ## 一次性外部配置
 
-### 1. 创建公开二进制仓库
+### 1. 启用源码仓库 Release
 
-创建公开仓库 `PIGU-PPPgu/edupi-releases`，保留 `main` 默认分支。正式工作流会跨仓库创建草稿 Release，只有 macOS、Windows、Linux 和组件清单全部上传成功后才发布为 latest。
+保持 `PIGU-PPPgu/edupi-desktop` 为公开仓库并启用 Actions。正式工作流在当前仓库创建草稿 Release，只有 macOS、Windows、Linux 和组件清单全部上传成功后才发布为 latest；不需要额外的发布仓库或跨仓库令牌。
 
 ### 2. 创建永久 updater 密钥
 
@@ -37,7 +36,8 @@ npm exec tauri signer generate -- -w ~/.tauri/edupi-desktop.key
 - `TAURI_SIGNING_PRIVATE_KEY`：私钥文件内容；
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`：生成私钥时使用的密码；
 - `TAURI_UPDATER_PUBLIC_KEY`：对应 `.pub` 文件的完整 Base64 内容；
-- `EDUPI_RELEASE_TOKEN`：只授予 `PIGU-PPPgu/edupi-releases` Contents 读写权限的细粒度令牌。
+
+Release 写入使用工作流内置的 `github.token`，由 `contents: write` 权限限定在当前仓库。
 
 不要轮换 updater 密钥，除非先实现密钥迁移。已安装客户端只信任构建时嵌入的公钥；丢失私钥会让这些客户端无法自动升级到新密钥版本。
 

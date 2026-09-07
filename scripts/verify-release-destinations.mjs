@@ -2,9 +2,9 @@ import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const EDUPI_RELEASE_REPOSITORY = "PIGU-PPPgu/edupi-releases";
+export const EDUPI_RELEASE_REPOSITORY = "PIGU-PPPgu/edupi-desktop";
 export const EDUPI_UPDATER_ENDPOINT =
-  "https://github.com/PIGU-PPPgu/edupi-releases/releases/latest/download/latest.json";
+  "https://github.com/PIGU-PPPgu/edupi-desktop/releases/latest/download/latest.json";
 
 export const RELEASE_DESTINATION_FILES = [
   ".github/workflows/release.yml",
@@ -50,11 +50,14 @@ export function releaseDestinationErrors(files) {
   }
   if (errors.length > 0) return errors;
 
+  if (releaseWorkflow.includes("EDUPI_RELEASE_TOKEN")) {
+    errors.push("release workflow must use the current repository token");
+  }
   requireText(
     errors,
     releaseWorkflow,
-    "EDUPI_RELEASE_TOKEN",
-    "release workflow must use the EduPi release-only token",
+    "GITHUB_TOKEN: ${{ github.token }}",
+    "release workflow must publish with the current repository token",
   );
   requireText(
     errors,
@@ -65,7 +68,7 @@ export function releaseDestinationErrors(files) {
   requireText(
     errors,
     releaseWorkflow,
-    "repo: edupi-releases",
+    "repo: edupi-desktop",
     "release workflow must target the EduPi release repository",
   );
   requireText(
@@ -77,7 +80,7 @@ export function releaseDestinationErrors(files) {
   if (JSON.stringify(exactYamlValues(releaseWorkflow, "owner")) !== '["PIGU-PPPgu"]') {
     errors.push("release workflow must have exactly one EduPi release owner");
   }
-  if (JSON.stringify(exactYamlValues(releaseWorkflow, "repo")) !== '["edupi-releases"]') {
+  if (JSON.stringify(exactYamlValues(releaseWorkflow, "repo")) !== '["edupi-desktop"]') {
     errors.push("release workflow must have exactly one EduPi release repository");
   }
   for (const line of releaseWorkflow.split("\n").filter((line) => line.includes("gh release "))) {
