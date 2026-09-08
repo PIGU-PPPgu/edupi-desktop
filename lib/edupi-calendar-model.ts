@@ -544,3 +544,12 @@ export function createCalendarProjection(
 }
 
 export const buildCalendarModel = createCalendarProjection;
+
+export function calendarSelectionFromLink(
+  data: Pick<EducationContract, "calendar" | "tasks" | "timetable">,
+  link: { kind: string | null; id: string | null; date: string | null },
+): CalendarItemSelection | null {
+  if (!link.id || !parseIsoDate(link.date) || (link.kind !== "calendar" && link.kind !== "timetable")) return null;
+  const entry = createCalendarProjection(data, { view: "day", anchorDate: link.date! }).entries.find(item => item.kind === link.kind && item.sourceId === link.id);
+  return entry ? { kind: entry.kind, sourceId: entry.sourceId, date: entry.date, title: entry.title, detail: entry.detail, sourceLabel: entry.sourceLabel, statusLabel: entry.statusLabel } : null;
+}

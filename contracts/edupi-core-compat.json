@@ -2,9 +2,9 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "cb9cd73b975995b523b0416ae44ed69650bb6478",
+    "core_commit": "9bd69d6248cb56927e3b9f462204844e5201adfe",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:b3d9a881e467ea97dbd901d352a6cb3f02d0876b5374e1748d553f35fe6eaae9"
+    "component_manifest_hash": "sha256:882a019bb0db6dbd6f1a3ff1e11ee856ffd711393a730769f37404db37f21224"
   },
   "contract_identities": [
     {

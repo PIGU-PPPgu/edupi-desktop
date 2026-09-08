@@ -70,6 +70,7 @@ async function assembleServer() {
   await copyFile(join(rootDir, "desktop", "preparation-worker.mjs"), join(serverResourcesDir, "preparation-worker.mjs"));
   await copyFile(join(rootDir, "desktop", "model-output-repair.mjs"), join(serverResourcesDir, "model-output-repair.mjs"));
   await copyFile(join(rootDir, "desktop", "preparation-materials.mjs"), join(serverResourcesDir, "preparation-materials.mjs"));
+  await copyFile(join(rootDir, "desktop", "preparation-skills.mjs"), join(serverResourcesDir, "preparation-skills.mjs"));
   await copyFile(join(rootDir, "desktop", "preparation-source-text.mjs"), join(serverResourcesDir, "preparation-source-text.mjs"));
   await copyFile(join(rootDir, "desktop", "office-archive.mjs"), join(serverResourcesDir, "office-archive.mjs"));
   await copyPreparationDependencies(rootDir, serverResourcesDir);

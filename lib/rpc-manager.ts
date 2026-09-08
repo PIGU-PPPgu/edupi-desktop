@@ -269,7 +269,7 @@ export class AgentSessionWrapper {
 
   start(): void {
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
-      if (resolve(this.cwd) === EDUPI_ROOT) {
+      if (normalizeRpcCwd(this.cwd) === EDUPI_ROOT) {
         if (event.type === "agent_start") this.artifactBaseline = snapshotGeneratedFiles(this.cwd, this.artifactOutputDirectory);
         const writtenArtifact = writtenToolArtifactPath(event, this.cwd, this.artifactPendingWrites);
         if (event.type === "tool_execution_end" && !event.isError) {
@@ -1402,7 +1402,7 @@ export async function startRpcSession(
       agentDir,
       resourceLoaderOptions: {
         additionalExtensionPaths: extensionPaths,
-        additionalSkillPaths: resolve(sessionCwd) === EDUPI_ROOT ? [prepareEducationResources()] : [],
+        additionalSkillPaths: normalizeRpcCwd(sessionCwd) === EDUPI_ROOT ? [prepareEducationResources()] : [],
         ...(teacherContextAppendSystemPromptOverride
           ? { appendSystemPromptOverride: teacherContextAppendSystemPromptOverride }
           : {}),
@@ -1434,7 +1434,7 @@ export async function startRpcSession(
       ...(toolsOption !== undefined ? { tools: toolsOption } : {}),
       customTools: [
         defineTool(createBashToolDefinition(sessionCwd, { shellPath: services.settingsManager.getShellPath(), spawnHook: redactDesktopSpawnContext })),
-        ...(resolve(sessionCwd) === EDUPI_ROOT ? [createEduPiDocumentTool(EDUPI_ROOT), createEduPiPresentationTool(EDUPI_ROOT), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
+        ...(normalizeRpcCwd(sessionCwd) === EDUPI_ROOT ? [createEduPiDocumentTool(EDUPI_ROOT), createEduPiPresentationTool(EDUPI_ROOT), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
           projectRoot: EDUPI_ROOT,
           requestAction: (action, signal) => requestEduPiAppAction(action, signal),
         }), createEduPiComputerUseTool({

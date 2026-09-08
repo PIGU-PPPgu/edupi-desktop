@@ -15,7 +15,7 @@ export async function workspaceResourcesRequest() {
 const extensions = new Set([".md", ".txt", ".docx", ".pdf", ".pptx", ".xlsx", ".csv", ".html"]);
 
 export function nativeToolArtifactPath(event: { type: string; toolName?: unknown; isError?: unknown; result?: unknown }): string | null {
-  if (event.type !== "tool_execution_end" || event.isError || (event.toolName !== "edupi_make_document" && event.toolName !== "edupi_make_ppt")) return null;
+  if (event.type !== "tool_execution_end" || event.isError || !["edupi_make_document", "edupi_make_ppt", "try_teaching_method"].includes(String(event.toolName))) return null;
   const result = event.result as { details?: { path?: unknown } } | undefined;
   return typeof result?.details?.path === "string" ? result.details.path : null;
 }
