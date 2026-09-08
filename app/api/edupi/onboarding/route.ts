@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
-import { EduPiSnapshotError } from "@/lib/edupi-core-snapshot";
-import { reviewTeacherContextCandidate } from "@/lib/edupi-education-server";
+import { EduPiSnapshotError, resolveEduPiBridgeRoots } from "@/lib/edupi-core-snapshot";
+import { readEducationContract, reviewTeacherContextCandidate } from "@/lib/edupi-education-server";
+import { runCoreProcess } from "@/lib/edupi-core-process-client";
+import { isApiRequestAllowed, hasJsonContentType } from "@/lib/request-security";
+import { parseJsonWithinLimit } from "@/lib/bounded-form-data";
+import { normalizeTeacherContextValues } from "@/lib/edupi-context-editor-model";
 import { TeacherContextReviewError, TEACHER_CONTEXT_REVIEW_DECISIONS, type TeacherContextReviewDecision } from "@/lib/edupi-teacher-context-review";
 import { readTeacherContext } from "@/lib/edupi-onboarding-server";
 
@@ -11,6 +15,29 @@ export async function GET() {
     return NextResponse.json(await readTeacherContext());
   } catch {
     return NextResponse.json({ error: "教育上下文暂不可用", reason: "Core v1.1 education_workspace 快照不可用。" }, { status: 503 });
+  }
+}
+
+export async function POST(request: Request) {
+  if (!isApiRequestAllowed(request) || !hasJsonContentType(request)) return NextResponse.json({ error: "请求无效" }, { status: 403 });
+  let values;
+  try {
+    values = normalizeTeacherContextValues(await parseJsonWithinLimit(request, 4000));
+    if (!values || !Object.keys(values).length) throw new Error();
+  } catch { return NextResponse.json({ error: "请至少填写一项，最多120字" }, { status: 400 }); }
+  try {
+    const capture = await runCoreProcess<{ ok: boolean; context_id: string; revision: number; proposed_values: Record<string, string> }>({ ...resolveEduPiBridgeRoots(), timeoutMs: 10000, request: { protocol: "edupi-desktop-bridge", protocol_version: 1, producer: "edupi-desktop", request_id: crypto.randomUUID(), operation: "teacher-context-input", values } });
+    if (!capture.ok) throw new Error();
+    const data = await readEducationContract();
+    const candidate = data.teacherContextCandidates.find(item => item.contextId === capture.context_id);
+    if (!candidate) throw new Error();
+    const sameValues = (left: Record<string, string>, right: Record<string, string>) => Object.keys(left).length === Object.keys(right).length && Object.entries(left).every(([key, value]) => right[key] === value);
+    if (!capture.proposed_values || candidate.revision !== capture.revision || !sameValues(values, capture.proposed_values) || !sameValues(values, candidate.proposedValues)) return NextResponse.json({ error: "教师资料已被其他操作更新，请刷新后重新保存" }, { status: 409 });
+    const result = await reviewTeacherContextCandidate({ targetId: candidate.contextId, expectedSnapshotId: candidate.snapshotId, expectedRevision: candidate.revision, decision: "accept", patch: null, note: "教师手动填写并保存", reviewerId: "teacher" });
+    return NextResponse.json({ candidate, receipt: result.receipt, data: result.data });
+  } catch (error) {
+    if (error instanceof TeacherContextReviewError && ["stale_snapshot", "stale_revision"].includes(error.code)) return NextResponse.json({ error: "教师资料已被其他操作更新，请刷新后重新保存" }, { status: 409 });
+    return NextResponse.json({ error: "保存未确认，请刷新查看待确认更新后重试" }, { status: 503 });
   }
 }
 

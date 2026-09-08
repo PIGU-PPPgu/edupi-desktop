@@ -441,7 +441,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     const requested = selectedTaskKey ? tasks.find((task) => taskKey(task) === selectedTaskKey) : undefined;
     if (activeView === "review") {
       const reviewable = (task: TeacherTask) => isTaskActionable(task) && isTaskReviewable(task, education ? workCaseForTask(education, task.id) : null);
-      return requested && reviewable(requested) ? requested : tasks.find(reviewable);
+      return requested ?? tasks.find(reviewable);
     }
     return requested ?? tasks.find((task) => task.boardStage !== "done" && task.status === "planned") ?? tasks[0];
   }, [activeView, education, selectedTaskKey, tasks]);

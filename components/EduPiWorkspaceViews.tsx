@@ -1,4 +1,5 @@
 "use client";
+import { briefPreview } from "@/lib/edupi-brief-preview";
 
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import type { CalendarFact, EducationContract, EducationEntityDeleteKind, TeacherTask } from "@/lib/edupi-education-contract";
@@ -171,7 +172,7 @@ function DashboardView({ data, context, kernelState, runningAgentCount, onEducat
       <div className="edupi-today-main">
         <section className={`edupi-page-section edupi-daily-brief${briefIsFresh ? " is-fresh" : latestBriefRun?.status === "failed" ? " is-failed" : " is-stale"}`}>
           <SectionHeader title="早安简报" meta={briefStatus} action={latestBrief ? briefIsFresh ? "打开简报" : "查看上次简报" : undefined} onAction={latestBrief ? () => onOpenFile(workspaceFile(data.workspace, latestBrief.path)) : undefined} />
-          {latestBrief ? <p>{latestBrief.excerpt}</p> : <div className="edupi-module-empty">今天还没有生成简报</div>}
+          {latestBrief ? <p>{briefPreview(latestBrief.excerpt)}</p> : <div className="edupi-module-empty">今天还没有生成简报</div>}
           <footer><span>自动运行</span><strong>{latestBriefRun ? ({ running: "正在生成", awaiting_delivery: "等待交付", failed: "生成失败", needs_review: "待确认", succeeded: "已生成", skipped: "已跳过" })[latestBriefRun.status] : kernelState.status === "unavailable" ? "状态不可用" : "尚无运行记录"}</strong></footer>
         </section>
         <EduPiTodayWork data={data} onEducation={onEducation} onWorkCaseDetail={(workCase) => { const task = data.tasks.find((item) => item.id === workCase.taskId); if (task) onTaskDetail(task); }} />

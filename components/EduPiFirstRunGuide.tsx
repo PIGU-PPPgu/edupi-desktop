@@ -105,14 +105,14 @@ export function EduPiFirstRunGuide({
 
   const current = STEPS[step];
   return (
-    <aside className="edupi-first-run" role="region" aria-labelledby="edupi-first-run-title" onKeyDown={handleKeyDown}>
+    <aside className={`edupi-first-run${opened ? " is-opened" : ""}`} role="region" aria-labelledby="edupi-first-run-title" onKeyDown={handleKeyDown}>
       <section className="edupi-first-run__dialog">
-        <div className="edupi-first-run__progress" aria-label={`第 ${step + 1} 步，共 ${STEPS.length} 步`}>
+        {!opened ? <div className="edupi-first-run__progress" aria-label={`第 ${step + 1} 步，共 ${STEPS.length} 步`}>
           {STEPS.map((item, index) => <span key={item.title} className={index <= step ? "is-active" : ""} />)}
-        </div>
-        <span className="edupi-first-run__step">{step + 1} / {STEPS.length}</span>
+        </div> : null}
+        {!opened ? <span className="edupi-first-run__step">{step + 1} / {STEPS.length}</span> : null}
         <h2 id="edupi-first-run-title">{current.title}</h2>
-        <p>{current.note}</p>
+        {!opened ? <p>{current.note}</p> : null}
         {feedback ? <p role="status">{feedback}</p> : null}
         <button ref={primaryRef} type="button" className="edupi-first-run__primary" disabled={checking} onClick={() => void runPrimary()}>
           {checking ? "检查中…" : opened ? "检查并继续" : current.action}

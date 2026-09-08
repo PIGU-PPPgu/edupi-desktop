@@ -52,7 +52,7 @@ export function EduPiTaskWorkspace(props: Props) {
   const dateLabel = props.task.trigger === "teaching_before_class" && props.task.sourceEventDate
     ? `上课 ${props.task.sourceEventDate}${props.task.dueDate ? ` · 截止 ${props.task.dueDate}` : ""}`
     : props.task.dueDate || "日期待确认";
-  const reviewable = isTaskReviewable(props.task, props.workCase);
+  const reviewable = isTaskReviewable(props.task, props.workCase) || Boolean(props.workReview && props.task.reviewHistory.length > 0 && props.task.status !== "planned");
   const reviewReason = reviewable ? props.reviewReason : "等待产物";
   const selectStage = (stage: TaskStage) => {
     if (stage === "review" && !reviewable) return;

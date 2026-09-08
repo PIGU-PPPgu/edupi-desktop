@@ -94,6 +94,7 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
   const proposalValues = useMemo(() => proposedContextValues(candidate), [candidate]);
   const [modifyOpen, setModifyOpen] = useState(false);
   const [chatDraftOpen, setChatDraftOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const [draft, setDraft] = useState<TeacherContextEditorValues>(proposalValues);
   const [busy, setBusy] = useState(false);
   const [busyDecision, setBusyDecision] = useState<TeacherContextReviewDecision | null>(null);
@@ -125,18 +126,19 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
   }, [busy, onBusyChange]);
 
   useEffect(() => {
-    if (!modifyOpen && !chatDraftOpen) return;
+    if (!modifyOpen && !chatDraftOpen && !manualOpen) return;
     const cancelDraft = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || busy) return;
       event.preventDefault();
       event.stopPropagation();
       setModifyOpen(false);
       setChatDraftOpen(false);
+      setManualOpen(false);
       setError(null);
     };
     window.addEventListener("keydown", cancelDraft, true);
     return () => window.removeEventListener("keydown", cancelDraft, true);
-  }, [busy, chatDraftOpen, modifyOpen]);
+  }, [busy, chatDraftOpen, modifyOpen, manualOpen]);
 
   function updateDraft(field: TeacherContextField, value: string) {
     if (busy) return;
@@ -147,9 +149,10 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
     if (event.key === "Escape") {
       event.stopPropagation();
       if (busy) return;
-      if (modifyOpen || chatDraftOpen) {
+      if (modifyOpen || chatDraftOpen || manualOpen) {
         setModifyOpen(false);
         setChatDraftOpen(false);
+        setManualOpen(false);
         setError(null);
         return;
       }
@@ -158,7 +161,10 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
     }
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       if (busy) return;
-      if (modifyOpen) {
+      if (manualOpen) {
+        event.preventDefault();
+        void saveManual();
+      } else if (modifyOpen) {
         event.preventDefault();
         submitModify();
       } else if (chatDraftOpen) {
@@ -272,6 +278,30 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
     }
   }
 
+  async function saveManual() {
+    if (busy) return;
+    const values = buildContextPatch(draft, {});
+    if (!values) { setError("请至少填写一项。"); return; }
+    setBusy(true); setError(null); setFeedback(null);
+    try {
+      const response = await fetch("/api/edupi/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(values) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      const before = result.candidate as EducationTeacherContextCandidate;
+      const verified = verifyTeacherContextReview(result, { targetId: before.contextId, expectedSnapshotId: before.snapshotId, expectedStateHash: before.stateHash, decision: "accept" });
+      if (!verified.ok) throw new Error("未收到可信回执，保存未确认。");
+      const data = verified.data as unknown as EducationContract;
+      const refreshed = onReviewed ? await onReviewed({ receipt: verified.receipt, data }) : data;
+      if (!matchesTeacherContextRefresh(refreshed, { targetId: before.contextId, afterSnapshotId: String(verified.receipt.after_snapshot_id), afterStateHash: String(verified.receipt.after_state_hash) })) throw new Error("已收到回执，刷新失败。");
+      setManualOpen(false);
+      setFeedback("已保存");
+      window.dispatchEvent(new Event("edupi-preparation-updated"));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "保存未确认，请重试。");
+      window.dispatchEvent(new Event("edupi-preparation-updated"));
+    } finally { setBusy(false); }
+  }
+
   const status = contextStatusLabel(candidate, capability, currentValues);
   const actionable = isActionable(candidate);
   const canReview = Boolean(candidate && capability?.enabled && actionable);
@@ -282,7 +312,7 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
       <header className="edupi-context-editor__header">
         <div>
           <h2 id="edupi-context-editor-title" ref={headingRef} tabIndex={-1}>教师上下文</h2>
-          {candidate ? <div className="edupi-context-editor__meta">来自对话 · {candidate.evidenceIds.length} 条证据 · 不外发</div> : null}
+          {candidate ? <div className="edupi-context-editor__meta">教师资料 · {candidate.evidenceIds.length} 条证据 · 不外发</div> : null}
         </div>
         <span className={`edupi-context-editor__status is-${candidate?.status || candidate?.teacherReview.state || (contextReady ? "accepted" : "unconfigured")}`}>{status}</span>
       </header>
@@ -316,16 +346,22 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
         <div className="edupi-context-editor__modify-actions"><button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => setChatDraftOpen(false)}>取消</button><button type="button" className="edupi-entry-primary" disabled={busy || !onAgentRequest} onClick={submitDraft}>放入对话</button></div>
       </div> : null}
 
+      {manualOpen ? <div className="edupi-context-editor__modify" aria-label="手动填写教师资料">
+        <div className="edupi-context-editor__fields">{TEACHER_CONTEXT_FIELDS.map((field) => <label key={field.key}>{field.label}<input maxLength={120} disabled={busy} value={draft[field.key] || ""} onChange={(event) => updateDraft(field.key, event.target.value)} /></label>)}</div>
+        <div className="edupi-context-editor__modify-actions"><button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => setManualOpen(false)}>取消</button><button type="button" className="edupi-entry-primary" disabled={busy} onClick={() => void saveManual()}>{busy ? "保存中…" : "保存"}</button></div>
+      </div> : null}
+
       {feedback ? <div className="edupi-context-editor__feedback" role="status" aria-live="polite">{feedback}</div> : null}
       {error ? <div className="edupi-context-editor__error" role="alert">{error}</div> : null}
 
       <footer className="edupi-context-editor__actions">
-        {canReview && !modifyOpen && !chatDraftOpen ? <>
+        {!manualOpen && !modifyOpen && !chatDraftOpen ? <button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => { setDraft(currentValues); setManualOpen(true); setError(null); }}>手动填写</button> : null}
+        {!manualOpen && canReview && !modifyOpen && !chatDraftOpen ? <>
           <button type="button" className="edupi-entry-primary" disabled={busy} onClick={() => void submit("accept", null)}>{busy && busyDecision === "accept" ? BUSY_LABELS.accept : ACTION_LABELS.accept}</button>
           <button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => { setChatDraftOpen(false); setDraft(proposalValues); setModifyOpen(true); }}>{ACTION_LABELS.modify}</button>
           <button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => void submit("hold", null)}>{busy && busyDecision === "hold" ? BUSY_LABELS.hold : ACTION_LABELS.hold}</button>
           <button type="button" className="edupi-entry-danger" disabled={busy} onClick={() => void submit("reject", null)}>{busy && busyDecision === "reject" ? BUSY_LABELS.reject : ACTION_LABELS.reject}</button>
-        </> : !modifyOpen && !chatDraftOpen && onAgentRequest ? <button type="button" className="edupi-entry-secondary" disabled={busy} onClick={startDraft}>起草更新</button> : null}
+        </> : !manualOpen && !modifyOpen && !chatDraftOpen && onAgentRequest ? <button type="button" className="edupi-entry-secondary" disabled={busy} onClick={startDraft}>起草更新</button> : null}
       </footer>
       {!contextReady && !candidate ? <span className="edupi-visually-hidden">尚未配置教师上下文</span> : null}
     </section>

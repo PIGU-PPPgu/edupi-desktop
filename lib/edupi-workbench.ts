@@ -104,6 +104,7 @@ export type TaskPresentation = {
 };
 
 export function taskPresentation(task: TeacherTask): TaskPresentation {
+  if (task.status === "rejected") return { label: "已拒绝", tone: "danger" };
   if (task.boardStage === "done") return { label: "已完成", tone: "success" };
   if (task.boardRevision > 0 && task.boardStage === "progress") return { label: "正在准备", tone: "warning" };
   if (task.boardRevision > 0 && task.boardStage === "review") return { label: "待你确认", tone: "warning" };
@@ -112,7 +113,6 @@ export function taskPresentation(task: TeacherTask): TaskPresentation {
   if (contentStatus === "准备失败") return { label: contentStatus, tone: "danger" };
   if (task.status === "accepted") return { label: "已接受", tone: "success" };
   if (task.status === "modified") return { label: "修改后接受", tone: "success" };
-  if (task.status === "rejected") return { label: "已拒绝", tone: "danger" };
   if (task.status === "hold") return { label: "已暂缓", tone: "neutral" };
   if (contentStatus === "正在准备" || contentStatus === "待你确认") return { label: contentStatus, tone: "warning" };
   if (task.boardStage === "progress") return { label: "正在准备", tone: "warning" };

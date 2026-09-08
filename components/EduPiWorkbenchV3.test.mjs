@@ -72,7 +72,8 @@ test("teaching keeps a home route and the calendar exposes a ten-period weekday 
 
 test("class workspace keeps the student directory mounted and opens a right drawer", async () => {
   const student = await read("./EduPiStudentWorkspace.tsx");
-  assert.match(student, /localeCompare\(studentRecordName\(right\), "zh-CN"\)/);
+  assert.match(student, /studentDirectoryPage\(data\.students, classFilter, query/);
+  assert.match(await read("../lib/edupi-student-pagination.ts"), /localeCompare\(studentRecordName\(right\.student\), "zh-CN"\)/);
   assert.match(student, /edupi-student-directory/);
   assert.match(student, /edupi-student-drawer/);
   assert.match(student, /EduPi 相关记忆/);
@@ -84,6 +85,13 @@ test("class workspace keeps the student directory mounted and opens a right draw
   assert.match(student, /disabled=\{data\.students\.length === 0\}/);
   assert.match(student, /parseStudentProfileList/);
   assert.match(student, /method: "PUT"/);
+});
+
+test("review keeps the selected task visible after its decision changes", async () => {
+  const source = await read("./EduPiEducationPanel.tsx");
+  const selection = source.slice(source.indexOf("const activeTask = useMemo"), source.indexOf("const activeWorkReview"));
+  assert.match(selection, /return requested \?\? tasks\.find\(reviewable\)/);
+  assert.doesNotMatch(selection, /requested && reviewable\(requested\)/);
 });
 
 test("growth and materials use explicit databases and right-side material details", async () => {
