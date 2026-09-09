@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
     "@earendil-works/pi-ai",
     "@earendil-works/pi-tui",
     "mammoth",
+    "proper-lockfile",
   ],
   experimental: {
     optimizePackageImports: ["@lobehub/icons", "react-syntax-highlighter"],
