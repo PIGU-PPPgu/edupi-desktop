@@ -21,7 +21,7 @@ export function createPrepareTaskTool(projectRoot:string, dependencies:{readEduc
     execute:async(_id,params,signal,_update,ctx)=>{
       if(resolve(ctx.cwd)!==resolve(projectRoot))throw new Error("请在 EduPi 工作区执行备课");
       signal?.throwIfAborted();
-      if(params.action==="status")return {content:[{type:"text",text:JSON.stringify(status())}],details:{}};
+      if(params.action==="status")return {content:[{type:"text",text:JSON.stringify(await status(params.task_id))}],details:{}};
       const data=await readEducation();
       const ids=new Set(data.workCases.filter(item=>["teaching_before_class","calendar_preparation"].includes(item.kind)).map(item=>item.taskId));
       const tasks=data.tasks.filter(task=>task.id!==null&&ids.has(task.id));
@@ -32,8 +32,9 @@ export function createPrepareTaskTool(projectRoot:string, dependencies:{readEduc
       const task=tasks.find(task=>task.id===params.task_id);
       if(!task)throw new Error("没有找到可执行的课表/校历准备任务，请先查询");
       signal?.throwIfAborted();
-      const runStatus=start({taskId:task.id});
-      return {content:[{type:"text",text:`已启动「${task.title}」的后台准备。当前状态：${runStatus.state}。生成完成后可在教学产物中查看；现在尚未宣称完成。`}],details:{taskId:task.id,status:runStatus.state}};
+      const runStatus=await start({taskId:task.id});
+      if(runStatus.state==="error")throw new Error(runStatus.error || "备课暂不可用");
+      return {content:[{type:"text",text:`已提交「${task.title}」备课。状态：${{running:"准备中",ready:"已准备",idle:"未运行"}[runStatus.state]}。`}],details:{taskId:task.id,status:runStatus.state}};
     },
   });
 }

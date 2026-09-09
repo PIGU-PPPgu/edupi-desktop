@@ -44,6 +44,7 @@ test("Linux and Windows packaging include the bundled Node runtime", async () =>
 
   assert.match(prepareSource, /process\.platform === "win32" \? "node\.exe" : "node"/);
   assert.match(prepareSource, /node_modules", "npm"/);
+  assert.ok(prepareSource.includes('copyFile(join(rootDir, "desktop", "core-runtime-host.mjs"), join(serverResourcesDir, "core-runtime-host.mjs"))'));
   assert.deepEqual(linuxConfig.bundle.targets, ["deb"]);
   assert.ok(linuxConfig.bundle.resources.includes("resources/node"));
   assert.deepEqual(windowsConfig.bundle.targets, ["nsis"]);

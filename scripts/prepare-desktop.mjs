@@ -9,6 +9,7 @@ import { buildPackagedCoreBundle } from "./packaged-core-bundle.mjs";
 import { piPackageDirNames } from "./pi-packages.mjs";
 import { removeUnusedMuslSharp } from "./packaged-sharp.mjs";
 import { copyPreparationDependencies } from "./preparation-runtime.mjs";
+import { copyRuntimeModelHostFiles } from "./runtime-model-host-files.mjs";
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const desktopBuildDir = join(rootDir, ".next-desktop");
@@ -68,6 +69,7 @@ async function assembleServer() {
     join(serverResourcesDir, "desktop-server.cjs"),
   );
   await copyFile(join(rootDir, "desktop", "preparation-worker.mjs"), join(serverResourcesDir, "preparation-worker.mjs"));
+  await copyFile(join(rootDir, "desktop", "core-runtime-host.mjs"), join(serverResourcesDir, "core-runtime-host.mjs"));
   await copyFile(join(rootDir, "desktop", "model-output-repair.mjs"), join(serverResourcesDir, "model-output-repair.mjs"));
   await copyFile(join(rootDir, "desktop", "preparation-materials.mjs"), join(serverResourcesDir, "preparation-materials.mjs"));
   await copyFile(join(rootDir, "desktop", "preparation-skills.mjs"), join(serverResourcesDir, "preparation-skills.mjs"));
@@ -266,6 +268,7 @@ if (overlong.length > 0) {
 
 const { binaryPath: nodeBinary, triple } = await bundleNodeRuntime();
 const coreBundle = await buildPackagedCoreBundle({ coreRoot: process.env.EDUPI_CORE_ROOT, desktopRoot: rootDir });
+await copyRuntimeModelHostFiles(coreBundle.sourceRoot, serverResourcesDir);
 
 console.log(`Desktop server staged at ${serverResourcesDir}`);
 console.log(`Node runtime staged at ${nodeBinary} (${triple})`);

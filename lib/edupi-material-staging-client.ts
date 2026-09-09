@@ -31,7 +31,10 @@ async function parseResponse(response: Response): Promise<MaterialStagingDescrip
   } catch {
     raw = null;
   }
-  if (!response.ok) throw new Error("材料暂存服务暂不可用，请稍后重试。");
+  if (!response.ok) {
+    if (record(raw)?.code === "unsupported_type") throw new Error("不支持这类文件，请选择 Word、PDF 或图片");
+    throw new Error("材料暂存服务暂不可用，请稍后重试。");
+  }
   const body = record(raw);
   if (!body || Object.keys(body).length !== 1 || !Array.isArray(body.staged)) throw new Error("材料暂存响应无效。");
   const descriptors = body.staged.map(parseDescriptor);

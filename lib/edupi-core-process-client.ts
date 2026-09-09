@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { isAbsolute, resolve } from "node:path";
 import type { ResolvedEduPiCore, ResolvedEduPiDataRoot } from "./edupi-core-root";
+import { getPendingEduPiRuntime } from "./edupi-runtime-supervisor";
 
 const MAX_REQUEST_BYTES = 256 * 1024;
 const MAX_STDOUT_BYTES = 2 * 1024 * 1024;
@@ -28,6 +29,8 @@ function allowedEnvironment(runtime: ResolvedEduPiCore, dataRoot: ResolvedEduPiD
     TZ: process.env.TZ || "Asia/Shanghai",
     NODE_ENV: process.env.NODE_ENV || "production",
     EDUPI_PROJECT_ROOT: dataRoot.root,
+    EDUPI_HOME: resolve(dataRoot.root, ".edupi"),
+    EDUPI_CORE_PARENT_PID: String(process.pid),
     EDUPI_MEMORY_DIR: dataRoot.memoryDir,
     EDUPI_OUTPUT_DIR: dataRoot.outputDir,
     EDUPI_LOCK_DIR: dataRoot.lockDir,
@@ -53,6 +56,29 @@ export function runCoreProcess<T = unknown>({
   const input = JSON.stringify(request);
   if (Buffer.byteLength(input) > MAX_REQUEST_BYTES) return Promise.reject(new EduPiCoreProcessError("request_limit", "Core request exceeds limit"));
   if (signal?.aborted) return Promise.reject(new EduPiCoreProcessError("aborted", "Core request aborted"));
+
+  const pendingRuntime = getPendingEduPiRuntime(dataRoot.root);
+  if (pendingRuntime) {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    let abort: () => void;
+    const interrupted = new Promise<T>((_resolve, reject) => {
+      abort = () => { controller.abort(); reject(new EduPiCoreProcessError("aborted", "Core request aborted")); };
+      signal?.addEventListener("abort", abort, { once: true });
+      timer = setTimeout(() => { controller.abort(); reject(new EduPiCoreProcessError("timeout", "Core request timed out")); }, timeoutMs);
+      if (signal?.aborted) abort();
+    });
+    const completed = pendingRuntime.then(async (host) => {
+    if (controller.signal.aborted) throw new EduPiCoreProcessError("aborted", "Core request aborted");
+    const result = await host.callBridge(request, controller.signal);
+    if (!result.ok) throw new EduPiCoreProcessError("runtime_unavailable", "Core runtime rejected the request");
+    const frame = (result.result as { bridge_frame?: unknown } | undefined)?.bridge_frame;
+    if (typeof frame !== "string" || Buffer.byteLength(frame) > MAX_STDOUT_BYTES) throw new EduPiCoreProcessError("stdout_limit", "Invalid Core runtime frame");
+    try { return JSON.parse(frame) as T; }
+    catch { throw new EduPiCoreProcessError("invalid_json", "Invalid Core runtime response"); }
+    });
+    return Promise.race([completed, interrupted]).finally(() => { clearTimeout(timer); signal?.removeEventListener("abort", abort); });
+  }
 
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [runtime.entrypoint], {

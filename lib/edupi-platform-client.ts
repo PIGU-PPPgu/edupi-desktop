@@ -12,6 +12,7 @@ export type EduPiTeachingSkill = {
 export type EduPiTeachingSkillLifecycle = {
   status: "ready" | "empty" | "unavailable";
   generatedAt: string | null;
+  mutationEnabled: boolean;
   skills: EduPiTeachingSkill[];
 };
 
@@ -32,7 +33,7 @@ function strings(value: unknown): string[] {
 export function normalizeTeachingSkillLifecycle(value: unknown): EduPiTeachingSkillLifecycle {
   const projection = record(value);
   if (!projection || projection.projection_kind !== "teaching_skill_lifecycle" || projection.external_send !== false || !Array.isArray(projection.skills)) {
-    return { status: "unavailable", generatedAt: null, skills: [] };
+    return { status: "unavailable", generatedAt: null, mutationEnabled: false, skills: [] };
   }
   const skills = projection.skills.flatMap((value) => {
     const item = record(value);
@@ -59,17 +60,17 @@ export function normalizeTeachingSkillLifecycle(value: unknown): EduPiTeachingSk
       } } : {}),
     }];
   });
-  return { status: skills.length > 0 ? "ready" : "empty", generatedAt: text(projection.generated_at), skills };
+  return { status: skills.length > 0 ? "ready" : "empty", generatedAt: text(projection.generated_at), mutationEnabled: projection.mutation_enabled === true, skills };
 }
 
 export async function readEduPiTeachingSkills(signal?: AbortSignal): Promise<EduPiTeachingSkillLifecycle> {
   try {
     const response = await fetch("/api/edupi/platform", { cache: "no-store", signal });
-    if (!response.ok) return { status: "unavailable", generatedAt: null, skills: [] };
+    if (!response.ok) return { status: "unavailable", generatedAt: null, mutationEnabled: false, skills: [] };
     const payload = record(await response.json());
     return normalizeTeachingSkillLifecycle(payload?.teachingSkills);
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw error;
-    return { status: "unavailable", generatedAt: null, skills: [] };
+    return { status: "unavailable", generatedAt: null, mutationEnabled: false, skills: [] };
   }
 }

@@ -52,6 +52,7 @@ import { readEduPiWorkspace } from "@/lib/edupi-education-client";
 import { deleteEducationEntity } from "@/lib/edupi-entity-delete-client";
 import type { EducationMemoryScopeProjection } from "@/lib/edupi-memory-scopes";
 import { readEduPiTeachingSkills, type EduPiTeachingSkillLifecycle } from "@/lib/edupi-platform-client";
+import { materialUploadScope } from "@/lib/edupi-material-rows";
 import { normalizeKernelState, readEduPiKernel, type EduPiKernelState } from "@/lib/edupi-kernel-client";
 
 type Props = {
@@ -121,7 +122,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const [education, setEducation] = useState<EducationContract | null>(null);
   const [context, setContext] = useState<TeacherContextSnapshot | null>(null);
   const [memoryScopes, setMemoryScopes] = useState<EducationMemoryScopeProjection | null>(null);
-  const [teachingSkills, setTeachingSkills] = useState<EduPiTeachingSkillLifecycle>({ status: "unavailable", generatedAt: null, skills: [] });
+  const [teachingSkills, setTeachingSkills] = useState<EduPiTeachingSkillLifecycle>({ status: "unavailable", generatedAt: null, mutationEnabled: false, skills: [] });
   const [runningSessionCount, setRunningSessionCount] = useState(0);
   const [runningKernelCount, setRunningKernelCount] = useState(0);
   const [kernelState, setKernelState] = useState<EduPiKernelState>({ status: "unavailable", updatedAt: null, running: 0, runs: [] });
@@ -259,8 +260,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       stagingId: item.staging_id,
       title: item.original_name,
       materialKind: "other",
-      subject: context?.subject || null,
-      classId: null,
+      ...materialUploadScope(context),
       recognize: true,
     });
     const eventCount = result.recognition?.eventCount || 0;
@@ -268,7 +268,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     const recognized = eventCount + slotCount > 0 ? `，识别到 ${eventCount} 条日程、${slotCount} 条课表` : "，未发现日程或课表";
     setMaterialStagingMessage({ tone: "success", text: `${item.original_name} 已接入 EduPi${recognized}。` });
     return result;
-  }, [context?.subject, submitEducationIntake]);
+  }, [context, submitEducationIntake]);
 
   const importCalendarEvent = useCallback(async (event: { eventId: string | null; date: string; endDate: string | null; name: string; type: string; notes: string | null }) => {
     const preservedEvents = education?.calendar.flatMap((item) => !item.id || item.id === event.eventId ? [] : [{
