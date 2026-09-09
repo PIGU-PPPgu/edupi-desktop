@@ -23,6 +23,8 @@ import { createEduPiPresentationTool } from "./edupi-presentation-tool";
 import { createEduPiDocumentTool } from "./edupi-document-tool";
 import { generatedArtifactsRequest, nativeToolArtifactPath, snapshotGeneratedFiles, writtenToolArtifactPath } from "./edupi-generated-artifacts";
 import { createStudentEventTool } from "./edupi-student-event-tool";
+import { createMemoryWriteTool } from "./edupi-memory-write-tool";
+import { createMemoryForgetTool } from "./edupi-memory-forget-tool";
 import { createPrepareTaskTool } from "./edupi-prepare-task-tool";
 import type { DesktopControlInput } from "./edupi-desktop-control";
 import { createEduPiComputerUseTool } from "./edupi-computer-tool";
@@ -1434,7 +1436,7 @@ export async function startRpcSession(
       ...(toolsOption !== undefined ? { tools: toolsOption } : {}),
       customTools: [
         defineTool(createBashToolDefinition(sessionCwd, { shellPath: services.settingsManager.getShellPath(), spawnHook: redactDesktopSpawnContext })),
-        ...(normalizeRpcCwd(sessionCwd) === EDUPI_ROOT ? [createEduPiDocumentTool(EDUPI_ROOT), createEduPiPresentationTool(EDUPI_ROOT), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
+        ...(normalizeRpcCwd(sessionCwd) === EDUPI_ROOT ? [createEduPiDocumentTool(EDUPI_ROOT), createEduPiPresentationTool(EDUPI_ROOT), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createMemoryWriteTool(EDUPI_ROOT), createMemoryForgetTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
           projectRoot: EDUPI_ROOT,
           requestAction: (action, signal) => requestEduPiAppAction(action, signal),
         }), createEduPiComputerUseTool({
