@@ -337,6 +337,26 @@ export async function listenQuickEntryNative(handler: () => void): Promise<() =>
   return listen("edupi://quick-entry", () => handler());
 }
 
+export type ReminderNotificationTarget = { taskId: string; kind: "ready" | "failed" | "due" | "brief" };
+export type ReminderNotificationClaim = { id: string; attemptedAt: string };
+export type NativeReminderNotification = { title: string; body: string; target: ReminderNotificationTarget | null; claims: ReminderNotificationClaim[] };
+
+export async function sendReminderNotificationNative(request: NativeReminderNotification): Promise<void> {
+  if (!isTauriDesktop()) throw new Error("请在桌面应用中使用通知");
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("send_reminder_notification", { request });
+}
+
+export async function listenReminderNotificationsNative(onOpen: (target: ReminderNotificationTarget | null) => void, onFailure: (claims: ReminderNotificationClaim[]) => void): Promise<() => void> {
+  if (!isTauriDesktop()) return () => {};
+  const { listen } = await import("@tauri-apps/api/event");
+  const open = await listen<ReminderNotificationTarget | null>("edupi://reminder-open", event => onOpen(event.payload));
+  try {
+    const failure = await listen<ReminderNotificationClaim[]>("edupi://reminder-failed", event => onFailure(event.payload));
+    return () => { open(); failure(); };
+  } catch (error) { open(); throw error; }
+}
+
 /** Remove one pending staging copy with packaged Desktop authorization. */
 export async function removeDesktopStagedMaterial(stagingId: string): Promise<MaterialStagingDescriptor[]> {
   return removeStagedMaterial(stagingId, await desktopApiHeaders());

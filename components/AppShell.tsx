@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useEduPiCompletionMonitor } from "@/hooks/useEduPiCompletionMonitor";
-import { useEduPiReminderNotifications } from "@/hooks/useEduPiReminderNotifications";
+import { reminderNotificationAction, useEduPiReminderNotifications } from "@/hooks/useEduPiReminderNotifications";
 import { bindReminderSession } from "@/lib/edupi-reminder-session";
 import { reminderPrompt } from "@/lib/edupi-reminder-prompt";
 import { readEduPiWorkspace } from "@/lib/edupi-education-client";
@@ -872,7 +872,13 @@ export function AppShell() {
     setEducationRefreshKey((key) => key + 1);
   }, []);
   useEduPiCompletionMonitor({ onRefresh: handleEducationProjectionChanged, notifications: false });
-  useEduPiReminderNotifications();
+  const openReminderNotification = useCallback((target: import("@/lib/desktop-native").ReminderNotificationTarget | null) => {
+    const inbox = () => router.replace("/?edupi=1&module=home&view=chat&reminders=1", { scroll: false });
+    const action = reminderNotificationAction(target);
+    if (!action) { inbox(); return; }
+    void handleEduPiAppAction(action).then(opened => { if (!opened) inbox(); }).catch(inbox);
+  }, [handleEduPiAppAction, router]);
+  useEduPiReminderNotifications(openReminderNotification);
 
   const handleProjectFilesImported = useCallback(() => {
     setExplorerRefreshKey((k) => k + 1);

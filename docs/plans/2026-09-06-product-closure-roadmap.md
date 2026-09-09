@@ -2,6 +2,8 @@
 
 ## 最新验收状态 · 2026-09-09
 
+通知点击缺口核实：`useEduPiReminderNotifications` 只发送聚合通知，没有对象点击回调。当前notify-rust固定4.17以满足Rust1.85，macOS/Windows无wait_for_action支持；Tauri现有desktop实现丢弃show返回值。系统通知发送保留“待实机验收”，点击返回具体事项明确为“未实现”；不能仅添加JS onAction便宣称打通。后续在不破坏现有MSRV的原生实现中补接并实机验收。
+
 ### 2026-09-09 11:30 续接记录
 
 后续取代：Core `182cd4e`、Desktop `708c47a` 加配套pin。产物手动正文修改、历史恢复、AI修订至第5版、重启回读及材料入口通过实际验收；生成来源变更后拒绝旧修订有生产回归。新Runtime早安简报漏接已修，干净目录启动自动生成且页面可打开；真实休眠/安装版仍待验收。运行日志中的重复signal listener定位到webpack重复加载proper-lockfile，改为server external；重启后的相关页面与接口未再出现该警告。

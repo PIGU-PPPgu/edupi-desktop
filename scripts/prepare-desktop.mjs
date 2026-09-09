@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { desktopTargetTriple } from "./desktop-platform.mjs";
 import { buildPackagedCoreBundle } from "./packaged-core-bundle.mjs";
+import { isDesktopServerInput } from "./desktop-package-inputs.mjs";
 import { piPackageDirNames } from "./pi-packages.mjs";
 import { removeUnusedMuslSharp } from "./packaged-sharp.mjs";
 import { copyPreparationDependencies } from "./preparation-runtime.mjs";
@@ -47,7 +48,7 @@ async function assembleServer() {
   await access(join(standaloneDir, "server.js"), constants.R_OK);
   await rm(serverResourcesDir, { recursive: true, force: true });
   await mkdir(dirname(serverResourcesDir), { recursive: true });
-  await cp(standaloneDir, serverResourcesDir, { recursive: true });
+  await cp(standaloneDir, serverResourcesDir, { recursive: true, filter: source => isDesktopServerInput(standaloneDir, source) });
 
   // Next's file tracer follows normal imports but intentionally omits files
   // reached through dynamic provider/export/plugin paths. These packages are

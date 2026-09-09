@@ -429,17 +429,15 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
         )}
       </Field>
 
-      <Field label="Base URL">
+      <Field label={t("models.baseUrlLabel")}>
         <TextInput value={provider.baseUrl ?? ""} onChange={(v) => set("baseUrl", v || undefined)}
           placeholder="https://api.example.com/v1" mono />
       </Field>
 
       <Field label="API Key">
         <SecretTextInput value={provider.apiKey ?? ""} onChange={(v) => set("apiKey", v || undefined)}
-          placeholder="ENV_VAR_NAME, !shell-command, or literal key" mono />
-        <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
-          Prefix with <code style={{ fontFamily: "var(--font-mono)" }}>!</code> to run a shell command, or use an env var name
-        </span>
+          placeholder={t("models.keyPlaceholder")} mono />
+        <details><summary>{t("models.keyAdvanced")}</summary><p>{t("models.keyHelp")}</p></details>
       </Field>
 
       <Field label="API">
@@ -965,8 +963,8 @@ function ModelDetail({
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label="ID *"><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
-        <Field label="Name"><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder="Display name" /></Field>
+        <Field label={t("models.idLabel")}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
+        <Field label={t("models.nameLabel")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("models.nameLabel")} /></Field>
       </div>
 
       <div style={{ padding: "10px 0", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}>
@@ -1018,13 +1016,13 @@ function ModelDetail({
         </div>
       </div>
 
-      <Field label="API override">
+      <Field label={t("models.apiOverrideLabel")}>
         <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />
       </Field>
 
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-        <Check label="Reasoning / thinking" checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
-        <Check label="Image input" checked={model.input?.includes("image") ?? false}
+        <Check label={t("models.reasoningLabel")} checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
+        <Check label={t("models.imageInputLabel")} checked={model.input?.includes("image") ?? false}
           onChange={(v) => set("input", v ? ["text", "image"] : undefined)} />
       </div>
 
@@ -1057,21 +1055,21 @@ function ModelDetail({
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label="Context window (tokens)">
+        <Field label={t("models.contextWindowLabel")}>
           <NumInput value={model.contextWindow !== undefined ? String(model.contextWindow) : ""}
             onChange={(v) => set("contextWindow", v ? parseInt(v) : undefined)} placeholder="128000" />
         </Field>
-        <Field label="Max output tokens">
+        <Field label={t("models.maxTokensLabel")}>
           <NumInput value={model.maxTokens !== undefined ? String(model.maxTokens) : ""}
             onChange={(v) => set("maxTokens", v ? parseInt(v) : undefined)} placeholder="16384" />
         </Field>
       </div>
 
       <div>
-        <SectionTitle>Cost (per million tokens)</SectionTitle>
+        <SectionTitle>{t("models.costLabel")}</SectionTitle>
         <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
           {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => (
-            <Field key={k} label={k}>
+            <Field key={k} label={t(`models.cost.${k}`)}>
               <NumInput value={costVal(k)} onChange={(v) => setCost(k, v)} placeholder="0" />
             </Field>
           ))}

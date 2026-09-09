@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { EducationContract } from "@/lib/edupi-education-contract";
+import { useStudentObservationRows } from "@/hooks/useStudentObservationRows";
 import { INSIGHT_CATEGORIES, INSIGHT_STATUSES, insightCategory, routePart, type InsightCategoryId, type InsightStatusId } from "@/lib/edupi-domain-navigation";
 
 const PAGE_SIZE = 8;
@@ -15,21 +16,25 @@ function shortDate(value: string | null): string {
 export function EduPiInsightDatabase({ data, query, selectedObjectId }: { data: EducationContract; query: string; selectedObjectId: string | null }) {
   const [category = "learning", status = "all"] = routePart(selectedObjectId, "insights", "learning:all").split(":") as [InsightCategoryId, InsightStatusId];
   const [page, setPage] = useState(0);
+  const studentObservations = useStudentObservationRows(category, status, query, page);
   const categoryLabel = INSIGHT_CATEGORIES.find((item) => item.id === category)?.label || "学情观察";
   const statusLabel = INSIGHT_STATUSES.find((item) => item.id === status)?.label || "全部";
   const rows = useMemo(() => {
     const observations = data.observations.filter((item) => insightCategory(item.text) === category).map((item) => ({ id: `observation:${item.observationId}`, type: "原始观察", content: item.text, status: item.teacherReview.state === "accepted" ? "已确认" : item.teacherReview.state === "rejected" ? "已拒绝" : item.teacherReview.state === "held" ? "已暂缓" : "待确认", statusId: "observation", evidence: item.evidenceIds, metric: `${item.evidenceIds.length} 条`, date: item.observedAt, related: [...item.studentIds, ...(item.classId ? [item.classId] : [])] }));
     const insights = data.continuity.insights.filter((item) => !item.content.startsWith("[主题候选]") && insightCategory(item.content) === category).map((item) => ({ id: `insight:${item.id}`, type: "洞察", content: item.content.replace(/^\[梦境启示\]\s*/, ""), status: item.status === "surfaced" ? "已浮出" : "酝酿中", statusId: item.status, evidence: item.evidenceIds, metric: `${Math.round(item.confidence * 100)}%`, date: item.surfacedAt || item.createdAt, related: [] as string[] }));
     const signals = data.continuity.signals.filter((item) => insightCategory(item.content) === category).map((item) => ({ id: `signal:${item.id}`, type: "弱信号", content: item.content, status: "持续观察", statusId: "signal", evidence: [] as string[], metric: `${item.strength} 次`, date: item.lastSeenAt || item.createdAt, related: item.related }));
-    return [...observations, ...insights, ...signals]
+    const studentRows = studentObservations.records.map(item => ({ id: `student-event:${item.id}`, type: item.kind === "learning" ? "学习记录" : "互动记录", content: [item.canonical_topic || item.topic, item.summary].filter(Boolean).join(" · "), status: "教师记录", statusId: "observation", evidence: [item.source?.message_id].filter(Boolean), metric: `版本 ${item.revision}`, date: item.recorded_at, related: item.student_labels || item.students, sourceText: item.source?.text || "" }));
+    return [...observations, ...insights, ...signals, ...studentRows]
       .filter((item) => status === "all" || item.statusId === status)
       .filter((item) => !query || `${item.content} ${item.status} ${item.evidence.join(" ")} ${item.related.join(" ")}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
       .sort((left, right) => String(right.date || "").localeCompare(String(left.date || "")));
-  }, [category, data.continuity.insights, data.continuity.signals, data.observations, query, status]);
+  }, [category, data.continuity.insights, data.continuity.signals, data.observations, query, status, studentObservations.records]);
   useEffect(() => setPage(0), [category, query, status]);
-  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const visible = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const sourceAvailable = data.dataSources.insights.present || data.observations.length > 0;
+  const total = rows.filter(item => !item.id.startsWith("student-event:")).length + studentObservations.total;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.min(page, pages - 1);
+  const visible = rows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const sourceAvailable = data.dataSources.insights.present || data.observations.length > 0 || studentObservations.connected;
   const emptyMessage = !sourceAvailable
     ? "观察与洞察数据尚未接入"
     : query || status !== "all"
@@ -37,12 +42,13 @@ export function EduPiInsightDatabase({ data, query, selectedObjectId }: { data: 
       : "数据已连接，当前没有该类记录";
 
   return <main className="edupi-module-workspace edupi-database-workspace">
-    <header className="edupi-module-heading"><div><span>观察与洞察 / {categoryLabel}</span><h1>{categoryLabel}</h1><p>{sourceAvailable ? "数据已连接" : "数据未接入"} · {statusLabel} · {rows.length} 条记录</p></div></header>
+    <header className="edupi-module-heading"><div><h1>{categoryLabel}</h1><p>{sourceAvailable ? "数据已连接" : "数据未接入"} · {statusLabel} · {total} 条记录</p></div></header>
+    {studentObservations.error ? <p role="alert">{studentObservations.error}</p> : null}
     <section className="edupi-database" aria-label={`${categoryLabel}数据库`}>
       <div className="edupi-database__head edupi-insight-db-grid"><span>类型</span><span>内容</span><span>状态</span><span>依据</span><span>最近时间</span></div>
-      {visible.map((item) => <details className="edupi-database-row" key={item.id}><summary className="edupi-insight-db-grid"><span>{item.type}</span><strong>{item.content}</strong><span>{item.status}</span><span>{item.evidence.length || item.related.length}</span><time>{shortDate(item.date)}</time></summary><div className="edupi-database-row__detail"><div><span>强度 / 置信度</span><strong>{item.metric}</strong></div><div><span>关联</span><strong>{item.related.join("、") || "—"}</strong></div><div><span>来源依据</span><strong>{item.evidence.length ? `${item.evidence.length} 条已保留` : "继续观察"}</strong></div></div></details>)}
-      {visible.length === 0 ? <div className="edupi-database__empty">{emptyMessage}</div> : null}
+      {visible.map((item) => <details className="edupi-database-row" key={item.id}><summary className="edupi-insight-db-grid"><span>{item.type}</span><strong>{item.content}</strong><span>{item.status}</span><span>{item.evidence.length || item.related.length}</span><time>{shortDate(item.date)}</time></summary><div className="edupi-database-row__detail"><div><span>强度 / 置信度</span><strong>{item.metric}</strong></div><div><span>关联</span><strong>{item.related.join("、") || "—"}</strong></div><div><span>来源依据</span><strong>{item.evidence.length ? `${item.evidence.length} 条已保留` : "继续观察"}</strong></div>{"sourceText" in item && typeof item.sourceText === "string" && item.sourceText ? <blockquote>{item.sourceText}</blockquote> : null}</div></details>)}
+      {studentObservations.loading ? <div role="status">读取中…</div> : visible.length === 0 && !studentObservations.error ? <div className="edupi-database__empty">{emptyMessage}</div> : null}
     </section>
-    <nav className="edupi-database-pagination" aria-label="观察与洞察分页"><button type="button" disabled={page === 0} onClick={() => setPage((value) => value - 1)}>上一页</button><span>{page + 1} / {pages}</span><button type="button" disabled={page >= pages - 1} onClick={() => setPage((value) => value + 1)}>下一页</button></nav>
+    <nav className="edupi-database-pagination" aria-label="观察与洞察分页"><button type="button" disabled={currentPage === 0 || studentObservations.loading} onClick={() => setPage(currentPage - 1)}>上一页</button><span>{currentPage + 1} / {pages}</span><button type="button" disabled={currentPage >= pages - 1 || studentObservations.loading} onClick={() => setPage(currentPage + 1)}>下一页</button></nav>
   </main>;
 }

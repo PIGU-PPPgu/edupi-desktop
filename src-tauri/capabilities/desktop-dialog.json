@@ -15,6 +15,7 @@
     "core:image:allow-rgba",
     "core:image:allow-size",
     "notification:default",
+    "allow-send-reminder-notification",
     "allow-open-external-url",
     "allow-open-path",
     "allow-reveal-item-in-dir",

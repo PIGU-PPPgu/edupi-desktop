@@ -25,12 +25,13 @@ export function EduPiReminderInbox({ onAction, onContinue }: { onAction: (action
     };
     void load(); const timer = setInterval(() => void load(), 30000);
     return () => { controller.abort(); clearInterval(timer); };
-  }, []);
+  }, [open]);
   const change = async (id: string, type: "read" | "handled" | "snooze") => {
     try {
       const response = await fetch("/api/edupi/reminders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, type }) });
       if (!response.ok) throw new Error();
       setItems((await response.json()).items);
+      setError("");
     } catch { setError("提醒保存失败"); }
   };
   const pending = items.filter(item => !item.withdrawn && !item.handled && !item.snoozedUntil);
@@ -42,7 +43,7 @@ export function EduPiReminderInbox({ onAction, onContinue }: { onAction: (action
     {open ? <div style={{ maxHeight: 320, overflowY: "auto" }}>
       <select aria-label="提醒状态" value={filter} onChange={event => { setFilter(event.target.value); setPage(0); }}><option value="pending">待处理</option><option value="snoozed">稍后提醒</option><option value="handled">历史提醒</option></select>
       {error ? <p role="alert">{error}</p> : null}
-      {!visible.length && !error ? <p>暂无待处理提醒</p> : null}
+      {!visible.length && !error ? <p>{filter === "handled" ? "暂无历史提醒" : filter === "snoozed" ? "暂无稍后提醒" : "暂无待处理提醒"}</p> : null}
       {visible.slice(currentPage * 8, currentPage * 8 + 8).map(item => <details key={item.id} onToggle={event => { if (event.currentTarget.open && !item.read) void change(item.id, "read"); }}>
         <summary>{item.title} · {item.withdrawn ? "已撤下" : item.kind === "brief" ? "简报已更新" : item.kind === "ready" ? "已准备" : item.kind === "due" ? "已到期" : "准备失败"}</summary>
         <time>{new Date(item.snoozedUntil || item.createdAt).toLocaleString("zh-CN")}</time>
