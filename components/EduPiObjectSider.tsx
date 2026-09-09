@@ -2,6 +2,7 @@
 
 import type { EducationContract, EducationMemoryCandidate, EducationObservation, TeacherTask } from "@/lib/edupi-education-contract";
 import { filterTimetableSlots, type CalendarItemSelection } from "@/lib/edupi-calendar-model";
+import { useStudentObservationRows } from "@/hooks/useStudentObservationRows";
 import { isRecognizedTimetableNote } from "@/lib/edupi-recognition-markers";
 import { INSIGHT_CATEGORIES, INSIGHT_STATUSES, MATERIAL_CATEGORIES, MEMORY_CATEGORIES, TEACHING_SECTIONS, filterSubjectKnowledgeItems, insightCategory, matchesWorkspaceQuery as match, memoryCategoryRoute, memoryObjectId, memorySemesterRoute, routePart, type InsightCategoryId, type InsightStatusId, type MaterialCategoryId } from "@/lib/edupi-domain-navigation";
 import { scopedMemoryIds, type EducationMemoryScopeProjection } from "@/lib/edupi-memory-scopes";
@@ -116,15 +117,18 @@ export function EduPiObjectSider({ view, data, context, memoryScopes, teachingSk
   const [insightCategoryRoute = "learning", insightStatusRoute = "all"] = routePart(selectedObjectId, "insights", "learning:all").split(":") as [InsightCategoryId, InsightStatusId];
   const growthCategory = routePart(selectedObjectId, "growth", "teacher");
   const materialCategoryRoute = routePart(selectedObjectId, "materials", "all");
-  const insightCategoryCount = (category: InsightCategoryId) => observations.filter((item) => insightCategory(item.text) === category).length + insights.filter((item) => insightCategory(item.content) === category).length + signals.filter((item) => insightCategory(item.content) === category).length;
+  const learningRecords = useStudentObservationRows(view === "insights" ? "learning" : "", "all", query, 0);
+  const interactionRecords = useStudentObservationRows(view === "insights" ? "class" : "", "all", query, 0);
+  const studentCount = (category: InsightCategoryId) => category === "learning" ? learningRecords.total : category === "class" ? interactionRecords.total : 0;
+  const insightCategoryCount = (category: InsightCategoryId) => observations.filter((item) => insightCategory(item.text) === category).length + insights.filter((item) => insightCategory(item.content) === category).length + signals.filter((item) => insightCategory(item.content) === category).length + studentCount(category);
   const insightStatusCount = (status: InsightStatusId) => {
     const categoryObservations = observations.filter((item) => insightCategory(item.text) === insightCategoryRoute);
     const categoryInsights = insights.filter((item) => insightCategory(item.content) === insightCategoryRoute);
     const categorySignals = signals.filter((item) => insightCategory(item.content) === insightCategoryRoute);
-    if (status === "observation") return categoryObservations.length;
+    if (status === "observation") return categoryObservations.length + studentCount(insightCategoryRoute);
     if (status === "signal") return categorySignals.length;
     if (status === "surfaced" || status === "brewing") return categoryInsights.filter((item) => item.status === status).length;
-    return categoryObservations.length + categoryInsights.length + categorySignals.length;
+    return categoryObservations.length + categoryInsights.length + categorySignals.length + studentCount(insightCategoryRoute);
   };
   const materialCount = (category: MaterialCategoryId) => category === "all" ? materials.length : materials.filter(item => item.category === category).length;
   const tasksByCategory = groupTasksByCategory(tasks);
