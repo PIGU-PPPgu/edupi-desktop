@@ -1,5 +1,11 @@
 # 实际流程验收
 
+## 合并前回归 · 2026-09-09
+
+- Desktop `npm test`：995 passed、24 skipped、0 failed；类型检查、lint通过。新正文修订及配套Core打包另有定向通过记录。
+- Core默认完整测试在学生材料版本样例处失败：样例未带class_id，正确被精确范围过滤。补齐703班并新增未确定范围材料不参与断言；从失败处复跑 `test:students`、`test:closure-regressions`、`test:scoped-memory-runtime` 全通过，之前已经通过的默认测试段不重复执行。最终Core `ac63a95`。
+- 本条不把跳过、未执行的安装版验证记为通过。R01–R17原账本继续保留未完成条件。
+
 ## 2026-09-09 受管早安简报
 
 - 发现新Runtime只启动课前准备扫描，`runMorningBrief` 没有生产调用方。Core `182cd4e` 将已有简报函数接到受管启动及5分钟检查；每日去重、早6点之前不生成、失败Kernel记录沿用原实现。
