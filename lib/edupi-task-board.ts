@@ -1,6 +1,6 @@
 import type { EducationWorkCandidate, TeacherTask } from "./edupi-education-contract";
 import type { TaskSessionBinding } from "./edupi-task-sessions";
-import { taskDisplayTitle, taskKey, taskTypeLabel } from "./edupi-workbench";
+import { taskContentReady, taskDisplayTitle, taskKey, taskTypeLabel } from "./edupi-workbench";
 
 export type TaskBoardLaneId = "todo" | "progress" | "review" | "done";
 
@@ -18,8 +18,8 @@ const columns: Array<{ id: TaskBoardLaneId; label: string }> = [
 ];
 
 const transitions: Record<TaskBoardLaneId, TaskBoardLaneId[]> = {
-  todo: ["progress", "review"],
-  progress: ["todo", "review"],
+  todo: ["progress", "review", "done"],
+  progress: ["todo", "review", "done"],
   review: ["progress", "done"],
   done: ["progress"],
 };
@@ -28,16 +28,18 @@ export function taskBoardTargets(stage: TaskBoardLaneId): TaskBoardLaneId[] {
   return [...transitions[stage]];
 }
 
-function hasCandidateOutput(task: TeacherTask): boolean {
-  return Boolean(task.contentStatus && task.contentStatus !== "not_generated");
-}
-
 export function taskBoardLane(task: TeacherTask, session: TaskSessionBinding | null | undefined, candidate?: Pick<EducationWorkCandidate, "status"> | null): TaskBoardLaneId {
-  if (task.boardStage) return task.boardStage;
+  // A later explicit move can reopen reviewed work. Initial stages and older
+  // moves must not hide a subsequent review or generated draft.
+  if (task.boardStage && task.boardRevision > 0 && (!task.reviewedAt || Boolean(task.boardUpdatedAt && task.boardUpdatedAt >= task.reviewedAt))) return task.boardStage;
   if (task.status === "accepted" || task.status === "modified" || task.status === "rejected") return "done";
   if (candidate?.status === "accepted" || candidate?.status === "modified" || candidate?.status === "rejected" || candidate?.status === "suppressed") return "done";
+  const contentStatus = task.contentStatus?.trim().toLocaleLowerCase().replace(/[\s-]+/g, "_");
+  if (contentStatus === "generating" || contentStatus === "running" || contentStatus === "queued") return "progress";
+  if (contentStatus === "generation_failed" || contentStatus === "failed" || contentStatus === "error") return task.boardStage === "progress" || session ? "progress" : "todo";
   if (candidate?.status === "pending_review") return "review";
-  if (hasCandidateOutput(task)) return "review";
+  if (taskContentReady(task)) return "review";
+  if (task.boardStage && task.boardStage !== "todo") return task.boardStage;
   if (session) return "progress";
   return "todo";
 }

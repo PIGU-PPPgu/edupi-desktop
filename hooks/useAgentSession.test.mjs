@@ -1,10 +1,30 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import ts from "typescript";
 
 const source = await readFile(new URL("./useAgentSession.ts", import.meta.url), "utf8");
 const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
 const rpcManagerSource = await readFile(new URL("../lib/rpc-manager.ts", import.meta.url), "utf8");
+
+test("task-update tool completion refreshes the workspace once using the matched call id", () => {
+  const cases = source.slice(source.indexOf('case "tool_execution_start"'), source.indexOf('case "queue_update"'));
+  const compiled = ts.transpileModule(`switch (event.type) { ${cases} }`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const handle = new Function("event", "educationToolCallsRef", "setAgentPhase", "onEducationImportCompleted", compiled);
+  const tracked = { current: new Map() };
+  const refreshed = [];
+  let phase = null;
+  const emit = event => handle(event, tracked, update => { phase = update(phase); }, name => refreshed.push(name));
+  emit({ type: "tool_execution_start", toolCallId: "task-update-1", toolName: "edupi_update_task" });
+  emit({ type: "tool_execution_start", toolCallId: "read-1", toolName: "read" });
+  assert.deepEqual(refreshed, []);
+  emit({ type: "tool_execution_end", toolCallId: "read-1" });
+  assert.deepEqual(refreshed, []);
+  emit({ type: "tool_execution_end", toolCallId: "task-update-1" });
+  emit({ type: "tool_execution_end", toolCallId: "task-update-1" });
+  assert.deepEqual(refreshed, ["edupi_update_task"]);
+  assert.equal(tracked.current.size, 0);
+});
 
 test("keeps the session event stream open through the idle grace window", () => {
   const finishSource = source.slice(
@@ -172,7 +192,7 @@ test("tracks education import tools by call id and refreshes only once on comple
   assert.match(startSource, /educationToolCallsRef\.current\.set\(id, name\)/);
   assert.match(endSource, /const name = educationToolCallsRef\.current\.get\(id\)/);
   assert.match(endSource, /educationToolCallsRef\.current\.delete\(id\)/);
-  assert.match(endSource, /if \(name === "calendar_import" \|\| name === "timetable_import" \|\| name === "edupi_create_task"\) \{[\s\S]*?onEducationImportCompleted\?\.\(name\)/);
+  assert.match(endSource, /if \(name === "calendar_import" \|\| name === "timetable_import" \|\| name === "edupi_create_task" \|\| name === "edupi_update_task"\) \{[\s\S]*?onEducationImportCompleted\?\.\(name\)/);
   assert.match(resetSource, /educationToolCallsRef\.current\.clear\(\)/);
   assert.match(unmountSource, /educationToolCallsRef\.current\.clear\(\)/);
   assert.match(chatWindowSource, /onEducationImportCompleted\?: \(toolName: EducationImportToolName\) => void/);
