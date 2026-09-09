@@ -62,7 +62,7 @@ jobs:
         run: |
           $fixture = Join-Path $env:RUNNER_TEMP "edupi-install-check/application/resources"
           if (!(Test-Path $fixture)) { throw "Published resource fixture missing" }
-          Copy-Item $fixture -Destination ./src-tauri/resources -Recurse
+          Copy-Item (Join-Path $fixture "*") -Destination ./src-tauri/resources -Recurse -Force
           $env:TAURI_CONFIG = Get-Content ./src-tauri/tauri.windows.conf.json -Raw
           cargo check --manifest-path src-tauri/Cargo.toml --lib --locked
   diagnose:

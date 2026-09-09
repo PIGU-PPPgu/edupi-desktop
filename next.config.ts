@@ -5,6 +5,9 @@ const isDesktopBuild = process.env.PI_WEB_DESKTOP_BUILD === "1";
 const nextConfig: NextConfig = {
   agentRules: false,
   outputFileTracingRoot: __dirname,
+  outputFileTracingExcludes: {
+    "/*": ["./.git/**/*", "./.env*", "./.edupi/**/*", "./src-tauri/target/**/*", "./src-tauri/resources/**/*", "./.next/**/*", "./.next-desktop/standalone/**/*"],
+  },
   ...(isDesktopBuild
     ? { output: "standalone" as const, distDir: ".next-desktop" }
     : {}),
