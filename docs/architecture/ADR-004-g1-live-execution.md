@@ -1,5 +1,28 @@
 # ADR-004: G1 result-only live model boundary
 
+Confirmed calendar events are also bounded G1 sources for calendar preparation.
+Core resolves the exact candidate source event and evidence identity through the
+canonical education projection, including intake overrides and deletion state.
+Only a unique, explicitly dated, confirmed or teacher-confirmed event is eligible.
+Its canonical structured JSON is sent as a `confirmed_calendar_event` source using
+the existing live-v1 material fields; it is not a file or a fabricated excerpt.
+The event contents and confirmation state bind the source revision and are checked
+before execution, after execution and by the existing artifact commit guard.
+Rescheduling, edits, withdrawal of confirmation and deletion invalidate the result.
+Unknown or inferred sources stay unavailable. Classroom preparation continues to
+require its original same-scope files and teacher-confirmed excerpts. All outputs
+remain teacher-internal drafts with external delivery disabled.
+
+Explicit prepare requests execute against the actual claim time even before the
+task due date. The planned occurrence remains part of the stable event identity,
+not an execution gate for a manual request. Existing queued `prepare:` events
+retain that identity and use the execution store's scoped `requestedTaskId` path.
+Automatic preparation only submits due candidates and shares the stable event
+identity with an explicit request for that same task and source revision.
+Calendar imports and deletions invalidate completed drafts before publishing the
+changed source, with rollback on source-write failure. Calendar source-version
+evidence distinguishes a later reconfirmation from its earlier stale execution.
+
 Status: implemented adapter boundary; scheduling and production activation pending.
 
 Material binding follow-up: `core_runtime_g1_sources.mjs` reads explicitly
