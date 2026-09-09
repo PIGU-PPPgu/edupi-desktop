@@ -25,6 +25,7 @@ use tauri::{
 };
 
 mod computer_use;
+mod reminder_notification;
 
 const WINDOW_LABEL: &str = "main";
 const DESKTOP_API_TOKEN_ENV: &str = "PI_DESKTOP_API_TOKEN";
@@ -1995,6 +1996,7 @@ pub fn run() {
         .manage(DesktopApiToken(desktop_api_token))
         .manage(computer_use::ComputerUseState::new())
         .invoke_handler(tauri::generate_handler![
+            reminder_notification::send_reminder_notification,
             get_desktop_api_token,
             open_external_url,
             open_path,
