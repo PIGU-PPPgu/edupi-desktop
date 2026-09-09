@@ -36,6 +36,10 @@ on:
         description: Published Windows version to install
         required: true
         default: v0.3.6
+      native_only:
+        description: Skip the private Core build and check the public installer/native source only
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -62,6 +66,7 @@ jobs:
           $env:TAURI_CONFIG = Get-Content ./src-tauri/tauri.windows.conf.json -Raw
           cargo check --manifest-path src-tauri/Cargo.toml --lib --locked
   diagnose:
+    if: ${{ !inputs.native_only }}
     runs-on: windows-latest
     steps:
       - name: Check out pi-agent-desktop
