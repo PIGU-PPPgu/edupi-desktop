@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { resolveModelDiscoveryAuth } from "@/lib/model-discovery-auth";
-import { buildModelsListUrl, parseDiscoveredModels } from "@/lib/model-discovery";
+import { buildModelsListUrl, nextModelsPageUrl, parseDiscoveredModels } from "@/lib/model-discovery";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
 const DISCOVERY_TIMEOUT_MS = 20_000;
+const MAX_DISCOVERY_PAGES = 20;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -58,26 +59,36 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `No API key found for "${providerName}"` }, { status: 400 });
     }
 
-    const response = await fetch(endpoint, {
-      cache: "no-store",
-      headers: buildHeaders(api, auth.apiKey, auth.headers),
-      signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
-    });
-    const responseText = await response.text();
-    if (!response.ok) {
-      return NextResponse.json({
-        error: responseText.slice(0, 500) || `Upstream returned HTTP ${response.status}`,
-        status: response.status,
-      }, { status: 502 });
+    const headers = buildHeaders(api, auth.apiKey, auth.headers);
+    const collected: unknown[] = [];
+    let pageUrl: URL | null = endpoint;
+
+    for (let page = 0; pageUrl && page < MAX_DISCOVERY_PAGES; page += 1) {
+      const response = await fetch(pageUrl, {
+        cache: "no-store",
+        headers,
+        signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
+      });
+      const responseText = await response.text();
+      if (!response.ok) {
+        return NextResponse.json({
+          error: responseText.slice(0, 500) || `Upstream returned HTTP ${response.status}`,
+          status: response.status,
+        }, { status: 502 });
+      }
+
+      let payload: unknown;
+      try {
+        payload = JSON.parse(responseText);
+      } catch {
+        return NextResponse.json({ error: "Upstream model list was not valid JSON" }, { status: 502 });
+      }
+
+      collected.push(payload);
+      pageUrl = nextModelsPageUrl(pageUrl, api, payload);
     }
 
-    let payload: unknown;
-    try {
-      payload = JSON.parse(responseText);
-    } catch {
-      return NextResponse.json({ error: "Upstream model list was not valid JSON" }, { status: 502 });
-    }
-    const models = parseDiscoveredModels(payload);
+    const models = parseDiscoveredModels(collected.length === 1 ? collected[0] : collected);
     if (models.length === 0) {
       return NextResponse.json({ error: "No models found in the upstream response" }, { status: 502 });
     }

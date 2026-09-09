@@ -2,9 +2,14 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
   resolveModelScopeWithDiagnostics,
   type ModelRuntime,
+  type ModelScopeDiagnostic,
   type ScopedModel,
 } from "@earendil-works/pi-coding-agent";
 import type { Api, Model } from "@earendil-works/pi-ai";
+import {
+  findUnauthenticatedProvidersForPattern,
+  type ModelScopeWarning,
+} from "./model-scope-warnings";
 
 /**
  * Model scoping shared by the UI selector and AgentSession startup.
@@ -25,7 +30,43 @@ export interface ModelScopeResult {
   /** `provider/modelId` → thinking level pinned with a `:level` pattern suffix. */
   thinkingLevelPins: Record<string, string>;
   /** Resolver diagnostics, e.g. a pattern that matched no model. */
-  warnings: string[];
+  warnings: ModelScopeWarning[];
+}
+
+/**
+ * Classify one resolver diagnostic for display.
+ *
+ * pi's `no-match` fires against `getAvailable()`, which drops every model of a
+ * provider without usable credentials — so a healthy pattern for an
+ * unauthenticated provider is misreported as a typo (#48). Cross-check the
+ * full catalog against `hasConfiguredAuth()` and rewrite that case into an
+ * `unauthenticated-provider` warning; everything else keeps the raw message.
+ */
+function classifyDiagnostic(
+  diagnostic: ModelScopeDiagnostic,
+  modelRuntime: ModelRuntime,
+): ModelScopeWarning {
+  if (diagnostic.code !== "no-match") {
+    return { code: diagnostic.code, pattern: diagnostic.pattern, message: diagnostic.message };
+  }
+  try {
+    const unauthenticated = findUnauthenticatedProvidersForPattern(
+      diagnostic.pattern,
+      modelRuntime.getModels(),
+      (providerId) => modelRuntime.hasConfiguredAuth(providerId),
+    );
+    if (unauthenticated && unauthenticated.length > 0) {
+      return {
+        code: "unauthenticated-provider",
+        pattern: diagnostic.pattern,
+        unauthenticatedProviders: unauthenticated,
+        message: diagnostic.message,
+      };
+    }
+  } catch {
+    // Classification is best-effort; the raw resolver message still surfaces.
+  }
+  return { code: diagnostic.code, pattern: diagnostic.pattern, message: diagnostic.message };
 }
 
 export interface InitialModelScopeOptions {
@@ -69,7 +110,7 @@ export async function resolveVisibleModels(
   }
 
   const { scopedModels, diagnostics } = await resolveModelScopeWithDiagnostics(cleaned, modelRuntime);
-  const warnings = diagnostics.map((diagnostic) => diagnostic.message);
+  const warnings = diagnostics.map((diagnostic) => classifyDiagnostic(diagnostic, modelRuntime));
   if (scopedModels.length === 0) {
     return {
       visible: await modelRuntime.getAvailable(),

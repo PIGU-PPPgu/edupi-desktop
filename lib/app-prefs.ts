@@ -17,6 +17,7 @@ export const APP_PREF_KEYS = {
   notifyOnComplete: "pi-desktop-notify-on-complete",
   computerUseEnabled: "edupi-computer-use-enabled",
   chatDrafts: "pi-chat-drafts-v1",
+  diffViewMode: "pi-diff-view-mode",
   /** Last open session / cwd / file tabs for desktop cold-start restore. */
   workspace: "pi-workspace-v1",
   edupiNavigationRailCollapsed: "edupi-navigation-rail-collapsed",

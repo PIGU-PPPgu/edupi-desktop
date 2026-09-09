@@ -4,6 +4,7 @@ import { memo, useState, useRef, useEffect, useMemo } from "react";
 import { MarkdownBody } from "./MarkdownBody";
 import { copyText } from "@/lib/clipboard";
 import { useI18n } from "@/hooks/useI18n";
+import { useDiffViewMode } from "@/hooks/useDiffViewMode";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, isEmptyThinkingBlock } from "@/lib/message-display";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
@@ -974,9 +975,11 @@ function PairedDiffResult({ diff }: {
 
 function SplitPatchView({ text }: { text: string }) {
   const { t } = useI18n();
+  const { mode } = useDiffViewMode();
   const files = useMemo(() => parseUnifiedPatch(text), [text]);
   if (!files) return <PatchTextView text={text} />;
   const showFileHeaders = files.length > 1;
+  const unified = mode === "unified";
 
   return (
     <div style={{ maxHeight: 560, overflowY: "auto", overflowX: "hidden", background: "var(--bg)" }}>
@@ -992,38 +995,128 @@ function SplitPatchView({ text }: { text: string }) {
           }}
         >
           {showFileHeaders && (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-                position: "sticky",
-                top: 0,
-                zIndex: 1,
-                background: "var(--bg-panel)",
-                borderBottom: "1px solid var(--border)",
-              }}
-            >
-               <SplitDiffHeader title={file.oldPath || t("i18n.before")} side="left" />
-               <SplitDiffHeader title={file.newPath || t("i18n.after")} side="right" />
-            </div>
+            unified ? (
+              <div
+                style={{
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 1,
+                  background: "var(--bg-panel)",
+                  borderBottom: "1px solid var(--border)",
+                }}
+              >
+                <SplitDiffHeader title={file.newPath || file.oldPath || t("i18n.after")} side="right" />
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 1,
+                  background: "var(--bg-panel)",
+                  borderBottom: "1px solid var(--border)",
+                }}
+              >
+                 <SplitDiffHeader title={file.oldPath || t("i18n.before")} side="left" />
+                 <SplitDiffHeader title={file.newPath || t("i18n.after")} side="right" />
+              </div>
+            )
           )}
 
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)" }}>
-            {file.rows.map((row, rowIndex) => {
-              if (row.type === "hunk") {
-                return null;
-              }
+          {unified ? (
+            <div>
+              {file.rows.flatMap((row, rowIndex) => {
+                if (row.type === "hunk") return [];
+                const cells = [];
+                const { left, right } = row;
+                if (left.type === "removed") {
+                  cells.push(<UnifiedDiffLine key={`${rowIndex}-l`} cell={left} />);
+                }
+                if (right.type === "added") {
+                  cells.push(<UnifiedDiffLine key={`${rowIndex}-r`} cell={right} />);
+                }
+                if (left.type === "context" && right.type === "context") {
+                  cells.push(<UnifiedDiffLine key={`${rowIndex}-c`} cell={right} />);
+                }
+                return cells;
+              })}
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)" }}>
+              {file.rows.map((row, rowIndex) => {
+                if (row.type === "hunk") {
+                  return null;
+                }
 
-              return (
-                <div key={rowIndex} style={{ display: "contents" }}>
-                  <SplitDiffCellView cell={row.left} side="left" />
-                  <SplitDiffCellView cell={row.right} side="right" />
-                </div>
-              );
-            })}
-          </div>
+                return (
+                  <div key={rowIndex} style={{ display: "contents" }}>
+                    <SplitDiffCellView cell={row.left} side="left" />
+                    <SplitDiffCellView cell={row.right} side="right" />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       ))}
+    </div>
+  );
+}
+
+function UnifiedDiffLine({ cell }: { cell: SplitDiffCell }) {
+  const bg =
+    cell.type === "added"
+      ? "rgba(34,197,94,0.12)"
+      : cell.type === "removed"
+      ? "rgba(248,113,113,0.13)"
+      : "transparent";
+  const marker =
+    cell.type === "added" ? "+" : cell.type === "removed" ? "-" : " ";
+  const markerColor =
+    cell.type === "added" ? "var(--success)" : cell.type === "removed" ? "var(--danger)" : "var(--text-dim)";
+
+  return (
+    <div style={{ display: "flex", minWidth: 0, background: bg }}>
+      <span
+        style={{
+          width: 42,
+          padding: "0 6px",
+          textAlign: "right",
+          color: "var(--text-dim)",
+          userSelect: "none",
+          background: "var(--bg-panel)",
+          borderRight: "1px solid var(--border)",
+          flexShrink: 0,
+        }}
+      >
+        {cell.lineNo ?? ""}
+      </span>
+      <span
+        style={{
+          width: 18,
+          padding: "0 5px",
+          color: markerColor,
+          userSelect: "none",
+          fontWeight: cell.type === "context" ? 400 : 700,
+          flexShrink: 0,
+        }}
+      >
+        {marker}
+      </span>
+      <span
+        style={{
+          flex: 1,
+          minWidth: 0,
+          padding: "0 10px 0 0",
+          color: "var(--text)",
+          whiteSpace: "pre-wrap",
+          overflowWrap: "anywhere",
+        }}
+      >
+        {cell.text || " "}
+      </span>
     </div>
   );
 }

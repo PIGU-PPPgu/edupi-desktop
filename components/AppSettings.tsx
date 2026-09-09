@@ -41,6 +41,7 @@ import { useTheme } from "@/hooks/useTheme";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { EduPiHelpPanel } from "./EduPiHelpPanel";
 import { announceComputerUseChanged, COMPUTER_USE_CHANGED_EVENT } from "./EduPiComputerUseStop";
+import { useDiffViewMode } from "@/hooks/useDiffViewMode";
 
 const sectionCardStyle: CSSProperties = {
   padding: "13px 14px",
@@ -368,6 +369,7 @@ function VersionChip({
 export function AppSettings({ onClose }: { onClose: () => void }) {
   const { t, locale, setLocale, supportedLocales } = useI18n();
   const { theme, setTheme } = useTheme();
+  const { mode: diffViewMode, setMode: setDiffViewMode } = useDiffViewMode();
   const desktop = isTauriDesktop();
   const [components, setComponents] = useState<AppComponentReleaseInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -609,6 +611,17 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
               <ChoiceButton active={theme === "dark"} onClick={() => setTheme("dark")}>
                 {t("appSettings.themeDark")}
               </ChoiceButton>
+            </div>
+            <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>{t("appSettings.diffViewMode")}</div>
+              <div style={{ marginTop: 4, display: "flex", gap: 8 }}>
+                <ChoiceButton active={diffViewMode === "split"} onClick={() => setDiffViewMode("split")}>
+                  {t("appSettings.diffViewModeSplit")}
+                </ChoiceButton>
+                <ChoiceButton active={diffViewMode === "unified"} onClick={() => setDiffViewMode("unified")}>
+                  {t("appSettings.diffViewModeUnified")}
+                </ChoiceButton>
+              </div>
             </div>
           </div>
 

@@ -1092,16 +1092,20 @@ span.linenumber {
   position: absolute;
   top: 0;
   bottom: 0;
+  /* Align with the panel's existing 1px border so hover never adds a second
+     visible pixel beside the separator. */
   left: 5px;
-  width: 2px;
+  width: 1px;
   pointer-events: none;
   background: transparent;
   transition: background 0.12s ease;
 }
 .panel-resize-handle:hover::after,
-.panel-resize-handle:focus-visible::after,
+.panel-resize-handle:focus-visible::after {
+  background: color-mix(in srgb, var(--border) 92%, var(--text-muted));
+}
 .panel-resize-handle.is-resizing::after {
-  background: color-mix(in srgb, var(--text-muted) 70%, var(--border));
+  background: color-mix(in srgb, var(--border) 80%, var(--text-muted));
 }
 .right-panel-overlay-backdrop {
   display: none;
