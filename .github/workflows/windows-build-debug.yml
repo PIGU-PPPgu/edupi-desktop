@@ -31,11 +31,28 @@ name: Debug the Windows desktop build
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Published Windows version to install
+        required: true
+        default: v0.3.6
 
 permissions:
   contents: read
 
 jobs:
+  published-install:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install and start published application
+        shell: pwsh
+        env:
+          EDUPI_TEST_RELEASE: ${{ inputs.tag }}
+        run: ./scripts/test-windows-installed-release.ps1
   diagnose:
     runs-on: windows-latest
     steps:
