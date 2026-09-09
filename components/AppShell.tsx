@@ -511,6 +511,13 @@ export function AppShell() {
     if (currentProject === newProject) {
       return;
     }
+    // A session selection also changes cwd; preserve the newly selected chat.
+    if (selectedSession && (selectedSession.projectRoot ?? selectedSession.cwd) === newProject) {
+      setFileTabs([]);
+      setActiveFileTabId(null);
+      setRightPanelOpen(false);
+      return;
+    }
     // Close any session that belongs to a different project — it no longer
     // matches the selected project directory.
     setSelectedSession(null);
@@ -1235,6 +1242,7 @@ export function AppShell() {
       onSessionStatsChange={handleSessionStatsChange}
       onSessionStatsPanelOpen={openSessionStatsPanel}
       onContextUsageChange={handleContextUsageChange}
+      onOpenModelsConfig={() => setModelsConfigOpen(true)}
       onEducationImportCompleted={handleEducationImportCompleted}
       onEduPiAction={handleEduPiAppAction}
       onEduPiComputerAction={handleEduPiComputerAction}
@@ -1910,6 +1918,7 @@ export function AppShell() {
               onSessionStatsChange={handleSessionStatsChange}
               onSessionStatsPanelOpen={openSessionStatsPanel}
               onContextUsageChange={handleContextUsageChange}
+              onOpenModelsConfig={() => setModelsConfigOpen(true)}
               onEducationImportCompleted={handleEducationImportCompleted}
               onEduPiAction={handleEduPiAppAction}
               onEduPiComputerAction={handleEduPiComputerAction}

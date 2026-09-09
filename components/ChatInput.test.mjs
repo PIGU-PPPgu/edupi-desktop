@@ -32,16 +32,50 @@ test("does not render an empty model error", () => {
   assert.equal(renderWithI18n(React.createElement(ModelErrorBanner, { error: null })), "");
 });
 
-test("renders enabledModels scope warnings", () => {
-  const html = renderToStaticMarkup(
+test("renders enabledModels scope warnings with a dismiss control", () => {
+  const html = renderWithI18n(
     React.createElement(ModelScopeWarningBanner, {
-      warnings: ['No models match pattern "ghost-gateway/*"'],
+      warnings: [
+        { code: "no-match", pattern: "ghost-gateway/*", message: "No models match pattern \"ghost-gateway/*\"" },
+      ],
+      onDismiss() {},
+      dismissLabel: "Dismiss",
     }),
   );
 
   assert.match(html, /Model scope warning/);
+  assert.match(html, /No models match pattern/);
   assert.match(html, /ghost-gateway/);
-  assert.equal(renderToStaticMarkup(React.createElement(ModelScopeWarningBanner, { warnings: [] })), "");
+  assert.match(html, /aria-label="Dismiss"/);
+  // No configure entry for plain no-match warnings.
+  assert.doesNotMatch(html, /Configure providers/);
+  assert.equal(renderWithI18n(React.createElement(ModelScopeWarningBanner, { warnings: [] })), "");
+  assert.equal(renderWithI18n(React.createElement(ModelScopeWarningBanner)), "");
+});
+
+test("rewords unauthenticated-provider warnings and offers the configure entry (#48)", () => {
+  const html = renderWithI18n(
+    React.createElement(ModelScopeWarningBanner, {
+      warnings: [
+        {
+          code: "unauthenticated-provider",
+          pattern: "acme-gateway/claude-opus-4-8",
+          unauthenticatedProviders: ["acme-gateway"],
+          message: "No models match pattern \"acme-gateway/claude-opus-4-8\"",
+        },
+      ],
+      onDismiss() {},
+      dismissLabel: "Dismiss",
+      onOpenModelsConfig() {},
+    }),
+  );
+
+  assert.match(html, /has no usable credentials/);
+  assert.match(html, /acme-gateway/);
+  // The raw resolver message must not leak through for classified warnings.
+  assert.doesNotMatch(html, /No models match pattern/);
+  assert.match(html, /Configure providers/);
+  assert.match(html, /aria-label="Dismiss"/);
 });
 
 test("keeps the model selector visible when a model error leaves no options", () => {

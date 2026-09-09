@@ -3,6 +3,7 @@
 import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent } from "react";
 import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages, SlashCommandInfo } from "@/hooks/useAgentSession";
 import type { SkillsResponse } from "@/lib/api-types";
+import type { ModelScopeWarning } from "@/lib/model-scope-warnings";
 import type { TextContent, UserMessage } from "@/lib/types";
 import { clearDraft, getDraft, setDraft, type ChatDraftImage } from "@/lib/draft-store";
 import {
@@ -11,9 +12,13 @@ import {
   isBase64ImageWithinLimits,
 } from "@/lib/image-attachments";
 import {
-  buildEntriesFromFiles, buildAtInsertText, extractAtQuery, filterFileEntries,
-  type AtQueryMatch, type FileIndexEntry,
+  buildEntriesFromFiles, buildAtInsertText, buildSessionMentionText, extractAtQuery, extractHashQuery,
+  filterFileEntries, filterSessionEntries,
+  type AtQueryMatch, type FileIndexEntry, type HashQueryMatch, type SessionMentionEntry,
 } from "@/lib/file-fuzzy";
+import { resolveSessionReferences } from "@/lib/session-reference";
+import { createDraftSubmissionGate } from "@/lib/draft-submission";
+import type { SessionInfo } from "@/lib/types";
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
@@ -51,7 +56,11 @@ interface Props {
   modelList?: { id: string; name: string; provider: string }[];
   modelError?: string | null;
   /** Diagnostics from resolving `enabledModels`, e.g. a pattern that matched nothing. */
-  modelScopeWarnings?: string[];
+  modelScopeWarnings?: ModelScopeWarning[];
+  /** Dismiss the current scope warnings for this conversation only. */
+  onDismissModelScopeWarnings?: () => void;
+  /** Open the provider/auth configuration modal (offered for unauthenticated-provider warnings). */
+  onOpenModelsConfig?: () => void;
   onModelChange?: (provider: string, modelId: string) => void;
   onCompact?: () => void;
   onAbortCompaction?: () => void;
@@ -305,7 +314,21 @@ function QueuedMessageRow({ kind, label, text }: { kind: "steer" | "follow-up"; 
   );
 }
 
-function ModelNoticeBanner({ tone, title, body }: { tone: "error" | "warning"; title: string; body: string }) {
+function ModelNoticeBanner({
+  tone,
+  title,
+  body,
+  action,
+  onDismiss,
+  dismissLabel,
+}: {
+  tone: "error" | "warning";
+  title: string;
+  body: string;
+  action?: React.ReactNode;
+  onDismiss?: () => void;
+  dismissLabel?: string;
+}) {
   const color = tone === "error" ? "239,68,68" : "234,179,8";
   return (
     <div
@@ -342,8 +365,40 @@ function ModelNoticeBanner({ tone, title, body }: { tone: "error" | "warning"; t
         <line x1="12" y1="9" x2="12" y2="13" />
         <line x1="12" y1="17" x2="12.01" y2="17" />
       </svg>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 600 }}>{title}</div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ fontWeight: 600, flex: 1 }}>{title}</div>
+          {action}
+          {onDismiss && (
+            <button
+              type="button"
+              onClick={onDismiss}
+              aria-label={dismissLabel}
+              title={dismissLabel}
+              style={{
+                flexShrink: 0,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 18,
+                height: 18,
+                padding: 0,
+                border: "none",
+                borderRadius: 4,
+                background: "transparent",
+                color: "inherit",
+                cursor: "pointer",
+                fontSize: 13,
+                lineHeight: 1,
+              }}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                <line x1="5" y1="5" x2="19" y2="19" />
+                <line x1="19" y1="5" x2="5" y2="19" />
+              </svg>
+            </button>
+          )}
+        </div>
         <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{body}</div>
       </div>
     </div>
@@ -356,20 +411,69 @@ export function ModelErrorBanner({ error }: { error?: string | null }) {
   return <ModelNoticeBanner tone="error" title={t("chat.modelError")} body={error} />;
 }
 
-/** Surfaces `enabledModels` patterns that matched nothing, so a typo is visible (#307). */
-export function ModelScopeWarningBanner({ warnings }: { warnings?: string[] }) {
+/**
+ * Surfaces `enabledModels` patterns that matched nothing (#307) and patterns
+ * whose provider has no usable credentials (#48), with an in-conversation
+ * dismiss so a stale warning never becomes permanent wallpaper.
+ */
+export function ModelScopeWarningBanner({
+  warnings,
+  onDismiss,
+  dismissLabel,
+  onOpenModelsConfig,
+}: {
+  warnings?: ModelScopeWarning[];
+  onDismiss?: () => void;
+  dismissLabel?: string;
+  onOpenModelsConfig?: () => void;
+}) {
+  const { t } = useI18n();
   if (!warnings || warnings.length === 0) return null;
+  const mentionsUnauthenticated = warnings.some(
+    (warning) => warning.code === "unauthenticated-provider" && (warning.unauthenticatedProviders?.length ?? 0) > 0,
+  );
+  const body = warnings.map((warning) => {
+    if (warning.code === "unauthenticated-provider" && (warning.unauthenticatedProviders?.length ?? 0) > 0) {
+      return t("chat.modelScopeUnauthenticated", {
+        pattern: warning.pattern,
+        providers: (warning.unauthenticatedProviders ?? []).join(", "),
+      });
+    }
+    return warning.message;
+  }).join("\n");
   return (
     <ModelNoticeBanner
       tone="warning"
-      title={warnings.length > 1 ? "Model scope warnings" : "Model scope warning"}
-      body={warnings.join("\n")}
+      title={warnings.length > 1 ? t("chat.modelScopeWarnings") : t("chat.modelScopeWarning")}
+      body={body}
+      action={mentionsUnauthenticated && onOpenModelsConfig ? (
+        <button
+          type="button"
+          onClick={onOpenModelsConfig}
+          style={{
+            flexShrink: 0,
+            padding: "2px 8px",
+            border: `1px solid rgba(234,179,8,0.45)`,
+            borderRadius: 5,
+            background: "transparent",
+            color: "inherit",
+            cursor: "pointer",
+            fontSize: 11,
+            lineHeight: 1.4,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {t("chat.modelScopeConfigure")}
+        </button>
+      ) : undefined}
+      onDismiss={onDismiss}
+      dismissLabel={dismissLabel}
     />
   );
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelError, modelScopeWarnings, onModelChange,
+  onSend, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelError, modelScopeWarnings, onDismissModelScopeWarnings, onOpenModelsConfig, onModelChange,
   onCompact, onAbortCompaction, isCompacting, compactError, compactResult, toolPreset, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo, queuedMessages, inputHistory = [], onRecallQueue,
@@ -384,16 +488,34 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 }: Props, ref) {
   const { t, locale } = useI18n();
   const isMobile = useIsMobile();
-  const [value, setValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
+  const submissionGate = useRef(createDraftSubmissionGate()).current;
+  const submissionIdentity = useRef({ draftKey, cwd, isStreaming });
+  if (submissionIdentity.current.draftKey !== draftKey
+    || submissionIdentity.current.cwd !== cwd
+    || submissionIdentity.current.isStreaming !== isStreaming) {
+    submissionGate.invalidate();
+    submissionIdentity.current = { draftKey, cwd, isStreaming };
+  }
+  const [sendPreparationError, setSendPreparationError] = useState(false);
+  const [value, setValueState] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
+  const setValue = useCallback<React.Dispatch<React.SetStateAction<string>>>((next) => {
+    submissionGate.invalidate();
+    setSendPreparationError(false);
+    setValueState(next);
+  }, [submissionGate]);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [modelDropdownRect, setModelDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [modelFilter, setModelFilter] = useState("");
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [controlsMenuOpen, setControlsMenuOpen] = useState(false);
-  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(() => (
+  const [attachedImages, setAttachedImagesState] = useState<AttachedImage[]>(() => (
     draftKey ? draftImagesToAttachedImages(getDraft(draftKey)?.images) : []
   ));
+  const setAttachedImages = useCallback<React.Dispatch<React.SetStateAction<AttachedImage[]>>>((next) => {
+    submissionGate.invalidate();
+    setAttachedImagesState(next);
+  }, [submissionGate]);
   const [attachError, setAttachError] = useState<string | null>(null);
   const trimmedValue = value.trimStart();
   const bashMode = attachedImages.length === 0 && trimmedValue.startsWith("!");
@@ -403,11 +525,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [atQuery, setAtQuery] = useState<AtQueryMatch | null>(null);
   const [atMenuOpen, setAtMenuOpen] = useState(false);
   const [atActiveIndex, setAtActiveIndex] = useState(0);
+  const [hashQuery, setHashQuery] = useState<HashQueryMatch | null>(null);
+  const [hashMenuOpen, setHashMenuOpen] = useState(false);
+  const [hashActiveIndex, setHashActiveIndex] = useState(0);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
   const [historyActiveIndex, setHistoryActiveIndex] = useState(0);
   const [fileIndex, setFileIndex] = useState<{ cwd: string; entries: FileIndexEntry[]; truncated: boolean } | null>(null);
   const [fileIndexLoading, setFileIndexLoading] = useState(false);
   const [atServerResult, setAtServerResult] = useState<{ cwd: string; query: string; matches: FileIndexEntry[] } | null>(null);
+  const [sessionIndex, setSessionIndex] = useState<{ entries: SessionMentionEntry[]; fetchedAt: number } | null>(null);
   const [skillDormancyState, setSkillDormancyState] = useState<{
     cwd: string;
     values: Record<string, boolean>;
@@ -429,9 +555,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const slashCommandsRequestedRef = useRef(false);
   const slashItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const atItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const hashItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const historyItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const fileIndexMetaRef = useRef<{ cwd: string; fetchedAt: number } | null>(null);
   const fileIndexFetchingRef = useRef<string | null>(null);
+  const sessionIndexFetchingRef = useRef(false);
+  const sessionMentionTargetsRef = useRef(new Map<string, string>());
   const draftKeyRef = useRef(draftKey);
   const valueRef = useRef(value);
   const attachedImagesRef = useRef(attachedImages);
@@ -453,8 +582,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       textarea.style.height = "auto";
       textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
     });
-  }, []);
-  const dictation = useSpeechDictation({ lang: locale === "zh-CN" ? "zh-CN" : "en-US", onTranscript: appendDictationTranscript });
+  }, [setValue]);  const dictation = useSpeechDictation({ lang: locale === "zh-CN" ? "zh-CN" : "en-US", onTranscript: appendDictationTranscript });
   const abortDictation = dictation.abort;
 
   useImperativeHandle(ref, () => ({
@@ -464,6 +592,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (current.trim()) return;
       setValue(text);
       setAtQuery(null);
+      setHashQuery(null);
       requestAnimationFrame(() => {
         if (!ta) return;
         ta.focus();
@@ -491,6 +620,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
       setValue(getUserMessageText(message));
       setAtQuery(null);
+      setHashQuery(null);
       setHistoryMenuOpen(false);
       setAttachedImages((prev) => {
         prev.forEach(revokeImagePreview);
@@ -512,6 +642,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       const combined = [text, current].filter((t) => t.trim()).join("\n\n");
       setValue(combined);
       setAtQuery(null);
+      setHashQuery(null);
       requestAnimationFrame(() => {
         if (!ta) return;
         ta.focus();
@@ -534,6 +665,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       const newVal = before + sep + text + after;
       setValue(newVal);
       setAtQuery(null);
+      setHashQuery(null);
       requestAnimationFrame(() => {
         if (!ta) return;
         const pos = start + sep.length + text.length;
@@ -568,8 +700,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       newImages.slice(accepted.length).forEach(revokeImagePreview);
       return [...prev, ...accepted];
     });
-  }, []);
-
+  }, [setAttachedImages]);
   const processImageFiles = useCallback(async (files: File[]) => {
     if (isStreaming) return;
     const remaining = Math.max(
@@ -648,19 +779,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (removed) revokeImagePreview(removed);
       return next;
     });
-  }, []);
-
+  }, [setAttachedImages]);
   const clearImages = useCallback(() => {
     setAttachedImages((prev) => {
       prev.forEach(revokeImagePreview);
       return [];
     });
-  }, []);
-
+  }, [setAttachedImages]);
   const clearInput = useCallback(() => {
     abortDictation();
     setValue("");
     setAtQuery(null);
+    setHashQuery(null);
     setHistoryMenuOpen(false);
     if (draftKey) clearDraft(draftKey);
     if (draftKeyRef.current && draftKeyRef.current !== draftKey) clearDraft(draftKeyRef.current);
@@ -668,7 +798,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [abortDictation, clearImages, draftKey]);
+  }, [abortDictation, clearImages, draftKey, setValue]);
 
   useEffect(() => {
     if (!draftKey || draftKeyRef.current !== draftKey) return;
@@ -693,12 +823,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     draftKeyRef.current = draftKey;
     setValue(draft?.value ?? "");
     setAtQuery(null);
+    setHashQuery(null);
     setHistoryMenuOpen(false);
     setAttachedImages((prev) => {
       prev.forEach(revokeImagePreview);
       return draftImagesToAttachedImages(draft?.images);
     });
-  }, [draftKey]);
+  }, [draftKey, setAttachedImages, setValue]);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -709,25 +840,31 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   useEffect(() => {
     return () => {
+      submissionGate.invalidate();
       attachedImagesRef.current.forEach(revokeImagePreview);
     };
-  }, []);
+  }, [submissionGate]);
 
   const handleSend = useCallback(async () => {
     const msg = value.trim();
     if (!msg && !attachedImages.length) return;
     if (isStreaming) return;
-    onAudioUnlock?.();
-    if (!attachedImages.length && msg.startsWith("/") && onBuiltinCommand) {
-      const result = await onBuiltinCommand(msg);
-      if (result.handled) {
-        if (!result.error) clearInput();
-        return;
+    const targets = new Map(sessionMentionTargetsRef.current);
+    await submissionGate.run(async (signal) => {
+      setSendPreparationError(false);
+      onAudioUnlock?.();
+      if (!attachedImages.length && msg.startsWith("/") && onBuiltinCommand) {
+        const result = await onBuiltinCommand(msg);
+        if (result.handled) return { message: null, clear: !result.error };
+        signal.throwIfAborted();
       }
-    }
-    onSend(msg, attachedImages.length ? attachedImages : undefined);
-    clearInput();
-  }, [value, attachedImages, isStreaming, onBuiltinCommand, onSend, clearInput, onAudioUnlock]);
+      const message = await resolveSessionReferences(msg, targets, fetch, { signal, strict: true });
+      return { message, clear: true };
+    }, (result) => {
+      if (result.message !== null) onSend(result.message, attachedImages.length ? attachedImages : undefined);
+      if (result.clear) clearInput();
+    }, () => setSendPreparationError(true));
+  }, [value, attachedImages, isStreaming, onBuiltinCommand, onSend, clearInput, onAudioUnlock, submissionGate]);
 
   const slashQuery = value.startsWith("/") && !/\s/.test(value.slice(1))
     ? value.slice(1).toLowerCase()
@@ -773,12 +910,28 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     setAtQuery(extractAtQuery(text.slice(0, pos)));
   }, [cwd]);
 
+  const updateHashQuery = useCallback((text: string, cursor: number | null) => {
+    if (!cwd) {
+      setHashQuery(null);
+      return;
+    }
+    const pos = cursor ?? text.length;
+    setHashQuery(extractHashQuery(text.slice(0, pos)));
+  }, [cwd]);
+
   const atQueryText = atQuery?.query ?? null;
-  const atLocalMatches: FileIndexEntry[] = React.useMemo(() => (
+  const atLocalFileMatches: FileIndexEntry[] = React.useMemo(() => (
     atQueryText !== null && fileIndex && fileIndex.cwd === cwd
-      ? filterFileEntries(fileIndex.entries, atQueryText)
+      ? filterFileEntries(fileIndex.entries, atQueryText, 12)
       : []
   ), [atQueryText, fileIndex, cwd]);
+
+  const hashQueryText = hashQuery?.query ?? null;
+  const hashMatches: SessionMentionEntry[] = React.useMemo(() => (
+    hashQueryText !== null && sessionIndex
+      ? filterSessionEntries(sessionIndex.entries, hashQueryText)
+      : []
+  ), [hashQueryText, sessionIndex]);
 
   // When the client index is truncated (repo larger than the index cap),
   // local filtering cannot see deep files, so queries are also ranked
@@ -808,7 +961,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     && atServerResult !== null
     && atServerResult.cwd === cwd
     && atServerResult.query === atQueryText;
-  const atMatches: FileIndexEntry[] = serverResultInUse ? atServerResult.matches : atLocalMatches;
+  const atMatches: FileIndexEntry[] = serverResultInUse ? atServerResult.matches : atLocalFileMatches;
 
   // Open/reset the menu whenever the @token appears or changes (mirrors the
   // slash menu: Escape closes it, the next keystroke re-opens it).
@@ -822,6 +975,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     setAtMenuOpen(true);
     setAtActiveIndex(0);
   }, [atTokenKey]);
+
+  const hashTokenKey = hashQuery === null ? null : `${hashQuery.start}:${hashQuery.quoted ? 1 : 0}:${hashQuery.query}`;
+  useEffect(() => {
+    if (hashTokenKey === null) {
+      setHashMenuOpen(false);
+      setHashActiveIndex(0);
+      return;
+    }
+    setHashMenuOpen(true);
+    setHashActiveIndex(0);
+  }, [hashTokenKey]);
 
   // Fetch the file index when the menu opens. The server caches per cwd for
   // ~10s, so re-opening refreshes cheaply; while typing nothing refetches.
@@ -853,6 +1017,36 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       });
   }, [atTokenActive, cwd]);
 
+  // Sessions use the # palette. Keep this list lightweight by
+  // using the existing session summary endpoint; full content is fetched only
+  // when a selected session mention is sent.
+  useEffect(() => {
+    if (!hashQuery || !cwd) return;
+    if (sessionIndex && Date.now() - sessionIndex.fetchedAt < 10_000) return;
+    if (sessionIndexFetchingRef.current) return;
+    sessionIndexFetchingRef.current = true;
+    fetch("/api/sessions")
+      .then((res) => {
+        if (!res.ok) throw new Error(`session index failed: ${res.status}`);
+        return res.json() as Promise<{ sessions?: SessionInfo[] }>;
+      })
+      .then((data) => {
+        const entries = (data.sessions ?? []).map((session): SessionMentionEntry => ({
+          kind: "session",
+          id: session.id,
+          name: session.name,
+          firstMessage: session.firstMessage,
+          modified: session.modified,
+          messageCount: session.messageCount,
+        }));
+        setSessionIndex({ entries, fetchedAt: Date.now() });
+      })
+      .catch(() => {})
+      .finally(() => {
+        sessionIndexFetchingRef.current = false;
+      });
+  }, [hashQuery, cwd, sessionIndex]);
+
   const applyAtCompletion = useCallback((entry: FileIndexEntry) => {
     if (!atQuery) return;
     const ta = textareaRef.current;
@@ -873,6 +1067,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     // end with a space (token closes, menu hides); directories end with "/"
     // before the caret (token stays open for drill-down into the directory).
     setAtQuery(extractAtQuery(newValue.slice(0, newPos)));
+    setHashQuery(extractHashQuery(newValue.slice(0, newPos)));
     requestAnimationFrame(() => {
       const el = textareaRef.current;
       if (!el) return;
@@ -881,7 +1076,33 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       el.style.height = "auto";
       el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
     });
-  }, [atQuery, value]);
+  }, [atQuery, value, setValue]);
+
+  const applyHashCompletion = useCallback((entry: SessionMentionEntry) => {
+    if (!hashQuery) return;
+    const ta = textareaRef.current;
+    const cursor = ta?.selectionStart ?? value.length;
+    const before = value.slice(0, hashQuery.start);
+    let after = value.slice(cursor);
+    if (hashQuery.quoted && after.startsWith('"')) after = after.slice(1);
+    const sessionDisplayName = entry.name?.trim() || entry.firstMessage.trim() || "Untitled session";
+    const visibleSessionName = sessionDisplayName.replace(/"/g, "'").replace(/\n/g, " ");
+    sessionMentionTargetsRef.current.set(visibleSessionName, entry.id);
+    const text = buildSessionMentionText(visibleSessionName);
+    const newValue = before + text + after;
+    const newPos = before.length + text.length;
+    setValue(newValue);
+    setHashQuery(extractHashQuery(newValue.slice(0, newPos)));
+    setAtQuery(extractAtQuery(newValue.slice(0, newPos)));
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(newPos, newPos);
+      el.style.height = "auto";
+      el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    });
+  }, [hashQuery, value, setValue]);
 
   useEffect(() => {
     if (atActiveIndex >= atMatches.length) {
@@ -897,6 +1118,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (!atMenuOpen) return;
     atItemRefs.current[atActiveIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [atActiveIndex, atMenuOpen]);
+
+  useEffect(() => {
+    hashItemRefs.current.length = hashMatches.length;
+  }, [hashMatches.length]);
+
+  useEffect(() => {
+    if (!hashMenuOpen) return;
+    hashItemRefs.current[hashActiveIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [hashActiveIndex, hashMenuOpen]);
+
+  useEffect(() => {
+    if (hashActiveIndex >= hashMatches.length) {
+      setHashActiveIndex(Math.max(0, hashMatches.length - 1));
+    }
+  }, [hashMatches.length, hashActiveIndex]);
 
   useEffect(() => {
     if (historyActiveIndex >= inputHistory.length) {
@@ -918,6 +1154,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     setHistoryMenuOpen(false);
     setHistoryActiveIndex(0);
     setAtQuery(null);
+    setHashQuery(null);
     requestAnimationFrame(() => {
       const ta = textareaRef.current;
       if (!ta) return;
@@ -926,8 +1163,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       ta.style.height = "auto";
       ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
     });
-  }, []);
-
+  }, [setValue]);
   const applySlashCommand = useCallback((command: SlashCommandPaletteItem) => {
     const nextValue = `/${command.name} `;
     setValue(nextValue);
@@ -941,26 +1177,25 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       ta.style.height = "auto";
       ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
     });
-  }, []);
-
-  const sendQueued = useCallback((mode: "steer" | "followup") => {
+  }, [setValue]);
+  const sendQueued = useCallback(async (mode: "steer" | "followup") => {
     const msg = value.trim();
     if (!msg && !attachedImages.length) return;
     if (attachedImages.length) return;
-    onAudioUnlock?.();
-    const streamingBehavior = mode === "steer" ? "steer" : "followUp";
-    if (msg.startsWith("/") && onPromptWithStreamingBehavior) {
-      onPromptWithStreamingBehavior(msg, streamingBehavior, attachedImages.length ? attachedImages : undefined);
+    const dispatch = msg.startsWith("/") && onPromptWithStreamingBehavior
+      ? (message: string) => onPromptWithStreamingBehavior(message, mode === "steer" ? "steer" : "followUp")
+      : mode === "steer" ? onSteer : onFollowUp;
+    if (!dispatch) return;
+    const targets = new Map(sessionMentionTargetsRef.current);
+    await submissionGate.run(async (signal) => {
+      setSendPreparationError(false);
+      onAudioUnlock?.();
+      return resolveSessionReferences(msg, targets, fetch, { signal, strict: true });
+    }, (message) => {
+      dispatch(message);
       clearInput();
-      return;
-    }
-    if (mode === "steer" && onSteer) {
-      onSteer(msg, attachedImages.length ? attachedImages : undefined);
-    } else if (mode === "followup" && onFollowUp) {
-      onFollowUp(msg, attachedImages.length ? attachedImages : undefined);
-    }
-    clearInput();
-  }, [value, attachedImages, onPromptWithStreamingBehavior, onSteer, onFollowUp, clearInput, onAudioUnlock]);
+    }, () => setSendPreparationError(true));
+  }, [value, attachedImages, onPromptWithStreamingBehavior, onSteer, onFollowUp, clearInput, onAudioUnlock, submissionGate]);
 
   const getNextSlashIndex = useCallback((direction: "up" | "down" | "left" | "right") => {
     const lastIndex = displayedSlashCommands.length - 1;
@@ -1077,6 +1312,29 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
       // @ file menu — skip while composing so IME candidate navigation
       // (arrows/Enter/Tab) is never intercepted.
+      if (hashMenuOpen && hashQuery !== null && !isComposing) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setHashActiveIndex((i) => Math.min(Math.max(0, hashMatches.length - 1), i + 1));
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setHashActiveIndex((i) => Math.max(0, i - 1));
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setHashMenuOpen(false);
+          return;
+        }
+        if ((e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) && hashMatches[hashActiveIndex]) {
+          e.preventDefault();
+          applyHashCompletion(hashMatches[hashActiveIndex]);
+          return;
+        }
+      }
+
       if (atMenuOpen && atQuery !== null && !isComposing) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
@@ -1104,6 +1362,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         e.preventDefault();
         setSlashMenuOpen(false);
         setAtMenuOpen(false);
+        setHashMenuOpen(false);
         setHistoryActiveIndex(inputHistory.length - 1);
         setHistoryMenuOpen(true);
         return;
@@ -1127,7 +1386,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         }
       }
     },
-    [isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, displayedSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, getNextSlashIndex, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value]
+    [isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, displayedSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, getNextSlashIndex, hashMenuOpen, hashQuery, hashMatches, hashActiveIndex, applyHashCompletion, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value]
   );
 
   const handleInput = useCallback(() => {
@@ -1323,9 +1582,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       />
       <div className="chat-composer-wrap" style={{ maxWidth: 820, margin: "0 auto" }}>
         <ModelErrorBanner error={modelError} />
+        {sendPreparationError && <div role="alert">{t("chat.sendPreparationError")}</div>}
         {attachError && <ModelNoticeBanner tone="error" title={t("chat.attachmentError")} body={attachError} />}
         {dictation.error && <ModelNoticeBanner tone="error" title={t("chat.dictationError")} body={dictation.error === "not-allowed" || dictation.error === "service-not-allowed" ? t("chat.dictationPermissionDenied") : t("chat.dictationTryAgain")} />}
-        <ModelScopeWarningBanner warnings={modelScopeWarnings} />
+        <ModelScopeWarningBanner
+          warnings={modelScopeWarnings}
+          onDismiss={onDismissModelScopeWarnings}
+          dismissLabel={t("chat.modelScopeDismiss")}
+          onOpenModelsConfig={onOpenModelsConfig}
+        />
         {/* Queued steering / follow-up messages (delivered by pi on upcoming turns) */}
         {((queuedMessages?.steering.length ?? 0) + (queuedMessages?.followUp.length ?? 0)) > 0 && (
           <div style={{
@@ -1706,6 +1971,86 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </div>
             </div>
           )}
+          {hashMenuOpen && hashQuery !== null && (() => {
+            const matchCountLabel = hashMatches.length === 1 ? t("chat.match") : t("chat.matches", { count: hashMatches.length });
+            return (
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  bottom: "calc(100% + 8px)",
+                  zIndex: 121,
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 8,
+                  boxShadow: "0 -6px 20px rgba(0,0,0,0.12)",
+                  overflow: "hidden",
+                  maxHeight: "min(48vh, 400px)",
+                }}
+              >
+                <div style={{
+                  padding: "8px 10px",
+                  borderBottom: "1px solid var(--border)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  fontSize: 11,
+                  color: "var(--text-dim)",
+                }}>
+                  <span>{sessionIndex ? t("chat.sessions", { label: matchCountLabel }) : t("chat.loadingSessions")}</span>
+                  <span style={{ fontFamily: "var(--font-mono)" }}>{t("chat.tabEnter")}</span>
+                </div>
+                <div style={{ maxHeight: "calc(min(48vh, 400px) - 34px)", overflowY: "auto", padding: 4 }}>
+                  {!sessionIndex ? (
+                    <div style={{ padding: "6px 8px", fontSize: 12, color: "var(--text-dim)" }}>{t("chat.loadingSessions")}</div>
+                  ) : hashMatches.length === 0 ? (
+                    <div style={{ padding: "6px 8px", fontSize: 12, color: "var(--text-dim)" }}>{t("chat.noMatchingSessions")}</div>
+                  ) : hashMatches.map((entry, index) => {
+                    const active = index === hashActiveIndex;
+                    const name = entry.name?.trim() || entry.firstMessage.trim() || t("chat.untitledSession");
+                    return (
+                      <button
+                        key={`session:${entry.id}`}
+                        ref={(node) => {
+                          hashItemRefs.current[index] = node;
+                        }}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          applyHashCompletion(entry);
+                        }}
+                        onMouseEnter={() => setHashActiveIndex(index)}
+                        style={{
+                          width: "100%",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "7px 8px",
+                          border: "none",
+                          borderRadius: 6,
+                          background: active ? "var(--bg-selected)" : "none",
+                          color: "var(--text)",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          fontSize: 12.5,
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+                        </svg>
+                        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                          <span style={{ display: "block", color: "var(--text-dim)", fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.firstMessage}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
           {atMenuOpen && atQuery !== null && (() => {
             const indexLoading = fileIndexLoading && (!fileIndex || fileIndex.cwd !== cwd);
              const matchCountLabel = atMatches.length === 1 ? t("chat.match") : t("chat.matches", { count: atMatches.length });
@@ -1743,9 +2088,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   }}
                 >
                   <span>
-                    {indexLoading
-                       ? t("chat.loadingFiles")
-                       : t("chat.files", { label: matchCountLabel, hint: truncatedHint })}
+                    {indexLoading ? t("chat.loadingFiles") : t("chat.files", { label: matchCountLabel, hint: truncatedHint })}
                   </span>
                    <span style={{ fontFamily: "var(--font-mono)" }}>{t("chat.tabEnter")}</span>
                 </div>
@@ -1828,10 +2171,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               setValue(e.target.value);
               setHistoryMenuOpen(false);
               updateAtQuery(e.target.value, e.target.selectionStart);
+              updateHashQuery(e.target.value, e.target.selectionStart);
             }}
             onSelect={(e) => {
               const el = e.currentTarget;
               updateAtQuery(el.value, el.selectionStart);
+              updateHashQuery(el.value, el.selectionStart);
             }}
             onKeyDown={handleKeyDown}
             onCompositionStart={() => {
@@ -1842,6 +2187,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               lastCompositionEndAtRef.current = Date.now();
               const el = e.currentTarget;
               updateAtQuery(el.value, el.selectionStart);
+              updateHashQuery(el.value, el.selectionStart);
             }}
             onInput={handleInput}
             onPaste={handlePaste}

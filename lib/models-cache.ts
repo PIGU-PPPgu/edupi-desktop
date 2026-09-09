@@ -1,3 +1,5 @@
+import type { ModelScopeWarning } from "./model-scope-warnings";
+
 export interface ModelsData {
   models: Record<string, string>;
   modelList: { id: string; name: string; provider: string }[];
@@ -8,7 +10,7 @@ export interface ModelsData {
   thinkingLevelPins: Record<string, string>;
   modelError?: string;
   /** Warnings from resolving the `enabledModels` scope (e.g. a pattern matched nothing). */
-  modelScopeWarnings?: string[];
+  modelScopeWarnings?: ModelScopeWarning[];
 }
 
 interface ModelsCacheState {

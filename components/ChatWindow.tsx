@@ -10,11 +10,11 @@ import { EduPiConversationFiles } from "./EduPiConversationFiles";
 import { ConversationNavigator, type ConversationTurnLocation } from "./ConversationNavigator";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { useI18n } from "@/hooks/useI18n";
+import { PRODUCT_NAME } from "@/lib/branding";
 import { useAgentSession, type AgentPhase, type EducationImportToolName, type NoticeItem } from "@/hooks/useAgentSession";
 import { useAudio } from "@/hooks/useAudio";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import type { SessionStatsInfo } from "@/lib/pi-types";
-import { PRODUCT_NAME } from "@/lib/branding";
 import { importDroppedProjectFiles, partitionChatDroppedFiles } from "@/lib/chat-file-drop";
 import {
   captureScrollDistance,
@@ -48,6 +48,8 @@ interface Props {
   onEducationImportCompleted?: (toolName: EducationImportToolName) => void;
   onEduPiAction?: (action: DesktopControlInput) => boolean | Promise<boolean>;
   onEduPiComputerAction?: (action: ComputerUseInput, expiresAt?: number) => ComputerUseBridgeResult | Promise<ComputerUseBridgeResult>;
+  /** Open the provider/auth configuration modal (offered by the scope-warning banner). */
+  onOpenModelsConfig?: () => void;
 }
 
 function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string | null {
@@ -224,10 +226,9 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
   );
 }
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, onEduPiComputerAction, emptyTitle, emptySubtitle, onOpenModelsConfig }: Props) {
   const { t } = useI18n();
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
-
   // Wrap onAgentEnd to play the completion sound. This is more reliable than
   // wrapping handleAgentEventRef because useAgentSession overwrites that ref
   // on every render (it syncs the latest callback), which would blow away an
@@ -264,6 +265,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     lastUserMsgRef, promptAnchorActive,
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
+    dismissModelScopeWarnings,
     handleRecallQueue,
     handleBuiltinSlashCommand, retryLoad,
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands, scrollToBottom, scrollUserMsgToTop,
@@ -830,6 +832,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       modelList={modelList}
       modelError={modelError}
       modelScopeWarnings={modelScopeWarnings}
+      onDismissModelScopeWarnings={dismissModelScopeWarnings}
+      onOpenModelsConfig={onOpenModelsConfig}
       onModelChange={handleModelChange}
       onCompact={session || isNew ? handleCompact : undefined}
       onAbortCompaction={handleAbortCompaction}

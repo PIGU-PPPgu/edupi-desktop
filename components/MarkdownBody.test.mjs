@@ -30,6 +30,17 @@ test("opens non-file markdown links in a safe new tab", () => {
   assert.doesNotMatch(html, /\snode=/);
 });
 
+test("does not swallow trailing CJK text into a GFM autolink", () => {
+  const html = renderMarkdown(
+    "看 https://github.com/abcwyc/pi-agent-desktop/issues/48，然后来解决一下",
+  );
+
+  assert.match(
+    html,
+    /<a [^>]*href="https:\/\/github\.com\/abcwyc\/pi-agent-desktop\/issues\/48"[^>]*>https:\/\/github\.com\/abcwyc\/pi-agent-desktop\/issues\/48<\/a>，然后来解决一下/,
+  );
+});
+
 test("keeps local file markdown links in the app", () => {
   const html = renderMarkdown("[file](components/MarkdownBody.tsx)");
 

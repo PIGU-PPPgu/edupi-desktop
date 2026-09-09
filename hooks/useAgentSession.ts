@@ -18,6 +18,7 @@ import { fetchWithRetry } from "@/lib/fetch-timeout";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
 import { rememberScrollPosition, sessionScrollTops } from "@/lib/scroll-memory";
 import { applyAssistantMessageEvent, type ClientAssistantMessageEvent } from "@/lib/streaming-message";
+import { modelScopeWarningKey, type ModelScopeWarning } from "@/lib/model-scope-warnings";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 
 export interface SessionData {
@@ -344,7 +345,7 @@ type ModelsResponse = {
   thinkingLevelMaps?: Record<string, Record<string, string | null>>;
   thinkingLevelPins?: Record<string, string>;
   modelError?: string;
-  modelScopeWarnings?: string[];
+  modelScopeWarnings?: ModelScopeWarning[];
 };
 
 type SlashCommandsResponse = {
@@ -432,7 +433,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [modelList, setModelList] = useState<ModelEntry[]>([]);
   const [modelError, setModelError] = useState<string | null>(null);
-  const [modelScopeWarnings, setModelScopeWarnings] = useState<string[]>([]);
+  const [modelScopeWarnings, setModelScopeWarnings] = useState<ModelScopeWarning[]>([]);
+  // Dismissed scope warnings are keyed per warning and reset on session switch:
+  // dismissal lives for the current conversation only, never persisted.
+  const [dismissedScopeWarningKeys, setDismissedScopeWarningKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const dismissModelScopeWarnings = useCallback(() => {
+    setDismissedScopeWarningKeys((prev) => {
+      const next = new Set(prev);
+      for (const warning of modelScopeWarnings) next.add(modelScopeWarningKey(warning));
+      return next;
+    });
+  }, [modelScopeWarnings]);
+  const visibleModelScopeWarnings = useMemo(
+    () => modelScopeWarnings.filter((warning) => !dismissedScopeWarningKeys.has(modelScopeWarningKey(warning))),
+    [modelScopeWarnings, dismissedScopeWarningKeys],
+  );
   const [modelThinkingLevels, setModelThinkingLevels] = useState<Record<string, string[]>>({});
   const [modelThinkingLevelMaps, setModelThinkingLevelMaps] = useState<Record<string, Record<string, string | null>>>({});
   const [newSessionModel, setNewSessionModel] = useState<SelectedModel | null>(null);
@@ -574,6 +589,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setExtensionWidgets([]);
       setQueuedMessages({ steering: [], followUp: [] });
       setSessionStatsOverride(null);
+      setDismissedScopeWarningKeys(new Set());
       setSlashCommands([]);
       setLoading(Boolean(session?.id));
       if (isNew) {
@@ -2231,7 +2247,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   return {
     // State
     data, loading, error, activeLeafId, messages, entryIds, streamState,
-    agentRunning, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
+    agentRunning, modelNames, modelList, modelError, modelScopeWarnings: visibleModelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
     retryInfo, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, compactResult, currentModel, displayModel, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
@@ -2247,6 +2263,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // Actions
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
+    dismissModelScopeWarnings,
     handleRecallQueue,
     handleBuiltinSlashCommand, retryLoad,
     handleToolPresetChange, handleThinkingLevelChange, loadTools, loadSlashCommands, setActiveLeafId, setData, setMessages,

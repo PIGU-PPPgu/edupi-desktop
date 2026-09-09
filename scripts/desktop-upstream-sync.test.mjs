@@ -200,12 +200,14 @@ test("readmes use EduPi source and downloads while retaining upstream attributio
 
 test("reviewed upstream state is strict and squash-merge safe", async () => {
   const source = await readFile(join(root, "scripts", "desktop-upstream-state.json"), "utf8");
-  assert.deepEqual(parseDesktopUpstreamState(source), {
+  const { reviewedCommit, ...identity } = parseDesktopUpstreamState(source);
+  assert.deepEqual(identity, {
     schemaVersion: 1,
     repository: DESKTOP_UPSTREAM_REPOSITORY,
     branch: DESKTOP_UPSTREAM_BRANCH,
-    reviewedCommit: null,
   });
+  assert.ok(reviewedCommit === null || /^[0-9a-f]{40}$/.test(reviewedCommit));
+  assert.equal(parseDesktopUpstreamState(JSON.stringify({ ...identity, reviewedCommit: null })).reviewedCommit, null);
   assert.deepEqual(
     parseDesktopUpstreamState(
       JSON.stringify({
