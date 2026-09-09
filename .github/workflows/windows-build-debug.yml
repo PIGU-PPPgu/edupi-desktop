@@ -53,6 +53,14 @@ jobs:
         env:
           EDUPI_TEST_RELEASE: ${{ inputs.tag }}
         run: ./scripts/test-windows-installed-release.ps1
+      - name: Check native source with public resource fixture
+        shell: pwsh
+        run: |
+          $fixture = Join-Path $env:RUNNER_TEMP "edupi-install-check/application/resources"
+          if (!(Test-Path $fixture)) { throw "Published resource fixture missing" }
+          Copy-Item $fixture -Destination ./src-tauri/resources -Recurse
+          $env:TAURI_CONFIG = Get-Content ./src-tauri/tauri.windows.conf.json -Raw
+          cargo check --manifest-path src-tauri/Cargo.toml --lib --locked
   diagnose:
     runs-on: windows-latest
     steps:
@@ -146,7 +154,10 @@ jobs:
           done
 
       - name: Check native desktop commands
-        run: cargo check --manifest-path src-tauri/Cargo.toml --lib --locked
+        shell: pwsh
+        run: |
+          $env:TAURI_CONFIG = Get-Content ./src-tauri/tauri.windows.conf.json -Raw
+          cargo check --manifest-path src-tauri/Cargo.toml --lib --locked
 
       - name: Look for junction loops in the profile
         shell: pwsh
