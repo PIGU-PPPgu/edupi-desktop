@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { createJiti } from "jiti";
@@ -11,7 +12,7 @@ const desktopRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const configuredCoreRoot = process.env.EDUPI_CORE_ROOT;
 const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
 const { loadEduPiCompatManifest } = await jiti.import(path.join(desktopRoot, "lib", "edupi-bridge-manifest.ts"));
-const { resolveEduPiCoreRoot } = await jiti.import(path.join(desktopRoot, "lib", "edupi-core-root.ts"));
+const { resolveEduPiCoreRoot, resolveEduPiDataRoot } = await jiti.import(path.join(desktopRoot, "lib", "edupi-core-root.ts"));
 
 function listFiles(root, current = root) {
   const files = [];
@@ -75,6 +76,14 @@ test("copies exactly the Desktop and Runtime closure union and validates without
     const typeboxValue = typebox.files.find((entry) => entry.path === "node_modules/typebox/build/value/index.mjs");
     assert.equal(typeboxValue.sha256, hash(fs.readFileSync(path.join(destination, typeboxValue.path))));
     assert.equal(typeboxValue.size, fs.statSync(path.join(destination, typeboxValue.path)).size);
+    const data = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "edupi-bundled-start-")));
+    let handle;
+    try {
+      for (const directory of ["memory", "output", "locks"]) fs.mkdirSync(path.join(data, ".edupi", directory), { recursive: true });
+      const { ensureEduPiRuntime } = await jiti.import(path.join(desktopRoot, "lib", "edupi-runtime-supervisor.ts"));
+      handle = await ensureEduPiRuntime({ runtime: resolveEduPiCoreRoot({ configuredRoot: destination, allowedRoot: path.dirname(destination), runtimeIdentity: compat.core_runtime, validationMode: "bundled" }), dataRoot: resolveEduPiDataRoot({ configuredRoot: data, allowedRoot: path.dirname(data) }) });
+      assert.equal((await handle.call("health", null)).ok, true, "copied Core must start without development-only files");
+    } finally { await handle?.close(); fs.rmSync(data, { recursive: true, force: true }); }
   } finally {
     fs.rmSync(destination, { recursive: true, force: true });
   }
