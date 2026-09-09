@@ -18,8 +18,9 @@ export async function backgroundJobRequest(action?: string, fields: Record<strin
 }
 
 export async function cancelBackgroundJob(id: string) {
+  const result = await backgroundJobRequest("cancel", { job_id: id });
   await active.get(id)?.();
-  return backgroundJobRequest("cancel", { job_id: id });
+  return result;
 }
 
 export async function pumpBackgroundJobs() {
@@ -32,7 +33,13 @@ export async function pumpBackgroundJobs() {
       try {
         const roots = resolveEduPiBridgeRoots();
         const { startHarnessSession } = await import("./harness/runtime");
-        const { session, realSessionId } = await startHarnessSession(`background-${job.job_id}`, "", roots.dataRoot.root, { toolNames: ["read", "write", "edit", "bash", "find", "ls", "edupi_make_ppt"] });
+        const { session, realSessionId } = await startHarnessSession(`background-${job.job_id}`, "", roots.dataRoot.root, { toolNames: ["read", "write", "edit", "bash", "find", "ls", "edupi_make_ppt", "edupi_make_document"] });
+        session.setArtifactOutputDirectory(path.resolve(roots.dataRoot.root, ".edupi/output/agent-computer", job.job_id));
+        const current = await backgroundJobRequest();
+        if (current.projection.jobs.find(item => item.job_id === job.job_id)?.status !== "running") {
+          session.destroy();
+          continue;
+        }
         let settled = false;
         let unsubscribe = () => {};
         const finish = async (ok: boolean) => {
@@ -42,6 +49,8 @@ export async function pumpBackgroundJobs() {
             const candidates = ok ? (await generatedArtifactsRequest("list")).artifacts?.filter(file => file.session_id === realSessionId) || [] : [];
             const files = [];
             for (const file of candidates) {
+              if (!file.relative_path.startsWith(`.edupi/output/agent-computer/${job.job_id}/`)) continue;
+              if (file.available === false) continue;
               const extension = path.extname(file.relative_path).toLowerCase();
               if (job.job_type === "ppt" && extension !== ".pptx") continue;
               if (file.size_bytes <= 0 || file.size_bytes > 50 * 1024 * 1024) continue;
@@ -62,7 +71,7 @@ export async function pumpBackgroundJobs() {
         const cancellationCheck = setInterval(() => { void backgroundJobRequest().then(result => { if (result.projection.jobs.find(item => item.job_id === job.job_id)?.status === "canceled") void active.get(job.job_id)?.(); }).catch(() => {}); }, 10000);
         active.set(job.job_id, async () => { settled = true; clearTimeout(timeout); clearInterval(cancellationCheck); unsubscribe(); await session.send({ type: "abort" }); active.delete(job.job_id); });
         unsubscribe = session.onEvent(event => { if (event.type === "prompt_done") void finish(true).catch(() => {}); if (event.type === "prompt_error") void finish(false).catch(() => {}); });
-        await session.send({ type: "prompt", message: `后台任务：${job.title}\n${job.instructions}\n\n请直接执行。将最终文件保存到 .edupi/output/agent-computer/${job.job_id}/，结束前检查文件存在。不要创建其他任务。` });
+        await session.send({ type: "prompt", message: `后台任务：${job.title}\n${job.instructions}\n\n请直接执行。需要 Word 时使用 edupi_make_document，需要课件时使用 edupi_make_ppt。将最终文件保存到 .edupi/output/agent-computer/${job.job_id}/，结束前检查文件存在。不要创建其他任务。` });
       } catch { active.delete(job.job_id); await backgroundJobRequest("fail", { job_id: job.job_id }); }
     }
   } finally { shared.__edupiJobPump = false; }

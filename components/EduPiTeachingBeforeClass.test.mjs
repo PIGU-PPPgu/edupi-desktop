@@ -109,9 +109,11 @@ const workCase = (artifactIds) => ({
   externalSend: false,
 });
 
-function renderTaskWorkspace(boundWorkCase, stage = "review") {
+function renderTaskWorkspace(boundWorkCase, stage = "review", files = [], workReview = false) {
   return renderToStaticMarkup(React.createElement(EduPiTaskWorkspace, {
     task,
+    files,
+    workReview,
     workCase: boundWorkCase,
     stage,
     workspace: "/workspace",
@@ -151,4 +153,23 @@ test("enables review navigation and teacher actions only for a fully evidenced w
 test("shows direct preparation only on supported Core work cases", () => {
   assert.match(renderTaskWorkspace(workCase([]), "run"), />立即准备<\/button>/);
   assert.doesNotMatch(renderTaskWorkspace({ ...workCase([]), kind: "student_follow_up" }, "run"), />立即准备<\/button>/);
+});
+
+test("artifact stage renders each linked file once and excludes other tasks", () => {
+  const files = [
+    {artifact_id:"a",task_id:task.id,title:"真实教案",relative_path:".edupi/output/a.md",available:true},
+    {artifact_id:"b",task_id:task.id,title:"真实学案",relative_path:".edupi/output/b.md",available:false},
+    {artifact_id:"c",task_id:"other",title:"其他任务文件",relative_path:".edupi/output/c.md"},
+  ];
+  const html = renderTaskWorkspace(workCase(["a","b"]),"artifact",files);
+  assert.equal((html.match(/>真实教案<\/button>/g)||[]).length,1);
+  assert.match(html,/<button[^>]*disabled[^>]*>真实学案<\/button>/);
+  assert.doesNotMatch(html,/其他任务文件|本次对话文件/);
+  assert.match(renderTaskWorkspace(workCase([]),"artifact"),/暂无可打开的产物/);
+});
+
+test("canonical work review only offers supported editing fields", () => {
+  const html = renderTaskWorkspace(workCase(["artifact-1"]),"review",[],true);
+  assert.match(html,/>接受<\/button>/);
+  assert.doesNotMatch(html,/>回滚<\/button>|教学产物<textarea/);
 });

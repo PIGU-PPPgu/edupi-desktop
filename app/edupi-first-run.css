@@ -24,6 +24,23 @@
   text-align: left;
 }
 
+.edupi-first-run.is-opened {
+  top: 8px;
+  bottom: auto;
+  width: min(640px, calc(100vw - 32px));
+}
+.edupi-first-run.is-opened .edupi-first-run__dialog {
+  min-height: 0;
+  padding: 8px 12px;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.edupi-first-run.is-opened .edupi-first-run__dialog h2 { margin: 0 auto 0 0; font-size: 14px; }
+.edupi-first-run.is-opened .edupi-first-run__dialog button { width: auto; margin: 0; padding: 6px 8px; }
+.edupi-first-run.is-opened .edupi-first-run__dialog p { flex-basis: 100%; margin: 0; }
+
 .edupi-first-run__progress {
   display: flex;
   gap: 6px;

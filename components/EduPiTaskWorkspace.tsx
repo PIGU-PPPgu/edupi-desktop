@@ -6,10 +6,12 @@ import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { taskDisplayTitle, taskStatusLabel, taskStatusTone, taskTypeLabel, type TaskStage } from "@/lib/edupi-workbench";
 import { isTaskReviewable, workCaseStateLabel } from "@/lib/edupi-work-case";
 import { EduPiTaskStage, type ReviewPayload } from "./EduPiTaskStage";
-import { EduPiConversationFiles } from "./EduPiConversationFiles";
+import type { GeneratedArtifact } from "@/lib/edupi-generated-artifacts";
 
 type Props = {
   task: TeacherTask;
+  files?: GeneratedArtifact[];
+  workReview?: boolean;
   workCase: EducationWorkCase | null;
   stage: TaskStage;
   workspace: string;
@@ -45,12 +47,12 @@ export function EduPiTaskWorkspace(props: Props) {
       : props.workCase?.currentState === "accepted" || props.workCase?.currentState === "modified" || props.workCase?.currentState === "completed"
         ? "success"
         : "neutral";
-  const statusLabel = props.workCase ? workCaseStateLabel(props.workCase.currentState) : taskStatusLabel(props.task);
-  const statusTone = props.workCase ? workCaseTone : taskStatusTone(props.task);
+  const statusLabel = props.task.status !== "planned" || !props.workCase ? taskStatusLabel(props.task) : workCaseStateLabel(props.workCase.currentState);
+  const statusTone = props.task.status !== "planned" || !props.workCase ? taskStatusTone(props.task) : workCaseTone;
   const dateLabel = props.task.trigger === "teaching_before_class" && props.task.sourceEventDate
     ? `上课 ${props.task.sourceEventDate}${props.task.dueDate ? ` · 截止 ${props.task.dueDate}` : ""}`
     : props.task.dueDate || "日期待确认";
-  const reviewable = isTaskReviewable(props.task, props.workCase);
+  const reviewable = isTaskReviewable(props.task, props.workCase) || Boolean(props.workReview && props.task.reviewHistory.length > 0 && props.task.status !== "planned");
   const reviewReason = reviewable ? props.reviewReason : "等待产物";
   const selectStage = (stage: TaskStage) => {
     if (stage === "review" && !reviewable) return;
@@ -72,9 +74,10 @@ export function EduPiTaskWorkspace(props: Props) {
         </nav>
         <section className="edupi-task-workspace__surface" aria-label={stageLabel}>
           <h2 className="edupi-visually-hidden">{stageLabel}</h2>
-          {props.stage === "artifact" && props.task.id ? <EduPiConversationFiles key={props.task.id} taskId={props.task.id} sessionId={props.agentSession?.sessionId || ""} cwd={props.workspace} onOpen={props.onOpenFile} /> : null}
           <EduPiTaskStage
           task={props.task}
+          workReview={props.workReview}
+          files={props.files?.filter(file => file.task_id === props.task.id)}
           stage={props.stage}
           workspace={props.workspace}
           contextLabel={contextLabel}

@@ -20,8 +20,12 @@ import { EDUPI_ROOT, extensionPaths, prepareEducationResources } from "./edupi-r
 import { createEduPiAppControlTool } from "./edupi-desktop-tool";
 import { createEduPiTaskTool } from "./edupi-task-tool";
 import { createEduPiPresentationTool } from "./edupi-presentation-tool";
-import { generatedArtifactsRequest, snapshotGeneratedFiles } from "./edupi-generated-artifacts";
+import { createEduPiDocumentTool } from "./edupi-document-tool";
+import { createPreparationArtifactTool } from "./edupi-preparation-artifact-tool";
+import { generatedArtifactsRequest, nativeToolArtifactPath, snapshotGeneratedFiles, writtenToolArtifactPath } from "./edupi-generated-artifacts";
 import { createStudentEventTool } from "./edupi-student-event-tool";
+import { createMemoryWriteTool } from "./edupi-memory-write-tool";
+import { createMemoryForgetTool } from "./edupi-memory-forget-tool";
 import { createPrepareTaskTool } from "./edupi-prepare-task-tool";
 import type { DesktopControlInput } from "./edupi-desktop-control";
 import { createEduPiComputerUseTool } from "./edupi-computer-tool";
@@ -187,9 +191,16 @@ export class AgentSessionWrapper {
   private _alive = true;
   private artifactWrites = Promise.resolve();
   private artifactBaseline = new Map<string, string>();
+  private artifactPendingWrites = new Map<string, string>();
+  private artifactOutputDirectory: string | undefined;
   private artifactTaskId: string | null = null;
 
   constructor(public readonly inner: AgentSessionLike) {}
+
+  setArtifactOutputDirectory(directory: string): void {
+    this.artifactOutputDirectory = directory;
+    this.artifactBaseline = snapshotGeneratedFiles(this.cwd, directory);
+  }
 
   get sessionId(): string {
     return this.inner.sessionId;
@@ -261,18 +272,23 @@ export class AgentSessionWrapper {
 
   start(): void {
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
-      if (resolve(this.cwd) === EDUPI_ROOT) {
-        if (event.type === "agent_start") this.artifactBaseline = snapshotGeneratedFiles(this.cwd);
+      if (normalizeRpcCwd(this.cwd) === EDUPI_ROOT) {
+        if (event.type === "agent_start") this.artifactBaseline = snapshotGeneratedFiles(this.cwd, this.artifactOutputDirectory);
+        const writtenArtifact = writtenToolArtifactPath(event, this.cwd, this.artifactPendingWrites);
         if (event.type === "tool_execution_end" && !event.isError) {
           if (event.toolName === "edupi_create_task") {
             const result = event.result as { details?: { taskId?: string } } | undefined;
             if (typeof result?.details?.taskId === "string") this.artifactTaskId = result.details.taskId;
           }
-          const files = snapshotGeneratedFiles(this.cwd);
-          const args = event.args as { path?: string } | undefined;
-          const changed = [...files].filter(([file, stamp]) => this.artifactBaseline.get(file) !== stamp).map(([file]) => file);
-          if ((event.toolName === "write" || event.toolName === "edit") && typeof args?.path === "string") changed.push(resolve(this.cwd, args.path));
-          this.artifactBaseline = files;
+          const changed: string[] = [];
+          if (event.toolName === "bash") {
+            const files = snapshotGeneratedFiles(this.cwd, this.artifactOutputDirectory);
+            changed.push(...[...files].filter(([file, stamp]) => this.artifactBaseline.get(file) !== stamp).map(([file]) => file));
+            this.artifactBaseline = files;
+          }
+          if (writtenArtifact) changed.push(writtenArtifact);
+          const nativeArtifact = nativeToolArtifactPath(event);
+          if (nativeArtifact) changed.push(nativeArtifact);
           const sessionId = this.sessionId;
           const taskId = this.artifactTaskId;
           for (const filePath of new Set(changed)) {
@@ -1389,7 +1405,7 @@ export async function startRpcSession(
       agentDir,
       resourceLoaderOptions: {
         additionalExtensionPaths: extensionPaths,
-        additionalSkillPaths: resolve(sessionCwd) === EDUPI_ROOT ? [prepareEducationResources()] : [],
+        additionalSkillPaths: normalizeRpcCwd(sessionCwd) === EDUPI_ROOT ? [prepareEducationResources()] : [],
         ...(teacherContextAppendSystemPromptOverride
           ? { appendSystemPromptOverride: teacherContextAppendSystemPromptOverride }
           : {}),
@@ -1421,7 +1437,7 @@ export async function startRpcSession(
       ...(toolsOption !== undefined ? { tools: toolsOption } : {}),
       customTools: [
         defineTool(createBashToolDefinition(sessionCwd, { shellPath: services.settingsManager.getShellPath(), spawnHook: redactDesktopSpawnContext })),
-        ...(resolve(sessionCwd) === EDUPI_ROOT ? [createEduPiPresentationTool(EDUPI_ROOT), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
+        ...(normalizeRpcCwd(sessionCwd) === EDUPI_ROOT ? [createPreparationArtifactTool(EDUPI_ROOT), createEduPiDocumentTool(EDUPI_ROOT), createEduPiPresentationTool(EDUPI_ROOT), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createMemoryWriteTool(EDUPI_ROOT), createMemoryForgetTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
           projectRoot: EDUPI_ROOT,
           requestAction: (action, signal) => requestEduPiAppAction(action, signal),
         }), createEduPiComputerUseTool({

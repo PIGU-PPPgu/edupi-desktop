@@ -2,6 +2,8 @@ import { appendTeacherInputSlot } from "./edupi-teacher-input-slot";
 
 type StudentProfilePromptInput = {
   name: string;
+  studentId?: string;
+  className?: string;
   traits: string[];
   parentNotes: string[];
   patternCount: number;
@@ -11,6 +13,8 @@ type StudentProfilePromptInput = {
 export function buildStudentProfileConversationPrompt(input: StudentProfilePromptInput): string {
   return appendTeacherInputSlot([
     `请协助我审阅并修订${input.name}的学生档案。`,
+    ...(input.studentId ? [`学生 ID：${input.studentId}`] : []),
+    ...(input.className ? [`班级：${input.className}`] : []),
     `当前特征：${input.traits.join("、") || "暂无"}`,
     `当前家校备注：${input.parentNotes.join("、") || "暂无"}`,
     `系统记录：${input.patternCount} 条学习模式 · ${input.trajectoryCount} 个成长节点。`,

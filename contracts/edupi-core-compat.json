@@ -2,17 +2,17 @@
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
   "core_runtime": {
-    "core_commit": "bf047b3f612899343c23234ccd950106618e4841",
+    "core_commit": "ac63a9540b54dad13af42e671f4023687bc049ce",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:c4192cc306375927c10c83531fb35a283f42390f80c494a8026d6610ae842a87"
+    "component_manifest_hash": "sha256:e75f110dede79a7dcea166401f3c217c4a7dd12a9f673315d6578bfa78704545"
   },
   "contract_identities": [
     {
       "contract_id": "edupi-bridge-v1.1",
       "contract_version": "1.1",
-      "schema_hash": "sha256:30d10113b6c7e7b2d3ad4eb54e34d47e8d03e848e9fbbabd1c81cf5db36727df",
+      "schema_hash": "sha256:41798fb7b5a2b30f09c2dcf07687193a0efbeade93667f47e6fd0c33e70760a3",
       "fixture_manifest_path": "fixtures/bridge/v1.1/fixture-manifest.json",
-      "fixture_manifest_hash": "sha256:2143fe0c4ab271d251134f137304c9dbef0a1b33517d8e8159c8adfb6dcb43c4",
+      "fixture_manifest_hash": "sha256:b2b00ae6252d953c285260e8794b81c7ada3b0bb7132f67802e4bee99ae3bbfb",
       "supported_commands": ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage", "update_memory"],
       "supported_projections": ["education_workspace"],
       "depends_on": []

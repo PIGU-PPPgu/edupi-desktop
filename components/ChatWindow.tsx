@@ -7,6 +7,8 @@ import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { MessageView } from "./MessageView";
 import { EduPiConversationFiles } from "./EduPiConversationFiles";
+import { EduPiReminderInbox } from "./EduPiReminderInbox";
+import { EduPiRuntimeFlow } from "./EduPiRuntimeFlow";
 import { ConversationNavigator, type ConversationTurnLocation } from "./ConversationNavigator";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { useI18n } from "@/hooks/useI18n";
@@ -47,6 +49,10 @@ interface Props {
   onProjectFilesImported?: () => void;
   onEducationImportCompleted?: (toolName: EducationImportToolName) => void;
   onEduPiAction?: (action: DesktopControlInput) => boolean | Promise<boolean>;
+  onContinueReminder?: (taskId: string) => Promise<void>;
+  reminderText?: string;
+  reminderTitle?: string;
+  reminderDraftKey?: string;
   onEduPiComputerAction?: (action: ComputerUseInput, expiresAt?: number) => ComputerUseBridgeResult | Promise<ComputerUseBridgeResult>;
 }
 
@@ -224,7 +230,13 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
   );
 }
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, onContinueReminder, reminderText, reminderTitle, reminderDraftKey, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
+  const appliedReminderText = useRef<string | null>(null);
+  useEffect(() => {
+    if (!reminderText || !chatInputRef?.current || appliedReminderText.current === reminderText) return;
+    chatInputRef.current.insertIfEmpty(reminderText);
+    appliedReminderText.current = reminderText;
+  }, [reminderText, chatInputRef, newSessionCwd, session?.id]);
   const { t } = useI18n();
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
 
@@ -853,7 +865,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       soundEnabled={soundEnabled}
       onSoundToggle={onSoundToggle}
       onAudioUnlock={unlockAudio}
-      draftKey={session?.id ?? (newSessionCwd ? `new:${newSessionCwd}` : undefined)}
+      draftKey={session?.id ?? reminderDraftKey ?? (newSessionCwd ? `new:${newSessionCwd}` : undefined)}
       cwd={session?.cwd ?? newSessionCwd}
       autoFocus={isNew}
       extensionStatuses={extensionStatuses}
@@ -873,6 +885,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {onEduPiAction ? <EduPiReminderInbox onAction={onEduPiAction} onContinue={onContinueReminder} /> : null}
+      {onEduPiAction ? <EduPiRuntimeFlow running={sessionBusy} toolRunning={bashRunning} compacting={isCompacting} activeTools={agentPhase?.kind === "running_tools" ? agentPhase.tools.map(tool => tool.name) : []} /> : null}
+      {reminderTitle ? <div role="status" style={{ padding: "8px 12px", color: "var(--text-muted)" }}>{reminderTitle}</div> : null}
       {onEduPiAction && (session?.id || sessionIdRef.current) && messageCwd ? <EduPiConversationFiles sessionId={(session?.id || sessionIdRef.current)!} cwd={messageCwd} onOpen={onOpenFile} /> : null}
       {isDragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex animate-[drop-zone-in_0.15s_ease_both] items-center justify-center bg-[var(--accent-soft)] backdrop-blur-[1px]">

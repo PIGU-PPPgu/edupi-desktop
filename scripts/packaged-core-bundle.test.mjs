@@ -37,7 +37,7 @@ function destinationRoot() {
   return destination;
 }
 
-test("copies only the pinned Core closure and bundled validation works without .git", { skip: !configuredCoreRoot }, async () => {
+test("copies exactly the Desktop and Runtime closure union and validates without .git", { skip: !configuredCoreRoot }, async () => {
   const destination = destinationRoot();
   try {
     const result = await buildPackagedCoreBundle({ coreRoot: configuredCoreRoot, desktopRoot, destinationRoot: destination });
@@ -47,14 +47,30 @@ test("copies only the pinned Core closure and bundled validation works without .
     assert.equal(fs.existsSync(path.join(destination, ".git")), false);
     assert.equal(fs.existsSync(path.join(destination, "fixtures/bridge/v1.1/fixture-manifest.json")), true);
     const manifest = JSON.parse(fs.readFileSync(path.join(destination, compat.core_runtime.component_manifest_path), "utf8"));
-    const expectedFiles = [
+    const runtimeManifestPath = "contracts/edupi-core-runtime-component-manifest.json";
+    const sourceRuntimeManifest = JSON.parse(fs.readFileSync(path.join(result.sourceRoot, runtimeManifestPath), "utf8"));
+    const runtimeManifest = JSON.parse(fs.readFileSync(path.join(destination, runtimeManifestPath), "utf8"));
+    assert.deepEqual(runtimeManifest, sourceRuntimeManifest);
+    assert.equal(runtimeManifest.entrypoint, "scripts/core_runtime_daemon.mjs");
+    const closure = value => [
+      ...value.modules.map(entry => entry.path),
+      ...value.assets.map(entry => entry.path),
+      ...value.runtime_dependencies.flatMap(dependency => dependency.files.map(entry => entry.path)),
+    ];
+    const expectedFiles = [...new Set([
       compat.core_runtime.component_manifest_path,
-      ...manifest.modules.map((entry) => entry.path),
-      ...manifest.assets.map((entry) => entry.path),
-      ...manifest.runtime_dependencies.flatMap((dependency) => dependency.files.map((entry) => entry.path)),
+      runtimeManifestPath,
+      ...closure(manifest),
+      ...closure(sourceRuntimeManifest),
       compat.contract_identities[0].fixture_manifest_path,
-    ].sort();
+    ])].sort();
     assert.deepEqual(listFiles(destination).sort(), expectedFiles);
+    assert.equal(result.files, expectedFiles.length);
+    for (const entry of [...sourceRuntimeManifest.modules, ...sourceRuntimeManifest.assets, ...sourceRuntimeManifest.runtime_dependencies.flatMap(dependency => dependency.files)]) {
+      const bytes = fs.readFileSync(path.join(destination, entry.path));
+      assert.equal(hash(bytes), entry.sha256, entry.path);
+      assert.equal(bytes.byteLength, entry.size, entry.path);
+    }
     const typebox = manifest.runtime_dependencies.find((dependency) => dependency.name === "typebox");
     const typeboxValue = typebox.files.find((entry) => entry.path === "node_modules/typebox/build/value/index.mjs");
     assert.equal(typeboxValue.sha256, hash(fs.readFileSync(path.join(destination, typeboxValue.path))));

@@ -30,9 +30,11 @@ function notificationCopy(changes: ReturnType<typeof diffTaskCompletionTransitio
 export function useEduPiCompletionMonitor({
   onRefresh,
   intervalMs = DEFAULT_POLL_INTERVAL_MS,
+  notifications = true,
 }: {
   onRefresh: () => void;
   intervalMs?: number;
+  notifications?: boolean;
 }): void {
   useEffect(() => {
     let disposed = false;
@@ -65,7 +67,7 @@ export function useEduPiCompletionMonitor({
         if (completionSnapshotSignature(previous) === completionSnapshotSignature(next)) return;
         const changes = diffTaskCompletionTransitions(previous, next);
         onRefresh();
-        if (changes.length > 0) void notifyDesktop(notificationCopy(changes));
+        if (notifications && changes.length > 0) void notifyDesktop(notificationCopy(changes));
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
       } finally {
@@ -90,5 +92,5 @@ export function useEduPiCompletionMonitor({
       window.removeEventListener("visibilitychange", refreshNow);
       window.removeEventListener("online", refreshNow);
     };
-  }, [intervalMs, onRefresh]);
+  }, [intervalMs, onRefresh, notifications]);
 }

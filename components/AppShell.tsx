@@ -5,6 +5,10 @@ import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useEduPiCompletionMonitor } from "@/hooks/useEduPiCompletionMonitor";
+import { useEduPiReminderNotifications } from "@/hooks/useEduPiReminderNotifications";
+import { bindReminderSession } from "@/lib/edupi-reminder-session";
+import { reminderPrompt } from "@/lib/edupi-reminder-prompt";
+import { readEduPiWorkspace } from "@/lib/edupi-education-client";
 import { SessionSidebar } from "./SessionSidebar";
 import { EduPiAdminPanel, type AdminSectionId } from "./EduPiAdminPanel";
 import { EduPiEducationPanel } from "./EduPiEducationPanel";
@@ -16,7 +20,7 @@ import type { DesktopControlInput } from "@/lib/edupi-desktop-control";
 import type { ComputerUseBridgeResult, ComputerUseInput } from "@/lib/edupi-computer-use";
 import { runComputerUseFromAgent, setComputerUseEnabledNative } from "@/lib/desktop-computer-use";
 import { ChatWindow } from "./ChatWindow";
-import { clearDraft } from "@/lib/draft-store";
+import { clearDraft, getDraft, setDraft } from "@/lib/draft-store";
 import { TabBar, type Tab } from "./TabBar";
 
 // Heavy, rarely-used surfaces are code-split out of the main bundle. The
@@ -621,6 +625,8 @@ export function AppShell() {
     params.set("edupi", "1");
     params.set("view", "chat");
     params.delete("session");
+    params.delete("task");
+    params.delete("reminders");
     router.replace(`/?${params.toString()}`, { scroll: false });
   }, [router, searchParams]);
 
@@ -655,6 +661,11 @@ export function AppShell() {
     router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
   }, [router, hydrateSelectedSession]);
 
+  const [pendingReminderBinding, setPendingReminderBinding] = useState<{ taskId: string; sessionId: string } | null>(null);
+  const retryReminderBinding = useCallback(async (binding: { taskId: string; sessionId: string }) => {
+    try { await bindReminderSession(binding.taskId, binding.sessionId); setPendingReminderBinding(null); }
+    catch { setPendingReminderBinding(binding); }
+  }, []);
   const handleEducationSessionCreated = useCallback((session: SessionInfo) => {
     setNewSessionCwd(null);
     setSelectedSession(session);
@@ -663,8 +674,10 @@ export function AppShell() {
     const params = new URLSearchParams(searchParams.toString());
     params.set("edupi", "1");
     params.set("session", session.id);
+    const taskId = params.get("task");
+    if (taskId && params.get("view") === "chat") void retryReminderBinding({ taskId, sessionId: session.id });
     router.replace(`/?${params.toString()}`, { scroll: false });
-  }, [hydrateSelectedSession, router, searchParams]);
+  }, [hydrateSelectedSession, router, searchParams, retryReminderBinding]);
 
   const handleActivateEducationAgentSession = useCallback(async ({ taskId, sessionId, cwd, view, stage, signal }: { taskId: string; sessionId: string | null; cwd: string; view: "tasks" | "review"; stage: TaskStage; signal: AbortSignal }): Promise<"existing" | "new"> => {
     const requestId = educationActivationRequestIdRef.current + 1;
@@ -773,6 +786,16 @@ export function AppShell() {
       router.replace(`/?${params.toString()}`, { scroll: false });
       return true;
     }
+    if (action.action === "open_document") {
+      const response = await fetch("/api/edupi/workspace", { cache: "no-store" });
+      if (!response.ok) return false;
+      const { data } = await response.json();
+      if (!data.continuity.documents.some((item: { id: string }) => item.id === action.documentId)) return false;
+      params.set("module", "home"); params.set("view", "dashboard"); params.set("document", action.documentId);
+      params.delete("task"); params.delete("stage");
+      router.replace(`/?${params.toString()}`, { scroll: false });
+      return true;
+    }
     if (action.action === "open_task") {
       const response = await fetch("/api/edupi/education", { cache: "no-store" });
       const data = response.ok ? await response.json() as { tasks?: Array<{ id: string | null }> } : {};
@@ -798,6 +821,37 @@ export function AppShell() {
     return true;
   }, [router, searchParams]);
 
+  const [reminderDraft, setReminderDraft] = useState<{ taskId: string; text: string; title: string } | null>(null);
+  const continueReminder = useCallback(async (taskId: string) => {
+    const response = await fetch("/api/edupi/workspace", { cache: "no-store" });
+    if (!response.ok) throw new Error("事项读取失败");
+    const { data } = await response.json();
+    const task = data.tasks.find((item: { id: string }) => item.id === taskId);
+    const document = data.continuity.documents.find((item: { id: string }) => `document:${item.id}` === taskId);
+    if (!task && !document) throw new Error("事项已移除");
+    const title = task?.title || document.title;
+    const sessionId = data.taskSessions[taskId]?.sessionId || null;
+    const workspaceDraftKey = `new:${data.workspace}`;
+    const workspaceDraft = getDraft(workspaceDraftKey);
+    const reminderKey = `reminder:${data.workspace}:${taskId}`;
+    const draftKey = sessionId || reminderKey;
+    const draft = getDraft(draftKey);
+    const result = await handleActivateEducationAgentSession({ taskId, sessionId, cwd: data.workspace, view: "tasks", stage: "run", signal: new AbortController().signal });
+    if (workspaceDraft) setDraft(workspaceDraftKey, workspaceDraft);
+    const key = result === "existing" ? sessionId! : reminderKey;
+    if (draft && (draft.value || draft.images.length)) { setDraft(key, draft); setReminderDraft({ taskId, text: draft.value, title }); }
+    else if (result === "existing") setReminderDraft({ taskId, text: "", title });
+    else {
+      const text = task ? reminderPrompt(task) : `关于${document.title}：\n${document.excerpt}\n来源文件：${document.path}\n\n我想补充：\n`;
+      setDraft(key, { value: text, images: [] });
+      setReminderDraft({ taskId, text, title });
+    }
+    const params = new URLSearchParams({ edupi: "1", module: "home", view: "chat", task: taskId });
+    if (result === "existing" && sessionId) params.set("session", sessionId);
+    router.replace(`/?${params.toString()}`, { scroll: false });
+    chatInputRef.current?.focus();
+  }, [handleActivateEducationAgentSession, router]);
+
   const handleEduPiComputerAction = useCallback((action: ComputerUseInput, expiresAt?: number): Promise<ComputerUseBridgeResult> => {
     return runComputerUseFromAgent(action, expiresAt);
   }, []);
@@ -817,7 +871,8 @@ export function AppShell() {
   const handleEducationProjectionChanged = useCallback(() => {
     setEducationRefreshKey((key) => key + 1);
   }, []);
-  useEduPiCompletionMonitor({ onRefresh: handleEducationProjectionChanged });
+  useEduPiCompletionMonitor({ onRefresh: handleEducationProjectionChanged, notifications: false });
+  useEduPiReminderNotifications();
 
   const handleProjectFilesImported = useCallback(() => {
     setExplorerRefreshKey((k) => k + 1);
@@ -979,6 +1034,16 @@ export function AppShell() {
 
   // Show chat area if a session is selected, or if we have a cwd to start a new session in
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
+  useEffect(() => {
+    if (!edupiChatActive || selectedSession || effectiveNewSessionCwd || !initialSessionRestored) return;
+    const controller = new AbortController();
+    void readEduPiWorkspace({ signal: controller.signal }).then(async bundle => {
+      const response = await fetch("/api/cwd/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd: bundle.data.workspace }), signal: controller.signal });
+      if (!response.ok) throw new Error("教育工作区无法打开");
+      if (!controller.signal.aborted) setNewSessionCwd(bundle.data.workspace);
+    }).catch(() => { /* Education panel exposes workspace errors and retry. */ });
+    return () => controller.abort();
+  }, [edupiChatActive, selectedSession, effectiveNewSessionCwd, initialSessionRestored]);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
   const projectTrustCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
   const showPlaceholder = initialSessionRestored && !showChat;
@@ -1221,6 +1286,8 @@ export function AppShell() {
   );
 
   const edupiChatWindow = (
+    <>
+    {pendingReminderBinding ? <div role="alert">对话已保存，任务关联失败 <button type="button" className="native-button" onClick={() => void retryReminderBinding(pendingReminderBinding)}>重试关联</button></div> : null}
     <ChatWindow
       key={`edupi-chat-${sessionKey}`}
       session={selectedSession}
@@ -1237,12 +1304,17 @@ export function AppShell() {
       onContextUsageChange={handleContextUsageChange}
       onEducationImportCompleted={handleEducationImportCompleted}
       onEduPiAction={handleEduPiAppAction}
+      onContinueReminder={continueReminder}
+      reminderText={reminderDraft?.taskId === searchParams.get("task") ? reminderDraft.text : undefined}
+      reminderTitle={reminderDraft?.taskId === searchParams.get("task") ? reminderDraft.title : undefined}
+      reminderDraftKey={!selectedSession && searchParams.get("task") && effectiveNewSessionCwd ? `reminder:${effectiveNewSessionCwd}:${searchParams.get("task")}` : undefined}
       onEduPiComputerAction={handleEduPiComputerAction}
       onOpenFile={handleOpenLinkedFile}
       onProjectFilesImported={handleProjectFilesImported}
       emptyTitle="新建对话"
       emptySubtitle="从教学任务、材料或课堂问题开始。"
     />
+    </>
   );
 
   return (
@@ -1912,6 +1984,10 @@ export function AppShell() {
               onContextUsageChange={handleContextUsageChange}
               onEducationImportCompleted={handleEducationImportCompleted}
               onEduPiAction={handleEduPiAppAction}
+              onContinueReminder={continueReminder}
+              reminderText={reminderDraft?.taskId === searchParams.get("task") ? reminderDraft.text : undefined}
+              reminderTitle={reminderDraft?.taskId === searchParams.get("task") ? reminderDraft.title : undefined}
+              reminderDraftKey={!selectedSession && searchParams.get("task") && effectiveNewSessionCwd ? `reminder:${effectiveNewSessionCwd}:${searchParams.get("task")}` : undefined}
               onEduPiComputerAction={handleEduPiComputerAction}
               onOpenFile={handleOpenLinkedFile}
               onProjectFilesImported={handleProjectFilesImported}

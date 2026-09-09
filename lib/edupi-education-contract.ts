@@ -370,12 +370,13 @@ export type EducationDataSource = {
 export type EducationContract = {
   teacherMaterials?: Array<{ material_id: string; title: string; kind: string; subject: string | null; class_id: string | null; relative_path: string; available?: boolean }>;
   generatedArtifactsUnavailable?: boolean;
-  generatedArtifacts?: Array<{ artifact_id: string; title: string; relative_path: string; available?: boolean; session_id: string; task_id: string | null; updated_at: string; size_bytes: number }>;
+  generatedArtifacts?: Array<{ artifact_id: string; title: string; relative_path: string; available?: boolean; session_id: string; task_id: string | null; updated_at: string; size_bytes: number; origin?: "preparation" }>;
   scope: "teacher_internal";
   externalSend: false;
   requiresTeacherReview: true;
   workspace: string;
   students: Array<Record<string, unknown>>;
+  studentNameCounts?: Record<string, number>;
   timetable: Array<Record<string, unknown>>;
   observations: EducationObservation[];
   memoryCandidates: EducationMemoryCandidate[];
@@ -1300,11 +1301,12 @@ function normalizeDocuments(value: unknown): EducationDocument[] {
     const title = text(raw.title);
     const excerpt = stripFrontMatter(text(raw.excerpt) ?? "");
     if ((kind !== "daily" && kind !== "weekly" && kind !== "insight" && kind !== "dream") || !path?.startsWith(".edupi/output/") || !title || !excerpt) return [];
+    const reportDate = kind === "daily" ? path.match(/\/(\d{4}-\d{2}-\d{2})\.md$/)?.[1] : null;
     return [{
-      id: text(raw.id) || `document:${index}`,
+      id: reportDate ? `daily:${reportDate}` : text(raw.id) || text(raw.document_id) || `document:${index}`,
       kind,
       title,
-      date: timestamp(raw.date),
+      date: reportDate || timestamp(raw.date),
       path,
       excerpt,
     } satisfies EducationDocument];
@@ -1580,6 +1582,11 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
   const workCandidates = normalizeWorkCandidateTargets(snapshotPayload?.review_targets, tasks, snapshotPayload);
   const workCandidateReceipts = normalizeWorkCandidateReceipts(snapshotPayload?.receipts);
   const workCandidateReviewHistory = normalizeWorkCandidateReviewHistory(snapshotPayload?.review_history);
+  for (const candidate of workCandidates) {
+    const task = tasks.find(item => item.id === candidate.taskId);
+    const history = workCandidateReviewHistory.filter(item => item.target?.targetId === candidate.candidateId);
+    if (task && history.length) task.reviewHistory = history.map(item => ({ review_id:item.reviewId, action:item.decision, reviewed_at:item.reviewedAt, note:item.teacherReview.note, reviewer:item.teacherReview.reviewerId }));
+  }
   const workCases = normalizeWorkCases(snapshotPayload?.work_cases, tasks);
   const continuity = record(workspace.continuity);
   const memories = normalizeMemories({

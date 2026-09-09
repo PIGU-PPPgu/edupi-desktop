@@ -9,6 +9,7 @@ import {
   createCalendarProjection,
   filterTimetableSlots,
   getCalendarViewRange,
+  parseIsoDate,
   shiftCalendarAnchor,
   type CalendarEntry,
   type CalendarItemSelection,
@@ -344,6 +345,13 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
   const [editingCalendarId, setEditingCalendarId] = useState<string | null>(null);
   const [editingTimetableId, setEditingTimetableId] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  useEffect(() => {
+    const requestedDate = parseIsoDate(new URLSearchParams(window.location.search).get("date"));
+    if (requestedDate) setAnchorDate(requestedDate);
+  }, []);
+  useEffect(() => {
+    if (selection?.date) setAnchorDate(selection.date);
+  }, [selection?.date]);
   const projection = useMemo(() => filterProjection(createCalendarProjection(data, { view, anchorDate, query }), contentMode), [anchorDate, contentMode, data, query, view]);
   const filteredTimetable = useMemo(() => filterTimetableSlots(data.timetable, query), [data.timetable, query]);
   const editingCalendarEvent = editingCalendarId

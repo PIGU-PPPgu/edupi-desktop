@@ -5,12 +5,14 @@ import fs from "node:fs";
 import { copyFile, lstat, mkdir, readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { createJiti } from "jiti";
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const COMPONENT_MANIFEST_VERSION = "1";
 const COMPONENT_MANIFEST_ALGORITHM = "sha256-canonical-component-payload-v1";
 const FIXTURE_MANIFEST_RELATIVE_PATH = "fixtures/bridge/v1.1/fixture-manifest.json";
+const RUNTIME_MANIFEST_PATH = "contracts/edupi-core-runtime-component-manifest.json";
 
 function sha256(bytes) {
   return `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`;
@@ -178,7 +180,18 @@ export async function buildPackagedCoreBundle({
   const { files } = componentFiles(manifest);
   await verifyFixtureManifest(external.root, contractIdentity);
   await verifyRuntimeFileClosure(external.root, manifest);
-  const relativeFiles = [...new Set([...files, runtimeIdentity.component_manifest_path, FIXTURE_MANIFEST_RELATIVE_PATH])].sort();
+  const runtimeFiles = [];
+  if (fs.existsSync(path.join(external.root, RUNTIME_MANIFEST_PATH))) {
+    const runtimeManifest = JSON.parse((await readRegularFile(external.root, RUNTIME_MANIFEST_PATH, "Core runtime manifest")).bytes.toString("utf8"));
+    const listed = componentFiles(runtimeManifest);
+    if (runtimeManifest.entrypoint !== "scripts/core_runtime_daemon.mjs") throw new Error("Unexpected Core runtime entrypoint");
+    const generator = await createJiti(import.meta.url).import(path.join(external.root, "scripts/edupi_component_manifest.mjs"));
+    const current = generator.generateComponentManifest({ root: external.root, entrypoint: runtimeManifest.entrypoint, assets: runtimeManifest.assets.map(item => item.path), write: false });
+    if (!isDeepStrictEqual(current, runtimeManifest)) throw new Error("Core runtime component manifest is stale");
+    await verifyRuntimeFileClosure(external.root, runtimeManifest);
+    runtimeFiles.push(...listed.files, RUNTIME_MANIFEST_PATH);
+  }
+  const relativeFiles = [...new Set([...files, ...runtimeFiles, runtimeIdentity.component_manifest_path, FIXTURE_MANIFEST_RELATIVE_PATH])].sort();
   await copyCoreFiles(external.root, destination, relativeFiles);
 
   const bundled = resolveEduPiCoreRoot({

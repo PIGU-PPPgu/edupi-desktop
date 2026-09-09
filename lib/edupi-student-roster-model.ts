@@ -71,7 +71,7 @@ export function parseStudentRosterRows(sourceRows: unknown[][]): StudentRosterRo
   if (students.length === 0 || students.some((student) => !student.name || student.name.length > 120)) throw new StudentRosterError("missing_name", "学生姓名不能为空且不能超过 120 字。");
   if (students.length > 500) throw new StudentRosterError("too_many_students", "一次最多导入 500 名学生。");
   if(students.some(student=>student.className&&student.className.length>120))throw new StudentRosterError("too_large","班级名称不能超过 120 字。");
-  if (new Set(students.map((student) => student.name)).size !== students.length) throw new StudentRosterError("duplicate_name", "名单中存在重复姓名，请先合并。");
+  if (students.some((student,index) => students.some((other,otherIndex) => otherIndex < index && other.name === student.name && (!student.className || !other.className || student.className === other.className)))) throw new StudentRosterError("duplicate_name", "同名学生需要填写不同班级，同班重复记录请先合并。");
   const corePayloadBytes = new TextEncoder().encode(JSON.stringify(students.map((student) => ({ name: student.name, traits: student.traits, parent_notes: student.parentNotes,...(student.className?{class_name:student.className}:{}) })))).byteLength;
   if (corePayloadBytes > 200 * 1024) throw new StudentRosterError("too_large", "名单内容过大，请拆分后导入。");
   return students;
@@ -83,7 +83,7 @@ export function parseStudentRosterCsv(source: string): StudentRosterRow[] {
 }
 
 export function studentRecordKey(student: Record<string, unknown>, index = 0): string {
-  for (const key of ["name", "student_name", "display_name", "student_id", "id"]) {
+  for (const key of ["student_id", "id", "name", "student_name", "display_name"]) {
     const value = student[key];
     if (typeof value === "string" && value.trim()) return value.trim();
   }

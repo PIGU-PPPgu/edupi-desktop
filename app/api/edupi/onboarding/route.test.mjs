@@ -2,11 +2,70 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createJiti } from "jiti";
+import ts from "typescript";
+import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-const { GET, PUT } = await createJiti(import.meta.url, { tsconfigPaths: true })
+const { GET, PUT, POST } = await createJiti(import.meta.url, { tsconfigPaths: true })
   .import("./route.ts");
 const coreRoot = process.env.EDUPI_CORE_ROOT;
 const dataRoot = process.env.EDUPI_DATA_ROOT;
+
+test("manual save refuses a real newer capture before it can accept the other values", { skip: !coreRoot }, async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "edupi-context-race-"));
+  const keys = ["EDUPI_PROJECT_ROOT", "EDUPI_MEMORY_DIR", "EDUPI_OUTPUT_DIR", "EDUPI_LOCK_DIR"];
+  const saved = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  process.env.EDUPI_PROJECT_ROOT = root;
+  process.env.EDUPI_MEMORY_DIR = path.join(root, "memory");
+  process.env.EDUPI_OUTPUT_DIR = path.join(root, "output");
+  process.env.EDUPI_LOCK_DIR = path.join(root, "locks");
+  await mkdir(process.env.EDUPI_OUTPUT_DIR);
+  await mkdir(process.env.EDUPI_MEMORY_DIR);
+  try {
+    const store = await import(pathToFileURL(path.join(coreRoot, "scripts/teacher_review_store.mjs")).href);
+    let latest;
+    let reviews = 0;
+    let race = true;
+    let sequence = 0;
+    const source = await readFile(new URL("./route.ts", import.meta.url), "utf8");
+    const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+    const routeModule = { exports: {} };
+    const dependencies = {
+      "next/server": { NextResponse: { json: (body, init) => new Response(JSON.stringify(body), init) } },
+      "@/lib/edupi-core-snapshot": { resolveEduPiBridgeRoots: () => ({}) },
+      "@/lib/request-security": { isApiRequestAllowed: () => true, hasJsonContentType: () => true },
+      "@/lib/bounded-form-data": { parseJsonWithinLimit: request => request.json() },
+      "@/lib/edupi-context-editor-model": { normalizeTeacherContextValues: values => values },
+      "@/lib/edupi-core-process-client": { runCoreProcess: async ({ request }) => {
+        const a = store.captureTeacherContextProposal({ source_message_id: `manual-a-${sequence++}`, source_text: "手动填写", values: request.values });
+        latest = race ? store.captureTeacherContextProposal({ source_message_id: `chat-b-${sequence++}`, source_text: "对话更新", values: { name: "另一份资料" } }) : a;
+        return { ok: true, context_id: a.context_id, revision: a.context.teacher_review.revision, proposed_values: a.context.proposed_values };
+      } },
+      "@/lib/edupi-education-server": { readEducationContract: async () => ({ teacherContextCandidates: [{ contextId: latest.context_id, revision: latest.context.teacher_review.revision, proposedValues: latest.context.proposed_values, snapshotId: "test-snapshot" }] }), reviewTeacherContextCandidate: async () => { reviews++; return { receipt: {}, data: {} }; } },
+    };
+    new Function("require", "module", "exports", output)(name => dependencies[name] || {}, routeModule, routeModule.exports);
+    const request = () => new Request("http://localhost/api/edupi/onboarding", { method: "POST", body: JSON.stringify({ name: "本次填写" }) });
+    assert.equal((await routeModule.exports.POST(request())).status, 409);
+    assert.equal(reviews, 0);
+    race = false;
+    assert.equal((await routeModule.exports.POST(request())).status, 200);
+    assert.equal(reviews, 1);
+  } finally {
+    for (const key of keys) if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("manual input rejects empty, unknown and oversized fields before Core", async () => {
+  for (const values of [{}, { api_key: "secret" }, { name: " " }, { name: "x".repeat(121) }]) {
+    const response = await POST(new Request("http://localhost/api/edupi/onboarding", { method: "POST", headers: { "Content-Type": "application/json", host: "localhost" }, body: JSON.stringify(values) }));
+    assert.equal(response.status, 400);
+  }
+  const blocked = await POST(new Request("http://localhost/api/edupi/onboarding", { method: "POST", headers: { "Content-Type": "application/json", origin: "https://untrusted.example" }, body: JSON.stringify({name:"测试老师"}) }));
+  assert.equal(blocked.status, 403);
+});
 
 test("returns the read-only teacher context from Core", { skip: !coreRoot || !dataRoot }, async () => {
   const response = await GET();

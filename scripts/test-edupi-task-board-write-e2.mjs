@@ -72,6 +72,21 @@ try {
   assert.equal(chatTask.boardStage, "todo");
   const reloaded = await (await GET()).json();
   assert.ok(reloaded.tasks.some((item) => item.id === chatTask.id));
+  const reminders = await jiti.import("../app/api/edupi/reminders/route.ts");
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const reminderTaskResponse = await POST(request("http://localhost/api/edupi/tasks", "POST", { title: "提醒接口验收", dueDate: today, note: "隔离测试" }));
+  assert.equal(reminderTaskResponse.status, 200);
+  const inboxResponse = await reminders.GET();
+  assert.equal(inboxResponse.status, 200);
+  const inbox = await inboxResponse.json();
+  const reminder = inbox.items.find(item => item.title === "提醒接口验收");
+  assert.ok(reminder);
+  assert.equal(reminder.kind, "due");
+  const again = await (await reminders.GET()).json();
+  assert.equal(again.items.filter(item => item.taskId === reminder.taskId).length, 1);
+  assert.equal((await reminders.POST(request("http://localhost/api/edupi/reminders", "POST", { id: reminder.id, type: "handled" }))).status, 200);
+  const persisted = await (await reminders.GET()).json();
+  assert.equal(persisted.items.find(item => item.id === reminder.id).handled, true);
   console.log(JSON.stringify({ status: "passed", created: 2, moved: ["progress", "review", "done"], invalid_transition_no_write: true, restart_reload: true }, null, 2));
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });

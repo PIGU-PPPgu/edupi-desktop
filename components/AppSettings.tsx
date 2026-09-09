@@ -38,6 +38,7 @@ import {
 } from "@/lib/desktop-native";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
+import { testDesktopNotification } from "@/lib/desktop-notify";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { EduPiHelpPanel } from "./EduPiHelpPanel";
 import { announceComputerUseChanged, COMPUTER_USE_CHANGED_EVENT } from "./EduPiComputerUseStop";
@@ -376,6 +377,8 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [closeQuits, setCloseQuits] = useState(() => getPrefBool(APP_PREF_KEYS.closeQuits, false));
   const [notifyOnComplete, setNotifyOnComplete] = useState(() => getPrefBool(APP_PREF_KEYS.notifyOnComplete, true));
+  const [notificationTest, setNotificationTest] = useState("");
+  const [testingNotification, setTestingNotification] = useState(false);
 
   const checkForUpdates = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -662,6 +665,24 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
                     </div>
                   </span>
                 </label>
+                <button
+                  type="button"
+                  className="native-button"
+                  disabled={testingNotification || !notifyOnComplete}
+                  onClick={async () => {
+                    setTestingNotification(true);
+                    setNotificationTest("");
+                    try {
+                      await testDesktopNotification();
+                      setNotificationTest("已请求发送；未看到时请检查系统通知设置或勿扰模式");
+                    } catch (error) {
+                      setNotificationTest(error instanceof Error ? error.message : "通知测试失败");
+                    } finally { setTestingNotification(false); }
+                  }}
+                >
+                  {testingNotification ? "发送中…" : "测试通知"}
+                </button>
+                {notificationTest ? <p role="status">{notificationTest}</p> : null}
                 <button
                   type="button"
                   className="native-button"

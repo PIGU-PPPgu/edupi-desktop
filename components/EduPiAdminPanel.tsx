@@ -25,7 +25,7 @@ type AdminSnapshot = {
   } | null;
   models: { modelList?: Array<{ id: string; provider: string }>; defaultModel?: { provider: string; modelId: string } | null } | null;
   platform: {
-    teachingSkills?: { summary?: Record<string, number>; skills?: Array<{ skill_id?: string; title?: string; lifecycle_state?: string; trial_count?: number; can_reuse?: boolean }> };
+    teachingSkills?: { mutation_enabled?: boolean; summary?: Record<string, number>; skills?: Array<{ skill_id?: string; title?: string; lifecycle_state?: string; trial_count?: number; can_reuse?: boolean }> };
     connectors?: { connectors?: Array<{ connector_id?: string; label?: string; status?: string; capabilities?: string[] }> };
     agentComputer?: { summary?: Record<string, number>; jobs?: Array<{ job_id?: string; title?: string; job_type?: string; status?: string }> };
     platform?: { tenant_count?: number; multi_harness_ready?: boolean; tenants?: Array<{ tenant_id?: string; label?: string; core_mode?: string; device_count?: number; harness_count?: number }> };
@@ -204,7 +204,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
       </section> : null}
 
       {activeSection === "teachingSkills" ? <section className="edupi-admin-section">
-        <AdminSectionHeader title="教学能力" meta="草稿 · 试用 · 验证 · 发布" onRefresh={refresh} />
+        <AdminSectionHeader title="教学能力" meta={snapshot.platform?.teachingSkills?.mutation_enabled === true ? "草稿 · 试用 · 验证 · 发布" : "当前教学方法不可编辑。"} onRefresh={refresh} />
         <div className="edupi-admin-metrics"><AdminMetric value={snapshot.platform?.teachingSkills?.summary?.published ?? 0} label="已发布" /><AdminMetric value={snapshot.platform?.teachingSkills?.summary?.trial ?? 0} label="试用中" /><AdminMetric value={snapshot.platform?.teachingSkills?.summary?.validated ?? 0} label="已验证" /></div>
         <div className="edupi-admin-list">{snapshot.platform?.teachingSkills?.skills?.slice(0, 20).map((skill) => <div key={skill.skill_id}><span><strong>{skill.title || "教学方法"}</strong><small>{skill.trial_count || 0} 次试用</small></span><em className={skill.can_reuse ? "is-ready" : ""}>{skill.lifecycle_state || "draft"}</em></div>)}{!snapshot.platform?.teachingSkills?.skills?.length ? <div><span><strong>暂无教学能力候选</strong></span><em>0</em></div> : null}</div>
       </section> : null}

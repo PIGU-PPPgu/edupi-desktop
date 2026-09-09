@@ -447,12 +447,17 @@ html.dark .edupi-teacher-shell {
 .edupi-student-drawer > header span { color: var(--ep-blue); font-size: 9px; font-weight: 700; }
 .edupi-student-drawer > header h2 { margin: 5px 0 2px; font-size: 21px; }
 .edupi-student-drawer > header p { margin: 0; color: var(--ep-muted); font-size: 10px; }
-.edupi-student-drawer__actions { display: flex; align-items: center; gap: 5px; }
-.edupi-student-drawer__actions button { height: 28px; padding: 0 8px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface); color: var(--ep-muted); cursor: pointer; font-size: 9px; }
+.edupi-student-drawer__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 5px; }
+.edupi-student-drawer__actions button { height: 28px; flex-shrink: 0; white-space: nowrap; padding: 0 8px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface); color: var(--ep-muted); cursor: pointer; font-size: 11px; }
 .edupi-student-drawer__actions button:hover { border-color: var(--ep-border-strong); color: var(--ep-text); }
 .edupi-student-drawer__actions button.is-delete { border-color: color-mix(in srgb, var(--ep-red) 35%, var(--ep-border)); color: var(--ep-red); }
 .edupi-student-drawer__actions button:disabled { cursor: not-allowed; opacity: .45; }
 .edupi-student-drawer__actions button:last-child { width: 28px; padding: 0; border-color: transparent; background: transparent; font-size: 18px; }
+.edupi-delete-confirmation { width: min(420px, calc(100vw - 32px)); padding: 24px; border: 1px solid var(--ep-border); border-radius: 10px; background: var(--ep-surface); color: var(--ep-text); }
+.edupi-delete-confirmation h2 { margin: 0 0 24px; font-size: 18px; }
+.edupi-delete-confirmation > div { display: flex; justify-content: flex-end; gap: 8px; }
+.edupi-delete-confirmation button { padding: 8px 16px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface-soft); color: var(--ep-text); cursor: pointer; }
+.edupi-delete-confirmation button.is-delete { color: var(--ep-red); }
 .edupi-student-drawer__metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--ep-border); }
 .edupi-student-drawer__metrics > div { min-height: 62px; padding: 12px; border-right: 1px solid var(--ep-border); }
 .edupi-student-drawer__metrics > div:last-child { border-right: 0; }

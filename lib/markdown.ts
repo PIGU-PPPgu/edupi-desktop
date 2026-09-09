@@ -14,6 +14,11 @@ const markdownSanitizeSchema = {
   strip: [...(defaultSchema.strip || []), "iframe", "object", "style", "form"],
 };
 
+export function educationDocumentBody(markdown: string): string {
+  const header = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  return header && /^generated_by:\s*EduPi\s*$/m.test(header[1]) ? markdown.slice(header[0].length).trimStart() : markdown;
+}
+
 export function normalizeDisplayMath(markdown: string): string {
   const lineBreak = markdown.includes("\r\n") ? "\r\n" : "\n";
   const lines = markdown.split(/\r?\n/);

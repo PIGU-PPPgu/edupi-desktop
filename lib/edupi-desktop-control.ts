@@ -3,6 +3,7 @@ import type { TaskStage, WorkbenchView } from "./edupi-workbench";
 export type DesktopControlInput =
   | { action: "navigate"; view: WorkbenchView }
   | { action: "open_task"; taskId: string; stage?: TaskStage }
+  | { action: "open_document"; documentId: string }
   | { action: "open_context" }
   | { action: "open_settings" }
   | { action: "set_inspector"; open: boolean }
@@ -39,6 +40,10 @@ export function validateDesktopCommand(value: unknown): DesktopControlInput {
     const taskId = identifier(input.taskId, "taskId");
     if (input.stage !== undefined && (typeof input.stage !== "string" || !STAGES.has(input.stage as TaskStage))) throw new Error("不支持的任务阶段");
     return { action: "open_task", taskId, ...(input.stage ? { stage: input.stage as TaskStage } : {}) };
+  }
+  if (input.action === "open_document") {
+    exactKeys(input, ["action", "documentId"]);
+    return { action: "open_document", documentId: identifier(input.documentId, "documentId") };
   }
   if (input.action === "open_context" || input.action === "open_settings" || input.action === "close_panel" || input.action === "show_window") {
     exactKeys(input, ["action"]);
