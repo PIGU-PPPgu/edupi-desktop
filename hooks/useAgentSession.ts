@@ -148,7 +148,7 @@ export type BuiltinSlashCommandResult =
   | { handled: false }
   | { handled: true; message?: string; error?: string; action?: "openSessionStats" };
 
-export type EducationImportToolName = "calendar_import" | "timetable_import" | "edupi_create_task";
+export type EducationImportToolName = "calendar_import" | "timetable_import" | "edupi_create_task" | "edupi_update_task";
 
 export interface UseAgentSessionOptions {
   session: SessionInfo | null;
@@ -1469,7 +1469,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const name = educationToolCallsRef.current.get(id);
         educationToolCallsRef.current.delete(id);
         if (name === "edupi_student_records") window.dispatchEvent(new Event("edupi-student-records-changed"));
-        if (name === "calendar_import" || name === "timetable_import" || name === "edupi_create_task") {
+        if (name === "calendar_import" || name === "timetable_import" || name === "edupi_create_task" || name === "edupi_update_task") {
           onEducationImportCompleted?.(name);
         }
         setAgentPhase((prev) => {

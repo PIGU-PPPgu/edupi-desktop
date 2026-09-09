@@ -9,6 +9,7 @@ export type EduPiCompletionSnapshotItem = {
   contentStatus: string;
   completion: EduPiCompletionKind | null;
   identity: string;
+  taskState: string;
 };
 
 export type EduPiCompletionSnapshot = Record<string, EduPiCompletionSnapshotItem>;
@@ -39,12 +40,13 @@ export function completionSnapshot(tasks: TeacherTask[], workspace: string): Edu
       contentStatus: normalizedContentStatus(task),
       completion: completionState(task),
       identity: completionIdentity(task, workspace),
+      taskState: JSON.stringify([task.status, task.revision, task.boardStage, task.boardRevision, task.boardUpdatedAt]),
     }])
     .sort(([left], [right]) => left.localeCompare(right)));
 }
 
 export function completionSnapshotSignature(snapshot: EduPiCompletionSnapshot): string {
-  return JSON.stringify(Object.values(snapshot).map((item) => [item.taskId, item.identity]));
+  return JSON.stringify(Object.values(snapshot).map((item) => [item.taskId, item.identity, item.taskState]));
 }
 
 export function diffTaskCompletionTransitions(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useRef, useState, type ReactNode, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { EducationContract, EducationWorkCandidate, EducationWorkCase, TeacherTask } from "@/lib/edupi-education-contract";
 import { workCaseForTask, workCaseStateLabel } from "@/lib/edupi-work-case";
 import { projectTaskBoard, taskBoardLane, taskBoardTargets, type TaskBoardLaneId } from "@/lib/edupi-task-board";
@@ -15,6 +15,7 @@ type Props = {
   onTaskDetail: (task: TeacherTask) => void;
   onCreateTask: (input: CreateTaskInput) => Promise<void>;
   onMoveTask: (task: TeacherTask, stage: TaskBoardLaneId) => Promise<void>;
+  mergeSuggestions?: ReactNode;
 };
 
 const stageLabels: Record<TaskBoardLaneId, string> = { todo: "待处理", progress: "进行中", review: "待我确认", done: "已完成" };
@@ -87,7 +88,7 @@ function TaskCard({ task, session, lane, candidate, workCase, busy, selected, dr
   );
 }
 
-export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, onMoveTask }: Props) {
+export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, onMoveTask, mergeSuggestions }: Props) {
   const [category, setCategory] = useState<"all" | TaskCategoryId>("all");
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -186,6 +187,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
         <div><span>教师工作</span><h1>工作区</h1><p>{query.trim() ? `找到 ${visibleCount} 项` : `${data.tasks.length} 项任务`}</p></div>
         <div className="edupi-workspace-board__actions"><span className="edupi-workspace-board__mode"><i aria-hidden="true" />Core 回执流转</span><button type="button" onClick={() => setCreateOpen((open) => !open)}>新建任务</button></div>
       </header>
+      {mergeSuggestions}
       <div className="edupi-task-category-segment" role="group" aria-label="任务类型">
         <button type="button" className={category === "all" ? "is-active" : ""} onClick={() => setCategory("all")} aria-pressed={category === "all"}>全部 <span>{data.tasks.length}</span></button>
         {TASK_CATEGORY_CONFIG.map((item) => { const count = data.tasks.filter((task) => taskCategory(task) === item.id).length; return count > 0 ? <button type="button" key={item.id} className={category === item.id ? "is-active" : ""} onClick={() => setCategory(item.id)} aria-pressed={category === item.id}>{item.label} <span>{count}</span></button> : null; })}
