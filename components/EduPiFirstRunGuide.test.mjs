@@ -2,12 +2,38 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createJiti } from "jiti";
+import ts from "typescript";
+import vm from "node:vm";
 
 const guide = await readFile(new URL("./EduPiFirstRunGuide.tsx", import.meta.url), "utf8");
 const shell = await readFile(new URL("./AppShell.tsx", import.meta.url), "utf8");
 const prefs = await readFile(new URL("../lib/app-prefs.ts", import.meta.url), "utf8");
 const css = await readFile(new URL("../app/edupi-first-run.css", import.meta.url), "utf8");
 const rail = await readFile(new URL("./EduPiNavigationRail.tsx", import.meta.url), "utf8");
+
+test("a resumed guide goes back to model setup, clears feedback and persists the previous step", async () => {
+  let savedStep = "1", modelOpened = 0;
+  const mount = () => {
+    const values = []; let cursor = 0;
+    const react = { useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === "function" ? initial() : initial; return [values[i], next => { values[i] = typeof next === "function" ? next(values[i]) : next; }]; }, useRef(value) { const i = cursor++; values[i] ??= { current: value }; return values[i]; }, useEffect() {} };
+    const jsx = (type, props) => ({ type, props }); const exports = {};
+    vm.runInNewContext(ts.transpileModule(guide, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, require: name => name === "react" ? react : name.includes("jsx-runtime") ? { jsx, jsxs: jsx } : name.includes("app-prefs") ? { APP_PREF_KEYS: { edupiFirstRunGuideStep: "step" }, getPref: () => savedStep, setPref: (_key, value) => { savedStep = value; } } : { readEduPiWorkspace: async () => ({ context: { configured: false } }) } });
+    const render = () => { cursor = 0; return exports.EduPiFirstRunGuide({ onOpenModels: () => modelOpened++, onOpenContext() {}, onSkip() {} }); };
+    const nodes = value => !value || typeof value !== "object" ? [] : Array.isArray(value) ? value.flatMap(nodes) : [value, ...nodes(value.props?.children)];
+    return { render, button: text => nodes(render()).find(node => node.type === "button" && node.props.children === text), nodes: () => nodes(render()) };
+  };
+  const component = mount();
+  component.button("打开教师资料").props.onClick();
+  component.button("检查并继续").props.onClick(); await new Promise(resolve => setImmediate(resolve));
+  assert.ok(component.nodes().some(node => node.props?.role === "status"));
+  component.button("上一步").props.onClick();
+  assert.equal(savedStep, "0");
+  assert.equal(component.button("上一步"), undefined);
+  assert.equal(component.render().props.className, "edupi-first-run");
+  assert.equal(component.nodes().some(node => node.props?.role === "status"), false);
+  const resumed = mount(); resumed.button("打开 AI 与模型").props.onClick();
+  assert.equal(modelOpened, 1);
+});
 
 test("setup readiness follows saved roster and actual preparation artifacts", async () => {
   const { isGuideStepReady } = await createJiti(import.meta.url, {jsx:{runtime:"automatic"},tsconfigPaths:true}).import("./EduPiFirstRunGuide.tsx");

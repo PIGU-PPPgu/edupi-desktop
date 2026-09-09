@@ -69,6 +69,7 @@ export function EduPiFirstRunGuide({
   };
 
   const advance = () => { setFeedback(null); setOpened(false); setPref(APP_PREF_KEYS.edupiFirstRunGuideStep, String(step + 1)); setStep((value) => value + 1); };
+  const previous = () => { if (checking || step === 0) return; setFeedback(null); setOpened(false); setPref(APP_PREF_KEYS.edupiFirstRunGuideStep, String(step - 1)); setStep((value) => value - 1); };
   const runPrimary = async () => {
     if (step === STEPS.length - 1) {
       setPref(APP_PREF_KEYS.edupiFirstRunGuideStep, "0");
@@ -117,6 +118,7 @@ export function EduPiFirstRunGuide({
         <button ref={primaryRef} type="button" className="edupi-first-run__primary" disabled={checking} onClick={() => void runPrimary()}>
           {checking ? "检查中…" : opened ? "检查并继续" : current.action}
         </button>
+        {step > 0 ? <button type="button" className="edupi-first-run__skip" disabled={checking} onClick={previous}>上一步</button> : null}
         {step < STEPS.length - 1 ? <button type="button" className="edupi-first-run__skip" disabled={checking} onClick={advance}>跳过此步</button> : null}
         <button type="button" className="edupi-first-run__skip" onClick={() => leaveGuide(onSkip)}>稍后再说</button>
       </section>

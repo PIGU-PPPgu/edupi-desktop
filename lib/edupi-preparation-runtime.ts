@@ -1,6 +1,7 @@
 import { resolveEduPiBridgeRoots } from "./edupi-core-snapshot";
 import { readEducationContract } from "./edupi-education-server";
 import { ensureEduPiRuntime, getPendingEduPiRuntime } from "./edupi-runtime-supervisor";
+import { pumpBackgroundJobs } from "./edupi-background-jobs";
 
 type PreparationStatus = { state: "idle" | "running" | "ready" | "error"; updatedAt: string | null; prepared: number; error: string | null; taskId?: string | null };
 const shared = globalThis as typeof globalThis & { __edupiPreparationStatus?: PreparationStatus };
@@ -55,13 +56,14 @@ export async function startPreparation({ taskId = null }: { taskId?: string | nu
     if (taskId) {
       const data = await readEducationContract();
       const candidate = data.workCandidates.find(item => item.taskId === taskId);
-      if (!candidate) throw new Error("请先选择可准备的课程任务");
-      payload = { task_id: taskId, expected_revision: candidate.revision };
+      const revision = candidate?.revision ?? data.tasks?.find(item => item.id === taskId)?.revision;
+      if (revision === undefined) throw new Error("请先选择可准备的任务");
+      payload = { task_id: taskId, expected_revision: revision };
     }
     let result = await host.call(taskId ? "prepare_task" : "prepare_due", payload);
     if (taskId && !result.ok && result.error_code === "stale_revision") {
       const candidate = (await readEducationContract()).workCandidates.find(item => item.taskId === taskId);
-      if (!candidate) throw new Error("请先选择可准备的课程任务");
+      if (!candidate) throw new Error("请先选择可准备的任务");
       result = await host.call("prepare_task", { task_id: taskId, expected_revision: candidate.revision });
     }
     if (!result.ok) throw failure(result);
@@ -86,6 +88,7 @@ export async function startPreparation({ taskId = null }: { taskId?: string | nu
 export async function ensurePreparation(): Promise<PreparationStatus> {
   try {
     await ensureEduPiRuntime(resolveEduPiBridgeRoots());
+    void pumpBackgroundJobs().catch(() => console.warn("[edupi background] startup recovery unavailable"));
     return preparationStatus();
   } catch {
     return { ...current(), state: "error", error: "备课执行尚未连接" };
