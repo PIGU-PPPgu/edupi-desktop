@@ -34,18 +34,26 @@ export function writtenToolArtifactPath(event: { type: string; toolCallId?: unkn
 
 export function completedSessionFiles(entries: Array<Record<string, unknown>>, root: string): string[] {
   const writes = new Map<string, string>();
+  const nativeCalls = new Map<string, string>();
   const completed = new Set<string>();
   for (const entry of entries) {
-    const message = entry.message as { role?: string; content?: Array<{ type?: string; name?: string; id?: string; arguments?: { path?: string } }>; toolCallId?: string; isError?: boolean } | undefined;
+    const message = entry.message as { role?: string; content?: Array<{ type?: string; name?: string; id?: string; arguments?: { path?: string } }>; toolCallId?: string; isError?: boolean; details?: { path?: unknown } } | undefined;
     if (message?.role === "assistant" && Array.isArray(message.content)) {
       for (const block of message.content) {
+        if (block.type === "toolCall" && block.id && ["edupi_make_ppt", "edupi_make_document", "try_teaching_method"].includes(block.name || "")) nativeCalls.set(block.id, block.name!);
         if (block.type === "toolCall" && ["write", "edit", "edupi_make_ppt", "edupi_make_document"].includes(block.name || "") && block.id && typeof block.arguments?.path === "string") {
           const file = resolve(root, block.arguments.path);
           if (extensions.has(extname(file).toLowerCase())) writes.set(block.id, file);
         }
       }
     }
-    if (message?.role === "toolResult" && !message.isError && message.toolCallId && writes.has(message.toolCallId)) completed.add(writes.get(message.toolCallId)!);
+    if (message?.role === "toolResult" && message.toolCallId) {
+      const nativePath = nativeToolArtifactPath({ type: "tool_execution_end", toolName: nativeCalls.get(message.toolCallId), isError: message.isError, result: message });
+      const file = nativePath ? resolve(root, nativePath) : writes.get(message.toolCallId);
+      if (!message.isError && file && extensions.has(extname(file).toLowerCase())) completed.add(file);
+      writes.delete(message.toolCallId);
+      nativeCalls.delete(message.toolCallId);
+    }
   }
   return [...completed];
 }
