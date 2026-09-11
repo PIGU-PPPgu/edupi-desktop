@@ -7,6 +7,7 @@
 - 新配套 Desktop pin 的组件清单为 `sha256:549aedb48143e320c913698c15000a742d44b8a4b5f70f0e5746d217f3807e8a`。C1/C2/C3 E2 均 GREEN：C1 为 1 observation/1 candidate/1 memory/2 receipts，C2 为 4 条教师上下文审核历史，C3 为 9 个工作候选/7 条工作审核回执；均覆盖重放、重启读回、过期快照或版本无写入、`external_send=false`。
 - R04 课前准备 E2 通过 6 个课次、4 个 `draft_ready` 工作包、每包 4 份产物；chat-capture 与 living-flow 通过。C6 材料 intake/识别、任务板直接完成、记忆更新、学生资料/事件、实体删除 E2 也通过。任务历史现在保留真实审核回执，直接待处理→完成符合已确认的教师看板规则。
 - 新打包 `EduPi.app` 冷启动首个状态请求约 8.3 秒；Core、教育投影、Kernel 均 ready，真实工作区为 50 名学生、9 个课表、43 个校历节点、237 个任务，原生窗口可见。构建未生成签名 updater，因为环境没有 `TAURI_SIGNING_PRIVATE_KEY`；未发布。
+- R14 同机补测：工作台首页改用 `/api/edupi/status?summary=1`，新包冷启动到 summary 响应约 2.3 秒，响应体约 1.1KB；完整管理中心状态仍保留约 55.7KB、50 条 Kernel run。新包 Core/projection 仍 ready；这只是 macOS 本机基线，未替代 Windows 或浮层交互验收。
 - R01/R02 普通工具完整矩阵、安装版文件操作和简报对象的原生点击仍待验收；R03 真实休眠/唤醒和安装版定时补跑、R04 内容质量人工核对、R05 系统通知点击、R06 零 API 首次备课，以及 R12/R17 安装版/大班交互仍未勾为完成。R07 依用户确认跳过，R15/R16 外部账号与跨平台发布继续保留外部阻塞。
 
 ## 2026-09-11 桌面启动故障续接

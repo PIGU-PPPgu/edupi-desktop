@@ -4,8 +4,9 @@ import { EduPiSnapshotError, readEduPiCoreHealth, readEduPiEducationSnapshot, re
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const summaryOnly = request ? new URL(request.url).searchParams.get("summary") === "1" : false;
     const roots = resolveEduPiBridgeRoots();
     const { health } = await readEduPiCoreHealth({ roots, requestId: `desktop-status-health-${Date.now().toString(36)}` });
     const [snapshot, kernel] = await Promise.all([
@@ -21,6 +22,16 @@ export async function GET() {
     };
     const supportedCommands = Array.isArray(health.supported_commands) ? health.supported_commands : [];
     const supportedProjections = Array.isArray(health.supported_projections) ? health.supported_projections : [];
+    const kernelBody = summaryOnly
+      ? {
+        status: "ready",
+        projection_kind: kernel.projection.projection_kind,
+        state_version: kernel.projection.state_version,
+        updated_at: kernel.projection.updated_at,
+        summary: kernel.projection.summary,
+        runs: [],
+      }
+      : { status: "ready", ...kernel.projection };
     return NextResponse.json({
       scope: "teacher_internal",
       externalSend: false,
@@ -35,7 +46,7 @@ export async function GET() {
         supportedProjections,
       },
       projection: { status: "ready", reason: null, projection: "education_workspace", counts },
-      kernel: { status: "ready", ...kernel.projection },
+      kernel: kernelBody,
     });
   } catch (error) {
     const reason = error instanceof EduPiCoreProcessError
