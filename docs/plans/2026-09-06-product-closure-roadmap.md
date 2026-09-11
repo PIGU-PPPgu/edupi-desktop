@@ -3,7 +3,7 @@
 ## 2026-09-12 R03–R17 续接验收
 
 - R03 Core 调度修复已在独立配套 worktree 完成并固定为 `18b37b8611b2745d09db55d1d1b41fa185e8b856`；`rhythm_heartbeat` 只把当前周期实际同步的候选传给 authoritative 列表，避免真实 238 项学期计划撞上 canonical work-candidate 200 项容量。205 项未来计划回归、节奏生命周期、层契约和 Desktop bridge/manifest 检查通过。
-- Desktop 配套修复已提交为 `50153d6`，包含 bundled Core 根目录隔离、Core pin 同步、产物登记任务绑定、聊天文件刷新和 C1–C3 E2 admission 生命周期修正。
+- Desktop 配套修复已提交为 `50153d6`，R14 状态摘要优化提交为 `6712d50`；包含 bundled Core 根目录隔离、Core pin 同步、产物登记任务绑定、聊天文件刷新和 C1–C3 E2 admission 生命周期修正。
 - 新配套 Desktop pin 的组件清单为 `sha256:549aedb48143e320c913698c15000a742d44b8a4b5f70f0e5746d217f3807e8a`。C1/C2/C3 E2 均 GREEN：C1 为 1 observation/1 candidate/1 memory/2 receipts，C2 为 4 条教师上下文审核历史，C3 为 9 个工作候选/7 条工作审核回执；均覆盖重放、重启读回、过期快照或版本无写入、`external_send=false`。
 - R04 课前准备 E2 通过 6 个课次、4 个 `draft_ready` 工作包、每包 4 份产物；chat-capture 与 living-flow 通过。C6 材料 intake/识别、任务板直接完成、记忆更新、学生资料/事件、实体删除 E2 也通过。任务历史现在保留真实审核回执，直接待处理→完成符合已确认的教师看板规则。
 - 新打包 `EduPi.app` 冷启动首个状态请求约 8.3 秒；Core、教育投影、Kernel 均 ready，真实工作区为 50 名学生、9 个课表、43 个校历节点、237 个任务，原生窗口可见。构建未生成签名 updater，因为环境没有 `TAURI_SIGNING_PRIVATE_KEY`；未发布。
