@@ -1,5 +1,25 @@
 # EduPi 产品闭环 PR 路线图
 
+## 2026-09-12 R03–R17 续接验收
+
+- R03 Core 调度修复已在独立配套 worktree 完成并固定为 `18b37b8611b2745d09db55d1d1b41fa185e8b856`；`rhythm_heartbeat` 只把当前周期实际同步的候选传给 authoritative 列表，避免真实 238 项学期计划撞上 canonical work-candidate 200 项容量。205 项未来计划回归、节奏生命周期、层契约和 Desktop bridge/manifest 检查通过。
+- 新配套 Desktop pin 的组件清单为 `sha256:549aedb48143e320c913698c15000a742d44b8a4b5f70f0e5746d217f3807e8a`。C1/C2/C3 E2 均 GREEN：C1 为 1 observation/1 candidate/1 memory/2 receipts，C2 为 4 条教师上下文审核历史，C3 为 9 个工作候选/7 条工作审核回执；均覆盖重放、重启读回、过期快照或版本无写入、`external_send=false`。
+- R04 课前准备 E2 通过 6 个课次、4 个 `draft_ready` 工作包、每包 4 份产物；chat-capture 与 living-flow 通过。C6 材料 intake/识别、任务板直接完成、记忆更新、学生资料/事件、实体删除 E2 也通过。任务历史现在保留真实审核回执，直接待处理→完成符合已确认的教师看板规则。
+- 新打包 `EduPi.app` 冷启动首个状态请求约 8.3 秒；Core、教育投影、Kernel 均 ready，真实工作区为 50 名学生、9 个课表、43 个校历节点、237 个任务，原生窗口可见。构建未生成签名 updater，因为环境没有 `TAURI_SIGNING_PRIVATE_KEY`；未发布。
+- R01/R02 普通工具完整矩阵、安装版文件操作和简报对象的原生点击仍待验收；R03 真实休眠/唤醒和安装版定时补跑、R04 内容质量人工核对、R05 系统通知点击、R06 零 API 首次备课，以及 R12/R17 安装版/大班交互仍未勾为完成。R07 依用户确认跳过，R15/R16 外部账号与跨平台发布继续保留外部阻塞。
+
+## 2026-09-11 桌面启动故障续接
+
+本节的 Core pin、E2 状态和打包结果已由上方 2026-09-12 记录取代；以下保留故障定位过程。
+
+- 桌面启动故障已复现并定位为三处配套漂移：开发启动脚本把默认旁路 `edupi` 数据目录误当成 Core 代码目录；被 `.gitignore` 忽略的 `src-tauri/resources/edupi-core` 仍是旧清单；Desktop 健康能力清单漏掉 Core 已提供的 `workspace-resources` 与 `generated-artifacts`。
+- 已修复 `scripts/desktop-dev.mjs` 的默认根目录映射，默认数据根与锁定的 bundled Core 分离；显式 `EDUPI_CORE_ROOT` 仍保留为外部开发覆盖。已补启动根目录回归测试。
+- 已用锁定 Core `1630ebcbf358b673379f67cfa6ec2525e0b43ba7` 重新生成本地桌面资源，组件清单哈希与 `contracts/edupi-core-compat.json` 的 `sha256:5a4d…` 一致；已补健康能力清单并加回归测试。
+- 开发版实际重启后，`/api/edupi/workspace`、`/api/edupi/kernel`、`/api/edupi/platform`、`/api/edupi/memory-scopes` 连续返回 200；本地打包的 `EduPi.app` 通过 `open` 启动，内置服务监听 38472，原生窗口可见，以上四个接口及 `/api/edupi/status` 返回有效工作区/投影。
+- 本地已生成 `EduPi.app`、DMG 和 updater tar.gz；构建末尾因当前环境未提供 `TAURI_SIGNING_PRIVATE_KEY` 未生成签名 updater 产物，未发布。Windows/Linux 实机安装与升级仍未验收。
+- R01/R02 续接：产物登记在缺少显式 `task_id` 时现在读取 Desktop 任务会话绑定，并按 canonical data root 定位绑定索引；真实 Core 分进程测试验证了“绑定任务 → 登记文件 → 列表回读”的 `task_id` 保留，覆盖 macOS `/var` 与 `/private/var` 路径别名。聊天文件面板在 Agent 完成后自动刷新。普通工具完整矩阵、冷启动页面刷新和安装版文件入口仍待验收。
+- R03/R04 配套 E2：聊天捕获、课前准备和 living-flow 隔离验证均通过，使用 Core `1630ebc`；课前准备覆盖 6 个课次、4 个 draft_ready 工作包和每包 4 份产物，聊天捕获为 1 条 observation/1 条 candidate。旧 C1 review E2 入口仍返回 `C1ReviewError(unavailable)`，不将其标为通过。
+
 ## 2026-09-10 续接
 
 - R01/R02：历史补录漏掉仅在工具结果中返回路径的产物，已复现并修复。补录读取成功工具结果的实际路径，覆盖教学方法工具，排除失败及无关工具结果。7项定向检查全部通过，包含真实Core分进程登记、回读、重复补录去重；不代表普通工具完整矩阵或安装版已验收。

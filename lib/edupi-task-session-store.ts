@@ -1,10 +1,18 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { chmod, copyFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import lockfile from "proper-lockfile";
 import { bindTaskSessionRecord, normalizeTaskSessionStore, type TaskSessionStore } from "./edupi-task-sessions";
 
 const EMPTY_STORE: TaskSessionStore = { schema_version: 1, bindings: [] };
+
+export function taskSessionFile(dataRoot: string): string {
+  const canonicalRoot = realpathSync(dataRoot);
+  const rootHash = createHash("sha256").update(canonicalRoot).digest("hex");
+  return join(getAgentDir(), "edupi-desktop", "task-session-bindings", `${rootHash}.json`);
+}
 
 async function readExisting(filePath: string): Promise<TaskSessionStore> {
   try {
@@ -33,6 +41,11 @@ async function ensureStoreFile(filePath: string): Promise<void> {
 
 export async function readTaskSessionFile(filePath: string): Promise<TaskSessionStore> {
   return readExisting(filePath);
+}
+
+export async function findTaskIdForSession(filePath: string, sessionId: string): Promise<string | null> {
+  const binding = (await readTaskSessionFile(filePath)).bindings.find((item) => item.session_id === sessionId);
+  return binding?.task_id || null;
 }
 
 export async function bindTaskSessionFile(

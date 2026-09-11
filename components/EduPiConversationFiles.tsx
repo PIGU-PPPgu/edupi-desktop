@@ -12,6 +12,11 @@ export function EduPiConversationFiles({ sessionId, taskId, cwd, onOpen }: { ses
   const [busy, setBusy] = useState(false);
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
+    const refreshFiles = () => setRefresh(value => value + 1);
+    window.addEventListener("edupi-artifacts-updated", refreshFiles);
+    return () => window.removeEventListener("edupi-artifacts-updated", refreshFiles);
+  }, []);
+  useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
     fetch("/api/edupi/artifacts", { signal: controller.signal, cache: "no-store" }).then(async response => {

@@ -7,8 +7,9 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const HARD_TIMEOUT_MS = 60_000;
-const EXPECTED_CORE_COMMIT = "cd68ca6d207f295f759d60dcc86a6be1656b3b32";
-const EXPECTED_COMPONENT_MANIFEST_HASH = "sha256:03055a399d8e0f6d743823da36a48bc350b93c438c52367b83efbd7a3e245e10";
+const COMPAT_MANIFEST = JSON.parse(fs.readFileSync(new URL("../contracts/edupi-core-compat.json", import.meta.url), "utf8"));
+const EXPECTED_CORE_COMMIT = COMPAT_MANIFEST.core_runtime.core_commit;
+const EXPECTED_COMPONENT_MANIFEST_HASH = COMPAT_MANIFEST.core_runtime.component_manifest_hash;
 const EXPECTED_FIXTURE_MANIFEST_HASH = "sha256:b2b00ae6252d953c285260e8794b81c7ada3b0bb7132f67802e4bee99ae3bbfb";
 const EXPECTED_SCHEMA_HASH = "sha256:41798fb7b5a2b30f09c2dcf07687193a0efbeade93667f47e6fd0c33e70760a3";
 const EXPECTED_COMMANDS = ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage", "update_memory"];
@@ -49,6 +50,24 @@ const previousEnvironment = new Map(ENV_KEYS.map((key) => [key, process.env[key]
 let temporaryDataRoot = null;
 let timeoutHandle = null;
 let phase = "start";
+let coreWriterModules = null;
+
+async function withCoreWriterAdmission(callback) {
+  const dataRoot = fs.realpathSync(process.env.EDUPI_PROJECT_ROOT);
+  const root = fs.realpathSync(process.env.EDUPI_CORE_ROOT);
+  coreWriterModules ||= {
+    root: await import(path.join(root, "scripts", "core_runtime_root.mjs")),
+    admission: await import(path.join(root, "scripts", "core_runtime_writer_admission.mjs")),
+  };
+  const prepared = coreWriterModules.root.prepareCoreRuntimeRoot(dataRoot);
+  assert.equal(prepared.ok, true, JSON.stringify(prepared));
+  const lease = await coreWriterModules.admission.acquireCoreRuntimeWriterAdmission({ root: prepared, kind: "legacy_c3_e2", busyTimeoutMs: 250 });
+  try {
+    return await callback();
+  } finally {
+    await lease.release();
+  }
+}
 
 function restoreEnvironment() {
   for (const [key, value] of previousEnvironment) {
@@ -115,6 +134,7 @@ function assertCoreFiles(root, memoryDir, outputDir) {
     ".edupi/output/rhythm_plan.json.bak",
     ".edupi/output/teacher_review_state.json",
     ".edupi/output/teacher_review_state.json.bak",
+    ".edupi/runtime/core-runtime-writer-admission-v1.sqlite",
   ]);
   assert.deepEqual(files.filter((file) => !allowed.has(file)), [], "C3 created an out-of-scope file");
   assert.deepEqual(listFiles(memoryDir), ["calendar.json"]);
@@ -206,7 +226,14 @@ function assertWorkCandidateJoin(snapshotResult, data, id, expected = expectedTa
   assert.equal(compatibilityTasks[0].teacher_review.revision, candidate.revision);
   assert.deepEqual(compatibilityTasks[0].teacher_review, rawTarget.teacher_review);
   assert.deepEqual(compatibilityTasks[0].evidence_ids, candidate.evidenceIds);
-  assert.equal(task.reviewHistory.length, 0, "legacy task history remains separate");
+  assert.ok(Array.isArray(task.reviewHistory), "task review history must remain an array");
+  if (candidate.teacherReview.reviewedAt && candidate.teacherReview.reviewerId) {
+    const latestTaskReview = task.reviewHistory.at(-1);
+    assert.ok(latestTaskReview, `a reviewed candidate must expose its task history: ${candidate.candidateId} status=${candidate.status} reviewedAt=${candidate.teacherReview.reviewedAt}`);
+    assert.equal(latestTaskReview.reviewed_at, candidate.teacherReview.reviewedAt);
+    assert.equal(latestTaskReview.reviewer, candidate.teacherReview.reviewerId);
+    assert.equal(latestTaskReview.note, candidate.teacherReview.note);
+  }
   assert.equal(task.requiresTeacherReview, true);
   assert.equal(task.scope, "teacher_internal");
   assert.equal(task.externalSend, false);
@@ -271,7 +298,12 @@ function assertReceipt(result, before, after, id, decision, patch, note) {
   assert.equal(task.reviewer, "c3-e2-teacher");
   assert.equal(task.reviewNote, note);
   assert.equal(task.externalSend, false);
-  assert.deepEqual(task.reviewHistory, []);
+  assert.ok(Array.isArray(task.reviewHistory));
+  const latestTaskReview = task.reviewHistory.at(-1);
+  assert.ok(latestTaskReview);
+  assert.equal(latestTaskReview.reviewed_at, FIXED_ISSUED_AT);
+  assert.equal(latestTaskReview.reviewer, "c3-e2-teacher");
+  assert.equal(latestTaskReview.note, note);
   if (decision === "modify") {
     assert.equal(afterCandidate.title, patch.title);
     assert.equal(afterCandidate.summary, patch.summary);
@@ -300,7 +332,7 @@ function assertReceipt(result, before, after, id, decision, patch, note) {
 function safeError(error) {
   const code = typeof error?.code === "string" ? error.code : null;
   const reason = code === "stale_snapshot" || code === "stale_revision" ? code : "C3 E2 assertion failed";
-  return { status: "RED", phase, code, reason };
+  return { status: "RED", phase, code, reason, message: typeof error?.message === "string" ? error.message : String(error) };
 }
 
 async function run() {
@@ -326,7 +358,7 @@ async function run() {
   process.env.EDUPI_MEMORY_DIR = memoryDir;
   process.env.EDUPI_OUTPUT_DIR = outputDir;
   process.env.EDUPI_LOCK_DIR = lockDir;
-  process.env.EDUPI_HOME = temporaryDataRoot;
+  process.env.EDUPI_HOME = path.join(temporaryDataRoot, ".edupi");
   process.env.HOME = temporaryDataRoot;
 
   const calendarEvents = [
@@ -389,7 +421,7 @@ async function run() {
   }
 
   phase = "initial_heartbeat";
-  const firstHeartbeat = heartbeat.run({ today: "2026-09-01", horizonDays: 30 });
+  const firstHeartbeat = await withCoreWriterAdmission(() => heartbeat.run({ today: "2026-09-01", horizonDays: 30 }));
   assert.ok(firstHeartbeat);
   assert.deepEqual(firstHeartbeat.proactive_entries, []);
   assert.equal(firstHeartbeat.tasks.length, EXPECTED_TASKS.length);
@@ -477,7 +509,7 @@ async function run() {
   await reviewCurrent({ id: "long_holiday_safety:suppress-next", decision: "suppress", patch: { suppressionScope: "next_cycle" }, note: "下一周期再看", label: "suppress-next" });
 
   phase = "matching_policy_cycle";
-  const sameCycle = heartbeat.run({ today: "2026-09-01", horizonDays: 30 });
+    const sameCycle = await withCoreWriterAdmission(() => heartbeat.run({ today: "2026-09-01", horizonDays: 30 }));
   assertHeartbeatInternal(sameCycle);
   const afterMatching = await readSnapshot("matching-policy");
   assertAllWorkJoins(afterMatching.snapshot, afterMatching.data);
@@ -487,7 +519,7 @@ async function run() {
   assert.equal(matchingPeer.nextCycleState, "suppressed_matching_reason");
 
   phase = "snooze_expiry_cycle";
-  const expiryHeartbeat = heartbeat.run({ today: "2026-09-15", horizonDays: 0 });
+  const expiryHeartbeat = await withCoreWriterAdmission(() => heartbeat.run({ today: "2026-09-15", horizonDays: 0 }));
   assertHeartbeatInternal(expiryHeartbeat);
   const afterExpiry = await readSnapshot("snooze-expiry");
   const expired = afterExpiry.data.workCandidates.find((item) => item.candidateId === "long_holiday_safety:snooze");
@@ -499,7 +531,7 @@ async function run() {
   assert.equal(nextConsumed.nextCycleState, "suppressed_next_cycle");
 
   phase = "next_cycle_release";
-  const releaseHeartbeat = heartbeat.run({ today: "2026-09-22", horizonDays: 0 });
+  const releaseHeartbeat = await withCoreWriterAdmission(() => heartbeat.run({ today: "2026-09-22", horizonDays: 0 }));
   assertHeartbeatInternal(releaseHeartbeat);
   const afterRelease = await readSnapshot("next-cycle-release");
   const released = afterRelease.data.workCandidates.find((item) => item.candidateId === "long_holiday_safety:suppress-next");

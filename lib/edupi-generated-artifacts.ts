@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import { resolveEduPiBridgeRoots } from "./edupi-core-snapshot";
 import { runCoreProcess } from "./edupi-core-process-client";
+import { findTaskIdForSession, taskSessionFile } from "./edupi-task-session-store";
 import type { EducationContract } from "./edupi-education-contract";
 
 export type GeneratedArtifact = { artifact_id: string; title: string; relative_path: string; available?: boolean; session_id: string; task_id: string | null; updated_at: string; size_bytes: number; origin?: "preparation" };
@@ -70,11 +71,23 @@ export async function recoverSessionArtifacts(sessionFile: string, root: string,
   return { registered, failedCount: failed.length };
 }
 
+export async function resolveArtifactRegistrationFields(
+  fields: Record<string, unknown>,
+  findTaskId: (sessionId: string) => Promise<string | null>,
+): Promise<Record<string, unknown>> {
+  if (fields.action !== "register" || fields.task_id || typeof fields.session_id !== "string") return fields;
+  const taskId = await findTaskId(fields.session_id);
+  return taskId ? { ...fields, task_id: taskId } : fields;
+}
+
 export async function generatedArtifactsRequest(action: "list" | "register" | "archive" | "restore", fields: Record<string, unknown> = {}) {
   const roots = resolveEduPiBridgeRoots();
+  const requestFields = action === "register"
+    ? await resolveArtifactRegistrationFields({ action, ...fields }, sessionId => findTaskIdForSession(taskSessionFile(roots.dataRoot.root), sessionId))
+    : fields;
   const response = await runCoreProcess<{ ok: boolean; artifacts?: GeneratedArtifact[]; artifact?: GeneratedArtifact; teacherMaterials?: EducationContract["teacherMaterials"] }>({
     ...roots, timeoutMs: 5000,
-    request: { protocol: "edupi-desktop-bridge", protocol_version: 1, producer: "edupi-desktop", request_id: crypto.randomUUID(), operation: "generated-artifacts", action, ...fields },
+    request: { protocol: "edupi-desktop-bridge", protocol_version: 1, producer: "edupi-desktop", request_id: crypto.randomUUID(), operation: "generated-artifacts", action, ...requestFields },
   });
   if (!response.ok) throw new Error("产物登记暂不可用");
   return response;

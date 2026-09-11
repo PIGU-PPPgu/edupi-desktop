@@ -27,6 +27,7 @@ let temporaryDataRoot = null;
 let timeoutHandle = null;
 let expectedCoreIdentity = null;
 let actualCoreIdentity = null;
+let writerAdmission = null;
 
 function cleanup() {
   if (!temporaryDataRoot) return;
@@ -182,7 +183,21 @@ async function run() {
   process.env.EDUPI_MEMORY_DIR = memoryDir;
   process.env.EDUPI_OUTPUT_DIR = outputDir;
   process.env.EDUPI_LOCK_DIR = lockDir;
-  process.env.EDUPI_HOME = temporaryDataRoot;
+  process.env.EDUPI_HOME = path.join(temporaryDataRoot, ".edupi");
+
+  // The current Core Runtime serializes every canonical education mutation
+  // behind one root-bound writer admission.  Hold it across capture, review,
+  // replay, and stale-snapshot checks so this verifier exercises the same
+  // admitted production path as the other cross-repository E2 checks.
+  const { prepareCoreRuntimeRoot } = await import(path.join(coreRoot, "scripts", "core_runtime_root.mjs"));
+  const { acquireCoreRuntimeWriterAdmission } = await import(path.join(coreRoot, "scripts", "core_runtime_writer_admission.mjs"));
+  const preparedRoot = prepareCoreRuntimeRoot(temporaryDataRoot);
+  assert.equal(preparedRoot.ok, true, JSON.stringify(preparedRoot));
+  writerAdmission = await acquireCoreRuntimeWriterAdmission({
+    root: preparedRoot,
+    kind: "legacy_c1_e2",
+    busyTimeoutMs: 250,
+  });
 
   const { createJiti } = await import("jiti");
   const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
@@ -194,16 +209,24 @@ async function run() {
   // Use Core's real TypeScript adapter and store export.  This is the only
   // C1 capture write; the canonical state JSON is never hand-authored here.
   const { captureTeacherObservation } = await jiti.import(path.join(coreRoot, "extensions", "teacher_observation.ts"));
-  const captured = captureTeacherObservation({
-    source_message_id: "e2e-teacher-message-2026-08-27",
-    text: "七年级二班本周解方程练习中出现同类移项符号错误，需要下一节课先复习再观察。",
-    observed_at: FIXED_ISSUED_AT,
-    subject: "math",
-    class_id: "class-7b",
-    category: "teaching",
-    matched_rules: ["e2e-observation-rule"],
-    tags: ["移项", "课堂观察"],
-  });
+  let captured;
+  try {
+    captured = captureTeacherObservation({
+      source_message_id: "e2e-teacher-message-2026-08-27",
+      text: "七年级二班本周解方程练习中出现同类移项符号错误，需要下一节课先复习再观察。",
+      observed_at: FIXED_ISSUED_AT,
+      subject: "math",
+      class_id: "class-7b",
+      category: "teaching",
+      matched_rules: ["e2e-observation-rule"],
+      tags: ["移项", "课堂观察"],
+    });
+  } finally {
+    // Review commands use Desktop's one-shot bridge, which acquires its own
+    // child-process admission. Do not hold the capture lease across them.
+    await writerAdmission?.release();
+    writerAdmission = null;
+  }
   assert.equal(captured.created, true);
   assert.ok(captured.observation_id);
   assert.ok(captured.candidate_id);
@@ -382,5 +405,7 @@ try {
   process.exitCode = 1;
 } finally {
   if (timeoutHandle) clearTimeout(timeoutHandle);
+  await writerAdmission?.release().catch(() => {});
+  writerAdmission = null;
   cleanup();
 }

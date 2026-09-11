@@ -49,12 +49,20 @@ test("launchers preserve legacy, workspace, data-only, and sibling fallbacks", (
   assertRoots(resolveDevRoots({ EDUPI_WORKSPACE: workspaceRoot }), workspaceRoot, workspaceRoot);
 
   const dataRoot = path.join(tmpdir(), "edupi-data-only");
-  assertRoots(resolveDevRoots({ EDUPI_DATA_ROOT: dataRoot }), dataRoot, dataRoot);
+  const bundledCoreRoot = mkdtempSync(path.join(tmpdir(), "edupi-bundled-core-"));
+  const dataOnlyRoots = resolveDevRoots({ EDUPI_DATA_ROOT: dataRoot }, path.join(tmpdir(), "missing-edupi"), bundledCoreRoot);
+  assertRoots(dataOnlyRoots, dataRoot, bundledCoreRoot);
+  assert.equal(dataOnlyRoots.EDUPI_CORE_VALIDATION_MODE, "bundled");
 
   const siblingParent = mkdtempSync(path.join(tmpdir(), "edupi-launch-sibling-"));
   const siblingRoot = path.join(siblingParent, "edupi");
   mkdirSync(siblingRoot);
-  assertRoots(resolveDevRoots({}, siblingRoot), siblingRoot, siblingRoot);
+  assertRoots(resolveDevRoots({}, siblingRoot, bundledCoreRoot), siblingRoot, bundledCoreRoot);
+  assert.equal(resolveDevRoots({}, siblingRoot, bundledCoreRoot).EDUPI_CORE_VALIDATION_MODE, "bundled");
+
+  const explicitCoreRoot = path.join(tmpdir(), "edupi-explicit-core");
+  assertRoots(resolveDevRoots({ EDUPI_CORE_ROOT: explicitCoreRoot }, siblingRoot, bundledCoreRoot), siblingRoot, explicitCoreRoot);
+  assert.equal(resolveDevRoots({ EDUPI_CORE_ROOT: explicitCoreRoot }, siblingRoot, bundledCoreRoot).EDUPI_CORE_VALIDATION_MODE, "external");
 
   const serverWithoutRoots = resolveServerRoots({});
   assert.equal(serverWithoutRoots.EDUPI_PROJECT_ROOT, "");

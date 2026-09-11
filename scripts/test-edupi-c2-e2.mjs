@@ -15,8 +15,9 @@ import os from "node:os";
 import path from "node:path";
 
 const HARD_TIMEOUT_MS = 60_000;
-const EXPECTED_CORE_COMMIT = "cd68ca6d207f295f759d60dcc86a6be1656b3b32";
-const EXPECTED_COMPONENT_MANIFEST_HASH = "sha256:03055a399d8e0f6d743823da36a48bc350b93c438c52367b83efbd7a3e245e10";
+const COMPAT_MANIFEST = JSON.parse(fs.readFileSync(new URL("../contracts/edupi-core-compat.json", import.meta.url), "utf8"));
+const EXPECTED_CORE_COMMIT = COMPAT_MANIFEST.core_runtime.core_commit;
+const EXPECTED_COMPONENT_MANIFEST_HASH = COMPAT_MANIFEST.core_runtime.component_manifest_hash;
 const EXPECTED_SCHEMA_HASH = "sha256:41798fb7b5a2b30f09c2dcf07687193a0efbeade93667f47e6fd0c33e70760a3";
 const EXPECTED_COMMANDS = ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage", "update_memory"];
 const EXPECTED_PROJECTIONS = ["education_workspace"];
@@ -47,6 +48,7 @@ const previousEnvironment = new Map(ENV_KEYS.map((key) => [key, process.env[key]
 let temporaryDataRoot = null;
 let timeoutHandle = null;
 let phase = "start";
+let coreWriterModules = null;
 
 function restoreEnvironment() {
   for (const [key, value] of previousEnvironment) {
@@ -164,11 +166,28 @@ async function captureSetup(registerExtension, sourceId, values, preferences, in
   const { setup } = registerOnboarding(registerExtension);
   const params = { ...values };
   if (preferences !== undefined) params.preferences = preferences;
-  const result = await setup.execute(`synthetic-tool-call-${sourceId}`, params, null, null, context);
+  const result = await withCoreWriterAdmission(() => setup.execute(`synthetic-tool-call-${sourceId}`, params, null, null, context));
   assert.equal(Object.hasOwn(entry.message, "id"), false, "UserMessage must remain ID-free");
   assert.equal(entry.id, sourceId, "source ID must remain on the outer branch entry");
   assert.equal(result.details?.context_id, "context_teacher");
   return { result, entry };
+}
+
+async function withCoreWriterAdmission(callback) {
+  const dataRoot = fs.realpathSync(process.env.EDUPI_PROJECT_ROOT);
+  const root = fs.realpathSync(process.env.EDUPI_CORE_ROOT);
+  coreWriterModules ||= {
+    root: await import(path.join(root, "scripts", "core_runtime_root.mjs")),
+    admission: await import(path.join(root, "scripts", "core_runtime_writer_admission.mjs")),
+  };
+  const prepared = coreWriterModules.root.prepareCoreRuntimeRoot(dataRoot);
+  assert.equal(prepared.ok, true, JSON.stringify(prepared));
+  const lease = await coreWriterModules.admission.acquireCoreRuntimeWriterAdmission({ root: prepared, kind: "legacy_c2_e2", busyTimeoutMs: 250 });
+  try {
+    return await callback();
+  } finally {
+    await lease.release();
+  }
 }
 
 function projectSnapshot(snapshot, buildEducationContractFromWorkspace, supportedCommands, dataRoot) {
@@ -260,7 +279,7 @@ async function run() {
   process.env.EDUPI_MEMORY_DIR = memoryDir;
   process.env.EDUPI_OUTPUT_DIR = outputDir;
   process.env.EDUPI_LOCK_DIR = lockDir;
-  process.env.EDUPI_HOME = temporaryDataRoot;
+  process.env.EDUPI_HOME = path.join(temporaryDataRoot, ".edupi");
   process.env.HOME = temporaryDataRoot;
 
   const { createJiti } = await import("jiti");
@@ -299,11 +318,11 @@ async function run() {
   const firstEntry = sourceEntry("c2-source-1", SOURCE_TEXT, 0);
   const firstContext = { sessionManager: { getBranch: () => [firstEntry] } };
   const firstParams = { ...INITIAL_VALUES, preferences: ["回答简洁", "保留来源"] };
-  const firstCapture = await firstRegistration.setup.execute("synthetic-tool-call-1", firstParams, null, null, firstContext);
+  const firstCapture = await withCoreWriterAdmission(() => firstRegistration.setup.execute("synthetic-tool-call-1", firstParams, null, null, firstContext));
   const statePath = path.join(outputDir, "teacher_review_state.json");
   const bytesAfterInitialCapture = fs.readFileSync(statePath, "utf8");
   phase = "capture_initial_replay_same_instance";
-  const sameInstanceReplay = await firstRegistration.setup.execute("synthetic-tool-call-1-replay", firstParams, null, null, firstContext);
+  const sameInstanceReplay = await withCoreWriterAdmission(() => firstRegistration.setup.execute("synthetic-tool-call-1-replay", firstParams, null, null, firstContext));
   phase = "capture_initial_assertions";
   phase = "capture_initial_created";
   assert.equal(firstCapture.details?.context_id, "context_teacher");

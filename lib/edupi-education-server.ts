@@ -1,6 +1,4 @@
-import { createHash } from "node:crypto";
-import { join, resolve } from "node:path";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { resolve } from "node:path";
 import { buildEducationContractFromWorkspace, type EducationContract } from "./edupi-education-contract";
 import { issueC1Review, type C1ReviewDependencies, type C1ReviewDecision, type C1ReviewTargetKind } from "./edupi-c1-review";
 import { issueTeacherContextReview, type TeacherContextReviewDependencies, type TeacherContextReviewInput } from "./edupi-teacher-context-review";
@@ -12,17 +10,14 @@ import { projectTeacherContextSnapshot } from "./edupi-onboarding-server";
 import type { TeacherContextSnapshot } from "./edupi-onboarding-types";
 import { activeBridgeIdentity } from "./edupi-bridge-manifest";
 import { readEduPiEducationSnapshot } from "./edupi-core-snapshot";
-import { bindTaskSessionFile, readTaskSessionFile } from "./edupi-task-session-store";
+import { bindTaskSessionFile, readTaskSessionFile, taskSessionFile } from "./edupi-task-session-store";
 import { projectTaskSessionBindings } from "./edupi-task-sessions";
 import { getLiveSessionSnapshots, getRpcSession, getRunningRpcSessionIds } from "./rpc-manager";
 import { listAllSessions } from "./session-reader";
 import { workspaceResourcesRequest } from "./edupi-generated-artifacts";
 
 
-export function taskSessionFile(dataRoot: string): string {
-  const rootHash = createHash("sha256").update(dataRoot).digest("hex");
-  return join(getAgentDir(), "edupi-desktop", "task-session-bindings", `${rootHash}.json`);
-}
+export { taskSessionFile } from "./edupi-task-session-store";
 
 function requiredText(value: unknown, field: string, max = 240): string {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${field} 不能为空`);

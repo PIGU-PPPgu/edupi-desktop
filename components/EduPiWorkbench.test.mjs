@@ -153,6 +153,7 @@ test("the dashboard wires the Core work-candidate inbox with six receipt-bound a
 test("refreshes education data after Core imports without remounting chat", async () => {
   const appShell = await read("./AppShell.tsx");
   const panel = await read("./EduPiEducationPanel.tsx");
+  const conversationFiles = await read("./EduPiConversationFiles.tsx");
   const loadEffect = panel.slice(
     panel.indexOf("useEffect(() => {"),
     panel.indexOf("useEffect(() => {", panel.indexOf("useEffect(() => {") + 1),
@@ -164,6 +165,9 @@ test("refreshes education data after Core imports without remounting chat", asyn
 
   assert.match(appShell, /const \[educationRefreshKey, setEducationRefreshKey\] = useState\(0\)/);
   assert.match(agentEndHandler, /setEducationRefreshKey\(\(key\) => key \+ 1\)/);
+  assert.match(agentEndHandler, /window\.dispatchEvent\(new Event\("edupi-artifacts-updated"\)\)/);
+  assert.match(conversationFiles, /window\.addEventListener\("edupi-artifacts-updated", refreshFiles\)/);
+  assert.match(conversationFiles, /setRefresh\(value => value \+ 1\)/);
   assert.match(appShell, /const handleEducationImportCompleted = useCallback\(\(\) => \{/);
   assert.match(appShell, /onEducationImportCompleted=\{handleEducationImportCompleted\}/);
   assert.match(appShell, /refreshKey=\{educationRefreshKey\}/);

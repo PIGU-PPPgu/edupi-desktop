@@ -72,7 +72,7 @@ EDUPI_DATA_ROOT=/absolute/path/to/teacher-workspace \
 npm run desktop:dev
 ```
 
-When a sibling `../edupi` directory exists, the desktop dev launcher defaults to it for both Core and data. Set both roots explicitly to keep code and teacher data separate.
+When a sibling `../edupi` directory exists, the desktop dev launcher uses it as the data root. The pinned Core bundled under `src-tauri/resources/edupi-core` supplies the code root unless `EDUPI_CORE_ROOT` is set explicitly. Set both roots explicitly when developing against a Core checkout.
 
 | Setting | Purpose |
 | --- | --- |
