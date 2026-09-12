@@ -4,12 +4,13 @@
 
 - 本机 updater 密钥对已找到并验证可签名；GitHub 的 `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_UPDATER_PUBLIC_KEY` 已存在。未设置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 不构成阻塞，因为私钥未加密；私有 Core 所需的 `EDUPI_CORE_READ_TOKEN` 已由现有 GitHub 登录凭据写入 Actions Secret，token 未进入仓库或日志。
 - Desktop 发布版本已推进到 `0.3.7`，组件清单和 Cargo 版本已同步；Core 修复提交 `6b1d0cf74d7a1344c881da8e34a857243e315fdb` 已通过本机全量回归并合并到公开 Core `main`（PR #58，合并提交 `ea3b1dd175d3521546cc2b3ff685f6c9c7a360c6`），Desktop 已具备按精确 pin 运行正式 Actions 的条件。
-- 本轮可在本机和正式 CI 闭合的发布风险已处理；剩余未验证项明确为 Windows/Linux 实机安装升级、Apple 公证，以及真实课堂内容质量与系统通知/睡眠唤醒场景。
+- 本轮可在本机、正式 CI 和 Windows runner 闭合的发布风险已处理；剩余未验证项明确为 Linux 实机安装升级、Apple 公证，以及真实课堂内容质量与系统通知/睡眠唤醒场景。
 
 ## 2026-09-13 正式发布验收
 
 - 首次 run `34701579391` 因私有 Core checkout 缺少 `EDUPI_CORE_READ_TOKEN` 失败；补入 Secret 后重跑 `34702177745` 成功，macOS、Linux、Windows 与 manifest jobs 全部通过。
 - `v0.3.7` 已发布为非草稿，远端资产包含 DMG、AppImage、deb、Windows NSIS、macOS updater tar.gz、三个 updater 签名文件、`latest.json` 和 `component-versions.json`。远端 `latest.json` 三个平台条目均有签名，清单版本为 `0.3.7`。
+- Windows run `34705099213` 的 published-install、native source check、私有 Core diagnose、stray-scan 和原生命令检查全部通过；Linux 仍只有 CI 构建证据，未宣称实机安装。
 
 ## 2026-09-12 Today 审核交互与 Core 写入锁修复（取代本页旧 pin/Today 状态）
 
@@ -19,13 +20,13 @@
 - 最终打包隔离 E2 使用同一 `EduPi.app` 资源服务和临时数据根，真实 POST `review_work_candidate/accept` 返回 HTTP 200、回执 `accepted`；重新读取后候选为 `accepted / closed_accepted`，待决定 14→13、已记录 0→1，临时数据已清理。
 - 最终桌面包由 `npm run desktop:prepare` 与 `tauri build --bundles app` 生成；包内 Core/projection/Kernel ready，真实工作区 50 名学生、9 个课表、43 个校历、237 个任务，Desktop manifest 为 `sha256:9f28910f0886fcfed4509729af8361749cbd0f0cf3b48df4093db34fed6728b5`。原生窗口截图已核对新列名、动作说明和无红色失败条。
 - 追加实际浏览器验收：Today 三列和动作标题可读；点击“接下来”日程项后进入日程详情并带真实对象路由；观察记录展开后“打开来源对话”进入对应 session；从班级点开程天乐档案后，知识图谱/人际互动网络两个切换入口均可用，网络图与列表空态按当前真实记录显示。上述操作为只读页面验收，未改教师数据。
-- 追加 R14 页面交互复核：学生详情抽屉打开后按 Escape 会关闭并清除 URL 选中项；768px 视口下文档宽度不溢出（scrollWidth=clientWidth=768），移动布局可读。Windows 实机仍未验收。
+- 追加 R14 页面交互复核：学生详情抽屉打开后按 Escape 会关闭并清除 URL 选中项；768px 视口下文档宽度不溢出（scrollWidth=clientWidth=768），移动布局可读。Windows runner published-install 已验收，真实 Linux 主机仍未验收。
 - 追加安装资源闭包复核：最终 bundled Core 的 clean profile loader 实际加载 7 个允许教育扩展且 `errors=[]`；测试同时确认已退休的直接写入扩展不进入包。此前失败的测试要求与当前 architecture ledger 冲突，已修正为当前闭包契约。
 - 追加 R01/R02 页面只读复核：最终包材料页真实显示对话生成文件，点击 `展开与折叠学案.md` 打开材料详情抽屉，状态、来源、日期、预览和“补充 / 修订”入口均可见；未在正式数据上执行修改或删除。
 - 最终 Core bundle closure 定向测试 3 项全部通过：临时复制包无 `.git` 可验证、篡改/缺失 runtime dependency 会拒绝、bundled 模式不依赖 Git；Desktop bridge transport parity 也通过。
 - 配套 Core `npm test` 最终全量通过（含 live model、writer admission/enforcement/C2/C3、daemon、学生、closure 和 scoped memory runtime）；此前 writer detector 与 Desktop manifest SHA 漂移已同步并复跑通过。
-- 签名风险已复核：本机永久 updater 密钥对存在，空密码签名探针和最终 `.app.tar.gz.sig` 均成功；GitHub 私钥/公钥 Secret 名称已存在，Core 仓库公开可读。剩余为正式 Actions Release、三平台产物和实机升级，不再要求用户额外提供本地密钥。
-- 验证结果：Desktop 全量 1067 tests、1042 passed、0 failed、25 skipped；`tsc --noEmit`、`npm run lint`、Core live model、桥接清单和传输一致性均通过。本机 updater 私钥已恢复并完成签名探针与最终 `.sig` 生成；正式 Actions Release 尚未运行，故远端发布仍未宣称完成。
+- 签名风险已复核：本机永久 updater 密钥对存在，空密码签名探针和最终 `.app.tar.gz.sig` 均成功；GitHub 私钥、公钥和私有 Core 读取 Secret 均已配置。正式 `v0.3.7` Actions Release 已完成，三平台资产、签名和组件清单均已发布。
+- 验证结果：Desktop 全量 1069 tests、1044 passed、0 failed、25 skipped；`tsc --noEmit`、`npm run lint`、Core live model、桥接清单和传输一致性均通过。本机包与远端 `latest.json` 均已核对为 `0.3.7`。
 - 状态边界：真实教师数据没有被测试接受动作改写；真实包写入在隔离数据根完成。原生自动化当前仍不稳定，因此没有把真实工作区的鼠标点击或系统通知点击记为通过；R15/R17 跨平台安装升级、签名、公证和真实课堂内容质量继续保留外部/人工验收状态。
 
 ## 2026-09-12 R03–R17 续接验收
