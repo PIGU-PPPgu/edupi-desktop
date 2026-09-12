@@ -6,6 +6,7 @@
 - R03 管理中心现在显示与 Core 调度表对齐的下一次计划检查，并保留最近运行/失败摘要；纯显示计算有固定北京时间边界回归，未改变 Core 的实际调度权。
 - R01/R03 冷启动读路径已延长只读 Core 请求窗口至 15 秒，覆盖打包 runtime 首次启动的实际耗时，避免首个状态请求在 runtime 尚未热起时提前报 process unavailable。
 - 最终包冷启动序列复测：首次观察到的 `/api/edupi/status?summary=1` 响应在约 2.4 秒直接为 Core/projection `ready`，没有先返回 unavailable；工作区计数和 manifest pin 正确。
+- R01/R02 追加打包隔离 E2：用临时数据根、临时 Pi 会话目录和最终 `EduPi.app` 启动 38471 实例，历史 `write` toolResult 补录返回 `registered=1, failedCount=0`，资源列表只含 `.edupi/output/package-e2.md`；临时实例关闭后正式包恢复为 ready，未写入教师数据。
 - 冷启动修复后的全量 Desktop 回归为 1067 tests、1042 passed、0 failed、25 skipped，TypeScript 与 ESLint 继续通过。
 - Desktop 配套修复已提交为 `50153d6`，R14 状态摘要优化提交为 `6712d50`；包含 bundled Core 根目录隔离、Core pin 同步、产物登记任务绑定、聊天文件刷新和 C1–C3 E2 admission 生命周期修正。
 - 新配套 Desktop pin 的组件清单为 `sha256:b29eb3ef9a9133de6d0d3c6528197d9bd13359ab4bd6ecf75c9d675e0845ddb7`。C1/C2/C3 E2 均 GREEN：C1 为 1 observation/1 candidate/1 memory/2 receipts，C2 为 4 条教师上下文审核历史，C3 为 9 个工作候选/7 条工作审核回执；均覆盖重放、重启读回、过期快照或版本无写入、`external_send=false`。
