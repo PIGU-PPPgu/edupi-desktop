@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { StudentEvent } from "@/lib/edupi-student-events";
-import { EDUPI_STUDENT_RECORDS_UPDATED_EVENT } from "@/lib/edupi-ui-events";
+import { EDUPI_STUDENT_RECORDS_UPDATED_EVENT } from "../lib/edupi-ui-events";
 
 type Prefix = { records: StudentEvent[]; total: number | null };
 export const STUDENT_OBSERVATION_PAGE_SIZE = 8;
