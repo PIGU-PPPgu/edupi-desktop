@@ -214,6 +214,22 @@ test("release workflow publishes Apple Silicon, Linux x64, and Windows x64 insta
   assert.match(workflow, /gh release edit "v\$version" --draft=false --latest/);
 });
 
+test("the published Linux installer workflow verifies a real packaged Core startup", async () => {
+  const workflow = await readFile(
+    join(root, ".github", "workflows", "linux-published-install.yml"),
+    "utf8",
+  );
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /gh release download/);
+  assert.match(workflow, /\*_amd64\.deb/);
+  assert.match(workflow, /dpkg-deb -f/);
+  assert.match(workflow, /apt-get install --yes "\$EDUPI_DEB"/);
+  assert.match(workflow, /xvfb-run/);
+  assert.match(workflow, /EDUPI_DATA_ROOT/);
+  assert.match(workflow, /api\/edupi\/status\?summary=1/);
+  assert.match(workflow, /core.*status.*ready/);
+});
+
 test("nothing reintroduces a literal homedir() into an fs call", async () => {
   // This is what broke the Windows build for every release: @vercel/nft folds
   // homedir() at build time and globs the whole user profile, which dies on the
