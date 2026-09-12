@@ -1,5 +1,13 @@
 # 实际流程验收
 
+## 2026-09-12 `0.3.7` 发布包收口（取代旧签名阻塞记录）
+
+- `npm run desktop:prepare` 使用 Core `6b1d0cf74d7a1344c881da8e34a857243e315fdb` 完成资源闭包；`EduPi.app`、`EduPi_0.3.7_aarch64.dmg`、updater tar.gz 和 `.sig` 均生成，包内 `CFBundleShortVersionString` 与 `CFBundleVersion` 均为 `0.3.7`。
+- 使用本机 updater 公钥通过 `minisign-verify` 复核 tar.gz 签名成功；源码中的临时公钥配置已由构建 trap 恢复，工作树没有密钥或配置残留。
+- 直接启动该 `.app` 的隔离 smoke 实例监听 `127.0.0.1:38471`；`/api/edupi/status?summary=1` 返回 Core/projection/Kernel `ready`，组件清单 hash 为 `sha256:9f28910f0886fcfed4509729af8361749cbd0f0cf3b48df4093db34fed6728b5`，Kernel 早安简报运行成功；进程随后已正常关闭。
+- Desktop PR #79 的 `audit` 与 `rust-audit` 均通过；Core PR #58 已合并到公开 `main`。本地未发现高危或严重 npm 漏洞，公开 Core checkout 不再依赖额外 Secret。
+- 尚未验证：正式 GitHub Release 上传与 `latest.json` 回读、Windows/Linux 实机安装升级、Apple 公证、真实系统睡眠唤醒/通知点击，以及真实课堂内容质量。这些仍是发布与人工验收边界。
+
 ## 2026-09-12 Today 审核交互与写入链复核（取代旧的 Today/包 pin 结论）
 
 - 失败复现：旧钉钉桥接 PID 持有 `.edupi/runtime/core-runtime-writer-admission-v1.sqlite`，Today 六种决定均在 Core 写入阶段失败，前端统一显示红色“暂时无法提交”。
