@@ -10,6 +10,13 @@
 - 修复内容：`e01bab9` 能力投影/兼容性面板/学生记录刷新事件；`6b645ec` Next 服务端材料识别模块加载修复和管理中心模型 fallback。定向测试、`tsc --noEmit`、`npm run lint` 均通过。
 - 未验证：正式安装版的日程/课表/材料页面写入、系统通知点击、睡眠唤醒、Apple 公证、Linux/Windows 应用内升级、零 API 首次完整备课和真实课堂内容质量。
 
+## 2026-09-13 `v0.3.8` 发布与本机包复核
+
+- Release workflow `34714343043` 的 macOS、Linux、Windows 和 manifest jobs 全部通过；Release `v0.3.8` 为非草稿、非预发布，资产包含三平台安装包、updater tar、签名文件、`latest.json` 和组件清单。
+- 远端 `latest.json` 三个平台 URL 和签名均回读为 `v0.3.8`；组件清单回读 Desktop `0.3.8`、Pi `0.84.1`、pi-web `0.8.7`。macOS updater tar.gz 使用本机 updater 公钥复核签名成功。
+- `/Applications/EduPi.app` 从 `v0.3.7` 备份后替换为 `v0.3.8` 并启动；Info.plist、`/api/updates?refresh=1`、`/api/edupi/status?summary=1` 和 `/api/edupi/workspace` 分别回读 `0.3.8`、up-to-date、Core/projection ready、50 名学生/237 个任务/43 个校历/9 个课表。
+- 因 Mac 锁屏，本次没有再次执行设置页中的原生“安装更新”点击；这条记录不替代应用内升级点击验收。Apple 公证、Linux/Windows 应用内升级、通知点击和睡眠唤醒仍未完成。
+
 ## 2026-09-12 `0.3.7` 发布包收口（取代旧签名阻塞记录）
 
 - `npm run desktop:prepare` 使用 Core `6b1d0cf74d7a1344c881da8e34a857243e315fdb` 完成资源闭包；`EduPi.app`、`EduPi_0.3.7_aarch64.dmg`、updater tar.gz 和 `.sig` 均生成，包内 `CFBundleShortVersionString` 与 `CFBundleVersion` 均为 `0.3.7`。

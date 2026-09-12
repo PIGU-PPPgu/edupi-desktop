@@ -35,6 +35,13 @@
 - 重启后的原生窗口显示 `v0.3.7`；`/api/edupi/status?summary=1` 返回 Core/projection/Kernel `ready`，计数为 students 50、tasks 237、calendar 43、timetable 9；`/api/updates?refresh=1` 返回 current/latest `0.3.7` 和 `updateAvailable=false`。
 - 升级前后 `.edupi` 文件清单均为 121 个；变化仅落在 dingtalk/kernel/rhythm/teacher-review 与 Core runtime 状态文件，学生、任务、校历和课表投影均重新读取成功。Linux 实机安装、Apple 公证和通知/睡眠唤醒仍未验收。
 
+## 2026-09-13 `v0.3.8` 发布与本机安装复核
+
+- Release workflow `34714343043` 的三平台 build 与 manifest 全部成功；`v0.3.8` 已发布为非草稿、非预发布，资产和签名元数据完整。
+- 远端 `latest.json` 的 `darwin-aarch64`、`linux-x86_64`、`windows-x86_64` 均指向 `v0.3.8`；`component-versions.json` 回读为 Desktop `0.3.8`、Pi `0.84.1`、pi-web `0.8.7`。
+- 本机 updater tar.gz 用公钥复核成功；由于 Mac 锁屏无法操作原生设置页，本次将已安装 `v0.3.7` 备份并替换为签名 `v0.3.8` 包后启动。应用版本、Core/projection readiness、50/237/43/9 工作区计数和 up-to-date 状态均回读成功。
+- Apple 公证、Linux/Windows 应用内升级、系统通知点击和睡眠唤醒仍未验收。
+
 ## 2026-09-12 Today 修复包（取代下方旧 Core pin 记录）
 
 - 最终包配套 Core pin 为 `6b1d0cf74d7a1344c881da8e34a857243e315fdb`，Desktop component manifest 为 `sha256:9f28910f0886fcfed4509729af8361749cbd0f0cf3b48df4093db34fed6728b5`。旧的 `deda34d… / b29eb3…` 记录仅保留为历史证据；writer detector 矩阵和 daemon manifest 断言均已同步。
