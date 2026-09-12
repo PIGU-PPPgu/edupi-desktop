@@ -4,6 +4,7 @@ import { briefPreview } from "@/lib/edupi-brief-preview";
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import type { CalendarFact, EducationContract, EducationEntityDeleteKind, TeacherTask } from "@/lib/edupi-education-contract";
 import type { CalendarItemSelection } from "@/lib/edupi-calendar-model";
+import { insightCategory } from "@/lib/edupi-domain-navigation";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import {
   taskArtifacts,
@@ -63,6 +64,7 @@ type Props = {
   onCreateTask: (input: { title: string; dueDate: string | null; note: string | null }) => Promise<void>;
   onMoveTask: (task: TeacherTask, stage: TaskBoardLaneId) => Promise<void>;
   onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<boolean>;
+  onReviewTarget?: (target: { kind: "observation" | "memory_candidate"; id: string }) => void;
 };
 
 function includesQuery(value: string, query: string): boolean {
@@ -72,6 +74,18 @@ function includesQuery(value: string, query: string): boolean {
 function workspaceFile(workspace: string, relativePath: string): string {
   const separator = workspace.includes("\\") ? "\\" : "/";
   return `${workspace.replace(/[\\/]$/, "")}${separator}${relativePath.replace(/[\\/]/g, separator)}`;
+}
+
+function calendarFactSelection(event: CalendarFact): CalendarItemSelection {
+  return {
+    kind: "calendar",
+    sourceId: event.id || `calendar:${event.date || "pending"}:${event.name}`,
+    date: event.date,
+    title: event.name,
+    detail: event.notes,
+    sourceLabel: event.source === "official_school_calendar" ? "学校校历" : event.source === "teacher" ? "教师" : event.source === "inferred" ? "材料识别" : "校历",
+    statusLabel: event.preparationStatus === "read_only" ? "已确认" : "待确认",
+  };
 }
 
 function cleanInsight(value: string): string {
@@ -142,7 +156,7 @@ function SectionHeader({ title, meta, action, onAction }: { title: string; meta?
   return <header className="edupi-page-section__header"><div><h2>{title}</h2>{meta ? <span>{meta}</span> : null}</div>{action && onAction ? <button type="button" onClick={onAction}>{action}</button> : null}</header>;
 }
 
-function DashboardView({ data, context, kernelState, runningAgentCount, onEducation, onTaskDetail, onNavigate, onUpload, onOpenContext, onOpenFile, onStartAgent }: Pick<Props, "data" | "context" | "kernelState" | "runningAgentCount" | "onEducation" | "onTaskDetail" | "onNavigate" | "onUpload" | "onOpenContext" | "onOpenFile" | "onStartAgent">) {
+function DashboardView({ data, context, kernelState, runningAgentCount, onEducation, onTaskDetail, onNavigate, onUpload, onOpenContext, onOpenFile, onStartAgent, onCalendarSelection }: Pick<Props, "data" | "context" | "kernelState" | "runningAgentCount" | "onEducation" | "onTaskDetail" | "onNavigate" | "onUpload" | "onOpenContext" | "onOpenFile" | "onStartAgent" | "onCalendarSelection">) {
   const today = localIsoDate();
   const currentWeek = data.calendar.find((event) => Boolean(event.date && event.date <= today && (event.endDate || event.date) >= today && /第\d+周/.test(event.name)));
   const upcoming = data.calendar.filter((event) => Boolean(event.date && (event.endDate || event.date) >= today && event !== currentWeek)).slice(0, 5);
@@ -182,12 +196,12 @@ function DashboardView({ data, context, kernelState, runningAgentCount, onEducat
         <section className="edupi-page-section edupi-today-dock">
           <SectionHeader title="接下来" action="日程" onAction={() => onNavigate("calendar")} />
           {currentWeek ? <div className="edupi-today-dock__week"><span>当前</span><strong>{currentWeek.name}</strong><small>{calendarDateLabel(currentWeek)}</small></div> : null}
-          <div className="edupi-today-dock__events">{upcoming.map((event) => <button type="button" key={event.id || `${event.date}:${event.name}`} onClick={() => onNavigate("calendar")}><time>{event.date?.slice(5).replace("-", "/") || "--/--"}</time><span><strong>{event.name}</strong><small>{event.endDate ? `至 ${event.endDate.slice(5).replace("-", "/")}` : calendarSourceLabel(event.source)}</small></span></button>)}</div>
+          <div className="edupi-today-dock__events">{upcoming.map((event) => <button type="button" key={event.id || `${event.date}:${event.name}`} onClick={() => { onCalendarSelection(calendarFactSelection(event)); onNavigate("calendar"); }}><time>{event.date?.slice(5).replace("-", "/") || "--/--"}</time><span><strong>{event.name}</strong><small>{event.endDate ? `至 ${event.endDate.slice(5).replace("-", "/")}` : calendarSourceLabel(event.source)}</small></span></button>)}</div>
           {!currentWeek && upcoming.length === 0 ? <button type="button" className="edupi-today-dock__empty" onClick={() => onNavigate("calendar")}>导入校历</button> : null}
         </section>
         <section className="edupi-page-section edupi-attention-note">
           <SectionHeader title="值得留意" action="全部洞察" onAction={() => onNavigate("insights")} />
-          {latestInsight ? <button type="button" onClick={() => onNavigate("insights")}><strong>{cleanInsight(latestInsight.content)}</strong><span>{latestInsight.evidenceIds.length} 条依据 · 仍由教师判断</span></button> : <div className="edupi-module-empty">暂无已浮出的洞察</div>}
+          {latestInsight ? <button type="button" onClick={() => onNavigate("insights", `insights:${insightCategory(latestInsight.content)}:surfaced`)}><strong>{cleanInsight(latestInsight.content)}</strong><span>{latestInsight.evidenceIds.length} 条依据 · 仍由教师判断</span></button> : <div className="edupi-module-empty">暂无已浮出的洞察</div>}
         </section>
       </aside>
     </div>
@@ -204,14 +218,14 @@ function ArtifactsView({ data, query, onTask }: Pick<Props, "data" | "query" | "
 }
 
 export function EduPiWorkspaceViews(props: Props) {
-  if (props.view === "dashboard") return <DashboardView data={props.data} context={props.context} kernelState={props.kernelState} runningAgentCount={props.runningAgentCount} onEducation={props.onEducation} onTaskDetail={props.onTaskDetail} onNavigate={props.onNavigate} onUpload={props.onUpload} onOpenContext={props.onOpenContext} onOpenFile={props.onOpenFile} onStartAgent={props.onStartAgent} />;
+  if (props.view === "dashboard") return <DashboardView data={props.data} context={props.context} kernelState={props.kernelState} runningAgentCount={props.runningAgentCount} onEducation={props.onEducation} onTaskDetail={props.onTaskDetail} onNavigate={props.onNavigate} onUpload={props.onUpload} onOpenContext={props.onOpenContext} onOpenFile={props.onOpenFile} onStartAgent={props.onStartAgent} onCalendarSelection={props.onCalendarSelection} />;
   if (props.view === "workspace") return <EduPiWorkspaceBoard data={props.data} query={props.query} onTaskDetail={props.onTaskDetail} onCreateTask={props.onCreateTask} onMoveTask={props.onMoveTask} mergeSuggestions={<EduPiPlanMergeSuggestions calendar={props.data.calendar} />} />;
   if (props.view === "teaching") return <EduPiTeachingWorkspace data={props.data} context={props.context} query={props.query} selectedObjectId={props.selectedObjectId} onObject={props.onObject} onTask={(task) => props.onTask(task, "brief")} onNavigate={props.onNavigate} onStartAgent={props.onStartAgent} onCalendarSelection={props.onCalendarSelection} />;
   if (props.view === "homeroom" || props.view === "students") return <EduPiStudentWorkspace mode={props.view} data={props.data} context={props.context} query={props.query} selectedStudentId={props.selectedStudentId} onStudent={props.onStudent} onEducation={props.onEducation} onTask={(task) => props.onTask(task, "brief")} onStartAgent={props.onStartAgent} onDeleteEntity={props.onDeleteEntity} />;
   if (props.view === "calendar") return <CalendarView data={props.data} query={props.query} onUpload={props.onUpload} intakeBusy={props.intakeBusy} calendarSelection={props.calendarSelection} onCalendarSelection={props.onCalendarSelection} onTaskDetail={props.onTaskDetail} onImportCalendar={props.onImportCalendar} onImportTimetable={props.onImportTimetable} onDeleteEntity={props.onDeleteEntity} />;
   if (props.view === "memory") return <EduPiMemoryDatabase data={props.data} memoryScopes={props.memoryScopes} query={props.query} selectedObjectId={props.selectedObjectId} onEducation={props.onEducation} onStartAgent={props.onStartAgent} onDeleteEntity={props.onDeleteEntity} />;
   if (props.view === "insights" && props.selectedObjectId?.startsWith("insights:student_records")) return <main className="edupi-module-workspace"><header className="edupi-module-heading"><div><span>观察与洞察</span><h1>学生学习与互动</h1></div></header><EduPiStudentEvents student={null} query={props.query} onAgent={props.onStartAgent} /></main>;
-  if (props.view === "insights") return <EduPiInsightDatabase data={props.data} query={props.query} selectedObjectId={props.selectedObjectId} />;
+  if (props.view === "insights") return <EduPiInsightDatabase data={props.data} query={props.query} selectedObjectId={props.selectedObjectId} onReviewTarget={props.onReviewTarget} />;
   if (props.view === "growth") return <EduPiGrowthWorkspace onStartAgent={props.onStartAgent} data={props.data} teachingSkills={props.teachingSkills} query={props.query} selectedObjectId={props.selectedObjectId} onOpenFile={props.onOpenFile} onTask={(task) => props.onTask(task, "artifact")} />;
   if (props.view === "materials") return <EduPiMaterialsWorkspace data={props.data} query={props.query} selectedObjectId={props.selectedObjectId} stagedMaterials={props.stagedMaterials} stagingBusy={props.stagingBusy} stagingMessage={props.stagingMessage} onTask={(task) => props.onTask(task, "evidence")} onUpload={props.onUpload} onIntakeMaterial={props.onIntakeMaterial} onRemoveStagedMaterial={props.onRemoveStagedMaterial} onOpenFile={props.onOpenFile} onStartAgent={props.onStartAgent} onDeleteEntity={props.onDeleteEntity} />;
   return <ArtifactsView data={props.data} query={props.query} onTask={props.onTask} />;

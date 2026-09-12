@@ -77,6 +77,9 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   assert.match(workspaceViews, /EduPiStudentWorkspace/);
   assert.match(workspaceViews, /EduPiMemoryDatabase/);
   assert.match(workspaceViews, /EduPiInsightDatabase/);
+  assert.match(workspaceViews, /calendarFactSelection/);
+  assert.match(workspaceViews, /onCalendarSelection\(calendarFactSelection\(event\)\)/);
+  assert.match(workspaceViews, /onNavigate\("insights", `insights:\$\{insightCategory\(latestInsight\.content\)\}:surfaced`\)/);
   assert.match(workspaceViews, /EduPiGrowthWorkspace/);
   assert.match(memoryDatabase, /edupi-database/);
   assert.match(insightDatabase, /edupi-database/);
@@ -124,7 +127,7 @@ test("the dashboard wires the Core work-candidate inbox with six receipt-bound a
   const helper = await read("../lib/edupi-today-work.ts");
   assert.match(workspaceViews, /EduPiTodayWork/);
   assert.match(component, /data\.workCandidates/);
-  for (const label of ["今天要判断", "现在", "稍后", "已完成", "接受", "调整", "暂缓", "稍后", "停止提示", "拒绝"]) assert.match(component, new RegExp(label));
+  for (const label of ["今天要判断", "待你决定", "稍后处理", "已记录", "接受", "调整", "暂缓", "稍后", "停止提示", "拒绝"]) assert.match(component, new RegExp(label));
   assert.match(component, /教师工作/);
   assert.doesNotMatch(component, /Core Today|Core 尚未开放/);
   assert.match(component, /<h3 id=/);
@@ -137,6 +140,7 @@ test("the dashboard wires the Core work-candidate inbox with six receipt-bound a
   assert.match(component, /min=\{tomorrow\(\)\}/);
   assert.match(css, /\.edupi-today-work__group > header h3/);
   assert.doesNotMatch(css, /\.edupi-today-work__group > header h2/);
+  assert.doesNotMatch(css, /edupi-today-work__guide/);
   assert.match(css, /\.edupi-today-work__item h4/);
   assert.match(helper, /review_work_candidate/);
   assert.match(helper, /expectedSnapshotId/);
@@ -145,14 +149,37 @@ test("the dashboard wires the Core work-candidate inbox with six receipt-bound a
   assert.match(component, /useSyncExternalStore/);
   assert.match(component, /aria-busy=\{busy\}/);
   assert.match(component, /setFeedback\(null\)/);
+  assert.match(component, /DECISION_EFFECTS/);
+  assert.match(component, /移到“已记录”/);
+  assert.match(component, /setRetryReview/);
+  assert.match(component, />重试<\/button>/);
+  assert.match(component, />刷新待办<\/button>/);
+  assert.match(component, /edupi-education-refresh/);
+  assert.match(component, /title=\{ACTION_TITLES\.accept\}/);
+  assert.match(component, /正在接受/);
+  assert.doesNotMatch(component, /edupi-today-work__guide/);
   assert.doesNotMatch(component, /result\??\.reason/);
   assert.doesNotMatch(component, /setCandidates|data\.tasks/);
   assert.doesNotMatch(component, /body\.(?:externalSend|sourceIds|evidenceIds|reviewer|issuedAt|provider|model|token)/);
 });
 
+test("insight provenance keeps shared evidence rows and only opens reviewable observations", async () => {
+  const insightDatabase = await read("./EduPiInsightDatabase.tsx");
+  assert.match(insightDatabase, /function isReviewableObservation\(item: EducationObservation\)/);
+  assert.match(insightDatabase, /pending_review.*held/);
+  for (const state of ["not_required", "pending_review", "accepted", "modified", "rejected", "held"]) {
+    assert.match(insightDatabase, new RegExp(`${state}:`));
+  }
+  assert.match(insightDatabase, /new Map<string, EducationContract\["observations"\]\[number\]\[\]>/);
+  assert.match(insightDatabase, /observationsByEvidence\.get\(evidenceId\) \|\| \[\]/);
+  assert.match(insightDatabase, /linkedObservations\.filter\(isReviewableObservation\)/);
+  assert.match(insightDatabase, /reviewTarget: isReviewableObservation\(item\)/);
+});
+
 test("refreshes education data after Core imports without remounting chat", async () => {
   const appShell = await read("./AppShell.tsx");
   const panel = await read("./EduPiEducationPanel.tsx");
+  const conversationFiles = await read("./EduPiConversationFiles.tsx");
   const loadEffect = panel.slice(
     panel.indexOf("useEffect(() => {"),
     panel.indexOf("useEffect(() => {", panel.indexOf("useEffect(() => {") + 1),
@@ -164,6 +191,9 @@ test("refreshes education data after Core imports without remounting chat", asyn
 
   assert.match(appShell, /const \[educationRefreshKey, setEducationRefreshKey\] = useState\(0\)/);
   assert.match(agentEndHandler, /setEducationRefreshKey\(\(key\) => key \+ 1\)/);
+  assert.match(agentEndHandler, /window\.dispatchEvent\(new Event\("edupi-artifacts-updated"\)\)/);
+  assert.match(conversationFiles, /window\.addEventListener\("edupi-artifacts-updated", refreshFiles\)/);
+  assert.match(conversationFiles, /setRefresh\(value => value \+ 1\)/);
   assert.match(appShell, /const handleEducationImportCompleted = useCallback\(\(\) => \{/);
   assert.match(appShell, /onEducationImportCompleted=\{handleEducationImportCompleted\}/);
   assert.match(appShell, /refreshKey=\{educationRefreshKey\}/);
@@ -423,4 +453,13 @@ test("the CSS defines a harness workspace with an optional object browser and re
   assert.match(css, /\.edupi-task-inspector/);
   assert.match(css, /@media \(max-width: 820px\)/);
   assert.doesNotMatch(css, /Notion-inspired surface language/);
+});
+
+test("background jobs expose every available artifact for native opening", async () => {
+  const jobs = await read("./EduPiBackgroundJobs.tsx");
+  const css = await read("../app/edupi-admin.css");
+  assert.match(jobs, /job\.artifacts\.map/);
+  assert.match(jobs, /workspaceFile\(data\.workspace, file\.relative_path\)/);
+  assert.match(jobs, /openPathNative/);
+  assert.match(css, /\.edupi-background-job-artifacts/);
 });

@@ -40,7 +40,7 @@ export function EduPiWorkspace() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/edupi/status", { cache: "no-store", signal: controller.signal })
+    fetch("/api/edupi/status?summary=1", { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json() as Promise<EduPiStatus>;

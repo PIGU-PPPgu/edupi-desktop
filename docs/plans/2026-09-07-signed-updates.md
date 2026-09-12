@@ -1,5 +1,37 @@
 # 自动下载安装
 
+## 2026-09-12 本地签名复核（取代“缺少私钥”的当前风险描述）
+
+- 已找到本机永久 updater 密钥对：`~/.config/edupi-release/updater.key` 与 `.pub`。用私钥对临时文件签名成功，确认该私钥未设置密码。
+- GitHub 仓库 Actions Secret 名称 `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_UPDATER_PUBLIC_KEY` 已存在；`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 不需要补值。Core 仓库匿名 `git ls-remote` 可读，`EDUPI_CORE_READ_TOKEN` 当前也不构成阻塞。
+- 使用本机密钥临时注入公钥后，最终 `EduPi.app.tar.gz` 已生成对应 `.sig` 文件（404 bytes）；随后恢复源码中的临时公钥配置，没有提交密钥或配置改动。
+- 当前剩余事项是 GitHub Actions 正式构建/草稿 Release、三平台产物和 Windows/Linux 实机验收；本地 updater 签名阻塞已解除。
+
+## 2026-09-12 正式发布链路准备（取代“缺少 Core token”的当前风险描述）
+
+- Desktop 版本已从 `0.3.6` 推进到 `0.3.7`，`Cargo.toml`、`Cargo.lock`、包元数据和 `component-versions.json` 已保持一致。
+- `release.yml`、`preview-installers.yml`、`windows-build-debug.yml` 对公开 EduPi Core 使用 `EDUPI_CORE_READ_TOKEN || github.token`；没有这个可选 Secret 也能 checkout 公开仓库，不再把它当成发布阻塞。
+- Core 修复提交 `6b1d0cf74d7a1344c881da8e34a857243e315fdb` 已通过本机全量回归并合并到公开 Core `main`（PR #58，合并提交 `ea3b1dd175d3521546cc2b3ff685f6c9c7a360c6`）；Desktop Actions 现在可以按精确 pin checkout。
+- 仍需远端实证的项目是 `v0.3.7` Actions 全矩阵、草稿 Release 的三平台签名产物、Windows/Linux 安装与应用内升级，以及 Apple 公证。它们分别记录为外部验收边界，不再混同为本地密钥或 Core token 缺失。
+
+## 2026-09-12 Today 修复包（取代下方旧 Core pin 记录）
+
+- 最终包配套 Core pin 为 `6b1d0cf74d7a1344c881da8e34a857243e315fdb`，Desktop component manifest 为 `sha256:9f28910f0886fcfed4509729af8361749cbd0f0cf3b48df4093db34fed6728b5`。旧的 `deda34d… / b29eb3…` 记录仅保留为历史证据；writer detector 矩阵和 daemon manifest 断言均已同步。
+- 钉钉长驻进程不再独占 Core 写锁；最终包启动后钉钉为 ready，空闲 writer admission 可由另一写入者成功取得并释放。
+- 隔离打包服务真实执行一次 Today 接受：HTTP 200、receipt `accepted`，重新读取为 `accepted / closed_accepted`，证明包内 UI 所接的写入链可持久化并重新投影。
+- Today 页面已显示“待你决定 / 稍后处理 / 已记录”，动作反馈和刷新/重试入口随包交付。macOS 原生窗口已冷启动并截图核对。
+- `tauri build --bundles app` 已生成 `.app` 和 tar.gz；updater 私钥缺失导致签名步骤退出，未上传发布。Windows/Linux 实机安装升级、签名/公证仍未验收。
+
+## 2026-09-12 本地修复包状态
+
+本地打包已使用锁定 Core `deda34d7523b5267602a5629027c367a91acaa7a`（Desktop component manifest `sha256:b29eb3…`）生成 `EduPi.app` 并实际冷启动；最新序列首个状态响应约 2.4 秒即为 ready，内置服务监听 38472，Core、教育投影和 Kernel 返回 ready，真实工作区为 50 名学生、9 个课表、43 个校历节点、237 个任务，原生窗口可见。构建最后的 updater 签名步骤因当前环境没有 `TAURI_SIGNING_PRIVATE_KEY` 失败，未上传或发布此包；DMG/updater 签名和跨平台升级仍未完成。
+
+同一包还包含 R03 下一次计划运行显示、R05/R10 来源跳转、R13 多产物入口和 C6 识别可选字段兼容；启动初期的 Core process 状态会在运行时完成后恢复为 ready，最终状态请求已回读 ready。
+
+最终包的模型测试路由用临时 localhost mock 服务复核通过：未提供 API key 时返回 `ok=true`、HTTP 200 和 `OK`，测试服务未写入持久配置。
+
+用临时数据根启动同一 `EduPi.app` 的独立 38471 实例完成文件补录 E2：历史会话 `write` 结果登记 1 份文件并重新读取成功；临时实例关闭后正式 38472 服务恢复 ready，未改真实教师数据。
+
 ## 2026-09-09 Windows安装基线
 
 后续运行 `34316941057`：公开版安装检查及当前原生代码编译均通过。原生编译使用公开版资源夹具，不包含新版Core/前端完整构建；私有Core构建仍未执行，不能据此宣称新版Windows安装包已通过。

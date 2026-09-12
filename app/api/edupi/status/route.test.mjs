@@ -8,7 +8,7 @@ const dataRoot = process.env.EDUPI_DATA_ROOT;
 const { GET } = await createJiti(import.meta.url, { tsconfigPaths: true }).import("./route.ts");
 
 test("projects only validated Core health and education snapshot", { skip: !coreRoot || !dataRoot }, async () => {
-  const response = await GET();
+  const response = await GET(new Request("http://localhost/api/edupi/status"));
   const body = await response.json();
   assert.equal(response.status, 200);
   assert.equal(body.scope, "teacher_internal");
@@ -26,11 +26,21 @@ test("projects only validated Core health and education snapshot", { skip: !core
   assert.equal("calendar" in body, false);
 });
 
+test("summary mode omits kernel history while preserving the run summary", { skip: !coreRoot || !dataRoot }, async () => {
+  const response = await GET(new Request("http://localhost/api/edupi/status?summary=1"));
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.kernel.status, "ready");
+  assert.deepEqual(body.kernel.runs, []);
+  assert.ok(Number.isInteger(body.kernel.summary.total));
+  assert.equal(body.projection.status, "ready");
+});
+
 test("fails visibly without a local JSON fallback", async () => {
   const previous = process.env.EDUPI_CORE_ROOT;
   process.env.EDUPI_CORE_ROOT = "/definitely/missing/edupi-core";
   try {
-    const response = await GET();
+  const response = await GET(new Request("http://localhost/api/edupi/status"));
     const body = await response.json();
     assert.equal(response.status, 200);
     assert.equal(body.core.status, "unavailable");
@@ -46,7 +56,7 @@ test("returns unavailable when the explicit data root is missing", async () => {
   const previous = process.env.EDUPI_DATA_ROOT;
   process.env.EDUPI_DATA_ROOT = "/definitely/missing/edupi-data";
   try {
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/edupi/status"));
     const body = await response.json();
     assert.equal(response.status, 200);
     assert.equal(body.core.status, "unavailable");

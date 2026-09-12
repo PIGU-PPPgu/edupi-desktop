@@ -10,6 +10,7 @@ import { useDesktopChrome, WindowControls } from "./desktop";
 import { EduPiConnectorSetup } from "./EduPiConnectorSetup";
 import { EduPiBackgroundJobs } from "./EduPiBackgroundJobs";
 import { startWindowDragging } from "@/lib/desktop-window";
+import { formatNextScheduledRun } from "@/lib/edupi-schedule-display";
 
 type AdminSnapshot = {
   context: TeacherContextSnapshot | null;
@@ -191,7 +192,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
       </section> : null}
 
       {activeSection === "automation" ? <section className="edupi-admin-section">
-        <AdminSectionHeader title="自动运行" meta={kernel?.status === "ready" ? `最近 ${kernelRuns.length} 次` : "运行状态不可用"} onRefresh={refresh} />
+        <AdminSectionHeader title="自动运行" meta={kernel?.status === "ready" ? `${formatNextScheduledRun()} · 最近 ${kernelRuns.length} 次` : "运行状态不可用"} onRefresh={refresh} />
         <div className="edupi-admin-metrics"><AdminMetric value={kernelSummary?.running ?? "—"} label="运行中" /><AdminMetric value={kernelSummary?.needs_review ?? "—"} label="待确认" /><AdminMetric value={kernelSummary?.succeeded ?? "—"} label="已完成" /></div>
         <div className="edupi-admin-runtime" role="list" aria-label="最近自动运行">
           {kernelRuns.length > 0 ? kernelRuns.slice(0, 12).map((run) => <div role="listitem" key={run.run_id}>

@@ -31,6 +31,7 @@ const ENV_KEYS = [
 const previousEnv = new Map(ENV_KEYS.map((key) => [key, process.env[key]]));
 
 let temporaryDataRoot = null;
+let writerAdmission = null;
 
 function restoreEnvironment() {
   for (const [key, value] of previousEnv) {
@@ -114,7 +115,13 @@ async function run() {
   process.env.EDUPI_MEMORY_DIR = memoryDir;
   process.env.EDUPI_OUTPUT_DIR = outputDir;
   process.env.EDUPI_LOCK_DIR = lockDir;
-  process.env.EDUPI_HOME = temporaryDataRoot;
+  process.env.EDUPI_HOME = path.join(temporaryDataRoot, ".edupi");
+
+  const { prepareCoreRuntimeRoot } = await import(path.join(coreRoot, "scripts", "core_runtime_root.mjs"));
+  const { acquireCoreRuntimeWriterAdmission } = await import(path.join(coreRoot, "scripts", "core_runtime_writer_admission.mjs"));
+  const preparedRoot = prepareCoreRuntimeRoot(temporaryDataRoot);
+  assert.equal(preparedRoot.ok, true, JSON.stringify(preparedRoot));
+  writerAdmission = await acquireCoreRuntimeWriterAdmission({ root: preparedRoot, kind: "legacy_chat_capture_e2", busyTimeoutMs: 250 });
 
   const { createJiti } = await import("jiti");
   const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
@@ -221,6 +228,8 @@ try {
   process.exitCode = 1;
 } finally {
   clearTimeout(timeoutHandle);
+  await writerAdmission?.release().catch(() => {});
+  writerAdmission = null;
   restoreEnvironment();
   cleanup();
 }

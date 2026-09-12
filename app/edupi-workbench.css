@@ -619,6 +619,12 @@ html.dark .edupi-teacher-shell {
 .edupi-database-row__detail span { color: var(--ep-dim); font-size: 9px; }
 .edupi-database-row__detail strong { overflow: hidden; color: var(--ep-muted); font-size: 10px; font-weight: 520; text-overflow: ellipsis; white-space: nowrap; }
 .edupi-database-row__detail button { height: 30px; padding: 0 10px; border: 1px solid var(--ep-border-strong); border-radius: 6px; background: var(--ep-surface); color: var(--ep-text); cursor: pointer; font-size: 10px; }
+.edupi-insight-source { display: grid; grid-column: 1 / -1; gap: 8px; align-items: start; }
+.edupi-insight-source > summary { width: fit-content; color: var(--ep-muted); cursor: pointer; font-size: 10px; }
+.edupi-insight-source__items { display: grid; gap: 3px; color: var(--ep-muted); font-size: 10px; }
+.edupi-insight-source__items p { margin: 0; }
+.edupi-insight-source-link { grid-column: 1 / -1; width: fit-content; color: var(--ep-blue); font-size: 10px; }
+.edupi-insight-source-quote { grid-column: 1 / -1; margin: 0; padding-left: 10px; border-left: 2px solid var(--ep-border-strong); color: var(--ep-muted); font-size: 10px; line-height: 1.6; white-space: pre-wrap; }
 .edupi-memory-actions { display: flex; gap: 6px; }
 .edupi-memory-actions button.is-delete { border-color: color-mix(in srgb, var(--ep-red) 35%, var(--ep-border)); color: var(--ep-red); }
 .edupi-memory-editor { display: grid; grid-column: 1 / -1; gap: 8px; }
@@ -887,8 +893,11 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-today-work__notice,
 .edupi-today-work__feedback { margin: 10px 12px 0; padding: 8px 10px; border-radius: 6px; font-size: 11px; line-height: 1.5; }
 .edupi-today-work__notice { background: var(--ep-surface-soft); color: var(--ep-muted); }
+.edupi-today-work__feedback { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .edupi-today-work__feedback.is-success { background: var(--ep-green-soft); color: var(--ep-green); }
 .edupi-today-work__feedback.is-error { background: var(--ep-red-soft); color: var(--ep-red); }
+.edupi-today-work__feedback button { flex: 0 0 auto; min-height: 24px; padding: 0 8px; border: 1px solid currentColor; border-radius: 5px; background: transparent; color: inherit; cursor: pointer; font-size: 10px; }
+.edupi-today-work__feedback button:disabled { cursor: not-allowed; opacity: .5; }
 .edupi-today-work__groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .edupi-today-flow { border-bottom: 1px solid var(--ep-border); background: color-mix(in srgb, var(--ep-blue-soft) 25%, var(--ep-surface)); }
 .edupi-today-flow > header { display: flex; align-items: center; justify-content: space-between; padding: 9px 13px 6px; }
@@ -905,7 +914,9 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-today-work__group { min-width: 0; }
 .edupi-today-work__group + .edupi-today-work__group { border-left: 1px solid var(--ep-border); }
 .edupi-today-work__group > header { display: flex; min-height: 38px; align-items: baseline; justify-content: space-between; gap: 8px; padding: 9px 12px 6px; border-bottom: 1px solid var(--ep-border); background: var(--ep-surface-soft); }
+.edupi-today-work__group > header > div { display: grid; min-width: 0; gap: 2px; }
 .edupi-today-work__group > header h3 { margin: 0; font-size: 12px; }
+.edupi-today-work__group > header p { margin: 0; color: var(--ep-muted); font-size: 9px; line-height: 1.4; }
 .edupi-today-work__group > header span { color: var(--ep-muted); font-size: 10px; }
 .edupi-today-work__items { min-width: 0; }
 .edupi-today-work__item { min-width: 0; padding: 11px 12px; border-bottom: 1px solid var(--ep-border); }

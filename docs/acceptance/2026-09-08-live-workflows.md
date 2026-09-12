@@ -1,5 +1,28 @@
 # 实际流程验收
 
+## 2026-09-12 `0.3.7` 发布包收口（取代旧签名阻塞记录）
+
+- `npm run desktop:prepare` 使用 Core `6b1d0cf74d7a1344c881da8e34a857243e315fdb` 完成资源闭包；`EduPi.app`、`EduPi_0.3.7_aarch64.dmg`、updater tar.gz 和 `.sig` 均生成，包内 `CFBundleShortVersionString` 与 `CFBundleVersion` 均为 `0.3.7`。
+- 使用本机 updater 公钥通过 `minisign-verify` 复核 tar.gz 签名成功；源码中的临时公钥配置已由构建 trap 恢复，工作树没有密钥或配置残留。
+- 直接启动该 `.app` 的隔离 smoke 实例监听 `127.0.0.1:38471`；`/api/edupi/status?summary=1` 返回 Core/projection/Kernel `ready`，组件清单 hash 为 `sha256:9f28910f0886fcfed4509729af8361749cbd0f0cf3b48df4093db34fed6728b5`，Kernel 早安简报运行成功；进程随后已正常关闭。
+- Desktop PR #79 的 `audit` 与 `rust-audit` 均通过；Core PR #58 已合并到公开 `main`。本地未发现高危或严重 npm 漏洞，公开 Core checkout 不再依赖额外 Secret。
+- 尚未验证：正式 GitHub Release 上传与 `latest.json` 回读、Windows/Linux 实机安装升级、Apple 公证、真实系统睡眠唤醒/通知点击，以及真实课堂内容质量。这些仍是发布与人工验收边界。
+
+## 2026-09-12 Today 审核交互与写入链复核（取代旧的 Today/包 pin 结论）
+
+- 失败复现：旧钉钉桥接 PID 持有 `.edupi/runtime/core-runtime-writer-admission-v1.sqlite`，Today 六种决定均在 Core 写入阶段失败，前端统一显示红色“暂时无法提交”。
+- 修复证据：Core `5650151` 将桥接写入改为短时准入，最终 pin `6b1d0cf74d7a1344c881da8e34a857243e315fdb`；writer detector 矩阵由 `94c3c3b`、daemon manifest 断言由 `6b1d0cf` 同步，完整 Core 回归通过。新包钉钉状态 ready，`lsof` 不再显示空闲进程持有 writer DB；独立 writer probe 成功。
+- 隔离包 E2：最终 bundled server 使用临时数据根，读取一条真实 projected pending candidate，提交 `accept` 返回 HTTP 200 与 receipt `accepted`；重新 GET 后状态为 `accepted`、revision 增加、next cycle 为 `closed_accepted`，分组从 pending 进入 done。未写入正式教师数据。
+- 页面证据：最终 `EduPi.app` 原生窗口可见；截图核对列名“待你决定 / 稍后处理 / 已记录”、列头说明、动作说明条和接受/调整/暂缓/稍后/停止提示/拒绝按钮。错误状态提供“本次没有写入”，快照过期提供“刷新待办”，普通失败提供“重试”。
+- 浏览器只读复核补齐 R05/R10/R12/R17：Today 的日程项进入带对象参数的日程详情；观察记录展开后来源链接进入对应 session；班级→程天乐档案可在“知识图谱 / 人际互动网络”间切换，当前记录、列表/网络空态和来源文本均随页面更新。
+- R14 交互补验：学生详情抽屉按 Escape 关闭并移除 URL 选中参数；768px 视口下 `scrollWidth === clientWidth === 768`，没有水平溢出。仅为 macOS 浏览器包验收。
+- clean profile 资源补验：最终 `src-tauri/resources/edupi-core` 中允许的 7 个教育扩展由 `DefaultResourceLoader` 实际加载，返回 0 errors；退休 direct-writer 扩展明确缺席，符合当前 Core architecture ledger。
+- R01/R02 页面复核：最终包材料页点击对话生成的 `展开与折叠学案.md` 后，材料详情抽屉显示状态、来源、日期、预览和“补充 / 修订”入口；本次只读打开，未改正式数据。
+- 最终 Core bundle closure 3 项和 bridge transport parity 通过；覆盖复制后 bundled 校验、篡改/缺失依赖拒绝以及无 Git bundled 启动。
+- 配套 Core `npm test` 最终全量回归通过；writer detector、daemon manifest SHA 和 Desktop pin 均与最终源码一致。
+- 回归：Desktop 1067 tests / 1042 passed / 0 failed / 25 skipped；TypeScript、ESLint、Core live model、Desktop bridge manifest、transport parity 均通过。
+- 未验证：没有在正式教师数据上代替教师点击接受；当前桌面自动化无法稳定完成原生鼠标点击，因此真实 UI 写入以隔离包 E2 和 API 重新读取证据为准。签名 updater、跨平台安装升级、系统通知点击和真实课堂内容质量仍未完成。
+
 ## 资源包实际启动 · 2026-09-09
 
 - 本地desktop:prepare首次因追踪旧src-tauri/target及resources目录产生147条过长路径失败；排除旧构建、Git与开发状态后构建通过，阶段目录不含.git、.env.local、.edupi或旧src-tauri树。
@@ -263,3 +286,13 @@ Core9af123d启动后，无需再保存摘录，旧任务已回planned、当前�
 - 纯行为测试覆盖取消中断合并、来源变化、同班/跨班、分批检查、忽略/分别保留缓存；未将这些单元测试标成全部浏览器操作通过。
 - 后续取代刷新欠项：同一真实模型会话调用reopen，工作区保持打开且没有手动刷新，既有监测将“提醒续聊验收”自动移回进行中。新增事件处理和监测签名16项测试通过；没有增加额外轮询。
 - 实际停止并重启开发服务后回读：合并计划只剩a并保留全部备注；手动完成任务done/revision1；对话重开任务progress/revision2。随后移除隔离凭据副本，恢复真实30141服务，未覆盖安装应用。Core PR #40；Desktop提交见本记录所在PR。定向测试36通过、6跳过，刷新测试16通过，tsc/eslint通过；跳过项不计通过。
+
+# 2026-09-12 最终配套运行时与桌面包复核
+
+- 配套 Core 固定为 `deda34d7523b5267602a5629027c367a91acaa7a`，Desktop component manifest 为 `sha256:b29eb3ef9a9133de6d0d3c6528197d9bd13359ab4bd6ecf75c9d675e0845ddb7`。`npm run test:core-runtime-live-model` 全部通过，覆盖隔离 SDK、symlinked `node_modules` 权限、取消/超时、父进程退出回收、G1 产物读回、重放/重启、显式重试和来源失效。
+- 最终 `EduPi.app` 由 `npm run desktop:prepare` 和 `tauri build --bundles app` 生成；包内服务重启后 `/api/edupi/status?summary=1` 返回 Core/projection/Kernel `ready`，工作区计数为 50 名学生、9 个课表、43 个校历节点、237 个任务，Core manifest hash 与 pin 一致，原生窗口可见。完整 build 的唯一失败步骤是 updater 私钥缺失，未生成签名更新包。
+- `6258d9a` 后的冷启动序列记录为首次状态响应约 2.4 秒，首个观察到的 Core/projection 状态即为 `ready`；这条证据只覆盖当前 macOS 打包包，不替代其他平台和真实睡眠唤醒。
+- 追加打包隔离文件 E2：临时数据根和临时 Pi 会话目录启动最终 `EduPi.app` 的 38471 实例；POST `/api/edupi/artifacts` 对历史 `write` toolResult 返回 `registered: 1, failedCount: 0`，GET 列表回读 1 份 `.edupi/output/package-e2.md`。关闭临时实例后正式 38472 包恢复 `Core/projection ready`，临时目录已清理。
+- 最终包 loopback 模型配置复核：临时 localhost SSE mock 通过 `/api/models-config/test` 返回 `ok=true`、HTTP 200、`responseText=OK`，未写入持久模型配置，mock 服务已关闭。
+- 同一最终 pin 的 Desktop 全量回归为 1067 tests、1042 passed、0 failed、25 skipped；`tsc --noEmit`、`npm run lint`、定向 C1/C2/C3 与 C6 recognition E2 均通过。C6 真实识别使用隔离材料，得到 3 个校历事件、1 个课表项，暂存目录回到 0。
+- 仍未完成的证据边界：真实系统睡眠/唤醒与安装版自动补跑、系统通知点击、Windows/Linux 实机安装升级、签名/公证、零 API 首次完整备课、安装版后台恢复、真实课堂内容质量和外部连接器账号闭环。当前桌面自动化读取超时，原生页面点击未以接口结果替代。

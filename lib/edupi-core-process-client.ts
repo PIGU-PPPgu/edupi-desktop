@@ -6,6 +6,8 @@ import { getPendingEduPiRuntime } from "./edupi-runtime-supervisor";
 const MAX_REQUEST_BYTES = 256 * 1024;
 const MAX_STDOUT_BYTES = 2 * 1024 * 1024;
 const MAX_STDERR_BYTES = 64 * 1024;
+const CORE_READ_TIMEOUT_MS = 15_000;
+const CORE_COMMAND_TIMEOUT_MS = 15_000;
 
 export class EduPiCoreProcessError extends Error {
   constructor(public code: string, message: string) {
@@ -156,5 +158,5 @@ export async function callEduPiCore<T = unknown>({
     request_id: requestId,
     ...(envelope === undefined ? {} : { envelope }),
   };
-  return runCoreProcess<T>({ runtime, dataRoot, request, timeoutMs: operation === "command" ? 15_000 : 5_000, signal });
+  return runCoreProcess<T>({ runtime, dataRoot, request, timeoutMs: operation === "command" ? CORE_COMMAND_TIMEOUT_MS : CORE_READ_TIMEOUT_MS, signal });
 }

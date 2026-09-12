@@ -860,6 +860,7 @@ export function AppShell() {
     setRefreshKey((k) => k + 1);
     setExplorerRefreshKey((k) => k + 1);
     setEducationRefreshKey((key) => key + 1);
+    window.dispatchEvent(new Event("edupi-artifacts-updated"));
   }, []);
 
   const handleEducationImportCompleted = useCallback(() => {

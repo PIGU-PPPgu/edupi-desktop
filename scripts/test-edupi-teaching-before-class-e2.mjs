@@ -27,7 +27,7 @@ fs.writeFileSync(path.join(memoryDir, "timetable.json"), JSON.stringify({ slots:
 fs.writeFileSync(path.join(memoryDir, "preferences.json"), JSON.stringify({ entries: [] }));
 fs.writeFileSync(path.join(memoryDir, "semester.json"), JSON.stringify({ start_date: null, end_date: null, entries: [] }));
 fs.writeFileSync(path.join(memoryDir, "subject_knowledge.json"), JSON.stringify({ 数学: { 一元一次方程: { mastery: 0.5, common_errors: [{ desc: "移项变号错误", students: ["赵六", "张三", "李四"] }], struggling_students: ["赵六", "张三", "李四"], updated_at: "2026-09-01T00:00:00.000Z" } } }));
-fs.writeFileSync(path.join(outputDir, "material_candidates.json"), JSON.stringify({ entries: [{ id: "material-1", title: "七年级数学第一周课件", subject: "数学" }] }));
+fs.writeFileSync(path.join(outputDir, "material_candidates.json"), JSON.stringify({ entries: [{ id: "material-1", title: "七年级数学第一周课件", subject: "数学", class_id: "703" }] }));
 
 Object.assign(process.env, {
   EDUPI_CORE_ROOT: coreRoot,
@@ -38,12 +38,18 @@ Object.assign(process.env, {
   EDUPI_MEMORY_DIR: memoryDir,
   EDUPI_OUTPUT_DIR: outputDir,
   EDUPI_LOCK_DIR: lockDir,
-  EDUPI_HOME: temp,
+  EDUPI_HOME: path.join(temp, ".edupi"),
 });
 
 const heartbeatUrl = `${pathToFileURL(path.join(coreRoot, "scripts", "calendar_work_heartbeat.mjs")).href}?teaching_e2=${Date.now()}`;
 const { run } = await import(heartbeatUrl);
 const outputFor = (candidate) => JSON.stringify({ artifacts: candidate.deliverables.map((title) => ({ title, content: `# ${title}\n\n${candidate.summary}` })) });
+
+const { prepareCoreRuntimeRoot } = await import(path.join(coreRoot, "scripts", "core_runtime_root.mjs"));
+const { acquireCoreRuntimeWriterAdmission } = await import(path.join(coreRoot, "scripts", "core_runtime_writer_admission.mjs"));
+const preparedRoot = prepareCoreRuntimeRoot(temp);
+assert.equal(preparedRoot.ok, true, JSON.stringify(preparedRoot));
+const admission = await acquireCoreRuntimeWriterAdmission({ root: preparedRoot, kind: "legacy_teaching_before_class_e2", busyTimeoutMs: 250 });
 
 try {
   await assert.rejects(() => run({ today: "2026-09-02", horizonDays: 2, now: "2026-09-02T12:00:00.000Z", outputDir }), (error) => error?.code === "model_unavailable");
@@ -75,5 +81,6 @@ try {
   assert.equal(final.workCases.every((workCase) => workCase.externalSend === false), true);
   console.log(JSON.stringify({ status: "passed", timetable_periods: 6, work_cases: 6, draft_ready: 4, artifacts_per_ready_case: 4, model_unavailable_visible: true, replay_stable: true, external_send: false }));
 } finally {
+  await admission.release();
   fs.rmSync(temp, { recursive: true, force: true });
 }

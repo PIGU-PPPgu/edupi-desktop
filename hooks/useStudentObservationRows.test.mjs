@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createJiti } from "jiti";
-const { readStudentObservationPrefix } = await createJiti(import.meta.url).import("./useStudentObservationRows.ts");
+const { readStudentObservationPrefix, studentObservationNeed } = await createJiti(import.meta.url).import("./useStudentObservationRows.ts");
+
+test("student observation pagination reserves space for local insight rows", () => {
+  assert.equal(studentObservationNeed(0, 0), 8);
+  assert.equal(studentObservationNeed(2, 17), 41);
+  assert.equal(studentObservationNeed(-1, -2), 8);
+});
 
 test("student observation pages load only the needed prefix and retain prior pages", async () => {
   const original = globalThis.fetch, offsets = [];

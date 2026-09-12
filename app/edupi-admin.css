@@ -247,6 +247,8 @@
 .edupi-admin-list small { color: var(--text-muted); font-size: 11px; }
 .edupi-admin-list em { color: var(--text-muted); font-size: 11px; font-style: normal; white-space: nowrap; }
 .edupi-admin-list em.is-ready { color: #18805a; }
+.edupi-background-job-artifacts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.edupi-background-job-artifacts button { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .edupi-connector-setup { margin-top: 18px; padding: 18px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); }
 .edupi-connector-setup > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }

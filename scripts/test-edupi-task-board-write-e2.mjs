@@ -51,15 +51,18 @@ try {
   const second = await secondResponse.json();
   assert.equal(secondResponse.status, 200, JSON.stringify(second));
   const secondTask = second.data.tasks.find((item) => item.title === "不可跳过流程的任务");
-  const invalidResponse = await PATCH(request(`http://localhost/api/edupi/tasks/${encodeURIComponent(secondTask.id)}`, "PATCH", { stage: "done", expectedRevision: 0, note: null }), { params: Promise.resolve({ taskId: secondTask.id }) });
-  assert.equal(invalidResponse.status, 409);
-  assert.equal((await invalidResponse.json()).code, "invalid_transition");
+  // Direct todo → done is an intentional teacher-board path: a teacher can
+  // record work completed outside EduPi without manufacturing a review.
+  const directCompletionResponse = await PATCH(request(`http://localhost/api/edupi/tasks/${encodeURIComponent(secondTask.id)}`, "PATCH", { stage: "done", expectedRevision: 0, note: null }), { params: Promise.resolve({ taskId: secondTask.id }) });
+  const directCompletion = await directCompletionResponse.json();
+  assert.equal(directCompletionResponse.status, 200, JSON.stringify(directCompletion));
+  assert.equal(directCompletion.data.tasks.find((item) => item.id === secondTask.id).boardStage, "done");
 
   const finalResponse = await GET();
   const final = await finalResponse.json();
   assert.equal(finalResponse.status, 200, JSON.stringify(final));
   assert.equal(final.tasks.find((item) => item.id === task.id).boardStage, "done");
-  assert.equal(final.tasks.find((item) => item.id === secondTask.id).boardStage, "todo");
+  assert.equal(final.tasks.find((item) => item.id === secondTask.id).boardStage, "done");
   assert.equal(fs.existsSync(path.join(dataRoot, ".edupi", "output", "task_board_state.json")), true);
   const { createEduPiTaskTool } = await jiti.import("../lib/edupi-task-tool.ts");
   const { taskCategory } = await jiti.import("../lib/edupi-task-category.ts");
@@ -87,7 +90,7 @@ try {
   assert.equal((await reminders.POST(request("http://localhost/api/edupi/reminders", "POST", { id: reminder.id, type: "handled" }))).status, 200);
   const persisted = await (await reminders.GET()).json();
   assert.equal(persisted.items.find(item => item.id === reminder.id).handled, true);
-  console.log(JSON.stringify({ status: "passed", created: 2, moved: ["progress", "review", "done"], invalid_transition_no_write: true, restart_reload: true }, null, 2));
+  console.log(JSON.stringify({ status: "passed", created: 2, moved: ["progress", "review", "done"], direct_completion: true, restart_reload: true }, null, 2));
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
 }

@@ -8,8 +8,10 @@ import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const tauriCli = require.resolve("@tauri-apps/cli/tauri.js");
-const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const workspaceRoot = resolve(desktopRoot, "..");
 const defaultEduPiRoot = resolve(workspaceRoot, "edupi");
+const defaultBundledCoreRoot = resolve(desktopRoot, "src-tauri/resources/edupi-core");
 
 function firstConfigured(environment, names) {
   return names.map((name) => environment[name]).find((value) => typeof value === "string" && value) ?? "";
@@ -19,19 +21,30 @@ function resolveConfiguredRoot(value) {
   return value ? resolve(value) : "";
 }
 
-export function resolveEduPiLaunchRoots(environment = process.env, siblingRoot = defaultEduPiRoot) {
+export function resolveEduPiLaunchRoots(
+  environment = process.env,
+  siblingRoot = defaultEduPiRoot,
+  bundledCoreRoot = defaultBundledCoreRoot,
+) {
   const dataRoot = resolveConfiguredRoot(
     firstConfigured(environment, ["EDUPI_DATA_ROOT", "EDUPI_PROJECT_ROOT", "EDUPI_WORKSPACE"])
       || (existsSync(siblingRoot) ? siblingRoot : ""),
   );
+  const explicitlyConfiguredCore = firstConfigured(environment, ["EDUPI_CORE_ROOT"]);
+  const legacyConfiguredRoot = firstConfigured(environment, ["EDUPI_PROJECT_ROOT", "EDUPI_WORKSPACE"]);
   const coreRoot = resolveConfiguredRoot(
-    firstConfigured(environment, ["EDUPI_CORE_ROOT", "EDUPI_PROJECT_ROOT", "EDUPI_WORKSPACE"]) || dataRoot,
+    explicitlyConfiguredCore
+      || legacyConfiguredRoot
+      || (existsSync(bundledCoreRoot) ? bundledCoreRoot : dataRoot),
   );
+  const coreValidationMode = environment.EDUPI_CORE_VALIDATION_MODE
+    || (explicitlyConfiguredCore || legacyConfiguredRoot ? "external" : "bundled");
   return {
     PI_DESKTOP_STATE_DIR: resolveConfiguredRoot(environment.PI_DESKTOP_STATE_DIR || ""),
     EDUPI_PROJECT_ROOT: dataRoot,
     EDUPI_DATA_ROOT: dataRoot,
     EDUPI_CORE_ROOT: coreRoot,
+    EDUPI_CORE_VALIDATION_MODE: coreValidationMode,
     EDUPI_CORE_ALLOWED_ROOT: resolveConfiguredRoot(
       environment.EDUPI_CORE_ALLOWED_ROOT || (coreRoot ? dirname(coreRoot) : ""),
     ),

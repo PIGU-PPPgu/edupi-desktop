@@ -3,6 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import type { StudentEvent } from "@/lib/edupi-student-events";
 
 type Prefix = { records: StudentEvent[]; total: number | null };
+export const STUDENT_OBSERVATION_PAGE_SIZE = 8;
+export function studentObservationNeed(page: number, extraRows = 0): number {
+  return (Math.max(0, page) + 1) * STUDENT_OBSERVATION_PAGE_SIZE + Math.max(0, extraRows);
+}
 export async function readStudentObservationPrefix(kind: string, query: string, needed: number, previous: Prefix, signal: AbortSignal): Promise<Prefix> {
   const records = [...previous.records];
   let total = previous.total;
@@ -20,7 +24,7 @@ export async function readStudentObservationPrefix(kind: string, query: string, 
   return { records, total };
 }
 
-export function useStudentObservationRows(category: string, status: string, query: string, page: number) {
+export function useStudentObservationRows(category: string, status: string, query: string, page: number, extraRows = 0) {
   const kind = category === "learning" ? "learning" : category === "class" ? "interaction" : null;
   const enabled = kind !== null && ["all", "observation"].includes(status);
   const key = `${kind}:${status}:${query}`;
@@ -37,12 +41,12 @@ export function useStudentObservationRows(category: string, status: string, quer
     const controller = new AbortController();
     const previous = cache.current.key === key ? cache.current.value : { records: [], total: null };
     setState({ key, records: previous.records, total: previous.total || 0, loading: true, error: "" });
-    void readStudentObservationPrefix(kind, query, (page + 1) * 8, previous, controller.signal).then(value => {
+    void readStudentObservationPrefix(kind, query, studentObservationNeed(page, extraRows), previous, controller.signal).then(value => {
       if (controller.signal.aborted) return;
       cache.current = { key, value };
       setState({ key, records: value.records, total: value.total || 0, loading: false, error: "" });
     }).catch(error => { if (!controller.signal.aborted) setState({ key, records: previous.records, total: previous.total || 0, loading: false, error: error.message }); });
     return () => controller.abort();
-  }, [enabled, key, kind, page, query, refresh]);
+  }, [enabled, extraRows, key, kind, page, query, refresh]);
   return enabled && state.key === key ? { ...state, connected: !state.loading && !state.error } : { records: [], total: 0, loading: enabled, error: "", connected: false };
 }

@@ -41,7 +41,14 @@ type EditorState = {
   note: string;
 };
 
-type Feedback = { kind: "success" | "error"; text: string } | null;
+type Feedback = { kind: "success" | "error"; text: string; action?: "refresh" } | null;
+type ReviewRetry = {
+  candidate: EducationWorkCandidate;
+  decision: EducationWorkCandidateDecision;
+  patch?: Record<string, unknown>;
+  note?: string;
+};
+type Submission = { candidateId: string; decision: EducationWorkCandidateDecision } | null;
 
 const STATUS_LABELS: Record<EducationWorkCandidate["status"], string> = {
   pending_review: "待判断",
@@ -62,10 +69,34 @@ const DECISION_LABELS: Record<EducationWorkCandidateDecision, string> = {
   suppress: "已停止提示",
 };
 
+const DECISION_EFFECTS: Record<EducationWorkCandidateDecision, string> = {
+  accept: "移到“已记录”，关闭本次待判断。",
+  modify: "按新内容记录，并移到“已记录”。",
+  reject: "关闭这条事项，并移到“已记录”。",
+  hold: "移到“稍后处理”，保留待后续判断。",
+  snooze: "移到“稍后处理”，到指定日期重新进入待你决定。",
+  suppress: "按选择的范围停止提示，并移到“已记录”。",
+};
+
+const ACTION_TITLES: Record<EducationWorkCandidateDecision, string> = {
+  accept: "接受：关闭本次待判断，移到已记录",
+  modify: "调整：修改标题、说明或截止日期后记录",
+  reject: "拒绝：关闭这条事项并保留拒绝记录",
+  hold: "暂缓：移到稍后处理，之后可以继续判断",
+  snooze: "稍后：选择日期，到期后重新进入待你决定",
+  suppress: "停止提示：选择停止范围并填写原因",
+};
+
 const GROUP_LABELS: Record<keyof WorkCandidateGroups, string> = {
-  now: "现在",
-  later: "稍后",
-  done: "已完成",
+  now: "待你决定",
+  later: "稍后处理",
+  done: "已记录",
+};
+
+const GROUP_HINTS: Record<keyof WorkCandidateGroups, string> = {
+  now: "需要你现在做决定",
+  later: "已暂缓或安排了日期",
+  done: "决定已写入，可修改",
 };
 
 const SUPPRESSION_SCOPE_LABELS = {
@@ -111,7 +142,14 @@ function readableDate(value: string | null): string {
 }
 
 function actionSuccess(decision: EducationWorkCandidateDecision, receiptId: string): string {
-  return `✓ ${DECISION_LABELS[decision]} · 回执 ${receiptId}`;
+  return `✓ ${DECISION_LABELS[decision]}：${DECISION_EFFECTS[decision]} 回执 ${receiptId}`;
+}
+
+function submittingLabel(decision: EducationWorkCandidateDecision): string {
+  return decision === "accept" ? "正在接受…"
+    : decision === "hold" ? "正在暂缓…"
+      : decision === "reject" ? "正在拒绝…"
+        : "正在提交…";
 }
 
 function candidateMeta(candidate: EducationWorkCandidate): string {
@@ -147,12 +185,14 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [changingDecisionId, setChangingDecisionId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [retryReview, setRetryReview] = useState<ReviewRetry | null>(null);
+  const [submission, setSubmission] = useState<Submission>(null);
   const editorCurrent = isTodayWorkEditorCurrent(editor, data.workCandidates, capability.enabled);
 
   useEffect(() => {
     if (editor && !editorCurrent) {
       setEditor(null);
-      setFeedback({ kind: "error", text: "内容已更新，请重新打开后确认。" });
+      setFeedback({ kind: "error", text: "内容已更新，本次没有写入；请刷新待办后重新决定。", action: "refresh" });
     }
   }, [editor, editorCurrent]);
 
@@ -164,6 +204,8 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
   ) => {
     if (busy || !capability.enabled) return;
     setFeedback(null);
+    setRetryReview(null);
+    setSubmission({ candidateId: candidate.candidateId, decision });
     try {
       const result = await submitTodayWorkReview({ candidate, decision, patch, note });
       onEducation(result.data);
@@ -173,20 +215,32 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
     } catch (error) {
       if (error instanceof TodayWorkReviewError) {
         if (error.data) onEducation(error.data);
-        if (todayWorkFailureDisposition(error.code) === "close") setEditor(null);
-        setFeedback({ kind: "error", text: todayWorkErrorMessage(error.code) });
+        const disposition = todayWorkFailureDisposition(error.code);
+        if (disposition === "close") setEditor(null);
+        setFeedback({ kind: "error", text: todayWorkErrorMessage(error.code), action: disposition === "close" ? "refresh" : undefined });
+        if (disposition === "preserve") setRetryReview({ candidate, decision, patch, note });
       } else setFeedback({ kind: "error", text: todayWorkErrorMessage("malformed") });
+    } finally {
+      setSubmission(null);
     }
+  };
+
+  const refreshEducation = () => {
+    setFeedback(null);
+    setRetryReview(null);
+    window.dispatchEvent(new Event("edupi-education-refresh"));
   };
 
   const openEditor = (candidate: EducationWorkCandidate, mode: EditorMode) => {
     setFeedback(null);
+    setRetryReview(null);
     setEditor(startEditor(candidate, mode));
   };
 
   const cancelEditor = () => {
     setEditor(null);
     setFeedback(null);
+    setRetryReview(null);
   };
 
   const submitModify = async (candidate: EducationWorkCandidate) => {
@@ -195,6 +249,7 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
     const summary = editor.summary.trim();
     if (!title || !summary) {
       setFeedback({ kind: "error", text: "标题和说明不能为空。" });
+      setRetryReview(null);
       return;
     }
     const patch: Record<string, unknown> = {};
@@ -203,10 +258,12 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
     if (editor.dueAt !== (candidate.dueAt || "")) patch.dueAt = editor.dueAt ? editor.dueAt : null;
     if (Object.keys(patch).length === 0) {
       setFeedback({ kind: "error", text: "请至少调整一项内容。" });
+      setRetryReview(null);
       return;
     }
     if (Object.hasOwn(patch, "dueAt") && patch.dueAt !== null && !isDateOnly(String(patch.dueAt))) {
       setFeedback({ kind: "error", text: "截止日期格式无效。" });
+      setRetryReview(null);
       return;
     }
     await review(candidate, "modify", patch);
@@ -215,6 +272,7 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
   const submitSnooze = async (candidate: EducationWorkCandidate) => {
     if (!editor || !editorCurrent || editor.candidateId !== candidate.candidateId || !isDateOnly(editor.snoozeUntil) || editor.snoozeUntil <= localIsoDate()) {
       setFeedback({ kind: "error", text: "请选择晚于今天的日期。" });
+      setRetryReview(null);
       return;
     }
     await review(candidate, "snooze", { snoozeUntil: editor.snoozeUntil });
@@ -223,6 +281,7 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
   const submitSuppress = async (candidate: EducationWorkCandidate) => {
     if (!editor || !editorCurrent || editor.candidateId !== candidate.candidateId || !editor.note.trim()) {
       setFeedback({ kind: "error", text: "请填写停止提示的原因。" });
+      setRetryReview(null);
       return;
     }
     await review(candidate, "suppress", { suppressionScope: editor.suppressionScope }, editor.note.trim());
@@ -256,6 +315,7 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
     const decisionRecorded = candidate.status !== "pending_review";
     const changingDecision = changingDecisionId === candidate.candidateId;
     const showActions = actionable && (!decisionRecorded || changingDecision);
+    const submittingCandidate = submission?.candidateId === candidate.candidateId;
     return <article className={`edupi-today-work__item is-${candidate.status}`} key={candidate.candidateId}>
       <header className="edupi-today-work__item-header"><div><span>{candidateMeta(candidate)}</span><h4>{candidate.title}</h4></div><strong className={`edupi-today-work__status is-${candidate.status}`}>{STATUS_LABELS[candidate.status]}</strong></header>
       <p className="edupi-today-work__summary">{candidate.summary}</p>
@@ -263,12 +323,12 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
       <details className="edupi-today-work__details"><summary>来源与依据</summary><dl><div><dt>来源</dt><dd>{candidate.sourceIds.join("、")}</dd></div><div><dt>依据</dt><dd>{candidate.evidenceIds.join("、")}</dd></div><div><dt>下一步</dt><dd>{NEXT_CYCLE_LABELS[candidate.nextCycleState] || candidate.nextCycleState}</dd></div><div><dt>候选 ID</dt><dd>{candidate.candidateId}</dd></div></dl></details>
       {decisionRecorded && !changingDecision ? <div className={`edupi-today-work__decision is-${candidate.status}`} role="status"><span>{STATUS_LABELS[candidate.status]}{candidate.teacherReview.reviewedAt ? ` · ${candidate.teacherReview.reviewedAt}` : ""}</span>{capability.enabled ? <button type="button" disabled={busy} onClick={() => setChangingDecisionId(candidate.candidateId)}>修改决定</button> : null}</div> : null}
       {showActions && capability.enabled ? <div className="edupi-today-work__actions">
-        <button type="button" className="is-primary" disabled={busy} onClick={() => void review(candidate, "accept")}>接受</button>
-        <button type="button" disabled={busy} onClick={() => isEditing && editor?.mode === "modify" ? cancelEditor() : openEditor(candidate, "modify")}>{isEditing && editor?.mode === "modify" ? "收起调整" : "调整"}</button>
-        <button type="button" disabled={busy} onClick={() => void review(candidate, "hold")}>暂缓</button>
-        <button type="button" disabled={busy} onClick={() => isEditing && editor?.mode === "snooze" ? cancelEditor() : openEditor(candidate, "snooze")}>稍后</button>
-        <button type="button" disabled={busy} onClick={() => isEditing && editor?.mode === "suppress" ? cancelEditor() : openEditor(candidate, "suppress")}>停止提示</button>
-        <button type="button" className="is-danger" disabled={busy} onClick={() => void review(candidate, "reject")}>拒绝</button>
+        <button type="button" className="is-primary" title={ACTION_TITLES.accept} disabled={busy} onClick={() => void review(candidate, "accept")}>{submittingCandidate && submission?.decision === "accept" ? submittingLabel("accept") : "接受"}</button>
+        <button type="button" title={ACTION_TITLES.modify} disabled={busy} onClick={() => isEditing && editor?.mode === "modify" ? cancelEditor() : openEditor(candidate, "modify")}>{isEditing && editor?.mode === "modify" ? "收起调整" : "调整"}</button>
+        <button type="button" title={ACTION_TITLES.hold} disabled={busy} onClick={() => void review(candidate, "hold")}>{submittingCandidate && submission?.decision === "hold" ? submittingLabel("hold") : "暂缓"}</button>
+        <button type="button" title={ACTION_TITLES.snooze} disabled={busy} onClick={() => isEditing && editor?.mode === "snooze" ? cancelEditor() : openEditor(candidate, "snooze")}>稍后</button>
+        <button type="button" title={ACTION_TITLES.suppress} disabled={busy} onClick={() => isEditing && editor?.mode === "suppress" ? cancelEditor() : openEditor(candidate, "suppress")}>停止提示</button>
+        <button type="button" className="is-danger" title={ACTION_TITLES.reject} disabled={busy} onClick={() => void review(candidate, "reject")}>{submittingCandidate && submission?.decision === "reject" ? submittingLabel("reject") : "拒绝"}</button>
       </div> : null}
       {isEditing ? renderEditor(candidate) : null}
     </article>;
@@ -277,7 +337,7 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
   const renderGroup = (group: keyof WorkCandidateGroups) => {
     const candidates = groups[group];
     return <section className={`edupi-today-work__group is-${group}`} aria-labelledby={`edupi-today-work-${group}`} key={group}>
-      <header><h3 id={`edupi-today-work-${group}`}>{GROUP_LABELS[group]}</h3><span>{candidates.length} 项</span></header>
+      <header><div><h3 id={`edupi-today-work-${group}`}>{GROUP_LABELS[group]}</h3><p>{GROUP_HINTS[group]}</p></div><span>{candidates.length} 项</span></header>
       <div className="edupi-today-work__items">{candidates.map((candidate) => renderCandidate(candidate, true))}</div>
       {candidates.length === 0 ? <p className="edupi-today-work__empty">这里暂时没有事项</p> : null}
     </section>;
@@ -288,7 +348,7 @@ export function EduPiTodayWork({ data, onEducation, onWorkCaseDetail }: Props) {
     <header className="edupi-today-work__header"><div><span>教师工作</span><h2 id="edupi-today-work-title">今天要判断</h2></div><span>{data.workCandidates.length} 项 · 教师内部</span></header>
     {livingCases.length > 0 ? <div className="edupi-today-flow" aria-label="EduPi 当前工作流"><header><span>EduPi 流</span><strong>{livingCases.length} 项</strong></header><div>{livingCases.slice(0, 4).map((workCase) => <button type="button" key={workCase.id} onClick={() => onWorkCaseDetail(workCase)}><i className={`edupi-flow-state is-${workCase.currentState}`} aria-hidden="true" /><span><strong>{workCase.title}</strong><small>{workCaseStateLabel(workCase.currentState)}{workCase.dueDate ? ` · ${workCase.dueDate}` : ""}</small></span><em aria-hidden="true">›</em></button>)}</div></div> : null}
     {unavailableCopy ? <p className="edupi-today-work__notice">{unavailableCopy}</p> : null}
-    {feedback ? <p className={`edupi-today-work__feedback is-${feedback.kind}`} role={feedback.kind === "error" ? "alert" : "status"} aria-live="polite">{feedback.text}</p> : null}
+    {feedback ? <div className={`edupi-today-work__feedback is-${feedback.kind}`} role={feedback.kind === "error" ? "alert" : "status"} aria-live="polite"><span>{feedback.text}</span>{feedback.kind === "error" && retryReview ? <button type="button" disabled={busy} onClick={() => void review(retryReview.candidate, retryReview.decision, retryReview.patch, retryReview.note)}>重试</button> : feedback.action === "refresh" ? <button type="button" disabled={busy} onClick={refreshEducation}>刷新待办</button> : null}</div> : null}
     <div className="edupi-today-work__groups">{(["now", "later", "done"] as const).map(renderGroup)}</div>
   </section>;
 }

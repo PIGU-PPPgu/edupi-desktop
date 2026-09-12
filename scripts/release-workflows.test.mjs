@@ -278,7 +278,11 @@ test("every packaged workflow checks out the exact pinned Core runtime", async (
     assert.match(workflow, /contracts\/edupi-core-compat\.json/);
     assert.match(workflow, /repository: PIGU-PPPgu\/edupi/);
     assert.match(workflow, /ref: \$\{\{ steps\.core\.outputs\.commit \}\}/);
-    assert.match(workflow, /token: \$\{\{ secrets\.EDUPI_CORE_READ_TOKEN \}\}/);
+    assert.match(
+      workflow,
+      /token: \$\{\{ secrets\.EDUPI_CORE_READ_TOKEN \|\| github\.token \}\}/,
+      "public Core checkout must remain usable without an optional private-mirror secret",
+    );
     assert.match(workflow, /persist-credentials: false/);
     assert.match(workflow, /git -C \.edupi-core-runtime config core\.autocrlf false/);
     assert.match(workflow, /git -C \.edupi-core-runtime checkout-index --all --force/);

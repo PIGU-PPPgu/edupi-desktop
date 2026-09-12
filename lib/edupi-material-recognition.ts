@@ -167,6 +167,12 @@ function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boo
   return actual.length === keys.length && actual.every((key) => keys.includes(key));
 }
 
+function exactKeysWithOptional(value: Record<string, unknown>, required: readonly string[], optional: readonly string[]): boolean {
+  const allowed = new Set([...required, ...optional]);
+  const actual = Object.keys(value);
+  return required.every((key) => Object.hasOwn(value, key)) && actual.every((key) => allowed.has(key));
+}
+
 function text(value: unknown, maxLength: number, nullable = false): string | null {
   if (value === null && nullable) return null;
   if (typeof value !== "string") throw new MaterialRecognitionError("invalid_output", "识别结果字段无效。");
@@ -235,20 +241,20 @@ export function parseRecognitionOutput(output: string, idFactory: () => string =
   }
   const events: CalendarImportEvent[] = root.events.map((value) => {
     const item = record(value);
-    if (!item || !exactKeys(item, ["date", "end_date", "name", "type", "notes"])) throw new MaterialRecognitionError("invalid_output", "校历识别结果无效。");
+    if (!item || !exactKeysWithOptional(item, ["date", "name", "type"], ["end_date", "notes"])) throw new MaterialRecognitionError("invalid_output", "校历识别结果无效。");
     return {
       event_id: text(idFactory(), 160) as string,
       date: normalizedDate(item.date) || "",
-      end_date: normalizedDate(item.end_date),
+      end_date: normalizedDate(item.end_date ?? null),
       name: text(item.name, 240) as string,
       type: normalizedCalendarType(item.type),
       confidence: "inferred",
-      notes: text(item.notes, 1000, true),
+      notes: text(item.notes ?? null, 1000, true),
     };
   });
   const slots: TimetableImportSlot[] = root.slots.map((value) => {
     const item = record(value);
-    if (!item || !exactKeys(item, ["day_of_week", "period", "subject", "class_name", "kind", "notes"])) {
+    if (!item || !exactKeysWithOptional(item, ["day_of_week", "period", "subject", "kind"], ["class_name", "notes"])) {
       throw new MaterialRecognitionError("invalid_output", "课表识别结果无效。");
     }
     return {
@@ -256,9 +262,9 @@ export function parseRecognitionOutput(output: string, idFactory: () => string =
       day_of_week: normalizedWeekday(item.day_of_week),
       period: normalizedPeriod(item.period),
       subject: text(item.subject, 120) as string,
-      class_name: text(item.class_name, 120, true),
+      class_name: text(item.class_name ?? null, 120, true),
       kind: normalizedSlotKind(item.kind),
-      notes: text(item.notes, 1000, true),
+      notes: text(item.notes ?? null, 1000, true),
     };
   });
   return { events, slots };
