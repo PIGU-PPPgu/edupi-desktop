@@ -10,6 +10,7 @@
 - R01/R02 隔离开发版真实 Agent 工具矩阵通过：同一 Session 通过 `write`、`bash`、`edupi_make_document` 生成 3 份文件，任务绑定后历史补录将 3 份文件全部关联同一 task；再次补录仍保持 3 条、无重复。安装版文件入口和真实页面冷启动仍待验收。
 - R11/R13 本地 Core 生命周期和 Desktop 后台边界回归通过：教学方法 5 种生命周期、冻结 mutation/trial、发布方法读取与来源变更失效通过；后台任务取消/跨任务文件隔离/不可用产物不误报完成通过。真实课堂效果、干净安装依赖和安装版恢复仍未验收。
 - R13 隔离开发版真实后台任务再跑通：提交 `document` job 后 worker 从 queued→running→completed，生成并登记 1 份 `.docx` 产物，状态无 error、产物可定位；后台管理界面现在逐份列出同一任务的所有产物，可在 Tauri 中分别打开。安装版重启恢复仍待验收。
+- R13/R16 Core live runtime 追加通过：`npm run test:core-runtime-live-model` 完整跑过隔离 SDK、父进程退出回收、取消/超时、生产 G1 备课产物读回、重放/重启、显式重试、来源失效和 artifact CAS；此前 symlinked `node_modules` 的权限误报已消除。该证据仍是隔离开发运行，不替代安装版恢复。
 - R06 本地模型配置补齐无 API key 的 loopback 测试路径：隔离 mock 流式模型测试、真实 RPC Session prompt 均成功，外部 URL 仍拒绝无凭据；零 API 首次完整备课和安装版配置续接仍需单独验证。
 - R06/R16 追加 IPv6 loopback：模型测试路由在 `http://[::1]` 上真实返回 OK，隔离后台 Host 与 Core 运行时清单同步允许 `::1`；外部 URL 仍要求凭据。零 API 首次完整备课和安装版配置续接仍需单独验证。
 - R10 来源追溯界面已补齐一条可走通的入口：原始观察显示 Core provenance、可打开 C1 审核；学生学习/互动记录显示来源会话和原文，并可返回来源对话；混合本地记录与学生记录时分页会按本地行数预取服务端前缀，避免后页漏项。组件静态回归、TypeScript、ESLint 通过；浏览器实际点击、编辑后刷新同步和分页端到端仍待验收，故 R10 继续保持部分实现。
