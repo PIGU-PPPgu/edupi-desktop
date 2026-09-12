@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { StudentEvent } from "@/lib/edupi-student-events";
+import { EDUPI_STUDENT_RECORDS_UPDATED_EVENT } from "../lib/edupi-ui-events";
 
 type Prefix = { records: StudentEvent[]; total: number | null };
 export const STUDENT_OBSERVATION_PAGE_SIZE = 8;
@@ -32,8 +33,8 @@ export function useStudentObservationRows(category: string, status: string, quer
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     const reload = () => { cache.current.key = ""; setRefresh(value => value + 1); };
-    window.addEventListener("edupi-student-records-updated", reload);
-    return () => window.removeEventListener("edupi-student-records-updated", reload);
+    window.addEventListener(EDUPI_STUDENT_RECORDS_UPDATED_EVENT, reload);
+    return () => window.removeEventListener(EDUPI_STUDENT_RECORDS_UPDATED_EVENT, reload);
   }, []);
   const [state, setState] = useState({ key: "", records: [] as StudentEvent[], total: 0, loading: false, error: "" });
   useEffect(() => {

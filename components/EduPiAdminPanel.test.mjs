@@ -5,7 +5,7 @@ import test from "node:test";
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("management center is a full admin workspace with persistent navigation", async () => {
-  const [admin, appShell, panel, rail, workspace, materials, css] = await Promise.all([
+  const [admin, appShell, panel, rail, workspace, materials, css, compatibility] = await Promise.all([
     read("./EduPiAdminPanel.tsx"),
     read("./AppShell.tsx"),
     read("./EduPiEducationPanel.tsx"),
@@ -13,6 +13,7 @@ test("management center is a full admin workspace with persistent navigation", a
     read("./EduPiWorkspaceViews.tsx"),
     read("./EduPiMaterialsWorkspace.tsx"),
     read("../app/edupi-admin.css"),
+    read("./EduPiCoreCompatibility.tsx"),
   ]);
 
   for (const endpoint of ["/api/edupi/workspace", "/api/edupi/status", "/api/models"]) assert.match(admin, new RegExp(endpoint.replaceAll("/", "\\/")));
@@ -34,6 +35,10 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.match(admin, /workspaceRef\.current\?\.scrollTo\(\{ top: 0 \}\)/);
   assert.match(admin, /modelSettingsDirty && !window\.confirm/);
   assert.match(admin, /coreConnected && projectionConnected/);
+  assert.match(admin, /EduPiCoreCompatibility/);
+  assert.match(admin, /snapshot\.compatibility/);
+  assert.match(admin, /await readJson<AdminSnapshot\["models"\]>\("\/api\/models", controller\.signal\)/);
+  assert.match(admin, /Boolean\(snapshot\.context && snapshot\.education && snapshot\.status\)/);
   assert.match(admin, /className="edupi-admin-sidebar"/);
   assert.match(admin, /className="edupi-admin-workspace"/);
   assert.match(admin, /APP_VERSION_DISPLAY/);
@@ -81,6 +86,8 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.match(css, /\.edupi-admin-section/);
   assert.doesNotMatch(css, /\.edupi-admin-grid/);
   assert.match(css, /\.edupi-admin-readiness/);
+  assert.match(css, /\.edupi-core-compatibility/);
+  assert.match(compatibility, /COMMAND_LABELS/);
 });
 
 test("management center preserves typed boundaries for unsupported destructive operations", async () => {

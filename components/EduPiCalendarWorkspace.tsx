@@ -429,9 +429,14 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
   };
   const canDeleteSelection = Boolean(selection && isNonTaskSelection(selection) && selection.sourceId
     && data.capabilities.entityDelete.enabled && data.capabilities.entityDelete.targetKinds.includes(selection.kind));
-  const drawerEditor = editingCalendarId && editingCalendarEvent
+  const calendarWriteReady = data.capabilities.calendar.enabled;
+  const timetableWriteReady = data.capabilities.timetable.enabled;
+  const writeReason = !calendarWriteReady || !timetableWriteReady
+    ? [!calendarWriteReady ? data.capabilities.calendar.reason : null, !timetableWriteReady ? data.capabilities.timetable.reason : null].filter(Boolean).join("；")
+    : null;
+  const drawerEditor = editingCalendarId && editingCalendarEvent && calendarWriteReady
     ? <IntakeComposer key={`calendar:${editingCalendarId}`} embedded mode="calendar" anchorDate={anchorDate} calendarEvent={editingCalendarEvent} busy={intakeBusy} onClose={() => setEditingCalendarId(null)} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} />
-    : editingTimetableId && editingTimetableSlot
+    : editingTimetableId && editingTimetableSlot && timetableWriteReady
       ? <IntakeComposer key={`timetable:${editingTimetableId}`} embedded mode="timetable" anchorDate={anchorDate} timetableSlot={editingTimetableSlot} busy={intakeBusy} onClose={() => setEditingTimetableId(null)} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} />
       : null;
 
@@ -439,8 +444,9 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
     <main className="edupi-module-workspace edupi-calendar-workspace">
       <header className="edupi-calendar-heading">
         <div><span>行事历</span><h1>日程</h1><p>校历、课程表与教师任务 · {itemCount} 项</p></div>
-        <div className="edupi-calendar-heading__actions"><button type="button" onClick={() => { if (composer === "calendar" && !editingCalendarId) closeComposer(); else { setEditingCalendarId(null); setEditingTimetableId(null); setComposer("calendar"); } }}>新建日程</button><button type="button" onClick={() => { if (composer === "timetable" && !editingTimetableId) closeComposer(); else { setEditingCalendarId(null); setEditingTimetableId(null); setComposer("timetable"); } }}>添加课表</button><button type="button" className="is-primary" onClick={onUpload}>上传文件</button></div>
+        <div className="edupi-calendar-heading__actions"><button type="button" disabled={!calendarWriteReady} title={!calendarWriteReady ? data.capabilities.calendar.reason : undefined} onClick={() => { if (composer === "calendar" && !editingCalendarId) closeComposer(); else { setEditingCalendarId(null); setEditingTimetableId(null); setComposer("calendar"); } }}>新建日程</button><button type="button" disabled={!timetableWriteReady} title={!timetableWriteReady ? data.capabilities.timetable.reason : undefined} onClick={() => { if (composer === "timetable" && !editingTimetableId) closeComposer(); else { setEditingCalendarId(null); setEditingTimetableId(null); setComposer("timetable"); } }}>添加课表</button><button type="button" className="is-primary" onClick={onUpload}>上传文件</button></div>
       </header>
+      {writeReason ? <p className="edupi-calendar-capability-note" role="status">{writeReason}</p> : null}
       {composer ? <IntakeComposer key={`${composer}:${editingCalendarId || editingTimetableId || "new"}`} mode={composer} anchorDate={anchorDate} calendarEvent={composer === "calendar" ? editingCalendarEvent : null} timetableSlot={composer === "timetable" ? editingTimetableSlot : null} busy={intakeBusy} onClose={closeComposer} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} /> : null}
       <div className="edupi-calendar-content-segment" role="group" aria-label="切换日程内容">{CONTENT_LABELS.map((item) => <button type="button" key={item.mode} className={contentMode === item.mode ? "is-active" : ""} onClick={() => { setContentMode(item.mode); setEditingCalendarId(null); setEditingTimetableId(null); onSelect(null); }} aria-pressed={contentMode === item.mode}>{item.label}</button>)}</div>
       {contentMode === "timetable" ? <EduPiTimetableGrid slots={filteredTimetable} onSelect={onSelect} /> : <>
@@ -456,7 +462,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
       <PendingInbox projection={projection} selection={selection} onSelect={onSelect} onTaskDetail={openTaskDetail} />
       </>}
       {query ? <p className="edupi-calendar-query-note" role="status">正在筛选：{query}{projection.entries.length === 0 && projection.pending.length === 0 ? " · 没有匹配项" : ""}</p> : null}
-      {selection && isNonTaskSelection(selection) ? <CalendarDetailDrawer data={data} selection={selection} onClose={closeDetail} editor={drawerEditor} onEdit={selection.kind === "calendar" && data.calendar.some((event) => event.id === selection.sourceId) ? editSelectedCalendar : selection.kind === "timetable" && data.timetable.map(rawRecord).some((slot) => rawText(slot.slot_id ?? slot.id) === selection.sourceId) ? editSelectedTimetable : undefined} onDelete={canDeleteSelection ? () => void deleteSelected() : undefined} deleteBusy={deleteBusy} /> : null}
+      {selection && isNonTaskSelection(selection) ? <CalendarDetailDrawer data={data} selection={selection} onClose={closeDetail} editor={drawerEditor} onEdit={selection.kind === "calendar" && calendarWriteReady && data.calendar.some((event) => event.id === selection.sourceId) ? editSelectedCalendar : selection.kind === "timetable" && timetableWriteReady && data.timetable.map(rawRecord).some((slot) => rawText(slot.slot_id ?? slot.id) === selection.sourceId) ? editSelectedTimetable : undefined} onDelete={canDeleteSelection ? () => void deleteSelected() : undefined} deleteBusy={deleteBusy} /> : null}
     </main>
   );
 }

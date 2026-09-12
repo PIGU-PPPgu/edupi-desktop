@@ -18,9 +18,9 @@ test("projects the real Core education workspace without Desktop task synthesis"
   assert.equal(body.tasks.some((task) => task.title.includes("教师内部") && task.sourceEventId === null), false);
   assert.equal(body.capabilities.taskReview.enabled, false);
   assert.equal(body.capabilities.taskReview.mode, "read_only");
-  assert.equal(body.capabilities.calendar.enabled, false);
-  assert.equal(body.capabilities.timetable.enabled, false);
-  assert.equal(body.capabilities.materialIntake.enabled, false);
+  assert.equal(body.capabilities.calendar.enabled, true);
+  assert.equal(body.capabilities.timetable.enabled, true);
+  assert.equal(body.capabilities.materialIntake.enabled, true);
 });
 
 test("POST rejects empty and legacy education writes before Core", async () => {

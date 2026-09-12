@@ -424,9 +424,9 @@ export type EducationContract = {
       actions: TaskReviewAction[];
       reason: string;
     };
-    calendar: { enabled: false; mode: "read_only"; reason: string };
-    timetable: { enabled: false; mode: "read_only"; reason: string };
-    materialIntake: { enabled: false; mode: "read_only"; reason: string };
+    calendar: { enabled: boolean; mode: "read_only" | "canonical_safe_store"; reason: string };
+    timetable: { enabled: boolean; mode: "read_only" | "canonical_safe_store"; reason: string };
+    materialIntake: { enabled: boolean; mode: "read_only" | "canonical_safe_store"; reason: string };
     c1Review: C1ReviewCapability;
     teacherContextReview: TeacherContextReviewCapability;
     workCandidateReview: WorkCandidateReviewCapability;
@@ -1452,6 +1452,22 @@ const WORK_CANDIDATE_REVIEW_COMMANDS: ["review_work_candidate"] = ["review_work_
 const WORK_CANDIDATE_REVIEW_ACTIONS: EducationWorkCandidateDecision[] = ["accept", "modify", "reject", "hold", "snooze", "suppress"];
 const MEMORY_UPDATE_COMMANDS: ["update_memory"] = ["update_memory"];
 
+function intakeCapability(
+  command: "import_calendar" | "import_timetable" | "intake_material",
+  label: string,
+  snapshotPayload: RawRecord | undefined,
+  supportedCommands?: readonly string[],
+): EducationContract["capabilities"]["calendar"] {
+  const manifestCommands = supportedCommands || [];
+  const snapshotCommands = record(snapshotPayload?.capabilities).supported_commands;
+  const enabled = manifestCommands.includes(command) && exactStringList(snapshotCommands, manifestCommands);
+  return {
+    enabled,
+    mode: enabled ? "canonical_safe_store" : "read_only",
+    reason: enabled ? `${label}通过 Core receipt 写入。` : `Core 尚未启用${label}。`,
+  };
+}
+
 function taskReviewCapability(snapshotPayload: RawRecord | undefined, supportedCommands?: readonly string[]): EducationContract["capabilities"]["taskReview"] {
   const manifestCommands = supportedCommands || [];
   const snapshotCommands = record(snapshotPayload?.capabilities).supported_commands;
@@ -1619,7 +1635,6 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
     materials: coreSourceSummary(workspace, "material_candidates"),
     documents: coreSourceSummary(workspace, "documents"),
   };
-  const disabled = (reason = CORE_PROJECTION_UNAVAILABLE) => ({ enabled: false as const, mode: "read_only" as const, reason });
   return {
     scope: "teacher_internal",
     externalSend: false,
@@ -1668,9 +1683,9 @@ export function buildEducationContractFromWorkspace(workspaceInput: RawRecord, o
     },
     capabilities: {
       taskReview: taskReviewCapability(snapshotPayload, options.supportedCommands),
-      calendar: disabled(),
-      timetable: disabled(),
-      materialIntake: disabled(),
+      calendar: intakeCapability("import_calendar", "校历导入", snapshotPayload, options.supportedCommands),
+      timetable: intakeCapability("import_timetable", "课表导入", snapshotPayload, options.supportedCommands),
+      materialIntake: intakeCapability("intake_material", "材料接入", snapshotPayload, options.supportedCommands),
       c1Review: c1ReviewCapability(snapshotPayload, options.supportedCommands),
       teacherContextReview: teacherContextReviewCapability(snapshotPayload, options.supportedCommands),
       workCandidateReview: workCandidateReviewCapability(snapshotPayload, options.supportedCommands),
@@ -1767,9 +1782,9 @@ export function buildEducationContract(input: ContractInput = {}): EducationCont
     },
     capabilities: {
       taskReview: taskReviewCapability(snapshotPayload, input.supportedCommands),
-      calendar: { enabled: false, mode: "read_only", reason: CORE_PROJECTION_UNAVAILABLE },
-      timetable: { enabled: false, mode: "read_only", reason: CORE_PROJECTION_UNAVAILABLE },
-      materialIntake: { enabled: false, mode: "read_only", reason: CORE_PROJECTION_UNAVAILABLE },
+      calendar: intakeCapability("import_calendar", "校历导入", snapshotPayload, input.supportedCommands),
+      timetable: intakeCapability("import_timetable", "课表导入", snapshotPayload, input.supportedCommands),
+      materialIntake: intakeCapability("intake_material", "材料接入", snapshotPayload, input.supportedCommands),
       c1Review: c1ReviewCapability(snapshotPayload, input.supportedCommands),
       teacherContextReview: teacherContextReviewCapability(snapshotPayload, input.supportedCommands),
       workCandidateReview: workCandidateReviewCapability(snapshotPayload, input.supportedCommands),

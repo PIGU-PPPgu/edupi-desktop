@@ -19,6 +19,7 @@ import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
 import { rememberScrollPosition, sessionScrollTops } from "@/lib/scroll-memory";
 import { applyAssistantMessageEvent, type ClientAssistantMessageEvent } from "@/lib/streaming-message";
 import type { SessionStatsInfo } from "@/lib/pi-types";
+import { EDUPI_STUDENT_RECORDS_UPDATED_EVENT } from "@/lib/edupi-ui-events";
 
 export interface SessionData {
   sessionId: string;
@@ -1468,7 +1469,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const id = event.toolCallId as string;
         const name = educationToolCallsRef.current.get(id);
         educationToolCallsRef.current.delete(id);
-        if (name === "edupi_student_records") window.dispatchEvent(new Event("edupi-student-records-changed"));
+        if (name === "edupi_student_records") window.dispatchEvent(new Event(EDUPI_STUDENT_RECORDS_UPDATED_EVENT));
         if (name === "calendar_import" || name === "timetable_import" || name === "edupi_create_task" || name === "edupi_update_task") {
           onEducationImportCompleted?.(name);
         }
