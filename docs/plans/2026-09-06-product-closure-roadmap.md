@@ -2,9 +2,14 @@
 
 ## 2026-09-12 发布风险收口（取代前述旧阻塞状态）
 
-- 本机 updater 密钥对已找到并验证可签名；GitHub 的 `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_UPDATER_PUBLIC_KEY` 已存在。未设置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 与 `EDUPI_CORE_READ_TOKEN` 不再构成本轮本机或公开 Core 发布链路的阻塞：前者对应未加密私钥，后者由三个工作流回退到 `github.token`。
+- 本机 updater 密钥对已找到并验证可签名；GitHub 的 `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_UPDATER_PUBLIC_KEY` 已存在。未设置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 不构成阻塞，因为私钥未加密；私有 Core 所需的 `EDUPI_CORE_READ_TOKEN` 已由现有 GitHub 登录凭据写入 Actions Secret，token 未进入仓库或日志。
 - Desktop 发布版本已推进到 `0.3.7`，组件清单和 Cargo 版本已同步；Core 修复提交 `6b1d0cf74d7a1344c881da8e34a857243e315fdb` 已通过本机全量回归并合并到公开 Core `main`（PR #58，合并提交 `ea3b1dd175d3521546cc2b3ff685f6c9c7a360c6`），Desktop 已具备按精确 pin 运行正式 Actions 的条件。
-- 本轮可在本机闭合的风险已处理；剩余未验证项明确为正式 Actions 全矩阵、三平台 Release 产物、Windows/Linux 实机安装升级、Apple 公证，以及真实课堂内容质量与系统通知/睡眠唤醒场景。
+- 本轮可在本机和正式 CI 闭合的发布风险已处理；剩余未验证项明确为 Windows/Linux 实机安装升级、Apple 公证，以及真实课堂内容质量与系统通知/睡眠唤醒场景。
+
+## 2026-09-13 正式发布验收
+
+- 首次 run `34701579391` 因私有 Core checkout 缺少 `EDUPI_CORE_READ_TOKEN` 失败；补入 Secret 后重跑 `34702177745` 成功，macOS、Linux、Windows 与 manifest jobs 全部通过。
+- `v0.3.7` 已发布为非草稿，远端资产包含 DMG、AppImage、deb、Windows NSIS、macOS updater tar.gz、三个 updater 签名文件、`latest.json` 和 `component-versions.json`。远端 `latest.json` 三个平台条目均有签名，清单版本为 `0.3.7`。
 
 ## 2026-09-12 Today 审核交互与 Core 写入锁修复（取代本页旧 pin/Today 状态）
 

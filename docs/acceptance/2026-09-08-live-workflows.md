@@ -6,7 +6,13 @@
 - 使用本机 updater 公钥通过 `minisign-verify` 复核 tar.gz 签名成功；源码中的临时公钥配置已由构建 trap 恢复，工作树没有密钥或配置残留。
 - 直接启动该 `.app` 的隔离 smoke 实例监听 `127.0.0.1:38471`；`/api/edupi/status?summary=1` 返回 Core/projection/Kernel `ready`，组件清单 hash 为 `sha256:9f28910f0886fcfed4509729af8361749cbd0f0cf3b48df4093db34fed6728b5`，Kernel 早安简报运行成功；进程随后已正常关闭。
 - Desktop PR #79 的 `audit` 与 `rust-audit` 均通过；Core PR #58 已合并到公开 `main`。本地未发现高危或严重 npm 漏洞，公开 Core checkout 不再依赖额外 Secret。
-- 尚未验证：正式 GitHub Release 上传与 `latest.json` 回读、Windows/Linux 实机安装升级、Apple 公证、真实系统睡眠唤醒/通知点击，以及真实课堂内容质量。这些仍是发布与人工验收边界。
+- 尚未验证：Windows/Linux 实机安装升级、Apple 公证、真实系统睡眠唤醒/通知点击，以及真实课堂内容质量。这些仍是发布与人工验收边界。
+
+## 2026-09-13 正式 GitHub Release 验收
+
+- 首次 run `34701579391` 在私有 Core checkout 失败，确认 `EDUPI_CORE_READ_TOKEN` 是正式 CI 必需 Secret；通过现有 GitHub 登录凭据写入该 Secret 后，run `34702177745` 的 macOS、Linux、Windows 和 manifest jobs 全部成功。
+- Release `v0.3.7` 已发布为非草稿、非预发布版本，资产包含 `EduPi_0.3.7_aarch64.dmg`、`EduPi_0.3.7_amd64.AppImage`、`EduPi_0.3.7_amd64.deb`、`EduPi_0.3.7_x64-setup.exe`、macOS updater tar.gz、三个 `.sig`、`latest.json` 和 `component-versions.json`。
+- 远端 `latest.json` 回读通过：版本为 `0.3.7`，`darwin-aarch64`、`linux-x86_64`、`windows-x86_64` 均有签名和对应 `v0.3.7` 下载地址；组件清单 `appVersion` 为 `0.3.7`。
 
 ## 2026-09-12 Today 审核交互与写入链复核（取代旧的 Today/包 pin 结论）
 
