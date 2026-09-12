@@ -8,6 +8,7 @@
 - 页面证据：最终 `EduPi.app` 原生窗口可见；截图核对列名“待你决定 / 稍后处理 / 已记录”、列头说明、动作说明条和接受/调整/暂缓/稍后/停止提示/拒绝按钮。错误状态提供“本次没有写入”，快照过期提供“刷新待办”，普通失败提供“重试”。
 - 浏览器只读复核补齐 R05/R10/R12/R17：Today 的日程项进入带对象参数的日程详情；观察记录展开后来源链接进入对应 session；班级→程天乐档案可在“知识图谱 / 人际互动网络”间切换，当前记录、列表/网络空态和来源文本均随页面更新。
 - R14 交互补验：学生详情抽屉按 Escape 关闭并移除 URL 选中参数；768px 视口下 `scrollWidth === clientWidth === 768`，没有水平溢出。仅为 macOS 浏览器包验收。
+- clean profile 资源补验：最终 `src-tauri/resources/edupi-core` 中允许的 7 个教育扩展由 `DefaultResourceLoader` 实际加载，返回 0 errors；退休 direct-writer 扩展明确缺席，符合当前 Core architecture ledger。
 - 回归：Desktop 1067 tests / 1042 passed / 0 failed / 25 skipped；TypeScript、ESLint、Core live model、Desktop bridge manifest、transport parity 均通过。
 - 未验证：没有在正式教师数据上代替教师点击接受；当前桌面自动化无法稳定完成原生鼠标点击，因此真实 UI 写入以隔离包 E2 和 API 重新读取证据为准。签名 updater、跨平台安装升级、系统通知点击和真实课堂内容质量仍未完成。
 

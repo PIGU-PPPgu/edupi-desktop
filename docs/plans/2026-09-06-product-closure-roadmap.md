@@ -9,6 +9,7 @@
 - 最终桌面包由 `npm run desktop:prepare` 与 `tauri build --bundles app` 生成；包内 Core/projection/Kernel ready，真实工作区 50 名学生、9 个课表、43 个校历、237 个任务，Desktop manifest 为 `sha256:9f28910f0886fcfed4509729af8361749cbd0f0cf3b48df4093db34fed6728b5`。原生窗口截图已核对新列名、动作说明和无红色失败条。
 - 追加实际浏览器验收：Today 三列和动作标题可读；点击“接下来”日程项后进入日程详情并带真实对象路由；观察记录展开后“打开来源对话”进入对应 session；从班级点开程天乐档案后，知识图谱/人际互动网络两个切换入口均可用，网络图与列表空态按当前真实记录显示。上述操作为只读页面验收，未改教师数据。
 - 追加 R14 页面交互复核：学生详情抽屉打开后按 Escape 会关闭并清除 URL 选中项；768px 视口下文档宽度不溢出（scrollWidth=clientWidth=768），移动布局可读。Windows 实机仍未验收。
+- 追加安装资源闭包复核：最终 bundled Core 的 clean profile loader 实际加载 7 个允许教育扩展且 `errors=[]`；测试同时确认已退休的直接写入扩展不进入包。此前失败的测试要求与当前 architecture ledger 冲突，已修正为当前闭包契约。
 - 验证结果：Desktop 全量 1067 tests、1042 passed、0 failed、25 skipped；`tsc --noEmit`、`npm run lint`、Core live model、桥接清单和传输一致性均通过。updater 私钥仍缺失，构建只在签名更新包步骤退出，未发布。
 - 状态边界：真实教师数据没有被测试接受动作改写；真实包写入在隔离数据根完成。原生自动化当前仍不稳定，因此没有把真实工作区的鼠标点击或系统通知点击记为通过；R15/R17 跨平台安装升级、签名、公证和真实课堂内容质量继续保留外部/人工验收状态。
 
