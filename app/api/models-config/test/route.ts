@@ -25,6 +25,17 @@ function getAssistantText(message: AssistantMessage): string {
     .join("");
 }
 
+function isLoopbackModelEndpoint(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:")
+      && ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(req: Request) {
   if (!isApiRequestAllowed(req)) {
     return NextResponse.json({ ok: false, error: "Untrusted API request" }, { status: 403 });
@@ -67,7 +78,8 @@ export async function POST(req: Request) {
     if (!model) return NextResponse.json({ ok: false, error: `Model not found: ${providerName}/${modelId}` });
 
     const resolved = await modelRuntime.getAuth(model);
-    if (!resolved?.auth.apiKey) {
+    const localNoAuth = !resolved?.auth?.apiKey && isLoopbackModelEndpoint((body.provider as Record<string, unknown>).baseUrl);
+    if (!resolved?.auth?.apiKey && !localNoAuth) {
       return NextResponse.json({ ok: false, error: `No API key found for "${providerName}"` });
     }
 
@@ -84,8 +96,8 @@ export async function POST(req: Request) {
           timestamp: Date.now(),
         }],
       }, {
-        apiKey: resolved.auth.apiKey,
-        headers: resolved.auth.headers,
+        apiKey: resolved?.auth?.apiKey ?? (localNoAuth ? "local-loopback" : ""),
+        headers: resolved?.auth?.headers,
         maxTokens: 16,
         timeoutMs: TEST_TIMEOUT_MS,
         maxRetries: 0,
