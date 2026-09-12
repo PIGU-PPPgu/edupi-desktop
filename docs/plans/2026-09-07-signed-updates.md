@@ -22,6 +22,13 @@
 - 仍未完成的是 Windows/Linux 实机安装与应用内升级、Apple 公证、系统睡眠唤醒/通知点击和真实课堂内容质量；CI 产物存在不替代这些验收。
 - Windows published-install run `34705099213` 已在干净 Windows runner 安装并启动 `v0.3.7`，同时 native source check、私有 Core diagnose、资源 stray-scan 和原生命令检查均通过。
 
+## 2026-09-13 macOS 应用内升级验收
+
+- `/Applications/EduPi.app` 升级前为 `0.3.6`；设置页真实检查返回 `latestVersion=0.3.7`、`updateAvailable=true`。先备份旧应用到 `/var/folders/xk/qmn_r8g93ljb7b5vqzq3rd040000gn/T/edupi-before-037-4bf_lkm1/EduPi.app`。
+- 第一次下载在约 80% 返回原生 `error decoding response body`，进程和旧应用保持不变；点击重试后下载、签名校验、安装和 relaunch 均成功。
+- 重启后的原生窗口显示 `v0.3.7`；`/api/edupi/status?summary=1` 返回 Core/projection/Kernel `ready`，计数为 students 50、tasks 237、calendar 43、timetable 9；`/api/updates?refresh=1` 返回 current/latest `0.3.7` 和 `updateAvailable=false`。
+- 升级前后 `.edupi` 文件清单均为 121 个；变化仅落在 dingtalk/kernel/rhythm/teacher-review 与 Core runtime 状态文件，学生、任务、校历和课表投影均重新读取成功。Linux 实机安装、Apple 公证和通知/睡眠唤醒仍未验收。
+
 ## 2026-09-12 Today 修复包（取代下方旧 Core pin 记录）
 
 - 最终包配套 Core pin 为 `6b1d0cf74d7a1344c881da8e34a857243e315fdb`，Desktop component manifest 为 `sha256:9f28910f0886fcfed4509729af8361749cbd0f0cf3b48df4093db34fed6728b5`。旧的 `deda34d… / b29eb3…` 记录仅保留为历史证据；writer detector 矩阵和 daemon manifest 断言均已同步。

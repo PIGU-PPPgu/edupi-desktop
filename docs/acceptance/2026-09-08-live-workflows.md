@@ -15,6 +15,12 @@
 - 远端 `latest.json` 回读通过：版本为 `0.3.7`，`darwin-aarch64`、`linux-x86_64`、`windows-x86_64` 均有签名和对应 `v0.3.7` 下载地址；组件清单 `appVersion` 为 `0.3.7`。
 - Windows workflow run `34705099213` 的 published-install 实际安装并启动 `v0.3.7`；同次 native source check、私有 Core diagnose、资源 stray-scan 和原生命令检查均通过。Linux 仍未在真实 Linux 主机安装，Apple 公证与应用内升级仍未验收。
 
+## 2026-09-13 macOS 应用内升级
+
+- 已从已安装的 `v0.3.6` 打开设置页执行真实更新；第一次下载在 80% 返回 `error decoding response body`，旧应用未被替换，重试后完成安装并重启。
+- 重启后的原生窗口显示 `v0.3.7`；Core/projection/Kernel ready，工作区回读 50 名学生、237 个任务、43 个校历、9 个课表，更新检查返回 `updateAvailable=false`。
+- 升级前后 `.edupi` 文件清单均为 121 个，变化限于运行时与 kernel/review 状态文件；未发现教师 roster、任务、校历或课表源文件被删除。Linux 实机、Apple 公证和系统通知/睡眠唤醒仍保留未验收状态。
+
 ## 2026-09-12 Today 审核交互与写入链复核（取代旧的 Today/包 pin 结论）
 
 - 失败复现：旧钉钉桥接 PID 持有 `.edupi/runtime/core-runtime-writer-admission-v1.sqlite`，Today 六种决定均在 Core 写入阶段失败，前端统一显示红色“暂时无法提交”。
