@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { StudentEvent } from "@/lib/edupi-student-events";
 import {EduPiStudentGraph} from "./EduPiStudentGraph";
 import {buildStudentGraph} from "@/lib/edupi-student-graph";
+import { EDUPI_STUDENT_RECORDS_UPDATED_EVENT } from "@/lib/edupi-ui-events";
 
 export function EduPiStudentEvents({student,studentId,studentClass,onAgent,query: search=""}:{student:string|null;studentId?:string;studentClass?:string;onAgent:(prompt:string,mode?:"insert"|"replace")=>void;query?:string}){
   const [kind,setKind]=useState("learning");const [page,setPage]=useState(0);
@@ -14,7 +15,7 @@ export function EduPiStudentEvents({student,studentId,studentClass,onAgent,query
   const [records,setRecords]=useState<StudentEvent[]>([]);const [total,setTotal]=useState(0);
   const [refresh,setRefresh]=useState(0);const [error,setError]=useState<string|null>(null);const [loading,setLoading]=useState(true);
   const [editing,setEditing]=useState<StudentEvent|null>(null);const [deleting,setDeleting]=useState<string|null>(null);const [busy,setBusy]=useState(false);
-  useEffect(()=>{const changed=()=>setRefresh(value=>value+1);window.addEventListener("edupi-student-records-changed",changed);return()=>window.removeEventListener("edupi-student-records-changed",changed);},[]);
+  useEffect(()=>{const changed=()=>setRefresh(value=>value+1);window.addEventListener(EDUPI_STUDENT_RECORDS_UPDATED_EVENT,changed);return()=>window.removeEventListener(EDUPI_STUDENT_RECORDS_UPDATED_EVENT,changed);},[]);
   useEffect(()=>{
     const controller=new AbortController();setLoading(true);setError(null);setRecords([]);setTotal(0);
     const query=new URLSearchParams({kind,offset:String(page*20),query:search,...(studentId?{student_id:studentId}:student?{student}:{}),...(from?{from}:{}),...(to?{to}:{})});
@@ -31,7 +32,7 @@ export function EduPiStudentEvents({student,studentId,studentClass,onAgent,query
       const response=await fetch("/api/edupi/student-events",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       const result=await response.json();if(!response.ok)throw new Error(result.error||"保存失败");
       setEditing(null);setDeleting(null);setRefresh(value=>value+1);
-      window.dispatchEvent(new Event("edupi-student-records-updated"));
+      window.dispatchEvent(new Event(EDUPI_STUDENT_RECORDS_UPDATED_EVENT));
       if(action==="delete_event")setSelectedRecord(null);
     }catch(reason){setError(reason instanceof Error?reason.message:"保存失败");}finally{setBusy(false);}
   };
@@ -41,7 +42,7 @@ export function EduPiStudentEvents({student,studentId,studentClass,onAgent,query
     <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}><label>从 <input type="date" value={from} onChange={event=>{setFrom(event.target.value);setPage(0);}}/></label><label>到 <input type="date" value={to} min={from||undefined} onChange={event=>{setTo(event.target.value);setPage(0);}}/></label></div>
     <div className="edupi-student-graph-toggle" role="group" aria-label="记录视图">{[["list","列表"],["graph","网络图"]].map(([value,label])=><button key={value} type="button" aria-pressed={view===value} onClick={()=>{setView(value);setSelectedRecord(null);setEditing(null);}}>{label}</button>)}</div>
     {!loading&&records.length>0&&view==="graph"?<EduPiStudentGraph records={records} selectedId={selectedRecord} onSelect={setSelectedRecord}/>:null}
-    {view==="graph"&&kind==="learning"?<details><summary>合并知识点名称</summary><form onSubmit={async event=>{event.preventDefault();setBusy(true);try{const response=await fetch("/api/edupi/student-events",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"set_topic_alias",alias,canonical})});const result=await response.json();if(!response.ok)throw new Error(result.error||"保存失败");setRefresh(value=>value+1);setAlias("");setCanonical("");window.dispatchEvent(new Event("edupi-student-records-updated"));}catch(reason){setError(reason instanceof Error?reason.message:"保存失败");}finally{setBusy(false);}}}><label>原名称<input required maxLength={160} value={alias} onChange={event=>setAlias(event.target.value)}/></label><label>统一名称<input required maxLength={160} value={canonical} onChange={event=>setCanonical(event.target.value)}/></label><button disabled={busy} type="submit">保存</button></form></details>:null}
+    {view==="graph"&&kind==="learning"?<details><summary>合并知识点名称</summary><form onSubmit={async event=>{event.preventDefault();setBusy(true);try{const response=await fetch("/api/edupi/student-events",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"set_topic_alias",alias,canonical})});const result=await response.json();if(!response.ok)throw new Error(result.error||"保存失败");setRefresh(value=>value+1);setAlias("");setCanonical("");window.dispatchEvent(new Event(EDUPI_STUDENT_RECORDS_UPDATED_EVENT));}catch(reason){setError(reason instanceof Error?reason.message:"保存失败");}finally{setBusy(false);}}}><label>原名称<input required maxLength={160} value={alias} onChange={event=>setAlias(event.target.value)}/></label><label>统一名称<input required maxLength={160} value={canonical} onChange={event=>setCanonical(event.target.value)}/></label><button disabled={busy} type="submit">保存</button></form></details>:null}
     {!loading&&!error&&records.length===0&&view==="graph"&&student?<svg viewBox="0 0 360 150" width="100%" role="img" aria-label={`${student}暂无${kind==="learning"?"知识点":"同伴互动"}关联记录`}><circle cx="180" cy="60" r="36" fill="var(--ep-surface-soft)" stroke="var(--ep-border)"/><text x="180" y="65" textAnchor="middle" fill="var(--ep-text)" fontSize="13">{student}</text><text x="180" y="125" textAnchor="middle" fill="var(--ep-muted)" fontSize="11">暂无关联记录</text></svg>:null}
     {loading?<p role="status">读取中…</p>:records.length===0?<p>暂无记录</p>:(view==="graph"?records.filter(record=>record.id===selectedRecord):records).map(item=><article key={item.id}>
       <header><strong>{(item.student_labels || item.students).join("、")}</strong>{item.class_name?<span>{item.class_name}</span>:null}<time>{item.observed_on||"日期未明确"}</time></header>

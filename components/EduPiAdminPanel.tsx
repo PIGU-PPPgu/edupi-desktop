@@ -11,12 +11,13 @@ import { EduPiConnectorSetup } from "./EduPiConnectorSetup";
 import { EduPiBackgroundJobs } from "./EduPiBackgroundJobs";
 import { startWindowDragging } from "@/lib/desktop-window";
 import { formatNextScheduledRun } from "@/lib/edupi-schedule-display";
+import { EduPiCoreCompatibility, type CoreCompatibilitySnapshot } from "./EduPiCoreCompatibility";
 
 type AdminSnapshot = {
   context: TeacherContextSnapshot | null;
   education: EducationContract | null;
   status: {
-    core?: { status?: string };
+    core?: { status?: string; coreCommit?: string; validationMode?: string; componentManifestHash?: string; contractVersion?: string; schemaHash?: string; fixtureManifestHash?: string; supportedCommands?: string[]; supportedProjections?: string[] };
     projection?: { status?: string };
     kernel?: {
       status?: string;
@@ -24,6 +25,7 @@ type AdminSnapshot = {
       runs?: Array<{ run_id?: string; trigger_id?: string; status?: string; updated_at?: string; result_summary?: string | null; attempt_count?: number }>;
     };
   } | null;
+  compatibility?: CoreCompatibilitySnapshot | null;
   models: { modelList?: Array<{ id: string; provider: string }>; defaultModel?: { provider: string; modelId: string } | null } | null;
   platform: {
     teachingSkills?: { mutation_enabled?: boolean; summary?: Record<string, number>; skills?: Array<{ skill_id?: string; title?: string; lifecycle_state?: string; trial_count?: number; can_reuse?: boolean }> };
@@ -94,7 +96,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
   const desktopChrome = useDesktopChrome();
   const [activeSection, setActiveSection] = useState<AdminSectionId>(initialSection);
   const [modelsMounted, setModelsMounted] = useState(false);
-  const [snapshot, setSnapshot] = useState<AdminSnapshot>({ context: null, education: null, status: null, models: null, platform: null });
+  const [snapshot, setSnapshot] = useState<AdminSnapshot>({ context: null, education: null, status: null, compatibility: null, models: null, platform: null });
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedConnector, setSelectedConnector] = useState<string | null>(null);
@@ -126,13 +128,13 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
     void (async () => {
       const [bundle, status, platform] = await Promise.all([
         readJson<EduPiWorkspaceBundle>("/api/edupi/workspace", controller.signal),
-        readJson<AdminSnapshot["status"]>("/api/edupi/status", controller.signal),
+        readJson<AdminSnapshot["status"] & { compatibility?: CoreCompatibilitySnapshot }>("/api/edupi/status", controller.signal),
         readJson<AdminSnapshot["platform"]>("/api/edupi/platform", controller.signal),
       ]);
       const context = bundle?.context ?? null;
       const education = bundle?.data ?? null;
       const models = await readJson<AdminSnapshot["models"]>(education?.workspace ? `/api/models?cwd=${encodeURIComponent(education.workspace)}` : "/api/models", controller.signal);
-      if (!controller.signal.aborted) setSnapshot({ context, education, status, models, platform });
+      if (!controller.signal.aborted) setSnapshot({ context, education, status, compatibility: status?.compatibility || null, models, platform });
     })().finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [refreshKey, refreshToken]);
@@ -259,6 +261,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
 
       {activeSection === "system" ? <section className="edupi-admin-section">
         <AdminSectionHeader title="系统" meta={education?.workspace || "数据目录待连接"} onRefresh={refresh} />
+        <EduPiCoreCompatibility value={snapshot.compatibility} onNavigate={onNavigate} onOpenContext={onOpenContext} />
         <div className="edupi-admin-list">
           <div><span><strong>EduPi Desktop</strong><small>当前安装版本</small></span><em>v{APP_VERSION_DISPLAY}</em></div>
           <div><span><strong>EduPi Core</strong><small>{snapshot.status?.core?.status || "不可用"}</small></span><em className={coreConnected ? "is-ready" : ""}>{coreConnected ? "已连接" : "检查"}</em></div>

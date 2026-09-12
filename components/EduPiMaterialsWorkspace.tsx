@@ -29,6 +29,7 @@ export function EduPiMaterialsWorkspace({ data, query, selectedObjectId, stagedM
   const [archivedId, setArchivedId] = useState<string | null>(null);
   const [operationError, setOperationError] = useState("");
   const generatedError = data.generatedArtifactsUnavailable;
+  const materialIntakeReady = data.capabilities.materialIntake.enabled;
   const rows = useMemo(() => buildMaterialRows(data, query).filter(item => category === "all" || item.category === category), [data, query, category]);
   useEffect(() => { setPage(0); setSelected(null); }, [category, query]);
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -76,7 +77,7 @@ export function EduPiMaterialsWorkspace({ data, query, selectedObjectId, stagedM
 
   return <main className="edupi-module-workspace edupi-database-workspace">
     <header className="edupi-module-heading"><div><span>材料</span><h1>{categoryLabel}</h1><p>{materialSource.present ? "数据已连接" : "材料索引尚未接入"} · {rows.length} 份材料 · {stagedMaterials.length} 份待接入</p></div><button type="button" disabled={stagingBusy} onClick={onUpload}>{stagingBusy ? "处理中…" : "上传材料"}</button></header>
-    {stagedMaterials.length > 0 ? <details className="edupi-material-inbox" open><summary>待接入材料 <span>{stagedMaterials.length}</span></summary><div>{stagedMaterials.map((item) => <div key={item.staging_id}><strong>{item.original_name}</strong><span>{Math.ceil(item.expected_size_bytes / 1024)} KB</span><button type="button" disabled={stagingBusy} onClick={() => void onIntakeMaterial(item).catch(() => {})}>接入 EduPi</button><button type="button" disabled={stagingBusy} onClick={() => void onRemoveStagedMaterial(item)}>移除</button></div>)}</div></details> : null}
+    {stagedMaterials.length > 0 ? <details className="edupi-material-inbox" open><summary>待接入材料 <span>{stagedMaterials.length}</span></summary><div>{stagedMaterials.map((item) => <div key={item.staging_id}><strong>{item.original_name}</strong><span>{Math.ceil(item.expected_size_bytes / 1024)} KB</span><button type="button" disabled={stagingBusy || !materialIntakeReady} title={!materialIntakeReady ? data.capabilities.materialIntake.reason : undefined} onClick={() => void onIntakeMaterial(item).catch(() => {})}>接入 EduPi</button><button type="button" disabled={stagingBusy} onClick={() => void onRemoveStagedMaterial(item)}>移除</button></div>)}</div>{!materialIntakeReady ? <p className="edupi-material-capability-note" role="status">{data.capabilities.materialIntake.reason}</p> : null}</details> : null}
     {stagingMessage ? <p className="edupi-material-message" role="status">{stagingMessage}</p> : null}
     {generatedError ? <p className="edupi-material-message" role="status">对话生成文件索引暂不可用</p> : null}
     {operationError ? <p role="alert">{operationError}</p> : null}
