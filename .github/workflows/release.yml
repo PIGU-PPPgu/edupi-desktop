@@ -64,9 +64,9 @@ jobs:
           repository: PIGU-PPPgu/edupi
           ref: ${{ steps.core.outputs.commit }}
           path: .edupi-core-runtime
-          # EduPi Core is public. Keep an optional repository token for a
-          # future private mirror, but make the public checkout work with the
-          # workflow token when that secret is absent.
+          # Use the repository-scoped read-only deploy key for the private Core
+          # checkout. The token fallback keeps public mirrors usable.
+          ssh-key: ${{ secrets.EDUPI_CORE_DEPLOY_KEY }}
           token: ${{ secrets.EDUPI_CORE_READ_TOKEN || github.token }}
           persist-credentials: false
       - name: Preserve Core manifest bytes
