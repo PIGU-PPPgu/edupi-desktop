@@ -22,6 +22,12 @@
 - 仍未完成的是 Windows/Linux 实机安装与应用内升级、Apple 公证、系统睡眠唤醒/通知点击和真实课堂内容质量；CI 产物存在不替代这些验收。
 - Windows published-install run `34705099213` 已在干净 Windows runner 安装并启动 `v0.3.7`，同时 native source check、私有 Core diagnose、资源 stray-scan 和原生命令检查均通过。
 
+## 2026-09-13 CI 读取权限与 Linux 安装验收
+
+- 私有 Core 的 Actions 读取已改为仓库专属只读 deploy key（Core key id `163097454`），Secret 为 `EDUPI_CORE_DEPLOY_KEY`；原有宽权限 `EDUPI_CORE_READ_TOKEN` 已删除。preview workflow `34710502746` 的 macOS/Windows checkout、质量和预览构建全部通过。
+- Linux published-install workflow `34711422997` 已在 Ubuntu 24.04 下载并安装 Release `v0.3.7` 的 `.deb`，在 Xvfb 下启动已安装二进制，Core/projection readiness 检查通过。
+- 当前剩余边界收窄为 Apple 公证、Linux/Windows 应用内升级、系统通知/睡眠唤醒和真实课堂内容质量；Windows 首次安装与 macOS 应用内升级已有证据。
+
 ## 2026-09-13 macOS 应用内升级验收
 
 - `/Applications/EduPi.app` 升级前为 `0.3.6`；设置页真实检查返回 `latestVersion=0.3.7`、`updateAvailable=true`。先备份旧应用到 `/var/folders/xk/qmn_r8g93ljb7b5vqzq3rd040000gn/T/edupi-before-037-4bf_lkm1/EduPi.app`。

@@ -10,8 +10,9 @@
 
 - 首次 run `34701579391` 因私有 Core checkout 缺少 `EDUPI_CORE_READ_TOKEN` 失败；补入 Secret 后重跑 `34702177745` 成功，macOS、Linux、Windows 与 manifest jobs 全部通过。
 - `v0.3.7` 已发布为非草稿，远端资产包含 DMG、AppImage、deb、Windows NSIS、macOS updater tar.gz、三个 updater 签名文件、`latest.json` 和 `component-versions.json`。远端 `latest.json` 三个平台条目均有签名，清单版本为 `0.3.7`。
-- Windows run `34705099213` 的 published-install、native source check、私有 Core diagnose、stray-scan 和原生命令检查全部通过；Linux 仍只有 CI 构建证据，未宣称实机安装。
+- Windows run `34705099213` 的 published-install、native source check、私有 Core diagnose、stray-scan 和原生命令检查全部通过；Linux Ubuntu runner 的 `.deb` 安装与启动也已通过，其他 Linux 发行版仍未验收。
 - 已从本机已安装 `v0.3.6` 实际执行应用内升级；首次网络响应解码失败后重试成功，重启显示 `v0.3.7`，更新状态为 up-to-date，50/237/43/9 工作区计数保持可读。Linux 主机安装、Apple 公证和通知/睡眠唤醒仍未验收。
+- 私有 Core 读取已改用仓库专属只读 deploy key，旧宽权限 token 已删除；preview run `34710502746` 和 Linux `.deb` 安装 run `34711422997` 均成功。
 
 ## 2026-09-12 Today 审核交互与 Core 写入锁修复（取代本页旧 pin/Today 状态）
 
