@@ -431,3 +431,12 @@ test("the CSS defines a harness workspace with an optional object browser and re
   assert.match(css, /@media \(max-width: 820px\)/);
   assert.doesNotMatch(css, /Notion-inspired surface language/);
 });
+
+test("background jobs expose every available artifact for native opening", async () => {
+  const jobs = await read("./EduPiBackgroundJobs.tsx");
+  const css = await read("../app/edupi-admin.css");
+  assert.match(jobs, /job\.artifacts\.map/);
+  assert.match(jobs, /workspaceFile\(data\.workspace, file\.relative_path\)/);
+  assert.match(jobs, /openPathNative/);
+  assert.match(css, /\.edupi-background-job-artifacts/);
+});

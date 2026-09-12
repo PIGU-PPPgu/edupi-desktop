@@ -8,6 +8,15 @@ import { isTauriDesktop } from "@/lib/desktop-updater";
 type Job = { job_id: string; title: string; status: string; error?: string; artifacts?: Array<{ relative_path: string }> };
 const labels: Record<string, string> = { queued: "排队中", running: "处理中", completed: "已完成", failed: "失败", canceled: "已取消" };
 
+function workspaceFile(workspace: string, relativePath: string): string {
+  const separator = workspace.includes("\\") ? "\\" : "/";
+  return `${workspace.replace(/[\\/]$/, "")}${separator}${relativePath.replace(/[\\/]/g, separator)}`;
+}
+
+function artifactLabel(relativePath: string, index: number): string {
+  return relativePath.split(/[\\/]/).filter(Boolean).at(-1) || `产物 ${index + 1}`;
+}
+
 export function backgroundJobStatusText(job: Pick<Job, "status" | "error">) {
   return `${labels[job.status] || job.status}${job.status === "failed" && job.error ? ` · ${job.error}` : ""}`;
 }
@@ -51,6 +60,6 @@ export function EduPiBackgroundJobs({ data, onMaterials }: { data: EducationCont
       <button className="native-button" disabled={busy} type="submit">{busy ? "提交中…" : "开始处理"}</button>
     </form> : null}
     {error ? <p role="alert">{error}</p> : null}
-    <div className="edupi-admin-list">{jobs.map(job => <div key={job.job_id}><span><strong>{job.title}</strong><small>{backgroundJobStatusText(job)}</small></span>{["queued", "running"].includes(job.status) ? <button disabled={busy} onClick={() => void action({ action: "cancel", jobId: job.job_id })}>取消</button> : ["failed", "canceled"].includes(job.status) ? <button disabled={busy} onClick={() => void action({ action: "retry", jobId: job.job_id })}>重试</button> : <button onClick={() => { const file = job.artifacts?.[0]; if (file && data && isTauriDesktop()) void openPathNative(`${data.workspace}/${file.relative_path}`).catch(() => setError("文件打开失败")); else onMaterials(); }}>查看产物</button>}</div>)}{jobs.length === 0 ? <div>暂无后台任务</div> : null}</div>
+    <div className="edupi-admin-list">{jobs.map(job => <div key={job.job_id}><span><strong>{job.title}</strong><small>{backgroundJobStatusText(job)}</small></span>{["queued", "running"].includes(job.status) ? <button disabled={busy} onClick={() => void action({ action: "cancel", jobId: job.job_id })}>取消</button> : ["failed", "canceled"].includes(job.status) ? <button disabled={busy} onClick={() => void action({ action: "retry", jobId: job.job_id })}>重试</button> : job.artifacts?.length && data && isTauriDesktop() ? <div className="edupi-background-job-artifacts">{job.artifacts.map((file, index) => <button type="button" key={file.relative_path} onClick={() => void openPathNative(workspaceFile(data.workspace, file.relative_path)).catch(() => setError("文件打开失败"))}>{artifactLabel(file.relative_path, index)}</button>)}</div> : <button onClick={onMaterials}>查看产物</button>}</div>)}{jobs.length === 0 ? <div>暂无后台任务</div> : null}</div>
   </section>;
 }
