@@ -5,6 +5,7 @@
 - R03 Core 调度修复已在独立配套 worktree 完成并固定为 `f4268af131496d8ef0243d16097662621a5dd71b`；`rhythm_heartbeat` 只把当前周期实际同步的候选传给 authoritative 列表，避免真实 238 项学期计划撞上 canonical work-candidate 200 项容量。另补齐后台 loopback 模型的 IPv6 `::1` 允许范围并刷新运行时清单；205 项未来计划回归、节奏生命周期、层契约和 Desktop bridge/manifest 检查通过。
 - Desktop 配套修复已提交为 `50153d6`，R14 状态摘要优化提交为 `6712d50`；包含 bundled Core 根目录隔离、Core pin 同步、产物登记任务绑定、聊天文件刷新和 C1–C3 E2 admission 生命周期修正。
 - 新配套 Desktop pin 的组件清单为 `sha256:2521ec3cab055799821c3955967d3c687e3cae0737f7f0d2f9c50202afbc69e2`。C1/C2/C3 E2 均 GREEN：C1 为 1 observation/1 candidate/1 memory/2 receipts，C2 为 4 条教师上下文审核历史，C3 为 9 个工作候选/7 条工作审核回执；均覆盖重放、重启读回、过期快照或版本无写入、`external_send=false`。
+- 新 pin 复跑的定向命令均通过：`EDUPI_CORE_ROOT=... npm run test:edupi-c1-e2`、`test:edupi-c2-e2`、`test:edupi-c3-e2`；C1/C2/C3 分别确认 canonical store、回放幂等、重启读回、过期快照/版本无写入，且核心统计与上条证据一致。
 - R04 课前准备 E2 通过 6 个课次、4 个 `draft_ready` 工作包、每包 4 份产物；chat-capture 与 living-flow 通过。C6 材料 intake/识别、任务板直接完成、记忆更新、学生资料/事件、实体删除 E2 也通过。任务历史现在保留真实审核回执，直接待处理→完成符合已确认的教师看板规则。
 - R01/R02 隔离开发版真实 Agent 工具矩阵通过：同一 Session 通过 `write`、`bash`、`edupi_make_document` 生成 3 份文件，任务绑定后历史补录将 3 份文件全部关联同一 task；再次补录仍保持 3 条、无重复。安装版文件入口和真实页面冷启动仍待验收。
 - R11/R13 本地 Core 生命周期和 Desktop 后台边界回归通过：教学方法 5 种生命周期、冻结 mutation/trial、发布方法读取与来源变更失效通过；后台任务取消/跨任务文件隔离/不可用产物不误报完成通过。真实课堂效果、干净安装依赖和安装版恢复仍未验收。
