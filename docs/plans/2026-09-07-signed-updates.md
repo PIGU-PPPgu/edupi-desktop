@@ -2,7 +2,7 @@
 
 ## 2026-09-11 本地修复包状态
 
-本地打包已使用锁定 Core `f4268af131496d8ef0243d16097662621a5dd71b`（Desktop component manifest `sha256:2521ec…`）生成 `EduPi.app` 并实际冷启动；首个状态请求约 8.3 秒，内置服务监听 38472，Core、教育投影和 Kernel 返回 ready，真实工作区为 50 名学生、9 个课表、43 个校历节点、237 个任务，原生窗口可见。构建最后的 updater 签名步骤因当前环境没有 `TAURI_SIGNING_PRIVATE_KEY` 失败，未上传或发布此包；DMG/updater 签名和跨平台升级仍未完成。
+本地打包已使用锁定 Core `deda34d7523b5267602a5629027c367a91acaa7a`（Desktop component manifest `sha256:b29eb3…`）生成 `EduPi.app` 并实际冷启动；首个状态请求约 8.3 秒，内置服务监听 38472，Core、教育投影和 Kernel 返回 ready，真实工作区为 50 名学生、9 个课表、43 个校历节点、237 个任务，原生窗口可见。构建最后的 updater 签名步骤因当前环境没有 `TAURI_SIGNING_PRIVATE_KEY` 失败，未上传或发布此包；DMG/updater 签名和跨平台升级仍未完成。
 
 ## 2026-09-09 Windows安装基线
 

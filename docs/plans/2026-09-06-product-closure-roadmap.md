@@ -2,9 +2,9 @@
 
 ## 2026-09-12 R03–R17 续接验收
 
-- R03 Core 调度修复已在独立配套 worktree 完成并固定为 `f4268af131496d8ef0243d16097662621a5dd71b`；`rhythm_heartbeat` 只把当前周期实际同步的候选传给 authoritative 列表，避免真实 238 项学期计划撞上 canonical work-candidate 200 项容量。另补齐后台 loopback 模型的 IPv6 `::1` 允许范围并刷新运行时清单；205 项未来计划回归、节奏生命周期、层契约和 Desktop bridge/manifest 检查通过。
+- R03 Core 调度修复已在独立配套 worktree 完成并固定为 `deda34d7523b5267602a5629027c367a91acaa7a`；`rhythm_heartbeat` 只把当前周期实际同步的候选传给 authoritative 列表，避免真实 238 项学期计划撞上 canonical work-candidate 200 项容量。另补齐后台 loopback 模型的 IPv6 `::1` 和 symlinked `node_modules` 运行时授权，并刷新运行时清单；205 项未来计划回归、节奏生命周期、Core live G1 与 Desktop bridge/manifest 检查通过。
 - Desktop 配套修复已提交为 `50153d6`，R14 状态摘要优化提交为 `6712d50`；包含 bundled Core 根目录隔离、Core pin 同步、产物登记任务绑定、聊天文件刷新和 C1–C3 E2 admission 生命周期修正。
-- 新配套 Desktop pin 的组件清单为 `sha256:2521ec3cab055799821c3955967d3c687e3cae0737f7f0d2f9c50202afbc69e2`。C1/C2/C3 E2 均 GREEN：C1 为 1 observation/1 candidate/1 memory/2 receipts，C2 为 4 条教师上下文审核历史，C3 为 9 个工作候选/7 条工作审核回执；均覆盖重放、重启读回、过期快照或版本无写入、`external_send=false`。
+- 新配套 Desktop pin 的组件清单为 `sha256:b29eb3ef9a9133de6d0d3c6528197d9bd13359ab4bd6ecf75c9d675e0845ddb7`。C1/C2/C3 E2 均 GREEN：C1 为 1 observation/1 candidate/1 memory/2 receipts，C2 为 4 条教师上下文审核历史，C3 为 9 个工作候选/7 条工作审核回执；均覆盖重放、重启读回、过期快照或版本无写入、`external_send=false`。
 - 新 pin 复跑的定向命令均通过：`EDUPI_CORE_ROOT=... npm run test:edupi-c1-e2`、`test:edupi-c2-e2`、`test:edupi-c3-e2`；C1/C2/C3 分别确认 canonical store、回放幂等、重启读回、过期快照/版本无写入，且核心统计与上条证据一致。
 - R04 课前准备 E2 通过 6 个课次、4 个 `draft_ready` 工作包、每包 4 份产物；chat-capture 与 living-flow 通过。C6 材料 intake/识别、任务板直接完成、记忆更新、学生资料/事件、实体删除 E2 也通过。任务历史现在保留真实审核回执，直接待处理→完成符合已确认的教师看板规则。
 - R01/R02 隔离开发版真实 Agent 工具矩阵通过：同一 Session 通过 `write`、`bash`、`edupi_make_document` 生成 3 份文件，任务绑定后历史补录将 3 份文件全部关联同一 task；再次补录仍保持 3 条、无重复。安装版文件入口和真实页面冷启动仍待验收。
@@ -16,7 +16,7 @@
 - R05 今天页对象跳转已收口：日程事项点击先建立对应校历对象，再进入日程详情；洞察点击带上真实类别与“已浮出”筛选，简报仍打开实际文件。组件回归、TypeScript、ESLint 通过；安装版原生点击仍受当前桌面自动化权限限制，R05 保持部分实现。
 - 新打包 `EduPi.app` 冷启动首个状态请求约 8.3 秒；Core、教育投影、Kernel 均 ready，真实工作区为 50 名学生、9 个课表、43 个校历节点、237 个任务，原生窗口可见。构建未生成签名 updater，因为环境没有 `TAURI_SIGNING_PRIVATE_KEY`；未发布。
 - R14 同机补测：工作台首页改用 `/api/edupi/status?summary=1`，新包冷启动到 summary 响应约 2.3 秒，响应体约 1.1KB；完整管理中心状态仍保留约 55.7KB、50 条 Kernel run。新包 Core/projection 仍 ready；这只是 macOS 本机基线，未替代 Windows 或浮层交互验收。
-- 最新打包验收已切换到 Core `f4268af131496d8ef0243d16097662621a5dd71b` / Desktop component manifest `sha256:2521ec…`：Tauri app bundle 构建完成，重启后原生 `EduPi` 窗口可见，38472 服务的 Core、projection、Kernel 均 ready，summary 响应 1066 字节；打包 JS 含 R05/R10 来源入口。updater 签名仍因缺少 `TAURI_SIGNING_PRIVATE_KEY` 未生成，未发布。
+- 最新打包验收已切换到 Core `deda34d7523b5267602a5629027c367a91acaa7a` / Desktop component manifest `sha256:b29eb3…`：Tauri app bundle 构建完成，重启后原生 `EduPi` 窗口可见，38472 服务的 Core、projection、Kernel 均 ready，summary 响应 1066 字节；打包 JS 含 R05/R10 来源入口。updater 签名仍因缺少 `TAURI_SIGNING_PRIVATE_KEY` 未生成，未发布。
 - R01/R02 安装版文件操作和简报对象的原生点击仍待验收；R03 真实休眠/唤醒和安装版定时补跑、R04 内容质量人工核对、R05 系统通知点击、R06 零 API 首次备课，以及 R12/R17 安装版/大班交互仍未勾为完成。R07 依用户确认跳过，R15/R16 外部账号与跨平台发布继续保留外部阻塞。
 
 ## 2026-09-11 桌面启动故障续接
