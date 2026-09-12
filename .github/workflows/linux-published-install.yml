@@ -64,7 +64,8 @@ jobs:
           set -euo pipefail
           smoke_root="$RUNNER_TEMP/edupi-linux-smoke"
           mkdir -p "$smoke_root/workspace" "$smoke_root/home" "$smoke_root/state"
-          binary="$(dpkg-deb -L "$EDUPI_DEB" | awk '/^\/usr\/bin\// { print; exit }')"
+          package_name="$(dpkg-deb -f "$EDUPI_DEB" Package)"
+          binary="$(dpkg -L "$package_name" | awk '/^\/usr\/bin\// { print; exit }')"
           test -x "$binary"
           xvfb-run --auto-servernum --server-args='-screen 0 1280x900x24' \
             env HOME="$smoke_root/home" \
