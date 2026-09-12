@@ -31,3 +31,10 @@ test("frozen growth renders existing evidence but no mutation entry points", () 
   assert.match(editor, /当前教学方法不可编辑/);
   assert.doesNotMatch(editor, /<form|<button/);
 });
+
+test("growth feedback exposes a saved status callback", async () => {
+  const source = await (await import("node:fs/promises")).readFile(new URL("./EduPiGrowthWorkspace.tsx", import.meta.url), "utf8");
+  assert.match(source, /savedFeedbackSkillId/);
+  assert.match(source, /反馈已保存/);
+  assert.match(source, /onSaved=\{\(\) => setSavedFeedbackSkillId\(item\.skillId\)\}/);
+});
