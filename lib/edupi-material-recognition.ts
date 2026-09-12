@@ -38,7 +38,12 @@ const CALENDAR_TYPE_ALIASES: Record<string, CalendarImportEvent["type"]> = {
 };
 const WEEKDAY_ALIASES: Record<string, number> = { 周一: 1, 星期一: 1, 周二: 2, 星期二: 2, 周三: 3, 星期三: 3, 周四: 4, 星期四: 4, 周五: 5, 星期五: 5, 周六: 6, 星期六: 6, 周日: 7, 星期日: 7, 星期天: 7 };
 const STAGING_ID = /^stg_[a-f0-9]{32}$/;
-const mammothEntry = createRequire(path.join(process.cwd(), "package.json")).resolve("mammoth");
+function resolveMammothEntry(): string {
+  // Keep the dynamic package root out of webpack's createRequire parser. The
+  // DOCX worker is resolved only when a staged DOCX is actually recognized.
+  const nodeRequire = createRequire;
+  return nodeRequire(path.join(process.cwd(), "package.json")).resolve("mammoth");
+}
 
 export type RecognitionImage = { data: string; mimeType: string };
 export type ExtractedMaterial = { text: string; images: RecognitionImage[] };
@@ -302,7 +307,7 @@ async function extractDocxText(filePath: string): Promise<string> {
       "-e",
       workerSource,
       filePath,
-      mammothEntry,
+      resolveMammothEntry(),
     ], { encoding: "utf8", maxBuffer: 128 * 1024, timeout: DOCX_WORKER_TIMEOUT_MS, windowsHide: true });
     return stdout;
   } catch {

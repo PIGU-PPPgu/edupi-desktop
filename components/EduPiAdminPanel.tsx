@@ -133,7 +133,8 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
       ]);
       const context = bundle?.context ?? null;
       const education = bundle?.data ?? null;
-      const models = await readJson<AdminSnapshot["models"]>(education?.workspace ? `/api/models?cwd=${encodeURIComponent(education.workspace)}` : "/api/models", controller.signal);
+      const models = await readJson<AdminSnapshot["models"]>(education?.workspace ? `/api/models?cwd=${encodeURIComponent(education.workspace)}` : "/api/models", controller.signal)
+        || await readJson<AdminSnapshot["models"]>("/api/models", controller.signal);
       if (!controller.signal.aborted) setSnapshot({ context, education, status, compatibility: status?.compatibility || null, models, platform });
     })().finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -144,7 +145,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
   const projectionConnected = snapshot.status?.projection?.status === "ready";
   const coreReady = coreConnected && projectionConnected;
   const modelReady = Boolean(snapshot.models?.defaultModel && (snapshot.models.modelList?.length || 0) > 0);
-  const allSourcesLoaded = Boolean(snapshot.context && snapshot.education && snapshot.status && snapshot.models);
+  const allSourcesLoaded = Boolean(snapshot.context && snapshot.education && snapshot.status);
   const readiness = useMemo(() => [
     { id: "core", label: "Core 与教育投影", complete: coreReady, action: () => setActiveSection("system") },
     { id: "model", label: "默认模型", complete: modelReady, action: () => setActiveSection("models") },

@@ -37,6 +37,8 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.match(admin, /coreConnected && projectionConnected/);
   assert.match(admin, /EduPiCoreCompatibility/);
   assert.match(admin, /snapshot\.compatibility/);
+  assert.match(admin, /await readJson<AdminSnapshot\["models"\]>\("\/api\/models", controller\.signal\)/);
+  assert.match(admin, /Boolean\(snapshot\.context && snapshot\.education && snapshot\.status\)/);
   assert.match(admin, /className="edupi-admin-sidebar"/);
   assert.match(admin, /className="edupi-admin-workspace"/);
   assert.match(admin, /APP_VERSION_DISPLAY/);
