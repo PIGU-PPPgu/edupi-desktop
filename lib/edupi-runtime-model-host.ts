@@ -41,7 +41,7 @@ export function createRuntimeModelHost({ coreRoot, projectRoot, agentDir = getAg
           if (!auth?.auth.apiKey || Object.keys(auth.auth.headers || {}).length || Object.keys(compatibility.headers || {}).length || runtime.isUsingOAuth(model.provider)) return failure("model_unavailable");
           if (controller.signal.aborted) return failure("cancelled");
           const endpoint = new URL(auth.auth.baseUrl || model.baseUrl);
-          const configuredLoopback = endpoint.protocol === "http:" && ["localhost", "127.0.0.1"].includes(endpoint.hostname);
+          const configuredLoopback = endpoint.protocol === "http:" && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(endpoint.hostname);
           if (configuredLoopback) endpoint.hostname = "127.0.0.1";
           const adapter = createIsolatedG1ModelAdapter({ model: { ...model, baseUrl: endpoint.href }, apiKey: auth.auth.apiKey, maxTokens: Math.min(model.maxTokens || 4096, 8192), timeoutMs: 300000, maxCalls: 1, allowLoopback: allowLoopback || configuredLoopback });
           return await adapter.run(request, { signal: controller.signal });

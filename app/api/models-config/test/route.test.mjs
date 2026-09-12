@@ -62,3 +62,35 @@ test("external custom models still require credentials", async () => {
   assert.equal(body.ok, false);
   assert.match(body.error, /No API key/);
 });
+
+test("IPv6 loopback custom models can be tested without an API key", async () => {
+  let calls = 0;
+  const server = http.createServer(async (_req, res) => {
+    calls += 1;
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    res.end([
+      `data: ${JSON.stringify({ id: "local-v6", object: "chat.completion.chunk", created: 1, model: "local-v6", choices: [{ index: 0, delta: { role: "assistant", content: "OK" }, finish_reason: null }] })}`,
+      "",
+      `data: ${JSON.stringify({ id: "local-v6", object: "chat.completion.chunk", created: 1, model: "local-v6", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}`,
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n"));
+  });
+  await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "::1", resolve); });
+  try {
+    const port = server.address().port;
+    const response = await POST(request({
+      providerName: "local-v6-e2",
+      provider: { api: "openai-completions", baseUrl: `http://[::1]:${port}/v1` },
+      model: { id: "local-v6", name: "local-v6", input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 1000, maxTokens: 16 },
+    }));
+    const body = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(body));
+    assert.equal(body.ok, true, JSON.stringify(body));
+    assert.equal(calls, 1);
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

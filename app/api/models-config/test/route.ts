@@ -30,7 +30,7 @@ function isLoopbackModelEndpoint(value: unknown): boolean {
   try {
     const url = new URL(value);
     return (url.protocol === "http:" || url.protocol === "https:")
-      && ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+      && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(url.hostname);
   } catch {
     return false;
   }
