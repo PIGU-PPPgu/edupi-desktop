@@ -2,7 +2,7 @@
 
 ## 2026-09-12 Today 审核交互与 Core 写入锁修复（取代本页旧 pin/Today 状态）
 
-- 根因已确认：旧版钉钉桥接进程会在整个进程生命周期持有 Core writer admission SQLite 锁，导致 Today 的接受、调整、暂缓、稍后、停止提示、拒绝全部在提交阶段返回 `writer_admission_unavailable`，页面只显示笼统的“暂时无法提交”。Core 行为修复提交为 `5650151`，桥接清单提交为 `7e6a99ff500483a199793f4175d1e1eeaf413ae0`，最终配套 pin 为 `92599b3cf14e2a7521ca695dee8a6992008ff76f`。
+- 根因已确认：旧版钉钉桥接进程会在整个进程生命周期持有 Core writer admission SQLite 锁，导致 Today 的接受、调整、暂缓、稍后、停止提示、拒绝全部在提交阶段返回 `writer_admission_unavailable`，页面只显示笼统的“暂时无法提交”。Core 行为修复提交为 `5650151`，桥接清单提交为 `7e6a99ff500483a199793f4175d1e1eeaf413ae0`，writer 矩阵提交为 `94c3c3b`，最终审计断言提交为 `6b1d0cf`，配套 pin 为 `6b1d0cf74d7a1344c881da8e34a857243e315fdb`。
 - 修复后钉钉桥接按连接、消息和状态写入短暂取得准入，空闲时释放；加入并通过桥接排队/释放回归。最终桌面包运行时实测：钉钉状态 `ready`，同一真实工作区 writer admission 探针成功取得并释放，进程空闲时不再占用 SQLite 文件。
 - Today 页面已把列改成“待你决定 / 稍后处理 / 已记录”，列头写明进入条件和可逆性；动作按钮有明确去向与处理中状态，成功反馈包含实际状态变化和回执；快照过期会说明“本次没有写入”并提供“刷新待办”，普通暂时不可用提供“重试”。
 - 最终打包隔离 E2 使用同一 `EduPi.app` 资源服务和临时数据根，真实 POST `review_work_candidate/accept` 返回 HTTP 200、回执 `accepted`；重新读取后候选为 `accepted / closed_accepted`，待决定 14→13、已记录 0→1，临时数据已清理。
