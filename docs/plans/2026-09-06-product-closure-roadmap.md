@@ -3,6 +3,7 @@
 ## 2026-09-12 R03–R17 续接验收
 
 - R03 Core 调度修复已在独立配套 worktree 完成并固定为 `deda34d7523b5267602a5629027c367a91acaa7a`；`rhythm_heartbeat` 只把当前周期实际同步的候选传给 authoritative 列表，避免真实 238 项学期计划撞上 canonical work-candidate 200 项容量。另补齐后台 loopback 模型的 IPv6 `::1` 和 symlinked `node_modules` 运行时授权，并刷新运行时清单；205 项未来计划回归、节奏生命周期、Core live G1 与 Desktop bridge/manifest 检查通过。
+- R03 管理中心现在显示与 Core 调度表对齐的下一次计划检查，并保留最近运行/失败摘要；纯显示计算有固定北京时间边界回归，未改变 Core 的实际调度权。
 - Desktop 配套修复已提交为 `50153d6`，R14 状态摘要优化提交为 `6712d50`；包含 bundled Core 根目录隔离、Core pin 同步、产物登记任务绑定、聊天文件刷新和 C1–C3 E2 admission 生命周期修正。
 - 新配套 Desktop pin 的组件清单为 `sha256:b29eb3ef9a9133de6d0d3c6528197d9bd13359ab4bd6ecf75c9d675e0845ddb7`。C1/C2/C3 E2 均 GREEN：C1 为 1 observation/1 candidate/1 memory/2 receipts，C2 为 4 条教师上下文审核历史，C3 为 9 个工作候选/7 条工作审核回执；均覆盖重放、重启读回、过期快照或版本无写入、`external_send=false`。
 - 新 pin 复跑的定向命令均通过：`EDUPI_CORE_ROOT=... npm run test:edupi-c1-e2`、`test:edupi-c2-e2`、`test:edupi-c3-e2`；C1/C2/C3 分别确认 canonical store、回放幂等、重启读回、过期快照/版本无写入，且核心统计与上条证据一致。
