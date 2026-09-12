@@ -11,6 +11,7 @@
 - clean profile 资源补验：最终 `src-tauri/resources/edupi-core` 中允许的 7 个教育扩展由 `DefaultResourceLoader` 实际加载，返回 0 errors；退休 direct-writer 扩展明确缺席，符合当前 Core architecture ledger。
 - R01/R02 页面复核：最终包材料页点击对话生成的 `展开与折叠学案.md` 后，材料详情抽屉显示状态、来源、日期、预览和“补充 / 修订”入口；本次只读打开，未改正式数据。
 - 最终 Core bundle closure 3 项和 bridge transport parity 通过；覆盖复制后 bundled 校验、篡改/缺失依赖拒绝以及无 Git bundled 启动。
+- 配套 Core `npm test` 最终全量回归通过；writer detector、daemon manifest SHA 和 Desktop pin 均与最终源码一致。
 - 回归：Desktop 1067 tests / 1042 passed / 0 failed / 25 skipped；TypeScript、ESLint、Core live model、Desktop bridge manifest、transport parity 均通过。
 - 未验证：没有在正式教师数据上代替教师点击接受；当前桌面自动化无法稳定完成原生鼠标点击，因此真实 UI 写入以隔离包 E2 和 API 重新读取证据为准。签名 updater、跨平台安装升级、系统通知点击和真实课堂内容质量仍未完成。
 
