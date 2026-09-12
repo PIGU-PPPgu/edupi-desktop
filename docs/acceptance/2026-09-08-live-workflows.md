@@ -270,5 +270,6 @@ Core9af123d启动后，无需再保存摘录，旧任务已回planned、当前�
 - 最终 `EduPi.app` 由 `npm run desktop:prepare` 和 `tauri build --bundles app` 生成；包内服务重启后 `/api/edupi/status?summary=1` 返回 Core/projection/Kernel `ready`，工作区计数为 50 名学生、9 个课表、43 个校历节点、237 个任务，Core manifest hash 与 pin 一致，原生窗口可见。完整 build 的唯一失败步骤是 updater 私钥缺失，未生成签名更新包。
 - `6258d9a` 后的冷启动序列记录为首次状态响应约 2.4 秒，首个观察到的 Core/projection 状态即为 `ready`；这条证据只覆盖当前 macOS 打包包，不替代其他平台和真实睡眠唤醒。
 - 追加打包隔离文件 E2：临时数据根和临时 Pi 会话目录启动最终 `EduPi.app` 的 38471 实例；POST `/api/edupi/artifacts` 对历史 `write` toolResult 返回 `registered: 1, failedCount: 0`，GET 列表回读 1 份 `.edupi/output/package-e2.md`。关闭临时实例后正式 38472 包恢复 `Core/projection ready`，临时目录已清理。
+- 最终包 loopback 模型配置复核：临时 localhost SSE mock 通过 `/api/models-config/test` 返回 `ok=true`、HTTP 200、`responseText=OK`，未写入持久模型配置，mock 服务已关闭。
 - 同一最终 pin 的 Desktop 全量回归为 1067 tests、1042 passed、0 failed、25 skipped；`tsc --noEmit`、`npm run lint`、定向 C1/C2/C3 与 C6 recognition E2 均通过。C6 真实识别使用隔离材料，得到 3 个校历事件、1 个课表项，暂存目录回到 0。
 - 仍未完成的证据边界：真实系统睡眠/唤醒与安装版自动补跑、系统通知点击、Windows/Linux 实机安装升级、签名/公证、零 API 首次完整备课、安装版后台恢复、真实课堂内容质量和外部连接器账号闭环。当前桌面自动化读取超时，原生页面点击未以接口结果替代。
