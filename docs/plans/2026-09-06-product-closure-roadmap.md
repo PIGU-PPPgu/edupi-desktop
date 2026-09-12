@@ -13,6 +13,7 @@
 - 追加 R01/R02 页面只读复核：最终包材料页真实显示对话生成文件，点击 `展开与折叠学案.md` 打开材料详情抽屉，状态、来源、日期、预览和“补充 / 修订”入口均可见；未在正式数据上执行修改或删除。
 - 最终 Core bundle closure 定向测试 3 项全部通过：临时复制包无 `.git` 可验证、篡改/缺失 runtime dependency 会拒绝、bundled 模式不依赖 Git；Desktop bridge transport parity 也通过。
 - 配套 Core `npm test` 最终全量通过（含 live model、writer admission/enforcement/C2/C3、daemon、学生、closure 和 scoped memory runtime）；此前 writer detector 与 Desktop manifest SHA 漂移已同步并复跑通过。
+- 签名风险已复核：本机永久 updater 密钥对存在，空密码签名探针和最终 `.app.tar.gz.sig` 均成功；GitHub 私钥/公钥 Secret 名称已存在，Core 仓库公开可读。剩余为正式 Actions Release、三平台产物和实机升级，不再要求用户额外提供本地密钥。
 - 验证结果：Desktop 全量 1067 tests、1042 passed、0 failed、25 skipped；`tsc --noEmit`、`npm run lint`、Core live model、桥接清单和传输一致性均通过。updater 私钥仍缺失，构建只在签名更新包步骤退出，未发布。
 - 状态边界：真实教师数据没有被测试接受动作改写；真实包写入在隔离数据根完成。原生自动化当前仍不稳定，因此没有把真实工作区的鼠标点击或系统通知点击记为通过；R15/R17 跨平台安装升级、签名、公证和真实课堂内容质量继续保留外部/人工验收状态。
 

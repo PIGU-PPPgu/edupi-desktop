@@ -1,5 +1,12 @@
 # 自动下载安装
 
+## 2026-09-12 本地签名复核（取代“缺少私钥”的当前风险描述）
+
+- 已找到本机永久 updater 密钥对：`~/.config/edupi-release/updater.key` 与 `.pub`。用私钥对临时文件签名成功，确认该私钥未设置密码。
+- GitHub 仓库 Actions Secret 名称 `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_UPDATER_PUBLIC_KEY` 已存在；`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 不需要补值。Core 仓库匿名 `git ls-remote` 可读，`EDUPI_CORE_READ_TOKEN` 当前也不构成阻塞。
+- 使用本机密钥临时注入公钥后，最终 `EduPi.app.tar.gz` 已生成对应 `.sig` 文件（404 bytes）；随后恢复源码中的临时公钥配置，没有提交密钥或配置改动。
+- 当前剩余事项是 GitHub Actions 正式构建/草稿 Release、三平台产物和 Windows/Linux 实机验收；本地 updater 签名阻塞已解除。
+
 ## 2026-09-12 Today 修复包（取代下方旧 Core pin 记录）
 
 - 最终包配套 Core pin 为 `6b1d0cf74d7a1344c881da8e34a857243e315fdb`，Desktop component manifest 为 `sha256:9f28910f0886fcfed4509729af8361749cbd0f0cf3b48df4093db34fed6728b5`。旧的 `deda34d… / b29eb3…` 记录仅保留为历史证据；writer detector 矩阵和 daemon manifest 断言均已同步。
