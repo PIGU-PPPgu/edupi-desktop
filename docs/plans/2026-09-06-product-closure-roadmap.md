@@ -2,7 +2,7 @@
 
 ## 2026-09-12 发布风险收口（取代前述旧阻塞状态）
 
-- 本机 updater 密钥对已找到并验证可签名；GitHub 的 `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_UPDATER_PUBLIC_KEY` 已存在。未设置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 不构成阻塞，因为私钥未加密；私有 Core 所需的 `EDUPI_CORE_READ_TOKEN` 已由现有 GitHub 登录凭据写入 Actions Secret，token 未进入仓库或日志。
+- 本机 updater 密钥对已找到并验证可签名；GitHub 的 `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_UPDATER_PUBLIC_KEY` 已存在。未设置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 不构成阻塞，因为私钥未加密；私有 Core 的 Actions 读取当前使用仓库专属只读 deploy key `EDUPI_CORE_DEPLOY_KEY`，旧宽权限 `EDUPI_CORE_READ_TOKEN` 已删除。
 - Desktop 发布版本已推进到 `0.3.7`，组件清单和 Cargo 版本已同步；Core 修复提交 `6b1d0cf74d7a1344c881da8e34a857243e315fdb` 已通过本机全量回归并合并到公开 Core `main`（PR #58，合并提交 `ea3b1dd175d3521546cc2b3ff685f6c9c7a360c6`），Desktop 已具备按精确 pin 运行正式 Actions 的条件。
 - 本轮可在本机、正式 CI 和 Windows runner 闭合的发布风险已处理；剩余未验证项明确为 Linux 实机安装升级、Apple 公证，以及真实课堂内容质量与系统通知/睡眠唤醒场景。
 
@@ -13,6 +13,16 @@
 - Windows run `34705099213` 的 published-install、native source check、私有 Core diagnose、stray-scan 和原生命令检查全部通过；Linux Ubuntu runner 的 `.deb` 安装与启动也已通过，其他 Linux 发行版仍未验收。
 - 已从本机已安装 `v0.3.6` 实际执行应用内升级；首次网络响应解码失败后重试成功，重启显示 `v0.3.7`，更新状态为 up-to-date，50/237/43/9 工作区计数保持可读。Linux 主机安装、Apple 公证和通知/睡眠唤醒仍未验收。
 - 私有 Core 读取已改用仓库专属只读 deploy key，旧宽权限 token 已删除；preview run `34710502746` 和 Linux `.deb` 安装 run `34711422997` 均成功。
+
+## 2026-09-13 Desktop/Core 匹配与交互复核
+
+- Desktop 提交 `e01bab9` 纠正了能力投影：pinned Core 声明的 `import_calendar`、`import_timetable`、`intake_material` 现在在教育合同中显示为 `canonical_safe_store`，只有 manifest 与 snapshot 能力清单完全一致时才启用；日程、课表和材料入口按同一能力结果显示可用或只读原因。
+- 管理中心新增 Core 兼容性面板：显示 Core commit、合同版本、组件清单摘要、投影和 11 个可交互命令；每个已启用命令可跳到对应桌面入口，未接入命令保留 Core 原因。隔离源码版浏览器实测显示“已匹配”、`11 / 11`，点击“写入校历”实际进入日程。
+- Desktop 提交 `6b645ec` 修复 Next 服务端加载材料识别模块时的动态 `createRequire` 解析问题。最终 pinned Core + 隔离数据的源码版实际通过页面写入临时校历，显示“日程已写入 EduPi 行事历”；Core receipt 为 `accepted`，教育工作区重新读取到对应校历对象。课表导入接口同样返回 `accepted`。测试数据只写入隔离目录，随后删除临时校历。
+- 学生记录刷新事件统一为 `edupi-student-records-updated`，对话工具写入、页面编辑/删除和观察数据库使用同一事件，避免跨入口显示旧记录。
+- 管理中心的模型读取在项目 cwd 端点不可用时回退全局模型端点；基础 Core/教育数据可用时不再把单独的模型配置缺失误报为整页“数据读取失败”。隔离源码版管理中心实测为 `7/7`、`100%`。
+- 当前 pinned Core 与 Desktop 兼容性证据：Core `6b1d0cf74d7a1344c881da8e34a857243e315fdb`、组件清单 `sha256:9f28910f0886fcfed4509729af8361749cbd0f0cf3b48df4093db34fed6728b5`、合同 `1.1`、投影 `education_workspace`；状态接口实际回读与 Desktop expected identity 完全相同。
+- 本轮仍未把系统通知点击、睡眠唤醒、Apple 公证、Linux/Windows 应用内升级、零 API 首次完整备课、真实课堂质量和外部连接器账号闭环标为完成；这些需要目标系统、账号或人工内容核对。
 
 ## 2026-09-12 Today 审核交互与 Core 写入锁修复（取代本页旧 pin/Today 状态）
 

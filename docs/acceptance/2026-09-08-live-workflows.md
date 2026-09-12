@@ -1,5 +1,15 @@
 # 实际流程验收
 
+## 2026-09-13 Desktop/Core 匹配与导入交互复核
+
+- 环境：macOS 源码版 Next 服务 `127.0.0.1:30142`，Core `6b1d0cf74d7a1344c881da8e34a857243e315fdb`，数据根为临时复制目录；未写正式教师数据。
+- `GET /api/edupi/status?summary=1` 实际返回 Core/projection ready；Core commit、合同 `1.1`、schema hash、fixture hash、component manifest hash、11 个 supported commands 和 `education_workspace` 均与 Desktop compatibility manifest 完全相同。
+- 浏览器打开管理中心的“系统”页，实际显示“Core 兼容性 / 已匹配 / 11 / 11”；点击“写入校历”实际导航到日程页。管理中心模型项目 cwd 读取遇到隔离根权限限制时回退全局模型端点，页面就绪度实际显示 `7/7`、`100%`。
+- 日程页“新建日程”和“添加课表”按钮实际可用。填写临时校历后提交，页面显示“日程已写入 EduPi 行事历”；`POST /api/edupi/intake` 回读 `import_calendar` receipt `accepted`，再读 `/api/edupi/education` 可见同一日期和名称。独立课表提交回读 `import_timetable` receipt `accepted`。
+- 首次复跑使用了带旧 Core runtime admission 数据库的临时复制目录，Core 正确拒绝 root fingerprint mismatch；重新建立干净临时 runtime 后复跑通过。该失败属于验收夹具状态，不是正式应用数据或代码路径失败。
+- 修复内容：`e01bab9` 能力投影/兼容性面板/学生记录刷新事件；`6b645ec` Next 服务端材料识别模块加载修复和管理中心模型 fallback。定向测试、`tsc --noEmit`、`npm run lint` 均通过。
+- 未验证：正式安装版的日程/课表/材料页面写入、系统通知点击、睡眠唤醒、Apple 公证、Linux/Windows 应用内升级、零 API 首次完整备课和真实课堂内容质量。
+
 ## 2026-09-12 `0.3.7` 发布包收口（取代旧签名阻塞记录）
 
 - `npm run desktop:prepare` 使用 Core `6b1d0cf74d7a1344c881da8e34a857243e315fdb` 完成资源闭包；`EduPi.app`、`EduPi_0.3.7_aarch64.dmg`、updater tar.gz 和 `.sig` 均生成，包内 `CFBundleShortVersionString` 与 `CFBundleVersion` 均为 `0.3.7`。
