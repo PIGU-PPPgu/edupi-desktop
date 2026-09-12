@@ -1,5 +1,15 @@
 # EduPi 产品闭环 PR 路线图
 
+## 2026-09-12 Today 审核交互与 Core 写入锁修复（取代本页旧 pin/Today 状态）
+
+- 根因已确认：旧版钉钉桥接进程会在整个进程生命周期持有 Core writer admission SQLite 锁，导致 Today 的接受、调整、暂缓、稍后、停止提示、拒绝全部在提交阶段返回 `writer_admission_unavailable`，页面只显示笼统的“暂时无法提交”。Core 行为修复提交为 `5650151`，桥接清单提交为 `7e6a99ff500483a199793f4175d1e1eeaf413ae0`，最终配套 pin 为 `92599b3cf14e2a7521ca695dee8a6992008ff76f`。
+- 修复后钉钉桥接按连接、消息和状态写入短暂取得准入，空闲时释放；加入并通过桥接排队/释放回归。最终桌面包运行时实测：钉钉状态 `ready`，同一真实工作区 writer admission 探针成功取得并释放，进程空闲时不再占用 SQLite 文件。
+- Today 页面已把列改成“待你决定 / 稍后处理 / 已记录”，列头写明进入条件和可逆性；动作按钮有明确去向与处理中状态，成功反馈包含实际状态变化和回执；快照过期会说明“本次没有写入”并提供“刷新待办”，普通暂时不可用提供“重试”。
+- 最终打包隔离 E2 使用同一 `EduPi.app` 资源服务和临时数据根，真实 POST `review_work_candidate/accept` 返回 HTTP 200、回执 `accepted`；重新读取后候选为 `accepted / closed_accepted`，待决定 14→13、已记录 0→1，临时数据已清理。
+- 最终桌面包由 `npm run desktop:prepare` 与 `tauri build --bundles app` 生成；包内 Core/projection/Kernel ready，真实工作区 50 名学生、9 个课表、43 个校历、237 个任务，Desktop manifest 为 `sha256:9f28910f0886fcfed4509729af8361749cbd0f0cf3b48df4093db34fed6728b5`。原生窗口截图已核对新列名、动作说明和无红色失败条。
+- 验证结果：Desktop 全量 1067 tests、1042 passed、0 failed、25 skipped；`tsc --noEmit`、`npm run lint`、Core live model、桥接清单和传输一致性均通过。updater 私钥仍缺失，构建只在签名更新包步骤退出，未发布。
+- 状态边界：真实教师数据没有被测试接受动作改写；真实包写入在隔离数据根完成。原生自动化当前仍不稳定，因此没有把真实工作区的鼠标点击或系统通知点击记为通过；R15/R17 跨平台安装升级、签名、公证和真实课堂内容质量继续保留外部/人工验收状态。
+
 ## 2026-09-12 R03–R17 续接验收
 
 - R03 Core 调度修复已在独立配套 worktree 完成并固定为 `deda34d7523b5267602a5629027c367a91acaa7a`；`rhythm_heartbeat` 只把当前周期实际同步的候选传给 authoritative 列表，避免真实 238 项学期计划撞上 canonical work-candidate 200 项容量。另补齐后台 loopback 模型的 IPv6 `::1` 和 symlinked `node_modules` 运行时授权，并刷新运行时清单；205 项未来计划回归、节奏生命周期、Core live G1 与 Desktop bridge/manifest 检查通过。

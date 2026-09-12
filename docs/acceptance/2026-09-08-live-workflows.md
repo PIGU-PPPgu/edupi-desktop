@@ -1,5 +1,14 @@
 # 实际流程验收
 
+## 2026-09-12 Today 审核交互与写入链复核（取代旧的 Today/包 pin 结论）
+
+- 失败复现：旧钉钉桥接 PID 持有 `.edupi/runtime/core-runtime-writer-admission-v1.sqlite`，Today 六种决定均在 Core 写入阶段失败，前端统一显示红色“暂时无法提交”。
+- 修复证据：Core `5650151` 将桥接写入改为短时准入，最终 pin `92599b3cf14e2a7521ca695dee8a6992008ff76f`；`node scripts/test_dingtalk_bridge.mjs`、`test_application_runtime.mjs`、`test_dingtalk_runtime_supervisor.mjs` 通过。新包钉钉状态 ready，`lsof` 不再显示空闲进程持有 writer DB；独立 writer probe 成功。
+- 隔离包 E2：最终 bundled server 使用临时数据根，读取一条真实 projected pending candidate，提交 `accept` 返回 HTTP 200 与 receipt `accepted`；重新 GET 后状态为 `accepted`、revision 增加、next cycle 为 `closed_accepted`，分组从 pending 进入 done。未写入正式教师数据。
+- 页面证据：最终 `EduPi.app` 原生窗口可见；截图核对列名“待你决定 / 稍后处理 / 已记录”、列头说明、动作说明条和接受/调整/暂缓/稍后/停止提示/拒绝按钮。错误状态提供“本次没有写入”，快照过期提供“刷新待办”，普通失败提供“重试”。
+- 回归：Desktop 1067 tests / 1042 passed / 0 failed / 25 skipped；TypeScript、ESLint、Core live model、Desktop bridge manifest、transport parity 均通过。
+- 未验证：没有在正式教师数据上代替教师点击接受；当前桌面自动化无法稳定完成原生鼠标点击，因此真实 UI 写入以隔离包 E2 和 API 重新读取证据为准。签名 updater、跨平台安装升级、系统通知点击和真实课堂内容质量仍未完成。
+
 ## 资源包实际启动 · 2026-09-09
 
 - 本地desktop:prepare首次因追踪旧src-tauri/target及resources目录产生147条过长路径失败；排除旧构建、Git与开发状态后构建通过，阶段目录不含.git、.env.local、.edupi或旧src-tauri树。
