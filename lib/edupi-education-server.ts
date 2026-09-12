@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { realpathSync } from "node:fs";
 import { buildEducationContractFromWorkspace, type EducationContract } from "./edupi-education-contract";
 import { issueC1Review, type C1ReviewDependencies, type C1ReviewDecision, type C1ReviewTargetKind } from "./edupi-c1-review";
 import { issueTeacherContextReview, type TeacherContextReviewDependencies, type TeacherContextReviewInput } from "./edupi-teacher-context-review";
@@ -24,6 +25,10 @@ function requiredText(value: unknown, field: string, max = 240): string {
   const result = value.trim();
   if (result.length > max) throw new Error(`${field} 过长`);
   return result;
+}
+
+export function canonicalEduPiCwd(value: string): string {
+  try { return realpathSync(value); } catch { return resolve(value); }
 }
 
 type EducationSnapshot = Awaited<ReturnType<typeof readEduPiEducationSnapshot>>;
@@ -234,12 +239,12 @@ export async function bindEducationTaskSession(input: { taskId: unknown; session
 
   const runtime = getRpcSession(sessionId);
   const runtimeCwd = runtime?.isAlive() ? runtime.cwd : undefined;
-  if (runtimeCwd && resolve(runtimeCwd) !== root) throw new Error("Pi Session 不属于 EduPi 工作区");
+  if (runtimeCwd && canonicalEduPiCwd(runtimeCwd) !== root) throw new Error("Pi Session 不属于 EduPi 工作区");
   const scanned = await listAllSessions();
   const sessionInfo = scanned.find((item) => item.id === sessionId);
   const sessionCwd = runtimeCwd || sessionInfo?.cwd;
   if (!sessionCwd) throw new Error("Pi Session 不存在或尚未形成可恢复记录");
-  if (resolve(sessionCwd) !== root) throw new Error("Pi Session 不属于 EduPi 工作区");
+  if (canonicalEduPiCwd(sessionCwd) !== root) throw new Error("Pi Session 不属于 EduPi 工作区");
   const previousBinding = current.taskSessions[taskId];
   if (previousBinding && previousBinding.sessionId !== sessionId && previousBinding.status !== "missing" && sessionInfo?.parentSessionId !== previousBinding.sessionId) {
     throw new Error("只能把教学任务切换到当前绑定 Session 的合法 fork");
