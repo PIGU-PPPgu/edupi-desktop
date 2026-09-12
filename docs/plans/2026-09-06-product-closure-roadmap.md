@@ -24,6 +24,13 @@
 - 当前 pinned Core 与 Desktop 兼容性证据：Core `6b1d0cf74d7a1344c881da8e34a857243e315fdb`、组件清单 `sha256:9f28910f0886fcfed4509729af8361749cbd0f0cf3b48df4093db34fed6728b5`、合同 `1.1`、投影 `education_workspace`；状态接口实际回读与 Desktop expected identity 完全相同。
 - 本轮仍未把系统通知点击、睡眠唤醒、Apple 公证、Linux/Windows 应用内升级、零 API 首次完整备课、真实课堂质量和外部连接器账号闭环标为完成；这些需要目标系统、账号或人工内容核对。
 
+## 2026-09-13 v0.3.8 发布与本机包复核
+
+- 主线已发布 `v0.3.8`，Release workflow `34714343043` 的 macOS、Linux、Windows 和 manifest jobs 全部成功；Release 为非草稿、非预发布。
+- 远端资产包含 DMG、AppImage、deb、Windows NSIS、updater tar.gz、三个签名文件、`latest.json` 和 `component-versions.json`；`latest.json` 三个平台均指向 `v0.3.8`，组件清单 `appVersion=0.3.8`。
+- 使用本机 updater 公钥对远端 macOS tar.gz 签名复核成功；旧安装 `v0.3.7` 已备份后替换为 `v0.3.8`，启动后 Core/projection ready，工作区回读 50 名学生、237 个任务、43 个校历、9 个课表，更新检查为 up-to-date。
+- 当前 macOS 处于锁屏状态，无法通过原生 CUA 再次点击设置页的“安装更新”按钮；本次记录是签名 updater 资产验证加本机包替换/启动证据，不把它写成新的应用内点击验收。此前 `v0.3.7` 应用内升级点击链已有独立证据。
+
 ## 2026-09-12 Today 审核交互与 Core 写入锁修复（取代本页旧 pin/Today 状态）
 
 - 根因已确认：旧版钉钉桥接进程会在整个进程生命周期持有 Core writer admission SQLite 锁，导致 Today 的接受、调整、暂缓、稍后、停止提示、拒绝全部在提交阶段返回 `writer_admission_unavailable`，页面只显示笼统的“暂时无法提交”。Core 行为修复提交为 `5650151`，桥接清单提交为 `7e6a99ff500483a199793f4175d1e1eeaf413ae0`，writer 矩阵提交为 `94c3c3b`，最终审计断言提交为 `6b1d0cf`，配套 pin 为 `6b1d0cf74d7a1344c881da8e34a857243e315fdb`。
