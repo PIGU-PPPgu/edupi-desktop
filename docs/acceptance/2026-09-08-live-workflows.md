@@ -6,6 +6,7 @@
 - 修复证据：Core `5650151` 将桥接写入改为短时准入，最终 pin `92599b3cf14e2a7521ca695dee8a6992008ff76f`；`node scripts/test_dingtalk_bridge.mjs`、`test_application_runtime.mjs`、`test_dingtalk_runtime_supervisor.mjs` 通过。新包钉钉状态 ready，`lsof` 不再显示空闲进程持有 writer DB；独立 writer probe 成功。
 - 隔离包 E2：最终 bundled server 使用临时数据根，读取一条真实 projected pending candidate，提交 `accept` 返回 HTTP 200 与 receipt `accepted`；重新 GET 后状态为 `accepted`、revision 增加、next cycle 为 `closed_accepted`，分组从 pending 进入 done。未写入正式教师数据。
 - 页面证据：最终 `EduPi.app` 原生窗口可见；截图核对列名“待你决定 / 稍后处理 / 已记录”、列头说明、动作说明条和接受/调整/暂缓/稍后/停止提示/拒绝按钮。错误状态提供“本次没有写入”，快照过期提供“刷新待办”，普通失败提供“重试”。
+- 浏览器只读复核补齐 R05/R10/R12/R17：Today 的日程项进入带对象参数的日程详情；观察记录展开后来源链接进入对应 session；班级→程天乐档案可在“知识图谱 / 人际互动网络”间切换，当前记录、列表/网络空态和来源文本均随页面更新。
 - 回归：Desktop 1067 tests / 1042 passed / 0 failed / 25 skipped；TypeScript、ESLint、Core live model、Desktop bridge manifest、transport parity 均通过。
 - 未验证：没有在正式教师数据上代替教师点击接受；当前桌面自动化无法稳定完成原生鼠标点击，因此真实 UI 写入以隔离包 E2 和 API 重新读取证据为准。签名 updater、跨平台安装升级、系统通知点击和真实课堂内容质量仍未完成。
 
