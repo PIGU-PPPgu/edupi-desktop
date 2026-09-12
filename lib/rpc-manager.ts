@@ -34,6 +34,7 @@ import { parseComputerUseBridgeResult, type ComputerUseBridgeResult, type Comput
 import { createDesktopSafeBashOperations, redactDesktopSpawnContext } from "./desktop-shell-security";
 import { createEduPiTeacherContextAppendSystemPromptOverride } from "./edupi-teacher-context-prompt";
 import { withEducationModel } from "./edupi-model-context";
+import { ensureLoopbackModelAuth } from "./loopback-model-auth";
 
 // ============================================================================
 // Types
@@ -1413,12 +1414,22 @@ export async function startRpcSession(
       },
       ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
     });
+    const defaultProvider = services.settingsManager.getDefaultProvider();
+    const defaultModelId = services.settingsManager.getDefaultModel();
+    const authModel = initialModel
+      ? services.modelRuntime.getModel(initialModel.provider, initialModel.modelId)
+      : defaultProvider && defaultModelId
+        ? services.modelRuntime.getModel(defaultProvider, defaultModelId)
+        : undefined;
+    if (authModel) await ensureLoopbackModelAuth(
+      authModel,
+      () => services.modelRuntime.getAuth(authModel),
+      (provider, key) => services.modelRuntime.setRuntimeApiKey(provider, key),
+    );
     const scope = await resolveVisibleModels(
       services.modelRuntime,
       services.settingsManager.getEnabledModels(),
     );
-    const defaultProvider = services.settingsManager.getDefaultProvider();
-    const defaultModelId = services.settingsManager.getDefaultModel();
     const hasExistingMessages = sessionManager.getBranch().some((entry) => entry.type === "message");
     const initial = hasExistingMessages
       ? { scopedModels: [...scope.scopedModels] }
@@ -1447,6 +1458,12 @@ export async function startRpcSession(
         })] : []),
       ],
     });
+
+    if (inner.model) await ensureLoopbackModelAuth(
+      inner.model,
+      () => services.modelRuntime.getAuth(inner.model!),
+      (provider, key) => services.modelRuntime.setRuntimeApiKey(provider, key),
+    );
 
     const persistedPreferences = await persistExplicitStartupPreferences(
       services.settingsManager,
