@@ -77,6 +77,9 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   assert.match(workspaceViews, /EduPiStudentWorkspace/);
   assert.match(workspaceViews, /EduPiMemoryDatabase/);
   assert.match(workspaceViews, /EduPiInsightDatabase/);
+  assert.match(workspaceViews, /calendarFactSelection/);
+  assert.match(workspaceViews, /onCalendarSelection\(calendarFactSelection\(event\)\)/);
+  assert.match(workspaceViews, /onNavigate\("insights", `insights:\$\{insightCategory\(latestInsight\.content\)\}:surfaced`\)/);
   assert.match(workspaceViews, /EduPiGrowthWorkspace/);
   assert.match(memoryDatabase, /edupi-database/);
   assert.match(insightDatabase, /edupi-database/);
