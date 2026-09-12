@@ -891,10 +891,8 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-today-work__header span { color: var(--ep-muted); font-size: 10px; }
 .edupi-today-work__header h2 { margin: 0; font-size: 14px; letter-spacing: -.01em; }
 .edupi-today-work__notice,
-.edupi-today-work__guide,
 .edupi-today-work__feedback { margin: 10px 12px 0; padding: 8px 10px; border-radius: 6px; font-size: 11px; line-height: 1.5; }
 .edupi-today-work__notice { background: var(--ep-surface-soft); color: var(--ep-muted); }
-.edupi-today-work__guide { color: var(--ep-muted); background: var(--ep-surface-soft); }
 .edupi-today-work__feedback { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .edupi-today-work__feedback.is-success { background: var(--ep-green-soft); color: var(--ep-green); }
 .edupi-today-work__feedback.is-error { background: var(--ep-red-soft); color: var(--ep-red); }

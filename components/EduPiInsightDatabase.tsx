@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { EducationContract } from "@/lib/edupi-education-contract";
+import type { EducationContract, EducationObservation } from "@/lib/edupi-education-contract";
 import { useStudentObservationRows } from "@/hooks/useStudentObservationRows";
 import { INSIGHT_CATEGORIES, INSIGHT_STATUSES, insightCategory, routePart, type InsightCategoryId, type InsightStatusId } from "@/lib/edupi-domain-navigation";
 
@@ -39,6 +39,21 @@ function uniqueSources(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
 
+function isReviewableObservation(item: EducationObservation): boolean {
+  return item.teacherReview.state === "pending_review" || item.teacherReview.state === "held";
+}
+
+function observationReviewLabel(item: EducationObservation): string {
+  return {
+    not_required: "无需确认",
+    pending_review: "待确认",
+    accepted: "已确认",
+    modified: "已修改",
+    rejected: "已拒绝",
+    held: "已暂缓",
+  }[item.teacherReview.state];
+}
+
 export function EduPiInsightDatabase({ data, query, selectedObjectId, onReviewTarget }: { data: EducationContract; query: string; selectedObjectId: string | null; onReviewTarget?: (target: ReviewTarget) => void }) {
   const [category = "learning", status = "all"] = routePart(selectedObjectId, "insights", "learning:all").split(":") as [InsightCategoryId, InsightStatusId];
   const [page, setPage] = useState(0);
@@ -53,12 +68,18 @@ export function EduPiInsightDatabase({ data, query, selectedObjectId, onReviewTa
   const categoryLabel = INSIGHT_CATEGORIES.find((item) => item.id === category)?.label || "学情观察";
   const statusLabel = INSIGHT_STATUSES.find((item) => item.id === status)?.label || "全部";
   const rows = useMemo<InsightRow[]>(() => {
-    const observations = data.observations.filter((item) => insightCategory(item.text) === category).map((item) => ({ id: `observation:${item.observationId}`, type: "原始观察", content: item.text, status: item.teacherReview.state === "accepted" ? "已确认" : item.teacherReview.state === "rejected" ? "已拒绝" : item.teacherReview.state === "held" ? "已暂缓" : "待确认", statusId: "observation", evidence: item.evidenceIds, metric: `${item.evidenceIds.length} 条`, date: item.observedAt, related: [...item.studentIds, ...(item.classId ? [item.classId] : [])], sources: uniqueSources([...item.provenance.map(source => `${source.sourceKind} · ${source.sourceId}`), ...item.evidenceIds.map(id => `证据 · ${id}`)]), reviewTarget: { kind: "observation" as const, id: item.observationId } }));
-    const observationsByEvidence = new Map<string, EducationContract["observations"][number]>();
-    for (const observation of data.observations) for (const evidenceId of observationEvidenceIds(observation)) observationsByEvidence.set(evidenceId, observation);
+    const observations = data.observations.filter((item) => insightCategory(item.text) === category).map((item) => ({ id: `observation:${item.observationId}`, type: "原始观察", content: item.text, status: observationReviewLabel(item), statusId: "observation", evidence: item.evidenceIds, metric: `${item.evidenceIds.length} 条`, date: item.observedAt, related: [...item.studentIds, ...(item.classId ? [item.classId] : [])], sources: uniqueSources([...item.provenance.map(source => `${source.sourceKind} · ${source.sourceId}`), ...item.evidenceIds.map(id => `证据 · ${id}`)]), reviewTarget: isReviewableObservation(item) ? { kind: "observation" as const, id: item.observationId } : undefined }));
+    const observationsByEvidence = new Map<string, EducationContract["observations"][number][]>();
+    for (const observation of data.observations) {
+      for (const evidenceId of observationEvidenceIds(observation)) {
+        const matches = observationsByEvidence.get(evidenceId) || [];
+        if (!matches.some((item) => item.observationId === observation.observationId)) matches.push(observation);
+        observationsByEvidence.set(evidenceId, matches);
+      }
+    }
     const insights = data.continuity.insights.filter((item) => !item.content.startsWith("[主题候选]") && insightCategory(item.content) === category).map((item) => {
-      const linkedObservations = [...new Set(item.evidenceIds.map(evidenceId => observationsByEvidence.get(evidenceId)).filter((observation): observation is EducationContract["observations"][number] => Boolean(observation)))];
-      return { id: `insight:${item.id}`, type: "洞察", content: item.content.replace(/^\[梦境启示\]\s*/, ""), status: item.status === "surfaced" ? "已浮出" : "酝酿中", statusId: item.status, evidence: item.evidenceIds, metric: `${Math.round(item.confidence * 100)}%`, date: item.surfacedAt || item.createdAt, related: [] as string[], sources: uniqueSources([...item.evidenceIds.map(id => `证据 · ${id}`), ...linkedObservations.map(observation => `原始观察 · ${observation.observationId}`)]), reviewTargets: linkedObservations.map(observation => ({ kind: "observation" as const, id: observation.observationId })) };
+      const linkedObservations = [...new Map(item.evidenceIds.flatMap((evidenceId) => observationsByEvidence.get(evidenceId) || []).map((observation) => [observation.observationId, observation])).values()];
+      return { id: `insight:${item.id}`, type: "洞察", content: item.content.replace(/^\[梦境启示\]\s*/, ""), status: item.status === "surfaced" ? "已浮出" : "酝酿中", statusId: item.status, evidence: item.evidenceIds, metric: `${Math.round(item.confidence * 100)}%`, date: item.surfacedAt || item.createdAt, related: [] as string[], sources: uniqueSources([...item.evidenceIds.map(id => `证据 · ${id}`), ...linkedObservations.map(observation => `原始观察 · ${observation.observationId}`)]), reviewTargets: linkedObservations.filter(isReviewableObservation).map(observation => ({ kind: "observation" as const, id: observation.observationId })) };
     });
     const signals = data.continuity.signals.filter((item) => insightCategory(item.content) === category).map((item) => ({ id: `signal:${item.id}`, type: "弱信号", content: item.content, status: "持续观察", statusId: "signal", evidence: [] as string[], metric: `${item.strength} 次`, date: item.lastSeenAt || item.createdAt, related: item.related, sources: item.related.map(source => `关联 · ${source}`) }));
     const studentRows = studentObservations.records.map(item => ({ id: `student-event:${item.id}`, type: item.kind === "learning" ? "学习记录" : "互动记录", content: [item.canonical_topic || item.topic, item.summary].filter(Boolean).join(" · "), status: "教师记录", statusId: "observation", evidence: [item.source?.message_id].filter(Boolean), metric: `版本 ${item.revision}`, date: item.recorded_at, related: item.student_labels || item.students, sourceText: item.source?.text || "", sourceSessionId: item.source?.session_id || null }));

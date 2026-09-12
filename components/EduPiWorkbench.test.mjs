@@ -140,6 +140,7 @@ test("the dashboard wires the Core work-candidate inbox with six receipt-bound a
   assert.match(component, /min=\{tomorrow\(\)\}/);
   assert.match(css, /\.edupi-today-work__group > header h3/);
   assert.doesNotMatch(css, /\.edupi-today-work__group > header h2/);
+  assert.doesNotMatch(css, /edupi-today-work__guide/);
   assert.match(css, /\.edupi-today-work__item h4/);
   assert.match(helper, /review_work_candidate/);
   assert.match(helper, /expectedSnapshotId/);
@@ -156,9 +157,23 @@ test("the dashboard wires the Core work-candidate inbox with six receipt-bound a
   assert.match(component, /edupi-education-refresh/);
   assert.match(component, /title=\{ACTION_TITLES\.accept\}/);
   assert.match(component, /正在接受/);
+  assert.doesNotMatch(component, /edupi-today-work__guide/);
   assert.doesNotMatch(component, /result\??\.reason/);
   assert.doesNotMatch(component, /setCandidates|data\.tasks/);
   assert.doesNotMatch(component, /body\.(?:externalSend|sourceIds|evidenceIds|reviewer|issuedAt|provider|model|token)/);
+});
+
+test("insight provenance keeps shared evidence rows and only opens reviewable observations", async () => {
+  const insightDatabase = await read("./EduPiInsightDatabase.tsx");
+  assert.match(insightDatabase, /function isReviewableObservation\(item: EducationObservation\)/);
+  assert.match(insightDatabase, /pending_review.*held/);
+  for (const state of ["not_required", "pending_review", "accepted", "modified", "rejected", "held"]) {
+    assert.match(insightDatabase, new RegExp(`${state}:`));
+  }
+  assert.match(insightDatabase, /new Map<string, EducationContract\["observations"\]\[number\]\[\]>/);
+  assert.match(insightDatabase, /observationsByEvidence\.get\(evidenceId\) \|\| \[\]/);
+  assert.match(insightDatabase, /linkedObservations\.filter\(isReviewableObservation\)/);
+  assert.match(insightDatabase, /reviewTarget: isReviewableObservation\(item\)/);
 });
 
 test("refreshes education data after Core imports without remounting chat", async () => {

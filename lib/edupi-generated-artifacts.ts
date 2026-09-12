@@ -45,15 +45,39 @@ function isArtifactOutputFile(filePath: string, root: string): boolean {
 export function bashToolArtifactPaths(command: unknown, root: string): string[] {
   if (typeof command !== "string" || !command.trim()) return [];
   const candidates = new Set<string>();
-  const tokenPattern = /(?:"([^"\\]*(?:\\.[^"\\]*)*)"|'([^']*)'|([^\s"'`;&|]+))/g;
-  for (const match of command.matchAll(tokenPattern)) {
-    const token = (match[1] ?? match[2] ?? match[3] ?? "").replace(/\\([\\"'])/g, "$1");
-    if (!token.includes(".edupi/output/") && !token.startsWith("教学产物/") && !token.startsWith("deliverables/") && !token.startsWith("output/")) continue;
+  const tokenPattern = /"([^"\\]*(?:\\.[^"\\]*)*)"|'([^']*)'|(2>>|2>|&>>|&>|>>\||>>|>\||>|&&|\|\||[;&|]|[^\s"'`;&|]+)/g;
+  const outputRedirects = new Set([">", ">>", ">|", "2>", "2>>", "&>", "&>>"]);
+  const outputFlags = new Set(["-o", "-O", "--out", "--output", "--output-file"]);
+  let expectsOutput = false;
+  const addCandidate = (value: string) => {
+    const token = value.replace(/\\([\\"'])/g, "$1");
     const file = resolve(root, token);
-    if (!isArtifactOutputFile(file, root)) continue;
+    if (!isArtifactOutputFile(file, root)) return;
     try {
       if (statSync(file).isFile()) candidates.add(file);
     } catch { /* A failed or removed bash target is not an artifact. */ }
+  };
+  for (const match of command.matchAll(tokenPattern)) {
+    const token = (match[1] ?? match[2] ?? match[3] ?? "").replace(/\\([\\"'])/g, "$1");
+    if (outputRedirects.has(token)) {
+      expectsOutput = true;
+      continue;
+    }
+    if (token === "&&" || token === "||" || token === ";" || token === "|") {
+      expectsOutput = false;
+      continue;
+    }
+    if (expectsOutput) {
+      addCandidate(token);
+      expectsOutput = false;
+      continue;
+    }
+    if (outputFlags.has(token)) {
+      expectsOutput = true;
+      continue;
+    }
+    const inlineOutput = /^(?:--out|--output|--output-file)=(.+)$/.exec(token);
+    if (inlineOutput) addCandidate(inlineOutput[1]);
   }
   return [...candidates].sort();
 }
