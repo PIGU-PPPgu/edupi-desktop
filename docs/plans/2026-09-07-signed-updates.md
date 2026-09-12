@@ -7,6 +7,13 @@
 - 使用本机密钥临时注入公钥后，最终 `EduPi.app.tar.gz` 已生成对应 `.sig` 文件（404 bytes）；随后恢复源码中的临时公钥配置，没有提交密钥或配置改动。
 - 当前剩余事项是 GitHub Actions 正式构建/草稿 Release、三平台产物和 Windows/Linux 实机验收；本地 updater 签名阻塞已解除。
 
+## 2026-09-12 正式发布链路准备（取代“缺少 Core token”的当前风险描述）
+
+- Desktop 版本已从 `0.3.6` 推进到 `0.3.7`，`Cargo.toml`、`Cargo.lock`、包元数据和 `component-versions.json` 已保持一致。
+- `release.yml`、`preview-installers.yml`、`windows-build-debug.yml` 对公开 EduPi Core 使用 `EDUPI_CORE_READ_TOKEN || github.token`；没有这个可选 Secret 也能 checkout 公开仓库，不再把它当成发布阻塞。
+- Core 修复提交 `6b1d0cf74d7a1344c881da8e34a857243e315fdb` 已通过本机全量回归并合并到公开 Core `main`（PR #58，合并提交 `ea3b1dd175d3521546cc2b3ff685f6c9c7a360c6`）；Desktop Actions 现在可以按精确 pin checkout。
+- 仍需远端实证的项目是 `v0.3.7` Actions 全矩阵、草稿 Release 的三平台签名产物、Windows/Linux 安装与应用内升级，以及 Apple 公证。它们分别记录为外部验收边界，不再混同为本地密钥或 Core token 缺失。
+
 ## 2026-09-12 Today 修复包（取代下方旧 Core pin 记录）
 
 - 最终包配套 Core pin 为 `6b1d0cf74d7a1344c881da8e34a857243e315fdb`，Desktop component manifest 为 `sha256:9f28910f0886fcfed4509729af8361749cbd0f0cf3b48df4093db34fed6728b5`。旧的 `deda34d… / b29eb3…` 记录仅保留为历史证据；writer detector 矩阵和 daemon manifest 断言均已同步。

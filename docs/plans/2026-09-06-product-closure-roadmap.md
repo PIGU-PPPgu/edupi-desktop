@@ -1,5 +1,11 @@
 # EduPi 产品闭环 PR 路线图
 
+## 2026-09-12 发布风险收口（取代前述旧阻塞状态）
+
+- 本机 updater 密钥对已找到并验证可签名；GitHub 的 `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_UPDATER_PUBLIC_KEY` 已存在。未设置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 与 `EDUPI_CORE_READ_TOKEN` 不再构成本轮本机或公开 Core 发布链路的阻塞：前者对应未加密私钥，后者由三个工作流回退到 `github.token`。
+- Desktop 发布版本已推进到 `0.3.7`，组件清单和 Cargo 版本已同步；Core 修复提交 `6b1d0cf74d7a1344c881da8e34a857243e315fdb` 已通过本机全量回归并合并到公开 Core `main`（PR #58，合并提交 `ea3b1dd175d3521546cc2b3ff685f6c9c7a360c6`），Desktop 已具备按精确 pin 运行正式 Actions 的条件。
+- 本轮可在本机闭合的风险已处理；剩余未验证项明确为正式 Actions 全矩阵、三平台 Release 产物、Windows/Linux 实机安装升级、Apple 公证，以及真实课堂内容质量与系统通知/睡眠唤醒场景。
+
 ## 2026-09-12 Today 审核交互与 Core 写入锁修复（取代本页旧 pin/Today 状态）
 
 - 根因已确认：旧版钉钉桥接进程会在整个进程生命周期持有 Core writer admission SQLite 锁，导致 Today 的接受、调整、暂缓、稍后、停止提示、拒绝全部在提交阶段返回 `writer_admission_unavailable`，页面只显示笼统的“暂时无法提交”。Core 行为修复提交为 `5650151`，桥接清单提交为 `7e6a99ff500483a199793f4175d1e1eeaf413ae0`，writer 矩阵提交为 `94c3c3b`，最终审计断言提交为 `6b1d0cf`，配套 pin 为 `6b1d0cf74d7a1344c881da8e34a857243e315fdb`。
@@ -14,7 +20,7 @@
 - 最终 Core bundle closure 定向测试 3 项全部通过：临时复制包无 `.git` 可验证、篡改/缺失 runtime dependency 会拒绝、bundled 模式不依赖 Git；Desktop bridge transport parity 也通过。
 - 配套 Core `npm test` 最终全量通过（含 live model、writer admission/enforcement/C2/C3、daemon、学生、closure 和 scoped memory runtime）；此前 writer detector 与 Desktop manifest SHA 漂移已同步并复跑通过。
 - 签名风险已复核：本机永久 updater 密钥对存在，空密码签名探针和最终 `.app.tar.gz.sig` 均成功；GitHub 私钥/公钥 Secret 名称已存在，Core 仓库公开可读。剩余为正式 Actions Release、三平台产物和实机升级，不再要求用户额外提供本地密钥。
-- 验证结果：Desktop 全量 1067 tests、1042 passed、0 failed、25 skipped；`tsc --noEmit`、`npm run lint`、Core live model、桥接清单和传输一致性均通过。updater 私钥仍缺失，构建只在签名更新包步骤退出，未发布。
+- 验证结果：Desktop 全量 1067 tests、1042 passed、0 failed、25 skipped；`tsc --noEmit`、`npm run lint`、Core live model、桥接清单和传输一致性均通过。本机 updater 私钥已恢复并完成签名探针与最终 `.sig` 生成；正式 Actions Release 尚未运行，故远端发布仍未宣称完成。
 - 状态边界：真实教师数据没有被测试接受动作改写；真实包写入在隔离数据根完成。原生自动化当前仍不稳定，因此没有把真实工作区的鼠标点击或系统通知点击记为通过；R15/R17 跨平台安装升级、签名、公证和真实课堂内容质量继续保留外部/人工验收状态。
 
 ## 2026-09-12 R03–R17 续接验收
