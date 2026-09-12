@@ -114,6 +114,10 @@ export function EduPiCoreCompatibility({ value, onNavigate, onOpenContext }: Pro
       <summary>未接入能力 <span>{Object.keys(value.expected.unsupportedCommandReasons).length}</span></summary>
       <div className="edupi-core-compatibility__unsupported">{Object.entries(value.expected.unsupportedCommandReasons).map(([command, reason]) => <p key={command}><strong>{command}</strong><span>{reason}</span></p>)}</div>
     </details>
+    <details>
+      <summary>未接入投影 <span>{Object.keys(value.expected.unsupportedProjectionReasons).length}</span></summary>
+      <div className="edupi-core-compatibility__unsupported">{Object.entries(value.expected.unsupportedProjectionReasons).map(([projection, reason]) => <p key={projection}><strong>{projection}</strong><span>{reason}</span></p>)}</div>
+    </details>
     <div className="edupi-core-compatibility__projection"><span>投影</span>{value.expected.supportedProjections.map((projection) => <em key={projection} className={projectionsMatch ? "is-ready" : ""}>{projection}</em>)}</div>
   </section>;
 }

@@ -33,6 +33,7 @@ test("Core compatibility surface exposes every pinned command and its Desktop en
 test("Core compatibility surface makes unsupported capabilities visible", async () => {
   const source = await read();
   assert.match(source, /unsupportedCommandReasons/);
+  assert.match(source, /unsupportedProjectionReasons/);
   assert.match(source, /未启用/);
   assert.match(source, /待连接/);
   assert.match(source, /title=\{actual\?\.coreCommit/);
