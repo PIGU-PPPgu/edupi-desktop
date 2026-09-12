@@ -222,7 +222,8 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     const refresh = () => { void loadWorkspace().catch(() => {}); };
     window.addEventListener("edupi-preparation-updated", refresh);
     window.addEventListener("edupi-artifacts-updated", refresh);
-    return () => { window.removeEventListener("edupi-preparation-updated", refresh); window.removeEventListener("edupi-artifacts-updated", refresh); };
+    window.addEventListener("edupi-education-refresh", refresh);
+    return () => { window.removeEventListener("edupi-preparation-updated", refresh); window.removeEventListener("edupi-artifacts-updated", refresh); window.removeEventListener("edupi-education-refresh", refresh); };
   }, [loadWorkspace]);
 
   useEffect(() => {

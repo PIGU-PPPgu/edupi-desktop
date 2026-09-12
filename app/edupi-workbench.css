@@ -891,10 +891,15 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-today-work__header span { color: var(--ep-muted); font-size: 10px; }
 .edupi-today-work__header h2 { margin: 0; font-size: 14px; letter-spacing: -.01em; }
 .edupi-today-work__notice,
+.edupi-today-work__guide,
 .edupi-today-work__feedback { margin: 10px 12px 0; padding: 8px 10px; border-radius: 6px; font-size: 11px; line-height: 1.5; }
 .edupi-today-work__notice { background: var(--ep-surface-soft); color: var(--ep-muted); }
+.edupi-today-work__guide { color: var(--ep-muted); background: var(--ep-surface-soft); }
+.edupi-today-work__feedback { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .edupi-today-work__feedback.is-success { background: var(--ep-green-soft); color: var(--ep-green); }
 .edupi-today-work__feedback.is-error { background: var(--ep-red-soft); color: var(--ep-red); }
+.edupi-today-work__feedback button { flex: 0 0 auto; min-height: 24px; padding: 0 8px; border: 1px solid currentColor; border-radius: 5px; background: transparent; color: inherit; cursor: pointer; font-size: 10px; }
+.edupi-today-work__feedback button:disabled { cursor: not-allowed; opacity: .5; }
 .edupi-today-work__groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .edupi-today-flow { border-bottom: 1px solid var(--ep-border); background: color-mix(in srgb, var(--ep-blue-soft) 25%, var(--ep-surface)); }
 .edupi-today-flow > header { display: flex; align-items: center; justify-content: space-between; padding: 9px 13px 6px; }
@@ -911,7 +916,9 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-today-work__group { min-width: 0; }
 .edupi-today-work__group + .edupi-today-work__group { border-left: 1px solid var(--ep-border); }
 .edupi-today-work__group > header { display: flex; min-height: 38px; align-items: baseline; justify-content: space-between; gap: 8px; padding: 9px 12px 6px; border-bottom: 1px solid var(--ep-border); background: var(--ep-surface-soft); }
+.edupi-today-work__group > header > div { display: grid; min-width: 0; gap: 2px; }
 .edupi-today-work__group > header h3 { margin: 0; font-size: 12px; }
+.edupi-today-work__group > header p { margin: 0; color: var(--ep-muted); font-size: 9px; line-height: 1.4; }
 .edupi-today-work__group > header span { color: var(--ep-muted); font-size: 10px; }
 .edupi-today-work__items { min-width: 0; }
 .edupi-today-work__item { min-width: 0; padding: 11px 12px; border-bottom: 1px solid var(--ep-border); }

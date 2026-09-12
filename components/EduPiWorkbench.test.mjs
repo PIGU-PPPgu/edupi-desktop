@@ -127,7 +127,7 @@ test("the dashboard wires the Core work-candidate inbox with six receipt-bound a
   const helper = await read("../lib/edupi-today-work.ts");
   assert.match(workspaceViews, /EduPiTodayWork/);
   assert.match(component, /data\.workCandidates/);
-  for (const label of ["今天要判断", "现在", "稍后", "已完成", "接受", "调整", "暂缓", "稍后", "停止提示", "拒绝"]) assert.match(component, new RegExp(label));
+  for (const label of ["今天要判断", "待你决定", "稍后处理", "已记录", "接受", "调整", "暂缓", "稍后", "停止提示", "拒绝"]) assert.match(component, new RegExp(label));
   assert.match(component, /教师工作/);
   assert.doesNotMatch(component, /Core Today|Core 尚未开放/);
   assert.match(component, /<h3 id=/);
@@ -148,6 +148,14 @@ test("the dashboard wires the Core work-candidate inbox with six receipt-bound a
   assert.match(component, /useSyncExternalStore/);
   assert.match(component, /aria-busy=\{busy\}/);
   assert.match(component, /setFeedback\(null\)/);
+  assert.match(component, /DECISION_EFFECTS/);
+  assert.match(component, /移到“已记录”/);
+  assert.match(component, /setRetryReview/);
+  assert.match(component, />重试<\/button>/);
+  assert.match(component, />刷新待办<\/button>/);
+  assert.match(component, /edupi-education-refresh/);
+  assert.match(component, /title=\{ACTION_TITLES\.accept\}/);
+  assert.match(component, /正在接受/);
   assert.doesNotMatch(component, /result\??\.reason/);
   assert.doesNotMatch(component, /setCandidates|data\.tasks/);
   assert.doesNotMatch(component, /body\.(?:externalSend|sourceIds|evidenceIds|reviewer|issuedAt|provider|model|token)/);

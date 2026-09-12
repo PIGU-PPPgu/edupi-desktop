@@ -37,13 +37,13 @@ export class TodayWorkBusyError extends TodayWorkReviewError {
 }
 
 const ERROR_MESSAGES: Record<TodayWorkErrorCode, string> = {
-  stale_snapshot: "内容已更新，请重新确认。",
-  stale_revision: "内容已更新，请重新确认。",
-  invalid_envelope: "这项内容无法提交，请重新打开后再试。",
+  stale_snapshot: "内容已更新，本次没有写入；请刷新待办后重新决定。",
+  stale_revision: "内容已更新，本次没有写入；请刷新待办后重新决定。",
+  invalid_envelope: "这条事项已失去最新依据，本次没有写入；请重新打开。",
   unsupported_command: "待办审核暂不可用。",
-  unavailable: "暂时无法提交，请稍后重试。",
+  unavailable: "写入通道暂不可用，本次没有写入；请重试。",
   busy: "正在处理上一项，请稍候。",
-  malformed: "提交失败，请重试。",
+  malformed: "返回结果无法核对，本次没有写入；请重试。",
 };
 
 export function todayWorkErrorMessage(code: string): string {
