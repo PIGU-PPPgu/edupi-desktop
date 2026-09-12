@@ -5,14 +5,14 @@
 - 已找到本机永久 updater 密钥对：`~/.config/edupi-release/updater.key` 与 `.pub`。用私钥对临时文件签名成功，确认该私钥未设置密码。
 - GitHub 仓库 Actions Secret 名称 `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_UPDATER_PUBLIC_KEY` 已存在；`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 不需要补值。Core 仓库实际为私有，正式 Actions 使用已写入的 `EDUPI_CORE_READ_TOKEN`；token 值未写入仓库或日志。
 - 使用本机密钥临时注入公钥后，最终 `EduPi.app.tar.gz` 已生成对应 `.sig` 文件（404 bytes）；随后恢复源码中的临时公钥配置，没有提交密钥或配置改动。
-- 当前剩余事项是 GitHub Actions 正式构建/草稿 Release、三平台产物和 Windows/Linux 实机验收；本地 updater 签名阻塞已解除。
+- 当前剩余事项是 Linux 实机安装与应用内升级、Apple 公证、系统通知/睡眠唤醒和真实课堂内容质量；本地签名、正式 Release 与 Windows runner 安装阻塞已解除。
 
 ## 2026-09-12 正式发布链路准备（取代“缺少 Core token”的当前风险描述）
 
 - Desktop 版本已从 `0.3.6` 推进到 `0.3.7`，`Cargo.toml`、`Cargo.lock`、包元数据和 `component-versions.json` 已保持一致。
 - `release.yml`、`preview-installers.yml`、`windows-build-debug.yml` 保留 `EDUPI_CORE_READ_TOKEN || github.token` 兼容公开镜像；当前私有 Core 正式构建使用 `EDUPI_CORE_READ_TOKEN`，缺失时会在 checkout 阶段明确失败。
 - Core 修复提交 `6b1d0cf74d7a1344c881da8e34a857243e315fdb` 已通过本机全量回归并合并到公开 Core `main`（PR #58，合并提交 `ea3b1dd175d3521546cc2b3ff685f6c9c7a360c6`）；Desktop Actions 现在可以按精确 pin checkout。
-- 仍需远端实证的项目是 `v0.3.7` Actions 全矩阵、草稿 Release 的三平台签名产物、Windows/Linux 安装与应用内升级，以及 Apple 公证。它们分别记录为外部验收边界，不再混同为本地密钥或 Core token 缺失。
+- 仍需远端实证的项目是 Linux 实机安装与应用内升级、Apple 公证、系统通知/睡眠唤醒和真实课堂内容质量；正式三平台 Release 与 Windows runner 安装已在下方记录。
 
 ## 2026-09-13 正式 `v0.3.7` Release（取代远端发布未验证状态）
 
@@ -20,6 +20,7 @@
 - 使用现有 GitHub 登录凭据通过 `gh secret set` 写入 `EDUPI_CORE_READ_TOKEN`，不回显 token；重跑 `34702177745` 成功，macOS、Linux、Windows build 与 manifest 全部成功。
 - `v0.3.7` 已发布为非草稿、非预发布版本：DMG、AppImage、deb、Windows NSIS、三类 updater `.sig`、macOS updater tar.gz、`latest.json` 和 `component-versions.json` 均存在；`latest.json` 的 `darwin-aarch64`、`linux-x86_64`、`windows-x86_64` 三项均有签名和 `v0.3.7` 下载地址，组件清单 `appVersion=0.3.7`。
 - 仍未完成的是 Windows/Linux 实机安装与应用内升级、Apple 公证、系统睡眠唤醒/通知点击和真实课堂内容质量；CI 产物存在不替代这些验收。
+- Windows published-install run `34705099213` 已在干净 Windows runner 安装并启动 `v0.3.7`，同时 native source check、私有 Core diagnose、资源 stray-scan 和原生命令检查均通过。
 
 ## 2026-09-12 Today 修复包（取代下方旧 Core pin 记录）
 

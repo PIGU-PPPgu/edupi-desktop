@@ -13,6 +13,7 @@
 - 首次 run `34701579391` 在私有 Core checkout 失败，确认 `EDUPI_CORE_READ_TOKEN` 是正式 CI 必需 Secret；通过现有 GitHub 登录凭据写入该 Secret 后，run `34702177745` 的 macOS、Linux、Windows 和 manifest jobs 全部成功。
 - Release `v0.3.7` 已发布为非草稿、非预发布版本，资产包含 `EduPi_0.3.7_aarch64.dmg`、`EduPi_0.3.7_amd64.AppImage`、`EduPi_0.3.7_amd64.deb`、`EduPi_0.3.7_x64-setup.exe`、macOS updater tar.gz、三个 `.sig`、`latest.json` 和 `component-versions.json`。
 - 远端 `latest.json` 回读通过：版本为 `0.3.7`，`darwin-aarch64`、`linux-x86_64`、`windows-x86_64` 均有签名和对应 `v0.3.7` 下载地址；组件清单 `appVersion` 为 `0.3.7`。
+- Windows workflow run `34705099213` 的 published-install 实际安装并启动 `v0.3.7`；同次 native source check、私有 Core diagnose、资源 stray-scan 和原生命令检查均通过。Linux 仍未在真实 Linux 主机安装，Apple 公证与应用内升级仍未验收。
 
 ## 2026-09-12 Today 审核交互与写入链复核（取代旧的 Today/包 pin 结论）
 
