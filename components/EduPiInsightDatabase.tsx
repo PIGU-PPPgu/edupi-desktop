@@ -42,7 +42,14 @@ function uniqueSources(values: string[]): string[] {
 export function EduPiInsightDatabase({ data, query, selectedObjectId, onReviewTarget }: { data: EducationContract; query: string; selectedObjectId: string | null; onReviewTarget?: (target: ReviewTarget) => void }) {
   const [category = "learning", status = "all"] = routePart(selectedObjectId, "insights", "learning:all").split(":") as [InsightCategoryId, InsightStatusId];
   const [page, setPage] = useState(0);
-  const studentObservations = useStudentObservationRows(category, status, query, page);
+  const localRowCount = useMemo(() => {
+    const matches = (content: string, rowStatus: string, evidence: string[], related: string[]) => !query || `${content} ${rowStatus} ${evidence.join(" ")} ${related.join(" ")}`.toLocaleLowerCase().includes(query.toLocaleLowerCase());
+    const observations = data.observations.filter(item => insightCategory(item.text) === category && (status === "all" || status === "observation") && matches(item.text, item.teacherReview.state, item.evidenceIds, [...item.studentIds, ...(item.classId ? [item.classId] : [])])).length;
+    const insights = data.continuity.insights.filter(item => !item.content.startsWith("[主题候选]") && insightCategory(item.content) === category && (status === "all" || status === item.status) && matches(item.content, item.status, item.evidenceIds, [])).length;
+    const signals = data.continuity.signals.filter(item => insightCategory(item.content) === category && (status === "all" || status === "signal") && matches(item.content, "持续观察", [], item.related)).length;
+    return observations + insights + signals;
+  }, [category, data.continuity.insights, data.continuity.signals, data.observations, query, status]);
+  const studentObservations = useStudentObservationRows(category, status, query, page, localRowCount);
   const categoryLabel = INSIGHT_CATEGORIES.find((item) => item.id === category)?.label || "学情观察";
   const statusLabel = INSIGHT_STATUSES.find((item) => item.id === status)?.label || "全部";
   const rows = useMemo<InsightRow[]>(() => {

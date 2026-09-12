@@ -17,6 +17,8 @@ test("long-term workspaces expose real source state instead of ambiguous empty s
   assert.match(insights, /item\.provenance\.map/);
   assert.match(insights, /observationsByEvidence/);
   assert.match(insights, /原始观察审核/);
+  assert.match(insights, /localRowCount/);
+  assert.match(insights, /useStudentObservationRows\(category, status, query, page, localRowCount\)/);
   assert.match(insights, /打开审核/);
   assert.match(insights, /打开来源对话/);
   assert.match(insights, /sourceSessionId/);
