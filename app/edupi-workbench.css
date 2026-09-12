@@ -619,6 +619,12 @@ html.dark .edupi-teacher-shell {
 .edupi-database-row__detail span { color: var(--ep-dim); font-size: 9px; }
 .edupi-database-row__detail strong { overflow: hidden; color: var(--ep-muted); font-size: 10px; font-weight: 520; text-overflow: ellipsis; white-space: nowrap; }
 .edupi-database-row__detail button { height: 30px; padding: 0 10px; border: 1px solid var(--ep-border-strong); border-radius: 6px; background: var(--ep-surface); color: var(--ep-text); cursor: pointer; font-size: 10px; }
+.edupi-insight-source { display: grid; grid-column: 1 / -1; gap: 8px; align-items: start; }
+.edupi-insight-source > summary { width: fit-content; color: var(--ep-muted); cursor: pointer; font-size: 10px; }
+.edupi-insight-source__items { display: grid; gap: 3px; color: var(--ep-muted); font-size: 10px; }
+.edupi-insight-source__items p { margin: 0; }
+.edupi-insight-source-link { grid-column: 1 / -1; width: fit-content; color: var(--ep-blue); font-size: 10px; }
+.edupi-insight-source-quote { grid-column: 1 / -1; margin: 0; padding-left: 10px; border-left: 2px solid var(--ep-border-strong); color: var(--ep-muted); font-size: 10px; line-height: 1.6; white-space: pre-wrap; }
 .edupi-memory-actions { display: flex; gap: 6px; }
 .edupi-memory-actions button.is-delete { border-color: color-mix(in srgb, var(--ep-red) 35%, var(--ep-border)); color: var(--ep-red); }
 .edupi-memory-editor { display: grid; grid-column: 1 / -1; gap: 8px; }
