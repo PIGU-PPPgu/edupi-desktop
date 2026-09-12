@@ -6,6 +6,7 @@
 - Desktop 配套修复已提交为 `50153d6`，R14 状态摘要优化提交为 `6712d50`；包含 bundled Core 根目录隔离、Core pin 同步、产物登记任务绑定、聊天文件刷新和 C1–C3 E2 admission 生命周期修正。
 - 新配套 Desktop pin 的组件清单为 `sha256:b29eb3ef9a9133de6d0d3c6528197d9bd13359ab4bd6ecf75c9d675e0845ddb7`。C1/C2/C3 E2 均 GREEN：C1 为 1 observation/1 candidate/1 memory/2 receipts，C2 为 4 条教师上下文审核历史，C3 为 9 个工作候选/7 条工作审核回执；均覆盖重放、重启读回、过期快照或版本无写入、`external_send=false`。
 - 新 pin 复跑的定向命令均通过：`EDUPI_CORE_ROOT=... npm run test:edupi-c1-e2`、`test:edupi-c2-e2`、`test:edupi-c3-e2`；C1/C2/C3 分别确认 canonical store、回放幂等、重启读回、过期快照/版本无写入，且核心统计与上条证据一致。
+- 最终 pin 下的 R09/R11/R13 定向回归也通过：记忆更新、学生资料与事件编辑/删除、实体删除、任务板直达完成、living-flow、教学能力五态、早安简报对象链接、持久后台任务均返回通过；仍未把开发隔离证据当作安装版或真实课堂质量验收。
 - R04 课前准备 E2 通过 6 个课次、4 个 `draft_ready` 工作包、每包 4 份产物；chat-capture 与 living-flow 通过。C6 材料 intake/识别、任务板直接完成、记忆更新、学生资料/事件、实体删除 E2 也通过。任务历史现在保留真实审核回执，直接待处理→完成符合已确认的教师看板规则。
 - R01/R02 隔离开发版真实 Agent 工具矩阵通过：同一 Session 通过 `write`、`bash`、`edupi_make_document` 生成 3 份文件，任务绑定后历史补录将 3 份文件全部关联同一 task；再次补录仍保持 3 条、无重复。安装版文件入口和真实页面冷启动仍待验收。
 - R11/R13 本地 Core 生命周期和 Desktop 后台边界回归通过：教学方法 5 种生命周期、冻结 mutation/trial、发布方法读取与来源变更失效通过；后台任务取消/跨任务文件隔离/不可用产物不误报完成通过。真实课堂效果、干净安装依赖和安装版恢复仍未验收。
