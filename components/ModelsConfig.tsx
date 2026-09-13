@@ -5,6 +5,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
 import { handleExternalLinkClick, openExternal } from "@/lib/desktop-native";
+import { fetchWithDeadline, fetchWithRetry } from "@/lib/fetch-timeout";
 import { ConfirmDangerButton } from "./ConfirmDangerButton";
 import type { ModelCatalogPreset, ModelCatalogRecommendation } from "@/lib/model-catalog";
 import type { DiscoveredModel } from "@/lib/model-discovery";
@@ -176,6 +177,37 @@ type Selection =
   | { type: "model"; providerName: string; index: number }
   | { type: "oauth"; providerId: string }
   | { type: "apikey"; providerId: string };
+
+function mergeModelEntries(...groups: readonly (readonly ModelEntry[])[]): ModelEntry[] {
+  const byId = new Map<string, ModelEntry>();
+  for (const group of groups) {
+    for (const model of group) {
+      const id = model.id.trim();
+      if (!id) continue;
+      const normalized = { ...model, id };
+      const previous = byId.get(id);
+      // Keep the first source's explicit edits, while allowing later sources
+      // to fill metadata that source did not provide.
+      byId.set(id, previous ? { ...normalized, ...previous } : normalized);
+    }
+  }
+  return [...byId.values()];
+}
+
+function pickPreferredManagedModel(models: readonly ModelEntry[], hints: readonly string[]): ModelEntry | undefined {
+  for (const hint of hints) {
+    const normalizedHint = hint.toLocaleLowerCase();
+    const exact = models.find((model) => model.id.toLocaleLowerCase() === normalizedHint);
+    if (exact) return exact;
+  }
+  for (const hint of hints) {
+    const normalizedHint = hint.toLocaleLowerCase();
+    const partial = models.find((model) => model.id.toLocaleLowerCase().includes(normalizedHint)
+      || model.name?.toLocaleLowerCase().includes(normalizedHint));
+    if (partial) return partial;
+  }
+  return models[0];
+}
 
 const API_OPTIONS = ["openai-completions", "openai-responses", "anthropic-messages", "google-generative-ai"] as const;
 
@@ -1354,20 +1386,76 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
 
 // ── API Key detail ────────────────────────────────────────────────────────────
 
-function ApiKeyDetail({ provider, onRefresh, onAddModel }: { provider: ApiKeyProvider; onRefresh: () => void; onAddModel: () => void }) {
+function ApiKeyDetail({
+  provider,
+  configProvider,
+  models,
+  onRefresh,
+  onConfigureProvider,
+  onUpdateModel,
+  onRemoveModel,
+  onUseModel,
+  onAddModel,
+}: {
+  provider: ApiKeyProvider;
+  configProvider: ProviderEntry;
+  models: ModelEntry[];
+  onRefresh: () => void;
+  onConfigureProvider: (provider: ApiKeyProvider, options?: { notify?: boolean }) => Promise<void>;
+  onUpdateModel: (index: number, model: ModelEntry) => void;
+  onRemoveModel: (index: number) => void;
+  onUseModel: (index: number) => Promise<void>;
+  onAddModel: () => number;
+}) {
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState(false);
   const { t } = useI18n();
+  const [activeModelIndex, setActiveModelIndex] = useState(0);
+  const modelLoadRef = useRef<Promise<void> | null>(null);
+  const autoLoadAttemptedRef = useRef(false);
+
+  useEffect(() => {
+    setActiveModelIndex((current) => Math.min(current, Math.max(0, models.length - 1)));
+  }, [models.length]);
 
   // Reset state when provider changes
   useEffect(() => {
     setApiKey("");
     setError(null);
     setSavedOk(false);
+    autoLoadAttemptedRef.current = false;
   }, [provider.id]);
+
+  const loadModels = useCallback((force = false, notify = false) => {
+    if (!provider.configured && !force) return Promise.resolve();
+    if (modelLoadRef.current) return modelLoadRef.current;
+
+    setModelsLoading(true);
+    const request = onConfigureProvider(provider, { notify })
+      .catch((cause) => {
+        setError(`Key 已保存，模型自动加载失败：${cause instanceof Error ? cause.message : String(cause)}`);
+        throw cause;
+      })
+      .finally(() => {
+        modelLoadRef.current = null;
+        setModelsLoading(false);
+      });
+    modelLoadRef.current = request;
+    return request;
+  }, [onConfigureProvider, provider]);
+
+  // Existing authenticated providers can be upgraded to the inline model
+  // editor when the panel is opened; they should not need to save the key a
+  // second time just to populate the model list.
+  useEffect(() => {
+    if (!provider.configured || models.length > 0 || autoLoadAttemptedRef.current) return;
+    autoLoadAttemptedRef.current = true;
+    void loadModels().catch(() => {});
+  }, [loadModels, models.length, provider.configured]);
 
   const handleSave = useCallback(async () => {
     if (!apiKey.trim()) return;
@@ -1388,13 +1476,19 @@ function ApiKeyDetail({ provider, onRefresh, onAddModel }: { provider: ApiKeyPro
         setSavedOk(true);
         setTimeout(() => setSavedOk(false), 2000);
         onRefresh();
+        autoLoadAttemptedRef.current = true;
+        try {
+          await loadModels(true, true);
+        } catch {
+          // loadModels already exposes the actionable error in the panel.
+        }
       }
     } catch (e) {
       setError(String(e));
     } finally {
       setSaving(false);
     }
-  }, [apiKey, provider.id, onRefresh]);
+  }, [apiKey, loadModels, onRefresh, provider.id]);
 
   const handleRemove = useCallback(async () => {
     setRemoving(true);
@@ -1460,7 +1554,53 @@ function ApiKeyDetail({ provider, onRefresh, onAddModel }: { provider: ApiKeyPro
       {error && <p style={{ margin: 0, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
 
       {provider.configured && (
-        <button className="native-button" onClick={onAddModel}>配置模型名称与连接测试</button>
+        <section style={{ display: "flex", flexDirection: "column", gap: 10, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+            <SectionTitle>模型</SectionTitle>
+            <span style={{ color: "var(--text-dim)", fontSize: 10 }}>
+              {modelsLoading ? "正在读取…" : models.length ? `已自动加载 ${models.length} 个` : "尚未加载"}
+            </span>
+          </div>
+          {modelsLoading && models.length === 0 ? (
+            <p style={{ margin: 0, color: "var(--text-muted)", fontSize: 12 }}>正在读取可用模型…</p>
+          ) : models.length > 0 ? (
+            <>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 180, overflowY: "auto" }}>
+                {models.map((model, index) => (
+                  <button
+                    key={`${model.id}-${index}`}
+                    type="button"
+                    className="native-button"
+                    onClick={() => setActiveModelIndex(index)}
+                    style={{ justifyContent: "space-between", textAlign: "left", background: index === activeModelIndex ? "var(--bg-selected)" : "var(--bg-panel)" }}
+                  >
+                    <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{model.name || model.id}</span>
+                    <code style={{ color: "var(--text-dim)", fontSize: 10 }}>{model.id}</code>
+                  </button>
+                ))}
+              </div>
+              {models[activeModelIndex] ? (
+                <div style={{ border: "1px solid var(--border)", borderRadius: 7, padding: 12 }}>
+                  <ModelDetail
+                    providerName={provider.id}
+                    provider={configProvider}
+                    model={models[activeModelIndex]}
+                    onChange={(model) => onUpdateModel(activeModelIndex, model)}
+                    onDelete={() => onRemoveModel(activeModelIndex)}
+                    onUse={() => onUseModel(activeModelIndex)}
+                  />
+                </div>
+              ) : null}
+            </>
+          ) : <p style={{ margin: 0, color: "var(--text-muted)", fontSize: 12 }}>服务没有返回模型，可以添加自定义模型。</p>}
+          <button
+            type="button"
+            className="native-button"
+            onClick={() => setActiveModelIndex(onAddModel())}
+          >
+            + 自定义模型
+          </button>
+        </section>
       )}
       {provider.configured && (
         <ConfirmDangerButton
@@ -2001,18 +2141,17 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
     });
   }, []);
 
-  const addModel = useCallback((providerName: string) => {
+  const addModel = useCallback((providerName: string, keepProviderSelection = false) => {
+    const currentModels = config.providers?.[providerName]?.models ?? [];
+    const newIndex = currentModels.length;
     setConfig((prev) => {
       const provider = prev.providers?.[providerName] ?? {};
       const models = [...(provider.models ?? []), { id: "" }];
       return { ...prev, providers: { ...(prev.providers ?? {}), [providerName]: { ...provider, models } } };
     });
-    setConfig((prev) => {
-      const idx = (prev.providers?.[providerName]?.models?.length ?? 1) - 1;
-      setSelection({ type: "model", providerName, index: idx });
-      return prev;
-    });
-  }, []);
+    if (!keepProviderSelection) setSelection({ type: "model", providerName, index: newIndex });
+    return newIndex;
+  }, [config.providers]);
 
   const addDiscoveredModels = useCallback((providerName: string, discovered: DiscoveredModel[]) => {
     setConfig((prev) => {
@@ -2028,6 +2167,90 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
     });
   }, []);
 
+  const configureApiKeyProvider = useCallback(async (managedProvider: ApiKeyProvider, options: { notify?: boolean } = {}) => {
+    const current = config.providers?.[managedProvider.id] ?? {};
+    const hadUsableModel = (current.models ?? []).some((model) => model.id.trim().length > 0);
+    let baseUrl = current.baseUrl;
+    let api = current.api;
+    let runtimeModels: ModelEntry[] = [];
+    try {
+      const response = await fetchWithRetry(`/api/models-config/provider-models?provider=${encodeURIComponent(managedProvider.id)}`);
+      if (response.ok) {
+        const result = await response.json() as { provider?: { baseUrl?: string; api?: string; models?: ModelEntry[] } };
+        baseUrl ||= result.provider?.baseUrl;
+        api ||= result.provider?.api;
+        runtimeModels = result.provider?.models ?? [];
+      }
+    } catch {
+      // Fall back to the preset or models.dev catalog below.
+    }
+
+    let catalogModels: ModelEntry[] = [];
+    let catalogBaseUrl: string | undefined;
+    if (runtimeModels.length === 0) {
+      try {
+        const response = await fetchWithRetry(`/api/models-config/catalog?provider=${encodeURIComponent(managedProvider.id)}&limit=100`);
+        if (response.ok) {
+          const result = await response.json() as { models?: Array<ModelEntry & { providerBaseUrl?: string }> };
+          catalogModels = (result.models ?? []).map((model) => ({
+            id: model.id,
+            ...(model.name ? { name: model.name } : {}),
+            ...(model.reasoning !== undefined ? { reasoning: model.reasoning } : {}),
+            ...(model.input ? { input: model.input } : {}),
+            ...(model.contextWindow !== undefined ? { contextWindow: model.contextWindow } : {}),
+            ...(model.maxTokens !== undefined ? { maxTokens: model.maxTokens } : {}),
+            ...(model.cost ? { cost: model.cost } : {}),
+          }));
+          catalogBaseUrl = result.models?.find((model) => model.providerBaseUrl)?.providerBaseUrl;
+        }
+      } catch {
+        // A provider can still be configured with a custom model below.
+      }
+    }
+
+    const preset = MODEL_SETUP_PRESETS.find((entry) => entry.id === managedProvider.id);
+    baseUrl ||= preset?.baseUrl;
+    api ||= preset?.api;
+    baseUrl ||= catalogBaseUrl;
+    const discoveredModels = mergeModelEntries(current.models ?? [], runtimeModels, catalogModels);
+    const preferred = pickPreferredManagedModel(discoveredModels, preset?.modelHints ?? []);
+    const orderedModels = !hadUsableModel && preferred
+      ? [preferred, ...discoveredModels.filter((model) => model.id !== preferred.id)]
+      : discoveredModels;
+    const nextProvider: ProviderEntry = {
+      ...current,
+      ...(baseUrl ? { baseUrl } : {}),
+      ...(api ? { api } : {}),
+      models: orderedModels,
+    };
+    const nextConfig = { ...config, providers: { ...(config.providers ?? {}), [managedProvider.id]: nextProvider } };
+    setConfig(nextConfig);
+    setSelection({ type: "apikey", providerId: managedProvider.id });
+    const saveResponse = await fetch("/api/models-config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nextConfig),
+    });
+    const saveResult = await saveResponse.json() as { error?: string };
+    if (!saveResponse.ok || saveResult.error) throw new Error(saveResult.error || `HTTP ${saveResponse.status}`);
+    // The provider/model catalog is already durable at this point. A failure
+    // while selecting the first default model must not make the saved catalog
+    // look like an unsaved edit in the footer.
+    savedSnapshotRef.current = JSON.stringify(nextConfig);
+    if (!hadUsableModel && preferred) {
+      const defaultResponse = await fetchWithDeadline("/api/models-config/default", 6_000, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: managedProvider.id, modelId: preferred.id }),
+      });
+      const defaultResult = await defaultResponse.json() as { success?: boolean; error?: string };
+      if (!defaultResponse.ok || !defaultResult.success) {
+        throw new Error(`模型已加载，但默认模型设置失败：${defaultResult.error || `HTTP ${defaultResponse.status}`}`);
+      }
+    }
+    if (options.notify !== false) onSaved?.();
+  }, [config, onSaved]);
+
   const updateModel = useCallback((providerName: string, index: number, m: ModelEntry) => {
     setConfig((prev) => {
       const provider = prev.providers?.[providerName] ?? {};
@@ -2037,15 +2260,35 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
     });
   }, []);
 
-  const removeModel = useCallback((providerName: string, index: number) => {
+  const removeModel = useCallback((providerName: string, index: number, keepProviderSelection = false) => {
     setConfig((prev) => {
       const provider = prev.providers?.[providerName] ?? {};
       const models = [...(provider.models ?? [])];
       models.splice(index, 1);
       return { ...prev, providers: { ...(prev.providers ?? {}), [providerName]: { ...provider, models: models.length ? models : undefined } } };
     });
-    setSelection({ type: "provider", name: providerName });
+    if (!keepProviderSelection) setSelection({ type: "provider", name: providerName });
   }, []);
+
+  const saveAndUseModel = useCallback(async (providerName: string, index: number) => {
+    setSaveError(null);
+    try {
+      const provider = config.providers?.[providerName];
+      const model = provider?.models?.[index];
+      if (!provider || !model?.id.trim()) throw new Error("模型 ID 不能为空");
+      const save = await fetch("/api/models-config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
+      const saved = await save.json();
+      if (!save.ok || saved.error) throw new Error(saved.error || "模型保存失败");
+      savedSnapshotRef.current = JSON.stringify(config);
+      const response = await fetch("/api/models-config/default", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: providerName, modelId: model.id.trim() }) });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || "默认模型设置失败");
+      setSavedOk(true);
+      onSaved?.();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "默认模型设置失败");
+    }
+  }, [config, onSaved]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -2105,7 +2348,19 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
     if (selection.type === "apikey") {
       const p = apiKeyProviders.find((p) => p.id === selection.providerId);
       if (!p) return null;
-      return <ApiKeyDetail key={p.id} provider={p} onRefresh={handleAuthChanged} onAddModel={() => addModel(p.id)} />;
+      const configuredProvider = config.providers?.[p.id] ?? {};
+      return <ApiKeyDetail
+        key={p.id}
+        provider={p}
+        configProvider={configuredProvider}
+        models={configuredProvider.models ?? []}
+        onRefresh={handleAuthChanged}
+        onConfigureProvider={configureApiKeyProvider}
+        onUpdateModel={(index, model) => updateModel(p.id, index, model)}
+        onRemoveModel={(index) => removeModel(p.id, index, true)}
+        onUseModel={(index) => saveAndUseModel(p.id, index)}
+        onAddModel={() => addModel(p.id, true)}
+      />;
     }
     if (selection.type === "provider") {
       const provider = config.providers?.[selection.name];
@@ -2133,20 +2388,7 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
         model={model}
         onChange={(m) => updateModel(selection.providerName, selection.index, m)}
         onDelete={() => removeModel(selection.providerName, selection.index)}
-        onUse={async () => {
-          setSaveError(null);
-          try {
-            const save = await fetch("/api/models-config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
-            const saved = await save.json();
-            if (!save.ok || saved.error) throw new Error(saved.error || "模型保存失败");
-            savedSnapshotRef.current = JSON.stringify(config);
-            const response = await fetch("/api/models-config/default", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: selection.providerName, modelId: model.id.trim() }) });
-            const result = await response.json();
-            if (!response.ok || !result.success) throw new Error(result.error || "默认模型设置失败");
-            setSavedOk(true);
-            onSaved?.();
-          } catch (error) { setSaveError(error instanceof Error ? error.message : "默认模型设置失败"); }
-        }}
+        onUse={() => saveAndUseModel(selection.providerName, selection.index)}
       />
     );
   })();
