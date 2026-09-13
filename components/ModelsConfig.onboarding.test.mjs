@@ -45,3 +45,17 @@ test("existing users keep the current provider tree and advanced editor", async 
   assert.match(source, /<ModelDetail/);
   assert.match(source, /<AddProviderPicker/);
 });
+
+test("saving a managed API key automatically loads models into the same provider panel", async () => {
+  const source = await read("./ModelsConfig.tsx");
+  assert.match(source, /\/api\/models-config\/provider-models\?provider=/);
+  assert.match(source, /模型自动加载失败/);
+  assert.match(source, /fetchWithRetry/);
+  assert.match(source, /\/api\/models-config\/default/);
+  assert.match(source, /loadModels\(true, true\)/);
+  assert.match(source, /\+ 自定义模型/);
+  assert.doesNotMatch(source, /配置模型名称与连接测试/);
+  assert.match(source, /onConfigureProvider=\{configureApiKeyProvider\}/);
+  assert.match(source, /onAddModel=\{\(\) => addModel\(p\.id, true\)\}/);
+  assert.match(source, /onRemoveModel=\{\(index\) => removeModel\(p\.id, index, true\)\}/);
+});
