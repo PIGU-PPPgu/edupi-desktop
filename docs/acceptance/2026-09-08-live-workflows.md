@@ -1,5 +1,14 @@
 # 实际流程验收
 
+## 2026-09-13 Provider/API Key 自动模型配置
+
+- 代码版本：Desktop `6541524`，源码开发服务 `Next.js 16.3.4`，临时 HOME 和临时数据根；正式用户目录未用于写入验收数据。
+- 实际操作：管理中心 → AI 与模型 → 添加 Provider → DeepSeek → 填入仅用于隔离验收的临时 Key → 保存。页面重新读取后显示 API Key“已配置”、模型“已自动加载 2 个”，并在同一右侧面板显示 `deepseek-v4-flash`、`deepseek-v4-pro` 与模型编辑器；默认模型接口回读成功。
+- 继续点击同一面板的“+ 自定义模型”，页面仍保留 DeepSeek Provider 选择和 API Key 区域，列表变为 3 个并显示“新模型”编辑字段；没有跳回旧的独立模型配置页。模型编辑器中的 models.dev 来源链接可见。
+- 安全边界：临时 Key 只写入临时 HOME 的 AuthStorage；模型配置不保存受管 Provider 的 API Key。验收结束已关闭临时服务、删除临时 HOME/数据根，并复核真实 `~/.pi/agent/models.json` 仍只有原 `edupi-test` Provider，默认仍为 `zai-coding-cn / glm-5.2`。
+- 自动化证据：Provider 路由与元数据投影测试、ModelsConfig onboarding/embedded 测试通过；`npm test` 为 1053 passed、0 failed、25 skipped，`tsc --noEmit` 和 `npm run lint` 通过。
+- 未验证：尚未把该提交打入新安装包，也未完成 Windows/Linux/macOS 安装版从保存 Key 到模型配置的验收；本次页面实际走的是运行时模型目录，`models.dev` 回退和真实 Provider 动态目录仍需独立验证，未把外部账号内容质量当作通过条件。
+
 ## 2026-09-13 Desktop/Core 匹配与导入交互复核
 
 - 环境：macOS 源码版 Next 服务 `127.0.0.1:30142`，Core `6b1d0cf74d7a1344c881da8e34a857243e315fdb`，数据根为临时复制目录；未写正式教师数据。

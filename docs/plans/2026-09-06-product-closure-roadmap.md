@@ -1,5 +1,13 @@
 # EduPi 产品闭环 PR 路线图
 
+## 2026-09-13 Provider/API Key 到模型配置收口（取代 R06/R16 旧的手动模型入口描述）
+
+- Desktop 提交 `6541524` 为受管 Provider 增加统一模型入口：保存 API Key 后在同一 Provider 面板自动读取运行时模型目录；运行时没有模型时回退 `models.dev`，仍可在同一面板添加自定义模型。
+- 首次配置新 Provider 且没有可用模型时，自动把首个匹配厂商提示的模型设为默认；已有模型配置不覆盖教师当前模型顺序和字段。模型元数据接口只返回模型字段，并递归过滤 API Key、Authorization、headers、token 等敏感键。
+- 隔离浏览器真实操作：打开“添加 Provider”→选择 DeepSeek→提交临时测试 Key，页面实际显示“已自动加载 2 个”；点击“+ 自定义模型”后仍停留在 DeepSeek 面板，模型数变为 3 个，未再进入旧的独立“配置模型名称与连接测试”入口。临时 HOME、Key 和配置已清理，正式配置仍为 `zai-coding-cn / glm-5.2`。
+- 定向 Provider 路由、ModelsConfig onboarding/embedded 回归、`tsc --noEmit`、ESLint 和全量 `npm test` 通过；全量结果为 1053 passed、0 failed、25 skipped（1078 tests）。
+- 当前边界：该功能已在源码开发版和隔离数据完成页面验收；`v0.3.8` 安装包尚未包含此提交，远端 PR/发布包与安装版模型配置续接待完成，不能提前标为发布验收通过。
+
 ## 2026-09-12 发布风险收口（取代前述旧阻塞状态）
 
 - 本机 updater 密钥对已找到并验证可签名；GitHub 的 `TAURI_SIGNING_PRIVATE_KEY`、`TAURI_UPDATER_PUBLIC_KEY` 已存在。未设置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 不构成阻塞，因为私钥未加密；私有 Core 的 Actions 读取当前使用仓库专属只读 deploy key `EDUPI_CORE_DEPLOY_KEY`，旧宽权限 `EDUPI_CORE_READ_TOKEN` 已删除。
