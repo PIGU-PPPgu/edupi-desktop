@@ -25,6 +25,8 @@
 
 ## 验收状态表
 
+2026-09-27 验收方式修订：下表的 canary 结果保留为开发证据。后续必须先发布包含本路线代码的正式签名/公证版本，再顺序使用唯一 `/Applications/EduPi.app` 验收；不得同时启动另一个同图标测试 App。切换隔离数据前先备份正式 App、记录教师数据与模型配置摘要，测试后恢复原数据根；不向真实学生档案写入合成证据。Windows G1 仍受 Core `a8fe471` 的原生盘证明阻塞，不能因安装包启动就勾选。
+
 | 条件 | macOS 隔离安装 | Windows 隔离安装 | 边界 |
 | --- | --- | --- | --- |
 | 冷启后 G1 active 且 G2/G3 默认 pending | 隔离 `.app` 冷启通过 | 预览 NSIS 安装/本机服务启动通过，G1 被 Core `native_attestation_required` 拒绝 | Core schema/manifest 已精确配对 |
