@@ -824,6 +824,17 @@ export function AppShell() {
     }
 
     throwIfStale();
+    const workspaceResponse = await fetch("/api/cwd/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cwd }),
+      signal,
+    });
+    throwIfStale();
+    if (!workspaceResponse.ok) {
+      const result = await workspaceResponse.json() as { error?: string };
+      throw new Error(result.error || "教学工作区不可读取");
+    }
     setSelectedSession(null);
     setNewSessionCwd(cwd);
     setSessionKey((key) => key + 1);

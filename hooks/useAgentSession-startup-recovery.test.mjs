@@ -40,9 +40,10 @@ function draftHarness() {
 
 function startupHarness({ input = true, acceptRestore = false, promptError = null, desktopPromptError = null,
   desktopDelivery = "disabled", desktopPromptSequence = null, desktop = false, intentStatus = "ready", intentGate = null,
-  holdingSubmission = false, creationGate = null, modelGate = null, initialSid = null, selectedModel = null } = {}) {
+  holdingSubmission = false, creationGate = null, modelGate = null, initialSid = null, selectedModel = null,
+  taskDraftKey = null } = {}) {
   const drafts = draftHarness();
-  const draftKey = "new:/synthetic/startup";
+  const draftKey = taskDraftKey ?? "new:/synthetic/startup";
   const timers = new Map(), sources = [], commands = [], notices = [], promoted = [], recoveries = [], settlements = [], events = [], desktopPrompts = [];
   let timerId = 0, creates = 0, active = false, history = emptyMessageHistory();
   class FakeEventSource {
@@ -60,7 +61,7 @@ function startupHarness({ input = true, acceptRestore = false, promptError = nul
     setTimeout: (callback, ms) => { timers.set(++timerId, { callback, ms }); return timerId; },
     clearTimeout: id => timers.delete(id),
     console: { error: noop },
-    sessionIdentity: draftKey, isNew: true, newSessionCwd: "/synthetic/startup", newSessionModel: selectedModel, session: null,
+    sessionIdentity: "new:/synthetic/startup", draftKey, isNew: true, newSessionCwd: "/synthetic/startup", newSessionModel: selectedModel, session: null,
     getDraft: drafts.store.getDraft, setDraft: drafts.store.setDraft,
     stagePendingPrompt: drafts.store.stagePendingPrompt, acknowledgePendingPrompt: drafts.store.acknowledgePendingPrompt,
     isTauriDesktop: () => desktop, reconcileEduPiCapturedPrompt: async () => "uncertain",
@@ -179,6 +180,19 @@ test("disabled proactive capture still sends a long Desktop prompt directly to P
   f.store.setDraft(f.draftKey, { value: text, images: [] });
   assert.equal(f.store.flushDraftNow(f.draftKey), true);
   const sent = f.send(text);
+  await flush();
+  f.sources[0].connected();
+  assert.equal(await sent, true);
+  assert.equal(f.desktopPrompts.length, 1);
+  assert.equal(f.commands.filter(item => item.type === "prompt").length, 1);
+  assert.equal(f.cold(f.draftKey)?.pendingPrompt, undefined);
+});
+
+test("a task-only new conversation stages and sends using its own draft key", async () => {
+  const f = startupHarness({ desktop: true, taskDraftKey: "reminder:/synthetic/startup:synthetic-task" });
+  f.store.setDraft(f.draftKey, { value: "合成任务续聊", images: [] });
+  assert.equal(f.store.flushDraftNow(f.draftKey), true);
+  const sent = f.send("合成任务续聊");
   await flush();
   f.sources[0].connected();
   assert.equal(await sent, true);

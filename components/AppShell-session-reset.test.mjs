@@ -22,7 +22,17 @@ test("opening an education task keeps the unrelated new-chat draft", async () =>
   const handler = source.slice(start, end);
   assert.doesNotMatch(handler, /resetNewSessionDraft\(`new:\$\{cwd\}`\)/);
   assert.equal((handler.match(/params\.delete\("taskDetail"\)/gu) ?? []).length, 2);
+  assert.match(handler, /fetch\("\/api\/cwd\/validate"[\s\S]*?JSON\.stringify\(\{ cwd \}\)[\s\S]*?setNewSessionCwd\(cwd\)/);
   assert.match(source, /reminderDraftKey=\{!selectedSession && searchParams\.get\("task"\) && effectiveNewSessionCwd \? `reminder:\$\{effectiveNewSessionCwd\}:\$\{searchParams\.get\("task"\)\}` : undefined\}/);
+});
+
+test("task-specific draft identity is shared by the composer and durable send", async () => {
+  const chat = await readFile(new URL("./ChatWindow.tsx", import.meta.url), "utf8");
+  const session = await readFile(new URL("../hooks/useAgentSession.ts", import.meta.url), "utf8");
+  assert.match(chat, /const draftKey = session\?\.id \?\? reminderDraftKey \?\? \(newSessionCwd \? `new:\$\{newSessionCwd\}` : null\)/);
+  assert.match(chat, /useAgentSession\(\{[\s\S]*?draftKey,[\s\S]*?\}\)/);
+  assert.match(chat, /<ChatInput[\s\S]*?draftKey=\{draftKey \?\? undefined\}/);
+  assert.match(session, /const originDraftKey = draftKey;/);
 });
 
 test("switching sessions immediately clears parent-owned session UI", async () => {

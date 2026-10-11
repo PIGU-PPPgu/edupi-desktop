@@ -1,9 +1,24 @@
 # 自动下载安装
 
-## 2026-10-11 v0.3.62 新 Core 配对待签名
+## 2026-10-11 v0.3.62 已拒绝发布，v0.3.63 待签名
+
+- 同资产 `.62` 二次 macOS 隔离安装揭出任务内首次发送的草稿键错位，以及 Safe Mode 模型/Skill 读取接口仍执行第三方扩展；两项均有原生 UI、私有会话/模型计数与合成扩展标记证据。[逐项记录](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-11-v0362-二次安装复验发现发布阻断)。`.62` 不能发布，旧客户端升级门也不能在此版本结案。
+- `.63` 源码补了同一草稿键、任务工作区预校验及两个 Safe Mode 读路径；已同步 Core `main` [#278](https://github.com/PIGU-PPPgu/edupi/pull/278) 的精确 `6b0f2a2` pin。该 Core 的合同/打包 15/15、完整 2348 通过、11 跳过、0 失败，隔离开发 API 不再执行合成第三方扩展。这不等于新签名安装通过。已恢复唯一公开 `.56` 并删除本地 `.62` App/DMG 约 1.1 GiB；远端 `.62` Release 保持 Draft，feed 仍 `.56` 七键。需在精确 `.63` 源码/CI/签名 Draft 后重新安装验收，再谈发布。
+
+## 2026-10-11 v0.3.62 安装版部分验收
+
+- 唯一 `/Applications/EduPi.app` 已实际安装签名 `.62` 并以隔离根冷启动；原生 UI、Core/投影身份、单班数学 G1 的一次合成草稿、四产物、人工接受与合成反馈写回及重读通过。测试夹具首次缺模型 `reasoning` 布尔值导致激活失败，补齐夹具后通过，未改真实模型配置。任务续聊、安全模式、TCC/通知点击、真实跨到期睡眠、真人内容质量和旧客户端原位升级仍未验；原生工具在继续时再次实报锁屏，不能以签名或 API 检查替代。
+- 已退出本轮隔离进程、恢复唯一公开 `.56`，严格签名/Gatekeeper 通过。真实业务和模型/认证文件前后相同，仅既有飞书错误日志变化。按用户要求删除本地 `.62` 测试 App 与 DMG 下载，约 1.1 GiB；远端九资产 Draft `409161380` 仍在。公开 feed 保持 `.56` 七键，未发布、未更新 manifest。[实际证据和未验边界](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-11-v0362-macos-安装版部分验收与回退)。下节“锁屏前未安装、保留 DMG”是先前阶段快照，已由本节取代。
+
+## 2026-10-11 v0.3.62 签名 Draft 已过构建门
+
+- 精确源码 `7848c112`/Core `2ecf3465` 的 [三平台 Draft run 38080377311](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38080377311) 和 `draft-proof` 成功；Release `409161380` 仍 Draft，共 9 资产，候选集合指纹 `sha256:e61bc0aca3bb3720e683f876a4cfa91d80fbe339ad2dee4536bf92bd0cb03da7`。Mac 公证 `Accepted` 并装订复核；Windows 新安装器隔离 Safe Mode/Core 默认关闭烟测通过。最终 DMG 本机下载 SHA-256 `46e364f39c10094311336ef637dfcaf93dcfaeb38b151543b09845fdad19c132`、App/DMG 签名/Gatekeeper/包内 Core 身份通过；四种 updater 载荷用公开 `.56` 公钥独立验签且篡改拒绝。预生成 manifest 为 7 键且 API URL；这不等于已发布 feed。
+- Mac 当前经原生工具实测锁屏，未进行唯一安装路径的 `.62` 替换、TCC、真实睡眠或教师内容验收；已请求手动解锁一次。公开 `/Applications/EduPi.app`/feed 仍 `.56`，Release 不发布，manifest/publish job 按设计跳过。完成隔离安装与旧客户端升级前，候选指纹不能当作接受指纹。[详细证据与恢复入口](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-11-v0362-三平台签名-draft-与安装门)。
+
+## 2026-10-11 v0.3.62 新 Core 配对准备记录
 
 - `.61` 旧 Core 安装器的精确 Windows 重查 run `38078453311` 已在隔离 runner 通过普通模式拒绝和 Safe Mode Core/投影 ready、G1 默认关闭、外发关闭；它不修复原三平台 Draft run 的 macOS 暂存请求失败，也不生成缺少的 Mac/Linux 资产。Release `409082688` 仍 Draft、公开 `.56` 与 feed 不变。
-- `.62` 在原 Desktop 分支消费 Core `main` `2ecf3465` 的 R03 Stage 1 静止准入证明和双组件清单；Runtime schema、Bridge/课次合同和 Pi/PiDurable 1.0.2 不变。精确 Core 配对的全量测试、主动消息 canary、DOCX/日程/ICS 及暂存包服务均通过，证据见唯一账本；Core retention stress skipped、正式 App/三平台签名和教师流程不能据此勾选。下一步必须以新提交创建新 `.62` Draft，核对七键 manifest、摘要、Apple 公证/签名和隔离安装，再决定发布。
+- `.62` 在原 Desktop 分支消费 Core `main` `2ecf3465` 的 R03 Stage 1 静止准入证明和双组件清单；Runtime schema、Bridge/课次合同和 Pi/PiDurable 1.0.2 不变。当时精确 Core 配对的全量测试、主动消息 canary、DOCX/日程/ICS 及暂存包服务均通过，证据见唯一账本；Core retention stress skipped。本段仅记录签名前的准备，不取代上节已完成的签名 Draft，也不把正式 App/教师流程计为通过。
 
 ## 2026-10-11 v0.3.61 失败追查历史
 

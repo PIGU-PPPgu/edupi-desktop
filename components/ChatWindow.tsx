@@ -246,6 +246,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
 }
 
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, teacherMode = false, onEduPiProactiveTarget, onOpenEduPiReminders, proactiveOpenRequest = 0, reminderContext, reminderOpenId, onReminderContextApplied, educationContext, educationOpenId, onEducationContextApplied, teacherDraftText, teacherDraftOpenId, onTeacherDraftApplied, reminderTitle, reminderDraftKey, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
+  const draftKey = session?.id ?? reminderDraftKey ?? (newSessionCwd ? `new:${newSessionCwd}` : null);
   const appliedReminderOpenId = useRef<string | null>(null);
   useEffect(() => {
     if (!reminderContext || !reminderOpenId || !(session?.id || newSessionCwd) || !chatInputRef?.current || appliedReminderOpenId.current === reminderOpenId) return;
@@ -314,7 +315,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     handleBuiltinSlashCommand, retryLoad,
     handleToolPresetChange, handlePermissionModeChange, handleThinkingLevelChange, loadSlashCommands, scrollToBottom, scrollUserMsgToTop,
   } = useAgentSession({
-    session, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
+    session, newSessionCwd, draftKey, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
     onEducationImportCompleted, onEduPiAction, onEduPiComputerAction,
   });
@@ -900,7 +901,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onSoundToggle={onSoundToggle}
       onAudioUnlock={unlockAudio}
       onAttachFiles={attachProjectFiles}
-      draftKey={session?.id ?? reminderDraftKey ?? (newSessionCwd ? `new:${newSessionCwd}` : undefined)}
+      draftKey={draftKey ?? undefined}
       cwd={session?.cwd ?? newSessionCwd}
       autoFocus={isNew}
       extensionStatuses={extensionStatuses}

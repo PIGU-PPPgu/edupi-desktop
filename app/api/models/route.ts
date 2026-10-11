@@ -6,6 +6,8 @@ import { loadModelsWithCache, withModelRuntimeError, type ModelsData } from "@/l
 import { resolveVisibleModels, selectInitialModelScope } from "@/lib/model-scope";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
 import { projectTrustReloadOptions } from "@/lib/project-trust";
+import { builtinEducationSkillPaths, EDUPI_CODE_ROOT, extensionPaths } from "@/lib/edupi-runtime";
+import { isSafeModeEnabled, safeModeResourceOptions } from "@/lib/safe-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,8 @@ async function loadModels(cwd: string): Promise<ModelsData> {
   const thinkingLevelMaps: Record<string, Record<string, string | null>> = {};
 
   const agentDir = getAgentDir();
+  const safeMode = isSafeModeEnabled();
+  const builtinSkillPaths = safeMode ? builtinEducationSkillPaths() : [];
   // Gate untrusted project extensions: enumerating models still imports and
   // runs a repository's .pi/extensions factories, so honor project trust here
   // too (see lib/project-trust.ts, #236).
@@ -35,6 +39,11 @@ async function loadModels(cwd: string): Promise<ModelsData> {
   const services = await createAgentSessionServices({
     cwd,
     agentDir,
+    ...(safeMode ? { resourceLoaderOptions: {
+      additionalExtensionPaths: extensionPaths,
+      additionalSkillPaths: builtinSkillPaths,
+      ...safeModeResourceOptions(true, { coreExtensionRoot: EDUPI_CODE_ROOT, builtinSkillPaths }),
+    } } : {}),
     ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
   });
   const modelError = services.modelRuntime.getError();

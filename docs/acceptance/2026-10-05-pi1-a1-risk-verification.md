@@ -1,5 +1,35 @@
 # Pi 1 与暂缓草稿风险验收
 
+## 2026-10-11 v0.3.62 二次安装复验发现发布阻断
+
+- 从 Draft `409161380` 的原 DMG 资产 `628932191` 重新下载，整包 234076625 字节、SHA-256 `46e364f39c10094311336ef637dfcaf93dcfaeb38b151543b09845fdad19c132`，镜像 CRC、App/DMG 严格签名与 Gatekeeper 再次通过。仍只用唯一 `/Applications/EduPi.app` 和原单班数学合成根；公开 `.56` 原包先移至持久回退路径。
+- 原生 UI 从已接受的 G1 任务点击“开始协作”，首次合成消息显示“发送标识未能保存，消息未发送”；关闭并重开任务后，输入原文仍在。新 Pi 会话文件只有会话头、工具/模型/思考设置，没有用户消息；回环模型调用数保持 1。原因已定位为任务专用草稿写入 `reminder:<cwd>:<taskId>`，发送链却读取 `new:<cwd>`。同页初始模型按钮显示不可选：打开任务前工作区尚未进入文件允许根，模型读取返回 403；建会话后该根的模型读取为 200，且 `local/local` 可用。这两项不得把 `.62` 的任务续聊标通过。
+- 原生 Safe Mode 横幅、Core 教育任务投影和会话运行时的内置 Skill/扩展过滤可见；但模型列表与 Skill 列表的读取 API 在 Safe Mode 下仍执行了隔离根中的合成第三方扩展，标记从正常模式的 1 次增至 4 次，且 Skill 列表仍列出合成第三方 Skill。这是发布阻断，不因主要会话运行时已过滤而降级。没有真实第三方代码或真实学生资料参与。
+- `.62` 安装候选已退出、公开签名 `.56` 原包恢复到唯一安装路径并再次通过严格签名/Gatekeeper；合成模型已停止。第二轮真实资料只读指纹前后各 167 文件，只有原有飞书错误日志变化，教师业务及模型/认证配置不变。按磁盘规则再次删除本地 `.62` 测试 App/DMG 约 1.1 GiB、开发服务退出后的 `.next` 46 MiB，保留小型合成根和私有证据 `~/edupi-install-checkpoints/v0.3.62/RESUME.md`。`.62` Draft 不发布，公开 feed 仍 `.56` 七键。
+- 后续 `.63` 源码统一任务草稿键/发送键、任务打开前校验工作区，并在 Safe Mode 的模型/Skill 读取路径先过滤第三方资源。隔离开发服务的两个读取 API 均 200、模型 1 项、内置 Skill 37 项，合成第三方 Skill 未列出，扩展标记未增长。Core [#278](https://github.com/PIGU-PPPgu/edupi/pull/278) 已合主线 `6b0f2a2a4ddce40112195c74898fd6316a0e6133`；`.63` pin 已同步，Runtime schema 与 Desktop manifest 不变，Core runtime manifest 更新为 `sha256:f964d77267a254cbe6ce50e124b92f448b3b4e181568fb5cdc8c6ec919d07f0b`。该提交仅增加 R03 重启状态迁移只读核对，未扩大 12 个桥接命令或默认许可。精确 Core 的合同/打包 15/15、完整 `EDUPI_CORE_ROOT=<精确 checkout> npm test` 为 2348 通过、11 跳过、0 失败；此前无 Core 根的全量 2325/34/0 不替代配对。类型、lint、release 版本验证、locked Cargo 元数据和高危 npm 审计通过；审计仍有 6 低/3 中。**这些是源码/开发服务证据，`.63` 尚未签名构建、安装或重验任务发送。**
+- 本机 `EDUPI_CORE_ROOT=<精确 checkout> npm run desktop:prepare` 编译、类型和闭包打包通过，暂存 Core 13298 文件；其包内服务隔离启动回读 Core/教育投影 ready、精确新 pin、G1/G2/G3 默认待启用、外发关闭。既有会话导出动态依赖警告仍在，不改为成功消失。按磁盘规则，测试结束且确认未跟踪、无服务占用后，删除 `.next-desktop` 与 `src-tauri/resources` 中本轮生成的 server、Pi Agent Server、edupi-core、open-connector，合计约 1.8 GiB；任务专用 43 MiB Core detached 检出也已移除。保留源码、组件版本文件、公开 App 和小型验收证据。
+
+## 2026-10-11 v0.3.62 macOS 安装版部分验收与回退
+
+本节取代下方“锁屏前尚未安装”的阶段状态。受测源码为 Desktop `7848c1128a57d55d4f291f4a63b60a0f97790fe0`、Core `2ecf34650cc6018195d34c171c715e25acbd78cc`；环境为唯一 `/Applications/EduPi.app` 内的已签名 `.62`，隔离根 `~/edupi-route1-canary-062-N23piRvi`、仅回环合成模型、`PI_OFFLINE=1`。详细操作、私有原始证据与恢复入口保存在 `~/edupi-install-checkpoints/v0.3.62/RESUME.md`；测试内容不是真人教学质量。
+
+| 验收项 | 当前状态 | 实际结果与边界 |
+| --- | --- | --- |
+| 签名安装、冷启动与 Core 身份 | 验收通过 | 先保留公开 `.56`，再从已核摘要的 `.62` DMG 安装到唯一应用路径；严格签名、Gatekeeper、安装程序字节与 DMG、原生 UI 版本、Core/投影 ready 及精确 pin 均核对。G1/G2 默认关闭，外发关闭。 |
+| 单班数学 G1 草稿 | 合成安装验收通过 | 第一次激活因本轮测试夹具 `models.json` 缺 `reasoning:false` 而返回 `model_unavailable`；补齐该夹具字段并只读预检后，原生 UI 明确启用 G1。Core 回读 `draft_ready`、attempt 1、4 个产物、仅 1 次回环模型调用、`external_send=false`；G2 未启用。该首次失败不是对生产模型凭据的修复。 |
+| 草稿查看、审核与反馈 | 合成安装验收通过 | 在原生任务详情打开同一任务的练习与参考答案，看到合成方程 `2x + 3 = 7` 的解答；点击“审核草稿”并接受，重读一条接受历史；点击评价并记录部分有帮助、未实际使用。Core 反馈文件回读 revision 1、`evidence_level=synthetic`、`decision=accept`、`usefulness=partial`、`used=false`。 |
+| 任务绑定续聊、重启保留、安全模式 | 未验 | 准备进入会话时原生控制工具再次实报 Mac 锁屏，未绕过，也未以 API/源码替代安装版操作。 |
+| 原生 TCC/通知点击、真实跨到期睡眠、旧客户端原位升级、真人教学质量、Windows/Linux 完整教师流程 | 未验 | 既有签名/runner 烟测不覆盖这些用户流程；六领域 Live、G5 关系与未核实材料仍不得当作通过。 |
+
+导航期间原生 UI 曾短暂出现本地服务断开横幅，同时原进程的 `/api/home` 返回 200、`/api/desktop/identity` 返回 204，稍后横幅消失；只记录可见延迟，未定位为服务或网络故障。锁屏后已精确退出本轮 App、包内服务/Core 子进程和合成模型，恢复原签名 `.56` 到唯一安装路径，严格签名与 Gatekeeper 再通过。受保护真实资料前后均为 167 文件；仅原有飞书错误日志变化，教师业务文件和模型/认证配置一致，私有指纹证据见上述检查点。按用户磁盘要求已删除本轮本地 `.62` 测试 App 副本约 942 MiB 和 DMG 下载约 223 MiB；远端 Draft `409161380` 的资产仍可重新下载。公开 Release/feed 仍 `.56`、七键，`.62` 未发布。下方签名与验签结果仍有效，但其中本地“保留 DMG”和“未安装”的表述仅是当时快照。
+
+## 2026-10-11 v0.3.62 三平台签名 Draft 与安装门
+
+- Desktop [#340](https://github.com/PIGU-PPPgu/edupi-desktop/pull/340) 已合并为 `7848c1128a57d55d4f291f4a63b60a0f97790fe0`。精确 Core pin 为 `2ecf34650cc6018195d34c171c715e25acbd78cc`；[三平台签名 Draft run 38080377311](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38080377311) 的 release、macOS、Windows、Linux 和 `draft-proof` 均成功，manifest/publish 因仍为 Draft 按设计跳过。Release `409161380` 保持草稿、9 项资产，候选资产指纹 `sha256:e61bc0aca3bb3720e683f876a4cfa91d80fbe339ad2dee4536bf92bd0cb03da7`；这是构建身份，不是教师已接受安装的指纹。Windows job 用本次 `.62` 安装器通过普通模式拒绝和隔离 Safe Mode Core/投影 ready、G1 默认关闭、外发关闭；Linux 构建成功但完整桌面流程未验。
+- Apple 公证提交 `b8c9996b-93c6-4d14-9af4-b91ea9440842` 返回 `Accepted`，CI 装订/验证、最终 App/DMG 严格签名与 Gatekeeper 通过。公证后 DMG 资产 `628932191` 为 234076625 字节、SHA-256 `46e364f39c10094311336ef637dfcaf93dcfaeb38b151543b09845fdad19c132`；本机完整下载摘要、镜像 CRC、App/DMG 签名与 Gatekeeper 独立通过。只读挂载核对 App `0.3.62`、Core `2ecf3465`、Runtime schema 与两个组件清单精确匹配后已卸载；保留的唯一候选包为 `~/edupi-install-checkpoints/v0.3.62/EduPi_0.3.62_aarch64.dmg`。首次本机 DMG `spctl` 未带 `context:primary-signature` 得到 `Insufficient Context`；按发布脚本正确上下文重测为 `accepted`，没有降低系统策略。
+- 本机从公开已安装 `.56` 客户端提取原 updater 公钥，独立下载并核对四种 updater 载荷及 `.sig` 的全部 SHA-256，用离线 `minisign-verify 0.2.5` 对 macOS archive、Linux AppImage/deb、Windows NSIS 均验签成功，四项单字节内存篡改均拒绝；`.62` 压缩包内嵌公钥与 `.56` 相同。用实际 9 资产/4 签名运行本地 manifest 生成器得到 7 平台键，资产 URL 均为 GitHub API。临时下载与校验器约 890 MiB 已清理，仅保留 DMG；验签不等于旧客户端原位升级成功。
+- Codex 原生桌面工具在安装前实际返回 Mac 锁屏，已一次请求用户手动解锁；不能绕过或沿用之前“已解锁”的旧状态。故本轮没有替换唯一 `/Applications/EduPi.app`、没有实际 `.62` macOS 教师流程/TCC/通知点击或真实跨到期睡眠验收，也未写真实数据根/模型凭据/launchd/系统权限。当前 App 与公开 feed 均仍 `.56`，feed 保持 7 键。缺安装/教师质量门时不发布 Draft、不更新 feed。完整可恢复入口为 `~/edupi-install-checkpoints/v0.3.62/RESUME.md`。
+
 ## 2026-10-11 Windows 同资产安装烟测与 Core 2ecf346 配对
 
 - [Windows Draft 重查 run 38078453311](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38078453311) 以 `.61` Draft `409082688` 的原安装器资产 `628621923` 校验 136781499 字节及 SHA-256 `67238f802f5f249a5ce235659b7ea5ae446c3c06725d2287add88280bd145c57`，在临时 Windows runner 安装并运行。普通模式包内批准的原生资产保持原字节，未证明的 Core 根返回 `native_attestation_required`；隔离 Safe Mode 启动后 Core/教育投影 ready、固定旧 pin 匹配、G1 `activation_pending`、`externalSend=false`。此项只通过 `.61` 的 Windows 安装/默认关闭烟测，不是完整 Windows 教师流程，也不补齐 `.61` 失败的 macOS/Linux 签名资产、manifest 或发布门。
