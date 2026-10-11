@@ -1,8 +1,17 @@
 # Pi 1 与暂缓草稿风险验收
 
+## 2026-10-11 v0.3.62 二次安装复验发现发布阻断
+
+- 从 Draft `409161380` 的原 DMG 资产 `628932191` 重新下载，整包 234076625 字节、SHA-256 `46e364f39c10094311336ef637dfcaf93dcfaeb38b151543b09845fdad19c132`，镜像 CRC、App/DMG 严格签名与 Gatekeeper 再次通过。仍只用唯一 `/Applications/EduPi.app` 和原单班数学合成根；公开 `.56` 原包先移至持久回退路径。
+- 原生 UI 从已接受的 G1 任务点击“开始协作”，首次合成消息显示“发送标识未能保存，消息未发送”；关闭并重开任务后，输入原文仍在。新 Pi 会话文件只有会话头、工具/模型/思考设置，没有用户消息；回环模型调用数保持 1。原因已定位为任务专用草稿写入 `reminder:<cwd>:<taskId>`，发送链却读取 `new:<cwd>`。同页初始模型按钮显示不可选：打开任务前工作区尚未进入文件允许根，模型读取返回 403；建会话后该根的模型读取为 200，且 `local/local` 可用。这两项不得把 `.62` 的任务续聊标通过。
+- 原生 Safe Mode 横幅、Core 教育任务投影和会话运行时的内置 Skill/扩展过滤可见；但模型列表与 Skill 列表的读取 API 在 Safe Mode 下仍执行了隔离根中的合成第三方扩展，标记从正常模式的 1 次增至 4 次，且 Skill 列表仍列出合成第三方 Skill。这是发布阻断，不因主要会话运行时已过滤而降级。没有真实第三方代码或真实学生资料参与。
+- `.62` 安装候选已退出、公开签名 `.56` 原包恢复到唯一安装路径并再次通过严格签名/Gatekeeper；合成模型已停止。第二轮真实资料只读指纹前后各 167 文件，只有原有飞书错误日志变化，教师业务及模型/认证配置不变。按磁盘规则再次删除本地 `.62` 测试 App/DMG 约 1.1 GiB、开发服务退出后的 `.next` 46 MiB，保留小型合成根和私有证据 `~/edupi-install-checkpoints/v0.3.62/RESUME.md`。`.62` Draft 不发布，公开 feed 仍 `.56` 七键。
+- 后续 `.63` 源码统一任务草稿键/发送键、任务打开前校验工作区，并在 Safe Mode 的模型/Skill 读取路径先过滤第三方资源。隔离开发服务的两个读取 API 均 200、模型 1 项、内置 Skill 37 项，合成第三方 Skill 未列出，扩展标记未增长。Core [#278](https://github.com/PIGU-PPPgu/edupi/pull/278) 已合主线 `6b0f2a2a4ddce40112195c74898fd6316a0e6133`；`.63` pin 已同步，Runtime schema 与 Desktop manifest 不变，Core runtime manifest 更新为 `sha256:f964d77267a254cbe6ce50e124b92f448b3b4e181568fb5cdc8c6ec919d07f0b`。该提交仅增加 R03 重启状态迁移只读核对，未扩大 12 个桥接命令或默认许可。精确 Core 的合同/打包 15/15、完整 `EDUPI_CORE_ROOT=<精确 checkout> npm test` 为 2348 通过、11 跳过、0 失败；此前无 Core 根的全量 2325/34/0 不替代配对。类型、lint、release 版本验证、locked Cargo 元数据和高危 npm 审计通过；审计仍有 6 低/3 中。**这些是源码/开发服务证据，`.63` 尚未签名构建、安装或重验任务发送。**
+- 本机 `EDUPI_CORE_ROOT=<精确 checkout> npm run desktop:prepare` 编译、类型和闭包打包通过，暂存 Core 13298 文件；其包内服务隔离启动回读 Core/教育投影 ready、精确新 pin、G1/G2/G3 默认待启用、外发关闭。既有会话导出动态依赖警告仍在，不改为成功消失。按磁盘规则，测试结束且确认未跟踪、无服务占用后，删除 `.next-desktop` 与 `src-tauri/resources` 中本轮生成的 server、Pi Agent Server、edupi-core、open-connector，合计约 1.8 GiB；任务专用 43 MiB Core detached 检出也已移除。保留源码、组件版本文件、公开 App 和小型验收证据。
+
 ## 2026-10-11 v0.3.62 macOS 安装版部分验收与回退
 
-本节取代下方“锁屏前尚未安装”的阶段状态。受测源码为 Desktop `7848c1128a57d55d4f291f4a63b60a0f97790fe0`、Core `2ecf34650cc6018195d34c171c715e25acbd78cc`；环境为唯一 `/Applications/EduPi.app` 内的已签名 `.62`，隔离根 `/Users/iguppp/edupi-route1-canary-062-N23piRvi`、仅回环合成模型、`PI_OFFLINE=1`。详细操作、私有原始证据与恢复入口保存在 `~/edupi-install-checkpoints/v0.3.62/RESUME.md`；测试内容不是真人教学质量。
+本节取代下方“锁屏前尚未安装”的阶段状态。受测源码为 Desktop `7848c1128a57d55d4f291f4a63b60a0f97790fe0`、Core `2ecf34650cc6018195d34c171c715e25acbd78cc`；环境为唯一 `/Applications/EduPi.app` 内的已签名 `.62`，隔离根 `~/edupi-route1-canary-062-N23piRvi`、仅回环合成模型、`PI_OFFLINE=1`。详细操作、私有原始证据与恢复入口保存在 `~/edupi-install-checkpoints/v0.3.62/RESUME.md`；测试内容不是真人教学质量。
 
 | 验收项 | 当前状态 | 实际结果与边界 |
 | --- | --- | --- |
