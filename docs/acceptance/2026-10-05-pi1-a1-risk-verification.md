@@ -1,5 +1,20 @@
 # Pi 1 与暂缓草稿风险验收
 
+## 2026-10-12 v0.3.63 三平台 Draft 与 macOS 安装版续聊、安全模式
+
+- Desktop 修复 [#341](https://github.com/PIGU-PPPgu/edupi-desktop/pull/341) 经质量/Rust CI 后合并为 `main` `6c2978844caa9ed5a3f76f5829e4edb43d8bacfa`，固定 Core `6b0f2a2a4ddce40112195c74898fd6316a0e6133`。签名 Draft [run 38144208051](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38144208051) 的 attempt 1 在 Mac runner 临时根准入失败；attempt 2 的 Mac 通过并公证，但沿用 attempt 1 的 Windows/Linux 资产使同轮资产证明拒绝。未放宽证明门或手工替换资产；同一源码、同一 Release 完整重跑 attempt 3 后，三平台 builder 与 `draft-proof` 全绿，manifest 按 Draft 设计跳过。Release `409693213` 仍未公开，9 项资产指纹 `sha256:a45e331c042164c6f45f004805dc995db67de151e87dc1511cc1feaf405c84a0`，公开 feed 仍 `.56` 七键。
+- 最终 Mac DMG 资产 `631199208` 为 234058700 字节、SHA-256 `06b8f93d11121ebb41ee4e714044b177efe1f8b2eeaa5f23b251c1963d0cb6ef`。CI Apple 公证 `Accepted`，最终 App/DMG 签名、装订与 Gatekeeper 接受；本机只下载这一份最终镜像，八段续传后整包摘要、镜像 CRC、签名与 Gatekeeper 独立通过。唯一 `/Applications/EduPi.app` 安装后的版本 `.63`、主程序字节与只读镜像、内嵌 Core Runtime/Desktop manifest 和 schema 均精确匹配；公开 `.56` 原包先移至持久回退路径。只用原单班数学合成根、`PI_OFFLINE=1` 和回环模型，不触碰真实教师根。
+
+| 安装版验收项 | 当前状态 | 实际证据与未验边界 |
+| --- | --- | --- |
+| 任务内首次发送、绑定与续聊 | 合成安装验收通过 | 原生任务入口恢复 `.62` 未发送草稿；发送前模型已显示可用。只点一次发送，页面出现一条 user 与一条本机 assistant；Pi 文件回读各一条，模型总调用由 1 变 2。任务绑定指向同一 Session；离开后点击“继续协作”、Safe Mode 冷启动和恢复正常后的再次进入均显示同一 Session 和原消息。 |
+| G1 草稿和反馈保留、重复不重做 | 合成安装验收通过 | Core/投影 ready，旧任务仍 1 次 execution、4 产物，反馈 revision 1，外发 false；三次 App 模式切换后没有额外 G1 模型调用。 |
+| 正常→Safe Mode→正常 | 合成安装验收通过 | 原生横幅出现并经“恢复正常启动”按钮重启；新进程继承隔离根，运行模式回读 normal。Safe Mode 中模型/Skill 读取均 200，1 个本机模型、37 个内置 Skill，合成第三方 Skill 不显示，第三方扩展执行标记保持 5；正常恢复后 Skill 再出现、标记增至 6。Core 工作区与原会话始终可读。 |
+| macOS 权限身份与系统通知发送 | 部分验收 | 设置页显示实际安装路径、`.63`、签名团队和进程；辅助功能/屏幕录制为已授权，桌面控制总开关仍关闭，系统通知为已开启。原生“测试通知跳转”仅发送一次，页面显示系统已接受；**用户尚未确认点击后返回提醒**，不能计为通知点击通过。App 管理/更新安装权限亦未由此证明。 |
+| 真实跨到期睡眠、真人教学质量、旧客户端更新、Windows/Linux 完整教师流程 | 未验 | 本轮不以合成答案、CI 烟测或下载验签代替这些证据；六领域 Live、G5 关系和未核实材料仍不放行。 |
+
+安装期间“与本地 Pi Agent 服务的连接已断开”横幅曾短暂出现多次；同一服务随后回 `/api/desktop/identity` 204、`/api/home` 200、Core 状态 ready，横幅自行消失。只记录可见问题，尚未定位时序原因或宣称已修。用户点击系统通知仍待回执；本节记录时 `.63` 隔离 App 尚在唯一安装路径，公开 `.56` 已保留待恢复。已核验并卸载的本地 `.63` DMG 下载 223 MiB 已删除，可从原 Draft 资产恢复；测试 App 清理须等退出进程、恢复 `.56`、复核真实资料指纹后执行，不能提前标完成。私有恢复入口和完整源证据位于 `~/edupi-install-checkpoints/v0.3.63/RESUME.md`。
+
 ## 2026-10-11 v0.3.62 二次安装复验发现发布阻断
 
 - 从 Draft `409161380` 的原 DMG 资产 `628932191` 重新下载，整包 234076625 字节、SHA-256 `46e364f39c10094311336ef637dfcaf93dcfaeb38b151543b09845fdad19c132`，镜像 CRC、App/DMG 严格签名与 Gatekeeper 再次通过。仍只用唯一 `/Applications/EduPi.app` 和原单班数学合成根；公开 `.56` 原包先移至持久回退路径。
