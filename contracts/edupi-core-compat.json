@@ -3,10 +3,10 @@
   "core_repository": "edupi",
   "core_sdk": { "pi": "1.0.2", "pi_durable": "1.0.2" },
   "core_runtime": {
-    "core_commit": "2ecf34650cc6018195d34c171c715e25acbd78cc",
+    "core_commit": "6b0f2a2a4ddce40112195c74898fd6316a0e6133",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
     "component_manifest_hash": "sha256:1cdb84958989f632237b4595d5c121cce4b81a25c98297e09f05e44a409dc7a7",
-    "runtime_component_manifest_hash": "sha256:b7af88e68321bf90f9173dcdd2f4b8668d6b49c930f0f178ef22e7f6743faf2a",
+    "runtime_component_manifest_hash": "sha256:f964d77267a254cbe6ce50e124b92f448b3b4e181568fb5cdc8c6ec919d07f0b",
     "runtime_schema_hash": "sha256:9d74537d188ba93d602f53076156bc42e0304acbc8bdedacf541b7ffc25546b4"
   },
   "contract_identities": [
@@ -203,7 +203,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/274",
     "https://github.com/PIGU-PPPgu/edupi/pull/275",
     "https://github.com/PIGU-PPPgu/edupi/pull/276",
-    "https://github.com/PIGU-PPPgu/edupi/pull/277"
+    "https://github.com/PIGU-PPPgu/edupi/pull/277",
+    "https://github.com/PIGU-PPPgu/edupi/pull/278"
   ],
-  "change_note": "Desktop pins Core main 2ecf346 after the R03 Stage 1 daemon-quiescence gate. Runtime schema is unchanged; both component manifests are updated. Bridge v1.1, occurrence v1.2 and 12 public bridge commands remain unchanged. Desktop outbox requires affirmative Core capture before Pi dispatch. G2/G3/G4 Live remain off by default; DOCX proposals stay pending teacher review and external_send=false. Source pairing does not establish installed-app, real sleep or teacher-quality acceptance."
+  "change_note": "Desktop pins Core main 6b0f2a2 after the R03 restart-state inspector. Runtime schema and Desktop component manifest are unchanged; the Core runtime manifest includes the new migration-only read classifier. Bridge v1.1, occurrence v1.2 and 12 public bridge commands remain unchanged. Desktop outbox requires affirmative Core capture before Pi dispatch. G2/G3/G4 Live remain off by default; DOCX proposals stay pending teacher review and external_send=false. Source pairing does not establish installed-app, real sleep or teacher-quality acceptance."
 }
