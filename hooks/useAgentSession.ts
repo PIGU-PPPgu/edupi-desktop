@@ -161,6 +161,7 @@ export type EducationImportToolName = "calendar_add" | "calendar_import" | "time
 export interface UseAgentSessionOptions {
   session: SessionInfo | null;
   newSessionCwd: string | null;
+  draftKey: string | null;
   onAgentEnd?: () => void;
   onSessionCreated?: (session: SessionInfo) => void;
   onSessionForked?: (newSessionId: string) => void;
@@ -324,7 +325,7 @@ type SlashCommandsResponse = {
 
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
-    session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked,
+    session, newSessionCwd, draftKey, onAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
     chatInputRef, onEducationImportCompleted, onEduPiAction, onEduPiComputerAction,
   } = opts;
@@ -1611,7 +1612,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!trimmedMessage && !images?.length) return false;
     if (agentRunningRef.current || bashRunningRef.current) return false;
     const sendGeneration = sessionGenerationRef.current;
-    const originDraftKey = sessionIdentity;
+    const originDraftKey = draftKey;
     const isSlashCommandPrompt = !images?.length && trimmedMessage.startsWith("/");
     const priorPrompt = originDraftKey ? getDraft(originDraftKey)?.pendingPrompt : undefined;
     if (priorPrompt && (priorPrompt.message !== message || images?.length)) {
@@ -1857,7 +1858,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       dispatch({ type: "end" });
       return false;
     }
-  }, [isNew, newSessionCwd, newSessionModel, session, sessionIdentity, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, dispatch, dispatchMessageHistory, chatInputRef, settleUiStage, loadSession]);
+  }, [isNew, newSessionCwd, newSessionModel, session, draftKey, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, dispatch, dispatchMessageHistory, chatInputRef, settleUiStage, loadSession]);
 
   const executeBash = useCallback(async (command: string, excludeFromContext: boolean) => {
     if (agentRunningRef.current || bashRunningRef.current) return;
