@@ -3,7 +3,7 @@
 ## 2026-10-12 v0.3.63 同轮签名 Draft 与安装门
 
 - `.63` 精确源码 `6c297884`/Core `6b0f2a2` 的 [run 38144208051](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38144208051) attempt 3 在 macOS/Windows/Linux 与 `draft-proof` 全绿，9 资产指纹 `sha256:a45e331c042164c6f45f004805dc995db67de151e87dc1511cc1feaf405c84a0`，Apple 公证 Accepted；Release `409693213` 仍 Draft，manifest/feed 未更新。前两次失败与同轮资产门原因见[唯一账本](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-12-v0363-三平台-draft-与-macos-安装版续聊安全模式)。
-- 最终 Mac DMG 本机摘要、镜像 CRC、签名/Gatekeeper、包内 Core 身份通过。唯一安装版用合成根完成任务首次发送、Pi 单次落盘/绑定、离开重进、Safe Mode 与恢复正常的资源过滤及持久化；G1 attempt 和反馈未重做。设置页通知为已开启、诊断通知被系统接受，但点击返回待用户确认。真实睡眠、真人内容、旧客户端实际升级和 Windows/Linux 完整教师流程继续未验；安装期间偶发本地连接横幅未定位。故不发布 Release、不更新七键 feed。已删除本地 DMG 下载 223 MiB；隔离 App 尚待退出、恢复公开 `.56` 和清理测试副本，不能写成已完成。
+- 最终 Mac DMG 本机摘要、镜像 CRC、签名/Gatekeeper、包内 Core 身份通过。唯一安装版用合成根完成任务首次发送、Pi 单次落盘/绑定、离开重进、Safe Mode 与恢复正常的资源过滤及持久化；G1 attempt 和反馈未重做。合成 ICS 在原生预览后由教师明确采用，材料、日程、Core 和磁盘各回读 1 条，采用后 App 重启保留尚未验。设置页通知为已开启、诊断通知被系统接受，但点击返回待用户确认。真实睡眠、真人内容、旧客户端实际升级和 Windows/Linux 完整教师流程继续未验；安装期间偶发本地连接横幅未定位。故不发布 Release、不更新七键 feed。隔离进程已退出、公开签名 `.56` 恢复并核对真实资料；本地 DMG 223 MiB 与测试 App 942 MiB 均已清理。
 
 ## 2026-10-11 v0.3.62 已拒绝发布，v0.3.63 待签名
 
