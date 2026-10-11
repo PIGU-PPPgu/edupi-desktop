@@ -1,5 +1,10 @@
 # 自动下载安装
 
+## 2026-10-11 v0.3.62 安装版部分验收
+
+- 唯一 `/Applications/EduPi.app` 已实际安装签名 `.62` 并以隔离根冷启动；原生 UI、Core/投影身份、单班数学 G1 的一次合成草稿、四产物、人工接受与合成反馈写回及重读通过。测试夹具首次缺模型 `reasoning` 布尔值导致激活失败，补齐夹具后通过，未改真实模型配置。任务续聊、安全模式、TCC/通知点击、真实跨到期睡眠、真人内容质量和旧客户端原位升级仍未验；原生工具在继续时再次实报锁屏，不能以签名或 API 检查替代。
+- 已退出本轮隔离进程、恢复唯一公开 `.56`，严格签名/Gatekeeper 通过。真实业务和模型/认证文件前后相同，仅既有飞书错误日志变化。按用户要求删除本地 `.62` 测试 App 与 DMG 下载，约 1.1 GiB；远端九资产 Draft `409161380` 仍在。公开 feed 保持 `.56` 七键，未发布、未更新 manifest。[实际证据和未验边界](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-11-v0362-macos-安装版部分验收与回退)。下节“锁屏前未安装、保留 DMG”是先前阶段快照，已由本节取代。
+
 ## 2026-10-11 v0.3.62 签名 Draft 已过构建门
 
 - 精确源码 `7848c112`/Core `2ecf3465` 的 [三平台 Draft run 38080377311](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38080377311) 和 `draft-proof` 成功；Release `409161380` 仍 Draft，共 9 资产，候选集合指纹 `sha256:e61bc0aca3bb3720e683f876a4cfa91d80fbe339ad2dee4536bf92bd0cb03da7`。Mac 公证 `Accepted` 并装订复核；Windows 新安装器隔离 Safe Mode/Core 默认关闭烟测通过。最终 DMG 本机下载 SHA-256 `46e364f39c10094311336ef637dfcaf93dcfaeb38b151543b09845fdad19c132`、App/DMG 签名/Gatekeeper/包内 Core 身份通过；四种 updater 载荷用公开 `.56` 公钥独立验签且篡改拒绝。预生成 manifest 为 7 键且 API URL；这不等于已发布 feed。

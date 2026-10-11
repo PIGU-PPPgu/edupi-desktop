@@ -1,5 +1,19 @@
 # Pi 1 与暂缓草稿风险验收
 
+## 2026-10-11 v0.3.62 macOS 安装版部分验收与回退
+
+本节取代下方“锁屏前尚未安装”的阶段状态。受测源码为 Desktop `7848c1128a57d55d4f291f4a63b60a0f97790fe0`、Core `2ecf34650cc6018195d34c171c715e25acbd78cc`；环境为唯一 `/Applications/EduPi.app` 内的已签名 `.62`，隔离根 `/Users/iguppp/edupi-route1-canary-062-N23piRvi`、仅回环合成模型、`PI_OFFLINE=1`。详细操作、私有原始证据与恢复入口保存在 `~/edupi-install-checkpoints/v0.3.62/RESUME.md`；测试内容不是真人教学质量。
+
+| 验收项 | 当前状态 | 实际结果与边界 |
+| --- | --- | --- |
+| 签名安装、冷启动与 Core 身份 | 验收通过 | 先保留公开 `.56`，再从已核摘要的 `.62` DMG 安装到唯一应用路径；严格签名、Gatekeeper、安装程序字节与 DMG、原生 UI 版本、Core/投影 ready 及精确 pin 均核对。G1/G2 默认关闭，外发关闭。 |
+| 单班数学 G1 草稿 | 合成安装验收通过 | 第一次激活因本轮测试夹具 `models.json` 缺 `reasoning:false` 而返回 `model_unavailable`；补齐该夹具字段并只读预检后，原生 UI 明确启用 G1。Core 回读 `draft_ready`、attempt 1、4 个产物、仅 1 次回环模型调用、`external_send=false`；G2 未启用。该首次失败不是对生产模型凭据的修复。 |
+| 草稿查看、审核与反馈 | 合成安装验收通过 | 在原生任务详情打开同一任务的练习与参考答案，看到合成方程 `2x + 3 = 7` 的解答；点击“审核草稿”并接受，重读一条接受历史；点击评价并记录部分有帮助、未实际使用。Core 反馈文件回读 revision 1、`evidence_level=synthetic`、`decision=accept`、`usefulness=partial`、`used=false`。 |
+| 任务绑定续聊、重启保留、安全模式 | 未验 | 准备进入会话时原生控制工具再次实报 Mac 锁屏，未绕过，也未以 API/源码替代安装版操作。 |
+| 原生 TCC/通知点击、真实跨到期睡眠、旧客户端原位升级、真人教学质量、Windows/Linux 完整教师流程 | 未验 | 既有签名/runner 烟测不覆盖这些用户流程；六领域 Live、G5 关系与未核实材料仍不得当作通过。 |
+
+导航期间原生 UI 曾短暂出现本地服务断开横幅，同时原进程的 `/api/home` 返回 200、`/api/desktop/identity` 返回 204，稍后横幅消失；只记录可见延迟，未定位为服务或网络故障。锁屏后已精确退出本轮 App、包内服务/Core 子进程和合成模型，恢复原签名 `.56` 到唯一安装路径，严格签名与 Gatekeeper 再通过。受保护真实资料前后均为 167 文件；仅原有飞书错误日志变化，教师业务文件和模型/认证配置一致，私有指纹证据见上述检查点。按用户磁盘要求已删除本轮本地 `.62` 测试 App 副本约 942 MiB 和 DMG 下载约 223 MiB；远端 Draft `409161380` 的资产仍可重新下载。公开 Release/feed 仍 `.56`、七键，`.62` 未发布。下方签名与验签结果仍有效，但其中本地“保留 DMG”和“未安装”的表述仅是当时快照。
+
 ## 2026-10-11 v0.3.62 三平台签名 Draft 与安装门
 
 - Desktop [#340](https://github.com/PIGU-PPPgu/edupi-desktop/pull/340) 已合并为 `7848c1128a57d55d4f291f4a63b60a0f97790fe0`。精确 Core pin 为 `2ecf34650cc6018195d34c171c715e25acbd78cc`；[三平台签名 Draft run 38080377311](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38080377311) 的 release、macOS、Windows、Linux 和 `draft-proof` 均成功，manifest/publish 因仍为 Draft 按设计跳过。Release `409161380` 保持草稿、9 项资产，候选资产指纹 `sha256:e61bc0aca3bb3720e683f876a4cfa91d80fbe339ad2dee4536bf92bd0cb03da7`；这是构建身份，不是教师已接受安装的指纹。Windows job 用本次 `.62` 安装器通过普通模式拒绝和隔离 Safe Mode Core/投影 ready、G1 默认关闭、外发关闭；Linux 构建成功但完整桌面流程未验。
