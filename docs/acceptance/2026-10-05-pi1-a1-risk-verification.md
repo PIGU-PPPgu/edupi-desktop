@@ -1,5 +1,17 @@
 # Pi 1 与暂缓草稿风险验收
 
+## 2026-10-12 v0.3.64 安装版定向通知点击与重启复验
+
+本节取代下方“通知未点击”的当前结论；旧尝试仍作为失败证据保留。教师点击旧通知后实际打开工作区，旧任务 `teacher-task-0c6a3ad6-6446-4137-a1d5-27341ef29781` 的账本仍只有一次 `notification_delivered`、零次 `notification_opened`，不能追认为成功。随后在唯一 `/Applications/EduPi.app` 重新安装同一已验签、公证的 `.64` Draft 资产 `632644912`，仍只用私有合成根 `~/edupi-route1-canary-062-N23piRvi`、单班数学、离线回环模型及外发 false。没有重建候选或改真实教师数据。
+
+原生工作区新建合成 `teacher_created` 任务 `teacher-task-faaf2949-951a-4547-a038-472e8de302d3`，标题“隔离通知点击复验 2026-10-12 21:00”，截止上海日 2026-10-12。提醒 `eedbecdf-1843-4307-8a0f-a07cfaa3566d`、同一 attempt `1a7f220d-9466-42b9-b6a2-779244f3259c` 在持久账本中各有一次 `notification_claimed`（UTC 13:03:28）、`notification_delivered`（13:03:36）与 `notification_opened`（14:54:47），无第二次投递。教师亲自点击系统通知后，Codex 原生窗口实际读到 URL 的精确 `task=teacher-task-faaf2949-951a-4547-a038-472e8de302d3` 和同一任务标题；这次定向通知回跳通过。点击距投递约 1 小时 51 分，不写作即时回跳性能证据。
+
+从该任务只发送一条合成消息，原生 UI 显示一条 user/assistant；Core 捕获后持久 outbox 为 `pi_accepted`，Pi JSONL 的消息角色回读为 system/user/assistant，任务绑定文件指向 Session `01a130a0-4d09-73b8-b12b-9297fa780431`，本地模型调用总数由 3 增至 4。离开到“今天”、点击该任务“继续协作”回到同一 Session；正常退出 `.64`、保持模型运行后以同一隔离根冷启动，原生 UI 再次显示同一 `task=`/`session=`、原 user/assistant，绑定文件仍是原 Session，模型调用维持 4；安装服务回读 Core `ready`/`b12b5cb`、Bridge 1.1、教育投影和运行内核 ready、外发 false。通知账本跨重启仍为一次领取、投递、打开，未重做。
+
+本轮同时**两次观察到短暂误导性的“与本地 Pi Agent 服务的连接已断开”横幅**：一次冷启动后，一次进入任务协作时；两次都在后续原生观察中自行消失，服务随后返回 `/api/desktop/identity` 204，Core 仍 ready。没有当时的 HTTP 错误码或事件循环证据，不能断言根因，也不能将“冷启动无误横幅”记为通过。这是 `.64` 继续保留 Draft 的已观察风险，后续需要可诊断的安装版复现及修复。
+
+隔离 App PID 6039 和精确回环模型 PID 79807 已退出。原签名公开 `.56` 已恢复为唯一安装版，主程序 SHA-256 `abec7c44ee0e09ede624bafdfd06f0200b138286ea26228e3899ee1b137eb22b`，strict codesign/Gatekeeper 均通过。受保护真实资料指纹前后各 167 文件，仅已有 `feishu-bridge.error.log` 改变；教师业务及模型/认证文件逐项不变。核对身份后删除本地 `.64` 测试 App 942 MiB 和 DMG 223 MiB，检查点仅留小型证据与恢复记录 `~/edupi-install-checkpoints/v0.3.64/RESUME.md`。Release `410117571` 和公开七键 feed 分别保持 Draft/`.56`。App 管理 TCC、旧客户端真实原位升级、跨到期系统睡眠、真人教学质量与 Windows/Linux 完整教师流程仍未验；新 Core `teacher_usage` Desktop UI 尚未接线。
+
 ## 2026-10-12 v0.3.64 安装版任务续聊恢复与日程重启回读
 
 本节取代紧随其后的“通知待点击”段落的当前安装状态，**不追认系统通知点击通过**。受测为同一签名安装 App v0.3.64、Core `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`、私有合成根 `~/edupi-route1-canary-062-N23piRvi`，无真实学生或外部模型。Mac 原生 UI 从提醒收件箱的合成到期任务 `teacher-task-0c6a3ad6-6446-4137-a1d5-27341ef29781` 点击“继续聊”，URL 精确带 `task=`，首次发送时本机模型端口此前已退出，Core 状态实读为 `degraded`/主动运行 `paused`、原因“课程准备自动检查未启动”。该请求仅留下发送前的持久 intent，**未生成 outbox、Pi 会话文件无 user/assistant、模型调用仍为 2**；草稿原文和核对入口保留，未自动重发或外发。不能把这个故障说成 Core pin 未对齐：系统页同时回读 Core `b12b5cb`、Bridge 1.1、双组件清单匹配。
