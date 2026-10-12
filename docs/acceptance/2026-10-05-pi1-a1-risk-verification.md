@@ -1,5 +1,41 @@
 # Pi 1 与暂缓草稿风险验收
 
+## 2026-10-12 v0.3.64 Core b12 配对与真实提醒证明源码门
+
+状态：**源码已实现待 PR/CI、签名 Draft 和安装验收**；本节不把 `.63` 的安装证据改称 `.64` 通过。Desktop 新候选固定 Core `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`（Core #279/#280 的 `main`），Runtime schema `sha256:4ed2f9ecf9bb5fc7824363eff39fcf5fa6757f776abc1a2902842702df4fb3ae`、Core 组件清单 `sha256:2dc436f77510558473ab6b675d845a3adce1f3df45c1e90537a769f15db0b294`；Desktop 组件清单、Bridge v1.1 的 12 命令与 Pi/PiDurable 1.0.2 不变。新 `teacher_usage` 同意/记录/读取/上传批次接口尚未接入 Desktop，默认不采集、不外发，不把 Core 的本地许可测试冒充桌面授权页面。
+
+- 冷启动断连横幅的探针由普通 `/api/home` 改为 Tauri 开窗前已握手的 `/api/desktop/identity`，要求 204 和实例标识；保留连续两次失败才显示及新探测覆盖旧探测的门。此前只观察到横幅后自行恢复，未取得当时具体失败码；本改动需新签名安装版冷启动复验，不能宣称已根治。
+- 新 Core 的无活跃 host、只读原生提醒证明曾在原 1.5 秒预算内确实 `Core request aborted`。定量核对：约 13,153 个 Core 闭包文件每次验证，首次约 2.2 秒，热读约 0.9 秒。现按三次串行 G1 来源读取设置单次 Core 6 秒、整条证明 21 秒、前端/原生传输 23 秒，Windows/Linux 系统提交确认 30 秒，均小于两分钟通知 claim 租约。旧尝试/来源变化、取消和晚到肯定回执仍拒发；未知 OS 结果不自动重试。Tauri 通知命令改为 async 并将阻塞证明和 OS 提交放入 `spawn_blocking`，不在 UI 线程等待。
+- 本机用独立干净的 Core `b12b5cb` 检出，不碰原 Core 脏 `main`。Core 使用证据 store/同意门/撤回/旧记录隔离测试、Runtime 协议及组件清单检查通过且 `external_send=false`；Desktop 精确 Core 关联的单次证明与结构回归 22/22，G1 的三读顺序和取消仅用合成注入测试，原生 JS 定向检查通过。`EDUPI_CORE_ROOT=<该精确检出> npm test` 最终 2354 通过、11 跳过、0 失败；TypeScript、lint、`release:verify`、锁定 Cargo metadata 均通过。高危 npm 审计为 0 高/严重，仍有 6 低/3 中，不称零漏洞。`desktop:prepare` 成功暂存 13,300 个 Core 文件；Cargo `check --lib --locked` 和 `test --lib --locked` 58/58 通过，改动的 Rust 文件 rustfmt 单独通过。全仓 `cargo fmt --all --check` 报既有大量无关格式差异，未批量改写。精确 Core 的今天运行与主动消息隔离 canary 通过，G1/G2 保持默认待激活、外发 false、回环模型恰好一次调用。
+
+上述全是源码、暂存包与本机 Rust 测试证据，**不是 `.64` 签名安装证据**。下一门是 PR/CI 后三平台同轮签名 Draft、资产/公证复核，再用唯一安装路径和隔离根实测：冷启动无误横幅、真实 `teacher_created` 单目标通知→点击精确任务会话→账本 `claimed/delivered/opened`→重启不重发。Core L4 `core_linked` 回执需另用许可范围内的 G1 canary，不能由本地任务路径代替。公开已安装 App/feed 仍 `.56`；`.63` Release `409693213` 仍 Draft。真实跨到期睡眠、旧客户端原位升级、App 管理 TCC、真人教学质量及 Windows/Linux 完整教师流程继续未验。
+
+## 2026-10-12 v0.3.63 诊断通知人工点击复验
+
+本节取代下方“通知点击待用户确认”的当前状态，不追认先前回退过早的无结论尝试。受测仍为签名 Draft 源码 `6c2978844caa9ed5a3f76f5829e4edb43d8bacfa`、固定 Core `6b0f2a2a4ddce40112195c74898fd6316a0e6133`、DMG 资产 `631199208`（234058700 字节，SHA-256 `06b8f93d11121ebb41ee4e714044b177efe1f8b2eeaa5f23b251c1963d0cb6ef）。本机重复下载的完整摘要匹配先前已验签公证的同一资产；只读挂载后从唯一 `/Applications/EduPi.app` 以单班合成根、离线模式启动 `.63`，公开 `.56` 先保留为精确回退包。
+
+原生设置页显示系统通知“已开启”，点击一次“测试通知跳转”得到“系统已接受通知；点击通知应打开提醒”。教师亲自点击该次系统通知，并明确回答“是，自动进入过提醒”。Codex 随后读取同一安装进程时，页面已被切至“学情观察”；**没有截取到提醒收件箱的过渡画面或原生回调日志**。因此将诊断通知的点击回跳记为“教师现场确认”，不写成机器独立复核通过；更不把这条无目标诊断通知冒充“真实事项触发 → 对应任务通知 → 点击续聊”的 R05 完整验收。重复触发/失败通知和真实任务目标仍未在本轮点击。
+
+教师正常退出后，原签名 `.56` 恢复为唯一安装版；主程序 SHA-256 `abec7c44ee0e09ede624bafdfd06f0200b138286ea26228e3899ee1b137eb22b`，严格签名与 Gatekeeper 均通过。此轮受保护真实资料前后各 167 文件，只有既有 `feishu-bridge.error.log` 变化，教师业务和模型/认证配置逐文件相同。已验证无测试 App/38471 监听，再删除本地 `.63` DMG 223 MiB 和测试 App 942 MiB；小型私有恢复证据位于 `~/edupi-install-checkpoints/v0.3.63/RESUME.md`。Release `409693213` 仍 Draft，公开 `.56` feed 仍七键。真实跨到期睡眠、旧客户端原位升级、真人教学质量、Windows/Linux 完整教师流程、App 管理 TCC 和偶发本地连接横幅根因仍缺独立证据，不随诊断通知的人工确认放行。
+
+## 2026-10-12 v0.3.63 三平台 Draft 与 macOS 安装版续聊、安全模式
+
+- Desktop 修复 [#341](https://github.com/PIGU-PPPgu/edupi-desktop/pull/341) 经质量/Rust CI 后合并为 `main` `6c2978844caa9ed5a3f76f5829e4edb43d8bacfa`，固定 Core `6b0f2a2a4ddce40112195c74898fd6316a0e6133`。签名 Draft [run 38144208051](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38144208051) 的 attempt 1 在 Mac runner 临时根准入失败；attempt 2 的 Mac 通过并公证，但沿用 attempt 1 的 Windows/Linux 资产使同轮资产证明拒绝。未放宽证明门或手工替换资产；同一源码、同一 Release 完整重跑 attempt 3 后，三平台 builder 与 `draft-proof` 全绿，manifest 按 Draft 设计跳过。Release `409693213` 仍未公开，9 项资产指纹 `sha256:a45e331c042164c6f45f004805dc995db67de151e87dc1511cc1feaf405c84a0`，公开 feed 仍 `.56` 七键。
+- 最终 Mac DMG 资产 `631199208` 为 234058700 字节、SHA-256 `06b8f93d11121ebb41ee4e714044b177efe1f8b2eeaa5f23b251c1963d0cb6ef`。CI Apple 公证 `Accepted`，最终 App/DMG 签名、装订与 Gatekeeper 接受；本机只下载这一份最终镜像，八段续传后整包摘要、镜像 CRC、签名与 Gatekeeper 独立通过。唯一 `/Applications/EduPi.app` 安装后的版本 `.63`、主程序字节与只读镜像、内嵌 Core Runtime/Desktop manifest 和 schema 均精确匹配；公开 `.56` 原包先移至持久回退路径。只用原单班数学合成根、`PI_OFFLINE=1` 和回环模型，不触碰真实教师根。
+
+| 安装版验收项 | 当前状态 | 实际证据与未验边界 |
+| --- | --- | --- |
+| 任务内首次发送、绑定与续聊 | 合成安装验收通过 | 原生任务入口恢复 `.62` 未发送草稿；发送前模型已显示可用。只点一次发送，页面出现一条 user 与一条本机 assistant；Pi 文件回读各一条，模型总调用由 1 变 2。任务绑定指向同一 Session；离开后点击“继续协作”、Safe Mode 冷启动和恢复正常后的再次进入均显示同一 Session 和原消息。 |
+| G1 草稿和反馈保留、重复不重做 | 合成安装验收通过 | Core/投影 ready，旧任务仍 1 次 execution、4 产物，反馈 revision 1，外发 false；三次 App 模式切换后没有额外 G1 模型调用。 |
+| 正常→Safe Mode→正常 | 合成安装验收通过 | 原生横幅出现并经“恢复正常启动”按钮重启；新进程继承隔离根，运行模式回读 normal。Safe Mode 中模型/Skill 读取均 200，1 个本机模型、37 个内置 Skill，合成第三方 Skill 不显示，第三方扩展执行标记保持 5；正常恢复后 Skill 再出现、标记增至 6。Core 工作区与原会话始终可读。 |
+| macOS 权限身份与系统通知发送 | 部分验收 | 设置页显示实际安装路径、`.63`、签名团队和进程；辅助功能/屏幕录制为已授权，桌面控制总开关仍关闭，系统通知为已开启。原生“测试通知跳转”仅发送一次，页面显示系统已接受；**用户尚未确认点击后返回提醒**，不能计为通知点击通过。App 管理/更新安装权限亦未由此证明。 |
+| ICS 材料预览与教师明确采用 | 合成安装验收通过，重启读回未验 | 从原生日程“上传文件”只选隔离 `.ics`，预览显示 2026-10-15 13:00–14:00、Asia/Shanghai、合成地点；点击一次“确认导入”后，材料列表新增 1 份 ICS 来源，日程列表/详情显示同一项，Core 来源列表 1 条、日程投影 1 条，磁盘日历账本也只有 1 条。该项在确认后尚未单独重启 App 再读；不据此宣称真实校历质量。 |
+| 真实跨到期睡眠、真人教学质量、旧客户端更新、Windows/Linux 完整教师流程 | 未验 | 本轮不以合成答案、CI 烟测或下载验签代替这些证据；六领域 Live、G5 关系和未核实材料仍不放行。 |
+
+安装期间“与本地 Pi Agent 服务的连接已断开”横幅曾短暂出现多次；同一服务随后回 `/api/desktop/identity` 204、`/api/home` 200、Core 状态 ready，横幅自行消失。只记录可见问题，尚未定位时序原因或宣称已修。用户未在本轮确认系统通知点击；测试通知若留在系统中，稍后不应再作为 `.63` 验收点击。已精确退出隔离 App、包内服务/Core 子进程和回环模型，恢复原签名公开 `.56` 至唯一 `/Applications/EduPi.app`，严格签名/Gatekeeper 通过；受保护真实资料前后各 167 文件，只有原有飞书错误日志变化，教师业务及模型/认证文件一致。已删除本地 `.63` DMG 223 MiB 与测试 App 942 MiB，远端 Draft 精确资产可恢复；检查点现只留小型证据。Release `409693213` 与 feed 仍为 Draft/公开 `.56`，未发布。私有恢复入口和逐文件指纹位于 `~/edupi-install-checkpoints/v0.3.63/RESUME.md`。
+
+历史时间点：`.63` 签名后 Core `main` 曾前进 3 个提交至 `70d009772124e87bb0fe13836b3599042d6ee37f`，新增本地 L4 用量证据/上传批次合同并改动 Runtime schema 与组件清单；`.63` 固定的仍是 `6b0f2a2`。这些差异及后续 #280 已由上方 `.64` 的 `b12b5cb` 源码配对消费，但尚无 `.64` 签名安装结果；不得倒写进 `.63` 身份。
+
 ## 2026-10-11 v0.3.62 二次安装复验发现发布阻断
 
 - 从 Draft `409161380` 的原 DMG 资产 `628932191` 重新下载，整包 234076625 字节、SHA-256 `46e364f39c10094311336ef637dfcaf93dcfaeb38b151543b09845fdad19c132`，镜像 CRC、App/DMG 严格签名与 Gatekeeper 再次通过。仍只用唯一 `/Applications/EduPi.app` 和原单班数学合成根；公开 `.56` 原包先移至持久回退路径。

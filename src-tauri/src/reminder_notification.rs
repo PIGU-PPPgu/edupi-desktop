@@ -24,6 +24,9 @@ use std::{
 };
 use tauri::{AppHandle, Emitter, Manager, Url};
 
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+const NATIVE_SEND_ACK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 struct ValidationServer {
     port: u16,
     instance_id: String,
@@ -652,7 +655,16 @@ fn deliver_linux_confirmed(
 }
 
 #[tauri::command]
-pub fn send_reminder_notification(
+pub async fn send_reminder_notification(
+    app: AppHandle,
+    request: ReminderNotification,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || send_reminder_notification_blocking(app, request))
+        .await
+        .map_err(|_| "notification_send_unknown".to_string())?
+}
+
+fn send_reminder_notification_blocking(
     app: AppHandle,
     request: ReminderNotification,
 ) -> Result<(), String> {
@@ -698,7 +710,7 @@ pub fn send_reminder_notification(
                 let _ = sender.send(result);
             })
             .map_err(|_| "notification_failed".to_string())?;
-        return submission_response(receiver.recv_timeout(std::time::Duration::from_secs(10)))?;
+        return submission_response(receiver.recv_timeout(NATIVE_SEND_ACK_TIMEOUT))?;
     }
 
     #[cfg(target_os = "linux")]
@@ -718,7 +730,7 @@ pub fn send_reminder_notification(
                 }
             })
             .map_err(|_| "notification_failed".to_string())?;
-        submission_response(receiver.recv_timeout(std::time::Duration::from_secs(3)))?
+        submission_response(receiver.recv_timeout(NATIVE_SEND_ACK_TIMEOUT))?
     }
 }
 
