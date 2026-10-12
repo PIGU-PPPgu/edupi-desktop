@@ -1,5 +1,14 @@
 # Pi 1 与暂缓草稿风险验收
 
+## 2026-10-12 v0.3.64 三平台签名 Draft 与 macOS 通知待点击
+
+本节取代下方“待 PR/CI、签名 Draft 和安装验收”的当前状态，不把源码测试、构建烟测或已提交系统通知算作完整点击续聊。Desktop [#342](https://github.com/PIGU-PPPgu/edupi-desktop/pull/342) 已合并到 `main` `7ea73fa2320fbb9fb5cca759de27c5723802645a`，Core 固定 `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`。三平台签名 Draft [run 38199564546](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38199564546) attempt 1 的 macOS、Windows、Linux、Release 和资产证明均成功，9 个同轮资产指纹为 `sha256:f425a4f3ea28f577af33320b46c20ff6ed773dfaf10daa85bdbbe13e1cc81254`；manifest/发布按 Draft 设计跳过。Release `410117571` 未公开，公开 feed 和原安装版仍以 `.56` 为回退基线。
+
+- 最终 Mac DMG 资产 `632644912` 为 234105961 字节、SHA-256 `891ede70b826f61fe291a45bb7eab78f76917377aede57127839008c55ba83c0`；Apple 公证 `Accepted`，CI 装订、严格签名和 Gatekeeper 均通过。本机八段下载重组后整包 SHA、`hdiutil verify`、DMG/App 严格签名与 Gatekeeper 独立通过。只读镜像内的 Core/Desktop 组件清单 hash 分别为 `2dc436f7…`/`1cdb8495…`，Pi 1.0.2；唯一安装路径下 `.64` 主程序 SHA 与镜像相同 `faa8ad3f36950109c1cb17dbd7640432e7a42e5d58cfc525fbf703f0d096e7b6`。公开 `.56` 原 App 暂存于 `~/edupi-install-checkpoints/v0.3.64/EduPi-public-056-live.app`，完成本次点击验收后必须恢复并清理本地测试包。
+- 只用 `~/edupi-route1-canary-062-N23piRvi` 私有合成根、`PI_OFFLINE=1` 和单班数学。原生 `.64` 窗口显示版本与该根，安装服务回读 Core `ready`/`b12b5cb`、Core 组件 `2dc436f7…`、Desktop 组件 `1cdb8495…`、Bridge 1.1、教师内部/不外发；G1 仍仅 `class-7-1`/数学，G2/G3 没有扩大。两次实际冷启动均到达“今天”主界面，过程中未观察到错误断连横幅；这不证明所有机器和所有时序都不会出现。
+- 原生工作区创建一条明确标记合成的 `teacher_created` 任务 `teacher-task-0c6a3ad6-6446-4137-a1d5-27341ef29781`，截止上海日 `2026-10-12`、不自动备课。Core 写后回读同一 ID/日期，提醒账本产生唯一 `teacher_local` 到期候选。第一次后台领取因验收人员切换前台窗口被安全释放，未提交 OS；重新使 Finder 真正前台后，同一候选第二次领取并在 `2026-10-12T05:09:50.085Z` 记一次 `notification_delivered`，attempt `5c6d6209-a8e3-4b87-b544-0b278d75ff89`。再次观察没有第二次 OS 投递。**系统通知仍待教师亲自点击，`notification_opened`、精确任务跳转、续聊/绑定/重启保留尚未通过**。不能代点通知中心，也不能在未清除旧通知时回退后误认 `.56` 的点击为 `.64` 验收。
+- 本机受保护真实资料安装前 167 文件、aggregate SHA `15916d7610fb3509c8191a5de58911ea33dd588d2a8664b74ce852b671cbbb45`；最终退出/回退后需再跑逐文件指纹比较。私有安装、下载及恢复入口在 `~/edupi-install-checkpoints/v0.3.64/RESUME.md`。App 管理 TCC/旧客户端原位升级、真正跨到期系统睡眠、真人教学质量和 Windows/Linux 全量教师流程仍未验；发布与 feed 未改变。
+
 ## 2026-10-12 v0.3.64 Core b12 配对与真实提醒证明源码门
 
 状态：**源码已实现待 PR/CI、签名 Draft 和安装验收**；本节不把 `.63` 的安装证据改称 `.64` 通过。Desktop 新候选固定 Core `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`（Core #279/#280 的 `main`），Runtime schema `sha256:4ed2f9ecf9bb5fc7824363eff39fcf5fa6757f776abc1a2902842702df4fb3ae`、Core 组件清单 `sha256:2dc436f77510558473ab6b675d845a3adce1f3df45c1e90537a769f15db0b294`；Desktop 组件清单、Bridge v1.1 的 12 命令与 Pi/PiDurable 1.0.2 不变。新 `teacher_usage` 同意/记录/读取/上传批次接口尚未接入 Desktop，默认不采集、不外发，不把 Core 的本地许可测试冒充桌面授权页面。

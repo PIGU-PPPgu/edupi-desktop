@@ -1,6 +1,12 @@
 # 自动下载安装
 
-## 2026-10-12 v0.3.64 新 Core 配对与构建前门
+## 2026-10-12 v0.3.64 签名 Draft 与安装版部分验收
+
+Desktop [#342](https://github.com/PIGU-PPPgu/edupi-desktop/pull/342) 合入 `main` `7ea73fa2`；精确 Core 为 `b12b5cb`。[run 38199564546](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38199564546) attempt 1 的 Mac/Windows/Linux、Release 和同轮资产证明均成功，9 资产指纹 `sha256:f425a4f3ea28f577af33320b46c20ff6ed773dfaf10daa85bdbbe13e1cc81254`。Apple 公证 Accepted；最终 DMG 资产 `632644912` 的本机整包 SHA-256 `891ede70b826f61fe291a45bb7eab78f76917377aede57127839008c55ba83c0`、镜像 CRC、App/DMG 严格签名和 Gatekeeper 通过。manifest/publish 按 Draft 设计跳过，Release `410117571` 未发布、feed 仍公开 `.56` 七键。
+
+唯一 `/Applications/EduPi.app` 当前暂装 `.64` 供隔离验收，公开签名 `.56` 原包保留在任务检查点，结束后须恢复并清理本地包。单班合成根的两次原生冷启动到达主界面且 Core `ready`/`b12b5cb`，没有观察到错误断连横幅；一个真实 `teacher_created` 到期任务系统通知已在后台 `claimed → delivered` 一次。**教师点击后精确任务续聊/账本 `opened`、旧客户端原位更新与 App 管理 TCC、真实跨到期睡眠、真人教学质量、Windows/Linux 完整教师流程尚未通过**，因此不发布或更新 feed。[逐项证据](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-12-v0364-三平台签名-draft-与-macos-通知待点击)。
+
+## 2026-10-12 v0.3.64 历史构建前门
 
 `.64` 源码现精确固定 Core `b12b5cb`/新 Runtime schema 与 Core 组件清单；Desktop manifest、Bridge 12 命令和 Pi/PiDurable 1.0.2 不变。修复冷启动用较慢 `/api/home` 判断本地服务离线的路径，并为新 Core 的完整来源验证设置逐层有界通知时限，原生通知证明移出 Tauri UI 线程。配对单测、全量 2354 通过/11 跳过/0 失败、类型/lint、高危审计、锁定 Cargo metadata、暂存 Core 13,300 文件、Cargo check 与 58 项库测试已过；原生实际任务通知、安装版横幅复验和三平台同轮签名 **尚未执行**。详细边界见[唯一账本](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-12-v0364-core-b12-配对与真实提醒证明源码门)。`.63` Draft `409693213` 不重复构建或公开；公开安装与七键 feed 仍 `.56`。只有 PR/CI 及新的 `.64` Draft/安装门通过后，再决定发布，不用源码门替代原位升级、睡眠、TCC 和真人教学质量。
 
