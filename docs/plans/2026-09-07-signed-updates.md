@@ -1,6 +1,10 @@
 # 自动下载安装
 
-## 2026-10-12 v0.3.64 签名 Draft 与安装版部分验收
+## 2026-10-12 v0.3.64 安装版续聊与重启保留追补
+
+固定 Core `b12b5cb` 的同一签名 `.64` 安装版，在单班数学隔离根内补验应用内到期事项“继续聊”：首次本机模型服务缺席时 Core 实报降级，Pi 未收到消息，原草稿和持久 intent 保留；恢复模型、明确重连 Core 后，核对旧请求无 Pi/outbox，再放弃并只发一次新请求，Core 捕获、Pi 一条 user/assistant、模型一次调用、任务 Session 绑定均回读。离开重进和真正 App 冷启动后返回同一 Session，模型未额外调用。已采用的合成 ICS 在重启后的日程详情仍显示原日期、13:00–14:00、Asia/Shanghai 与已确认。**系统通知只实际投递，未取得点击回执**；App 管理 TCC、旧客户端原位升级、跨到期睡眠、真人质量和 Windows/Linux 完整教师流程仍缺证，Release `410117571` 保持 Draft，公开 feed `.56` 不变。隔离 App/模型已退出，原签名公开 `.56` 恢复并通过 Gatekeeper，受保护资料只变既有错误日志；本地 `.64` 测试 App/DMG 约 1.1 GiB 已清理。[逐项证据](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-12-v0364-安装版任务续聊恢复与日程重启回读)。
+
+## 2026-10-12 v0.3.64 历史签名 Draft 与安装版部分验收
 
 Desktop [#342](https://github.com/PIGU-PPPgu/edupi-desktop/pull/342) 合入 `main` `7ea73fa2`；精确 Core 为 `b12b5cb`。[run 38199564546](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38199564546) attempt 1 的 Mac/Windows/Linux、Release 和同轮资产证明均成功，9 资产指纹 `sha256:f425a4f3ea28f577af33320b46c20ff6ed773dfaf10daa85bdbbe13e1cc81254`。Apple 公证 Accepted；最终 DMG 资产 `632644912` 的本机整包 SHA-256 `891ede70b826f61fe291a45bb7eab78f76917377aede57127839008c55ba83c0`、镜像 CRC、App/DMG 严格签名和 Gatekeeper 通过。manifest/publish 按 Draft 设计跳过，Release `410117571` 未发布、feed 仍公开 `.56` 七键。
 

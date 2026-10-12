@@ -1,5 +1,13 @@
 # Pi 1 与暂缓草稿风险验收
 
+## 2026-10-12 v0.3.64 安装版任务续聊恢复与日程重启回读
+
+本节取代紧随其后的“通知待点击”段落的当前安装状态，**不追认系统通知点击通过**。受测为同一签名安装 App v0.3.64、Core `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`、私有合成根 `~/edupi-route1-canary-062-N23piRvi`，无真实学生或外部模型。Mac 原生 UI 从提醒收件箱的合成到期任务 `teacher-task-0c6a3ad6-6446-4137-a1d5-27341ef29781` 点击“继续聊”，URL 精确带 `task=`，首次发送时本机模型端口此前已退出，Core 状态实读为 `degraded`/主动运行 `paused`、原因“课程准备自动检查未启动”。该请求仅留下发送前的持久 intent，**未生成 outbox、Pi 会话文件无 user/assistant、模型调用仍为 2**；草稿原文和核对入口保留，未自动重发或外发。不能把这个故障说成 Core pin 未对齐：系统页同时回读 Core `b12b5cb`、Bridge 1.1、双组件清单匹配。
+
+仅在恢复隔离回环模型后，通过安装版“重新连接 Core”明确重启运行器，状态回读 `ready`/主动运行 `active`、外发 false。先核对旧请求无 Pi 消息和 outbox，再由原生管理中心“确认放弃”该条合成 intent，落盘状态 `discarded`；从原会话清除旧发送标识后只发一次新请求。安装版显示一条 user 和一条本机 assistant，Pi JSONL 回读各一条，outbox 为 `pi_accepted` 且教学准备绑定 `captured=true`；回环模型调用总数从 2 增至 3。任务绑定的 Session `01a12ff4-07a1-7537-ac54-e32636520f41` 写入并回读，离开→提醒“继续聊”进入同一 Session。随后正常退出、按原隔离根冷启动同一 `.64`，今天入口显示该任务“继续协作”，点击后 URL 与消息仍是上述同一 Session；Core `ready`/`b12b5cb`、主动运行 `active`、外发 false，模型调用数未增加。这验证任务手动续聊和冷重启保留，不替代 OS 通知点击回跳。
+
+另对 `.63` 已由教师确认采用但尚缺冷启动回读的合成 ICS，在 `.64` 安装版实际重启后从日程列表打开同一 `2026-10-15` 教研会：详情仍是 `13:00–14:00`、`Asia/Shanghai`、合成地点、已确认；这补的是同一隔离材料的重启保留，不证明真实校历质量。系统通知账本最终仍仅有一次 `delivered`、零次 `opened`；后续即使点击旧通知，也不得算 `.64` 验收。隔离 App 与精确回环模型已正常退出，原签名公开 `.56` 恢复到唯一 `/Applications/EduPi.app`，主程序 SHA-256 `abec7c44ee0e09ede624bafdfd06f0200b138286ea26228e3899ee1b137eb22b`、严格签名/Gatekeeper 再通过。受保护真实资料安装前后各 167 文件，只有既有 `feishu-bridge.error.log` 变化，教师业务和模型/认证配置逐文件相同；精确本地 `.64` 测试 App 942 MiB、DMG 223 MiB 已删除，检查点只留 208 KiB 小证据。Release `410117571` 仍 Draft、feed 公开 `.56` 七键。真实跨到期睡眠、App 管理 TCC/原位升级、真人教学质量与 Windows/Linux 完整教师流程继续未验。
+
 ## 2026-10-12 v0.3.64 三平台签名 Draft 与 macOS 通知待点击
 
 本节取代下方“待 PR/CI、签名 Draft 和安装验收”的当前状态，不把源码测试、构建烟测或已提交系统通知算作完整点击续聊。Desktop [#342](https://github.com/PIGU-PPPgu/edupi-desktop/pull/342) 已合并到 `main` `7ea73fa2320fbb9fb5cca759de27c5723802645a`，Core 固定 `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`。三平台签名 Draft [run 38199564546](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38199564546) attempt 1 的 macOS、Windows、Linux、Release 和资产证明均成功，9 个同轮资产指纹为 `sha256:f425a4f3ea28f577af33320b46c20ff6ed773dfaf10daa85bdbbe13e1cc81254`；manifest/发布按 Draft 设计跳过。Release `410117571` 未公开，公开 feed 和原安装版仍以 `.56` 为回退基线。
