@@ -3,11 +3,11 @@
   "core_repository": "edupi",
   "core_sdk": { "pi": "1.0.2", "pi_durable": "1.0.2" },
   "core_runtime": {
-    "core_commit": "6b0f2a2a4ddce40112195c74898fd6316a0e6133",
+    "core_commit": "b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
     "component_manifest_hash": "sha256:1cdb84958989f632237b4595d5c121cce4b81a25c98297e09f05e44a409dc7a7",
-    "runtime_component_manifest_hash": "sha256:f964d77267a254cbe6ce50e124b92f448b3b4e181568fb5cdc8c6ec919d07f0b",
-    "runtime_schema_hash": "sha256:9d74537d188ba93d602f53076156bc42e0304acbc8bdedacf541b7ffc25546b4"
+    "runtime_component_manifest_hash": "sha256:2dc436f77510558473ab6b675d845a3adce1f3df45c1e90537a769f15db0b294",
+    "runtime_schema_hash": "sha256:4ed2f9ecf9bb5fc7824363eff39fcf5fa6757f776abc1a2902842702df4fb3ae"
   },
   "contract_identities": [
     {
@@ -204,7 +204,9 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/275",
     "https://github.com/PIGU-PPPgu/edupi/pull/276",
     "https://github.com/PIGU-PPPgu/edupi/pull/277",
-    "https://github.com/PIGU-PPPgu/edupi/pull/278"
+    "https://github.com/PIGU-PPPgu/edupi/pull/278",
+    "https://github.com/PIGU-PPPgu/edupi/pull/279",
+    "https://github.com/PIGU-PPPgu/edupi/pull/280"
   ],
-  "change_note": "Desktop pins Core main 6b0f2a2 after the R03 restart-state inspector. Runtime schema and Desktop component manifest are unchanged; the Core runtime manifest includes the new migration-only read classifier. Bridge v1.1, occurrence v1.2 and 12 public bridge commands remain unchanged. Desktop outbox requires affirmative Core capture before Pi dispatch. G2/G3/G4 Live remain off by default; DOCX proposals stay pending teacher review and external_send=false. Source pairing does not establish installed-app, real sleep or teacher-quality acceptance."
+  "change_note": "Desktop pins Core main b12b5cb after PR #279 local L4 usage evidence and PR #280 versioned teacher-usage consent. Core Runtime schema and component manifest changed; Desktop component manifest, Bridge v1.1, occurrence v1.2 and 12 public bridge commands remain unchanged. The new teacher_usage consent, record, read and upload-batch-read APIs are held: Desktop has not wired their UI or capture flow, usage remains local-only and external_send=false. Desktop outbox requires affirmative Core capture before Pi dispatch. G2/G3/G4 Live remain off by default; DOCX proposals stay pending teacher review. Source pairing does not establish installed-app, real sleep or teacher-quality acceptance."
 }
