@@ -3,6 +3,7 @@ import {
   DESKTOP_API_TOKEN_HEADER,
   MAX_DESKTOP_SAVE_BYTES,
 } from "@/lib/desktop-api";
+import { NOTIFICATION_PROOF_TRANSPORT_DEADLINE_MS } from "@/lib/edupi-reminder-proof-deadlines";
 import {
   loadStagedMaterials,
   removeStagedMaterial,
@@ -455,7 +456,7 @@ export async function validateReminderNotificationClaims(claims: ReminderNotific
   const nonce = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, "0")).join("");
   try {
     const response = await fetchDesktopApi("/api/edupi/reminders/notification-proof", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version: 1, nonce, claims }), signal: AbortSignal.timeout(1500), redirect: "error" });
+      body: JSON.stringify({ version: 1, nonce, claims }), signal: AbortSignal.timeout(NOTIFICATION_PROOF_TRANSPORT_DEADLINE_MS), redirect: "error" });
     return response.status === 204 && response.headers.get("x-pi-reminder-proof-nonce") === nonce;
   } catch { return false; }
 }

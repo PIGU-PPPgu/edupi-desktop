@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { readPackagedServerIdentity } from "@/lib/desktop-connection-probe";
 import { relaunchAppNative } from "@/lib/desktop-native";
 
 export type DesktopConnectionState = "online" | "offline" | "checking";
@@ -9,10 +10,7 @@ export type DesktopConnectionState = "online" | "offline" | "checking";
 const PING_INTERVAL_MS = 8_000;
 const OFFLINE_THRESHOLD = 2;
 
-/**
- * Lightweight local-server health probe. Used to surface a reconnect banner
- * when the packaged Next server or SSE streams drop.
- */
+/** Surface a reconnect banner when the shell-verified local server is unreachable. */
 export function useDesktopConnection(enabled = true): {
   state: DesktopConnectionState;
   retry: () => void;
@@ -21,6 +19,7 @@ export function useDesktopConnection(enabled = true): {
   const failuresRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const probeControllerRef = useRef<AbortController | null>(null);
+  const instanceIdRef = useRef<string | null>(null);
   const stoppedRef = useRef(false);
 
   const probe = useCallback(async (): Promise<boolean | null> => {
@@ -34,13 +33,12 @@ export function useDesktopConnection(enabled = true): {
     probeControllerRef.current = controller;
     const timeout = window.setTimeout(() => controller.abort(), 4_000);
     try {
-      const res = await fetch(`/api/home?_=${Date.now()}`, {
-        method: "GET",
-        cache: "no-store",
-        signal: controller.signal,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const instanceId = await readPackagedServerIdentity(fetch, controller.signal);
+      if (!instanceId || instanceIdRef.current && instanceIdRef.current !== instanceId) {
+        throw new Error("Desktop server identity unavailable");
+      }
       if (stoppedRef.current || probeControllerRef.current !== controller) return null;
+      instanceIdRef.current = instanceId;
       failuresRef.current = 0;
       setState("online");
       return true;
@@ -109,6 +107,7 @@ export function useDesktopConnection(enabled = true): {
   useEffect(() => {
     if (!enabled) {
       stoppedRef.current = true;
+      instanceIdRef.current = null;
       return;
     }
     stoppedRef.current = false;

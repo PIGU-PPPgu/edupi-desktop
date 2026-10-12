@@ -6,7 +6,7 @@ use std::{
 };
 
 const MAX_HEADERS: usize = 4096;
-const DEADLINE: Duration = Duration::from_millis(1500);
+const DEADLINE: Duration = Duration::from_millis(23000);
 const PROOF_PATH: &str = "/api/edupi/reminders/native-send";
 
 #[derive(Debug, PartialEq)]
@@ -105,6 +105,17 @@ pub(crate) fn validate(
     nonce: &str,
     body: &[u8],
 ) -> ProofResult {
+    validate_with_deadline(port, token, instance, nonce, body, DEADLINE)
+}
+
+fn validate_with_deadline(
+    port: u16,
+    token: &str,
+    instance: &str,
+    nonce: &str,
+    body: &[u8],
+    timeout: Duration,
+) -> ProofResult {
     if port == 0
         || token.len() < 32
         || token.len() > 256
@@ -116,9 +127,11 @@ pub(crate) fn validate(
     {
         return ProofResult::Unavailable;
     }
-    let deadline = Instant::now() + DEADLINE;
+    let deadline = Instant::now() + timeout;
     let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
-    let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(300)) else {
+    let Ok(mut stream) =
+        TcpStream::connect_timeout(&address, Duration::from_millis(300).min(timeout))
+    else {
         return ProofResult::Unavailable;
     };
     let request = format!("POST {PROOF_PATH} HTTP/1.1\r\nHost: {address}\r\nx-pi-desktop-token: {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
@@ -279,7 +292,14 @@ mod tests {
         let (port, captured, release, worker) = fixture(response(&instance, &nonce), true);
         let timer = Instant::now();
         assert_eq!(
-            validate(port, TOKEN, &instance, &nonce, b"{}"),
+            validate_with_deadline(
+                port,
+                TOKEN,
+                &instance,
+                &nonce,
+                b"{}",
+                Duration::from_millis(150)
+            ),
             ProofResult::Unavailable
         );
         assert!(timer.elapsed() < Duration::from_secs(3));

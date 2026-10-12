@@ -14,12 +14,14 @@ import { getRunningRpcSessionIds } from "./rpc-manager";
 import { readServerForegroundPolicy } from "./edupi-foreground-server";
 import { isReminderForeground, shanghaiDate } from "./edupi-foreground";
 import { reminderEvents } from "./edupi-reminder-events";
+import { NOTIFICATION_CORE_READ_DEADLINE_MS, NOTIFICATION_PROOF_DEADLINE_MS } from "./edupi-reminder-proof-deadlines";
 import type { Reminder } from "./edupi-reminder-store";
+
+export { NOTIFICATION_PROOF_DEADLINE_MS } from "./edupi-reminder-proof-deadlines";
 
 export type NotificationClaim = { id: string; attemptId: string; attemptedAt: string };
 export type NotificationProofRequest = { version: 1; nonce: string; claims: NotificationClaim[] };
 export const NOTIFICATION_PROOF_NONCE_HEADER = "x-pi-reminder-proof-nonce";
-export const NOTIFICATION_PROOF_DEADLINE_MS = 1500;
 const MAX_STATE_BYTES = 16 * 1024 * 1024;
 
 export function validNotificationProofRequest(value: unknown): value is NotificationProofRequest {
@@ -60,6 +62,27 @@ export function reminderNotificationSourceFingerprint(item: Reminder, data: Educ
   })).digest("hex");
 }
 
+/** G1 artifacts require a fresh snapshot after the separate resource read. */
+export async function readReminderSourceWithResources(
+  read: (operation: string, fields?: Record<string, unknown>) => Promise<Record<string, unknown>>,
+  project: (snapshot: Record<string, unknown>) => EducationContract,
+  signal: AbortSignal,
+): Promise<EducationContract> {
+  const snapshot = () => read("snapshot", { schedule_occurrence_version: "1.2" });
+  let data = project(await snapshot());
+  if (signal.aborted) throw new Error("提醒来源暂不可用");
+  if (data.tasks.some(task => task.trigger === "teaching_before_class")) {
+    const resources = await read("workspace-resources");
+    if (signal.aborted || resources.ok !== true || resources.artifacts !== null && !Array.isArray(resources.artifacts)) {
+      throw new Error("提醒来源暂不可用");
+    }
+    data = project(await snapshot());
+    if (signal.aborted) throw new Error("提醒来源暂不可用");
+    data.generatedArtifacts = (resources.artifacts || []) as EducationContract["generatedArtifacts"];
+  }
+  return data;
+}
+
 /** Existing-host reads, or the same pinned read-only one-shot bridge; never ensure/start a runtime. */
 export async function readCurrentReminderEducation(signal: AbortSignal): Promise<EducationContract> {
   const roots = resolveEduPiBridgeRoots();
@@ -67,7 +90,7 @@ export async function readCurrentReminderEducation(signal: AbortSignal): Promise
   const read = async (operation: string, fields: Record<string, unknown> = {}) => {
     const request = { protocol: "edupi-desktop-bridge", protocol_version: 1, producer: "edupi-desktop",
       request_id: crypto.randomUUID(), operation, ...fields };
-    if (!host) return runCoreProcess<Record<string, unknown>>({ ...roots, request, timeoutMs: NOTIFICATION_PROOF_DEADLINE_MS, signal });
+    if (!host) return runCoreProcess<Record<string, unknown>>({ ...roots, request, timeoutMs: NOTIFICATION_CORE_READ_DEADLINE_MS, signal });
     const result = await host.callBridge(request, signal);
     const frame = (result.result as { bridge_frame?: unknown } | undefined)?.bridge_frame;
     if (signal.aborted || result.ok !== true || typeof frame !== "string" || Buffer.byteLength(frame) > 8 * 1024 * 1024) throw new Error("提醒来源暂不可用");
@@ -91,14 +114,7 @@ export async function readCurrentReminderEducation(signal: AbortSignal): Promise
       workspacePath: roots.dataRoot.root, snapshotPayload: payload, supportedCommands: identity.contract.supported_commands,
     });
   };
-  let data = project(await read("snapshot", { schedule_occurrence_version: "1.2" }));
-  if (data.tasks.some(task => task.trigger === "teaching_before_class")) {
-    const resources = await read("workspace-resources");
-    if (resources.ok !== true || resources.artifacts !== null && !Array.isArray(resources.artifacts)) throw new Error("提醒来源暂不可用");
-    // Re-read source after slower resource work; no task snapshot is promoted late.
-    data = project(await read("snapshot", { schedule_occurrence_version: "1.2" }));
-    data.generatedArtifacts = (resources.artifacts || []) as EducationContract["generatedArtifacts"];
-  }
+  const data = await readReminderSourceWithResources(read, project, signal);
   const running = new Set(getRunningRpcSessionIds());
   data.taskSessions = projectTaskSessionBindings(bindings, { taskIds: new Set(data.tasks.flatMap(task => task.id ? [task.id] : [])), knownSessionIds: running, runningSessionIds: running });
   return data;
