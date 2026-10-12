@@ -1,5 +1,15 @@
 # Pi 1 与暂缓草稿风险验收
 
+## 2026-10-12 v0.3.64 Core b12 配对与真实提醒证明源码门
+
+状态：**源码已实现待 PR/CI、签名 Draft 和安装验收**；本节不把 `.63` 的安装证据改称 `.64` 通过。Desktop 新候选固定 Core `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`（Core #279/#280 的 `main`），Runtime schema `sha256:4ed2f9ecf9bb5fc7824363eff39fcf5fa6757f776abc1a2902842702df4fb3ae`、Core 组件清单 `sha256:2dc436f77510558473ab6b675d845a3adce1f3df45c1e90537a769f15db0b294`；Desktop 组件清单、Bridge v1.1 的 12 命令与 Pi/PiDurable 1.0.2 不变。新 `teacher_usage` 同意/记录/读取/上传批次接口尚未接入 Desktop，默认不采集、不外发，不把 Core 的本地许可测试冒充桌面授权页面。
+
+- 冷启动断连横幅的探针由普通 `/api/home` 改为 Tauri 开窗前已握手的 `/api/desktop/identity`，要求 204 和实例标识；保留连续两次失败才显示及新探测覆盖旧探测的门。此前只观察到横幅后自行恢复，未取得当时具体失败码；本改动需新签名安装版冷启动复验，不能宣称已根治。
+- 新 Core 的无活跃 host、只读原生提醒证明曾在原 1.5 秒预算内确实 `Core request aborted`。定量核对：约 13,153 个 Core 闭包文件每次验证，首次约 2.2 秒，热读约 0.9 秒。现按三次串行 G1 来源读取设置单次 Core 6 秒、整条证明 21 秒、前端/原生传输 23 秒，Windows/Linux 系统提交确认 30 秒，均小于两分钟通知 claim 租约。旧尝试/来源变化、取消和晚到肯定回执仍拒发；未知 OS 结果不自动重试。Tauri 通知命令改为 async 并将阻塞证明和 OS 提交放入 `spawn_blocking`，不在 UI 线程等待。
+- 本机用独立干净的 Core `b12b5cb` 检出，不碰原 Core 脏 `main`。Core 使用证据 store/同意门/撤回/旧记录隔离测试、Runtime 协议及组件清单检查通过且 `external_send=false`；Desktop 精确 Core 关联的单次证明与结构回归 22/22，G1 的三读顺序和取消仅用合成注入测试，原生 JS 定向检查通过。`EDUPI_CORE_ROOT=<该精确检出> npm test` 最终 2354 通过、11 跳过、0 失败；TypeScript、lint、`release:verify`、锁定 Cargo metadata 均通过。高危 npm 审计为 0 高/严重，仍有 6 低/3 中，不称零漏洞。`desktop:prepare` 成功暂存 13,300 个 Core 文件；Cargo `check --lib --locked` 和 `test --lib --locked` 58/58 通过，改动的 Rust 文件 rustfmt 单独通过。全仓 `cargo fmt --all --check` 报既有大量无关格式差异，未批量改写。精确 Core 的今天运行与主动消息隔离 canary 通过，G1/G2 保持默认待激活、外发 false、回环模型恰好一次调用。
+
+上述全是源码、暂存包与本机 Rust 测试证据，**不是 `.64` 签名安装证据**。下一门是 PR/CI 后三平台同轮签名 Draft、资产/公证复核，再用唯一安装路径和隔离根实测：冷启动无误横幅、真实 `teacher_created` 单目标通知→点击精确任务会话→账本 `claimed/delivered/opened`→重启不重发。Core L4 `core_linked` 回执需另用许可范围内的 G1 canary，不能由本地任务路径代替。公开已安装 App/feed 仍 `.56`；`.63` Release `409693213` 仍 Draft。真实跨到期睡眠、旧客户端原位升级、App 管理 TCC、真人教学质量及 Windows/Linux 完整教师流程继续未验。
+
 ## 2026-10-12 v0.3.63 诊断通知人工点击复验
 
 本节取代下方“通知点击待用户确认”的当前状态，不追认先前回退过早的无结论尝试。受测仍为签名 Draft 源码 `6c2978844caa9ed5a3f76f5829e4edb43d8bacfa`、固定 Core `6b0f2a2a4ddce40112195c74898fd6316a0e6133`、DMG 资产 `631199208`（234058700 字节，SHA-256 `06b8f93d11121ebb41ee4e714044b177efe1f8b2eeaa5f23b251c1963d0cb6ef）。本机重复下载的完整摘要匹配先前已验签公证的同一资产；只读挂载后从唯一 `/Applications/EduPi.app` 以单班合成根、离线模式启动 `.63`，公开 `.56` 先保留为精确回退包。
