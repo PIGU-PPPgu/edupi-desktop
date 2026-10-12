@@ -1,5 +1,13 @@
 # Pi 1 与暂缓草稿风险验收
 
+## 2026-10-12 v0.3.63 诊断通知人工点击复验
+
+本节取代下方“通知点击待用户确认”的当前状态，不追认先前回退过早的无结论尝试。受测仍为签名 Draft 源码 `6c2978844caa9ed5a3f76f5829e4edb43d8bacfa`、固定 Core `6b0f2a2a4ddce40112195c74898fd6316a0e6133`、DMG 资产 `631199208`（234058700 字节，SHA-256 `06b8f93d11121ebb41ee4e714044b177efe1f8b2eeaa5f23b251c1963d0cb6ef）。本机重复下载的完整摘要匹配先前已验签公证的同一资产；只读挂载后从唯一 `/Applications/EduPi.app` 以单班合成根、离线模式启动 `.63`，公开 `.56` 先保留为精确回退包。
+
+原生设置页显示系统通知“已开启”，点击一次“测试通知跳转”得到“系统已接受通知；点击通知应打开提醒”。教师亲自点击该次系统通知，并明确回答“是，自动进入过提醒”。Codex 随后读取同一安装进程时，页面已被切至“学情观察”；**没有截取到提醒收件箱的过渡画面或原生回调日志**。因此将诊断通知的点击回跳记为“教师现场确认”，不写成机器独立复核通过；更不把这条无目标诊断通知冒充“真实事项触发 → 对应任务通知 → 点击续聊”的 R05 完整验收。重复触发/失败通知和真实任务目标仍未在本轮点击。
+
+教师正常退出后，原签名 `.56` 恢复为唯一安装版；主程序 SHA-256 `abec7c44ee0e09ede624bafdfd06f0200b138286ea26228e3899ee1b137eb22b`，严格签名与 Gatekeeper 均通过。此轮受保护真实资料前后各 167 文件，只有既有 `feishu-bridge.error.log` 变化，教师业务和模型/认证配置逐文件相同。已验证无测试 App/38471 监听，再删除本地 `.63` DMG 223 MiB 和测试 App 942 MiB；小型私有恢复证据位于 `~/edupi-install-checkpoints/v0.3.63/RESUME.md`。Release `409693213` 仍 Draft，公开 `.56` feed 仍七键。真实跨到期睡眠、旧客户端原位升级、真人教学质量、Windows/Linux 完整教师流程、App 管理 TCC 和偶发本地连接横幅根因仍缺独立证据，不随诊断通知的人工确认放行。
+
 ## 2026-10-12 v0.3.63 三平台 Draft 与 macOS 安装版续聊、安全模式
 
 - Desktop 修复 [#341](https://github.com/PIGU-PPPgu/edupi-desktop/pull/341) 经质量/Rust CI 后合并为 `main` `6c2978844caa9ed5a3f76f5829e4edb43d8bacfa`，固定 Core `6b0f2a2a4ddce40112195c74898fd6316a0e6133`。签名 Draft [run 38144208051](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38144208051) 的 attempt 1 在 Mac runner 临时根准入失败；attempt 2 的 Mac 通过并公证，但沿用 attempt 1 的 Windows/Linux 资产使同轮资产证明拒绝。未放宽证明门或手工替换资产；同一源码、同一 Release 完整重跑 attempt 3 后，三平台 builder 与 `draft-proof` 全绿，manifest 按 Draft 设计跳过。Release `409693213` 仍未公开，9 项资产指纹 `sha256:a45e331c042164c6f45f004805dc995db67de151e87dc1511cc1feaf405c84a0`，公开 feed 仍 `.56` 七键。

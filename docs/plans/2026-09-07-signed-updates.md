@@ -1,5 +1,9 @@
 # 自动下载安装
 
+## 2026-10-12 v0.3.63 诊断通知点击复验
+
+同一签名 Draft `.63` 在唯一安装路径和隔离数据根重测一次系统通知。设置页显示授权已开启，原生测试通知被系统接受；教师亲自点击并确认自动进入提醒收件箱。Codex 随后只看到同一安装进程已切至“学情观察”，没有截到过渡画面；这是教师现场确认的**无目标诊断通知**，不是对应真实任务的后台通知→点击续聊证明。该缺口和真实睡眠、旧客户端 updater 原位安装、真人教学质量、完整 Windows/Linux 流程、App 管理 TCC、偶发断连横幅根因继续保留在[唯一账本](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-12-v0363-诊断通知人工点击复验)。测试后严格签名/Gatekeeper 核对公开 `.56` 并恢复为唯一安装版；受保护真实资料前后各 167 文件，仅既有飞书错误日志变化；本地测试 App 942 MiB 和 DMG 223 MiB 已删除。Release `409693213` 不发布，公开 feed 仍 `.56` 七键。
+
 ## 2026-10-12 v0.3.63 同轮签名 Draft 与安装门
 
 - `.63` 精确源码 `6c297884`/Core `6b0f2a2` 的 [run 38144208051](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38144208051) attempt 3 在 macOS/Windows/Linux 与 `draft-proof` 全绿，9 资产指纹 `sha256:a45e331c042164c6f45f004805dc995db67de151e87dc1511cc1feaf405c84a0`，Apple 公证 Accepted；Release `409693213` 仍 Draft，manifest/feed 未更新。前两次失败与同轮资产门原因见[唯一账本](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-12-v0363-三平台-draft-与-macos-安装版续聊安全模式)。
