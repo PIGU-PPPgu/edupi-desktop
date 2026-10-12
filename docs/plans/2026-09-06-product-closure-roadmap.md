@@ -1,6 +1,8 @@
 # EduPi 产品闭环 PR 路线图
 
-2026-10-12 当前开发状态：`.64` 已在原 Desktop 分支配对 Core `b12b5cb` 的新 Runtime schema/清单；提醒来源证明的冷 Core 预算、原生命令阻塞线程以及桌面连接探针已改。精确 Core 的 2354/11/0 全量、暂存 13,300 文件、Cargo check/58 项测试通过，**仍待 PR/CI、三平台签名 Draft 和安装版实测**。新 `teacher_usage` 同意/记录/上传接口未在 Desktop 启用，G1/G2/G3/G4 Live 仍按原许可默认关闭。真实任务通知点击、睡眠、TCC、旧客户端原位升级、真人教学质量和完整 Windows/Linux 流程不因 `.64` 源码通过而结案。公开安装/feed 仍 `.56`；[当前验收](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-12-v0364-core-b12-配对与真实提醒证明源码门)。
+2026-10-12 当前发布状态：Desktop [#342](https://github.com/PIGU-PPPgu/edupi-desktop/pull/342) 已合 `main` `7ea73fa2`，固定 Core `b12b5cb`；[三平台签名 Draft](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38199564546) 与资产证明通过，Mac 公证 Accepted。本机核对最终 DMG 摘要、镜像/应用签名并从唯一 `/Applications/EduPi.app` 用隔离根冷启动 `.64` 两次，Core 身份/投影 ready，未观察到断连横幅；公开 `.56` 原 App 暂存待恢复。合成 `teacher_created` 到期事项的系统通知已实际提交一次，**教师点击、精确任务续聊与重启保留仍待验**。Release `410117571` 保持 Draft、公开 feed 仍 `.56` 七键，不把构建烟测当完整发布。新 `teacher_usage` Desktop 接线、真实睡眠、App 管理 TCC/旧客户端原位升级、真人教学质量和完整 Windows/Linux 教师流程继续缺证。[当前验收](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-12-v0364-三平台签名-draft-与-macos-通知待点击)。
+
+2026-10-12 历史 `.64` 构建前状态：精确 Core 的 2354 通过/11 跳过/0 失败、暂存 13,300 文件、Cargo check/58 项测试、提醒来源证明预算/原生工作线程及连接探针修复均在签名之前完成；这些源码检查不独立证明原生通知或发布。详见[当时记录](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-12-v0364-core-b12-配对与真实提醒证明源码门)。
 
 2026-10-12 历史 `.63` 安装状态：`.63` 精确 Core `6b0f2a2` 的三平台同轮签名 Draft 与 Apple 公证通过；macOS 唯一安装版在隔离根完成任务首次发送、绑定续聊、Safe Mode/恢复正常及 G1/反馈不重做，合成 ICS 预览后明确采用并跨材料/日程/Core 回读。系统接受诊断通知，教师亲自点击并确认自动进入提醒收件箱；Codex 未截到过渡页面，这也不是对应真实任务的通知续聊证明。真实睡眠、真人教学质量、旧客户端原位升级与 Windows/Linux 完整教师流程未验，偶发本地连接横幅未定位。因此 Release `409693213` 仍 Draft，公开 feed 仍 `.56` 七键。隔离进程已退出、签名公开 `.56` 恢复、真实资料逐文件核对完成，本地测试包约 1.1 GiB 已清理。[诊断通知复验](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-12-v0363-诊断通知人工点击复验)、[原安装版验收](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-12-v0363-三平台-draft-与-macos-安装版续聊安全模式)。
 
