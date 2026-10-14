@@ -3352,7 +3352,7 @@ dependencies = [
 
 [[package]]
 name = "pi-agent-desktop"
-version = "0.3.66"
+version = "0.3.67"
 dependencies = [
  "block2",
  "dunce",
