@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-10-14 安全门追补：`.67` [PR #349 首轮 CI](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38575076924) 的 npm 门通过、Rust 审计因当天新增的四条 rustls 0.23.45 漏洞失败；原分支已把锁文件更新到官方 0.23.46，保留原审计门，待新 CI 和三平台构建验证。公开 `.56`/feed 与真实教师数据未变，具体证据见[发布账本](2026-09-07-signed-updates.md#2026-10-14-v0367-三平台签名试用候选待构建)。
+
 2026-10-14 当前构建门：`.66` [三平台 Draft run 38539592345](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38539592345) 的 Linux/Windows 成功、Mac Core 根准入已通过，但打包服务首个日程冲突 GET `ECONNRESET`，仍无 Mac 签名、公证或同轮资产证明。原分支提交 `2163fdc4` 让隔离验收等目标只读路由返回预期 403，`.67` 本机按 CI 顺序的四项打包集成通过，待 PR CI 与新三平台 Draft；生产产品功能/Core pin 不变。唯一公开 `.56`/feed 不变，断连横幅、TCC、旧客户端升级、真实睡眠、真人质量和跨平台完整教师流程仍欠证。[发布账本](2026-09-07-signed-updates.md#2026-10-14-v0367-三平台签名试用候选待构建)。
 
 2026-10-14 历史构建门（.65 失败后、.66 构建前）：`.65` [三平台 Draft run 38532458614](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38532458614) 的 Linux/Windows 通过、macOS Core 合成根准入失败，缺 Mac 资产与同轮资产证明，Release 保持 Draft。原分支已用固定 Core `b12b5cb` 对验收夹具改为私有工作区根并增加脱敏根错误码，`.66` 待 PR CI/新三平台构建；未改 Core 写入准入或产品功能。公开 `.56`/feed 不变，断连横幅、TCC、旧客户端升级、真实睡眠、真人质量和跨平台完整教师流程继续欠证。[发布账本](2026-09-07-signed-updates.md#2026-10-14-v0366-三平台签名试用候选待构建)。
