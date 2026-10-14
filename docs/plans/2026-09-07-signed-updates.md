@@ -1,6 +1,12 @@
 # 自动下载安装
 
-## 2026-10-14 v0.3.67 Draft 失败，v0.3.68 待验
+## 2026-10-15 v0.3.68 三平台 Draft 失败
+
+- Desktop [#350](https://github.com/PIGU-PPPgu/edupi-desktop/pull/350) 的应用检查与 Rust 安全审计在 [CI 38593848793](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38593848793) 通过，合并源码为 `539ada017961d03da096bb56c2a8ae260dff2493`，Core 固定 `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`。[三平台 Draft run 38594840857 attempt 1](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38594840857) 的 Windows/Linux 完成并通过，Mac 的配对 Core、打包集成、签名、打包运行时和 updater 公钥检查均通过。
+- 预期 Mac 公证返回 `Accepted`、装订并替换 Release DMG，再完成严格签名/Gatekeeper 和同轮九资产指纹。实际 `notarytool submit --wait` 已上传 DMG、取得 submission `bae90110-2958-470d-86f9-5319261caca9`，在查询 `appstoreconnect.apple.com/notary/v2/submissions` 时报告 `NSURLErrorDomain -1009` / `No network route` 并退出；**Apple 最终公证状态未知**。装订、DMG 替换与最终验证未执行，`draft-proof` 跳过。Release `412914947` 虽列九项资产仍为 Draft，其中 Mac DMG 资产 `641035204`、SHA-256 `94b575ee375bffaca441046f65b362d79de922f29828152b03a58a8eb004a9ff` 是装订/替换前上传的字节，不能供教师下载或用于发布。`.67` 的 `-1005` 校验重试在真实 Mac CI 中尚未运行到，只有本机回归测试通过。
+- 此次失败在 Apple 公证状态网络轮询，不是已观察到的产品签名拒绝；不能据此推断 Apple 已接受，也不能把 Windows/Linux 成功或九个文件名当成完整签名发布证明。连续 `.67`、`.68` 均被 Apple 网络瞬断打断，按费用与安全边界暂停重复三平台构建、单平台拼接和自动发布。待外部链路稳定后从新候选重新取得同一 attempt 的全套成功证明。GitHub API 回读公开 `updater-feed/latest.json` 仍为 `.56`、7 平台键；唯一公开安装 `.56` 未切换，本轮没有本地下载或构建包要清理。短暂断连横幅、TCC/旧客户端原位升级、真实跨到期睡眠、真人教学质量、Windows/Linux 完整教师流程继续未验。本节取代下面 `.67`/.68 构建前记录的当前状态。
+
+## 2026-10-14 v0.3.67 Draft 失败，v0.3.68 构建前快照
 
 - Desktop [#349](https://github.com/PIGU-PPPgu/edupi-desktop/pull/349) 已合并为 `main` `cc1531575108baef2264e2020051b41c7dcd0bd4`，固定 Core `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`。[三平台 Draft run 38582208711](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38582208711) 中 Windows/Linux 成功，Mac 的配对 Core、打包集成、签名、更新公钥检查通过；Apple notary submission `2e4c8673-723a-439b-bb10-8fef621e7b9b` 为 `Accepted`，DMG 装订及首次校验、Gatekeeper 评估通过，替换后的 DMG SHA-256 为 `9159defb5a3036ff95b44bb996e355dbcc38655560d5c54b38e557beded4f2a1`。
 - 同一 Mac job 的最终复核中，App strict codesign 与装订校验、DMG codesign 通过；重复运行 DMG `stapler validate` 时 Apple CloudKit 票据查询返回 `NSURLErrorDomain -1005`（连接中断），脚本因仅识别 `-1009` 而立即失败。**整轮 CI 失败，`draft-proof` 跳过**；Release `412825464` 虽有九项资产，仍是 Draft，未证明同轮资产指纹，也不把 Mac 最终验证写为通过。公开安装和 feed 仍是 `.56`。
