@@ -75,14 +75,22 @@ async function startStagedServer() {
     while (Date.now() < deadline) {
       if (child.exitCode !== null) throw new Error(`staged server exited: ${logs}`);
       try {
-        if ((await fetch(`${url}/api/desktop/identity`, { signal: AbortSignal.timeout(2000) })).status === 204) return {
-          url, stop, diagnostics: () => ({
-            exitCode: child.exitCode,
-            signalCode: child.signalCode,
-            logTailSha256: crypto.createHash("sha256").update(logs.slice(-1500)).digest("hex"),
-            errorCodes: [...new Set(logs.slice(-1500).match(/\b(?:ECONNRESET|EADDRINUSE|EACCES|EPIPE|ERR_[A-Z0-9_]+)\b/gu) || [])],
-          }),
-        };
+        const identity = await fetch(`${url}/api/desktop/identity`, { signal: AbortSignal.timeout(2000) });
+        if (identity.status === 204) {
+          // Identity proves the process is listening; the cold schedule route
+          // may still reset its first connection while Next loads its bundle.
+          const route = await fetch(`${url}/api/edupi/schedule-conflicts?limit=50`, {
+            headers: { origin: url }, signal: AbortSignal.timeout(5000),
+          });
+          if (route.status === 403) return {
+            url, stop, diagnostics: () => ({
+              exitCode: child.exitCode,
+              signalCode: child.signalCode,
+              logTailSha256: crypto.createHash("sha256").update(logs.slice(-1500)).digest("hex"),
+              errorCodes: [...new Set(logs.slice(-1500).match(/\b(?:ECONNRESET|EADDRINUSE|EACCES|EPIPE|ERR_[A-Z0-9_]+)\b/gu) || [])],
+            }),
+          };
+        }
       } catch { /* cold start */ }
       await new Promise((resolve) => setTimeout(resolve, 200));
     }

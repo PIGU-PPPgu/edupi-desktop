@@ -1,6 +1,20 @@
 # 自动下载安装
 
-## 2026-10-14 v0.3.66 三平台签名试用候选待构建
+## 2026-10-14 v0.3.67 三平台签名试用候选待构建
+
+- `.66` 的 Mac 构建已越过 Core 根准入门，但首个打包服务日程冲突 GET 在轻量身份端点返回 204 后仍发生 `ECONNRESET`。原分支修复提交 `2163fdc4` 在启动隔离服务器时，要求只读、无 token 的目标路由实际返回预期 403，才进入写入/审核用例；仍保留 45 秒有界启动门，不重试任何可能写入的 POST。`.67` 的最终 PR 合并源码 SHA 与签名 run 待产生后回填；Core 继续固定 `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`，没有改产品接口或生产 Core 数据。
+- 本机 macOS 26.5.1/arm64、Node v22.23.1，用 `npm run desktop:prepare` 真实暂存 13,300 个固定 Core 文件后，按 CI 顺序运行四项打包服务集成验收：日程冲突、课次改动、上传校历、教师反馈均通过；包内模型文件检查 1 通过、1 跳过。期待新 PR CI 零失败，再从合并 `main` 触发 `phase=draft, platform=all`，核对三平台同轮九资产、更新签名及 Mac 公证 Accepted。当前只是**源码和本机暂存验收通过，待 PR CI/签名 Draft**；本机原始 stdout 未归档，新 PR 与 Release Actions 日志需作为可复核原件回填。
+- 同一源码第一次本机 `npm test` 长时运行记录 2330 通过、2 失败、1 取消、34 跳过，失败项原始输出被终端截断，原因未定位；不把它当成通过。未改代码的第二次完整运行记录 2333 通过、34 跳过、0 失败；TypeScript、lint、`release:verify`、锁定 Cargo metadata 和发布工具 202 通过/6 跳过/0 失败。两轮本机 stdout 均未归档，干净 runner 的 PR CI 是下一道可追溯门。
+- PR [#349](https://github.com/PIGU-PPPgu/edupi-desktop/pull/349) 首轮 [CI 38575076924](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38575076924) 的 npm 应用门通过，Rust 审计却按 2026-10-14 新披露的 `RUSTSEC-2026-0346` 至 `0349` 拒绝锁定版 `rustls 0.23.45`；[rustls 官方 0.23.46 发布](https://github.com/rustls/rustls/releases/tag/v%2F0.23.46)包含四项修复。已只用临时 Cargo 源配置将锁定 `rustls` 更新到 `0.23.46`，未禁用审计；Cargo 解析同时重选已在锁文件中的五处 `windows-sys 0.59.0` 引用，跨平台兼容须由新 CI/构建验证。此前 8 条 unmaintained/yanked 警告不是本次四条漏洞，也不称为零风险。当前仍待新 PR CI，不能合并或触发签名 Draft。
+- PR 审查又指出后续三项 staged E2 各自新启服务器，也只等轻量身份端点。现按各自首个业务路由加有界只读/无效请求预热：课次 `intake` 的 `{}` 只得 400、不写入；上传材料与反馈无 token 只得 403。反馈在截止前未取得预期 403 则明确失败。使用本机真实 standalone 和同一固定 Core 重新跑课次、上传校历、反馈三项均通过，外发 false；工作流保护测试 203 通过、6 跳过、0 失败。所有本轮打包资源和临时 Core 依赖用完清理，磁盘空闲由约 48 GiB 恢复为 50 GiB；仍待新 PR CI 和 hosted macOS 签名验收，不把这次本机结果当成安装版证据。
+- `.64` 的短暂断连横幅仍是已观察风险，`.67` 安装、TCC、旧客户端原位升级、真睡眠、真人教学质量和 Windows/Linux 完整教师流程均未验。唯一公开 `/Applications/EduPi.app` 和 feed 保持 `.56`；不得把 `.66` 的 Linux/Windows 部分资产拼入新版本或提前公开。此次本地暂存的 `.next-desktop`、server、Pi Agent Server、Core 和 OpenConnector 资源及精确临时 Core 依赖已核对为可再生后删除，空闲空间由约 48 GiB 回到 50 GiB。
+
+## 2026-10-14 v0.3.66 三平台 Draft 失败
+
+- PR [#348](https://github.com/PIGU-PPPgu/edupi-desktop/pull/348) 在 [CI 38538935999](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38538935999) 两项通过后合并为 `main` `67a6734d0d9eade08aef5d8c19a3bf3d8e837338`。三平台 Draft [run 38539592345](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38539592345) 中 Linux/Windows 成功，macOS “Verify paired Core runtime”通过，但在“Verify staged macOS integrations”的首项 `test:staged-schedule-conflicts-runtime` 报 `staged_schedule_get_failed:ECONNRESET`；进程未退出，日志摘要保留而无安全错误码。签名、公证未执行，`draft-proof` 因 Mac 失败跳过；Release `.66` 仍是只有六个 Linux/Windows 资产的 Draft，未改 feed。
+- 该失败是验收服务的首次只读请求，未发生教师数据写入；其精确网络层原因仍未证实。`.67` 的目标路由预热是针对冷启动竞态的假设修复，需 macOS hosted runner 实测，不把本机打包服务通过写成 CI 通过。本节取代下面 `.66` 的构建前快照。
+
+## 2026-10-14 v0.3.66 历史构建前状态
 
 - `.65` 的 macOS 验收失败后，在原 Desktop 分支提交测试根修复 `a1b7305c`，并将候选版本升为 `.66`；最终 PR 合并源码 SHA 与签名 run 待实际产生后回填。Core 仍固定 `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`，不把本候选称为最新 Core 配对，也不改变生产 Root writer admission。
 - macOS 失败发生在合成验收脚本的系统临时根申请 Core 租约之前；准确的 Core 根错误码未被旧脚本打印，原因仍属环境假设。新脚本在申请租约前断言并输出脱敏 `code`，默认用受检出的 Desktop 工作区卷；Release 与 Preview 的非 Windows 配对步为所有合成脚本提供权限为 `0700` 的工作区临时目录，并在步末核对精确路径后清理。针对性结构测试先在旧工作流失败、修复后通过；本机精确 Core 的真实根租约、ambient、slot-alias 和 proactivity canary 通过，均在 macOS 26.5.1/arm64、Node v22.23.1 上运行。证据为该分支的 `scripts/release-workflows.test.mjs` 与下方 `.65` 失败 [run 38532458614](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38532458614)；原始新 PR/签名 CI 日志待回填，不用本机通过冒充 runner 结果。
