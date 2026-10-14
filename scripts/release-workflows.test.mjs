@@ -64,6 +64,15 @@ test("paired Core checks use a private workspace-backed temporary root", async (
   }
 });
 
+test("staged schedule test waits for its guarded route after server identity", async () => {
+  const source = await readFile(join(root, "scripts", "test-edupi-schedule-conflicts-e2.mjs"), "utf8");
+  const start = source.indexOf("async function startStagedServer");
+  const readiness = source.slice(start, source.indexOf("\ntry {\n  const rootModule", start));
+  assert.ok(start >= 0);
+  assert.ok(readiness.indexOf("/api/desktop/identity") < readiness.indexOf("/api/edupi/schedule-conflicts?limit=50"));
+  assert.match(readiness, /route\.status === 403/u);
+});
+
 test("official releases require Developer ID and notarization before publishing", async () => {
   const workflow = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
   const releaseJob = workflow.slice(workflow.indexOf("\n  release:"), workflow.indexOf("\n  build:"));
