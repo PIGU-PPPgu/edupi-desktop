@@ -113,7 +113,11 @@ jobs:
         if: runner.os != 'Windows'
         env:
           EDUPI_CORE_ROOT: ${{ github.workspace }}/.edupi-core-runtime
-        run: npm run test:edupi-ambient-today-runtime
+          TMPDIR: ${{ github.workspace }}/.edupi-core-test-tmp
+        run: |
+          mkdir -m 700 "$TMPDIR"
+          trap 'test "$TMPDIR" = "$GITHUB_WORKSPACE/.edupi-core-test-tmp" && rm -r "$TMPDIR"' EXIT
+          npm run test:edupi-ambient-today-runtime
       - name: Verify paired Core bundle on Windows
         if: runner.os == 'Windows'
         env:
@@ -129,7 +133,11 @@ jobs:
         if: runner.os != 'Windows'
         env:
           EDUPI_CORE_ROOT: ${{ github.workspace }}/.edupi-core-runtime
-        run: npm run test:edupi-slot-alias-e2
+          TMPDIR: ${{ github.workspace }}/.edupi-core-test-tmp
+        run: |
+          mkdir -m 700 "$TMPDIR"
+          trap 'test "$TMPDIR" = "$GITHUB_WORKSPACE/.edupi-core-test-tmp" && rm -r "$TMPDIR"' EXIT
+          npm run test:edupi-slot-alias-e2
       - name: Prepare packaged Desktop runtime
         env:
           EDUPI_CORE_ROOT: ${{ github.workspace }}/.edupi-core-runtime

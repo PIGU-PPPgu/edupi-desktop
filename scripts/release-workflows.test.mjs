@@ -52,6 +52,18 @@ test("the signed release workflow is manual-only", async () => {
   assert.match(release, /tauriScript: npx tauri/);
 });
 
+test("paired Core checks use a private workspace-backed temporary root", async () => {
+  for (const name of ["release.yml", "preview-installers.yml"]) {
+    const workflow = await readFile(join(root, ".github", "workflows", name), "utf8");
+    const start = workflow.indexOf("name: Verify paired Core runtime");
+    const step = workflow.slice(start, workflow.indexOf("\n      - ", start));
+    assert.ok(start >= 0, `${name} must verify the paired Core runtime`);
+    assert.match(step, /TMPDIR: \$\{\{ github\.workspace \}\}\/\.edupi-core-test-tmp/u);
+    assert.match(step, /mkdir -m 700 "\$TMPDIR"/u);
+    assert.match(step, /trap 'test "\$TMPDIR" = "\$GITHUB_WORKSPACE\/\.edupi-core-test-tmp" && rm -r "\$TMPDIR"' EXIT/u);
+  }
+});
+
 test("official releases require Developer ID and notarization before publishing", async () => {
   const workflow = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
   const releaseJob = workflow.slice(workflow.indexOf("\n  release:"), workflow.indexOf("\n  build:"));
