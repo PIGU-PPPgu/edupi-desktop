@@ -1,6 +1,17 @@
 # 自动下载安装
 
-## 2026-10-14 v0.3.65 三平台签名试用候选待构建
+## 2026-10-14 v0.3.66 三平台签名试用候选待构建
+
+- `.65` 的 macOS 验收失败后，在原 Desktop 分支提交测试根修复 `a1b7305c`，并将候选版本升为 `.66`；最终 PR 合并源码 SHA 与签名 run 待实际产生后回填。Core 仍固定 `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`，不把本候选称为最新 Core 配对，也不改变生产 Root writer admission。
+- macOS 失败发生在合成验收脚本的系统临时根申请 Core 租约之前；准确的 Core 根错误码未被旧脚本打印，原因仍属环境假设。新脚本在申请租约前断言并输出脱敏 `code`，默认用受检出的 Desktop 工作区卷；Release 与 Preview 的非 Windows 配对步为所有合成脚本提供权限为 `0700` 的工作区临时目录，并在步末核对精确路径后清理。针对性结构测试先在旧工作流失败、修复后通过；本机精确 Core 的真实根租约、ambient、slot-alias 和 proactivity canary 通过，均在 macOS 26.5.1/arm64、Node v22.23.1 上运行。证据为该分支的 `scripts/release-workflows.test.mjs` 与下方 `.65` 失败 [run 38532458614](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38532458614)；原始新 PR/签名 CI 日志待回填，不用本机通过冒充 runner 结果。
+- 当前状态为**已修复验收夹具、待 PR CI 和新三平台签名 Draft**。预期新候选的 Mac/Linux/Windows 构建及同轮资产证明全部通过，Mac 公证 Accepted、签名与装订验真；实际结果待运行。`.64` 已观察的短暂断连横幅仍未修复，`.66` 安装、旧客户端原位更新、App 管理 TCC、真实跨到期睡眠、真人教学质量和 Windows/Linux 完整教师流程均未验。构建不自动公开 Release 或更新 feed；公开版仍 `.56`。
+
+## 2026-10-14 v0.3.65 三平台 Draft 失败
+
+- PR [#347](https://github.com/PIGU-PPPgu/edupi-desktop/pull/347) 合并为 `main` `566cb0514ea954f8e47a7bf8e4f61a644f7564dd`，本地检查及 PR CI [run 38531538804](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38531538804) 通过。三平台签名 Draft [run 38532458614](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38532458614) 实际失败：Linux/Windows 构建成功，macOS 在“Verify paired Core runtime”中由 `scripts/test-edupi-ambient-today-runtime.mjs` 触发 `CoreRuntimeWriterAdmissionError: The Core Runtime writer admission root is invalid`，后续签名、公证未执行；`draft-proof` 因矩阵失败跳过。Release `v0.3.65` 保持 Draft，只有 Linux/Windows 六个资产，不能作为三平台包或公开更新发布。
+- 失败时旧验收脚本使用 `os.tmpdir()` 创建合成数据根；旧日志只显示写入租约拒绝，没有记录 `prepareCoreRuntimeRoot` 的具体错误码，不能断言 Core 生产根被拒绝或某个文件系统必然不受支持。本节取代下面 `.65` 的构建前快照；公开安装和七键 feed 均未改变。
+
+## 2026-10-14 v0.3.65 历史构建前状态
 
 - 版本提交 `a1b12f1af17f9ccb785f76ab22cf11b3d50545ee` 在 Desktop [PR #347](https://github.com/PIGU-PPPgu/edupi-desktop/pull/347) 中，合并提交与签名 Draft 的精确源码 SHA 待 CI 和合并后回填。本次只改版本、组件版本清单与发布说明；Core 固定 `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`，Pi/PiDurable 1.0.2，未声称消费 Core 新 `main`。
 - 当前状态为**已准备版本、待 PR CI 与三平台 Draft 构建**，不是“已构建”或“可公开下载”。本地 `npm test` 2331 通过、34 跳过、0 失败；发布工具测试 200 通过、6 跳过、0 失败；TypeScript、lint、`release:verify`、`cargo metadata --locked` 和高危 npm 审计通过，审计仍有 6 低危、3 中危。PR CI 完成后才从合并的 `main` 用 `phase=draft, platform=all` 触发签名构建，并逐项核对同轮资产、更新签名与 Apple 公证。

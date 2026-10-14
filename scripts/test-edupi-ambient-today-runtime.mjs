@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createJiti } from "jiti";
@@ -18,7 +17,7 @@ const requestedDataRoot = process.env.EDUPI_AMBIENT_TODAY_RUNTIME_DATA_ROOT;
 const previousDesktopStateDir = process.env.PI_DESKTOP_STATE_DIR;
 const temporaryRoot = requestedDataRoot
   ? path.resolve(requestedDataRoot)
-  : fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "edupi-ambient-today-runtime-")));
+  : fs.realpathSync(fs.mkdtempSync(path.join(desktopRoot, ".edupi-ambient-today-runtime-")));
 fs.mkdirSync(temporaryRoot, { recursive: true });
 const dataRootPath = path.join(temporaryRoot, "data");
 for (const directory of [".edupi/memory", ".edupi/output", ".edupi/locks"]) {
@@ -58,6 +57,7 @@ const material = {
 let handle;
 try {
   const preparedDataRoot = prepareCoreRuntimeRoot(dataRootPath);
+  assert.equal(preparedDataRoot.ok, true, `Core Runtime test root unavailable (${preparedDataRoot.code})`);
   const admission = await acquireCoreRuntimeWriterAdmission({ root: preparedDataRoot, kind: "legacy_ambient_today_runtime_test" });
   try {
     const planningStore = createAmbientPlanningStore({ root: preparedDataRoot });
