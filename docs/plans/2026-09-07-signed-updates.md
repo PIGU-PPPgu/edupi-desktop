@@ -1,6 +1,13 @@
 # 自动下载安装
 
-## 2026-10-14 v0.3.67 三平台签名试用候选待构建
+## 2026-10-14 v0.3.67 Draft 失败，v0.3.68 待验
+
+- Desktop [#349](https://github.com/PIGU-PPPgu/edupi-desktop/pull/349) 已合并为 `main` `cc1531575108baef2264e2020051b41c7dcd0bd4`，固定 Core `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`。[三平台 Draft run 38582208711](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38582208711) 中 Windows/Linux 成功，Mac 的配对 Core、打包集成、签名、更新公钥检查通过；Apple notary submission `2e4c8673-723a-439b-bb10-8fef621e7b9b` 为 `Accepted`，DMG 装订及首次校验、Gatekeeper 评估通过，替换后的 DMG SHA-256 为 `9159defb5a3036ff95b44bb996e355dbcc38655560d5c54b38e557beded4f2a1`。
+- 同一 Mac job 的最终复核中，App strict codesign 与装订校验、DMG codesign 通过；重复运行 DMG `stapler validate` 时 Apple CloudKit 票据查询返回 `NSURLErrorDomain -1005`（连接中断），脚本因仅识别 `-1009` 而立即失败。**整轮 CI 失败，`draft-proof` 跳过**；Release `412825464` 虽有九项资产，仍是 Draft，未证明同轮资产指纹，也不把 Mac 最终验证写为通过。公开安装和 feed 仍是 `.56`。
+- 原分支对 Apple 票据服务这一路径的 `-1005` 增加至多三次校验、两次有界等待；持久中断、其他 URL、票据/签名错误仍失败。新增回归测试先在旧代码 2 项失败、修改后 5 项全过。仅为新候选 `.68` 准备版本与说明；PR CI、签名 Draft、同轮资产证明和安装验收均待实际运行，不能借 `.67` 资产发布。
+- `.67` 所记录的短暂断连横幅、TCC、旧客户端原位升级、真睡眠、真人教学质量与 Windows/Linux 完整教师流程继续未验；构建失败不能推定这些流程的结果。本节取代下面 `.67` 构建前快照的当前状态。
+
+## 2026-10-14 v0.3.67 构建前快照
 
 - `.66` 的 Mac 构建已越过 Core 根准入门，但首个打包服务日程冲突 GET 在轻量身份端点返回 204 后仍发生 `ECONNRESET`。原分支修复提交 `2163fdc4` 在启动隔离服务器时，要求只读、无 token 的目标路由实际返回预期 403，才进入写入/审核用例；仍保留 45 秒有界启动门，不重试任何可能写入的 POST。`.67` 的最终 PR 合并源码 SHA 与签名 run 待产生后回填；Core 继续固定 `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`，没有改产品接口或生产 Core 数据。
 - 本机 macOS 26.5.1/arm64、Node v22.23.1，用 `npm run desktop:prepare` 真实暂存 13,300 个固定 Core 文件后，按 CI 顺序运行四项打包服务集成验收：日程冲突、课次改动、上传校历、教师反馈均通过；包内模型文件检查 1 通过、1 跳过。期待新 PR CI 零失败，再从合并 `main` 触发 `phase=draft, platform=all`，核对三平台同轮九资产、更新签名及 Mac 公证 Accepted。当前只是**源码和本机暂存验收通过，待 PR CI/签名 Draft**；本机原始 stdout 未归档，新 PR 与 Release Actions 日志需作为可复核原件回填。

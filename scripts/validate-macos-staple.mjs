@@ -12,12 +12,17 @@ export async function validateMacOSStaple(target, {
     const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
     log(output);
     if (result.status === 0) return;
-    // CloudKit briefly reported an offline network after successful notarization.
-    // Ticket/signature failures and all unrecognized errors must fail immediately.
-    if (attempt === 3 || !/NSURLErrorDomain Code=-1009\b/.test(output)) {
+    // Only retry observed CloudKit transport errors; ticket/signature failures
+    // and errors from other endpoints must fail immediately.
+    const transientCloudKitError = result.status === 68 && (
+      /NSURLErrorDomain Code=-1009\b/.test(output) ||
+      (/NSURLErrorDomain Code=-1005\b/.test(output) &&
+        /https:\/\/api\.apple-cloudkit\.com\/database\/1\/com\.apple\.gk\.ticket-delivery\//.test(output))
+    );
+    if (attempt === 3 || !transientCloudKitError) {
       throw new Error(`Staple validation failed with status ${result.status ?? "unavailable"}`);
     }
-    log(`CloudKit offline; retrying staple validation (${attempt}/3).\n`);
+    log(`CloudKit connection interrupted; retrying staple validation (${attempt}/3).\n`);
     await wait(5_000);
   }
 }
