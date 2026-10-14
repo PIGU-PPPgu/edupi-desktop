@@ -1,5 +1,11 @@
 # 自动下载安装
 
+## 2026-10-14 v0.3.65 三平台签名试用候选待构建
+
+- 版本提交 `a1b12f1af17f9ccb785f76ab22cf11b3d50545ee` 在 Desktop [PR #347](https://github.com/PIGU-PPPgu/edupi-desktop/pull/347) 中，合并提交与签名 Draft 的精确源码 SHA 待 CI 和合并后回填。本次只改版本、组件版本清单与发布说明；Core 固定 `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`，Pi/PiDurable 1.0.2，未声称消费 Core 新 `main`。
+- 当前状态为**已准备版本、待 PR CI 与三平台 Draft 构建**，不是“已构建”或“可公开下载”。本地 `npm test` 2331 通过、34 跳过、0 失败；发布工具测试 200 通过、6 跳过、0 失败；TypeScript、lint、`release:verify`、`cargo metadata --locked` 和高危 npm 审计通过，审计仍有 6 低危、3 中危。PR CI 完成后才从合并的 `main` 用 `phase=draft, platform=all` 触发签名构建，并逐项核对同轮资产、更新签名与 Apple 公证。
+- `.64` 安装版短暂误报断连仍是本候选已知风险，没有在 `.65` 修复；其已通过的定向通知和隔离续聊仅属于 `.64`，不能替代 `.65` 安装证据。`.65` 的签名包安装、旧客户端更新与 App 管理 TCC、真实跨到期睡眠、真人教学质量及 Windows/Linux 完整教师流程均未验。构建结果不自动发布 Release 或更新 feed；公开版仍为 `.56`。
+
 ## 2026-10-12 v0.3.64 定向通知安装验收追补
 
 同一签名 Draft 资产 `632644912` 重装到唯一 `/Applications/EduPi.app`，仅以隔离单班数学根和本机回环模型运行。新合成任务 `teacher-task-faaf2949-951a-4547-a038-472e8de302d3` 的同一通知 attempt `1a7f220d-9466-42b9-b6a2-779244f3259c` 持久账本为一次 `claimed → delivered → opened`，教师亲点后原生 URL 精确指向该任务；一条合成续聊由 Core 捕获并在 Pi/绑定文件回读，离开重进和冷启动后仍是 Session `01a130a0-4d09-73b8-b12b-9297fa780431`，无重投递、无额外模型调用。旧通知点击只打开工作区，不计入新尝试。
