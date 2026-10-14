@@ -88,8 +88,15 @@ async function startStagedServer() {
     const deadline = Date.now() + 45_000;
     while (Date.now() < deadline) {
       if (child.exitCode !== null) throw new Error(`staged server exited: ${logs}`);
-      try { if ((await fetch(`${url}/api/desktop/identity`, { signal: AbortSignal.timeout(2000) })).status === 204) return { url, stop }; }
-      catch { /* cold start */ }
+      try {
+        const identity = await fetch(`${url}/api/desktop/identity`, { signal: AbortSignal.timeout(2000) });
+        if (identity.status === 204) {
+          const route = await fetch(`${url}/api/edupi/materials/staging`, {
+            headers: { origin: url }, signal: AbortSignal.timeout(5000),
+          });
+          if (route.status === 403) return { url, stop };
+        }
+      } catch { /* cold start */ }
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
     throw new Error(`staged server not ready: ${logs}`);

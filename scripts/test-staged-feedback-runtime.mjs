@@ -120,14 +120,19 @@ async function jsonFetch(url, init) {
 
 try {
   const readyDeadline = Date.now() + 45_000;
+  let ready = false;
   while (Date.now() < readyDeadline) {
     if (child.exitCode !== null) throw new Error(`staged server exited: ${logs.slice(-4000)}`);
     try {
       const identity = await fetch(`${baseUrl}/api/desktop/identity`, { signal: AbortSignal.timeout(2000) });
-      if (identity.status === 204) break;
+      if (identity.status === 204) {
+        const route = await fetch(`${baseUrl}/api/edupi/teacher-feedback`, { signal: AbortSignal.timeout(5000) });
+        if (route.status === 403) { ready = true; break; }
+      }
     } catch { /* cold start */ }
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
+  assert.equal(ready, true, "staged feedback route not ready");
   assert.equal((await fetch(`${baseUrl}/api/edupi/teacher-feedback`)).status, 403);
   assert.equal((await fetch(`${baseUrl}/api/edupi/teacher-feedback`, { method: "POST", headers: { "content-type": "application/json" }, body: "null" })).status, 403);
   const bootstrap = await jsonFetch("/api/edupi/teacher-feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "bootstrap" }) });

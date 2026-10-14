@@ -73,6 +73,20 @@ test("staged schedule test waits for its guarded route after server identity", a
   assert.match(readiness, /route\.status === 403/u);
 });
 
+test("each remaining staged macOS test warms its first business route", async () => {
+  for (const [file, route, status] of [
+    ["test-edupi-schedule-occurrence-e2.mjs", "/api/edupi/intake", 400],
+    ["test-edupi-uploaded-calendar-e2.mjs", "/api/edupi/materials/staging", 403],
+    ["test-staged-feedback-runtime.mjs", "/api/edupi/teacher-feedback", 403],
+  ]) {
+    const source = await readFile(join(root, "scripts", file), "utf8");
+    const start = source.indexOf("/api/desktop/identity");
+    const readiness = source.slice(start, source.indexOf("catch { /* cold start */ }", start));
+    assert.ok(start >= 0 && readiness.includes(route), `${file} must warm ${route}`);
+    assert.match(readiness, new RegExp(`route\\.status === ${status}`));
+  }
+});
+
 test("official releases require Developer ID and notarization before publishing", async () => {
   const workflow = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
   const releaseJob = workflow.slice(workflow.indexOf("\n  release:"), workflow.indexOf("\n  build:"));
