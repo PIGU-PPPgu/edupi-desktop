@@ -3,6 +3,7 @@ import test from "node:test";
 import { validateMacOSStaple } from "./validate-macos-staple.mjs";
 
 const offline = { status: 68, stderr: 'Error Domain=NSURLErrorDomain Code=-1009 "The Internet connection appears to be offline."' };
+const cloudKitConnectionLost = { status: 68, stderr: 'Error Domain=NSURLErrorDomain Code=-1005 "The network connection was lost." NSErrorFailingURLStringKey=https://api.apple-cloudkit.com/database/1/com.apple.gk.ticket-delivery/production/public/records/lookup' };
 function harness(results) {
   const calls = [], waits = [];
   return { calls, waits, options: {
@@ -25,8 +26,27 @@ test("persistent CloudKit failure does not pass after the retry limit", async ()
   assert.equal(waits.length, 2);
 });
 
+test("retries a lost CloudKit ticket-delivery connection and still requires successful validation", async () => {
+  const { calls, waits, options } = harness([cloudKitConnectionLost, { status: 0 }]);
+  await validateMacOSStaple("EduPi.dmg", options);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(waits, [5_000]);
+});
+
+test("persistent lost CloudKit connections fail after the retry limit", async () => {
+  const { calls, waits, options } = harness([cloudKitConnectionLost]);
+  await assert.rejects(validateMacOSStaple("EduPi.dmg", options), /status 68/);
+  assert.equal(calls.length, 3);
+  assert.equal(waits.length, 2);
+});
+
 test("invalid tickets and unrecognized failures are not retried", async () => {
-  for (const result of [{ status: 65, stderr: "The ticket is invalid" }, { status: null, error: new Error("missing xcrun") }]) {
+  for (const result of [
+    { status: 65, stderr: "The ticket is invalid" },
+    { ...cloudKitConnectionLost, status: 65 },
+    { status: 68, stderr: 'Error Domain=NSURLErrorDomain Code=-1005 "The network connection was lost." NSErrorFailingURLStringKey=https://example.com/other' },
+    { status: null, error: new Error("missing xcrun") },
+  ]) {
     const { calls, waits, options } = harness([result]);
     await assert.rejects(validateMacOSStaple("EduPi.app", options), /Staple validation failed/);
     assert.equal(calls.length, 1);
