@@ -2,6 +2,8 @@
 
 2026-10-15 当前发布路线：`.68` 的 Apple 公证轮询因 `-1009` 失败，不能拿未装订 DMG 发布。原分支准备 `.69`：macOS runner 在三平台构建前检查公证服务，DMG 上传后对单一 submission ID 有界查询，原签名/装订/Gatekeeper/同轮资产证明门不降级。先过 PR CI 与签名 Draft，再做安装和更新技术验收后公开；任何一步失败均保持公开 `.56`/feed 不变。详见[发布账本](2026-09-07-signed-updates.md#2026-10-15-v0369-三平台签名候选待验)。
 
+2026-10-15 本地分支清理：清理记录已由 Desktop [#352](https://github.com/PIGU-PPPgu/edupi-desktop/pull/352) 合入 `main`。当前主目录切至最新主线并保持干净；53 条闲置本地分支移入可恢复归档，常用分支由 87 条减至 34 条，原有 35 个工作树保持。分支引用清理没有测得空间释放，也不改变 `.68` Draft 或公开 `.56` 的发布状态。命令、版本、清单和未验证条件见[本地分支清理验收](../acceptance/2026-10-15-local-branch-cleanup.md)。
+
 2026-10-15 历史签名门：Desktop [#350](https://github.com/PIGU-PPPgu/edupi-desktop/pull/350) 已合 `main` `539ada0`，`.68` [三平台 Draft run 38594840857](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38594840857) 中 Windows/Linux 成功，Mac 的签名打包和 updater 公钥检查通过，但 Apple notary 状态轮询报 `-1009`、无网络路由；上传回执不等于公证 `Accepted`，后续装订/替换/最终验证及 `draft-proof` 均未执行。九项资产与 `.67` 不混用，Release 保持 Draft，公开 `.56`/feed 不变。当时连续 Apple 链路失败后暂停新的付费三平台构建；断连横幅、TCC、旧客户端原位升级、真实睡眠、真人质量及 Windows/Linux 完整教师流程仍欠证。[发布账本](2026-09-07-signed-updates.md#2026-10-15-v0368-三平台-draft-失败)。
 
 2026-10-14 历史签名门：Desktop `main` `cc153157` 的 `.67` [三平台 Draft run 38582208711](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38582208711) 中 Windows/Linux 成功，Mac 到 Apple 公证 Accepted、DMG 装订和首次 Gatekeeper 通过；最终重复 CloudKit 票据校验因连接中断 `-1005` 失败，`draft-proof` 跳过，九资产不得当作通过发布。原分支已以先红后绿的回归测试加入该特定票据端点的有界重试，并准备 `.68`；当时仍待 PR CI、全新三平台 Draft 和资产证明。公开 `.56`/feed、真实教师数据不变；断连横幅、TCC、旧客户端原位升级、真实睡眠、真人质量及 Windows/Linux 完整教师流程仍欠证。[发布账本](2026-09-07-signed-updates.md#2026-10-14-v0367-draft-失败v0368-构建前快照)。
@@ -13,6 +15,11 @@
 2026-10-14 历史构建门：`.66` [三平台 Draft run 38539592345](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38539592345) 的 Linux/Windows 成功、Mac Core 根准入已通过，但打包服务首个日程冲突 GET `ECONNRESET`，仍无 Mac 签名、公证或同轮资产证明。原分支提交 `2163fdc4` 让隔离验收等目标只读路由返回预期 403，`.67` 本机按 CI 顺序的四项打包集成通过；生产产品功能/Core pin 不变。唯一公开 `.56`/feed 不变，断连横幅、TCC、旧客户端升级、真实睡眠、真人质量和跨平台完整教师流程仍欠证。[发布账本](2026-09-07-signed-updates.md#2026-10-14-v0367-构建前快照)。
 
 2026-10-14 历史构建门（.65 失败后、.66 构建前）：`.65` [三平台 Draft run 38532458614](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38532458614) 的 Linux/Windows 通过、macOS Core 合成根准入失败，缺 Mac 资产与同轮资产证明，Release 保持 Draft。原分支已用固定 Core `b12b5cb` 对验收夹具改为私有工作区根并增加脱敏根错误码，`.66` 待 PR CI/新三平台构建；未改 Core 写入准入或产品功能。公开 `.56`/feed 不变，断连横幅、TCC、旧客户端升级、真实睡眠、真人质量和跨平台完整教师流程继续欠证。[发布账本](2026-09-07-signed-updates.md#2026-10-14-v0366-三平台签名试用候选待构建)。
+
+## 2026-10-13 本地缓存继续清理
+
+- R14 本地产物清理：本轮验收通过。删除 42 份已结束实验的重复依赖、1 份与安装版相同的旧回退应用及 11 个已合并的闲置 Core 本地分支；删除目录原占用合计 24.53 GiB。`df -k` 回读可用空间 2.72 → 28.67 GiB，净增 25.94 GiB；APFS 与并发项目会影响该差值。详情见 [清理验收](../acceptance/2026-10-13-local-cache-cleanup.md)。
+- 42 个目录的 HEAD、Git 状态、修改及锁文件摘要前后相同，Desktop 35 条和 Core 115 条工作树注册路径保持，两仓库 Git 连通性检查通过。七份安装 checkpoint 的证据和恢复说明、在用及共享依赖、冻结研究依赖保留；安装版 0.3.56 的版本文件、主程序和签名清单摘要保持。持续研究服务仍为 HTTP 200、researching、循环启用。本轮未构建、安装或执行功能验收，产品功能与发布状态不变。
 
 2026-10-12 当前 `.64` 安装验收追补：同一签名三平台 Draft 的 macOS 唯一安装版，在隔离单班数学根内对新合成任务完成后台通知一次领取、一次投递、教师亲点后一次 `opened`，原生 URL 精确进入该任务；发一条本机合成消息后 Core 捕获、Pi 单次落盘，离开重进和真实 App 冷重启均返回原 Session、原消息，没有重发或额外模型调用。旧通知点击只打开工作区、无 `opened`，不追认。冷启动与任务加载时仍两次短暂出现“本地服务已断开”横幅，随后自行恢复；失败瞬间原因未采到，`.64` 保持 Draft。唯一公开 `.56` 已恢复且签名/Gatekeeper/摘要通过，真实教师业务及模型/认证文件逐项未变，本地 `.64` DMG/测试 App 约 1.1 GiB 已清理。TCC/旧客户端原位升级、真睡眠、真人教学质量、Windows/Linux 教师流程及 `teacher_usage` Desktop 接线继续未验。[逐项证据](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-12-v0364-安装版定向通知点击与重启复验)。
 
@@ -27,6 +34,12 @@
 2026-10-11 最新发布门：`.62` 二次签名安装复验发现任务内首次消息未发送、Safe Mode 两个只读入口仍执行第三方扩展，已判为不可发布。`.63` 源码修复、隔离开发服务与最新 Core [#278](https://github.com/PIGU-PPPgu/edupi/pull/278) 精确 pin `6b0f2a2` 的配对通过，仍待 PR/CI、三平台签名 Draft 和新安装版验收；公开 `.56`、唯一安装 App 与七键 feed 已恢复。本机 `.62` 重下载与测试 App 已按用户要求清理。任务续聊重进、TCC/通知、真实睡眠、真人教学质量及完整跨平台安装不据源码测试补勾。[唯一验收](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-11-v0362-二次安装复验发现发布阻断)。
 
 2026-10-11 当前开发门：Core `main` `2ecf3465` 的 R03 静止准入与双组件清单已由 Desktop [#340](https://github.com/PIGU-PPPgu/edupi-desktop/pull/340) 固定到 `.62`；此前 `57093b` 的持久 outbox、Core 肯定捕获后发送 Pi、G2 隔离品牌和 DOCX 待审建议由 [#331](https://github.com/PIGU-PPPgu/edupi-desktop/pull/331) 合入，`.59` 注册消息、`.60` ICS 明确采用、`.61` DOCX 配对分别由 [#332](https://github.com/PIGU-PPPgu/edupi-desktop/pull/332)、[#333](https://github.com/PIGU-PPPgu/edupi-desktop/pull/333)、[#334](https://github.com/PIGU-PPPgu/edupi-desktop/pull/334) 合入。`.58`–`.61` 签名 Draft 未过发布门；`.62` 精确源码 `7848c112` 的三平台签名 Draft 与公证/`draft-proof` 已通过，本机资产摘要/签名/包内 Core 亦核对。此后唯一安装路径实际完成 `.62` 隔离冷启动、单班 G1 合成草稿、四产物、审核与反馈写回，随后 Mac 再次锁屏；续聊、安全模式、TCC/通知、真实睡眠和真人质量未验。已退出测试进程、恢复签名公开 `.56`、删除约 1.1 GiB 本地候选包；`.62` Release/feed 不公开。自然改期/取消只捕获、不静默改写原 Goal，产品审核闭环仍待；双系统完整教师流程、DOCX 重进刷新、主动模式图片材料身份继续缺证，详见[唯一验收](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-11-v0362-macos-安装版部分验收与回退)。
+
+## 2026-10-10 本地构建产物清理
+
+- 状态：验收通过。应用户要求，`AGENTS.md` 已加入本地构建产物用后清理规则；已核对 35 个 Desktop Git 工作树，在 7 个目录中删除 51 个未跟踪、已忽略且无打开文件的生成路径，清理前目录占用合计 54.62 GiB。
+- 磁盘可用空间从 19.24 GiB 增至 66.00 GiB，前后回读净增 46.76 GiB；51 个路径均已不存在，6 个其他工作树 Git 状态保持，主目录只改清理规则和本轮记录。源码、工作树、原有修改、依赖、教师数据、配置和已安装应用保留；未重新构建或打包。版本、环境、范围与命令见 [清理验收](../acceptance/2026-10-10-local-build-cleanup.md)。本轮无合并、发布或升级操作。
+- 用户追加检查旧安装包和临时文件后，继续删除 1 个 v0.3.45 升级临时应用备份、9 份已结束测试副本的重复依赖和 30 个旧 TypeScript 编译缓存，共 40 个路径、占用约 3.28 GiB；本次磁盘可用空间回读 64.41 → 67.76 GiB。9 个源码与记录目录共 3,925 个文件摘要保持，安装版 v0.3.56 的版本文件和主程序摘要保持，30 个工作树 Git 状态保持。105 个 Core 工作树无额外遗留构建目录；本地安装包搜索只命中两份报名材料压缩包，均保留；今日生成的 1 个缓存及 iCloud 笔记内容保留。状态仍为验收通过，详见同一份清理验收的继续清理记录。
 
 2026-10-10 历史 `.57` 失败记录：Desktop #330 已合 `main` `7faa74fd`，但 `.57` 三平台 Draft [run 37987228603](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/37987228603) 全部在私有 Core checkout HTTPS 403 停止，Release `408319110` 为 Draft/0 资产；签名、公证、安装及 feed 都未发生。当时要求更新新 Core 仓库只读凭据并重试；该行动已由上方新 pin 状态取代。公开 `.56` 与已安装应用保持，详见[唯一验收](../acceptance/2026-10-05-pi1-a1-risk-verification.md#2026-10-10-v0357-draft-私有-core-检出阻塞)。
 
