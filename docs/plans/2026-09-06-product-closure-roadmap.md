@@ -1,6 +1,8 @@
 # EduPi 产品闭环 PR 路线图
 
-2026-10-15 当前签名门：Desktop [#350](https://github.com/PIGU-PPPgu/edupi-desktop/pull/350) 已合 `main` `539ada0`，`.68` [三平台 Draft run 38594840857](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38594840857) 中 Windows/Linux 成功，Mac 的签名打包和 updater 公钥检查通过，但 Apple notary 状态轮询报 `-1009`、无网络路由；上传回执不等于公证 `Accepted`，后续装订/替换/最终验证及 `draft-proof` 均未执行。九项资产与 `.67` 不混用，Release 保持 Draft，公开 `.56`/feed 不变。连续 Apple 链路失败后暂停新的付费三平台构建；断连横幅、TCC、旧客户端原位升级、真实睡眠、真人质量及 Windows/Linux 完整教师流程仍欠证。[发布账本](2026-09-07-signed-updates.md#2026-10-15-v0368-三平台-draft-失败)。
+2026-10-15 当前发布路线：`.68` 的 Apple 公证轮询因 `-1009` 失败，不能拿未装订 DMG 发布。原分支准备 `.69`：macOS runner 在三平台构建前检查公证服务，DMG 上传后对单一 submission ID 有界查询，原签名/装订/Gatekeeper/同轮资产证明门不降级。先过 PR CI 与签名 Draft，再做安装和更新技术验收后公开；任何一步失败均保持公开 `.56`/feed 不变。详见[发布账本](2026-09-07-signed-updates.md#2026-10-15-v0369-三平台签名候选待验)。
+
+2026-10-15 历史签名门：Desktop [#350](https://github.com/PIGU-PPPgu/edupi-desktop/pull/350) 已合 `main` `539ada0`，`.68` [三平台 Draft run 38594840857](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38594840857) 中 Windows/Linux 成功，Mac 的签名打包和 updater 公钥检查通过，但 Apple notary 状态轮询报 `-1009`、无网络路由；上传回执不等于公证 `Accepted`，后续装订/替换/最终验证及 `draft-proof` 均未执行。九项资产与 `.67` 不混用，Release 保持 Draft，公开 `.56`/feed 不变。当时连续 Apple 链路失败后暂停新的付费三平台构建；断连横幅、TCC、旧客户端原位升级、真实睡眠、真人质量及 Windows/Linux 完整教师流程仍欠证。[发布账本](2026-09-07-signed-updates.md#2026-10-15-v0368-三平台-draft-失败)。
 
 2026-10-14 历史签名门：Desktop `main` `cc153157` 的 `.67` [三平台 Draft run 38582208711](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38582208711) 中 Windows/Linux 成功，Mac 到 Apple 公证 Accepted、DMG 装订和首次 Gatekeeper 通过；最终重复 CloudKit 票据校验因连接中断 `-1005` 失败，`draft-proof` 跳过，九资产不得当作通过发布。原分支已以先红后绿的回归测试加入该特定票据端点的有界重试，并准备 `.68`；当时仍待 PR CI、全新三平台 Draft 和资产证明。公开 `.56`/feed、真实教师数据不变；断连横幅、TCC、旧客户端原位升级、真实睡眠、真人质量及 Windows/Linux 完整教师流程仍欠证。[发布账本](2026-09-07-signed-updates.md#2026-10-14-v0367-draft-失败v0368-构建前快照)。
 

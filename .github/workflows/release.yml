@@ -29,7 +29,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  notary-preflight:
+    if: inputs.phase == 'draft' && (inputs.platform == 'all' || inputs.platform == 'macos')
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - name: Check Apple notary status route before packaging
+        shell: bash
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$NOTARY_APPLE_ID"
+          test -n "$NOTARY_PASSWORD"
+          test -n "$NOTARY_TEAM_ID"
+          xcrun notarytool history \
+            --apple-id "$NOTARY_APPLE_ID" \
+            --password "$NOTARY_PASSWORD" \
+            --team-id "$NOTARY_TEAM_ID" \
+            --output-format json > /dev/null
+
   release:
+    needs: notary-preflight
+    if: ${{ always() && !cancelled() && (inputs.phase == 'publish' || inputs.platform == 'windows' || inputs.platform == 'linux' || needs.notary-preflight.result == 'success') }}
     runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.release.outputs.release_id }}
@@ -116,6 +140,7 @@ jobs:
       matrix:
         target: ${{ fromJSON(inputs.platform == 'linux' && '["x86_64-unknown-linux-gnu"]' || inputs.platform == 'windows' && '["x86_64-pc-windows-msvc"]' || inputs.platform == 'macos' && '["aarch64-apple-darwin"]' || '["aarch64-apple-darwin","x86_64-unknown-linux-gnu","x86_64-pc-windows-msvc"]') }}
     runs-on: ${{ matrix.target == 'aarch64-apple-darwin' && 'macos-15' || matrix.target == 'x86_64-pc-windows-msvc' && 'windows-latest' || 'ubuntu-24.04' }}
+    timeout-minutes: 120
     steps:
       - name: Check out EduPi Desktop
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -411,11 +436,7 @@ jobs:
           shopt -s nullglob
           dmgs=(src-tauri/target/${{ matrix.target }}/release/bundle/dmg/EduPi_*.dmg)
           test "${#dmgs[@]}" -eq 1
-          xcrun notarytool submit "${dmgs[0]}" \
-            --apple-id "$NOTARY_APPLE_ID" \
-            --password "$NOTARY_PASSWORD" \
-            --team-id "$NOTARY_TEAM_ID" \
-            --wait
+          node scripts/notarize-macos-dmg.mjs "${dmgs[0]}"
           xcrun stapler staple "${dmgs[0]}"
           node scripts/validate-macos-staple.mjs "${dmgs[0]}"
           spctl --assess --type open --context context:primary-signature --verbose=2 "${dmgs[0]}"
@@ -676,7 +697,7 @@ jobs:
   # v0.1.3 builds failed on Windows without anyone noticing, and the release was
   # published by hand with macOS artifacts only and no component manifest.
   notify:
-    needs: [release, build, draft-proof, manifest]
+    needs: [notary-preflight, release, build, draft-proof, manifest]
     if: failure()
     runs-on: ubuntu-latest
     permissions:

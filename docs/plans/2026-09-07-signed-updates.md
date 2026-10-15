@@ -1,5 +1,10 @@
 # 自动下载安装
 
+## 2026-10-15 v0.3.69 三平台签名候选待验
+
+- `.68` Mac 签名包上传后，Apple 公证状态轮询出现 `-1009`；无 `Accepted`、装订、最终验证或同轮资产证明。原分支为 `.69` 增加 macOS runner 的公证服务预检，预检不通时不启动三平台打包；提交 DMG 后保存一次 submission ID，对 `In Progress` 和已观察到的 Apple 状态端点短暂断线有界查询，最多 80 次，每次间隔 15 秒，不重传未知结果。`Invalid`、身份不符、非 Apple 端点、超时及持久故障仍失败；装订、签名、Gatekeeper 和原同轮资产证明门均保留。
+- 本轮仍固定 Core `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`，不改教师业务接口、真实数据根、公开 `.56` 安装或 feed。源码 PR、CI、签名 Draft、九资产指纹、Mac 公证及安装/更新技术验收必须分别记录实际结果；版本准备和脚本单测不等于发布。若 Apple 预检失败，记录后停在无新资产状态，不再触发重复付费构建。
+
 ## 2026-10-15 v0.3.68 三平台 Draft 失败
 
 - Desktop [#350](https://github.com/PIGU-PPPgu/edupi-desktop/pull/350) 的应用检查与 Rust 安全审计在 [CI 38593848793](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38593848793) 通过，合并源码为 `539ada017961d03da096bb56c2a8ae260dff2493`，Core 固定 `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`。[三平台 Draft run 38594840857 attempt 1](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38594840857) 的 Windows/Linux 完成并通过，Mac 的配对 Core、打包集成、签名、打包运行时和 updater 公钥检查均通过。
