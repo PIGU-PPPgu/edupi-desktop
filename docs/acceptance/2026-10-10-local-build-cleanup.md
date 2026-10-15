@@ -41,13 +41,13 @@
 
 | 工作目录 | HEAD | 清理前目录占用 |
 | --- | --- | ---: |
-| `/Users/iguppp/.openclaw/workspace/edupi-desktop` | `9ff46e58e2ad` | 5.44 GiB |
-| `/Users/iguppp/.codex/worktrees/desktop-l4-exact-grants-20261008/edupi-desktop` | `a2cac63530e7` | 9.76 GiB |
-| `/Users/iguppp/.codex/worktrees/edupi-l4-worker-closure-preview` | `01e86c119724` | 6.18 GiB |
-| `/Users/iguppp/.openclaw/workspace/edupi-desktop-worktrees/desktop-l4-combo-20261008` | `0512454a93e2` | 5.32 GiB |
-| `/Users/iguppp/.openclaw/workspace/edupi-desktop-worktrees/desktop-l4-integrated-pin-20261009` | `5e5cafd9fe40` | 5.36 GiB |
-| `/Users/iguppp/.openclaw/workspace/edupi-desktop-worktrees/desktop-six-domain-routing-20261008` | `a8bc819f1cab` | 9.17 GiB |
-| `/Users/iguppp/.openclaw/workspace/edupi-desktop-worktrees/route1-core-a8fe471` | `ada91666cbb5` | 13.40 GiB |
+| 主目录 `edupi-desktop` | `9ff46e58e2ad` | 5.44 GiB |
+| Codex 工作树 `desktop-l4-exact-grants-20261008/edupi-desktop` | `a2cac63530e7` | 9.76 GiB |
+| Codex 工作树 `edupi-l4-worker-closure-preview` | `01e86c119724` | 6.18 GiB |
+| Desktop 工作树 `desktop-l4-combo-20261008` | `0512454a93e2` | 5.32 GiB |
+| Desktop 工作树 `desktop-l4-integrated-pin-20261009` | `5e5cafd9fe40` | 5.36 GiB |
+| Desktop 工作树 `desktop-six-domain-routing-20261008` | `a8bc819f1cab` | 9.17 GiB |
+| Desktop 工作树 `route1-core-a8fe471` | `ada91666cbb5` | 13.40 GiB |
 
 删除目录包括 7 份 `.next-desktop/`、7 份 `src-tauri/target/`、7 份 `src-tauri/gen/`，以及这 7 个目录中生成的 `src-tauri/resources/Pi Agent Server.app/`、`server/`、`edupi-core/`、`open-connector/`；主目录与 `route1-core-a8fe471` 的 `.next/` 也已删除。运行进程未占用这些路径。
 

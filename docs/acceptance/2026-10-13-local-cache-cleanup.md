@@ -8,7 +8,7 @@
 
 删除 42 份 `node_modules/`，清理前占用合计 23.75 GiB。每份均核对 Git 忽略规则、无跟踪文件、锁文件存在，删除前重新检查进程工作目录、打开文件和命令中的路径引用。各目录的 HEAD、Git 状态摘要、相对 HEAD 的修改摘要及锁文件摘要前后相同。
 
-删除 `/Users/iguppp/edupi-install-checkpoints/v0.3.58/rollback/EduPi-public-056.app`，占用 0.78 GiB。删除前核对其 `Info.plist`、主程序及 `CodeResources` 与 `/Applications/EduPi.app` 的摘要完全相同，且无进程使用。安装版仍为 0.3.56，三个文件摘要保持；v0.3.58 至 v0.3.64 的七份 `evidence/` 与 `RESUME.md` 保留。
+删除私有安装检查点 `v0.3.58/rollback/EduPi-public-056.app`，占用 0.78 GiB。删除前核对其 `Info.plist`、主程序及 `CodeResources` 与 `/Applications/EduPi.app` 的摘要完全相同，且无进程使用。安装版仍为 0.3.56，三个文件摘要保持；v0.3.58 至 v0.3.64 的七份 `evidence/` 与 `RESUME.md` 保留。
 
 刷新两个仓库的 `origin` 后，删除 11 个已合入 Core `origin/main`、未被工作树占用的本地分支及其旧跟踪配置。每个分支按预期提交进行引用删除，并在删除后再次证明该提交是主线祖先。研究用分支保留。
 
@@ -26,7 +26,7 @@
 | `git fsck --connectivity-only --no-dangling` | 两个仓库连通性正常 | 均退出 0，无错误 |
 | 持续研究服务 `GET /api/status` | 清理不影响正在运行的服务 | HTTP 200、`researching`、循环启用，第 116 轮 |
 
-完整清单、分支提交、保护目录、前后摘要及原始空间读数保存在 `/Users/iguppp/.codex/logs/edupi-cleanup-20261013/`，汇总为 `summary.json`。本轮仅新增本文并在原路线图记录结果，已有改动保留。
+完整清单、分支提交、保护目录、前后摘要及原始空间读数保存在本机私有审计目录 `edupi-cleanup-20261013`，汇总为 `summary.json`。本轮仅新增本文并在原路线图记录结果，已有改动保留。
 
 ## 保留与未验证
 

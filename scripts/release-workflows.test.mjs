@@ -100,7 +100,7 @@ test("official releases require Developer ID and notarization before publishing"
   }
   assert.doesNotMatch(buildJob, /APPLE_SIGNING_IDENTITY=-|ad-hoc signed/);
   assert.match(buildJob, /node scripts\/validate-macos-staple\.mjs "\$app_path"/);
-  assert.match(buildJob, /xcrun notarytool submit "\$\{dmgs\[0\]\}"/);
+  assert.match(buildJob, /node scripts\/notarize-macos-dmg\.mjs "\$\{dmgs\[0\]\}"/);
   assert.match(buildJob, /xcrun stapler staple "\$\{dmgs\[0\]\}"/);
   assert.match(buildJob, /node scripts\/validate-macos-staple\.mjs "\$\{dmgs\[0\]\}"/);
   assert.match(buildJob, /spctl --assess --type open --context context:primary-signature/);
@@ -113,6 +113,22 @@ test("official releases require Developer ID and notarization before publishing"
   assert.match(buildJob, /codesign --verify --verbose=2 "\$\{dmgs\[0\]\}"/);
   assert.match(buildJob, /spctl --assess/);
   assert.ok(buildJob.indexOf("node scripts/validate-macos-staple.mjs") > buildJob.indexOf("name: Build, sign, and upload updater artifacts"));
+});
+
+test("the draft checks Apple's notary route before starting three paid builders", async () => {
+  const workflow = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+  const preflight = workflow.slice(workflow.indexOf("\n  notary-preflight:"), workflow.indexOf("\n  release:"));
+  const releaseJob = workflow.slice(workflow.indexOf("\n  release:"), workflow.indexOf("\n  build:"));
+  assert.match(preflight, /runs-on: macos-15/);
+  assert.match(preflight, /inputs\.platform == 'all' \|\| inputs\.platform == 'macos'/);
+  for (const credential of ["NOTARY_APPLE_ID", "NOTARY_PASSWORD", "NOTARY_TEAM_ID"]) {
+    assert.match(preflight, new RegExp(`test -n "\\$${credential}"`));
+  }
+  assert.match(preflight, /xcrun notarytool history/);
+  assert.match(releaseJob, /needs: notary-preflight/);
+  assert.match(releaseJob, /needs\.notary-preflight\.result == 'success'/);
+  assert.match(releaseJob, /inputs\.phase == 'publish'/);
+  assert.match(releaseJob, /inputs\.platform == 'windows' \|\| inputs\.platform == 'linux'/);
 });
 
 test("every release platform starts the staged server before uploading", async () => {
@@ -264,7 +280,7 @@ test("a failed release build is reported instead of failing silently", async () 
   assert.match(workflow, /if: failure\(\)/);
   assert.match(workflow, /gh issue create/);
   assert.match(workflow, /release-failure/);
-  assert.match(workflow, /needs: \[release, build, draft-proof, manifest\]/);
+  assert.match(workflow, /needs: \[notary-preflight, release, build, draft-proof, manifest\]/);
 });
 
 test("signed draft builds and manifest publication require separate dispatches", async () => {
