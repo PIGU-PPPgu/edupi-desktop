@@ -58,6 +58,18 @@ try {
 $assets = @($release.assets | Where-Object { $_.name -match '_x64-setup\.exe$' })
 if ($release.draft -or $release.prerelease -or $release.tag_name -ne $tag) { throw "Expected a published stable release" }
 if ($assets.Count -ne 1) { throw "Expected one x64 NSIS installer" }
+$publishedSource = $env:EDUPI_PUBLISHED_SOURCE_DIR
+if ([string]::IsNullOrWhiteSpace($publishedSource) -or
+    ![System.IO.Path]::IsPathFullyQualified($publishedSource) -or !(Test-Path $publishedSource -PathType Container)) {
+    throw "Published source checkout is missing"
+}
+$sourceCommit = [string](& git -C $publishedSource rev-parse HEAD)
+if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[a-f0-9]{40}$' -or
+    ($release.target_commitish -match '^[a-f0-9]{40}$' -and $sourceCommit -ne $release.target_commitish)) {
+    throw "Published source checkout differs from the release target"
+}
+$compatPath = Join-Path $publishedSource "contracts/edupi-core-compat.json"
+if (!(Test-Path $compatPath -PathType Leaf)) { throw "Published source contract is missing" }
 $installerName = [string]$assets[0].name
 if ($installerName -notmatch '^EduPi_\d+\.\d+\.\d+_x64-setup\.exe$' -or
     $assets[0].digest -notmatch '^sha256:[a-f0-9]{64}$' -or [long]$assets[0].size -le 0) {
@@ -174,9 +186,11 @@ try {
 # the exact public installer instead of treating normal-mode Core refusal as a
 # failed installation or weakening the native admission boundary.
 $env:EDUPI_PREVIEW_INSTALLER_DIR = $testDir
+$env:EDUPI_PREVIEW_COMPAT_PATH = $compatPath
 try {
     & (Join-Path $PSScriptRoot "test-windows-route1-preview.ps1")
 } finally {
     Remove-Item Env:EDUPI_PREVIEW_INSTALLER_DIR -ErrorAction SilentlyContinue
+    Remove-Item Env:EDUPI_PREVIEW_COMPAT_PATH -ErrorAction SilentlyContinue
 }
 Write-Output "Verified ${tag}: public installer digest, normal shell, single instance, native refusal, and isolated Safe Mode Core readiness."

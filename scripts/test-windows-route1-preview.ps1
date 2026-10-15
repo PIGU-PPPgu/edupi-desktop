@@ -45,7 +45,8 @@ $coreRoot = Join-Path $resources "edupi-core"
 foreach ($required in @($executable, $bundledNode, (Join-Path $coreRoot "scripts/core_runtime_root.mjs"))) {
     if (!(Test-Path $required)) { throw "Installed preview resource missing: $([System.IO.Path]::GetFileName($required))" }
 }
-$compat = Get-Content "contracts/edupi-core-compat.json" -Raw | ConvertFrom-Json
+$compatPath = if ($env:EDUPI_PREVIEW_COMPAT_PATH) { $env:EDUPI_PREVIEW_COMPAT_PATH } else { "contracts/edupi-core-compat.json" }
+$compat = Get-Content $compatPath -Raw | ConvertFrom-Json
 $desktopManifest = Get-Content (Join-Path $coreRoot "contracts/edupi-desktop-component-manifest.json") -Raw | ConvertFrom-Json
 $runtimeManifest = Get-Content (Join-Path $coreRoot "contracts/edupi-core-runtime-component-manifest.json") -Raw | ConvertFrom-Json
 if ($desktopManifest.component_manifest_hash -ne $compat.core_runtime.component_manifest_hash -or

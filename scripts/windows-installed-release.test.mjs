@@ -6,6 +6,8 @@ import test from "node:test";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const source = await readFile(join(root, "scripts", "test-windows-installed-release.ps1"), "utf8");
+const workflow = await readFile(join(root, ".github", "workflows", "windows-build-debug.yml"), "utf8");
+const canary = await readFile(join(root, "scripts", "test-windows-route1-preview.ps1"), "utf8");
 
 test("published Windows install reuses an installer-started process and captures bounded crash evidence", () => {
   assert.match(source, /Get-Process -Name "pi-agent-desktop"/);
@@ -28,6 +30,12 @@ test("published Windows smoke keeps native Core admission closed and checks the 
   assert.doesNotMatch(source, /^\s*\$home\s*=/imu);
   assert.doesNotMatch(source, /Invoke-WebRequest[^\n]*api\/edupi\/workspace/u);
   assert.match(source, /EDUPI_PREVIEW_INSTALLER_DIR = \$testDir/u);
+  assert.match(source, /EDUPI_PREVIEW_COMPAT_PATH = \$compatPath/u);
+  assert.match(source, /\$sourceCommit -ne \$release\.target_commitish/u);
+  assert.match(canary, /EDUPI_PREVIEW_COMPAT_PATH/u);
+  assert.match(workflow, /ref: \$\{\{ inputs\.tag \}\}/u);
+  assert.match(workflow, /timeout-minutes: 15/u);
+  assert.match(workflow, /Join-Path \$publishedSource "src-tauri\/Cargo\.toml"/u);
   assert.match(source, /test-windows-route1-preview\.ps1/u);
   assert.ok(source.indexOf("test-windows-route1-preview.ps1") > source.indexOf("System32/taskkill.exe"),
     "the normal-mode process must stop before the isolated Safe Mode canary");

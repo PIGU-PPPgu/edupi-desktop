@@ -46,15 +46,22 @@ permissions:
 jobs:
   published-install:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          persist-credentials: false
+      - name: Check out published release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.tag }}
+          path: published-source
           persist-credentials: false
       - name: Install and start published application
         shell: pwsh
         env:
           EDUPI_TEST_RELEASE: ${{ inputs.tag }}
+          EDUPI_PUBLISHED_SOURCE_DIR: ${{ github.workspace }}/published-source
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/test-windows-installed-release.ps1
       - name: Check native source with public resource fixture
@@ -62,9 +69,10 @@ jobs:
         run: |
           $fixture = Join-Path $env:RUNNER_TEMP "edupi-install-check/application/resources"
           if (!(Test-Path $fixture)) { throw "Published resource fixture missing" }
-          Copy-Item (Join-Path $fixture "*") -Destination ./src-tauri/resources -Recurse -Force
-          $env:TAURI_CONFIG = Get-Content ./src-tauri/tauri.windows.conf.json -Raw
-          cargo check --manifest-path src-tauri/Cargo.toml --lib --locked
+          $publishedSource = Join-Path $env:GITHUB_WORKSPACE "published-source"
+          Copy-Item (Join-Path $fixture "*") -Destination (Join-Path $publishedSource "src-tauri/resources") -Recurse -Force
+          $env:TAURI_CONFIG = Get-Content (Join-Path $publishedSource "src-tauri/tauri.windows.conf.json") -Raw
+          cargo check --manifest-path (Join-Path $publishedSource "src-tauri/Cargo.toml") --lib --locked
   diagnose:
     if: ${{ !inputs.native_only }}
     runs-on: windows-latest
