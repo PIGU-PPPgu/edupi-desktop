@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { createJiti } from "jiti";
+import { fetchStagedGetAfterReset } from "./staged-read-retry.mjs";
 
 const desktopRoot = path.resolve(new URL("..", import.meta.url).pathname);
 const staged = process.env.EDUPI_UPLOADED_CALENDAR_E2_STAGED === "1";
@@ -85,7 +86,7 @@ async function startStagedServer() {
     if (!await Promise.race([exited.then(() => true), new Promise((resolve) => setTimeout(() => resolve(false), 3000))])) throw new Error("staged server did not exit");
   };
   try {
-    const deadline = Date.now() + 45_000;
+    const deadline = Date.now() + 90_000;
     while (Date.now() < deadline) {
       if (child.exitCode !== null) throw new Error(`staged server exited: ${logs}`);
       try {
@@ -94,7 +95,14 @@ async function startStagedServer() {
           const route = await fetch(`${url}/api/edupi/materials/staging`, {
             headers: { origin: url }, signal: AbortSignal.timeout(5000),
           });
-          if (route.status === 403) return { url, stop };
+          await route.arrayBuffer();
+          if (route.status === 403) {
+            const educationRead = await fetchStagedGetAfterReset(`${url}/api/edupi/education`, {
+              origin: url, "x-pi-desktop-token": token,
+            });
+            await educationRead.arrayBuffer();
+            if (educationRead.status === 200) return { url, stop };
+          }
         }
       } catch { /* cold start */ }
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -171,12 +179,12 @@ try {
   };
   const education = async () => {
     const request = new Request(`${baseUrl()}/api/edupi/education`, { headers: headers() });
-    const response = stagedServer ? await fetch(request, { signal: AbortSignal.timeout(15_000) }) : await educationRoute.GET();
+    const response = stagedServer ? await fetchStagedGetAfterReset(request.url, headers()) : await educationRoute.GET();
     return { response, body: await response.json() };
   };
   const listSources = async () => {
     const request = new Request(`${baseUrl()}/api/edupi/calendar-sources`, { headers: headers() });
-    const response = stagedServer ? await fetch(request, { signal: AbortSignal.timeout(15_000) }) : await sourceRoute.GET(request);
+    const response = stagedServer ? await fetchStagedGetAfterReset(request.url, headers()) : await sourceRoute.GET(request);
     return { response, body: await response.json() };
   };
   const manual = await intakeManualOccurrence();

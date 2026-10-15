@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import net from "node:net";
 import { spawn } from "node:child_process";
+import { fetchStagedGetAfterReset } from "./staged-read-retry.mjs";
 
 const root = path.resolve(new URL("..", import.meta.url).pathname);
 const resources = path.resolve(process.env.EDUPI_STAGED_RESOURCES || path.join(root, "src-tauri/resources"));
@@ -114,12 +115,15 @@ async function stop() {
 }
 
 async function jsonFetch(url, init) {
-  const response = await fetch(`${baseUrl}${url}`, { ...init, headers: { ...init?.headers, "x-pi-desktop-token": desktopToken }, signal: AbortSignal.timeout(15_000) });
+  const headers = { ...init?.headers, "x-pi-desktop-token": desktopToken };
+  const response = init?.method === "GET"
+    ? await fetchStagedGetAfterReset(`${baseUrl}${url}`, headers)
+    : await fetch(`${baseUrl}${url}`, { ...init, headers, signal: AbortSignal.timeout(15_000) });
   return { response, body: await response.json() };
 }
 
 try {
-  const readyDeadline = Date.now() + 45_000;
+  const readyDeadline = Date.now() + 90_000;
   let ready = false;
   while (Date.now() < readyDeadline) {
     if (child.exitCode !== null) throw new Error(`staged server exited: ${logs.slice(-4000)}`);
@@ -127,7 +131,14 @@ try {
       const identity = await fetch(`${baseUrl}/api/desktop/identity`, { signal: AbortSignal.timeout(2000) });
       if (identity.status === 204) {
         const route = await fetch(`${baseUrl}/api/edupi/teacher-feedback`, { signal: AbortSignal.timeout(5000) });
-        if (route.status === 403) { ready = true; break; }
+        await route.arrayBuffer();
+        if (route.status === 403) {
+          const authorized = await fetchStagedGetAfterReset(`${baseUrl}/api/edupi/teacher-feedback`, {
+            "x-pi-desktop-token": desktopToken,
+          });
+          await authorized.arrayBuffer();
+          if ([200, 409, 503].includes(authorized.status)) { ready = true; break; }
+        }
       }
     } catch { /* cold start */ }
     await new Promise((resolve) => setTimeout(resolve, 200));

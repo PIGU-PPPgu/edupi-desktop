@@ -89,6 +89,29 @@ test("each remaining staged macOS test warms its first business route", async ()
   }
 });
 
+test("staged occurrence and uploaded-calendar reads warm authenticated Core after each restart", async () => {
+  for (const [file, readRoute] of [
+    ["test-edupi-schedule-occurrence-e2.mjs", "/api/edupi/education"],
+    ["test-edupi-uploaded-calendar-e2.mjs", "/api/edupi/education"],
+  ]) {
+    const source = await readFile(join(root, "scripts", file), "utf8");
+    const start = source.indexOf("async function startStagedServer");
+    const readiness = source.slice(start, source.indexOf("\ntry {", start));
+    assert.ok(start >= 0 && readiness.includes(readRoute), `${file} must warm ${readRoute}`);
+    assert.match(readiness, /"x-pi-desktop-token"/u);
+    assert.match(readiness, /await .*\.arrayBuffer\(\)/u);
+    assert.match(source, /fetchStagedGetAfterReset/u);
+  }
+});
+
+test("staged feedback initializes Core with a read before its first authorized write", async () => {
+  const source = await readFile(join(root, "scripts", "test-staged-feedback-runtime.mjs"), "utf8");
+  const readiness = source.slice(source.indexOf("const readyDeadline"), source.indexOf("const bootstrap"));
+  assert.match(readiness, /"x-pi-desktop-token": desktopToken/u);
+  assert.match(readiness, /await .*\.arrayBuffer\(\)/u);
+  assert.match(source, /fetchStagedGetAfterReset/u);
+});
+
 test("official releases require Developer ID and notarization before publishing", async () => {
   const workflow = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
   const releaseJob = workflow.slice(workflow.indexOf("\n  release:"), workflow.indexOf("\n  build:"));

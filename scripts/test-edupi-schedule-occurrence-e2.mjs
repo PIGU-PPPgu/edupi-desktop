@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { createJiti } from "jiti";
+import { fetchStagedGetAfterReset } from "./staged-read-retry.mjs";
 
 const desktopRoot = path.resolve(new URL("..", import.meta.url).pathname);
 const staged = process.env.EDUPI_OCCURRENCE_E2_STAGED === "1";
@@ -55,6 +56,12 @@ async function startStagedServer() {
   let logs = "";
   child.stdout.on("data", (chunk) => { logs = (logs + chunk.toString("utf8")).slice(-5000); });
   child.stderr.on("data", (chunk) => { logs = (logs + chunk.toString("utf8")).slice(-5000); });
+  const diagnostics = () => ({
+    exitCode: child.exitCode,
+    signalCode: child.signalCode,
+    logTailSha256: crypto.createHash("sha256").update(logs.slice(-1500)).digest("hex"),
+    errorCodes: [...new Set(logs.slice(-1500).match(/\b(?:ECONNRESET|EADDRINUSE|EACCES|EPIPE|ERR_[A-Z0-9_]+)\b/gu) || [])],
+  });
   const exited = new Promise((resolve) => child.once("exit", resolve));
   const stop = async () => {
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
@@ -63,9 +70,9 @@ async function startStagedServer() {
     if (!await Promise.race([exited.then(() => true), new Promise((resolve) => setTimeout(() => resolve(false), 3000))])) throw new Error("staged server did not exit");
   };
   try {
-    const deadline = Date.now() + 45_000;
+    const deadline = Date.now() + 90_000;
     while (Date.now() < deadline) {
-      if (child.exitCode !== null) throw new Error(`staged server exited: ${logs}`);
+      if (child.exitCode !== null) throw new Error(`staged server exited: ${JSON.stringify(diagnostics())}`);
       try {
         const identity = await fetch(`${url}/api/desktop/identity`, { signal: AbortSignal.timeout(2000) });
         if (identity.status === 204) {
@@ -74,19 +81,19 @@ async function startStagedServer() {
             method: "POST", headers: { origin: url, "content-type": "application/json" },
             body: "{}", signal: AbortSignal.timeout(5000),
           });
-          if (route.status === 400) return {
-            url, stop, diagnostics: () => ({
-              exitCode: child.exitCode,
-              signalCode: child.signalCode,
-              logTailSha256: crypto.createHash("sha256").update(logs.slice(-1500)).digest("hex"),
-              errorCodes: [...new Set(logs.slice(-1500).match(/\b(?:ECONNRESET|EADDRINUSE|EACCES|EPIPE|ERR_[A-Z0-9_]+)\b/gu) || [])],
-            }),
-          };
+          await route.arrayBuffer();
+          if (route.status === 400) {
+            const educationRead = await fetchStagedGetAfterReset(`${url}/api/edupi/education`, {
+              origin: url, "x-pi-desktop-token": token,
+            });
+            await educationRead.arrayBuffer();
+            if (educationRead.status === 200) return { url, stop, diagnostics };
+          }
         }
       } catch { /* cold start */ }
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
-    throw new Error(`staged server not ready: ${logs}`);
+    throw new Error(`staged server not ready: ${JSON.stringify(diagnostics())}`);
   } catch (error) { await stop(); throw error; }
 }
 
@@ -109,13 +116,13 @@ try {
   };
   const education = async () => {
     const response = stagedServer
-      ? await fetch(`${baseUrl()}/api/edupi/education`, { headers: desktopHeaders(), signal: AbortSignal.timeout(15000) })
+      ? await fetchStagedGetAfterReset(`${baseUrl()}/api/edupi/education`, desktopHeaders())
       : await educationRoute.GET();
     return { response, body: await response.json() };
   };
   const conflicts = async () => {
     const response = stagedServer
-      ? await fetch(`${baseUrl()}/api/edupi/schedule-conflicts?limit=50`, { headers: desktopHeaders(), signal: AbortSignal.timeout(15000) })
+      ? await fetchStagedGetAfterReset(`${baseUrl()}/api/edupi/schedule-conflicts?limit=50`, desktopHeaders())
       : await conflictRoute.GET(new Request(`${baseUrl()}/api/edupi/schedule-conflicts?limit=50`, { headers: desktopHeaders() }));
     return { response, body: await response.json() };
   };
