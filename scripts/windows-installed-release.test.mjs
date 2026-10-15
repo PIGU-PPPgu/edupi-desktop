@@ -25,6 +25,9 @@ test("published Windows smoke keeps native Core admission closed and checks the 
   assert.match(source, /\$release\.draft -or \$release\.prerelease/u);
   assert.match(source, /Get-FileHash \$installer -Algorithm SHA256/u);
   assert.match(source, /\$assets\[0\]\.digest/u);
+  assert.match(source, /\$testDir "\/inheritance:r"/u);
+  assert.match(source, /EDUPI_PUBLISHED_INSTALL_DIR=\$destination/u);
+  assert.match(workflow, /Join-Path \$env:EDUPI_PUBLISHED_INSTALL_DIR "resources"/u);
   assert.match(source, /api\/desktop\/identity/u);
   assert.match(source, /api\/home/u);
   assert.doesNotMatch(source, /^\s*\$home\s*=/imu);

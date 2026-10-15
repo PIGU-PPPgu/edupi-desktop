@@ -75,8 +75,11 @@ if ($installerName -notmatch '^EduPi_\d+\.\d+\.\d+_x64-setup\.exe$' -or
     $assets[0].digest -notmatch '^sha256:[a-f0-9]{64}$' -or [long]$assets[0].size -le 0) {
     throw "Published Windows installer identity is invalid"
 }
-$testDir = Join-Path $env:RUNNER_TEMP "edupi-install-check"
-New-Item -ItemType Directory -Force -Path $testDir | Out-Null
+$testDir = Join-Path $env:USERPROFILE "edupi-route1-published-$([guid]::NewGuid().ToString('N'))"
+New-Item -ItemType Directory -Path $testDir | Out-Null
+$sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+& (Join-Path $env:SystemRoot "System32/icacls.exe") $testDir "/inheritance:r" "/grant:r" "*${sid}:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Published installation root ACL setup failed" }
 $installer = Join-Path $testDir $installerName
 $destination = Join-Path $testDir "application"
 Invoke-WebRequest $assets[0].browser_download_url -OutFile $installer
@@ -194,3 +197,6 @@ try {
     Remove-Item Env:EDUPI_PREVIEW_COMPAT_PATH -ErrorAction SilentlyContinue
 }
 Write-Output "Verified ${tag}: public installer digest, normal shell, single instance, native refusal, and isolated Safe Mode Core readiness."
+if ($env:GITHUB_ENV) {
+    Add-Content -LiteralPath $env:GITHUB_ENV -Value "EDUPI_PUBLISHED_INSTALL_DIR=$destination"
+}
