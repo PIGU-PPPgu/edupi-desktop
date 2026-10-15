@@ -47,6 +47,8 @@ function Write-LaunchDiagnostics([datetime]$Since, [string]$TestDir) {
 
 $tag = $env:EDUPI_TEST_RELEASE
 if ($tag -notmatch '^v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') { throw "Invalid release tag" }
+$versionParts = [regex]::Match($tag, '^v(\d+)\.(\d+)\.(\d+)')
+$releaseVersion = [version]::new([int]$versionParts.Groups[1].Value, [int]$versionParts.Groups[2].Value, [int]$versionParts.Groups[3].Value)
 if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) { throw "GH_TOKEN is required for release lookup" }
 $releaseHeaders = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = "application/vnd.github+json" }
 try {
@@ -56,12 +58,42 @@ try {
     $releaseHeaders.Clear()
 }
 $assets = @($release.assets | Where-Object { $_.name -match '_x64-setup\.exe$' })
+if ($release.draft -or $release.prerelease -or $release.tag_name -ne $tag) { throw "Expected a published stable release" }
 if ($assets.Count -ne 1) { throw "Expected one x64 NSIS installer" }
-$testDir = Join-Path $env:RUNNER_TEMP "edupi-install-check"
-New-Item -ItemType Directory -Force -Path $testDir | Out-Null
-$installer = Join-Path $testDir "setup.exe"
+$publishedSource = $env:EDUPI_PUBLISHED_SOURCE_DIR
+if ([string]::IsNullOrWhiteSpace($publishedSource) -or
+    ![System.IO.Path]::IsPathFullyQualified($publishedSource) -or !(Test-Path $publishedSource -PathType Container)) {
+    throw "Published source checkout is missing"
+}
+$sourceCommit = [string](& git -C $publishedSource rev-parse HEAD)
+if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[a-f0-9]{40}$' -or
+    ($release.target_commitish -match '^[a-f0-9]{40}$' -and $sourceCommit -ne $release.target_commitish)) {
+    throw "Published source checkout differs from the release target"
+}
+$compatPath = Join-Path $publishedSource "contracts/edupi-core-compat.json"
+if (!(Test-Path $compatPath -PathType Leaf)) { throw "Published source contract is missing" }
+$installerName = [string]$assets[0].name
+if ($installerName -notmatch '^EduPi_\d+\.\d+\.\d+_x64-setup\.exe$' -or
+    $assets[0].digest -notmatch '^sha256:[a-f0-9]{64}$' -or [long]$assets[0].size -le 0) {
+    throw "Published Windows installer identity is invalid"
+}
+if ($releaseVersion -ge [version]::new(0, 3, 70)) {
+    $testDir = Join-Path $env:USERPROFILE "edupi-route1-published-$([guid]::NewGuid().ToString('N'))"
+    New-Item -ItemType Directory -Path $testDir | Out-Null
+    $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    & (Join-Path $env:SystemRoot "System32/icacls.exe") $testDir "/inheritance:r" "/grant:r" "*${sid}:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Published installation root ACL setup failed" }
+} else {
+    $testDir = Join-Path $env:RUNNER_TEMP "edupi-install-check"
+    New-Item -ItemType Directory -Force -Path $testDir | Out-Null
+}
+$installer = Join-Path $testDir $installerName
 $destination = Join-Path $testDir "application"
 Invoke-WebRequest $assets[0].browser_download_url -OutFile $installer
+if ((Get-Item $installer).Length -ne [long]$assets[0].size -or
+    "sha256:$((Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant())" -ne $assets[0].digest) {
+    throw "Published Windows installer bytes differ from the release asset"
+}
 $installation = Start-Process -FilePath $installer -ArgumentList "/S", "/D=$destination" -Wait -PassThru
 if ($installation.ExitCode -ne 0) { throw "Installer exit code: $($installation.ExitCode)" }
 $executable = Join-Path $destination "pi-agent-desktop.exe"
@@ -78,8 +110,6 @@ if ($runningAfterInstall.Count -eq 1) {
         -RedirectStandardError (Join-Path $testDir "app-stderr.log")
 }
 try {
-    $versionParts = [regex]::Match($tag, '^v(\d+)\.(\d+)\.(\d+)')
-    $releaseVersion = [version]::new([int]$versionParts.Groups[1].Value, [int]$versionParts.Groups[2].Value, [int]$versionParts.Groups[3].Value)
     if ($releaseVersion -ge [version]::new(0, 3, 38)) {
         $exeVersionText = (Get-Item $executable).VersionInfo.ProductVersion
         if ($exeVersionText -notmatch '^(\d+)\.(\d+)\.(\d+)') { throw "Installed executable version is unavailable" }
@@ -97,8 +127,12 @@ try {
         Remove-Item Env:EDUPI_STAGED_RESOURCES -ErrorAction SilentlyContinue
     }
 
+    # Normal mode cannot claim a Windows Core writer without native source
+    # attestation. Prove only the installed shell here; the same public
+    # installer must pass the private Safe Mode Core check below.
     $response = $null
     $log = $null
+    $lastProbe = "no listener found"
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
         $application.Refresh()
         if ($application.HasExited) {
@@ -112,17 +146,54 @@ try {
             $ports = [regex]::Matches($text, 'http://127\.0\.0\.1:(\d+)')
             if ($ports.Count) {
                 $origin = "http://127.0.0.1:$($ports[$ports.Count - 1].Groups[1].Value)"
-                try { $response = Invoke-WebRequest "$origin/api/edupi/workspace" -Headers @{ Origin = $origin } -TimeoutSec 5; break } catch { }
+                try {
+                    $identity = Invoke-WebRequest "$origin/api/desktop/identity" -Headers @{ Origin = $origin } -TimeoutSec 5
+                    if ($identity.StatusCode -ne 204) {
+                        $lastProbe = "identity HTTP $([int]$identity.StatusCode)"
+                    } else {
+                        $response = Invoke-WebRequest "$origin/api/home" -Headers @{ Origin = $origin } -TimeoutSec 5
+                        if ($response.StatusCode -eq 200) { break }
+                        $lastProbe = "home HTTP $([int]$response.StatusCode)"
+                    }
+                } catch {
+                    $lastProbe = if ($_.Exception.Response) { "HTTP $([int]$_.Exception.Response.StatusCode)" }
+                        else { "request=$($_.Exception.GetType().Name)" }
+                }
             }
         }
         Start-Sleep -Seconds 2
     }
     if (!$response -or $response.StatusCode -ne 200) {
         Write-LaunchDiagnostics -Since $launchStartedAt -TestDir $testDir
-        throw "Installed workspace did not become available"
+        throw "Installed local server did not become available: $lastProbe"
     }
-    $workspace = $response.Content | ConvertFrom-Json
-    if (!$workspace.data) { throw "Workspace response has no education data" }
+    $homePayload = $response.Content | ConvertFrom-Json
+    if ([string]::IsNullOrWhiteSpace($homePayload.home)) { throw "Installed home response is invalid" }
+    if ($releaseVersion -lt [version]::new(0, 3, 70)) {
+        # v0.3.70 is the first published native-attestation release. Older
+        # public packages retain the original bounded workspace readiness gate.
+        $legacyReady = $false
+        $legacyProbe = "no workspace response"
+        for ($attempt = 0; $attempt -lt 30; $attempt++) {
+            try {
+                $legacyWorkspace = Invoke-WebRequest "$origin/api/edupi/workspace" -Headers @{ Origin = $origin } -TimeoutSec 5
+                $legacyPayload = $legacyWorkspace.Content | ConvertFrom-Json
+                if ($legacyWorkspace.StatusCode -eq 200 -and $legacyPayload.data) {
+                    $legacyReady = $true
+                    break
+                }
+                $legacyProbe = "workspace HTTP $([int]$legacyWorkspace.StatusCode)"
+            } catch {
+                $legacyProbe = if ($_.Exception.Response) { "HTTP $([int]$_.Exception.Response.StatusCode)" }
+                    else { "request=$($_.Exception.GetType().Name)" }
+            }
+            Start-Sleep -Seconds 2
+        }
+        if (!$legacyReady) {
+            Write-LaunchDiagnostics -Since $launchStartedAt -TestDir $testDir
+            throw "Legacy installed workspace did not become available: $legacyProbe"
+        }
+    }
 
     # A second launch must hand off to the existing process and exit. Without
     # the Tauri single-instance plugin it starts another server/WebView here.
@@ -137,7 +208,29 @@ try {
         if (!$secondApplication.HasExited) { Stop-Process -Id $secondApplication.Id -Force -ErrorAction SilentlyContinue }
     }
 
-    Write-Output "Verified ${tag}: installer exit 0; application stayed running; workspace HTTP 200; second launch reused the existing process."
 } finally {
-    if (!$application.HasExited) { Stop-Process -Id $application.Id -ErrorAction SilentlyContinue }
+    $application.Refresh()
+    if (!$application.HasExited) {
+        & (Join-Path $env:SystemRoot "System32/taskkill.exe") /PID $application.Id /T /F | Out-Null
+    }
+}
+
+# The signed draft already uses this guarded Windows canary. Reuse the exact
+# public installation after its single-instance check rather than reinstalling
+# it or treating normal-mode Core refusal as a failed installation.
+if ($releaseVersion -ge [version]::new(0, 3, 70)) {
+    $env:EDUPI_PREVIEW_INSTALLED_DIR = $destination
+    $env:EDUPI_PREVIEW_COMPAT_PATH = $compatPath
+    try {
+        & (Join-Path $PSScriptRoot "test-windows-route1-preview.ps1")
+    } finally {
+        Remove-Item Env:EDUPI_PREVIEW_INSTALLED_DIR -ErrorAction SilentlyContinue
+        Remove-Item Env:EDUPI_PREVIEW_COMPAT_PATH -ErrorAction SilentlyContinue
+    }
+    Write-Output "Verified ${tag}: public installer digest, normal shell, single instance, native refusal, and isolated Safe Mode Core readiness."
+} else {
+    Write-Output "Verified ${tag}: public installer digest, normal workspace, and single instance."
+}
+if ($env:GITHUB_ENV) {
+    Add-Content -LiteralPath $env:GITHUB_ENV -Value "EDUPI_PUBLISHED_INSTALL_DIR=$destination"
 }
