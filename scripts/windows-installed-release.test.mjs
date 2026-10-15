@@ -31,7 +31,8 @@ test("published Windows smoke keeps native Core admission closed and checks the 
   assert.match(source, /api\/desktop\/identity/u);
   assert.match(source, /api\/home/u);
   assert.doesNotMatch(source, /^\s*\$home\s*=/imu);
-  assert.doesNotMatch(source, /Invoke-WebRequest[^\n]*api\/edupi\/workspace/u);
+  assert.match(source, /if \(\$releaseVersion -lt \[version\]::new\(0, 3, 70\)\) \{[\s\S]*?Invoke-WebRequest "\$origin\/api\/edupi\/workspace"/u);
+  assert.match(source, /if \(\$releaseVersion -ge \[version\]::new\(0, 3, 70\)\) \{[\s\S]*?test-windows-route1-preview\.ps1/u);
   assert.match(source, /EDUPI_PREVIEW_INSTALLED_DIR = \$destination/u);
   assert.match(source, /EDUPI_PREVIEW_COMPAT_PATH = \$compatPath/u);
   assert.match(source, /\$sourceCommit -ne \$release\.target_commitish/u);

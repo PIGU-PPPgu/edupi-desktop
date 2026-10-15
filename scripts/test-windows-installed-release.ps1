@@ -164,6 +164,20 @@ try {
     }
     $homePayload = $response.Content | ConvertFrom-Json
     if ([string]::IsNullOrWhiteSpace($homePayload.home)) { throw "Installed home response is invalid" }
+    if ($releaseVersion -lt [version]::new(0, 3, 70)) {
+        # v0.3.70 is the first published native-attestation release. Older
+        # public packages still use the pre-canary workspace readiness gate.
+        try {
+            $legacyWorkspace = Invoke-WebRequest "$origin/api/edupi/workspace" -Headers @{ Origin = $origin } -TimeoutSec 90
+            $legacyPayload = $legacyWorkspace.Content | ConvertFrom-Json
+            if ($legacyWorkspace.StatusCode -ne 200 -or !$legacyPayload.data) {
+                throw "Legacy installed workspace response is invalid"
+            }
+        } catch {
+            Write-LaunchDiagnostics -Since $launchStartedAt -TestDir $testDir
+            throw
+        }
+    }
 
     # A second launch must hand off to the existing process and exit. Without
     # the Tauri single-instance plugin it starts another server/WebView here.
@@ -188,15 +202,19 @@ try {
 # The signed draft already uses this guarded Windows canary. Reuse the exact
 # public installation after its single-instance check rather than reinstalling
 # it or treating normal-mode Core refusal as a failed installation.
-$env:EDUPI_PREVIEW_INSTALLED_DIR = $destination
-$env:EDUPI_PREVIEW_COMPAT_PATH = $compatPath
-try {
-    & (Join-Path $PSScriptRoot "test-windows-route1-preview.ps1")
-} finally {
-    Remove-Item Env:EDUPI_PREVIEW_INSTALLED_DIR -ErrorAction SilentlyContinue
-    Remove-Item Env:EDUPI_PREVIEW_COMPAT_PATH -ErrorAction SilentlyContinue
+if ($releaseVersion -ge [version]::new(0, 3, 70)) {
+    $env:EDUPI_PREVIEW_INSTALLED_DIR = $destination
+    $env:EDUPI_PREVIEW_COMPAT_PATH = $compatPath
+    try {
+        & (Join-Path $PSScriptRoot "test-windows-route1-preview.ps1")
+    } finally {
+        Remove-Item Env:EDUPI_PREVIEW_INSTALLED_DIR -ErrorAction SilentlyContinue
+        Remove-Item Env:EDUPI_PREVIEW_COMPAT_PATH -ErrorAction SilentlyContinue
+    }
+    Write-Output "Verified ${tag}: public installer digest, normal shell, single instance, native refusal, and isolated Safe Mode Core readiness."
+} else {
+    Write-Output "Verified ${tag}: public installer digest, normal workspace, and single instance."
 }
-Write-Output "Verified ${tag}: public installer digest, normal shell, single instance, native refusal, and isolated Safe Mode Core readiness."
 if ($env:GITHUB_ENV) {
     Add-Content -LiteralPath $env:GITHUB_ENV -Value "EDUPI_PUBLISHED_INSTALL_DIR=$destination"
 }
