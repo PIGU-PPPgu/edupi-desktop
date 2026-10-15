@@ -25,13 +25,14 @@ test("published Windows smoke keeps native Core admission closed and checks the 
   assert.match(source, /\$release\.draft -or \$release\.prerelease/u);
   assert.match(source, /Get-FileHash \$installer -Algorithm SHA256/u);
   assert.match(source, /\$assets\[0\]\.digest/u);
-  assert.match(source, /\$testDir "\/inheritance:r"/u);
+  assert.match(source, /if \(\$releaseVersion -ge \[version\]::new\(0, 3, 70\)\) \{[\s\S]*?\$testDir "\/inheritance:r"/u);
+  assert.match(source, /\} else \{\s*\$testDir = Join-Path \$env:RUNNER_TEMP "edupi-install-check"/u);
   assert.match(source, /EDUPI_PUBLISHED_INSTALL_DIR=\$destination/u);
   assert.match(workflow, /Join-Path \$env:EDUPI_PUBLISHED_INSTALL_DIR "resources"/u);
   assert.match(source, /api\/desktop\/identity/u);
   assert.match(source, /api\/home/u);
   assert.doesNotMatch(source, /^\s*\$home\s*=/imu);
-  assert.match(source, /if \(\$releaseVersion -lt \[version\]::new\(0, 3, 70\)\) \{[\s\S]*?Invoke-WebRequest "\$origin\/api\/edupi\/workspace"/u);
+  assert.match(source, /if \(\$releaseVersion -lt \[version\]::new\(0, 3, 70\)\) \{[\s\S]*?for \(\$attempt = 0; \$attempt -lt 30; \$attempt\+\+\) \{[\s\S]*?Invoke-WebRequest "\$origin\/api\/edupi\/workspace"/u);
   assert.match(source, /if \(\$releaseVersion -ge \[version\]::new\(0, 3, 70\)\) \{[\s\S]*?test-windows-route1-preview\.ps1/u);
   assert.match(source, /EDUPI_PREVIEW_INSTALLED_DIR = \$destination/u);
   assert.match(source, /EDUPI_PREVIEW_COMPAT_PATH = \$compatPath/u);

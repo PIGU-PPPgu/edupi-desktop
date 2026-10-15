@@ -47,6 +47,8 @@ function Write-LaunchDiagnostics([datetime]$Since, [string]$TestDir) {
 
 $tag = $env:EDUPI_TEST_RELEASE
 if ($tag -notmatch '^v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') { throw "Invalid release tag" }
+$versionParts = [regex]::Match($tag, '^v(\d+)\.(\d+)\.(\d+)')
+$releaseVersion = [version]::new([int]$versionParts.Groups[1].Value, [int]$versionParts.Groups[2].Value, [int]$versionParts.Groups[3].Value)
 if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) { throw "GH_TOKEN is required for release lookup" }
 $releaseHeaders = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = "application/vnd.github+json" }
 try {
@@ -75,11 +77,16 @@ if ($installerName -notmatch '^EduPi_\d+\.\d+\.\d+_x64-setup\.exe$' -or
     $assets[0].digest -notmatch '^sha256:[a-f0-9]{64}$' -or [long]$assets[0].size -le 0) {
     throw "Published Windows installer identity is invalid"
 }
-$testDir = Join-Path $env:USERPROFILE "edupi-route1-published-$([guid]::NewGuid().ToString('N'))"
-New-Item -ItemType Directory -Path $testDir | Out-Null
-$sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-& (Join-Path $env:SystemRoot "System32/icacls.exe") $testDir "/inheritance:r" "/grant:r" "*${sid}:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "Published installation root ACL setup failed" }
+if ($releaseVersion -ge [version]::new(0, 3, 70)) {
+    $testDir = Join-Path $env:USERPROFILE "edupi-route1-published-$([guid]::NewGuid().ToString('N'))"
+    New-Item -ItemType Directory -Path $testDir | Out-Null
+    $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    & (Join-Path $env:SystemRoot "System32/icacls.exe") $testDir "/inheritance:r" "/grant:r" "*${sid}:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Published installation root ACL setup failed" }
+} else {
+    $testDir = Join-Path $env:RUNNER_TEMP "edupi-install-check"
+    New-Item -ItemType Directory -Force -Path $testDir | Out-Null
+}
 $installer = Join-Path $testDir $installerName
 $destination = Join-Path $testDir "application"
 Invoke-WebRequest $assets[0].browser_download_url -OutFile $installer
@@ -103,8 +110,6 @@ if ($runningAfterInstall.Count -eq 1) {
         -RedirectStandardError (Join-Path $testDir "app-stderr.log")
 }
 try {
-    $versionParts = [regex]::Match($tag, '^v(\d+)\.(\d+)\.(\d+)')
-    $releaseVersion = [version]::new([int]$versionParts.Groups[1].Value, [int]$versionParts.Groups[2].Value, [int]$versionParts.Groups[3].Value)
     if ($releaseVersion -ge [version]::new(0, 3, 38)) {
         $exeVersionText = (Get-Item $executable).VersionInfo.ProductVersion
         if ($exeVersionText -notmatch '^(\d+)\.(\d+)\.(\d+)') { throw "Installed executable version is unavailable" }
@@ -166,16 +171,27 @@ try {
     if ([string]::IsNullOrWhiteSpace($homePayload.home)) { throw "Installed home response is invalid" }
     if ($releaseVersion -lt [version]::new(0, 3, 70)) {
         # v0.3.70 is the first published native-attestation release. Older
-        # public packages still use the pre-canary workspace readiness gate.
-        try {
-            $legacyWorkspace = Invoke-WebRequest "$origin/api/edupi/workspace" -Headers @{ Origin = $origin } -TimeoutSec 90
-            $legacyPayload = $legacyWorkspace.Content | ConvertFrom-Json
-            if ($legacyWorkspace.StatusCode -ne 200 -or !$legacyPayload.data) {
-                throw "Legacy installed workspace response is invalid"
+        # public packages retain the original bounded workspace readiness gate.
+        $legacyReady = $false
+        $legacyProbe = "no workspace response"
+        for ($attempt = 0; $attempt -lt 30; $attempt++) {
+            try {
+                $legacyWorkspace = Invoke-WebRequest "$origin/api/edupi/workspace" -Headers @{ Origin = $origin } -TimeoutSec 5
+                $legacyPayload = $legacyWorkspace.Content | ConvertFrom-Json
+                if ($legacyWorkspace.StatusCode -eq 200 -and $legacyPayload.data) {
+                    $legacyReady = $true
+                    break
+                }
+                $legacyProbe = "workspace HTTP $([int]$legacyWorkspace.StatusCode)"
+            } catch {
+                $legacyProbe = if ($_.Exception.Response) { "HTTP $([int]$_.Exception.Response.StatusCode)" }
+                    else { "request=$($_.Exception.GetType().Name)" }
             }
-        } catch {
+            Start-Sleep -Seconds 2
+        }
+        if (!$legacyReady) {
             Write-LaunchDiagnostics -Since $launchStartedAt -TestDir $testDir
-            throw
+            throw "Legacy installed workspace did not become available: $legacyProbe"
         }
     }
 
