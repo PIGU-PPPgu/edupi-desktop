@@ -61,6 +61,12 @@ async function startStagedServer() {
   let logs = "";
   child.stdout.on("data", (chunk) => { logs = (logs + chunk.toString("utf8")).slice(-4000); });
   child.stderr.on("data", (chunk) => { logs = (logs + chunk.toString("utf8")).slice(-4000); });
+  const diagnostics = () => ({
+    exitCode: child.exitCode,
+    signalCode: child.signalCode,
+    logTailSha256: crypto.createHash("sha256").update(logs.slice(-1500)).digest("hex"),
+    errorCodes: [...new Set(logs.slice(-1500).match(/\b(?:ECONNRESET|EADDRINUSE|EACCES|EPIPE|ERR_[A-Z0-9_]+)\b/gu) || [])],
+  });
   const exited = new Promise((resolve) => child.once("exit", resolve));
   const stop = async () => {
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
@@ -71,30 +77,29 @@ async function startStagedServer() {
     if (!exitedForced) throw new Error("staged server did not exit");
   };
   try {
-    const deadline = Date.now() + 45000;
+    const deadline = Date.now() + 90000;
+    let readAttempts = 0;
+    let lastReadError = "none";
     while (Date.now() < deadline) {
-      if (child.exitCode !== null) throw new Error(`staged server exited: ${logs}`);
+      if (child.exitCode !== null) throw new Error(`staged server exited: ${JSON.stringify(diagnostics())}`);
       try {
         const identity = await fetch(`${url}/api/desktop/identity`, { signal: AbortSignal.timeout(2000) });
         if (identity.status === 204) {
-          // Identity proves the process is listening; the cold schedule route
-          // may still reset its first connection while Next loads its bundle.
+          // A 403 probe does not initialize Core. Warm the authenticated read
+          // path before exercising the review, including after each restart.
+          readAttempts++;
           const route = await fetch(`${url}/api/edupi/schedule-conflicts?limit=50`, {
-            headers: { origin: url }, signal: AbortSignal.timeout(5000),
+            headers: { origin: url, "x-pi-desktop-token": process.env.PI_DESKTOP_API_TOKEN },
+            signal: AbortSignal.timeout(15000),
           });
-          if (route.status === 403) return {
-            url, stop, diagnostics: () => ({
-              exitCode: child.exitCode,
-              signalCode: child.signalCode,
-              logTailSha256: crypto.createHash("sha256").update(logs.slice(-1500)).digest("hex"),
-              errorCodes: [...new Set(logs.slice(-1500).match(/\b(?:ECONNRESET|EADDRINUSE|EACCES|EPIPE|ERR_[A-Z0-9_]+)\b/gu) || [])],
-            }),
-          };
+          await route.arrayBuffer();
+          if ([200, 409, 503].includes(route.status)) return { url, stop, diagnostics };
+          lastReadError = `http_${route.status}`;
         }
-      } catch { /* cold start */ }
+      } catch (error) { lastReadError = error?.cause?.code || error?.name || "request"; }
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
-    throw new Error(`staged server not ready: ${logs}`);
+    throw new Error(`staged server not ready: ${JSON.stringify({ ...diagnostics(), readAttempts, lastReadError })}`);
   } catch (error) { await stop(); throw error; }
 }
 
