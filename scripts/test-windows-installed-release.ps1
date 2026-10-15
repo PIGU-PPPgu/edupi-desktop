@@ -182,15 +182,15 @@ try {
     }
 }
 
-# The signed draft already uses this guarded Windows canary. Repeat it from
-# the exact public installer instead of treating normal-mode Core refusal as a
-# failed installation or weakening the native admission boundary.
-$env:EDUPI_PREVIEW_INSTALLER_DIR = $testDir
+# The signed draft already uses this guarded Windows canary. Reuse the exact
+# public installation after its single-instance check rather than reinstalling
+# it or treating normal-mode Core refusal as a failed installation.
+$env:EDUPI_PREVIEW_INSTALLED_DIR = $destination
 $env:EDUPI_PREVIEW_COMPAT_PATH = $compatPath
 try {
     & (Join-Path $PSScriptRoot "test-windows-route1-preview.ps1")
 } finally {
-    Remove-Item Env:EDUPI_PREVIEW_INSTALLER_DIR -ErrorAction SilentlyContinue
+    Remove-Item Env:EDUPI_PREVIEW_INSTALLED_DIR -ErrorAction SilentlyContinue
     Remove-Item Env:EDUPI_PREVIEW_COMPAT_PATH -ErrorAction SilentlyContinue
 }
 Write-Output "Verified ${tag}: public installer digest, normal shell, single instance, native refusal, and isolated Safe Mode Core readiness."

@@ -1,18 +1,27 @@
 $ErrorActionPreference = "Stop"
 
-$bundleDirectory = if ($env:EDUPI_PREVIEW_INSTALLER_DIR) { $env:EDUPI_PREVIEW_INSTALLER_DIR } else { "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis" }
-$installers = @(Get-ChildItem $bundleDirectory -Filter "*-setup.exe" -File)
-if ($installers.Count -ne 1) { throw "Expected exactly one Windows preview installer" }
+$reuseInstalled = ![string]::IsNullOrWhiteSpace($env:EDUPI_PREVIEW_INSTALLED_DIR)
+if ($reuseInstalled) {
+    if (![System.IO.Path]::IsPathFullyQualified($env:EDUPI_PREVIEW_INSTALLED_DIR) -or
+        !(Test-Path $env:EDUPI_PREVIEW_INSTALLED_DIR -PathType Container)) {
+        throw "Published Windows installation is missing"
+    }
+} else {
+    $bundleDirectory = if ($env:EDUPI_PREVIEW_INSTALLER_DIR) { $env:EDUPI_PREVIEW_INSTALLER_DIR } else { "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis" }
+    $installers = @(Get-ChildItem $bundleDirectory -Filter "*-setup.exe" -File)
+    if ($installers.Count -ne 1) { throw "Expected exactly one Windows preview installer" }
+}
 
 $testRoot = Join-Path $env:USERPROFILE "edupi-route1-preview-$([guid]::NewGuid().ToString('N'))"
-$destination = Join-Path $testRoot "application"
+$destination = if ($reuseInstalled) { [System.IO.Path]::GetFullPath($env:EDUPI_PREVIEW_INSTALLED_DIR) } else { Join-Path $testRoot "application" }
 $dataRoot = Join-Path $testRoot "teacher-data"
 $agentDir = Join-Path $testRoot "agent"
 New-Item -ItemType Directory -Path $testRoot | Out-Null
 $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 & (Join-Path $env:SystemRoot "System32/icacls.exe") $testRoot "/inheritance:r" "/grant:r" "*${sid}:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Isolated preview installation root ACL setup failed" }
-New-Item -ItemType Directory -Force -Path $destination, $dataRoot, $agentDir | Out-Null
+New-Item -ItemType Directory -Force -Path $dataRoot, $agentDir | Out-Null
+if (!$reuseInstalled) { New-Item -ItemType Directory -Force -Path $destination | Out-Null }
 $env:EDUPI_PROJECT_ROOT = $dataRoot
 $env:EDUPI_DATA_ROOT = $dataRoot
 $env:EDUPI_DATA_ALLOWED_ROOT = $testRoot
@@ -37,8 +46,10 @@ function Stop-InstalledPreviewProcesses {
     throw "Installed preview process did not stop: $($remaining.Id -join ',')"
 }
 try {
-$installation = Start-Process -FilePath $installers[0].FullName -ArgumentList "/S", "/D=$destination" -Wait -PassThru
-if ($installation.ExitCode -ne 0) { throw "Preview installer returned a nonzero exit code" }
+if (!$reuseInstalled) {
+    $installation = Start-Process -FilePath $installers[0].FullName -ArgumentList "/S", "/D=$destination" -Wait -PassThru
+    if ($installation.ExitCode -ne 0) { throw "Preview installer returned a nonzero exit code" }
+}
 $resources = Join-Path $destination "resources"
 $bundledNode = Join-Path $resources "node/node.exe"
 $coreRoot = Join-Path $resources "edupi-core"
@@ -101,17 +112,25 @@ try {
         Start-Sleep -Seconds 2
     }
     if (!$ready) { throw "Installed preview local server did not become ready" }
-    $second = Start-Process -FilePath $executable -PassThru
-    try {
-        Wait-Process -Id $second.Id -Timeout 10 -ErrorAction SilentlyContinue
-        $second.Refresh()
-        if (!$second.HasExited) { throw "Second launch did not hand off to the installed process" }
+    if ($reuseInstalled) {
+        # The public-install wrapper already checked a second launch on this
+        # exact installation. Do not repeat it after changing the test root.
         $remaining = @(Get-Process -Name "pi-agent-desktop" -ErrorAction SilentlyContinue |
             Where-Object { $_.Path -eq $executable })
         if ($remaining.Count -ne 1) { throw "Installed preview has more than one active application process" }
-    } finally {
-        $second.Refresh()
-        if (!$second.HasExited) { Stop-Process -Id $second.Id -Force -ErrorAction SilentlyContinue }
+    } else {
+        $second = Start-Process -FilePath $executable -PassThru
+        try {
+            Wait-Process -Id $second.Id -Timeout 10 -ErrorAction SilentlyContinue
+            $second.Refresh()
+            if (!$second.HasExited) { throw "Second launch did not hand off to the installed process" }
+            $remaining = @(Get-Process -Name "pi-agent-desktop" -ErrorAction SilentlyContinue |
+                Where-Object { $_.Path -eq $executable })
+            if ($remaining.Count -ne 1) { throw "Installed preview has more than one active application process" }
+        } finally {
+            $second.Refresh()
+            if (!$second.HasExited) { Stop-Process -Id $second.Id -Force -ErrorAction SilentlyContinue }
+        }
     }
     Write-Output "Windows preview installer retained the approved native bytes, started with isolated data, and kept normal-mode G1 blocked."
 } finally {

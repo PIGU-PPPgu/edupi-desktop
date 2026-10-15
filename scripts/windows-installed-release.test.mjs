@@ -29,10 +29,14 @@ test("published Windows smoke keeps native Core admission closed and checks the 
   assert.match(source, /api\/home/u);
   assert.doesNotMatch(source, /^\s*\$home\s*=/imu);
   assert.doesNotMatch(source, /Invoke-WebRequest[^\n]*api\/edupi\/workspace/u);
-  assert.match(source, /EDUPI_PREVIEW_INSTALLER_DIR = \$testDir/u);
+  assert.match(source, /EDUPI_PREVIEW_INSTALLED_DIR = \$destination/u);
   assert.match(source, /EDUPI_PREVIEW_COMPAT_PATH = \$compatPath/u);
   assert.match(source, /\$sourceCommit -ne \$release\.target_commitish/u);
   assert.match(canary, /EDUPI_PREVIEW_COMPAT_PATH/u);
+  assert.match(canary, /if \(\$reuseInstalled\) \{/u);
+  assert.match(canary, /if \(!\$reuseInstalled\) \{\s*\$installation = Start-Process/u);
+  assert.match(canary, /\} else \{\s*\$second = Start-Process/u);
+  assert.match(canary, /The public-install wrapper already checked a second launch/u);
   assert.match(workflow, /ref: \$\{\{ inputs\.tag \}\}/u);
   assert.match(workflow, /timeout-minutes: 15/u);
   assert.match(workflow, /Join-Path \$publishedSource "src-tauri\/Cargo\.toml"/u);
