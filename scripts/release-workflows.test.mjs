@@ -64,13 +64,15 @@ test("paired Core checks use a private workspace-backed temporary root", async (
   }
 });
 
-test("staged schedule test waits for its guarded route after server identity", async () => {
+test("staged schedule test warms its authenticated read route after server identity", async () => {
   const source = await readFile(join(root, "scripts", "test-edupi-schedule-conflicts-e2.mjs"), "utf8");
   const start = source.indexOf("async function startStagedServer");
   const readiness = source.slice(start, source.indexOf("\ntry {\n  const rootModule", start));
   assert.ok(start >= 0);
   assert.ok(readiness.indexOf("/api/desktop/identity") < readiness.indexOf("/api/edupi/schedule-conflicts?limit=50"));
-  assert.match(readiness, /route\.status === 403/u);
+  assert.match(readiness, /"x-pi-desktop-token": process\.env\.PI_DESKTOP_API_TOKEN/u);
+  assert.match(readiness, /await route\.arrayBuffer\(\)/u);
+  assert.match(readiness, /\[200, 409, 503\]\.includes\(route\.status\)/u);
 });
 
 test("each remaining staged macOS test warms its first business route", async () => {

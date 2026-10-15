@@ -1,6 +1,6 @@
 # EduPi 产品闭环 PR 路线图
 
-2026-10-15 当前发布路线：`.68` 的 Apple 公证轮询因 `-1009` 失败，不能拿未装订 DMG 发布。原分支准备 `.69`：macOS runner 在三平台构建前检查公证服务，DMG 上传后对单一 submission ID 有界查询，原签名/装订/Gatekeeper/同轮资产证明门不降级。先过 PR CI 与签名 Draft，再做安装和更新技术验收后公开；任何一步失败均保持公开 `.56`/feed 不变。详见[发布账本](2026-09-07-signed-updates.md#2026-10-15-v0369-三平台签名候选待验)。
+2026-10-15 当前发布路线：`.68` attempt 1 的 Apple 公证轮询因 `-1009` 失败；并行触发的完整 attempt 2 又在第三次隔离服务启动后的首个带授权日程 GET 报 `ECONNRESET`，Mac 均未过全套门，九资产不得发布或跨 attempt 拼接。`.69` 的 Apple 预检、单一 submission ID 有界查询已由 [#353](https://github.com/PIGU-PPPgu/edupi-desktop/pull/353) 合入；原分支现让日程打包验收先完整读取一次带授权的只读 Core 路由，本机真实暂存服务连续三次通过，仍待干净 runner 复验。须先过新 PR CI 和签名 Draft，再做安装/更新技术验收后公开；失败时保持 `.56`/feed 不变。[发布账本](2026-09-07-signed-updates.md#2026-10-15-v0369-三平台签名候选待验)。
 
 2026-10-15 本地分支清理：清理记录已由 Desktop [#352](https://github.com/PIGU-PPPgu/edupi-desktop/pull/352) 合入 `main`。当前主目录切至最新主线并保持干净；53 条闲置本地分支移入可恢复归档，常用分支由 87 条减至 34 条，原有 35 个工作树保持。分支引用清理没有测得空间释放，也不改变 `.68` Draft 或公开 `.56` 的发布状态。命令、版本、清单和未验证条件见[本地分支清理验收](../acceptance/2026-10-15-local-branch-cleanup.md)。
 
