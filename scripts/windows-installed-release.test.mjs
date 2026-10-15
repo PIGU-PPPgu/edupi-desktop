@@ -25,6 +25,7 @@ test("published Windows smoke keeps native Core admission closed and checks the 
   assert.match(source, /\$assets\[0\]\.digest/u);
   assert.match(source, /api\/desktop\/identity/u);
   assert.match(source, /api\/home/u);
+  assert.doesNotMatch(source, /^\s*\$home\s*=/imu);
   assert.doesNotMatch(source, /Invoke-WebRequest[^\n]*api\/edupi\/workspace/u);
   assert.match(source, /EDUPI_PREVIEW_INSTALLER_DIR = \$testDir/u);
   assert.match(source, /test-windows-route1-preview\.ps1/u);

@@ -147,8 +147,8 @@ try {
         Write-LaunchDiagnostics -Since $launchStartedAt -TestDir $testDir
         throw "Installed local server did not become available: $lastProbe"
     }
-    $home = $response.Content | ConvertFrom-Json
-    if ([string]::IsNullOrWhiteSpace($home.home)) { throw "Installed home response is invalid" }
+    $homePayload = $response.Content | ConvertFrom-Json
+    if ([string]::IsNullOrWhiteSpace($homePayload.home)) { throw "Installed home response is invalid" }
 
     # A second launch must hand off to the existing process and exit. Without
     # the Tauri single-instance plugin it starts another server/WebView here.
