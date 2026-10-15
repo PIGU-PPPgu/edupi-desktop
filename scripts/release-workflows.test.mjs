@@ -109,6 +109,7 @@ test("staged feedback initializes Core with a read before its first authorized w
   const readiness = source.slice(source.indexOf("const readyDeadline"), source.indexOf("const bootstrap"));
   assert.match(readiness, /"x-pi-desktop-token": desktopToken/u);
   assert.match(readiness, /await .*\.arrayBuffer\(\)/u);
+  assert.match(readiness, /\[200, 409\]\.includes\(authorized\.status\)/u);
   assert.match(source, /fetchStagedGetAfterReset/u);
 });
 

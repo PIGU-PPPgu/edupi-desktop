@@ -137,7 +137,7 @@ try {
             "x-pi-desktop-token": desktopToken,
           });
           await authorized.arrayBuffer();
-          if ([200, 409, 503].includes(authorized.status)) { ready = true; break; }
+          if ([200, 409].includes(authorized.status)) { ready = true; break; }
         }
       }
     } catch { /* cold start */ }
