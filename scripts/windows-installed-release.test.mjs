@@ -18,3 +18,16 @@ test("published Windows install reuses an installer-started process and captures
   assert.match(source, /\[redacted\]/);
   assert.doesNotMatch(source, /Get-Content \$Path -Raw/);
 });
+
+test("published Windows smoke keeps native Core admission closed and checks the exact public installer", () => {
+  assert.match(source, /\$release\.draft -or \$release\.prerelease/u);
+  assert.match(source, /Get-FileHash \$installer -Algorithm SHA256/u);
+  assert.match(source, /\$assets\[0\]\.digest/u);
+  assert.match(source, /api\/desktop\/identity/u);
+  assert.match(source, /api\/home/u);
+  assert.doesNotMatch(source, /Invoke-WebRequest[^\n]*api\/edupi\/workspace/u);
+  assert.match(source, /EDUPI_PREVIEW_INSTALLER_DIR = \$testDir/u);
+  assert.match(source, /test-windows-route1-preview\.ps1/u);
+  assert.ok(source.indexOf("test-windows-route1-preview.ps1") > source.indexOf("System32/taskkill.exe"),
+    "the normal-mode process must stop before the isolated Safe Mode canary");
+});

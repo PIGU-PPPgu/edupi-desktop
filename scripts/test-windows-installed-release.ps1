@@ -56,12 +56,22 @@ try {
     $releaseHeaders.Clear()
 }
 $assets = @($release.assets | Where-Object { $_.name -match '_x64-setup\.exe$' })
+if ($release.draft -or $release.prerelease -or $release.tag_name -ne $tag) { throw "Expected a published stable release" }
 if ($assets.Count -ne 1) { throw "Expected one x64 NSIS installer" }
+$installerName = [string]$assets[0].name
+if ($installerName -notmatch '^EduPi_\d+\.\d+\.\d+_x64-setup\.exe$' -or
+    $assets[0].digest -notmatch '^sha256:[a-f0-9]{64}$' -or [long]$assets[0].size -le 0) {
+    throw "Published Windows installer identity is invalid"
+}
 $testDir = Join-Path $env:RUNNER_TEMP "edupi-install-check"
 New-Item -ItemType Directory -Force -Path $testDir | Out-Null
-$installer = Join-Path $testDir "setup.exe"
+$installer = Join-Path $testDir $installerName
 $destination = Join-Path $testDir "application"
 Invoke-WebRequest $assets[0].browser_download_url -OutFile $installer
+if ((Get-Item $installer).Length -ne [long]$assets[0].size -or
+    "sha256:$((Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant())" -ne $assets[0].digest) {
+    throw "Published Windows installer bytes differ from the release asset"
+}
 $installation = Start-Process -FilePath $installer -ArgumentList "/S", "/D=$destination" -Wait -PassThru
 if ($installation.ExitCode -ne 0) { throw "Installer exit code: $($installation.ExitCode)" }
 $executable = Join-Path $destination "pi-agent-desktop.exe"
@@ -97,8 +107,12 @@ try {
         Remove-Item Env:EDUPI_STAGED_RESOURCES -ErrorAction SilentlyContinue
     }
 
+    # Normal mode cannot claim a Windows Core writer without native source
+    # attestation. Prove only the installed shell here; the same public
+    # installer must pass the private Safe Mode Core check below.
     $response = $null
     $log = $null
+    $lastProbe = "no listener found"
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
         $application.Refresh()
         if ($application.HasExited) {
@@ -112,17 +126,29 @@ try {
             $ports = [regex]::Matches($text, 'http://127\.0\.0\.1:(\d+)')
             if ($ports.Count) {
                 $origin = "http://127.0.0.1:$($ports[$ports.Count - 1].Groups[1].Value)"
-                try { $response = Invoke-WebRequest "$origin/api/edupi/workspace" -Headers @{ Origin = $origin } -TimeoutSec 5; break } catch { }
+                try {
+                    $identity = Invoke-WebRequest "$origin/api/desktop/identity" -Headers @{ Origin = $origin } -TimeoutSec 5
+                    if ($identity.StatusCode -ne 204) {
+                        $lastProbe = "identity HTTP $([int]$identity.StatusCode)"
+                    } else {
+                        $response = Invoke-WebRequest "$origin/api/home" -Headers @{ Origin = $origin } -TimeoutSec 5
+                        if ($response.StatusCode -eq 200) { break }
+                        $lastProbe = "home HTTP $([int]$response.StatusCode)"
+                    }
+                } catch {
+                    $lastProbe = if ($_.Exception.Response) { "HTTP $([int]$_.Exception.Response.StatusCode)" }
+                        else { "request=$($_.Exception.GetType().Name)" }
+                }
             }
         }
         Start-Sleep -Seconds 2
     }
     if (!$response -or $response.StatusCode -ne 200) {
         Write-LaunchDiagnostics -Since $launchStartedAt -TestDir $testDir
-        throw "Installed workspace did not become available"
+        throw "Installed local server did not become available: $lastProbe"
     }
-    $workspace = $response.Content | ConvertFrom-Json
-    if (!$workspace.data) { throw "Workspace response has no education data" }
+    $home = $response.Content | ConvertFrom-Json
+    if ([string]::IsNullOrWhiteSpace($home.home)) { throw "Installed home response is invalid" }
 
     # A second launch must hand off to the existing process and exit. Without
     # the Tauri single-instance plugin it starts another server/WebView here.
@@ -137,7 +163,20 @@ try {
         if (!$secondApplication.HasExited) { Stop-Process -Id $secondApplication.Id -Force -ErrorAction SilentlyContinue }
     }
 
-    Write-Output "Verified ${tag}: installer exit 0; application stayed running; workspace HTTP 200; second launch reused the existing process."
 } finally {
-    if (!$application.HasExited) { Stop-Process -Id $application.Id -ErrorAction SilentlyContinue }
+    $application.Refresh()
+    if (!$application.HasExited) {
+        & (Join-Path $env:SystemRoot "System32/taskkill.exe") /PID $application.Id /T /F | Out-Null
+    }
 }
+
+# The signed draft already uses this guarded Windows canary. Repeat it from
+# the exact public installer instead of treating normal-mode Core refusal as a
+# failed installation or weakening the native admission boundary.
+$env:EDUPI_PREVIEW_INSTALLER_DIR = $testDir
+try {
+    & (Join-Path $PSScriptRoot "test-windows-route1-preview.ps1")
+} finally {
+    Remove-Item Env:EDUPI_PREVIEW_INSTALLER_DIR -ErrorAction SilentlyContinue
+}
+Write-Output "Verified ${tag}: public installer digest, normal shell, single instance, native refusal, and isolated Safe Mode Core readiness."
