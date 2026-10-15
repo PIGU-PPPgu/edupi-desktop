@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { createJiti } from "jiti";
+import { fetchStagedGetAfterReset } from "./staged-read-retry.mjs";
 
 const desktopRoot = path.resolve(new URL("..", import.meta.url).pathname);
 const staged = process.env.EDUPI_SCHEDULE_E2_STAGED === "1";
@@ -140,9 +141,8 @@ try {
   const get = async (authorized = true) => {
     if (!stagedServer) return route.GET(new Request(`${url}?limit=50`, { headers: authorized ? headers : { host: headers.host, origin: headers.origin } }));
     try {
-      return await fetch(`${stagedServer.url}/api/edupi/schedule-conflicts?limit=50`, {
-        headers: { origin: stagedServer.url, ...(authorized ? { "x-pi-desktop-token": token } : {}) }, signal: AbortSignal.timeout(15000),
-      });
+      return await fetchStagedGetAfterReset(`${stagedServer.url}/api/edupi/schedule-conflicts?limit=50`,
+        { origin: stagedServer.url, ...(authorized ? { "x-pi-desktop-token": token } : {}) });
     } catch (error) {
       throw new Error(`staged_schedule_get_failed:${error?.cause?.code || "request"}:${JSON.stringify(stagedServer.diagnostics())}`);
     }
