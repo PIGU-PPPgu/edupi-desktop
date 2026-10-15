@@ -1,6 +1,8 @@
 # EduPi 产品闭环 PR 路线图
 
-2026-10-15 当前发布路线：`.69` [三平台 Draft run 38675336208](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38675336208) 的 Mac 已越过上一轮日程冲突阻断，却在下一项课次变更的重启后只读 GET 遇 `ECONNRESET`，仍未进入 Mac 签名/公证；不能发布该 Draft。原分支准备独立 `.70`：课次、上传校历及反馈的测试服务先完成带授权只读预热，只读 GET 仅允许一次连接重置重试，写入不重试；本机真实暂存服务三项通过，仍需新 PR/CI 和签名 Draft。公证、装订、Gatekeeper、同轮资产证明与安装/更新技术验收均不降级；失败时公开 `.56`/feed 不变。[发布账本](2026-09-07-signed-updates.md#2026-10-15-v0370-三平台签名候选待验)。
+2026-10-15 当前发布路线：`.70` 精确源码 `ea03b523`、Core `b12b5cb` 的三平台同轮签名 Draft、公证装订与九资产证明已通过；[publish run 38687334676](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38687334676) 将 Release 和七键 feed 公开为 `.70`。macOS 唯一安装路径已从 `.56` 原位验签升级至 `.70`，隔离根/标记文件和受保护教师业务/模型/认证文件保持；Linux 公网安装通过。Windows 首轮公网烟测用旧普通模式工作区门超时；修正验收夹具后，[同一公开包复测 38691364876](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38691364876) 通过普通壳、原生拒写、隔离 Safe Mode Core/投影及原生源码检查，#358 已合并为 `ed23b2d4`。只记 Windows 公网安装技术烟测，不扩写为完整教师 UI；历史 `.56` 兼容分支恢复有界只读等待但未重跑。直接测试启动器的服务 `SIGTERM` 来源及 macOS TCC 开关与进程探测不一致继续作为技术风险记录，未改安全权限。[逐项发布证据](2026-09-07-signed-updates.md#2026-10-15-v0370-正式发布与技术验收)。
+
+2026-10-15 历史 `.70` 构建前路线：`.69` [三平台 Draft run 38675336208](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38675336208) 的 Mac 已越过上一轮日程冲突阻断，却在下一项课次变更的重启后只读 GET 遇 `ECONNRESET`，仍未进入 Mac 签名/公证。原分支当时准备独立 `.70`：课次、上传校历及反馈的测试服务先完成带授权只读预热，只读 GET 仅允许一次连接重置重试，写入不重试；本机真实暂存服务三项通过。后续 PR/CI、签名 Draft 与正式发布结果以本页顶部当前状态为准。
 
 2026-10-15 本地分支清理：清理记录已由 Desktop [#352](https://github.com/PIGU-PPPgu/edupi-desktop/pull/352) 合入 `main`。当前主目录切至最新主线并保持干净；53 条闲置本地分支移入可恢复归档，常用分支由 87 条减至 34 条，原有 35 个工作树保持。分支引用清理没有测得空间释放，也不改变 `.68` Draft 或公开 `.56` 的发布状态。命令、版本、清单和未验证条件见[本地分支清理验收](../acceptance/2026-10-15-local-branch-cleanup.md)。
 
