@@ -1,0 +1,207 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>EduPi MV</title>
+<style>
+:root{--canvas:#f6f7f9;--surface:#fff;--soft:#f5f6f8;--rail:#f1f3f5;--border:#e1e4e8;--border2:#cfd4da;--text:#20242a;--muted:#69707a;--dim:#9299a2;--blue:#2d65d8;--blue-s:#edf3ff;--green:#177a55;--green-s:#eaf6f0;--orange:#a76308;--orange-s:#fff3df;--red:#b83f4c}
+*{box-sizing:border-box;margin:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif}
+#stage{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden}
+#paper{position:absolute;left:0;top:0}
+#deskwrap{position:absolute;inset:0;overflow:hidden}
+#wall{position:absolute;inset:0;background:radial-gradient(1200px 700px at 15% 10%,#cfe0ff 0,transparent 60%),radial-gradient(1000px 700px at 90% 95%,#e9d7ff 0,transparent 60%),linear-gradient(135deg,#dbe6f6,#c9d6ea)}
+#cam{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
+#win{position:absolute;left:40px;top:60px;width:1640px;height:950px;background:var(--surface);border-radius:14px;box-shadow:0 40px 90px rgba(30,45,80,.35),0 0 0 1px rgba(0,0,0,.08);overflow:hidden;color:var(--text)}
+#tb{position:absolute;left:0;top:0;right:0;height:44px;background:var(--rail);border-bottom:1px solid var(--border)}
+#tb i{position:absolute;top:15px;width:13px;height:13px;border-radius:50%}
+#tb span{position:absolute;left:0;right:0;text-align:center;top:12px;font-size:14px;color:var(--muted)}
+#rail{position:absolute;left:0;top:44px;bottom:0;width:230px;background:var(--rail);border-right:1px solid var(--border);padding:18px 14px}
+.nav{position:relative;height:48px;border-radius:9px;display:flex;align-items:center;padding:0 14px;font-size:17px;color:var(--muted);margin-bottom:4px;gap:12px}
+.nav b{width:10px;height:10px;border-radius:3px;background:var(--border2)}
+.nav.on{background:var(--surface);color:var(--text);box-shadow:0 0 0 1px var(--border);font-weight:600}.nav.on b{background:var(--blue)}
+.nav em{position:absolute;right:12px;font-style:normal;font-size:13px;font-weight:700;background:var(--orange-s);color:var(--orange);border-radius:10px;padding:2px 9px}
+#rail .foot{position:absolute;left:28px;bottom:22px;font-size:14px;color:var(--dim);line-height:30px}
+#main{position:absolute;left:230px;top:44px;right:0;bottom:0;background:var(--surface)}
+.view{position:absolute;inset:0;opacity:0}
+.hd{padding:30px 44px 18px;border-bottom:1px solid var(--border)}
+.hd h1{font-size:30px;font-weight:700;letter-spacing:.01em}.hd p{font-size:15px;color:var(--muted);margin-top:6px}
+.card{border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.tag{display:inline-block;font-size:13px;font-weight:650;border-radius:6px;padding:4px 10px;background:var(--soft);color:var(--muted)}
+.tag.g{background:var(--green-s);color:var(--green)}.tag.o{background:var(--orange-s);color:var(--orange)}.tag.b{background:var(--blue-s);color:var(--blue)}
+/* guide */
+#guide .box{position:absolute;left:230px;top:70px;width:900px;padding:34px 40px}
+#guide h2{font-size:28px}#guide .sub{color:var(--muted);font-size:16px;margin:8px 0 22px}
+.step{position:relative;height:74px;border-top:1px solid var(--border);display:flex;align-items:center;gap:18px;font-size:20px}
+.step .ck{width:28px;height:28px;border-radius:50%;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px}
+.step small{display:block;font-size:14px;color:var(--dim);margin-top:4px}
+.step.done .ck{background:var(--green);border-color:var(--green)}
+.step .go{position:absolute;right:20px;font-size:14px;color:var(--blue);font-weight:600}
+/* cal */
+#drop{position:absolute;left:44px;top:148px;width:440px;height:240px;border:2px dashed var(--border2);border-radius:14px;background:var(--soft);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);font-size:19px}
+#drop .big{font-size:40px;color:var(--blue)}
+#prog{position:absolute;left:44px;top:414px;width:440px}
+#prog .bar{height:8px;border-radius:4px;background:var(--border);overflow:hidden;margin-top:10px}#prog .bar i{display:block;height:100%;background:var(--blue)}
+#cands{position:absolute;left:520px;top:148px;width:480px}
+#cands h3{font-size:20px;margin-bottom:14px}
+.row{position:relative;height:96px;display:flex;align-items:center;padding:0 24px;gap:20px;margin-bottom:14px}
+.row .d{width:140px;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.row .t{flex:1;font-size:19px}.row .t small{display:block;font-size:14px;color:var(--dim);margin-top:5px}
+.row.pending{border-color:#e8c48d;background:#fffaf0}
+#drawer{position:absolute;right:0;top:0;bottom:0;width:400px;background:var(--surface);border-left:1px solid var(--border);box-shadow:-18px 0 40px rgba(20,30,60,.10);padding:36px 34px}
+#drawer h3{font-size:24px;margin:12px 0 18px}
+.ev{border-left:3px solid var(--orange);background:#fff7ea;padding:14px 16px;color:var(--muted);font-size:16px;line-height:1.7;margin:10px 0 20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 22px;border:1px solid var(--border2);border-radius:8px;font-size:17px;background:var(--surface);margin-right:10px}
+.btn.p{background:var(--text);color:#fff;border-color:var(--text)}
+/* today */
+#tlist{position:absolute;left:44px;top:148px;width:640px}
+#tlist h3{font-size:20px;margin-bottom:14px}
+.task{position:relative;height:92px;padding:0 22px;display:flex;align-items:center;gap:16px;margin-bottom:12px;font-size:19px}
+.task small{display:block;font-size:14px;color:var(--dim);margin-top:5px}.task .t{flex:1}
+.task.sel{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-s)}
+#tdetail{position:absolute;left:720px;top:148px;width:650px;padding:30px 34px;min-height:650px}
+#tdetail h3{font-size:25px;line-height:1.4;margin:10px 0 18px}
+#tdetail h4{font-size:15px;color:var(--muted);letter-spacing:.08em;margin:22px 0 10px}
+.prog{display:flex;gap:10px}.pstep{flex:1;position:relative;border:1px solid var(--border);border-radius:9px;padding:13px 14px;font-size:16px;color:var(--muted)}
+.pstep.done{background:var(--green-s);border-color:#bfe3d1;color:var(--green)}
+.art{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--border2);border-radius:9px;padding:11px 16px;font-size:17px;background:var(--soft)}
+#actions{margin-top:30px;height:60px}
+#recpt{position:absolute;left:34px;right:34px;bottom:30px;border:1px solid #bfe3d1;background:var(--green-s);border-radius:9px;padding:14px 18px;font-size:16px;color:var(--green)}
+#recpt b{color:var(--text);font-weight:600;margin-right:12px}
+/* overlays */
+#chip{position:absolute;width:150px;height:130px;text-align:center;font-size:14px;color:#2b3a55}
+#chip div{width:92px;height:106px;margin:0 auto 6px;background:#fff;border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,.2);border:1px solid #d6dbe4;position:relative;overflow:hidden}
+#chip div:before{content:"校历通知";position:absolute;left:0;right:0;top:34px;font-size:13px;color:#69707a}
+#chip div:after{content:"";position:absolute;left:0;right:0;top:0;height:20px;background:var(--blue)}
+#masc{position:absolute;width:60px;height:60px;transform-origin:50% 100%;image-rendering:pixelated;z-index:30}
+#cur{position:absolute;left:0;top:0;width:34px;height:34px;z-index:40}
+#ring{position:absolute;width:60px;height:60px;border-radius:50%;border:3px solid var(--blue);z-index:39;opacity:0}
+#dust{position:absolute;left:0;top:0;z-index:29}
+#chap{position:absolute;left:44px;top:12px;height:34px;padding:0 16px;border-radius:17px;background:rgba(255,255,255,.62);backdrop-filter:blur(14px);box-shadow:0 0 0 1px rgba(0,0,0,.06);font-size:16px;font-weight:600;color:#2b3a55;line-height:34px;z-index:50;opacity:0}
+#chap b{color:var(--blue);margin-right:8px}
+#sub{position:absolute;z-index:50;font-size:26px;line-height:1.35;opacity:0}
+#sub.pill{left:50%;bottom:20px;transform:translateX(-50%);padding:9px 26px;border-radius:26px;background:rgba(255,255,255,.7);backdrop-filter:blur(16px);box-shadow:0 0 0 1px rgba(0,0,0,.06);color:#20242a;white-space:nowrap}
+#sub.paper{left:170px;bottom:92px;font-family:"Songti SC","Songti TC",serif;color:#3a3228;font-size:30px;white-space:nowrap}
+
+/* extra views */
+.srow{position:relative;height:84px;padding:0 22px;display:flex;flex-direction:column;justify-content:center;font-size:20px;font-weight:600;margin-bottom:12px}.srow small{font-size:14px;color:var(--dim);font-weight:400;margin-top:5px}
+.srow.sel{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-s)}
+#slist{position:absolute;left:44px;top:148px;width:380px}
+#sdetail{position:absolute;left:450px;top:148px;width:920px;min-height:720px;padding:30px 36px}
+#sdetail h3{font-size:26px}#sdetail h4{font-size:15px;color:var(--muted);letter-spacing:.08em;margin:22px 0 10px}
+.evt{display:flex;gap:16px;align-items:center;height:48px;border-bottom:1px solid var(--border);font-size:17px}.evt i{font-style:normal;color:var(--dim);width:70px;font-variant-numeric:tabular-nums}
+#cand{margin-top:22px;padding:22px 26px;border-color:#e8c48d;background:#fffaf0}#cand b{display:block;font-size:21px;margin:12px 0 4px}
+#srecpt{position:absolute;left:36px;right:36px;bottom:28px;border:1px solid #bfe3d1;background:var(--green-s);border-radius:9px;padding:14px 18px;font-size:16px;color:var(--green)}
+#mlist{position:absolute;left:44px;top:148px;width:520px}
+#mdetail{position:absolute;left:600px;top:148px;width:770px;min-height:700px;padding:30px 36px}
+#mdetail h3{font-size:24px;margin:10px 0 6px}
+#mtext{border:1px solid var(--border2);border-radius:9px;background:var(--soft);padding:18px 20px;font-size:17px;line-height:1.85;color:var(--muted);margin:14px 0 20px;height:300px;overflow:hidden}
+#mtext mark{background:#fff3b8;color:var(--text)}
+#chatv .msgs{position:absolute;left:0;right:0;top:80px;bottom:150px;padding:30px 120px}
+.um{margin-left:auto;max-width:640px;background:var(--soft);border-radius:14px;padding:16px 22px;font-size:19px;width:fit-content}
+.am{margin-top:26px;font-size:19px;line-height:1.85;max-width:880px}.am small{display:block;color:var(--dim);font-size:14px;margin-bottom:8px}
+#composer{position:absolute;left:120px;right:120px;bottom:76px;height:92px;border:1px solid var(--border2);border-radius:16px;padding:18px 22px;font-size:18px;color:var(--dim);box-shadow:0 8px 24px rgba(30,45,80,.08)}
+#composer .send{position:absolute;right:16px;bottom:14px;background:var(--text);color:#fff;border-radius:9px;padding:8px 18px;font-size:16px}
+#scrim{position:absolute;inset:0;background:rgba(18,26,48,.5);opacity:0}
+#phone{position:absolute;left:730px;top:50px;width:460px;height:960px;border-radius:44px;background:#1b1f27;padding:14px;box-shadow:0 40px 90px rgba(0,0,0,.5);opacity:0}
+#pscr{position:relative;width:100%;height:100%;border-radius:32px;background:#eef1f6;overflow:hidden}
+#phd{height:92px;background:#fff;border-bottom:1px solid #e1e4e8;padding:44px 20px 0;font-size:19px;font-weight:700;text-align:center}#phd small{font-weight:400;color:#9299a2;font-size:12px;display:block}
+.pset{position:absolute;left:0;right:0;top:92px;bottom:0;padding:18px 16px;display:flex;flex-direction:column;gap:14px;opacity:0}.pm{position:relative;font-size:16px;line-height:1.65}
+.pm .b{display:inline-block;max-width:330px;padding:11px 15px;border-radius:14px}
+.pm.me{text-align:right}.pm.me .b{background:#3a7bf2;color:#fff;border-bottom-right-radius:4px;text-align:left}
+.pm.bot .b{background:#fff;border-bottom-left-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.pm.card .b{display:block;max-width:none;padding:0;overflow:hidden;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.pm.card .ch{padding:12px 16px;color:#fff;font-weight:700;font-size:16px}.pm.card .cb{padding:12px 16px;font-size:15px;line-height:1.7;color:#3a4150}
+.pm.card .cf{padding:10px 16px 14px;display:flex;gap:10px;font-size:14px}.pm.card .cf span{border:1px solid #cfd4da;border-radius:7px;padding:6px 14px}
+#idform{position:absolute;left:760px;top:250px;width:560px;padding:30px 34px;box-shadow:0 30px 70px rgba(20,30,60,.28);z-index:20;opacity:0;background:#fff}
+#idform h3{font-size:24px;margin-bottom:18px}.fld{margin-bottom:14px}.fld small{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+.fld div{height:46px;border:1px solid var(--border2);border-radius:8px;padding:0 14px;line-height:44px;font-size:19px}
+#chip{opacity:0}#cand.ok{border-color:#bfe3d1;background:var(--green-s)}#amtx{white-space:pre-wrap}#part{position:absolute;right:44px;top:20px;z-index:55;font:600 15px Menlo,monospace;letter-spacing:.06em}
+#realbg{position:absolute;left:0;top:0;width:1920px;height:1080px;display:none}
+#wipe{position:absolute;inset:0;z-index:60}
+</style></head><body>
+<div id="stage">
+ <canvas id="paper" width="1920" height="1080"></canvas>
+ <div id="deskwrap"><div id="wall"></div>
+  <div id="cam">
+   <div id="chip"><div></div>七年级校历通知.png</div>
+   <img id="realbg" alt="">
+   <div id="win">
+    <div id="tb"><i style="left:18px;background:#ff5f57"></i><i style="left:38px;background:#febc2e"></i><i style="left:58px;background:#28c840"></i><span>EduPi</span></div>
+    <div id="rail">
+      <div class="nav" id="nav-today"><b></b>今天<em id="badge">6</em></div>
+      <div class="nav" id="nav-tasks"><b></b>教学任务</div>
+      <div class="nav" id="nav-cal"><b></b>日程</div>
+      <div class="nav" id="nav-stu"><b></b>学生档案</div>
+      <div class="nav" id="nav-mat"><b></b>材料</div>
+      <div class="nav" id="nav-art"><b></b>教学产物</div>
+      <div class="nav" id="nav-ai"><b></b>AI 协作</div>
+      <div class="foot">帮助<br>模型设置<br>教师设置</div>
+    </div>
+    <div id="main">
+     <div class="view" id="guide"><div class="hd"><h1>欢迎使用 EduPi</h1><p>教师的本地 AI 工作台</p></div>
+      <div class="card box"><h2>先完成教师设置</h2><div class="sub">设置只做一次；以后可从帮助重新打开。<span id="gcount" style="float:right;color:var(--blue);font-weight:700">0 / 5</span></div>
+       <div class="step" id="s1"><div class="ck">✓</div><div>补齐身份<small>称呼、学科、年级</small></div><span class="go">开始</span></div>
+       <div class="step" id="s2"><div class="ck">✓</div><div>导入校历<small>上传学校通知或校历文件</small></div><span class="go">开始</span></div>
+       <div class="step" id="s3"><div class="ck">✓</div><div>补充课程<small>课表与课次</small></div><span class="go">开始</span></div>
+       <div class="step" id="s4"><div class="ck">✓</div><div>导入班级名单<small>当前学生名单</small></div><span class="go">开始</span></div>
+       <div class="step" id="s5"><div class="ck">✓</div><div>上传第一份材料<small>教学材料</small></div><span class="go">开始</span></div>
+      </div></div>
+     <div class="view" id="cal"><div class="hd"><h1>日程</h1><p>校历与课程</p></div>
+      <div id="drop"><div class="big">⇪</div>拖入学校通知、校历图片或文件<span style="font-size:14px;color:var(--dim)">日期不确定时，停在待确认</span></div>
+      <div id="prog"><span id="progtx" style="font-size:16px;color:var(--muted)">识别中…</span><div class="bar"><i id="progbar" style="width:0"></i></div></div>
+      <div id="cands"><h3>识别出的日程候选 <span class="tag" id="ccount">3</span></h3>
+       <div class="card row" id="r1"><div class="d">10月20日</div><div class="t">家长会<small>来源：通知 第1段</small></div><span class="tag g">已识别</span></div>
+       <div class="card row" id="r2"><div class="d">10月27日</div><div class="t">秋季运动会<small>来源：通知 第2段</small></div><span class="tag g">已识别</span></div>
+       <div class="card row pending" id="r3"><div class="d">11月 · 日期未明</div><div class="t">期中考试<small>来源：通知 第4段</small></div><span class="tag o" id="r3tag">待确认</span></div>
+      </div>
+      <div id="drawer"><span class="tag o">待确认</span><h3>期中考试</h3><div style="font-size:15px;color:var(--muted)">原文证据</div>
+       <div class="ev">“期中考试时间另行通知。”<br>通知 第4段</div>
+       <div style="font-size:16px;color:var(--muted);margin-bottom:22px">日期不确定，不会写入日程。</div><span class="btn p" id="dbtn1">确认日期</span><span class="btn" id="dbtn2">保持待确认</span></div>
+     </div>
+     <div class="view" id="today"><div class="hd"><h1>今天 · 10月15日</h1><p>由校历与材料形成的待办</p></div>
+      <div id="tlist"><h3>待办任务</h3>
+       <div class="card task" id="k1"><div class="t">七年级数学《有理数的加减》课前准备<small>备课任务</small></div><span class="tag o" id="k1tag">待审核</span></div>
+       <div class="card task" id="k2"><div class="t">国庆后返校安排提醒<small>校历通知</small></div><span class="tag o">待审核</span></div>
+       <div class="card task" id="k3"><div class="t">周测后需跟进的学生名单<small>学生档案</small></div><span class="tag o">待审核</span></div>
+       <div class="card task" id="k4"><div class="t">本周教学材料整理<small>材料</small></div><span class="tag b">进行中</span></div>
+      </div>
+      <div class="card" id="tdetail"><span class="tag o" id="dtag">待审核</span><h3>七年级数学《有理数的加减》课前准备</h3>
+       <h4>证据</h4><div class="ev" style="border-color:var(--blue);background:var(--blue-s)">课表：周四 第3节 七年级数学<br>校历：国庆后第一周教学安排</div>
+       <h4>进度</h4><div class="prog"><div class="pstep" id="p1">读取课表</div><div class="pstep" id="p2">匹配教学材料</div><div class="pstep" id="p3">生成准备清单</div></div>
+       <h4>产物</h4><div class="art" id="art">▤ 课前准备清单.docx</div>
+       <div id="actions"><span class="btn p" id="bok" style="margin-top:20px">通过</span><span class="btn" id="bedit" style="margin-top:20px">修改</span><span class="btn" id="bback" style="margin-top:20px">退回</span></div>
+       <div id="recpt"><b>已通过</b>命令已由 Core 执行，回执已核验</div>
+      </div>
+     </div>
+     <div class="view" id="stu"><div class="hd"><h1>学生档案</h1><p>事件、教育记忆与候选信息</p></div>
+      <div id="slist"><div class="card srow sel" id="st1">张三<small>七年级 3 班</small></div><div class="card srow" id="st2">李四<small>七年级 3 班</small></div><div class="card srow" id="st3">赵六<small>七年级 3 班</small></div></div>
+      <div class="card" id="sdetail"><h3>张三</h3><h4>事件</h4>
+       <div class="evt" id="ev1"><i>9月22日</i>周测：移项变号出错</div><div class="evt" id="ev2"><i>9月25日</i>课堂记录：解方程时再次漏变号</div><div class="evt" id="ev3"><i>10月9日</i>作业：同类错误第三次出现</div>
+       <div class="card" id="cand"><span class="tag o" id="ctag">待确认</span><b>连续 3 次在“移项变号”上出错</b><span style="font-size:15px;color:var(--muted)">候选信息 · 学生跟进</span>
+        <div class="ev" id="cev">依据：周测 9月22日、课堂记录 9月25日、作业 10月9日</div>
+        <div id="cbtns"><span class="btn p" id="cb1">接受</span><span class="btn" id="cb2">修改</span><span class="btn" id="cb3">拒绝</span><span class="btn" id="cb4">暂缓</span></div></div>
+       <div id="srecpt">✓ 已记录回执　已写入学生画像，可用于评语、家长沟通与辅导方案</div></div></div>
+     <div class="view" id="mat"><div class="hd"><h1>材料</h1><p>导入、识别与核对</p></div>
+      <div id="mlist"><div class="card srow sel" id="m1">七年级数学 第三章 教案.docx<small>备课材料 · 正文已识别</small></div><div class="card srow" id="m2">国庆放假通知.pdf<small>校历通知 · 已确认</small></div><div class="card srow" id="m3">周测成绩表.xlsx<small>学生材料 · 处理中…</small></div></div>
+      <div class="card" id="mdetail"><span class="tag o" id="mtag">待核对</span><h3>备课材料正文</h3><div style="font-size:14px;color:var(--dim)">原文片段 · 七年级数学 第三章 教案.docx</div>
+       <div id="mtext">第三章　有理数的加减。<mark>课时目标：掌握有理数加法法则，能够进行简单的有理数加减混合运算。</mark>教学重点：同号相加、异号相加的符号判断。教学难点：减法转化为加法。作业：课本第 52 页 1–6 题……</div>
+       <span class="btn" id="mprev">预览原材料</span><span class="btn p" id="mok">确认正文</span><span id="mundo" style="font-size:15px;color:var(--blue);margin-left:14px">撤回确认</span>
+       <div id="mrec" style="margin-top:26px;border:1px solid #bfe3d1;background:var(--green-s);border-radius:9px;padding:14px 18px;font-size:16px;color:var(--green)">✓ 正文已确认，可用于备课任务与日程</div></div></div>
+     <div class="view" id="chatv"><div class="hd"><h1>根据七年级数学安排，今天先准备什么？</h1><p>AI 协作 · 教育工作区</p></div>
+      <div class="msgs"><div class="um" id="um1">根据我的七年级数学安排，今天先准备什么？</div>
+       <div class="am" id="am1"><small>EduPi</small><span id="amtx"></span></div></div>
+      <div id="composer"><span id="ctx">描述教学目标，或继续当前任务…</span><span class="send">发送</span></div></div>
+    </div>
+   </div>
+   <div id="scrim"></div>
+   <div class="card" id="idform"><h3>补齐身份</h3><div class="fld"><small>称呼</small><div id="f1"></div></div><div class="fld"><small>学科</small><div id="f2"></div></div><div class="fld"><small>年级</small><div id="f3"></div></div><span class="btn p" id="fsave" style="margin-top:6px">保存</span></div>
+   <div id="phone"><div id="pscr"><div id="phd">班主任AI助手<small>飞书 · 机器人</small></div><div id="pmsgs"></div></div></div>
+   <canvas id="dust" width="1920" height="1080"></canvas>
+   <canvas id="masc" width="12" height="12"></canvas>
+   <div id="ring"></div>
+   <svg id="cur" viewBox="0 0 24 24"><path d="M3 2l7 19 3-8 8-3z" fill="#fff" stroke="#20242a" stroke-width="1.6" stroke-linejoin="round"/></svg>
+  </div>
+  <div id="chap"></div>
+ </div>
+ <div id="sub"></div>
+ <div id="part"></div>
+ <canvas id="wipe" width="1920" height="1080"></canvas>
+</div>
+<script src="build/data.js"></script><script src="engine.js"></script><script src="scenes.js"></script></body></html>
