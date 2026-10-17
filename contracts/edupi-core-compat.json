@@ -3,10 +3,10 @@
   "core_repository": "edupi",
   "core_sdk": { "pi": "1.0.2", "pi_durable": "1.0.2" },
   "core_runtime": {
-    "core_commit": "fbd9bae9d192faad9dbfb002277bd2ea7f5f8dce",
+    "core_commit": "8ea21ace7e8e55a4091a3a32954a02fc224b046a",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:9830444c1e39a879d4463238fffd35aaac841e2ad7245fdbe2c069085e36b22e",
-    "runtime_component_manifest_hash": "sha256:f271e5000f8b57d2d464082a904e1c79145e6ff705a1042ecb99a4a1f444771a",
+    "component_manifest_hash": "sha256:9ad7f36647838d10d056a88bf822b497a40cc9cce6d0e11853da3e8a0905fb5d",
+    "runtime_component_manifest_hash": "sha256:4d8e71efa2d32b803971a5086bc7f55d91b0beab4af870fd381824eae7031ed4",
     "runtime_schema_hash": "sha256:6c9ef87ed04f18b81abc30236ab09b9d7ce00879c12d519deaa5e479a4844c49"
   },
   "contract_identities": [
@@ -209,5 +209,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/280",
     "https://github.com/PIGU-PPPgu/edupi/pull/283"
   ],
-  "change_note": "Temporary Desktop pairing to Core PR #286 head fbd9bae, based on merged #283 and pending legacy schedule-deletion fix. Do not ship until #286 merges and this identity is replaced by its exact merge commit. Runtime schema adds teacher_usage_erase_all; Runtime and Desktop component manifests changed. Bridge v1.1, occurrence v1.2, fixtures and 12 public bridge commands remain unchanged. Desktop has no teacher_usage capture, consent UI, upload queue or cached batches; observation and external send remain off. Core deletion and consent receipts do not substitute for installed-app verification. G2/G3/G4 Live remain off by default; DOCX proposals stay pending teacher review."
+  "change_note": "Temporary Desktop pairing to Core PR #286 head 8ea21ac, based on merged #283 and pending legacy schedule-deletion fix. Do not ship until #286 merges and this identity is replaced by its exact merge commit. Runtime schema adds teacher_usage_erase_all; Runtime and Desktop component manifests changed. Bridge v1.1, occurrence v1.2, fixtures and 12 public bridge commands remain unchanged. Desktop has no teacher_usage capture, consent UI, upload queue or cached batches; observation and external send remain off. Core deletion and consent receipts do not substitute for installed-app verification. G2/G3/G4 Live remain off by default; DOCX proposals stay pending teacher review."
 }
