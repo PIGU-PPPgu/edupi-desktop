@@ -3,11 +3,11 @@
   "core_repository": "edupi",
   "core_sdk": { "pi": "1.0.2", "pi_durable": "1.0.2" },
   "core_runtime": {
-    "core_commit": "b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d",
+    "core_commit": "fbd9bae9d192faad9dbfb002277bd2ea7f5f8dce",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:1cdb84958989f632237b4595d5c121cce4b81a25c98297e09f05e44a409dc7a7",
-    "runtime_component_manifest_hash": "sha256:2dc436f77510558473ab6b675d845a3adce1f3df45c1e90537a769f15db0b294",
-    "runtime_schema_hash": "sha256:4ed2f9ecf9bb5fc7824363eff39fcf5fa6757f776abc1a2902842702df4fb3ae"
+    "component_manifest_hash": "sha256:9830444c1e39a879d4463238fffd35aaac841e2ad7245fdbe2c069085e36b22e",
+    "runtime_component_manifest_hash": "sha256:f271e5000f8b57d2d464082a904e1c79145e6ff705a1042ecb99a4a1f444771a",
+    "runtime_schema_hash": "sha256:6c9ef87ed04f18b81abc30236ab09b9d7ce00879c12d519deaa5e479a4844c49"
   },
   "contract_identities": [
     {
@@ -206,7 +206,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/277",
     "https://github.com/PIGU-PPPgu/edupi/pull/278",
     "https://github.com/PIGU-PPPgu/edupi/pull/279",
-    "https://github.com/PIGU-PPPgu/edupi/pull/280"
+    "https://github.com/PIGU-PPPgu/edupi/pull/280",
+    "https://github.com/PIGU-PPPgu/edupi/pull/283"
   ],
-  "change_note": "Desktop pins Core main b12b5cb after PR #279 local L4 usage evidence and PR #280 versioned teacher-usage consent. Core Runtime schema and component manifest changed; Desktop component manifest, Bridge v1.1, occurrence v1.2 and 12 public bridge commands remain unchanged. The new teacher_usage consent, record, read and upload-batch-read APIs are held: Desktop has not wired their UI or capture flow, usage remains local-only and external_send=false. Desktop outbox requires affirmative Core capture before Pi dispatch. G2/G3/G4 Live remain off by default; DOCX proposals stay pending teacher review. Source pairing does not establish installed-app, real sleep or teacher-quality acceptance."
+  "change_note": "Temporary Desktop pairing to Core PR #286 head fbd9bae, based on merged #283 and pending legacy schedule-deletion fix. Do not ship until #286 merges and this identity is replaced by its exact merge commit. Runtime schema adds teacher_usage_erase_all; Runtime and Desktop component manifests changed. Bridge v1.1, occurrence v1.2, fixtures and 12 public bridge commands remain unchanged. Desktop has no teacher_usage capture, consent UI, upload queue or cached batches; observation and external send remain off. Core deletion and consent receipts do not substitute for installed-app verification. G2/G3/G4 Live remain off by default; DOCX proposals stay pending teacher review."
 }
