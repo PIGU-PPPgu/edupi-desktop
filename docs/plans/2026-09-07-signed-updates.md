@@ -1,5 +1,9 @@
 # 自动下载安装
 
+## 2026-10-19 Windows 构建暂缓
+
+用户要求在其确认 Windows x64 电脑可用之前，不触发 Windows 构建或原生检查。后续不派发 `platform=all/windows` 签名 Draft、Windows preview/smoke/debug，也不手动重跑私有 Core 的 `windows-native-inspector`；Core PR 更新/main 推送会自动触发该 job，须保持 [Core #286](https://github.com/PIGU-PPPgu/edupi/pull/286) 待处理，不能用跳过或零步骤失败替代质量门。其 Mac 自托管质量检查已通过，Windows job 零步骤未分配 runner；Desktop [#364](https://github.com/PIGU-PPPgu/edupi-desktop/pull/364) 仍为 Draft 临时 pin。没有新签名候选或本地安装包；公开 `.70` Release、七键 feed 与唯一安装版不变。Windows runner 就绪后再恢复精确 Core 合并、Desktop 最终 pin、三平台同轮签名与安装验收。
+
 ## 2026-10-15 v0.3.70 正式发布与技术验收
 
 - Desktop [#357](https://github.com/PIGU-PPPgu/edupi-desktop/pull/357) 合并为精确 `main` `ea03b52398455d80539d8f52fe22e18bd2dad032`，固定 Core `b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d`。[三平台 Draft run 38679653950](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/38679653950) attempt 1 的 Mac/Windows/Linux、notary-preflight 与 `draft-proof` 同轮成功，九资产指纹 `sha256:e7ab5b1bbbe0db337f9f5f9f456125595057baaea5217b755da342378c319311`。Apple App submission `02c098d7-76e1-4d6f-b70c-8646aaedc66b` 与 DMG submission `f465887b-febf-406b-a782-e228889aec7e` 均 `Accepted`；装订、严格签名、Gatekeeper 及最终 DMG 替换通过。最终 DMG 资产 `642737755`，234088244 字节，SHA-256 `db04f04714409a7326ef396e3171ea17123de6de338416c3a4ab383c3f32101c`；本机整包摘要、镜像 CRC、签名和 Gatekeeper 独立通过。
