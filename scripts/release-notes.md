@@ -4,4 +4,6 @@ EduPi Desktop 0.3.71 macOS Apple Silicon 技术试用候选，Release 保持 Dra
 
 本轮只构建 macOS Apple Silicon。Windows 构建和原生检查按用户指令暂缓，Linux 亦不纳入本次候选；因此没有三平台同轮资产证明，不公开 Release、不更新七平台 updater feed。当前公开安装版仍为 v0.3.70。只有这份候选实际完成 Mac 签名、公证、包内 Core 身份和隔离根安装验收，才能记录对应的 macOS 技术结果；它不替代 Core #286 的最终合并 pin 或后续三平台发布门。
 
+仓库级 Rust 审计对 `zip 4.6.1` 报出三项漏洞，其中一项严重、一项高危；该版本由 Tauri updater 的 Windows 目标依赖带入锁文件。此候选仅在 Mac 目标依赖闭包排除旧版 `zip` 后才继续签名；仓库级审计仍失败，不能据 Mac 检查宣称 Windows 安全或发布资格。待上游提供已发布修复并完成全平台验证后再处理正式发布。
+
 教师资料、模型配置和默认安全门不因候选改变。G1/G2/G3/G4 Live 默认关闭，外部发送不自动开启；未核实材料和 DOCX 建议继续待教师审核。

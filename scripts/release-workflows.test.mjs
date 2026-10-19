@@ -52,6 +52,16 @@ test("the signed release workflow is manual-only", async () => {
   assert.match(release, /tauriScript: npx tauri/);
 });
 
+test("a macOS-only draft proves its target closure before creating a release", async () => {
+  const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+  const preflight = release.slice(release.indexOf("\n  notary-preflight:"), release.indexOf("\n  release:"));
+  assert.match(preflight, /name: Check out EduPi Desktop/);
+  assert.match(preflight, /name: Verify macOS dependency closure/);
+  assert.match(preflight, /cargo tree --locked --target aarch64-apple-darwin --edges normal,build/);
+  assert.match(preflight, /grep -Eq '\^zip v\(\[0-8\]\)\\\.'/);
+  assert.doesNotMatch(preflight, /--ignore RUSTSEC|cargo audit --ignore/);
+});
+
 test("paired Core checks use a private workspace-backed temporary root", async () => {
   for (const name of ["release.yml", "preview-installers.yml"]) {
     const workflow = await readFile(join(root, ".github", "workflows", name), "utf8");
