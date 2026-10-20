@@ -4,6 +4,8 @@ EduPi Desktop 0.3.77 macOS Apple Silicon 技术候选，Release 保持 Draft。
 
 原生桌面逐次确认绑定当前应用主窗口，缺少窗口或请求过期立即拒绝。已封存的 Core 技能不可经普通技能开关写入。DOCX 章节建议先读取当前原文与元数据，再由教师明确确认片段，不自动采用或创建备课任务。
 
+PDF、图片和 OCR 结果只登记材料与只读候选，不经旧同步入口写入日程或课表；非 OCR 的 Word、ICS 流程保留。Core 写入围栏与安装负例须在最终配对中单独通过。
+
 Core 精确提交、Runtime schema 和双组件清单以包内兼容清单为准；源码检查、签名、公证与实际安装结果分别记录，不互相替代。教师资料和模型配置保持，外部发送关闭。
 
 本轮只构建 macOS Apple Silicon，不构建 Windows/Linux，不公开 Release 或更新七平台 feed；公开版仍为 v0.3.70。
