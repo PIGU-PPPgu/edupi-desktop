@@ -98,6 +98,11 @@ function reviewHistory(task: RawRecord): RawRecord[] {
   return history;
 }
 
+function isCapabilityTask(task: RawRecord): boolean {
+  return /^capability_task_[a-f0-9]{32}$/.test(String(task.task_id))
+    && task.trigger === "capability_package" && record(task.evidence)?.material_kind === "capability_package";
+}
+
 function normalizePatch(value: unknown, decision: TaskReviewDecision): RawRecord | null {
   if (decision !== "modify") {
     if (value !== undefined && value !== null) throw new TaskReviewError("invalid_envelope", `${decision} 不接受修改字段。`);
@@ -136,6 +141,7 @@ export function buildTaskReviewCommandEnvelope(input: TaskReviewInput & { payloa
   const stateHash = requiredText(payload.state_hash, "stateHash");
   if (!/^sha256:[A-Za-z0-9_-]+$/.test(stateHash)) throw new TaskReviewError("unavailable", "Core 教育快照来源哈希不可用。");
   const task = taskFromPayload(payload, taskId);
+  if (input.decision === "rollback" && isCapabilityTask(task)) throw new TaskReviewError("invalid_envelope", "当前任务不支持回滚。");
   const revision = task.revision;
   if (typeof revision !== "number" || !Number.isInteger(revision) || revision < 0) throw new TaskReviewError("invalid_envelope", "任务审核版本无效。");
   if (input.expectedRevision !== undefined) {
@@ -199,7 +205,7 @@ async function productionSnapshot(): Promise<SnapshotResult> {
 const expectedStatus: Record<TaskReviewDecision, string> = { accept: "accepted", modify: "modified", reject: "rejected", hold: "held", rollback: "modified" };
 const expectedTaskStatus: Record<TaskReviewDecision, string> = { accept: "accepted", modify: "modified", reject: "rejected", hold: "hold", rollback: "" };
 
-function receiptForCommand(value: unknown, envelope: RawRecord, supportedCommands: readonly string[]): RawRecord {
+function receiptForCommand(value: unknown, envelope: RawRecord, supportedCommands: readonly string[], beforeTask: RawRecord): RawRecord {
   const response = record(value);
   const identity = activeBridgeIdentity();
   if (!response || response.ok !== true || response.operation !== "command" || response.request_id !== envelope.request_id
@@ -253,7 +259,9 @@ function receiptForCommand(value: unknown, envelope: RawRecord, supportedCommand
     throw new TaskReviewError("invalid_envelope", "Core 任务审核状态绑定无效。");
   }
   const rollback = record(receipt.rollback);
-  if (!rollback || (decision === "rollback"
+  if (!rollback || (isCapabilityTask(beforeTask)
+    ? decision === "rollback" || !sameRecord(rollback, { available: false, rollback_id: null, expires_at: null })
+    : decision === "rollback"
     ? rollback.available !== false || rollback.rollback_id !== null
     : rollback.available !== true || typeof rollback.rollback_id !== "string" || !rollback.rollback_id)) {
     throw new TaskReviewError("invalid_envelope", "Core 任务审核回滚绑定无效。");
@@ -273,7 +281,8 @@ function verifyRefreshedTask(payload: CoreEducationSnapshotPayload, beforeTask: 
   const latest = afterHistory.at(-1);
   const receiptReview = record(receipt.teacher_review);
   const taskReviewState = task.status === "planned" ? "pending_review" : task.status === "hold" ? "held" : task.status;
-  if (task.revision !== expectedRevision || afterHistory.length !== beforeHistory.length + 1
+  if (isCapabilityTask(beforeTask) && !isCapabilityTask(task)
+    || task.revision !== expectedRevision || afterHistory.length !== beforeHistory.length + 1
     || !sameRecord(afterHistory.slice(0, beforeHistory.length), beforeHistory) || !latest
     || latest.action !== decision || latest.reviewed_at !== envelope.issued_at
     || latest.reviewer !== record(envelope.teacher_review)?.reviewer_id || latest.note !== command.note
@@ -286,7 +295,8 @@ function verifyRefreshedTask(payload: CoreEducationSnapshotPayload, beforeTask: 
   if (decision === "rollback") {
     if (latest.rollback_of !== command.rollback_id || record(latest.after)?.status !== task.status) throw new TaskReviewError("invalid_envelope", "Core 刷新后的回滚记录无效。");
   } else {
-    if (task.status !== expectedTaskStatus[decision] || latest.review_id !== record(receipt.rollback)?.rollback_id) throw new TaskReviewError("invalid_envelope", "Core 刷新后的任务状态无效。");
+    const expectedReviewId = isCapabilityTask(beforeTask) ? receipt.receipt_id : record(receipt.rollback)?.rollback_id;
+    if (task.status !== expectedTaskStatus[decision] || latest.review_id !== expectedReviewId) throw new TaskReviewError("invalid_envelope", "Core 刷新后的任务状态无效。");
   }
   const patch = record(command.patch);
   if (decision === "modify" && patch) {
@@ -314,7 +324,7 @@ export async function issueTaskReview(input: TaskReviewInput, dependencies: Task
     if (error instanceof TaskReviewError) throw error;
     throw new TaskReviewError("unavailable", "Core 任务审核暂不可用。");
   }
-  const receipt = receiptForCommand(rawResponse, envelope, supportedCommands);
+  const receipt = receiptForCommand(rawResponse, envelope, supportedCommands, beforeTask);
   const refresh = dependencies.refreshSnapshot || (async (roots) => (await readEduPiEducationSnapshot({ roots })).payload);
   const data = await refresh(initial.roots);
   const task = verifyRefreshedTask(data, beforeTask, envelope, receipt);
