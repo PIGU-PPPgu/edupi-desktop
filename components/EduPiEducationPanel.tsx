@@ -57,6 +57,8 @@ import { materialRecognitionSummary } from "@/lib/edupi-material-recognition-sta
 import type { DocumentPairingSubmission } from "@/lib/edupi-document-pairing-contract";
 import { preserveUnavailableWorkspaceResources, readEduPiWorkspace } from "@/lib/edupi-education-client";
 import { EduPiPreparationArtifactEditor } from "./EduPiPreparationArtifactEditor";
+import { EduPiArtifactUsageContext } from "./EduPiUsageObservation";
+import { projectedArtifactUsageTarget } from "@/lib/edupi-usage-observation";
 import { deleteEducationEntity } from "@/lib/edupi-entity-delete-client";
 import { readEducationMemoryScopes, type EducationMemoryScopeProjection } from "@/lib/edupi-memory-scopes";
 import { readEduPiTeachingSkills, type EduPiTeachingSkillLifecycle } from "@/lib/edupi-platform-client";
@@ -179,6 +181,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [previewArtifact, setPreviewArtifact] = useState<{ id: string; title: string } | null>(null);
   const previewArtifactId = previewArtifact?.id ?? null;
+  const previewUsageTarget = education && previewPath ? projectedArtifactUsageTarget(education.workspace, previewPath, education.workCases) : null;
   const [fileReturnTaskKey, setFileReturnTaskKey] = useState<string | null>(null);
   const [reviewBusy, setReviewBusy] = useState<TaskReviewAction | null>(null);
   const [reviewMessage, setReviewMessage] = useState<string | null>(null);
@@ -1299,13 +1302,14 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
           </div>
           {inspectorAvailable ? <EduPiInspector open={inspectorOpen} data={education} task={activeTask} onClose={toggleInspector} onOpenAgent={openAgent} onStage={selectStage} /> : null}
       {taskDetail ? <EduPiTaskDetailDrawer task={taskDetail} workCase={workCaseForTask(education, taskDetail.id)} files={education.generatedArtifacts} workspace={education.workspace} docked={dockedDetails} unavailable={Boolean(loadError)} artifactsUnavailable={education.workspaceResourcesUnavailable} onClose={closeTaskDetail} onOpenFile={openTaskFile} onOpenTask={selectTask} onReview={detailReviewable ? () => selectTask(taskDetail, "review") : undefined} onOpenAgent={openAgentForTask} onDelete={(task) => { if (task.id) void deleteEntity("task", task.id, task.title).catch(() => {}); }} deleteBusy={deleteBusy === `task:${taskDetail.id}`} agentBusy={taskSessionBusy} agentError={taskSessionError ? "会话暂不可用，请重试" : null} /> : null}
-      {drawer === "file" ? <FileWorkspaceDrawer kind="file" docked={dockedDetails} onBack={fileReturnTaskKey ? () => closeDrawer(true) : undefined} task={activeView === "tasks" || activeView === "review" ? activeTask : undefined} filePath={previewPath} fileTitle={education?.generatedArtifacts?.find(file => file.artifact_id === previewArtifactId || previewPath?.replaceAll("\\", "/").endsWith(`/${file.relative_path.replaceAll("\\", "/")}`))?.title || previewArtifact?.title || education?.teacherMaterials?.find(file => previewPath?.replaceAll("\\", "/").endsWith(`/${file.relative_path.replaceAll("\\", "/")}`))?.title} filePanel={previewPath ? previewArtifactId ? <EduPiPreparationArtifactEditor
+      {drawer === "file" ? <FileWorkspaceDrawer kind="file" docked={dockedDetails} onBack={fileReturnTaskKey ? () => closeDrawer(true) : undefined} task={activeView === "tasks" || activeView === "review" ? activeTask : undefined} filePath={previewPath} fileTitle={education?.generatedArtifacts?.find(file => file.artifact_id === previewArtifactId || previewPath?.replaceAll("\\", "/").endsWith(`/${file.relative_path.replaceAll("\\", "/")}`))?.title || previewArtifact?.title || education?.teacherMaterials?.find(file => previewPath?.replaceAll("\\", "/").endsWith(`/${file.relative_path.replaceAll("\\", "/")}`))?.title} filePanel={previewPath ? <EduPiArtifactUsageContext.Provider value={previewUsageTarget ? { target: previewUsageTarget, filePath: previewPath } : null}>{previewArtifactId ? <EduPiPreparationArtifactEditor
         key={previewArtifactId}
         artifactId={previewArtifactId}
+        workspace={education.workspace}
         preview={value => renderFilePreview(`${education!.workspace.replace(/[\\/]$/, "")}/${value.relative_path}`)}
         onSaved={value => { setPreviewPath(`${education!.workspace.replace(/[\\/]$/, "")}/${value.relative_path}`); window.dispatchEvent(new Event("edupi-preparation-updated")); }}
         onAgent={prompt => { closeDrawer(false); startAgent(prompt, "replace"); }}
-      /> : renderFilePreview(previewPath) : null} onClose={() => { closeDrawer(false); closeTaskDetail(); }} onPreparePrompt={onPrepareAgentPrompt} /> : null}
+      /> : renderFilePreview(previewPath)}</EduPiArtifactUsageContext.Provider> : null} onClose={() => { closeDrawer(false); closeTaskDetail(); }} onPreparePrompt={onPrepareAgentPrompt} /> : null}
         </div>
       </div>
       <EduPiQuickEntry open={quickEntryOpen} education={education} onClose={onCloseQuickEntry} onSelect={selectQuickEntry} />

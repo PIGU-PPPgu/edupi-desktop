@@ -12,6 +12,7 @@ import {
   type TeacherFeedbackCapture,
 } from "@/lib/edupi-teacher-feedback";
 import { EduPiTeacherValueForm, feedbackCaptureFor, type TeacherValueDraft } from "./EduPiTodayWork";
+import { EduPiUsageVisibility } from "./EduPiUsageObservation";
 
 const EMPTY_VALUE: TeacherValueDraft = { usefulness: "", used: false, wouldUseAgain: "", baselineMinutes: "", reviewMinutes: "", note: "" };
 type FeedbackRecord = { feedback_id?: string; session_id?: string; current?: boolean; target?: { kind?: string; target_id?: string; revision?: number } };
@@ -164,9 +165,9 @@ export function EduPiTaskFeedback({ task, candidate }: { task: TeacherTask; cand
   return <section className="edupi-task-feedback" aria-label="教师评价">
     {!open && !recorded ? <button type="button" disabled={busy} onClick={() => void openForm()}>评价本次准备</button> : null}
     {recorded ? <span role="status">已评价</span> : null}
-    {open && !retryCapture ? <EduPiTeacherValueForm draft={draft} allowUsed={decision === "accept" || decision === "modify"}
+    {open && !retryCapture ? <EduPiUsageVisibility target={{ kind: "work_candidate", targetId: candidate.candidateId, expectedRevision: candidate.revision }} action="feedback_form_opened" surface="task"><EduPiTeacherValueForm draft={draft} allowUsed={decision === "accept" || decision === "modify"}
       busy={busy} onChange={setDraft} onSubmit={() => void submit()}
-      onCancel={() => { if (!busy) { setOpen(false); setRetryCapture(null); setDraft(EMPTY_VALUE); } }} /> : null}
+      onCancel={() => { if (!busy) { setOpen(false); setRetryCapture(null); setDraft(EMPTY_VALUE); } }} /></EduPiUsageVisibility> : null}
     {retryCapture && !busy ? <div className="edupi-task-feedback__retry"><button type="button" onClick={() => void submit()}>重试记录</button><button type="button" onClick={() => { setRetryCapture(null); setOpen(false); setDraft(EMPTY_VALUE); }}>取消</button></div> : null}
     {message ? <p role="status">{message}</p> : null}
   </section>;

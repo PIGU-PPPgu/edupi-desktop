@@ -14,9 +14,12 @@ import { EduPiTaskPreparationAction } from "./EduPiTaskPreparationAction";
 import { EduPiPreparationExecution } from "./EduPiPreparationExecution";
 import type { GeneratedArtifact } from "@/lib/edupi-generated-artifacts";
 import { EduPiTaskFeedback } from "./EduPiTaskFeedback";
+import { EduPiCapabilityFeedback } from "./EduPiCapabilityFeedback";
 import { todayWorkErrorMessage } from "@/lib/edupi-today-work";
 import { taskPreparedArtifacts } from "@/lib/edupi-task-artifacts";
 import { EduPiTaskArtifacts } from "./EduPiTaskArtifacts";
+import { useUsageVisibility } from "./EduPiUsageObservation";
+import type { UsageObservationTarget } from "@/lib/edupi-usage-observation";
 
 export type ReviewPayload = {
   note?: string;
@@ -54,7 +57,13 @@ function BriefStage({ task, contextLabel }: { task: TeacherTask; contextLabel: s
   return <div className="edupi-stage-brief"><dl><div><dt>任务来源</dt><dd>{taskSourceLabel(task)}</dd></div><div><dt>班级 / 学科</dt><dd>{contextLabel}</dd></div><div><dt>截止节点</dt><dd>{task.dueDate || "日期待确认"}</dd></div><div><dt>工作范围</dt><dd>教师内部</dd></div></dl><section><h3>预期产物</h3><ul>{(task.deliverables.length ? task.deliverables : ["待教师补充"]).map((item) => <li key={item}>{item}</li>)}</ul></section></div>;
 }
 
-function RunStage({ task, agentSession, busy, error, onOpenAgent, canPrepare, onStage }: { task: TeacherTask; agentSession: TaskSessionBinding | null; busy: boolean; error: string | null; onOpenAgent: () => void; canPrepare: boolean; onStage: (stage: TaskStage) => void }) {
+function taskUsageTarget(task: TeacherTask, workCase: EducationWorkCase | null, candidate?: EducationWorkCandidate | null): UsageObservationTarget | null {
+  if (candidate && candidate.taskId === task.id) return { kind: "work_candidate", targetId: candidate.candidateId, expectedRevision: candidate.revision };
+  if (task.trigger === "capability_package" && workCase?.kind === "capability_package" && workCase.taskId === task.id && workCase.externalSend === false) return { kind: "capability_work", targetId: workCase.id, expectedRevision: task.revision };
+  return null;
+}
+
+function RunStage({ task, agentSession, busy, error, onOpenAgent, canPrepare, onStage, usageTarget }: { task: TeacherTask; agentSession: TaskSessionBinding | null; busy: boolean; error: string | null; onOpenAgent: () => void; canPrepare: boolean; onStage: (stage: TaskStage) => void; usageTarget: UsageObservationTarget | null }) {
   const steps = taskAgentSteps(task);
   const runtime = agentSession?.status === "running"
     ? { title: "正在协作", action: "查看进行中", tone: "running" }
@@ -63,7 +72,7 @@ function RunStage({ task, agentSession, busy, error, onOpenAgent, canPrepare, on
       : agentSession?.status === "missing"
         ? { title: "协作记录需要恢复", action: "恢复协作", tone: "missing" }
         : { title: "尚未建立协作会话", action: "开始协作", tone: "unbound" };
-  return <div className="edupi-stage-run"><div className={`edupi-agent-session is-${runtime.tone}`}><span className="edupi-agent-session__dot" aria-hidden="true" /><div><strong>{runtime.title}</strong></div><button type="button" disabled={busy} onClick={onOpenAgent}>{busy ? "正在准备" : runtime.action}</button></div>{canPrepare && task.id ? <><EduPiTaskPreparationAction taskId={task.id} onReady={() => onStage("artifact")} /><EduPiPreparationExecution taskId={task.id} revision={task.revision} onUpdated={() => window.dispatchEvent(new Event("edupi-preparation-updated"))} /></> : null}{error ? <div className="edupi-agent-session__error" role="alert">{error}</div> : null}<div className="edupi-stage-toolbar"><span>准备清单</span></div><ol>{steps.map((step) => <li key={step.id} className={`is-${step.state}`}><span className="edupi-run-step__state">{step.state === "done" ? "✓" : step.state === "active" ? "●" : "○"}</span><div><strong>{step.title}</strong><p>{step.detail}</p><small>材料：{step.material}</small></div><em>{step.state === "done" ? "已记录" : step.state === "active" ? "待处理" : "待补充"}</em></li>)}</ol></div>;
+  return <div className="edupi-stage-run"><div className={`edupi-agent-session is-${runtime.tone}`}><span className="edupi-agent-session__dot" aria-hidden="true" /><div><strong>{runtime.title}</strong></div><button type="button" disabled={busy} onClick={onOpenAgent}>{busy ? "正在准备" : runtime.action}</button></div>{canPrepare && task.id ? <><EduPiTaskPreparationAction taskId={task.id} usageTarget={usageTarget} onReady={() => onStage("artifact")} /><EduPiPreparationExecution taskId={task.id} revision={task.revision} onUpdated={() => window.dispatchEvent(new Event("edupi-preparation-updated"))} /></> : null}{error ? <div className="edupi-agent-session__error" role="alert">{error}</div> : null}<div className="edupi-stage-toolbar"><span>准备清单</span></div><ol>{steps.map((step) => <li key={step.id} className={`is-${step.state}`}><span className="edupi-run-step__state">{step.state === "done" ? "✓" : step.state === "active" ? "●" : "○"}</span><div><strong>{step.title}</strong><p>{step.detail}</p><small>材料：{step.material}</small></div><em>{step.state === "done" ? "已记录" : step.state === "active" ? "待处理" : "待补充"}</em></li>)}</ol></div>;
 }
 
 function EvidenceStage({ task, workspace, onOpenFile }: { task: TeacherTask; workspace: string; onOpenFile: (path: string) => void }) {
@@ -87,7 +96,8 @@ function reviewActionLabel(value: string): string {
   return { accept: "接受", modify: "修改后接受", reject: "拒绝", hold: "暂缓", rollback: "回滚" }[value] || value;
 }
 
-function ReviewStage({ task, workCandidate, workReview = false, enabled, blocked, reason, busy, message, onReview, onOpenAgent, taskSessionBusy, taskSessionError }: { task: TeacherTask; workCandidate?: EducationWorkCandidate | null; workReview?: boolean; enabled: boolean; blocked: boolean; reason: string; busy: TaskReviewAction | null; message: string | null; onReview: (action: TaskReviewAction, payload: ReviewPayload) => Promise<void>; onOpenAgent: () => void; taskSessionBusy: boolean; taskSessionError: string | null }) {
+function ReviewStage({ task, workCase, workCandidate, workReview = false, enabled, blocked, reason, busy, message, onReview, onOpenAgent, taskSessionBusy, taskSessionError }: { task: TeacherTask; workCase: EducationWorkCase | null; workCandidate?: EducationWorkCandidate | null; workReview?: boolean; enabled: boolean; blocked: boolean; reason: string; busy: TaskReviewAction | null; message: string | null; onReview: (action: TaskReviewAction, payload: ReviewPayload) => Promise<void>; onOpenAgent: () => void; taskSessionBusy: boolean; taskSessionError: string | null }) {
+  const usageRef = useUsageVisibility({ target: enabled && !blocked ? taskUsageTarget(task, workCase, workCandidate) : null, action: "review_started", surface: "task" });
   const [note, setNote] = useState("");
   const [title, setTitle] = useState(task.title);
   const [dueDate, setDueDate] = useState(task.dueDate || "");
@@ -128,13 +138,13 @@ function ReviewStage({ task, workCandidate, workReview = false, enabled, blocked
     </div>
   );
   const staleReview = ["stale_snapshot", "stale_revision", "invalid_envelope", "unavailable", "malformed"].some(code => message === todayWorkErrorMessage(code)) || message === "任务读取失败，请重试。";
-  return <div className="edupi-stage-review">{decisionRecorded && !changingDecision ? <section className={`edupi-review-decision is-${task.status}`} role="status"><div><strong>{{ accepted: "已接受", modified: "已修改", rejected: "已拒绝", hold: "已暂缓", planned: "待审核" }[task.status]}</strong><span>{task.reviewedAt || "审核结果已记录"}{task.reviewer ? ` · ${task.reviewer}` : ""}</span></div>{enabled && !blocked ? <button type="button" disabled={busy !== null} onClick={() => setChangingDecision(true)}>修改决定</button> : null}</section> : null}{reviewFields}{blocked || !enabled ? <div className="edupi-review-notice" role="status">{reason}</div> : null}{reviewActions}{blocked ? null : !enabled && taskSessionError ? <div className="edupi-agent-session__error" role="alert">{taskSessionError}</div> : null}{message ? <div className="edupi-review-message" role="status">{message}{staleReview ? <button type="button" onClick={() => window.dispatchEvent(new Event("edupi-education-refresh"))}>刷新任务</button> : null}</div> : null}<section className="edupi-review-history"><h3>审核历史<span>{task.reviewHistory.length}</span></h3>{task.reviewHistory.slice().reverse().map((entry, index) => <div key={`${historyText(entry, "review_id", String(index))}:${index}`}><strong>{reviewActionLabel(historyText(entry, "action"))}</strong><span>{historyText(entry, "reviewed_at")}</span><p>{historyText(entry, "note", "无备注")}</p></div>)}{task.reviewHistory.length === 0 ? <p className="edupi-review-history__empty">暂无审核记录</p> : null}</section>{workReview ? <EduPiTaskFeedback task={task} candidate={workCandidate ?? null} /> : null}</div>;
+  return <div className="edupi-stage-review" ref={usageRef}>{decisionRecorded && !changingDecision ? <section className={`edupi-review-decision is-${task.status}`} role="status"><div><strong>{{ accepted: "已接受", modified: "已修改", rejected: "已拒绝", hold: "已暂缓", planned: "待审核" }[task.status]}</strong><span>{task.reviewedAt || "审核结果已记录"}{task.reviewer ? ` · ${task.reviewer}` : ""}</span></div>{enabled && !blocked ? <button type="button" disabled={busy !== null} onClick={() => setChangingDecision(true)}>修改决定</button> : null}</section> : null}{reviewFields}{blocked || !enabled ? <div className="edupi-review-notice" role="status">{reason}</div> : null}{reviewActions}{blocked ? null : !enabled && taskSessionError ? <div className="edupi-agent-session__error" role="alert">{taskSessionError}</div> : null}{message ? <div className="edupi-review-message" role="status">{message}{staleReview ? <button type="button" onClick={() => window.dispatchEvent(new Event("edupi-education-refresh"))}>刷新任务</button> : null}</div> : null}<section className="edupi-review-history"><h3>审核历史<span>{task.reviewHistory.length}</span></h3>{task.reviewHistory.slice().reverse().map((entry, index) => <div key={`${historyText(entry, "review_id", String(index))}:${index}`}><strong>{reviewActionLabel(historyText(entry, "action"))}</strong><span>{historyText(entry, "reviewed_at")}</span><p>{historyText(entry, "note", "无备注")}</p></div>)}{task.reviewHistory.length === 0 ? <p className="edupi-review-history__empty">暂无审核记录</p> : null}</section>{workReview ? <EduPiTaskFeedback task={task} candidate={workCandidate ?? null} /> : null}{!blocked ? <EduPiCapabilityFeedback task={task} workCase={workCase} /> : null}</div>;
 }
 
 export function EduPiTaskStage(props: Props) {
   if (props.stage === "brief") return <BriefStage task={props.task} contextLabel={props.contextLabel} />;
-  if (props.stage === "run") return <RunStage task={props.task} agentSession={props.agentSession} busy={props.taskSessionBusy} error={props.taskSessionError} onOpenAgent={props.onOpenAgent} canPrepare={props.canPrepare} onStage={props.onStage} />;
+  if (props.stage === "run") return <RunStage task={props.task} agentSession={props.agentSession} busy={props.taskSessionBusy} error={props.taskSessionError} onOpenAgent={props.onOpenAgent} canPrepare={props.canPrepare} onStage={props.onStage} usageTarget={taskUsageTarget(props.task, props.workCase, props.workCandidate)} />;
   if (props.stage === "evidence") return <EvidenceStage task={props.task} workspace={props.workspace} onOpenFile={props.onOpenFile} />;
   if (props.stage === "artifact") return <ArtifactStage task={props.task} workCase={props.workCase} files={props.files} workspace={props.workspace} onOpenFile={props.onOpenFile} reviewable={!props.reviewBlocked} onStage={props.onStage} unavailable={props.artifactsUnavailable} />;
-  return <ReviewStage task={props.task} workCandidate={props.workCandidate} workReview={props.workReview} enabled={props.reviewEnabled} blocked={props.reviewBlocked} reason={props.reviewReason} busy={props.reviewBusy} message={props.reviewMessage} onReview={props.onReview} onOpenAgent={props.onOpenAgent} taskSessionBusy={props.taskSessionBusy} taskSessionError={props.taskSessionError} />;
+  return <ReviewStage task={props.task} workCase={props.workCase} workCandidate={props.workCandidate} workReview={props.workReview} enabled={props.reviewEnabled} blocked={props.reviewBlocked} reason={props.reviewReason} busy={props.reviewBusy} message={props.reviewMessage} onReview={props.onReview} onOpenAgent={props.onOpenAgent} taskSessionBusy={props.taskSessionBusy} taskSessionError={props.taskSessionError} />;
 }

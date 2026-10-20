@@ -27,6 +27,8 @@ import { EduPiListPreview, EduPiPagedRows, useEduPiForegroundPolicy } from "./Ed
 import { taskDisplayTitle } from "@/lib/edupi-workbench";
 import { taskBoardLane } from "@/lib/edupi-task-board";
 import type { CalendarItemSelection } from "@/lib/edupi-calendar-model";
+import { observeTeacherUsage } from "@/lib/edupi-usage-observation";
+import { EduPiUsageArticle, EduPiUsageVisibility } from "./EduPiUsageObservation";
 
 type Props = {
   data: EducationContract;
@@ -473,9 +475,12 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
     setFeedback(null);
     setRetryReview(null);
     setEditor(startEditor(candidate, mode));
+    if (isTauriDesktop()) void observeTeacherUsage({ target: { kind: "work_candidate", targetId: candidate.candidateId, expectedRevision: candidate.revision }, action: "review_started", surface: "today", once: true });
   };
 
   const cancelEditor = () => {
+    const candidate = data.workCandidates.find(item => item.candidateId === editor?.candidateId);
+    if (candidate && isTauriDesktop()) void observeTeacherUsage({ target: { kind: "work_candidate", targetId: candidate.candidateId, expectedRevision: candidate.revision }, action: "review_dismissed", surface: "today" });
     setEditor(null);
     setFeedback(null);
     setRetryReview(null);
@@ -555,7 +560,7 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
     const changingDecision = changingDecisionId === candidate.candidateId;
     const showActions = actionable && (!decisionRecorded || changingDecision);
     const submittingCandidate = submission?.candidateId === candidate.candidateId;
-    return <article className={`edupi-today-work__item is-${candidate.status}`} key={candidate.candidateId}>
+    return <EduPiUsageArticle target={actionable ? { kind: "work_candidate", targetId: candidate.candidateId, expectedRevision: candidate.revision } : null} action="opportunity_visible" surface="today" className={`edupi-today-work__item is-${candidate.status}`} key={candidate.candidateId}>
       <header className="edupi-today-work__item-header"><div><span>{candidateMeta(candidate)}</span><h4>{task ? <button type="button" className="edupi-today-work__item-title" disabled={busy} onClick={() => onTaskDetail(task)} aria-label={`打开任务：${candidate.title}`}>{candidate.title}<span aria-hidden="true">›</span></button> : candidate.title}</h4></div><strong className={`edupi-today-work__status is-${candidate.status}`}>{STATUS_LABELS[candidate.status]}</strong></header>
       <p className="edupi-today-work__summary">{candidate.summary}</p>
       <div className="edupi-today-work__reason"><span>原因</span>{workCandidateReasonLabel(candidate.reason)}</div>
@@ -570,7 +575,7 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
         <button type="button" className="is-danger" title={ACTION_TITLES.reject} disabled={busy} onClick={() => void review(candidate, "reject")}>{submittingCandidate && submission?.decision === "reject" ? submittingLabel("reject") : "拒绝"}</button>
       </div> : null}
       {isEditing ? renderEditor(candidate) : null}
-    </article>;
+    </EduPiUsageArticle>;
   };
 
   const renderGroup = (group: keyof WorkCandidateGroups) => {
@@ -641,14 +646,14 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
         : feedback.kind === "error" && retryReview ? <button type="button" disabled={busy} onClick={() => void review(retryReview.candidate, retryReview.decision, retryReview.patch, retryReview.note)}>重试</button>
           : feedback.action === "refresh" ? <button type="button" disabled={busy} onClick={refreshEducation}>刷新待办</button>
             : pendingFeedback && !ratingOpen ? <button type="button" onClick={() => { setValueDraft(EMPTY_TEACHER_VALUE); setRatingOpen(true); }}>评价</button> : null}
-      {pendingFeedback && ratingOpen ? <EduPiTeacherValueForm
+      {pendingFeedback && ratingOpen ? <EduPiUsageVisibility target={{ kind: "work_candidate", targetId: pendingFeedback.candidate.candidateId, expectedRevision: pendingFeedback.candidate.revision }} action="feedback_form_opened" surface="today"><EduPiTeacherValueForm
         draft={valueDraft}
         allowUsed={pendingFeedback.decision === "accept" || pendingFeedback.decision === "modify"}
         busy={feedbackBusy}
         onChange={setValueDraft}
         onSubmit={() => void submitTeacherRating()}
         onCancel={() => { setRatingOpen(false); setValueDraft(EMPTY_TEACHER_VALUE); }}
-      /> : null}
+      /></EduPiUsageVisibility> : null}
     </div> : null}
     <div className="edupi-today-work__groups">{(["now", "later", "done"] as const).map(renderGroup)}</div>
     {groups.now.length + groups.later.length + groups.done.length === 0 && activeTasks.length === 0 && l4Summary.ready.length + l4Summary.running.length + l4Summary.attention.length === 0 ? <p className="edupi-today-work__empty">暂无需判断的工作</p> : null}
