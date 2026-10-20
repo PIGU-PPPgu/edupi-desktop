@@ -1,5 +1,15 @@
 # 自动下载安装
 
+## 2026-10-20 v0.3.72 macOS 接线与安装准备
+
+- 状态：接线已实现、Core 已合并，正在准备 macOS 签名安装验证。Desktop 原分支从 `12bb6a75` 继续，候选版本升为 `.72`；没有改写 `.71` tag/资产，没有替换公开 `.70` 安装或 feed。Windows/Linux 本轮不构建。
+- 最终配对取代本节下方仍称待 CI/合并的中间记录：组合头 `54c51a68` 的 [Mac CI 39410686488](https://github.com/PIGU-PPPgu/edupi/actions/runs/39410686488) 全部适用门通过，Windows/retention stress skipped；[#298](https://github.com/PIGU-PPPgu/edupi/pull/298) 正常合并为 main `ae99a886532eb811682f417b7eb8cb7b47298e7a`，包含 #297 全部提交，两 PR 均已 merged。最终树与通过 CI 的组合树逐字节相同；#297 单独排队检查取消，不冒称其独立通过。Desktop 已固定最终 main、Runtime schema `10adc92f…`、Runtime 组件 `bb0945ee…` 与 Desktop 组件 `039373bc…`。
+- Desktop 全量 `2384 pass / 36 skipped / 0 fail`、类型、完整 lint/branding 和 high audit 通过。可选跳过项之外，真实 Core/SDK 用量与可信召回 3/3、合同/打包/原生提醒证明 25/25、强制公开收件人确认的三域 E2 均通过。三轮 SDK 助手完整落盘、无 prompt_error，空闲耗时 83/3/4 ms，无外发。安装操作尚未完成，不能把本机源码门提升为安装结果。
+- Core 基线为已合并 `e74367ba87df9eda918ef88be02e3446e3a64928`。该精确树上的 Bridge/Runtime/课次合同与打包闭包 25/25、六类删除恢复、教师上下文审核、工作判断、学生档案与事件、文本日程证据链路已在 macOS 26.5.1/arm64、Node 22.23.1 的隔离根通过。它们不代替新增宿主合同的最终组合测试或安装证据。
+- 新接线包括真实 SDK 当前消息和 Core 私有证明绑定的记忆读取、三域精确 grant/scope 启动、自然消息持久 outbox、收件人明确确认、审核后评价与本地用量。Core 收件人 [#297](https://github.com/PIGU-PPPgu/edupi/pull/297) 先后补同家长多学生/跨学期与未知失活来源的审查回归；[首轮 Mac CI 39406757007](https://github.com/PIGU-PPPgu/edupi/actions/runs/39406757007) 的 type/protocol/manifest/audit 通过，既有 G2 崩溃恢复夹具未到发布边界失败。用 2.1 秒回环延迟在旧测试租约复现 `model_unavailable` 后，仅扩大夹具 live 窗口、改等真实持久到期并增加脱敏诊断；SIGKILL、单调用/单占额、撤销和到期不发布的断言保留，三个定向恢复场景通过。新提交 `feae897` 待其 CI，不手动重跑失败旧 SHA。
+- 使用记录的未知回执重试、Core 真重启、政策切换隔离、撤销/擦除、队列容量及业务哨兵保持通过真实 Core 定向测试；API 鉴权和对应界面恢复控制通过。默认不收集、不上传，正式政策/协议与云端接收合同未提供，不能从合成同意推出真实采集可启用。草稿打开按精确投影路径/ID/版本且实际可见后计入，导出仅在原生保存成功后计入；未知文件和教师材料不借用产物身份。
+- 可信召回 Core 分支已通过精确注册消息、同名跨班、撤回删除、冷恢复、Safe Mode/无工具、在途 steer 失效及原中文/数学/日期回归。完整本机 npm 门遇审计矩阵行号和跨清单分类元数据断言后按证据修复，已经通过的前段与后续命令分别保留，不宣称原失败命令整体成功。最终固定版本 CI、双清单合并身份及原生安装步骤尚待执行。小型恢复记录在 `~/edupi-install-checkpoints/v0.3.72/RESUME.md`。
+
 ## 2026-10-19 v0.3.71 仅 macOS Draft 与隔离安装
 
 - 用户要求先只构建 Mac，不在 Windows x64 电脑就绪前触发 Windows 构建或原生检查。Desktop Draft [#364](https://github.com/PIGU-PPPgu/edupi-desktop/pull/364) 的精确源码 `5c3c7d912acd6e6436f944ea3f22989a77ba4305` 临时固定未合并 Core [#286](https://github.com/PIGU-PPPgu/edupi/pull/286) 的旧快照 `d510792d8eb52a321825afc3808ba2006d3f67cd`；复查时 Core #286 头已前进至 `ac03fb9ba58265abea07993ed40946cb7859c6c7`，故本候选不能充当新头或未来合并提交的验收。[Mac-only Draft run 39191284249](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39191284249) attempt 1 的 notary-preflight、release、`build (aarch64-apple-darwin)` 成功；Windows/Linux build 未派发，`draft-proof` 因非 `platform=all` 按设计跳过，**没有三平台同轮指纹或正式发布资格**。仓库级 [Rust 审计 39191253917](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39191253917) 对 Windows 目标引入的 `zip 4.6.1` 三项新漏洞仍失败；Mac 预检只证明其目标依赖闭包没有旧版 zip，未关闭或豁免原审计。

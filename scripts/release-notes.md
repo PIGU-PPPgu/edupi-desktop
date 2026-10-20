@@ -1,9 +1,9 @@
-EduPi Desktop 0.3.71 macOS Apple Silicon 技术试用候选，Release 保持 Draft。
+EduPi Desktop 0.3.72 macOS Apple Silicon 技术试用候选，Release 保持 Draft。
 
-此候选固定待合并的 Core [#286](https://github.com/PIGU-PPPgu/edupi/pull/286) 提交 `d510792d8eb52a321825afc3808ba2006d3f67cd`。Core 修复旧校历来源删除后备课任务及提醒复活、长课表槽位误关联，以及材料撤销后反馈目标仍可用的问题。Desktop 增加六类删除与恢复的合成端到端回归，并按 Core Runtime schema、Bridge 与双组件清单固定身份。
+本轮在 Core 已合并的来源删除、事实修订和课次修复上，补齐普通对话的可信记忆召回、三域草稿执行与审核后评价、家长收件人明确确认、本地用量同意及持久队列。Core 精确提交、Runtime schema 和双组件清单以包内兼容清单为准。真实对话只有在 Core 肯定捕获后才发送 Pi；规范化命令身份不再受 JSON 字段顺序影响。
 
-本轮只构建 macOS Apple Silicon。Windows 构建和原生检查按用户指令暂缓，Linux 亦不纳入本次候选；因此没有三平台同轮资产证明，不公开 Release、不更新七平台 updater feed。当前公开安装版仍为 v0.3.70。只有这份候选实际完成 Mac 签名、公证、包内 Core 身份和隔离根安装验收，才能记录对应的 macOS 技术结果；它不替代 Core #286 的最终合并 pin 或后续三平台发布门。
+本轮只构建 macOS Apple Silicon。Windows 构建和原生检查按用户指令暂缓，Linux 不纳入本次候选；没有三平台同轮资产证明，不公开 Release、不更新七平台 updater feed。当前公开安装版仍为 v0.3.70。Mac 签名、公证、包内 Core 身份和隔离根安装结果分别按实际证据记录。
 
 仓库级 Rust 审计对 `zip 4.6.1` 报出三项漏洞，其中一项严重、一项高危；该版本由 Tauri updater 的 Windows 目标依赖带入锁文件。此候选仅在 Mac 目标依赖闭包排除旧版 `zip` 后才继续签名；仓库级审计仍失败，不能据 Mac 检查宣称 Windows 安全或发布资格。待上游提供已发布修复并完成全平台验证后再处理正式发布。
 
-教师资料、模型配置和默认安全门不因候选改变。G1/G2/G3/G4 Live 默认关闭，外部发送不自动开启；未核实材料和 DOCX 建议继续待教师审核。
+教师资料、模型配置和默认安全门不因候选改变。G1/G2/G3/G4/G5 Live 默认关闭，新增试用仅在明确 macOS 隔离根启用；外部发送关闭。未核实材料和 DOCX 建议继续待教师审核。本地用量默认不收集，未配置正式政策和协议时拒绝开启；没有云端上传接线。

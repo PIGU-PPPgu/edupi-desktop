@@ -74,6 +74,20 @@ test("paired Core checks use a private workspace-backed temporary root", async (
   }
 });
 
+test("the Mac candidate exercises new host contracts against its exact pinned Core before packaging", async () => {
+  const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+  const start = release.indexOf("name: Verify macOS Core host wiring");
+  assert.ok(start >= 0);
+  const step = release.slice(start, release.indexOf("\n      - ", start));
+  assert.match(step, /if: runner\.os == 'macOS'/u);
+  assert.match(step, /EDUPI_MEMORY_RECALL_CORE_ROOT: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/u);
+  assert.match(step, /EDUPI_USAGE_TEST_CORE: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/u);
+  assert.match(step, /lib\/edupi-memory-recall-access\.test\.mjs/u);
+  assert.match(step, /lib\/edupi-teacher-usage-runtime\.test\.mjs/u);
+  assert.match(step, /test-edupi-capability-canary-e2\.mjs --require-recipient-confirmation/u);
+  assert.ok(start < release.indexOf("name: Prepare packaged Next.js server"));
+});
+
 test("staged schedule test warms its authenticated read route after server identity", async () => {
   const source = await readFile(join(root, "scripts", "test-edupi-schedule-conflicts-e2.mjs"), "utf8");
   const start = source.indexOf("async function startStagedServer");
