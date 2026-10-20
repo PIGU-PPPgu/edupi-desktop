@@ -6,7 +6,8 @@ import ts from "typescript";
 
 function harness({ desktop = true } = {}) {
   const effects = [], observations = [], timers = new Map(), listeners = new Map(), windowListeners = new Map();
-  let nextTimer = 0, observer;
+  let nextTimer = 0;
+  const observers = [];
   const document = { visibilityState: "visible", addEventListener: (event, fn) => listeners.set(event, fn), removeEventListener: event => listeners.delete(event) };
   const jsx = (type, props) => ({ type, props });
   const hooks = { useRef: current => ({ current }), useEffect: effect => effects.push(effect), createContext: () => ({}), useContext: () => null };
@@ -17,7 +18,7 @@ function harness({ desktop = true } = {}) {
   vm.runInNewContext(code, { exports, document,
     window: { addEventListener: (event, fn) => windowListeners.set(event, fn), removeEventListener: event => windowListeners.delete(event) },
     setTimeout: fn => { timers.set(++nextTimer, fn); return nextTimer; }, clearTimeout: id => timers.delete(id),
-    IntersectionObserver: class { constructor(callback) { this.callback = callback; observer = this; } observe(element) { this.element = element; } disconnect() { this.disconnected = true; } },
+    IntersectionObserver: class { constructor(callback) { this.callback = callback; observers.push(this); } observe(element) { this.element = element; } disconnect() { this.disconnected = true; } },
     require(name) {
       if (name === "react") return hooks;
       if (name.includes("jsx-runtime")) return { jsx, jsxs: jsx };
@@ -30,8 +31,8 @@ function harness({ desktop = true } = {}) {
   const tree = exports.EduPiUsageArticle(props);
   tree.props.ref.current = {};
   const cleanup = effects[0]();
-  return { tree, document, observations, listeners, windowListeners, cleanup, get observer() { return observer; },
-    intersect(visible) { observer.callback([{ target: observer.element, isIntersecting: visible, intersectionRatio: visible ? 1 : 0 }]); },
+  return { tree, document, observations, listeners, windowListeners, cleanup, get observer() { return observers.at(-1); },
+    intersect(visible) { const observer = observers.at(-1); observer.callback([{ target: observer.element, isIntersecting: visible, intersectionRatio: visible ? 1 : 0 }]); },
     async flush() { for (const [id, fn] of [...timers]) { timers.delete(id); fn(); } await Promise.resolve(); await Promise.resolve(); },
   };
 }

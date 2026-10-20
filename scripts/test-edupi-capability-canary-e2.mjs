@@ -16,10 +16,19 @@ const dataRoot = path.join(temp, "data"), stateDir = path.join(temp, "state"), a
 for (const directory of [stateDir, agentDir, path.join(home, "memory"), path.join(home, "output"), path.join(home, "locks")]) fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
 const token = crypto.randomBytes(32).toString("hex"), keep = process.env.EDUPI_E2_KEEP === "1";
 let chatCalls = 0;
+const syntheticReply = "合成测试消息已接收", sseFrames = [];
 const server = http.createServer(async (request, response) => {
-  for await (const _chunk of request) { /* synthetic local chat response only */ }
+  let requestBytes = 0;
+  for await (const chunk of request) requestBytes += chunk.byteLength;
   if (request.url !== "/v1/chat/completions") { response.writeHead(404); response.end(); return; }
   chatCalls++;
+  const finish = response.end.bind(response);
+  response.end = chunk => {
+    const body = String(chunk);
+    sseFrames.push({ call: chatCalls, requestBytes, newlineDelimited: body.includes("\n\n"), literalBackslashDelimited: body.includes("\\n\\n"),
+      tailHex: Buffer.from(body).subarray(-16).toString("hex") });
+    return finish(chunk);
+  };
   const id = `synthetic-capability-chat-${chatCalls}`, content = "合成测试消息已接收";
   response.writeHead(200, { "Content-Type": "text/event-stream" });
   response.end(`data: ${JSON.stringify({ id, object: "chat.completion.chunk", model: "local", choices: [{ index: 0, delta: { role: "assistant", content }, finish_reason: null }] })}\n\ndata: ${JSON.stringify({ id, object: "chat.completion.chunk", model: "local", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n`);
@@ -109,7 +118,7 @@ try {
   sessionReader.cacheSessionPath(sessionId, sessionFile);
   const { startHarnessSession } = await jiti.import("../lib/harness/runtime.ts");
   await startHarnessSession(sessionId, sessionFile, dataRoot, { toolNames: [] });
-  const piEvents = [];
+  const piEvents = [], assistantChecks = [];
   rpc.getRpcSession(sessionId).onEvent(event => piEvents.push({ type: event.type, clientRequestId: event.clientRequestId,
     role: event.message?.role, entryId: event.entryId, error: event.error }));
   for (const domain of domains) {
@@ -124,11 +133,49 @@ try {
     const persisted = outbox.readEduPiPromptOutbox(sessionId, clientRequestId, { dataRoot });
     assert.equal(persisted.stage, "pi_accepted"); assert.equal(persisted.bindings.length, 3);
     assert.ok(persisted.bindings.every(binding => binding.captured && binding.registration));
-    const idleDeadline = Date.now() + 10_000;
-    while (rpc.getRpcSession(sessionId)?.isRunning() && Date.now() < idleDeadline) await new Promise(resolve => setTimeout(resolve, 50));
-    assert.equal(rpc.getRpcSession(sessionId)?.isRunning(), false);
+    const session = rpc.getRpcSession(sessionId);
+    assert.equal(typeof session?.inner.waitForIdle, "function", "the real SDK session must expose waitForIdle");
+    const idleStarted = performance.now();
+    let idleTimer;
+    try {
+      await Promise.race([session.inner.waitForIdle(), new Promise((_, reject) => {
+        idleTimer = setTimeout(() => reject(new Error("synthetic_chat_sdk_idle_timeout")), 10_000);
+      })]);
+    } finally { clearTimeout(idleTimer); }
+    const sdkIdleMs = Math.round(performance.now() - idleStarted);
+    assert.ok(sdkIdleMs <= 10_000, `SDK idle exceeded its wall-time bound: ${sdkIdleMs} ms`);
+    const idleDeadline = Date.now() + 1000;
+    while (session.isRunning() && Date.now() < idleDeadline) await new Promise(resolve => setTimeout(resolve, 25));
+    assert.equal(session.isRunning(), false);
+    const entries = sessionReader.getSessionEntries(sessionFile);
+    const user = entries.filter(item => item.type === "message" && item.message.role === "user").at(-1);
+    assert.ok(user, "the current user message must remain persisted");
+    const byId = new Map(entries.map(item => [item.id, item]));
+    const replies = entries.filter(item => {
+      if (item.type !== "message" || item.message.role !== "assistant") return false;
+      let parent = item.parentId;
+      const seen = new Set();
+      while (parent && !seen.has(parent)) {
+        if (parent === user.id) return true;
+        seen.add(parent);
+        const ancestor = byId.get(parent);
+        if (ancestor?.type === "message" && ancestor.message.role === "user") return false;
+        parent = ancestor?.parentId;
+      }
+      return false;
+    });
+    const textOf = message => typeof message.content === "string" ? message.content
+      : message.content.filter(item => item.type === "text").map(item => item.text).join("");
+    const diagnostics = { domain, replies: replies.map(item => ({ stopReason: item.message.stopReason,
+      textLength: textOf(item.message).length, error: item.message.errorMessage?.slice(0, 160) })), sseFrames };
+    assert.equal(piEvents.filter(event => event.clientRequestId === clientRequestId && event.type === "prompt_error").length, 0, JSON.stringify(diagnostics));
+    assert.equal(replies.length, 1, JSON.stringify(diagnostics));
+    assert.equal(replies[0].message.stopReason, "stop", JSON.stringify(diagnostics));
+    assert.equal(textOf(replies[0].message), syntheticReply, JSON.stringify(diagnostics));
+    assistantChecks.push({ domain, assistantEntryId: replies[0].id, stopReason: replies[0].message.stopReason,
+      responseSha256: crypto.createHash("sha256").update(textOf(replies[0].message)).digest("hex"), sdkWaitForIdle: true, sdkIdleMs, promptErrors: 0 });
   }
-  const bridge = async (operation, fields = {}, mutate = false) => {
+  const bridge = async (operation, fields = {}) => {
     const reply = await host.callBridge({ protocol: "edupi-desktop-bridge", protocol_version: 1, producer: "edupi-desktop", operation,
       request_id: `capability-e2-${crypto.randomUUID()}`, ...fields });
     assert.equal(reply.ok, true, JSON.stringify(reply)); const body = JSON.parse(reply.result.bridge_frame);
@@ -190,7 +237,7 @@ try {
       snapshotId: snapshot.snapshot_id, idempotencyKey: `review-${task.task_id}`, provenance: [{ ...source, source_path: null, observed_at: reviewedAt, actor: "core", parent_ids: [] }],
       teacherReview: { state: "pending_review", reviewer_id: "synthetic-capability-teacher", reviewed_at: null, note: "隔离合成审核", revision: task.revision },
       command: { command_type: "review_task", task_id: task.task_id, expected_revision: task.revision, decision: "accept", patch: null, rollback_id: null, source, note: "隔离合成审核" } });
-    assert.equal((await bridge("command", { envelope }, true)).receipt.payload.status, "accepted");
+    assert.equal((await bridge("command", { envelope })).receipt.payload.status, "accepted");
     const reviewedSnapshot = (await bridge("snapshot")).envelope.payload;
     const projected = education.buildEducationContractFromWorkspace(reviewedSnapshot.education_workspace, { workspacePath: dataRoot, snapshotPayload: reviewedSnapshot });
     const taskProjection = projected.tasks.find(item => item.id === task.task_id), caseProjection = projected.workCases.find(item => item.id === workCase.work_case_id);
@@ -263,7 +310,7 @@ try {
   console.log(JSON.stringify({ status: "passed", domains: summaries, defaultOff: true, exactGrantFence: true, productionOutbox: true,
     registeredContinuation: true, artifactHashReadback: true, reviewReadback: true, syntheticFeedback: true, recipientRefusal: true,
     recipientPublicConfirmation: publicRecipientConfirmation, threeDomainSettlement: true, crossStudentRefusal: true, unsafeRefusal: true, stopRestartResume: true,
-    capabilityModelCalls: 0, syntheticChatCalls: chatCalls, externalSend: false }));
+    capabilityModelCalls: 0, syntheticChatCalls: chatCalls, assistantChecks, sseNewlineDelimited: sseFrames.every(frame => frame.newlineDelimited), externalSend: false }));
   if (keep) console.log(JSON.stringify({ status: "retained", temporaryRoot: temp, dataRoot, stateDir, agentDir, requests: selected.requests, recipientFactId: recipientReference.fact_id, publicRecipientConfirmation }));
 } finally {
   await rpc?.destroyRpcSessionsForCwd(dataRoot);

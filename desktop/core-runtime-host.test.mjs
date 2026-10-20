@@ -22,10 +22,10 @@ test("G3 forwards a frozen exact grant snapshot without a model host and rejects
   const bindings = [{ domain: "lesson_reflection", grantId: "selected-grant", ownerId: "selected-owner", scope: { class_id: "selected-class", subject: "math" } }];
   const opening = startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: bindings } }, channel);
   bindings[0].grantId = "foreign-grant"; bindings[0].scope.class_id = "foreign-class";
-  const host = await opening, module = await import(pathToFileURL(path.join(root, "scripts/core_runtime_daemon.mjs")).href);
-  assert.deepEqual(module.received.g3Live.allowedBindings, [{ domain: "lesson_reflection", grantId: "selected-grant", ownerId: "selected-owner", scope: { class_id: "selected-class", subject: "math" } }]);
-  assert.ok(Object.isFrozen(module.received.g3Live.allowedBindings[0].scope)); assert.equal(module.received.g3Live.durableCalendarAdministration, false);
-  assert.equal(module.received.ownerMessageContinuation, true); assert.deepEqual(sent, []); await host.close();
+  const host = await opening, daemonModule = await import(pathToFileURL(path.join(root, "scripts/core_runtime_daemon.mjs")).href);
+  assert.deepEqual(daemonModule.received.g3Live.allowedBindings, [{ domain: "lesson_reflection", grantId: "selected-grant", ownerId: "selected-owner", scope: { class_id: "selected-class", subject: "math" } }]);
+  assert.ok(Object.isFrozen(daemonModule.received.g3Live.allowedBindings[0].scope)); assert.equal(daemonModule.received.g3Live.durableCalendarAdministration, false);
+  assert.equal(daemonModule.received.ownerMessageContinuation, true); assert.deepEqual(sent, []); await host.close();
   let getterCalled = false;
   const getter = { domain: "lesson_reflection", grantId: "selected-grant", get scope() { getterCalled = true; return bindings[0].scope; } };
   for (const g3Bindings of [[getter], [{ domain: "lesson_reflection" }], [{ ...bindings[0], allowedDomains: ["lesson_reflection"] }], [bindings[0], bindings[0]]]) {

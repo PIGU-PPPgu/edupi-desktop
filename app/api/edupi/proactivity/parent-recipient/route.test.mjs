@@ -43,11 +43,11 @@ function fixture({ allowed = true, isolated = true, savedStage = "pi_accepted", 
     "@/lib/edupi-ambient-session-lock": { withEduPiAmbientSessionLock: async (_id, callback) => callback() },
     "@/lib/edupi-parent-recipient-client": { parseParentRecipientEntries: body => body.entries },
   };
-  const module = { exports: {} }; new Function("require", "module", "exports", compiled)(name => { assert.ok(modules[name], name); return modules[name]; }, module, module.exports);
+  const routeModule = { exports: {} }; new Function("require", "module", "exports", compiled)(name => { assert.ok(modules[name], name); return modules[name]; }, routeModule, routeModule.exports);
   const input = { sessionId: "session-1", clientRequestId: "request-1", commandId: "recipient-command", expectedGrantVersion: 1,
     expectedSourceFingerprint: candidate.source_fingerprint, studentId: "student-1", recipientId: "parent-1", termRef: "term-1" };
-  return { calls, input, get: () => module.exports.GET(new Request("http://localhost/api/edupi/proactivity/parent-recipient")),
-    post: (body = input) => module.exports.POST(new Request("http://localhost/api/edupi/proactivity/parent-recipient", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })) };
+  return { calls, input, get: () => routeModule.exports.GET(new Request("http://localhost/api/edupi/proactivity/parent-recipient")),
+    post: (body = input) => routeModule.exports.POST(new Request("http://localhost/api/edupi/proactivity/parent-recipient", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })) };
 }
 test("recipient confirmation only exposes accepted registered outbox sources and authenticates every owner call", async () => {
   const f = fixture(), before = await (await f.get()).json();

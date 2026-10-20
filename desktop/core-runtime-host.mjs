@@ -141,7 +141,8 @@ export async function startCoreRuntimeHost({ coreRoot, options }, channel = proc
   const hostExecutor = hasModelScope ? createParentModelExecutor(channel) : null;
   try {
     const { createCoreRuntimeDaemon } = await import(pathToFileURL(path.join(coreRoot, "scripts/core_runtime_daemon.mjs")).href);
-    const { g1Scope, g2Scope, g3Bindings: _g3Bindings, ...daemonOptions } = options;
+    const { g1Scope, g2Scope, ...daemonOptions } = options;
+    delete daemonOptions.g3Bindings;
     let g1Runner;
     if (g1Scope) {
       try {
