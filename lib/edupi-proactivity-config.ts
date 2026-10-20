@@ -9,23 +9,30 @@ const HASH = /^sha256:[a-f0-9]{64}$/u;
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:@/+~=-]{0,159}$/u;
 
 export type EduPiProactivityScope = { classId: string; subject: string };
-export type EduPiProactivityDomain = "teaching_preparation" | "student_followup";
+export const EDUPI_CAPABILITY_DOMAINS = ["calendar_administration", "lesson_reflection", "parent_communication"] as const;
+export type EduPiCapabilityDomain = typeof EDUPI_CAPABILITY_DOMAINS[number];
+export type EduPiProactivityDomain = "teaching_preparation" | "student_followup" | EduPiCapabilityDomain;
+export function isEduPiCapabilityDomain(domain: string): domain is EduPiCapabilityDomain {
+  return (EDUPI_CAPABILITY_DOMAINS as readonly string[]).includes(domain);
+}
 export type EduPiProactivityActivation = {
   enabled: boolean;
   source: "default" | "desktop_canary" | "environment";
   configurationStatus: "missing" | "ready" | "legacy" | "stop_pending" | "mismatched" | "invalid";
   scope: EduPiProactivityScope | null;
   grantId: string | null;
+  ownerId?: string;
   updatedAt: string | null;
 };
 
 type StoredConfig = {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   data_root_hash: string;
   enabled: boolean;
   scope: { class_id: string; subject: string } | null;
   grant_id: string | null;
   updated_at: string;
+  owner_id?: string;
 };
 type StoredStopIntent = {
   version: 1;
@@ -45,6 +52,7 @@ function fail(): never { throw new EduPiProactivityConfigError(); }
 function fileName(domain: EduPiProactivityDomain, stop = false): string {
   if (domain === "teaching_preparation") return stop ? STOP_FILE_NAME : FILE_NAME;
   if (domain === "student_followup") return stop ? "edupi-student-followup-stop.json" : "edupi-student-followup.json";
+  if (isEduPiCapabilityDomain(domain)) return `edupi-${domain.replaceAll("_", "-")}${stop ? "-stop" : ""}.json`;
   return fail();
 }
 
@@ -65,10 +73,11 @@ function exactKeys(value: unknown, keys: string[]): value is Record<string, unkn
 }
 
 function validStored(value: unknown): value is StoredConfig {
-  if (!exactKeys(value, ["version", "data_root_hash", "enabled", "scope", "grant_id", "updated_at"])) return false;
+  if (!exactKeys(value, ["version", "data_root_hash", "enabled", "scope", "grant_id", "updated_at", ...(value && typeof value === "object" && Object.hasOwn(value, "owner_id") ? ["owner_id"] : [])])) return false;
   const scope = value.scope;
   const grantId = value.grant_id;
-  return (value.version === 1 || value.version === 2) && HASH.test(String(value.data_root_hash || "")) && typeof value.enabled === "boolean"
+  return (value.version === 1 || value.version === 2 || value.version === 3) && HASH.test(String(value.data_root_hash || "")) && typeof value.enabled === "boolean"
+    && (value.owner_id === undefined || value.version === 3 && typeof value.owner_id === "string" && /^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$/u.test(value.owner_id))
     && (scope === null && grantId === null || validScope(scope) && typeof grantId === "string" && ID.test(grantId))
     && (!value.enabled || scope !== null)
     && typeof value.updated_at === "string" && new Date(value.updated_at).toISOString() === value.updated_at;
@@ -209,6 +218,7 @@ function publicActivation(value: StoredConfig, source: EduPiProactivityActivatio
     configurationStatus: "ready",
     scope: value.scope ? { classId: value.scope.class_id, subject: value.scope.subject } : null,
     grantId: value.grant_id,
+    ...(value.owner_id ? { ownerId: value.owner_id } : {}),
     updatedAt: value.updated_at,
   };
 }
@@ -237,7 +247,7 @@ export function readEduPiProactivityActivation({
 }
 
 export function writeEduPiProactivityConfig(
-  input: { enabled: boolean; scope: EduPiProactivityScope | null; grantId: string | null },
+  input: { enabled: boolean; scope: EduPiProactivityScope | null; grantId: string | null; ownerId?: string },
   { stateDir = process.env.PI_DESKTOP_STATE_DIR, dataRoot, now = new Date().toISOString(), domain = "teaching_preparation" }:
     { stateDir?: string; dataRoot: string; now?: string; domain?: EduPiProactivityDomain },
 ): EduPiProactivityActivation {
@@ -249,12 +259,13 @@ export function writeEduPiProactivityConfig(
     || input.grantId !== null && !ID.test(input.grantId)) fail();
   const root = secureRoot(stateDir);
   const value: StoredConfig = {
-    version: 2,
+    version: isEduPiCapabilityDomain(domain) ? 3 : 2,
     data_root_hash: dataRootHash(dataRoot),
     enabled: input.enabled,
     scope: input.scope ? { class_id: input.scope.classId, subject: input.scope.subject.trim() } : null,
     grant_id: input.grantId,
     updated_at: canonicalNow,
+    ...(input.ownerId ? { owner_id: input.ownerId } : {}),
   };
   if (!validStored(value)) fail();
   const file = path.join(root, fileName(domain));

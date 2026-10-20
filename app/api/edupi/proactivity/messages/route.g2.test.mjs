@@ -15,7 +15,7 @@ function fixture({g1=true,g2=true,isolated=true,g2Active=true,failG1=false,regis
     "@/lib/desktop-api-auth":{isDesktopApiRequestAllowed:()=>true},
     "@/lib/bounded-form-data":{parseJsonWithinLimit:async r=>{bodyReads++;return r.json();},RequestBodyTooLargeError:class extends Error{}},
     "@/lib/edupi-core-snapshot":{resolveEduPiBridgeRoots:()=>({dataRoot:{root:"/synthetic-root"}})},
-    "@/lib/safe-mode":{canStartEduPiProactivity:()=>true,canStartEduPiStudentFollowup:()=>isolated},
+    "@/lib/safe-mode":{canStartEduPiProactivity:()=>true,canStartEduPiStudentFollowup:()=>isolated,canStartEduPiCapabilityDrafts:()=>false},
     "@/lib/edupi-proactivity-config":{readEduPiProactivityActivation:({domain})=>({enabled:domain==="student_followup"?g2:g1,grantId:domain,scope:{classId:"class-1",subject:"数学"}})},
     "@/lib/session-reader":{resolveSessionPath:async()=>"synthetic-session"},
     "@/lib/edupi-ambient-session-lock":{withEduPiAmbientSessionLock:async(_id,operation)=>operation()},

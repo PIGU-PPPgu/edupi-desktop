@@ -16,14 +16,14 @@ const occurredAt = "2026-10-10T08:00:00.000Z";
 
 function fixture({ authorized = true, g2 = false, registrationFailure = null,
   captureFailure = null, piError = false, piAsyncFailure = false,
-  settleFailure = false, settleStatus = "sealed_absent", reconciliationEvidence = "confirmed" } = {}) {
+  settleFailure = false, settleStatus = "sealed_absent", reconciliationEvidence = "confirmed", capability = false } = {}) {
   // An in-memory transport proves route ordering only: no Core daemon, Pi
   // model, teacher files, or installed app is touched by these tests.
   const events = [];
   let piListener = () => {};
   const outbox = new Map();
   const ledger = new Map();
-  let domains = g2 ? [G1, G2] : [G1];
+  let domains = capability ? ["calendar_administration", "lesson_reflection", "parent_communication"] : g2 ? [G1, G2] : [G1];
   const key = (sessionId, clientRequestId) => `${sessionId}\0${clientRequestId}`;
   const get = (sessionId, clientRequestId) => outbox.get(key(sessionId, clientRequestId)) ?? null;
   const mutate = (sessionId, clientRequestId, change) => {
@@ -36,7 +36,7 @@ function fixture({ authorized = true, g2 = false, registrationFailure = null,
     assert.equal(operation, "health");
     events.push("health");
     return { ok: true, result: { data_root_fingerprint: rootRef, capabilities: {
-      ambient_planning: "active", owner_message_registration: "active", g1_processor: "active", g2_processor: "active",
+      ambient_planning: "active", owner_message_registration: "active", g1_processor: "active", g2_processor: "active", g3_processor: "active",
     } } };
   } };
   const modules = {
@@ -98,7 +98,11 @@ function fixture({ authorized = true, g2 = false, registrationFailure = null,
     "@/lib/rpc-manager": { getRpcSession: () => ({ isAlive: () => true,
       ensureSessionPersisted: () => events.push("session_persisted"),
       onEvent: listener => { piListener = listener; return () => { piListener = () => {}; }; },
-      recordEduPiPromptDispatch: () => events.push("pi_session_marker"), sendCoreCapturedPrompt: async command => {
+      recordEduPiPromptDispatch: (requestId, commandHash) => {
+        const persisted = get("session-1", requestId);
+        assert.equal(commandHash, `sha256:${createHash("sha256").update(JSON.stringify(persisted.command)).digest("hex")}`);
+        events.push("pi_session_marker");
+      }, sendCoreCapturedPrompt: async command => {
         events.push("pi_send"); if (piError) throw new Error("synthetic_pi_uncertain");
         queueMicrotask(() => piListener(piAsyncFailure
           ? { type: "prompt_error", clientRequestId: command.clientRequestId }
@@ -107,7 +111,7 @@ function fixture({ authorized = true, g2 = false, registrationFailure = null,
       } }) },
     "@/lib/session-reader": { resolveSessionPath: async () => { events.push("session_path"); return "synthetic-session"; } },
     "@/lib/harness/runtime": { startHarnessSession: async () => { throw new Error("unexpected harness start"); } },
-    "@/lib/safe-mode": { canStartEduPiProactivity: () => true, canStartEduPiStudentFollowup: () => g2 },
+    "@/lib/safe-mode": { canStartEduPiProactivity: () => true, canStartEduPiStudentFollowup: () => g2, canStartEduPiCapabilityDrafts: () => capability },
     "@/lib/image-attachments": { validateAgentImages: () => null },
     "@/lib/edupi-prompt-outbox": {
       listEduPiPromptOutbox: () => [...outbox.values()].map(item => ({ sessionId: item.sessionId,
@@ -122,7 +126,7 @@ function fixture({ authorized = true, g2 = false, registrationFailure = null,
           assert.deepEqual(existing.command, input.command, "retry must reuse exact Pi command");
           return existing;
         }
-        const entry = { ...input, stage: "prepared", bindings: input.bindings.map(binding => ({
+        const entry = { ...input, command: { type: input.command.type, message: input.command.message, clientRequestId: input.command.clientRequestId }, stage: "prepared", bindings: input.bindings.map(binding => ({
           ...binding, captured: false, registration: null, messageRef: null,
         })) };
         outbox.set(id, entry);
@@ -216,6 +220,23 @@ test("G1 affirmative capture is durable before the sole Pi dispatch", async () =
   assert.ok(position("pi_accepted") < position("intent_resolved"));
   assert.equal(f.events.filter(event => event === "pi_send").length, 1);
   assert.equal(f.events.includes("pi_accepted"), true);
+});
+
+test("a legal JSON key order uses the durable command hash for its Pi marker", async () => {
+  const f = fixture();
+  const response = await f.post({ ...f.body, command: { type: "prompt", clientRequestId: "request-1", message: "请准备数学课" } });
+  assert.equal(response.status, 200); assert.equal(f.entry().stage, "pi_accepted");
+});
+
+test("G3 G4 G5 all persist independent registration bindings before one Pi dispatch", async () => {
+  const f = fixture({ capability: true });
+  assert.equal((await f.post()).status, 200);
+  const bindings = f.entry().bindings;
+  assert.deepEqual(bindings.map(item => item.domain), ["calendar_administration", "lesson_reflection", "parent_communication"]);
+  assert.equal(new Set(bindings.map(item => item.captureMessageId)).size, 3);
+  assert.equal(new Set(bindings.map(item => item.carrierId)).size, 3);
+  assert.ok(bindings.every(item => item.captured && item.registration));
+  assert.equal(f.events.filter(item => item === "pi_send").length, 1);
 });
 
 test("G1 and G2 both capture before Pi dispatch in isolated canary", async () => {

@@ -9,6 +9,33 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createJiti } from "jiti";
 import { classifyCoreRuntimeStartupError, createParentModelExecutor, startCoreRuntimeHost } from "./core-runtime-host.mjs";
 
+test("G3 forwards a frozen exact grant snapshot without a model host and rejects broad or executable configuration", { skip: process.platform !== "darwin" }, async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "edupi-runtime-host-g3-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const previous = process.env.EDUPI_DESKTOP_ISOLATED_CANARY; process.env.EDUPI_DESKTOP_ISOLATED_CANARY = "1";
+  t.after(() => { if (previous === undefined) delete process.env.EDUPI_DESKTOP_ISOLATED_CANARY; else process.env.EDUPI_DESKTOP_ISOLATED_CANARY = previous; });
+  fs.mkdirSync(path.join(root, "scripts"));
+  fs.writeFileSync(path.join(root, "scripts/core_runtime_daemon.mjs"), "export let received; export async function createCoreRuntimeDaemon(options) { received = options; return { async close() {} }; }");
+  const channel = new EventEmitter(); channel.connected = true; const sent = []; channel.send = value => sent.push(value);
+  const options = { dataRoot: root, token: "token", supervisorSessionId: "g3", coreCommit: "a".repeat(40), componentManifestHash: `sha256:${"b".repeat(64)}`,
+    port: 0, ambientPlanning: true, ownerControlToken: "control", ownerMessageRegistration: true };
+  const bindings = [{ domain: "lesson_reflection", grantId: "selected-grant", ownerId: "selected-owner", scope: { class_id: "selected-class", subject: "math" } }];
+  const opening = startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: bindings } }, channel);
+  bindings[0].grantId = "foreign-grant"; bindings[0].scope.class_id = "foreign-class";
+  const host = await opening, module = await import(pathToFileURL(path.join(root, "scripts/core_runtime_daemon.mjs")).href);
+  assert.deepEqual(module.received.g3Live.allowedBindings, [{ domain: "lesson_reflection", grantId: "selected-grant", ownerId: "selected-owner", scope: { class_id: "selected-class", subject: "math" } }]);
+  assert.ok(Object.isFrozen(module.received.g3Live.allowedBindings[0].scope)); assert.equal(module.received.g3Live.durableCalendarAdministration, false);
+  assert.equal(module.received.ownerMessageContinuation, true); assert.deepEqual(sent, []); await host.close();
+  let getterCalled = false;
+  const getter = { domain: "lesson_reflection", grantId: "selected-grant", get scope() { getterCalled = true; return bindings[0].scope; } };
+  for (const g3Bindings of [[getter], [{ domain: "lesson_reflection" }], [{ ...bindings[0], allowedDomains: ["lesson_reflection"] }], [bindings[0], bindings[0]]]) {
+    await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings } }, channel), /Invalid runtime bootstrap/);
+  }
+  assert.equal(getterCalled, false);
+  delete process.env.EDUPI_DESKTOP_ISOLATED_CANARY;
+  await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: bindings } }, channel), /Invalid runtime bootstrap/);
+});
+
 test("runtime startup errors expose only bounded operational categories", () => {
   assert.equal(classifyCoreRuntimeStartupError({ code: "database_unavailable", message: "/private/teacher/data" }), "runtime_database_unavailable");
   assert.equal(classifyCoreRuntimeStartupError({ code: "invalid_state" }), "runtime_state_invalid");

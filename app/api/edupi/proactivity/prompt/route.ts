@@ -16,7 +16,7 @@ import { getRpcSession } from "@/lib/rpc-manager";
 import { inspectEduPiPromptSession } from "@/lib/edupi-prompt-reconciliation";
 import { resolveSessionPath } from "@/lib/session-reader";
 import { startHarnessSession } from "@/lib/harness/runtime";
-import { canStartEduPiProactivity, canStartEduPiStudentFollowup } from "@/lib/safe-mode";
+import { canStartEduPiCapabilityDrafts, canStartEduPiProactivity, canStartEduPiStudentFollowup } from "@/lib/safe-mode";
 import { discardEduPiPromptIntent, listEduPiPromptIntents, readEduPiPromptIntent, resolveEduPiPromptIntent } from "@/lib/edupi-prompt-intent";
 import { validateAgentImages } from "@/lib/image-attachments";
 import { prepareEduPiPromptOutbox, readEduPiPromptOutbox, listEduPiPromptOutbox, markEduPiPromptOutboxCancelled,
@@ -45,6 +45,7 @@ function activations(dataRoot: string) {
   const domains: EduPiProactivityDomain[] = [
     ...(canStartEduPiProactivity() ? ["teaching_preparation" as const] : []),
     ...(canStartEduPiStudentFollowup() ? ["student_followup" as const] : []),
+    ...(canStartEduPiCapabilityDrafts() ? ["calendar_administration" as const, "lesson_reflection" as const, "parent_communication" as const] : []),
   ];
   return domains.map(domain => ({ domain, activation: readEduPiProactivityActivation({ dataRoot, domain }) }))
     .filter(({ activation }) => activation.enabled);
@@ -271,17 +272,18 @@ export async function POST(request: Request) {
       if (healthFrame?.ok !== true || typeof rootRef !== "string" || !ROOT_REF.test(rootRef)
         || capabilities?.ambient_planning !== "active" || capabilities?.owner_message_registration !== "active"
         || enabled.some(({ domain }) => domain === "teaching_preparation" && capabilities?.g1_processor !== "active")
-        || enabled.some(({ domain }) => domain === "student_followup" && capabilities?.g2_processor !== "active")) {
+        || enabled.some(({ domain }) => domain === "student_followup" && capabilities?.g2_processor !== "active")
+        || enabled.some(({ domain }) => domain !== "teaching_preparation" && domain !== "student_followup" && capabilities?.g3_processor !== "active")) {
         return response("core_unavailable", 503);
       }
       const text = promptCommand.message.trim();
       const bindings = prior?.bindings ?? await Promise.all(enabled.map(async ({ domain, activation }) => {
         const context = await readProactivityOwnerContext(host, rootRef, activation.grantId!);
         if (!context || context.status !== "active") throw new Error("owner_grant_unavailable");
-        const captureMessageId = domain === "student_followup"
-          ? `g2_${createHash("sha256").update(`${sessionId}\0${messageId}`).digest("hex")}` : messageId;
+        const captureMessageId = domain === "teaching_preparation" ? messageId
+          : `${domain === "student_followup" ? "g2" : domain}_${createHash("sha256").update(`${sessionId}\0${messageId}`).digest("hex")}`;
         return { domain, ownerId: context.ownerId, grantId: context.grantId, grantVersion: context.grantVersion,
-          captureMessageId, carrierId: `edupi.desktop.${domain === "student_followup" ? "g2" : "g1"}`,
+          captureMessageId, carrierId: `edupi.desktop.${domain === "student_followup" ? "g2" : domain === "teaching_preparation" ? "g1" : domain}`,
           planId: `prompt.${clientRequestId}.${domain}` };
       }));
       let outbox = prepareEduPiPromptOutbox({ sessionId, clientRequestId, messageId, occurredAt, command: promptCommand, bindings }, options);
@@ -326,7 +328,7 @@ export async function POST(request: Request) {
           current = getRpcSession(sessionId);
         }
         if (!current?.isAlive()) throw new Error("session_unavailable_after_capture");
-        const commandHash = `sha256:${createHash("sha256").update(JSON.stringify(promptCommand)).digest("hex")}`;
+        const commandHash = `sha256:${createHash("sha256").update(JSON.stringify(outbox.command)).digest("hex")}`;
         let received!: (value: boolean) => void;
         const userPersisted = new Promise<boolean>(resolve => { received = resolve; });
         const unsubscribe = current.onEvent(event => {

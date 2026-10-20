@@ -13,7 +13,7 @@ const PRODUCER_ID = /^[A-Za-z0-9_.:-]{1,128}$/u;
 const RAW_ID = /^[^\u0000-\u001f\u007f]{1,128}$/u;
 const EPOCH = /^[a-f0-9]{64}$/u;
 const INSTANCE_NONCE = /^[A-Za-z0-9][A-Za-z0-9._:@/+~=-]{0,127}$/u;
-const DOMAINS = new Set<EduPiProactivityDomain>(["teaching_preparation", "student_followup"]);
+const DOMAINS = new Set<EduPiProactivityDomain>(["teaching_preparation", "student_followup", "calendar_administration", "lesson_reflection", "parent_communication"]);
 const MAX_PAYLOAD_BYTES = 150 * 1024 * 1024; // Ten existing 10 MiB image attachments encode below this limit.
 const MAX_OUTBOX_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_ENTRIES = 10_000;
