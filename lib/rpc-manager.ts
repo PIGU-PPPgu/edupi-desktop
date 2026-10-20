@@ -11,7 +11,7 @@ import { extractTextContent } from "./session-scan";
 import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
 import { getProjectTrustStatus, projectTrustReloadOptions } from "./project-trust";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
-import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
+import type { LoadExtensionsResult, SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import { PRODUCT_NAME } from "./branding";
 import type { AgentSessionLike, ExtensionUiContextLike, ToolInfo } from "./pi-types";
 import type { ExtensionUiRequest, ExtensionUiResponse, ExtensionWidgetItem } from "./types";
@@ -44,6 +44,7 @@ import { createRpcResourceLoader, rpcResourceOptions, type RpcToolMode } from ".
 import { readSessionToolNames, saveSessionToolNames } from "./session-tool-preferences";
 import { persistInitialPiSessionFile } from "./pi-session-first-file";
 import { eduPiDirectPromptGate } from "./edupi-direct-prompt-gate";
+import { createEduPiMemoryRecallAccess, type EduPiMemoryRecallAccess } from "./edupi-memory-recall-access";
 
 const CORE_CAPTURED_PROMPT = Symbol("edupi-core-captured-prompt");
 
@@ -219,8 +220,9 @@ export class AgentSessionWrapper {
   private artifactTaskId: string | null = null;
   private accessMode: PermissionMode = "workspace";
 
-  constructor(public inner: AgentSessionLike, private runtime?: AgentSessionRuntime, private toolMode: RpcToolMode = { disabled: false }) {
+  constructor(public inner: AgentSessionLike, private runtime?: AgentSessionRuntime, private toolMode: RpcToolMode = { disabled: false }, private memoryRecall?: EduPiMemoryRecallAccess) {
     runtime?.setBeforeSessionInvalidate(() => {
+      this.memoryRecall?.invalidate(this.inner.sessionManager);
       this.sessionInvalidated = true;
       this.unsubscribe?.();
       this.unsubscribe = null;
@@ -490,6 +492,14 @@ export class AgentSessionWrapper {
     if (this.forceEmptySystemPrompt) this.inner.setActiveToolsByName([]);
   }
 
+  private runPromptWithMemoryRecall<T>(command: Record<string, unknown>, callback: () => Promise<T>): Promise<T> {
+    if (!this.memoryRecall) return callback();
+    return this.memoryRecall.run(this.inner.sessionManager, {
+      message: command.message as string,
+      ...(typeof command.clientRequestId === "string" ? { clientRequestId: command.clientRequestId } : {}),
+    }, Reflect.get(command, CORE_CAPTURED_PROMPT) === true && !command.streamingBehavior, callback);
+  }
+
   private emit(event: AgentEvent): void {
     for (const listener of this.listeners) {
       try {
@@ -598,7 +608,7 @@ export class AgentSessionWrapper {
         this.promptRunning = true;
         notifyRunningChange();
         try {
-          await this.inner.prompt(message, { source: "rpc" });
+          await this.runPromptWithMemoryRecall(command, () => this.inner.prompt(message, { source: "rpc" }));
           await this.artifactWrites;
           invalidateSessionListCache();
           return null;
@@ -650,11 +660,11 @@ export class AgentSessionWrapper {
         }) : null;
         const persistenceTimer = awaitUserPersistence ? setTimeout(() => finishPersistence?.(false), 20_000) : null;
         notifyRunningChange();
-        withEducationModel(this.inner, () => this.inner.prompt(command.message as string, {
+        this.runPromptWithMemoryRecall(command, () => withEducationModel(this.inner, () => this.inner.prompt(command.message as string, {
           ...(promptImages?.length ? { images: promptImages } : {}),
           ...(streamingBehavior ? { streamingBehavior } : {}),
           source: "rpc",
-        })).then(async () => {
+        }))).then(async () => {
           await this.artifactWrites;
           if (!streamingBehavior) {
             this.promptRunning = false;
@@ -686,6 +696,7 @@ export class AgentSessionWrapper {
       }
 
       case "abort":
+        this.memoryRecall?.invalidate(this.inner.sessionManager);
         await this.withFinalRunningNotification(() => this.inner.abort());
         return null;
 
@@ -742,6 +753,7 @@ export class AgentSessionWrapper {
         const entryId = command.entryId as string;
         if (!this.runtime) throw new Error("Session runtime is unavailable");
         await this.waitForExtensionsBound();
+        this.memoryRecall?.invalidate(this.inner.sessionManager);
         const previousSession = this.inner;
         try {
           const result = await this.runtime.fork(entryId, { position: "before" });
@@ -763,6 +775,7 @@ export class AgentSessionWrapper {
         if (this.inner.isBashRunning) {
           throw new Error("Cannot navigate while a shell command is running");
         }
+        this.memoryRecall?.invalidate(this.inner.sessionManager);
         const result = await this.inner.navigateTree(command.targetId as string, {});
         const toolNames = readSessionToolNames(this.inner.sessionManager);
         if (!result.cancelled && toolNames !== undefined) {
@@ -829,12 +842,14 @@ export class AgentSessionWrapper {
       }
 
       case "steer": {
+        this.memoryRecall?.invalidate(this.inner.sessionManager);
         const steerImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         const disposition = await this.inner.steer(command.message as string, steerImages?.length ? steerImages : undefined, { source: "rpc" });
         return { disposition };
       }
 
       case "follow_up": {
+        this.memoryRecall?.invalidate(this.inner.sessionManager);
         const followImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
         const disposition = await this.inner.followUp(command.message as string, followImages?.length ? followImages : undefined, { source: "rpc" });
         return { disposition };
@@ -910,6 +925,7 @@ export class AgentSessionWrapper {
 
       case "reload": {
         await this.waitForExtensionsBound();
+        this.memoryRecall?.invalidate(this.inner.sessionManager);
         this.extensionStatuses.clear();
         this.extensionWidgets.clear();
         this.syncProjectTrust();
@@ -978,6 +994,7 @@ export class AgentSessionWrapper {
 
   destroy(): void {
     if (!this._alive) return;
+    this.memoryRecall?.invalidate(this.inner.sessionManager);
     this._alive = false;
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.inner.isBashRunning) this.inner.abortBash();
@@ -1003,6 +1020,7 @@ export class AgentSessionWrapper {
   async shutdown(): Promise<void> {
     if (this.shutdownPromise) return this.shutdownPromise;
     if (!this._alive) return;
+    this.memoryRecall?.invalidate(this.inner.sessionManager);
 
     this.shutdownPromise = (async () => {
       try {
@@ -1336,6 +1354,7 @@ export class AgentSessionWrapper {
       newSession: async () => ({ cancelled: true }),
       fork: async () => ({ cancelled: true }),
       navigateTree: async (targetId, options) => {
+        this.memoryRecall?.invalidate(this.inner.sessionManager);
         const result = await this.inner.navigateTree(targetId, { summarize: options?.summarize });
         const toolNames = readSessionToolNames(this.inner.sessionManager);
         if (!result.cancelled && toolNames !== undefined) {
@@ -1346,6 +1365,7 @@ export class AgentSessionWrapper {
       },
       switchSession: async () => ({ cancelled: true }),
       reload: async () => {
+        this.memoryRecall?.invalidate(this.inner.sessionManager);
         this.extensionStatuses.clear();
         this.extensionWidgets.clear();
         this.syncProjectTrust();
@@ -1545,6 +1565,7 @@ export async function startRpcSession(
     initTheme();
     const agentDir = getAgentDir();
     const toolMode = { disabled: toolNames?.length === 0 };
+    const memoryRecall = createEduPiMemoryRecallAccess(EDUPI_ROOT, { disabled: () => toolMode.disabled });
     const host: { wrapper?: AgentSessionWrapper } = {};
     const createRuntime: CreateAgentSessionRuntimeFactory = async ({ cwd: sessionCwd, sessionManager, sessionStartEvent }) => {
       const explicitTools = sessionStartEvent?.reason === "fork" ? host.wrapper?.inner.getActiveToolNames() : toolNames;
@@ -1572,7 +1593,11 @@ export async function startRpcSession(
       const resourceOptions = {
         cwd: sessionCwd,
         agentDir,
-        additionalExtensionPaths: extensionPaths,
+        // Desktop's owner-controlled broker replaces Core's in-process recall
+        // extension; its opaque capabilities cannot cross the daemon boundary.
+        additionalExtensionPaths: extensionPaths.filter(file => file !== resolve(EDUPI_CODE_ROOT, "extensions/memory.ts")),
+        extensionsOverride: (result: LoadExtensionsResult) => ({ ...result, extensions: result.extensions.filter(extension =>
+          normalizeRpcCwd(extension.resolvedPath) !== normalizeRpcCwd(resolve(EDUPI_CODE_ROOT, "extensions/memory.ts"))) }),
         additionalSkillPaths: safeMode ? builtinSkillPaths : educationSkillPath ? [educationSkillPath] : [],
         ...safeModeResourceOptions(safeMode, {
           coreExtensionRoot: EDUPI_CODE_ROOT,
@@ -1585,10 +1610,10 @@ export async function startRpcSession(
       const services = await createAgentSessionServices({
         cwd: sessionCwd,
         agentDir,
-        resourceLoaderOptions: rpcResourceOptions(resourceOptions, toolMode),
+        resourceLoaderOptions: rpcResourceOptions(resourceOptions, toolMode, [memoryRecall.extension]),
         ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
       });
-      services.resourceLoader = createRpcResourceLoader(services.resourceLoader, { ...resourceOptions, settingsManager: services.settingsManager }, toolMode);
+      services.resourceLoader = createRpcResourceLoader(services.resourceLoader, { ...resourceOptions, settingsManager: services.settingsManager }, toolMode, [memoryRecall.extension]);
       const defaultProvider = services.settingsManager.getDefaultProvider();
       const defaultModelId = services.settingsManager.getDefaultModel();
       const authModel = initialModel
@@ -1626,6 +1651,7 @@ export async function startRpcSession(
         // restricted loader and empty active set make this session tool-free.
         ...(toolMode.disabled ? { noTools: "builtin" as const } : {}),
         customTools: [
+          ...(sessionIsEduPiDataRoot && !safeMode ? [memoryRecall.tool] : []),
           defineTool(createBashToolDefinition(sessionCwd, { shellPath: services.settingsManager.getShellPath(), spawnHook: redactDesktopSpawnContext })),
           ...(sessionIsEduPiDataRoot ? [...createEduPiCalendarTools({ projectRoot: EDUPI_ROOT }), createPreparationArtifactTool(EDUPI_ROOT), createEduPiDocumentTool(EDUPI_ROOT), createEduPiPresentationTool(EDUPI_ROOT), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createMemoryWriteTool(EDUPI_ROOT), createMemoryForgetTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiUpdateTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
             projectRoot: EDUPI_ROOT,
@@ -1673,7 +1699,7 @@ export async function startRpcSession(
 
     const runtime = await createAgentSessionRuntime(createRuntime, { cwd: sessionCwd, agentDir, sessionManager });
     const inner = runtime.session;
-    const wrapper = new AgentSessionWrapper(inner, runtime, toolMode);
+    const wrapper = new AgentSessionWrapper(inner, runtime, toolMode, memoryRecall);
     host.wrapper = wrapper;
     if (accessMode) wrapper.setAccessMode(accessMode);
     requestEduPiAppAction = (action, signal) => wrapper.requestEduPiAppAction(action, signal);
