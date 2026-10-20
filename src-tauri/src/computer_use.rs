@@ -520,11 +520,15 @@ fn approval_message(value: &Value) -> String {
 }
 
 async fn confirm_native_action(app: &AppHandle, input: &Value) -> Result<bool, String> {
+    let parent = app
+        .get_webview_window(crate::WINDOW_LABEL)
+        .ok_or_else(|| "EduPi desktop window is unavailable.".to_string())?;
     let app = app.clone();
     let message = approval_message(input);
     tokio::task::spawn_blocking(move || {
         app.dialog()
             .message(message)
+            .parent(&parent)
             .title("EduPi 桌面控制")
             .buttons(MessageDialogButtons::OkCancelCustom(
                 "允许".to_string(),
@@ -570,6 +574,11 @@ pub async fn computer_use_execute(
     validate_input(&input)?;
     let action = action(&input)?.to_string();
     let _execution = state.execution_lock.lock().await;
+    if request_expired(expires_at_ms) {
+        return Err(
+            "Desktop control request expired while waiting for another action.".to_string(),
+        );
+    }
     if !state.enabled.load(Ordering::SeqCst) {
         return Err("Desktop control was stopped before this action began.".to_string());
     }
