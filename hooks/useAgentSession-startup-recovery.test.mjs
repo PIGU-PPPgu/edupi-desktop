@@ -40,8 +40,9 @@ function draftHarness() {
 
 function startupHarness({ input = true, acceptRestore = false, promptError = null, desktopPromptError = null,
   desktopDelivery = "disabled", desktopPromptSequence = null, desktop = false, intentStatus = "ready", intentGate = null,
+  promptReceiptGate = null, intentResolutionGate = null, reconciliationStatus = "uncertain",
   holdingSubmission = false, creationGate = null, modelGate = null, initialSid = null, selectedModel = null,
-  taskDraftKey = null } = {}) {
+  taskDraftKey = null, editorUnedited = true } = {}) {
   const drafts = draftHarness();
   const draftKey = taskDraftKey ?? "new:/synthetic/startup";
   const timers = new Map(), sources = [], commands = [], notices = [], promoted = [], recoveries = [], settlements = [], events = [], desktopPrompts = [];
@@ -63,12 +64,15 @@ function startupHarness({ input = true, acceptRestore = false, promptError = nul
     console: { error: noop },
     sessionIdentity: "new:/synthetic/startup", draftKey, isNew: true, newSessionCwd: "/synthetic/startup", newSessionModel: selectedModel, session: null,
     getDraft: drafts.store.getDraft, setDraft: drafts.store.setDraft,
+    flushDraftNow: drafts.store.flushDraftNow, activeDraftKeyRef: { current: draftKey },
+    refreshPromptRecovery: noop,
     stagePendingPrompt: drafts.store.stagePendingPrompt, acknowledgePendingPrompt: drafts.store.acknowledgePendingPrompt,
-    isTauriDesktop: () => desktop, reconcileEduPiCapturedPrompt: async () => "uncertain",
+    isTauriDesktop: () => desktop, reconcileEduPiCapturedPrompt: async () => reconciliationStatus,
     persistEduPiPromptIntent: async () => { if (intentGate) await intentGate; return intentStatus; }, resolveEduPiPromptIntentClient: async () => {
       if (!desktop) throw new Error("desktop_only_intent_resolution");
+      if (intentResolutionGate) await intentResolutionGate;
     },
-    settleUiStage: () => { context.agentRunningRef.current = false; active = false; },
+    retirePromptRequest: noop, setRetryInfo: noop,
     loadSession: async sid => { events.push(["reload", sid]); return { sessionId: sid }; },
     releasePendingPromptForNewMessage: drafts.store.releasePendingPromptForNewMessage,
     sessionIdRef: { current: initialSid }, sessionGenerationRef: { current: 0 },
@@ -77,9 +81,10 @@ function startupHarness({ input = true, acceptRestore = false, promptError = nul
     toolPresetRef: { current: "none" }, permissionModeRef: { current: "none" }, getToolNamesForPreset: () => [],
     setPendingModel: noop, setNewSessionDefaultModel: noop, setThinkingLevel: noop,
     fetch: async url => { assert.equal(url, "/api/agent/new"); creates++; if (creationGate) await creationGate; return { ok: true, json: async () => ({ sessionId: "created-session" }) }; },
-    sendAgentCommand: async (sid, command) => { commands.push({ sid, ...command }); if (command.type === "set_model" && modelGate) await modelGate; if (command.type === "prompt" && promptError) throw promptError; },
+    sendAgentCommand: async (sid, command) => { commands.push({ sid, ...command }); if (command.type === "set_model" && modelGate) await modelGate; if (command.type === "prompt" && promptReceiptGate) await promptReceiptGate; if (command.type === "prompt" && promptError) throw promptError; },
     onSessionCreated: row => promoted.push(row),
-    promptRunIdRef: { current: 0 }, promptRequestIdRef: { current: null },
+    promptRunIdRef: { current: 0 }, promptRequestIdRef: { current: null }, promptSubmissionRunIdRef: { current: null },
+    sdkAgentActiveRef: { current: false },
     agentRunningRef: { current: false }, rpcPromptPendingRef: { current: false }, bashRunningRef: { current: false },
     executeBashRef: { current: null }, setLoading: noop, setAgentRunning: value => { active = value; }, setAgentPhase: noop,
     dispatch: noop, dispatchMessageHistory: action => { history = messageHistoryReducer(history, action); },
@@ -97,6 +102,7 @@ function startupHarness({ input = true, acceptRestore = false, promptError = nul
     addNotice: notice => notices.push(notice), restoreFailedMessageDraft: drafts.store.restoreFailedMessageDraft,
     chatInputRef: { current: input ? {
       isHoldingSubmission: () => holdingSubmission,
+      isSubmittedDraftUnedited: () => editorUnedited,
       acknowledgeSubmittedMessage: (key, value) => { recoveries.push({ type: "acknowledge", key, value }); return true; },
       preserveContextForSession: noop,
       replaceMessage: message => { recoveries.push({ type: "replace", message: plain(message), durableBeforeRestore: drafts.cold(draftKey) }); return acceptRestore; },
@@ -108,9 +114,12 @@ function startupHarness({ input = true, acceptRestore = false, promptError = nul
   const creation = source.slice(source.indexOf("  const promoteNewSession = useCallback"), source.indexOf("  const loadSlashCommands = useCallback"));
   const connection = source.slice(source.indexOf("  const cancelEventStreamGrace = useCallback"), source.indexOf("  const respondToExtensionUi = useCallback"));
   const sending = source.slice(source.indexOf("  const handleSend = useCallback"), source.indexOf("  const executeBash = useCallback"));
-  const api = new Function(...Object.keys(context), compile(`${constants}\n${connectionError}\n${creation}\n${connection}\n${sending}\nreturn { handleSend, ensureEventsConnected };`))(...Object.values(context));
+  const acknowledging = source.slice(source.indexOf("  const acknowledgeSubmittedPrompt = useCallback"), source.indexOf("  const reconcilePendingPrompt = useCallback"));
+  const settling = source.slice(source.indexOf("  const settleUiStage = useCallback"), source.indexOf("  const notifyPromptStage = useCallback"));
+  const api = new Function(...Object.keys(context), compile(`${constants}\n${connectionError}\n${creation}\n${connection}\n${settling}\n${acknowledging}\n${sending}\nreturn { handleSend, ensureEventsConnected, settleUiStage };`))(...Object.values(context));
   return { ...drafts, context, draftKey, sources, commands, notices, promoted, recoveries, settlements, events, desktopPrompts,
     send: api.handleSend, state: () => ({ creates, active, history }),
+    finishPrompt: () => { context.rpcPromptPendingRef.current = false; context.sdkAgentActiveRef.current = false; api.settleUiStage(); },
     expire: async ms => { const timer = [...timers.entries()].find(([, timer]) => timer.ms === ms); assert.ok(timer, `expected ${ms}ms deadline`); timers.delete(timer[0]); timer[1].callback(); await flush(); },
     timerDelays: () => [...timers.values()].map(timer => timer.ms),
   };
@@ -188,6 +197,50 @@ test("disabled proactive capture still sends a long Desktop prompt directly to P
   assert.equal(f.cold(f.draftKey)?.pendingPrompt, undefined);
 });
 
+test("an early terminal SSE does not expose a pending warning while the durable REST ACK is in flight", async () => {
+  for (const stage of ["persistence", "intent"]) {
+    let finishAck;
+    const gate = new Promise(resolve => { finishAck = resolve; });
+    const f = startupHarness({ desktop: true,
+      ...(stage === "persistence" ? { promptReceiptGate: gate } : { intentResolutionGate: gate }) });
+    f.store.setDraft(f.draftKey, { value: "已落盘合成消息", images: [] });
+    f.store.flushDraftNow(f.draftKey);
+    const sent = f.send("已落盘合成消息");
+    await flush();
+    f.sources[0].connected();
+    await flush();
+    f.finishPrompt();
+    assert.equal(f.state().active, true, `${stage} ACK remains part of the current busy stage`);
+    assert.ok(f.cold(f.draftKey)?.pendingPrompt);
+    finishAck();
+    assert.equal(await sent, true);
+    assert.equal(f.state().active, false);
+    assert.equal(f.cold(f.draftKey)?.pendingPrompt, undefined);
+    assert.equal(f.commands.filter(command => command.type === "prompt").length, 1);
+  }
+});
+
+test("a lost direct REST ACK has a deadline and its late arrival cannot resume intent settlement or replay", async () => {
+  let finishAck;
+  const f = startupHarness({ desktop: true, promptReceiptGate: new Promise(resolve => { finishAck = resolve; }) });
+  f.store.setDraft(f.draftKey, { value: "合成丢回执", images: [] });
+  f.store.flushDraftNow(f.draftKey);
+  const sent = f.send("合成丢回执");
+  await flush();
+  f.sources[0].connected();
+  await flush();
+  f.finishPrompt();
+  await f.expire(25_000);
+  assert.equal(await sent, false);
+  const pending = f.cold(f.draftKey)?.pendingPrompt;
+  assert.ok(pending);
+  assert.equal(f.state().active, false);
+  finishAck();
+  await flush();
+  assert.equal(f.cold(f.draftKey)?.pendingPrompt?.clientRequestId, pending.clientRequestId);
+  assert.equal(f.commands.filter(command => command.type === "prompt").length, 1);
+});
+
 test("a task-only new conversation stages and sends using its own draft key", async () => {
   const f = startupHarness({ desktop: true, taskDraftKey: "reminder:/synthetic/startup:synthetic-task" });
   f.store.setDraft(f.draftKey, { value: "合成任务续聊", images: [] });
@@ -216,9 +269,9 @@ test("an extension slash command is captured before Pi while active and runs dir
 });
 
 test("a resolved intent retry clears its optimistic ghost and running state without a second send", async () => {
-  const f = startupHarness({ desktop: true, intentStatus: "resolved" });
+  const f = startupHarness({ desktop: true, intentStatus: "resolved", reconciliationStatus: "accepted" });
   const pendingPrompt = { sessionId: "created-session", clientRequestId: "66666666-6666-4666-8666-666666666666",
-    occurredAt: "2026-10-10T00:00:00.000Z", message: "已送达消息", draftValue: "已送达消息" };
+    occurredAt: "2026-10-10T00:00:00.000Z", message: "已送达消息", draftValue: "已送达消息", draftUnedited: true };
   f.store.setDraft(f.draftKey, { value: pendingPrompt.draftValue, images: [], pendingPrompt });
   assert.equal(f.store.flushDraftNow(f.draftKey), true);
   const sent = f.send(pendingPrompt.message);
@@ -236,9 +289,9 @@ test("a resolved intent retry clears its optimistic ghost and running state with
 test("a session switch during a resolved-intent read never revives the delivered message as failed", async () => {
   let finishIntent;
   const intentGate = new Promise(resolve => { finishIntent = resolve; });
-  const f = startupHarness({ desktop: true, intentStatus: "resolved", intentGate });
+  const f = startupHarness({ desktop: true, intentStatus: "resolved", intentGate, reconciliationStatus: "accepted" });
   const pendingPrompt = { sessionId: "created-session", clientRequestId: "77777777-7777-4777-8777-777777777777",
-    occurredAt: "2026-10-10T00:00:00.000Z", message: "已经送达", draftValue: "已经送达" };
+    occurredAt: "2026-10-10T00:00:00.000Z", message: "已经送达", draftValue: "已经送达", draftUnedited: true };
   f.store.setDraft(f.draftKey, { value: pendingPrompt.draftValue, images: [], pendingPrompt });
   assert.equal(f.store.flushDraftNow(f.draftKey), true);
   const sent = f.send(pendingPrompt.message);
@@ -252,6 +305,35 @@ test("a session switch during a resolved-intent read never revives the delivered
   assert.equal(f.cold(f.draftKey), null);
   assert.equal(f.recoveries.some(item => item.type === "pending" || item.type === "replace"), false);
   assert.equal(f.desktopPrompts.length, 0);
+});
+
+test("a resolved intent without exact Pi persistence proof keeps its pending identity and never replays", async () => {
+  const f = startupHarness({ desktop: true, intentStatus: "resolved" });
+  const pendingPrompt = { sessionId: "created-session", clientRequestId: "88888888-8888-4888-8888-888888888888",
+    occurredAt: "2026-10-10T00:00:00.000Z", message: "未知合成消息", draftValue: "未知合成消息" };
+  f.store.setDraft(f.draftKey, { value: pendingPrompt.draftValue, images: [], pendingPrompt });
+  f.store.flushDraftNow(f.draftKey);
+  const sent = f.send(pendingPrompt.message);
+  await flush();
+  f.sources[0].connected();
+  assert.equal(await sent, false);
+  assert.equal(f.cold(f.draftKey)?.pendingPrompt?.clientRequestId, pendingPrompt.clientRequestId);
+  assert.equal(f.desktopPrompts.length, 0);
+  assert.equal(f.commands.filter(command => command.type === "prompt").length, 0);
+});
+
+test("new pending aliases require the actual editor's unedited submission proof before any text can be cleared", async () => {
+  const f = startupHarness({ desktop: true, desktopDelivery: "accepted", editorUnedited: false });
+  f.store.setDraft(f.draftKey, { value: "同文新编辑", images: [], context: { title: "新引用", reference: "synthetic new context" } });
+  f.store.flushDraftNow(f.draftKey);
+  const sent = f.send("同文新编辑");
+  await flush();
+  f.sources[0].connected();
+  assert.equal(await sent, true);
+  assert.equal(f.cold(f.draftKey)?.value, "同文新编辑");
+  assert.equal(f.cold("created-session")?.value, "同文新编辑");
+  assert.equal(f.cold(f.draftKey)?.context?.title, "新引用");
+  assert.equal(f.cold(f.draftKey)?.pendingPrompt, undefined);
 });
 
 test("complete startup failure keeps text, all references and images durable without a UI ref", async () => {

@@ -1,7 +1,8 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices, createBashToolDefinition, defineTool, getAgentDir, initTheme, SessionManager, Theme, type AgentSessionRuntime, type CreateAgentSessionRuntimeFactory } from "@earendil-works/pi-coding-agent";
 import { KeybindingsManager as TuiKeybindingsManager, TUI_KEYBINDINGS } from "@earendil-works/pi-tui";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
+import { isDeepStrictEqual } from "node:util";
 import { existsSync, realpathSync } from "fs";
 import { resolve } from "path";
 import { validateAgentImages } from "./image-attachments";
@@ -45,6 +46,7 @@ import { readSessionToolNames, saveSessionToolNames } from "./session-tool-prefe
 import { persistInitialPiSessionFile } from "./pi-session-first-file";
 import { eduPiDirectPromptGate } from "./edupi-direct-prompt-gate";
 import { createEduPiMemoryRecallAccess, type EduPiMemoryRecallAccess } from "./edupi-memory-recall-access";
+import { inspectEduPiPromptSession } from "./edupi-prompt-reconciliation";
 
 const CORE_CAPTURED_PROMPT = Symbol("edupi-core-captured-prompt");
 
@@ -276,8 +278,8 @@ export class AgentSessionWrapper {
     if (!this._alive || this.isRunning() || !/^[A-Za-z0-9_.:-]{1,128}$/u.test(clientRequestId)
       || !/^sha256:[a-f0-9]{64}$/u.test(commandHash)) throw new Error("edupi_prompt_dispatch_unavailable");
     // This silent Pi session entry binds the later user message to the
-    // durable outbox identity. It contains no teacher text or image bytes.
-    this.inner.sessionManager.appendCustomEntry("edupi_prompt_dispatch_v1", { clientRequestId, commandHash });
+    // durable request identity. It contains no teacher text or image bytes.
+    this.inner.sessionManager.appendCustomEntry("edupi_prompt_dispatch_v1", { sessionId: this.sessionId, clientRequestId, commandHash });
   }
 
   /** Only the server's Core-first route can use this non-JSON dispatch path. */
@@ -629,13 +631,19 @@ export class AgentSessionWrapper {
         const clientRequestId = typeof command.clientRequestId === "string" && command.clientRequestId.length <= 128
           ? command.clientRequestId : undefined;
         const awaitUserPersistence = command.awaitUserPersistence === true;
-        if (awaitUserPersistence && (!clientRequestId || streamingBehavior)) throw new Error("Invalid prompt persistence request");
+        if (awaitUserPersistence && (!clientRequestId || streamingBehavior || typeof command.message !== "string")) throw new Error("Invalid prompt persistence request");
+        const persistenceCommand = { type: "prompt" as const, message: command.message as string,
+          clientRequestId: clientRequestId ?? "", ...(promptImages === undefined ? {} : { images: promptImages }) };
         if (!streamingBehavior) {
           if (clientRequestId && this.acceptedPromptRequestIds.has(clientRequestId)) {
             if (awaitUserPersistence) throw new Error("Prompt request already submitted; verify the session");
             return null;
           }
           if (this.promptRunning || this.inner.isStreaming) throw new Error("Agent is already processing");
+          if (awaitUserPersistence && !promptImages?.length) {
+            this.recordEduPiPromptDispatch(clientRequestId!,
+              `sha256:${createHash("sha256").update(JSON.stringify(persistenceCommand)).digest("hex")}`);
+          }
           this.promptRequestId = clientRequestId ?? null;
           this.promptRunning = true;
           if (clientRequestId) {
@@ -645,18 +653,45 @@ export class AgentSessionWrapper {
         }
         let finishPersistence: ((value: boolean) => void) | null = null;
         const persistence = awaitUserPersistence ? new Promise<boolean>(resolve => { finishPersistence = resolve; }) : null;
-        const unsubscribePersistence = awaitUserPersistence ? this.onEvent(event => {
-          if (event.clientRequestId !== clientRequestId) return;
+        let receiptSettled = false;
+        const unsubscribePersistence = clientRequestId && !streamingBehavior ? this.onEvent(event => {
+          if (receiptSettled || event.clientRequestId !== clientRequestId) return;
           const userMessage = event.message as { role?: unknown } | undefined;
           if (event.type === "message_end" && userMessage?.role === "user" && typeof event.entryId === "string") {
             const file = this.inner.sessionManager.getSessionFile();
             let saved = false;
-            try { saved = Boolean(file && existsSync(file) && SessionManager.open(file).getEntries()
-              .some(entry => entry.type === "message" && entry.id === event.entryId && entry.message.role === "user")); }
+            try {
+              const persisted = file && existsSync(file) ? SessionManager.open(file).getEntries()
+                .find(entry => entry.type === "message" && entry.id === event.entryId) : null;
+              const exactUser = persisted?.type === "message" && persisted.message.role === "user"
+                && (typeof persisted.message.content === "string" && !promptImages?.length
+                  ? persisted.message.content === persistenceCommand.message
+                  : isDeepStrictEqual(persisted.message.content,
+                    [{ type: "text", text: persistenceCommand.message }, ...(promptImages ?? [])]));
+              if (exactUser) {
+                const receipt = { sessionId: this.sessionId, clientRequestId,
+                  commandHash: `sha256:${createHash("sha256").update(JSON.stringify(persistenceCommand)).digest("hex")}`,
+                  userEntryId: event.entryId };
+                this.inner.sessionManager.appendCustomEntry("edupi_prompt_accepted_v1", receipt);
+                // A dispatch marker by itself can borrow a later, unmarked
+                // same-text prompt after failure. Persist this exact positive
+                // SDK mapping before any HTTP or cold recovery may ACK it.
+                saved = promptImages?.length
+                  ? SessionManager.open(file!).getEntries().filter(entry => entry.type === "custom"
+                    && entry.customType === "edupi_prompt_accepted_v1" && isDeepStrictEqual(entry.data, receipt)).length === 1
+                  : inspectEduPiPromptSession({ sessionId: this.sessionId,
+                    clientRequestId, command: persistenceCommand }, file!) === "confirmed";
+              }
+            }
             catch { saved = false; }
+            receiptSettled = true;
             finishPersistence?.(saved);
+            queueMicrotask(() => unsubscribePersistence?.());
           }
-          if (event.type === "prompt_error" || event.type === "prompt_done") queueMicrotask(() => finishPersistence?.(false));
+          if (event.type === "prompt_error" || event.type === "prompt_done") queueMicrotask(() => {
+            if (!receiptSettled) { receiptSettled = true; finishPersistence?.(false); }
+            unsubscribePersistence?.();
+          });
         }) : null;
         const persistenceTimer = awaitUserPersistence ? setTimeout(() => finishPersistence?.(false), 20_000) : null;
         notifyRunningChange();
@@ -690,7 +725,9 @@ export class AgentSessionWrapper {
         });
         if (persistence) {
           try { if (!await persistence) throw new Error("Pi user message was not durably recorded"); }
-          finally { if (persistenceTimer) clearTimeout(persistenceTimer); unsubscribePersistence?.(); }
+          // A timed-out HTTP wait must not remove the observer: a genuinely
+          // late SDK user may still acquire a positive receipt for recovery.
+          finally { if (persistenceTimer) clearTimeout(persistenceTimer); }
         }
         return null;
       }

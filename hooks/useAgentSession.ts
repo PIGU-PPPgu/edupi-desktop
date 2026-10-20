@@ -292,7 +292,9 @@ export interface ChatInputHandle {
   markQueueRecoveryUncertain: (sessionId: string, recoveryId: string) => boolean;
   refreshPendingFailedMessages: (draftKey: string) => void;
   isHoldingSubmission: (draftKey: string) => boolean;
-  acknowledgeSubmittedMessage: (draftKey: string, value: string, preserveContext: boolean) => boolean;
+  isSubmittedDraftUnedited?: (draftKey: string, value: string) => boolean;
+  acknowledgeSubmittedMessage: (draftKey: string, value: string, preserveContext: boolean,
+    request?: { sessionId: string; clientRequestId: string }) => boolean;
   insertIfEmpty: (content: string) => void;
   replaceMessage: (message: UserMessage, allowPendingRecovery?: boolean) => boolean;
   prependText: (text: string) => void;
@@ -443,6 +445,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessages>({ steering: [], followUp: [] });
   const [queueRecallBusy, setQueueRecallBusy] = useState(false);
   const [queueRecoveryRequiresReview, setQueueRecoveryRequiresReview] = useState(false);
+  const [, refreshPromptRecovery] = useState(0);
   const queueRecallInFlightRef = useRef(new Set<string>());
 
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -452,6 +455,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const eventStreamGraceGenerationRef = useRef(0);
   const eventStreamGraceActiveRef = useRef(false);
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
+  const activeDraftKeyRef = useRef(draftKey);
+  activeDraftKeyRef.current = draftKey;
   // Async reads that write session-scoped UI state need their own monotonic
   // request ids. Checking only the session id is not enough when the user
   // switches A → B → A before the first A request settles.
@@ -485,6 +490,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const toolPresetRef = useRef(toolPreset);
   const permissionModeRef = useRef(permissionMode);
   const promptRunIdRef = useRef(0);
+  const promptSubmissionRunIdRef = useRef<number | null>(null);
   const promptRequestIdRef = useRef<string | null>(null);
   const completedPromptRequestIdsRef = useRef(new Set<string>());
   const peerRequestProbeIdRef = useRef(0);
@@ -622,6 +628,43 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } satisfies SessionStatsInfo;
   }, [messages, sessionStatsOverride, contextUsage, data?.filePath, session?.id, session?.name]);
 
+  const acknowledgeSubmittedPrompt = useCallback((key: string, pending: {
+    sessionId: string; clientRequestId: string; draftValue: string; message: string;
+  }) => {
+    chatInputRef?.current?.acknowledgeSubmittedMessage?.(key, pending.draftValue,
+      pending.message.startsWith("/"), { sessionId: pending.sessionId, clientRequestId: pending.clientRequestId });
+    acknowledgePendingPrompt(key, pending.clientRequestId);
+    refreshPromptRecovery(value => value + 1);
+  }, [chatInputRef]);
+
+  const reconcilePendingPrompt = useCallback(async (sid: string, isCurrent: () => boolean, key = sid) => {
+    if (!isTauriDesktop() || !isCurrent() || promptSubmissionRunIdRef.current === promptRunIdRef.current) return;
+    const pending = getDraft(key)?.pendingPrompt;
+    if (!pending || pending.sessionId !== sid) return;
+    try {
+      const status = await reconcileEduPiCapturedPrompt(sid, pending.clientRequestId,
+        { type: "prompt", message: pending.message, clientRequestId: pending.clientRequestId });
+      const current = getDraft(key)?.pendingPrompt;
+      if (status !== "accepted" || !isCurrent() || current?.sessionId !== sid
+        || current.clientRequestId !== pending.clientRequestId || current.message !== pending.message
+        || current.occurredAt !== pending.occurredAt) return;
+      acknowledgeSubmittedPrompt(key, pending);
+    } catch {
+      // An unavailable proof leaves the exact pending request recoverable.
+    }
+  }, [acknowledgeSubmittedPrompt]);
+
+  useEffect(() => {
+    if (!isNew || !draftKey || !isTauriDesktop()) return;
+    const pending = getDraft(draftKey)?.pendingPrompt;
+    if (!pending || sessionIdRef.current) return;
+    const generation = sessionGenerationRef.current, runId = promptRunIdRef.current;
+    const isCurrent = () => activeDraftKeyRef.current === draftKey
+      && sessionGenerationRef.current === generation && promptRunIdRef.current === runId
+      && !sessionIdRef.current && !agentRunningRef.current;
+    void reconcilePendingPrompt(pending.sessionId, isCurrent, draftKey);
+  }, [isNew, draftKey, reconcilePendingPrompt]);
+
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
     const requestId = ++contextLoadIdRef.current;
     const sessionGeneration = sessionGenerationRef.current;
@@ -653,6 +696,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as SessionData;
+      if (!isCurrent()) return null;
+      await reconcilePendingPrompt(sid, isCurrent);
       if (!isCurrent()) return null;
       const loadedEntryIds = new Set(d.context.entryIds ?? []);
       const deliveredSinceRead = messageHistoryRef.current.messageIds.filter(id => id && !messageIdsBeforeRead.has(id));
@@ -699,7 +744,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       if (showLoading && !messagesLoaded && isCurrent()) setLoading(false);
     }
-  }, [dispatchMessageHistory]);
+  }, [dispatchMessageHistory, reconcilePendingPrompt]);
 
   /** Re-run the initial session load after a failed fetch (error-state Retry). */
   const retryLoad = useCallback(() => {
@@ -1101,6 +1146,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const settleUiStage = useCallback(() => {
     const wasRunning = agentRunningRef.current;
+    // SDK completion can precede the HTTP persistence receipt and its intent
+    // settlement. Keep that submission busy until its own request finishes.
+    if (promptSubmissionRunIdRef.current === promptRunIdRef.current) return wasRunning;
     retirePromptRequest(promptRequestIdRef.current);
     agentRunningRef.current = false;
     setAgentRunning(false);
@@ -1616,11 +1664,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const isSlashCommandPrompt = !images?.length && trimmedMessage.startsWith("/");
     const priorPrompt = originDraftKey ? getDraft(originDraftKey)?.pendingPrompt : undefined;
     if (priorPrompt && (priorPrompt.message !== message || images?.length)) {
-      const status = await reconcileEduPiCapturedPrompt(priorPrompt.sessionId, priorPrompt.clientRequestId)
+      const status = await reconcileEduPiCapturedPrompt(priorPrompt.sessionId, priorPrompt.clientRequestId,
+        { type: "prompt", message: priorPrompt.message, clientRequestId: priorPrompt.clientRequestId })
         .catch(() => "unavailable");
-      if (["accepted", "cancelled"].includes(status)) {
-        acknowledgePendingPrompt(originDraftKey!, priorPrompt.clientRequestId);
+      if (status === "accepted") {
+        acknowledgeSubmittedPrompt(originDraftKey!, priorPrompt);
         addNotice({ type: "info", message: "先前消息已核对，请再次发送当前内容" });
+      } else if (status === "cancelled") {
+        releasePendingPromptForNewMessage(originDraftKey!, priorPrompt.clientRequestId);
+        addNotice({ type: "info", message: "先前消息已撤回，请再次发送当前内容" });
       } else {
         addNotice({ type: "warning", message: "先前消息结果未核对，请到管理中心处理后重试" });
       }
@@ -1664,6 +1716,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     };
     dispatchMessageHistory({ type: "optimistic", message: userMsg, requestId: clientRequestId });
     promptRunIdRef.current = promptRunId;
+    promptSubmissionRunIdRef.current = promptRunId;
     agentRunningRef.current = true;
     setAgentRunning(true);
     setAgentPhase(isSlashCommandPrompt ? { kind: "running_command" } : { kind: "waiting_model" });
@@ -1682,6 +1735,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         throw new Error("The conversation changed before the message was submitted.");
       }
     };
+    const awaitPromptReceipt = async <T,>(receipt: Promise<T>): Promise<T> => {
+      let timer: ReturnType<typeof setTimeout>;
+      const deadline = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error("消息回执超时，请核对发送结果")), 25_000);
+      });
+      try { return await Promise.race([receipt, deadline]); }
+      finally { clearTimeout(timer!); }
+    };
     const submitPrompt = async (sid: string): Promise<boolean> => {
       const command = { type: "prompt" as const, message, clientRequestId,
         ...(piImages?.length ? { images: piImages } : {}) };
@@ -1691,20 +1752,32 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const sourceDraft = getDraft(originDraftKey);
         const pending = { sessionId: sid, clientRequestId, occurredAt: new Date(occurredAtMs).toISOString(),
           message, draftValue: priorPrompt?.draftValue ?? sourceDraft?.value ?? "" };
-        if (!sourceDraft || !stagePendingPrompt(originDraftKey, pending)) throw new Error("发送标识未能保存，消息未发送");
+        const draftUnedited = chatInputRef?.current?.isSubmittedDraftUnedited?.(originDraftKey, pending.draftValue) === true;
+        if (!sourceDraft || !stagePendingPrompt(originDraftKey, pending, draftUnedited)) throw new Error("发送标识未能保存，消息未发送");
         if (sid !== originDraftKey) {
           const target = getDraft(sid);
           if (target && target.value && target.value !== sourceDraft.value) throw new Error("会话草稿冲突，消息未发送");
           if (!target) setDraft(sid, sourceDraft);
-          if (!stagePendingPrompt(sid, pending)) throw new Error("会话标识未能保存，消息未发送");
+          if (!stagePendingPrompt(sid, pending, draftUnedited)) throw new Error("会话标识未能保存，消息未发送");
         }
         const cwd = newSessionCwd ?? session?.cwd;
         if (!cwd) throw new Error("工作区未确认，消息未发送");
         const intent = await persistEduPiPromptIntent({ ...pending, cwd });
         if (intent === "resolved") {
+          promptRequestStarted = true;
+          const status = await reconcileEduPiCapturedPrompt(sid, clientRequestId, command);
+          if (status !== "accepted") {
+            if (sendGeneration === sessionGenerationRef.current && promptRunIdRef.current === promptRunId
+              && sessionIdRef.current === sid) {
+              dispatchMessageHistory({ type: "remove_optimistic", requestId: clientRequestId });
+              rpcPromptPendingRef.current = false;
+              settleUiStage();
+              addNotice({ type: "warning", message: "先前消息结果仍待核对，未自动重发" });
+            }
+            return false;
+          }
           previouslyResolved = true;
-          chatInputRef?.current?.acknowledgeSubmittedMessage?.(originDraftKey, pending.draftValue, message.startsWith("/"));
-          acknowledgePendingPrompt(originDraftKey, clientRequestId);
+          acknowledgeSubmittedPrompt(originDraftKey, pending);
           if (sendGeneration === sessionGenerationRef.current && promptRunIdRef.current === promptRunId
             && sessionIdRef.current === sid) {
             dispatchMessageHistory({ type: "remove_optimistic", requestId: clientRequestId });
@@ -1723,13 +1796,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       if (isSlashCommandPrompt && !durableSend) {
         promptRequestStarted = true;
-        await sendAgentCommand(sid, { ...command, awaitUserPersistence: true });
+        await awaitPromptReceipt(sendAgentCommand(sid, { ...command, awaitUserPersistence: true }));
         return true;
       }
       // A lost response can mean Pi accepted the prompt. Never blindly replay it.
       promptRequestStarted = true;
-      const delivery = await sendEduPiCapturedPrompt({ sessionId: sid,
-        messageId: `prompt-${clientRequestId}`, occurredAt: new Date(occurredAtMs).toISOString(), command });
+      const delivery = await awaitPromptReceipt(sendEduPiCapturedPrompt({ sessionId: sid,
+        messageId: `prompt-${clientRequestId}`, occurredAt: new Date(occurredAtMs).toISOString(), command }));
       if (delivery === "blocked") {
         promptRequestStarted = false;
         throw new Error("Core 尚未确认消息，未发送给 Pi。请在管理中心检查运行状态。");
@@ -1744,8 +1817,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         throw new Error("主动运行期间，请先在材料中接入附件；消息未发送");
       }
       if (delivery === "cancelled") {
-        if (originDraftKey) acknowledgePendingPrompt(originDraftKey, clientRequestId);
-        if (sid !== originDraftKey) acknowledgePendingPrompt(sid, clientRequestId);
+        if (originDraftKey) releasePendingPromptForNewMessage(originDraftKey, clientRequestId);
+        if (sid !== originDraftKey) releasePendingPromptForNewMessage(sid, clientRequestId);
         addNotice({ type: "info", message: "先前消息已撤回，请再次发送当前内容" });
         return false;
       }
@@ -1758,9 +1831,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           addNotice({ type: "warning", message: "先前发送结果未核对，未自动重发" });
           return false;
         }
-        await sendAgentCommand(sid, { ...command, awaitUserPersistence: true });
+        await awaitPromptReceipt(sendAgentCommand(sid, { ...command, awaitUserPersistence: true }));
         if (durableSend) {
-          try { await resolveEduPiPromptIntentClient(sid, clientRequestId); }
+          try { await awaitPromptReceipt(resolveEduPiPromptIntentClient(sid, clientRequestId)); }
           catch {
             addNotice({ type: "warning", message: "Pi 已收到，恢复记录仍待核对" });
             return false;
@@ -1772,7 +1845,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         void waitForPromptSettlement(sid, promptRunId);
         return false;
       }
-      if (originDraftKey) acknowledgePendingPrompt(originDraftKey, clientRequestId);
+      if (originDraftKey) {
+        const pending = getDraft(originDraftKey)?.pendingPrompt;
+        if (pending?.clientRequestId === clientRequestId && pending.sessionId === sid) acknowledgeSubmittedPrompt(originDraftKey, pending);
+      }
       if (sid !== originDraftKey) acknowledgePendingPrompt(sid, clientRequestId);
       return true;
     };
@@ -1857,8 +1933,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setPromptAnchorActive(false);
       dispatch({ type: "end" });
       return false;
+    } finally {
+      if (promptSubmissionRunIdRef.current === promptRunId) promptSubmissionRunIdRef.current = null;
+      if (sendGeneration === sessionGenerationRef.current && promptRunIdRef.current === promptRunId
+        && sentSessionId && sessionIdRef.current === sentSessionId) {
+        if (!rpcPromptPendingRef.current && !sdkAgentActiveRef.current) settleUiStage();
+        // A terminal SSE may have arrived while the receipt was still in
+        // flight. Re-read the proof once that request can no longer ACK it.
+        if (originDraftKey && getDraft(originDraftKey)?.pendingPrompt?.clientRequestId === clientRequestId) {
+          void loadSession(sentSessionId);
+        }
+      }
     }
-  }, [isNew, newSessionCwd, newSessionModel, session, draftKey, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, dispatch, dispatchMessageHistory, chatInputRef, settleUiStage, loadSession]);
+  }, [isNew, newSessionCwd, newSessionModel, session, draftKey, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, acknowledgeSubmittedPrompt, addNotice, cancelEventStreamGrace, closeEvents, dispatch, dispatchMessageHistory, chatInputRef, settleUiStage, loadSession]);
 
   const executeBash = useCallback(async (command: string, excludeFromContext: boolean) => {
     if (agentRunningRef.current || bashRunningRef.current) return;

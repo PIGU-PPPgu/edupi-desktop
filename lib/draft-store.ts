@@ -26,7 +26,8 @@ export interface ChatDraft {
   pendingQueueReadyToAck?: boolean;
   pendingQueueUncertain?: boolean;
   pendingFailedMessages?: FailedDraftMessage[];
-  pendingPrompt?: { sessionId: string; clientRequestId: string; occurredAt: string; message: string; draftValue: string };
+  pendingPrompt?: { sessionId: string; clientRequestId: string; occurredAt: string; message: string; draftValue: string;
+    draftUnedited?: boolean };
 }
 
 const drafts = new Map<string, ChatDraft>();
@@ -248,8 +249,17 @@ export function getDraft(key: string): ChatDraft | null {
 
 export function setDraft(key: string, draft: ChatDraft): void {
   hydrateFromStorage();
-  const pendingPrompt = drafts.get(key)?.pendingPrompt;
+  const previous = drafts.get(key);
+  const pendingPrompt = previous?.pendingPrompt;
   if (pendingPrompt && !draft.pendingPrompt) draft = { ...draft, pendingPrompt };
+  if (pendingPrompt && draft.pendingPrompt?.sessionId === pendingPrompt.sessionId
+    && draft.pendingPrompt.clientRequestId === pendingPrompt.clientRequestId) {
+    const inputChanged = previous.value !== draft.value || previous.images.length !== draft.images.length
+      || previous.images.some((image, index) => image.data !== draft.images[index]?.data || image.mimeType !== draft.images[index]?.mimeType)
+      || JSON.stringify(previous.context ?? null) !== JSON.stringify(draft.context ?? null);
+    draft = { ...draft, pendingPrompt: { ...draft.pendingPrompt,
+      draftUnedited: pendingPrompt.draftUnedited === true && draft.pendingPrompt.draftUnedited !== false && !inputChanged } };
+  }
   if (isEmptyDraft(draft)) {
     drafts.delete(key);
     dirtyKeys.add(key);
@@ -277,12 +287,25 @@ export function clearDraft(key: string): void {
 }
 
 /** Keep the retry identity on disk before the request can reach Core or Pi. */
-export function stagePendingPrompt(key: string, pendingPrompt: NonNullable<ChatDraft["pendingPrompt"]>): boolean {
+export function stagePendingPrompt(key: string, pendingPrompt: NonNullable<ChatDraft["pendingPrompt"]>, draftUnedited = false): boolean {
   if (!validPendingPrompt(pendingPrompt)) return false;
   const current = getDraft(key);
   if (!current) return false;
-  if (current.pendingPrompt && JSON.stringify(current.pendingPrompt) !== JSON.stringify(pendingPrompt)) return false;
-  setDraft(key, { ...current, pendingPrompt });
+  if (current.pendingPrompt && (current.pendingPrompt.sessionId !== pendingPrompt.sessionId
+    || current.pendingPrompt.clientRequestId !== pendingPrompt.clientRequestId || current.pendingPrompt.occurredAt !== pendingPrompt.occurredAt
+    || current.pendingPrompt.message !== pendingPrompt.message || current.pendingPrompt.draftValue !== pendingPrompt.draftValue)) return false;
+  const prepared = current.pendingPrompt ?? { ...pendingPrompt,
+    draftUnedited: draftUnedited === true && current.value === pendingPrompt.draftValue && current.images.length === 0 };
+  setDraft(key, { ...current, pendingPrompt: prepared });
+  return flushDraftNow(key);
+}
+
+/** Editing evidence is local to this draft/request and cannot be reset by navigation or retry. */
+export function markPendingPromptDraftEdited(key: string | null | undefined): boolean {
+  if (!key) return true;
+  const current = getDraft(key);
+  if (!current?.pendingPrompt || current.pendingPrompt.draftUnedited === false) return true;
+  setDraft(key, { ...current, pendingPrompt: { ...current.pendingPrompt, draftUnedited: false } });
   return flushDraftNow(key);
 }
 
@@ -293,7 +316,11 @@ function clearPendingPrompt(key: string, clientRequestId: string, clearSubmitted
     if (draft.pendingPrompt?.clientRequestId !== clientRequestId
       || draft.pendingPrompt.sessionId !== current.pendingPrompt.sessionId) continue;
     const next = { ...draft };
-    if (clearSubmittedText && next.value === draft.pendingPrompt.draftValue && next.images.length === 0) next.value = "";
+    if (clearSubmittedText && draft.pendingPrompt.draftUnedited === true
+      && next.value === draft.pendingPrompt.draftValue && next.images.length === 0) {
+      next.value = "";
+      if (!draft.pendingPrompt.message.startsWith("/")) delete next.context;
+    }
     delete next.pendingPrompt;
     // Bypass setDraft's preservation rule only for this explicit acknowledgement.
     drafts.delete(draftKey);
