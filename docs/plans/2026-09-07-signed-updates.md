@@ -2,11 +2,12 @@
 
 ## 2026-10-21 v0.3.77 源码与配对门
 
-- 原分支已准备 `.77` 版本并创建 [Desktop Draft PR #370](https://github.com/PIGU-PPPgu/edupi-desktop/pull/370)，尚未创建 tag、签名 run 或安装资产。当前 pin 仍是历史 `2fbd3726`，不能按其签新候选；Core [#310](https://github.com/PIGU-PPPgu/edupi/pull/310) 的反馈来源重验正在本机 Mac 完整 CI，Windows job 跳过，非付费 Windows 构建。
-- 新发现与真实复现：Core58 专用 read/apply 拒绝 PDF/图片，但旧 Desktop 同步链仍可经通用 import_calendar 写入 pending_review；伪造 teacher_confirmed 的通用请求还能写 confirmed，不能把 OCR 的 trusted 或前端阻断当来源证明。Desktop 已封住 PDF/图片/OCR 的安排命令、采用与撤销绑定，材料登记及非OCR Word/ICS保持；两生产文件/四测试独立复核通过，132/132、实际API/Core/磁盘回读11/11、独立87/87、类型和定向lint通过。Core canonical writer 围栏尚未交付合并身份，仍是签名前必要门，不提前宣称安全闭合。
-- 公开 `.70` 又以原生 UI 回读原升级根 A/B 两任务、B 原会话与 A 独立 fork；未发送新消息。实际输入未发送草稿 `UI_KEEP_EDITED_DRAFT_077`，退出后只读核对它绑定原 fork 并持久化，尚不证明新候选恢复。新一轮311文件保护基线及三origin界面偏好备份已建立，唯一 App 已退出。
+- 原分支已准备 `.77` 版本并创建 [Desktop Draft PR #370](https://github.com/PIGU-PPPgu/edupi-desktop/pull/370)，尚无 tag、签名 run 或安装资产。生产 pin 仍是历史 `2fbd3726`，不能按其签新候选。Core [#310](https://github.com/PIGU-PPPgu/edupi/pull/310) 已经完整 Mac CI `39495441473` 正常合入 `c8066d3d`，受测与合并树一致；Windows/retention 按范围跳过。文件写入围栏 [#311](https://github.com/PIGU-PPPgu/edupi/pull/311) 当前仍待最终 CI 和正常合并，未消费未合身份。
+- 真实复现的旧通用文件写入缺口已扩展为完整消费迁移：ICS/DOCX 只收件，由现有 Core owner 重新读取 hash、metadata revision、parse fingerprint，原生明确确认后才 apply。PDF/图片/OCR/.doc 不能安排写入。旧 source 更新、逐项配对、纯 CANCEL/EXDATE 和文件课表缺 owner 合同，入口先返回409并保留暂存、不写安排/删除状态；旧历史读取保持，不能将这些负例记为更新功能完成。
+- 两条消费链独立复核无必修；只读 Core `85f175f8` 的实际 Desktop API/磁盘诊断6项通过，文件 writer、owner ICS/DOCX 及副本证据 probe 通过，但它不是正式 pin。源码最终全套2483总/2444通过/39条件跳过/0失败，39项需要正式 Core 配对环境，仍须在最终 pin 补跑。类型、定向lint通过。CI `39499328715` 的章节组件三项失败已精确定位为测试未等真实 WebCrypto，三个回调返回既有 Promise、测试等待实际动作并新增摘要挂起期间切材料回归，10/10无跳过及独立复核通过；原失败日志保留，未削弱来源校验。
+- 公开 `.70` 曾以原生 UI 回读 A/B、B 原会话与 A 独立 fork，输入未发送草稿并在退出后核对持久化。等待 CI 期间已恢复原 WebKit 偏好，故该测试草稿当前不在界面中；新签名包就绪后必须再经旧版 UI 建立，不能注入偏好伪造跨版恢复。新一轮311文件保护基线与原三origin偏好备份保留，唯一 App 已退出。
 - `.76` 镜像已卸载、验签小工具保留；下载包、测试App及本轮Native缓存共3.8GiB已移至废纸篓单一目录 `~/.Trash/edupi-076-generated-products-20261021`，待当次永久删除确认，尚未释放该占用，不清其他废纸篓。源树/证据/真实数据保留。
-- 证据：`~/edupi-install-checkpoints/v0.3.76/evidence/material-readonly-boundary.md`、`core-capability-gap-audit.md`；`.77/evidence/public-070-upgrade-ui-baseline.json`、`legacy-draft-before.json`、`real-before-candidate-with-sessions.json`。旧8命令实际均在Core写入前返回unsupported、两未来投影未发布；受管教学方法、teacher_growth和洞察只读已有独立入口，不能将其一并归为外部阻塞或伪称旧命令完成。
+- 证据：`.76/evidence/material-readonly-boundary.md`、`core-capability-gap-audit.md`；`~/edupi-install-checkpoints/v0.3.77/evidence/n02-owner-consumer-implementation.md`、`file-schedule-e2-adaptation.md`、`docx-chapter-action-wait.md`、`core-feedback-pr310-merge-proof.json`、`webview-prefs-waiting-restore.json`、`real-before-candidate-with-sessions.json`。旧8命令实际均在Core写入前返回unsupported、两未来投影未发布；受管教学方法、teacher_growth和洞察只读已有独立入口，不能将其一并归为外部阻塞或伪称旧命令完成。最终配对、精确源码 CI、签名与实际安装继续本轮执行。
 
 ## 2026-10-21 v0.3.76 退出与源码修复
 
