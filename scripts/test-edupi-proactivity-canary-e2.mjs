@@ -137,7 +137,9 @@ try {
   const tomorrow = localFuture(1);
   const correctedDay = localFuture(2);
   const deletionDay = localFuture(3);
-  const source = (id) => ({ source_id: id, source_kind: "teacher_file", source_hash: `sha256:${id.at(-1).repeat(64)}`, evidence_ids: [`evidence-${id}`] });
+  // This fixture is an independently teacher-declared timetable, not parsed
+  // file content. The separate PDF below supplies material only, never slots.
+  const source = (id) => ({ source_id: id, source_kind: "teacher_message", source_hash: `sha256:${id.at(-1).repeat(64)}`, evidence_ids: [`evidence-${id}`] });
   const timetable = await intake.issueEducationIntake({
     command_type: "import_timetable",
     source: source("canary-timetable-1"),
@@ -153,8 +155,7 @@ try {
   assert.equal(timetable.receipt.status, "accepted");
   const bytes = Buffer.from("%PDF-1.4\nEduPi proactive canary material\n", "utf8");
   const descriptor = staging.stageMaterialInputs([{ name: "七一班数学材料.pdf", mimeType: "application/pdf", bytes: new Uint8Array(bytes) }])[0];
-  const material = await flow.intakeRecognizedMaterial({ descriptor, title: "七一班数学材料", materialKind: "lesson_note", subject: "数学", classId: "class-7-1", recognize: true },
-    { recognize: async () => ({ events: [], slots: [] }) });
+  const material = await flow.intakeRecognizedMaterial({ descriptor, title: "七一班数学材料", materialKind: "lesson_note", subject: "数学", classId: "class-7-1" });
   assert.equal(material.receipts[0].status, "accepted");
 
   // Upgrading an enabled v1 canary must not silently restart broad G1. The

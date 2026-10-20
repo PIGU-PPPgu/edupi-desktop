@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createJiti } from "jiti";
+import { snapshotScheduleState } from "./material-schedule-e2-client.mjs";
 
 const coreRoot = process.env.EDUPI_CORE_ROOT;
 if (typeof coreRoot !== "string" || !path.isAbsolute(coreRoot)) throw new Error("EDUPI_CORE_ROOT must be an absolute Core checkout");
@@ -17,6 +18,7 @@ const outputDir = path.join(home, "output");
 const lockDir = path.join(home, "locks");
 for (const directory of [memoryDir, outputDir, lockDir]) fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
 const previous = new Map(["EDUPI_PROJECT_ROOT", "EDUPI_DATA_ROOT", "EDUPI_DATA_ALLOWED_ROOT", "EDUPI_CORE_ROOT", "EDUPI_CORE_ALLOWED_ROOT", "EDUPI_HOME", "EDUPI_MEMORY_DIR", "EDUPI_OUTPUT_DIR", "EDUPI_LOCK_DIR", "EDUPI_CORE_COMMIT"].map(key => [key, process.env[key]]));
+let supervisor;
 Object.assign(process.env, {
   EDUPI_PROJECT_ROOT: dataRoot,
   EDUPI_DATA_ROOT: dataRoot,
@@ -32,6 +34,7 @@ Object.assign(process.env, {
 
 try {
   const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
+  supervisor = await jiti.import("../lib/edupi-runtime-supervisor.ts");
   const snapshot = await jiti.import("../lib/edupi-core-snapshot.ts");
   const intake = await jiti.import("../lib/edupi-education-intake.ts");
   const schedule = await jiti.import("../lib/edupi-schedule-upload.ts");
@@ -41,20 +44,23 @@ try {
   ];
   const source = { source_id: "desktop-calendar-upload-dedupe", source_kind: "teacher_file", source_hash: schedule.stableScheduleSourceHash(events), evidence_ids: ["calendar-upload-dedupe-evidence"] };
   const first = await snapshot.readEduPiEducationSnapshot({ requestId: "calendar-dedupe-before" });
-  const firstResult = await intake.issueEducationIntake({ command_type: "import_calendar", source, events });
-  assert.ok(["accepted", "modified", "held"].includes(firstResult.receipt.status));
+  const canonicalBefore = snapshotScheduleState(home);
+  await assert.rejects(intake.issueEducationIntake({ command_type: "import_calendar", source, events }),
+    error => error?.code === "file_schedule_unverified");
   const afterFirst = await snapshot.readEduPiEducationSnapshot({ requestId: "calendar-dedupe-after-first" });
   const secondSource = { ...source, source_id: "desktop-calendar-upload-dedupe-retry" };
-  const secondResult = await intake.issueEducationIntake({ command_type: "import_calendar", source: secondSource, events: [...events].reverse() });
+  await assert.rejects(intake.issueEducationIntake({ command_type: "import_calendar", source: secondSource, events: [...events].reverse() }),
+    error => error?.code === "file_schedule_unverified");
   const afterSecond = await snapshot.readEduPiEducationSnapshot({ requestId: "calendar-dedupe-after-second" });
   assert.equal(first.payload.education_workspace.calendar.length, 0);
-  assert.equal(afterFirst.payload.education_workspace.calendar.length, 2);
-  assert.equal(afterSecond.payload.education_workspace.calendar.length, 2);
-  assert.equal(afterSecond.payload.education_workspace.calendar.filter(item => item.date_status === "invalid").length, 1);
-  assert.ok(["accepted", "modified", "held"].includes(secondResult.receipt.status));
-  assert.equal(afterSecond.payload.education_workspace.calendar.map(item => item.event_id).sort().join("|"), events.map(item => item.event_id).sort().join("|"));
-  console.log(JSON.stringify({ status: "passed", initial_count: 0, after_first_count: 2, after_replay_count: 2, stable_event_ids: true, unresolved_date_held: true, external_send: false }, null, 2));
+  assert.equal(afterFirst.payload.education_workspace.calendar.length, 0);
+  assert.equal(afterSecond.payload.education_workspace.calendar.length, 0);
+  assert.deepEqual(snapshotScheduleState(home), canonicalBefore);
+  console.log(JSON.stringify({ status: "passed", core_commit: compat.core_runtime.core_commit,
+    unverified_file_schedule: { supported: false, first_and_replay_rejected: true, schedule_writes: 0 },
+    owner_adoption_positive_suite: "test-edupi-uploaded-calendar-e2.mjs", external_send: false }, null, 2));
 } finally {
+  await supervisor?.closeAllEduPiRuntimes();
   fs.rmSync(dataRoot, { recursive: true, force: true });
   for (const [key, value] of previous) {
     if (value === undefined) delete process.env[key];
