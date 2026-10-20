@@ -1,5 +1,25 @@
 # 自动下载安装
 
+## 2026-10-21 v0.3.76 退出与源码修复
+
+- 本节取代下方运行快照。唯一 `/Applications/EduPi.app` 已恢复原签名公开 `.70` 并停止；strict codesign/Gatekeeper/原主程序摘要通过，feed不变。311个受保护文件中308原样，差异仅版本记录和两份日志追加，原前缀保持，无文件增删；教师业务、模型与认证文件保持。WebKit本轮改变的草稿/工作区键已恢复并按原摘要回读。
+- 三域各三产物已原生打开；行政任务明确接受已落盘，但UI错把合法无回滚回执判失败，评价也已写入却因Core漏重验capability_work显示失效。原生导出取消不增记录、成功保存增一条本地用量事件，无外发；其余两域审核、用量撤销/擦除和新源码安装仍待。
+- 原生逐次确认失败定位到锁版rfd无parent进入CF系统通知，非TCC未开或SSE未达。绑定主窗口、缺窗拒绝、锁后到期重验已实际cargo check及Rust6/6通过；新候选仍须真正允许/取消，未操作受禁通知中心或放宽授权。
+- 原分支a14398ca的八项源码提交独立复核通过，尚未推送；Native补丁与账本保留。全量初次2484通过/1失败/38可选跳过，唯一旧断言漏sessionId；补精确身份及跨会话拒认后真实SDK26/26无跳过，生产校验未降级，lint/type通过。最终精确源码CI仍须全套成功。
+- Core安全依赖已合3992040，必要反馈来源修复独立提交58a13b2f待正常PR/完整CI/合并后固定Desktop；未消费未发布Feishu/floor。DOCX新章节建议仅从精确来源片段待审采用，不自动建教学任务。以上不是`.76`已安装代码；后续只建一次有代码变更理由的Mac-only候选，不重建`.76`、不派Windows/Linux或发布feed。
+- 证据仍在`~/edupi-install-checkpoints/v0.3.76/evidence/`：capability-install-result.json、native-export-result.json、native-wire-diagnosis.json、native-computer-parent-artifacts.json、real-076-verified-log-deltas.json、webview-prefs-restore.json。包与缓存身份核对后可恢复清理，完成前不报告已释放空间。
+
+## 2026-10-21 v0.3.76 安装实测与修复中
+
+- 本节取代下方构建前状态。Desktop `57bfe09e`、Core `2fbd3726` 的唯一 [Mac run 39461851799](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39461851799) attempt1 全部成功；Release `418648403` 保持 Draft。App 公证 `85ff37a7-c5fc-4e6e-ad92-53562490a33a`、DMG 公证 `e00469af-2460-4a5e-930e-6f45c1df4758` 均 Accepted，实际装订、验票、strict codesign 和 Gatekeeper 通过，没有重跑或跨轮拼包。
+- 三项最终资产已完整下载核对：DMG `660081618` / 234229972 字节 / SHA-256 `3323e88597713360fde3998d5d20ca4c25946e27fe41521247f75d51e546b5da`；tar `660064808` / 235520186 / `f42567887a847903ec85d922bb5ba74b7bc296e75f35027a961993df13bc48cf`；sig `660065260` / 404 / `742722ac568ed9865bc321d99a09d191b471c171a1bb8f7250e6cd4bc03edffc`。新旧 updater 公钥一致，真实 Minisign 验签和单字节篡改拒绝通过。Mac-only fingerprint 为 `sha256:54cce0a422f99b4a1a7a4fd50f5276f4e846722f18ea351a29f2bc1304db4a35`，不是全平台发布证明。
+- 唯一 `/Applications/EduPi.app` 已安装签名 `.76`，仅用明确合成根；原签名公开 `.70` 备份保留于 `~/edupi-install-checkpoints/v0.3.76/EduPi-public-070.app`，公开 feed 不变。实际管理页核对 Core/双清单；旧 `.70` 创建的两任务、哨兵及隔离模型设置在升级和真实冷重启后保持。两任务各自续聊、A 独立 fork、原 A/B 历史及绑定、冷重进无重发通过，4 次本机模型调用/3 个会话文件。fork 消息虽已单次落盘，界面仍误报待核对；没有再次发送，不能把冷重进可见当作自动回执修复。
+- 原生安装版完成 A 两回合→独立 fork→切 B 真重启→回 A 正向→班级页删除 A→原会话新回合及冷恢复。模型上下文跨班无串档、已删学生姓名不回生、无关已审核偏好保留；12 次实际本机调用，用户 prompt 未含被测姓名。随后从回收站按规范 ID 恢复 A，回收站 0 项、班级页两名同名异班学生回读一致。原审计/会话历史不重写，不宣称历史文件清除。
+- 工具关闭及冷重启后空工具、恢复默认工具的实际调用通过；正常→安全→正常启动实测第三方技能/工具过滤和恢复。安全模式下插件/技能只读入口、新会话均未执行合成扩展模块，恢复正常的新服务 PID 再次记录扩展加载；没有用全关工具冒充安全模式。`.76` 新进程设置页两项 TCC 已授权且身份匹配，但两次 `observe` 在原会话/新会话均 45 秒后返回“EduPi 桌面窗口未连接”、没有逐次确认框，实际允许/取消尚未通过。
+- 安装还复现短暂断连。旧 8192 项缓存小于 13158 文件闭包，暖调用仍读约 111 MiB；新源码 32768 有界 LRU 在未修改签名包上实测暖调用只读清单 1 次，仍逐次路径/stat/完整性核对。新增本地连接详情不保存正文、令牌或实例值，不放宽 4 秒/两次失败门。消息恢复补精确请求/完整命令的肯定持久回执，不凭 idle、同文或空 outbox 自动重发；导航后新编辑草稿也须保留。这些修复正在原分支复核，尚未进入签名 `.76`。
+- 另确认技能 PATCH 在通用允许根覆盖 Core 时可触及包内封存文件；实际 App 写入被诊断替身拦截，签名文件未改。新源码为已配置 Core 技能增加独立只读拒写与禁用开关，普通用户技能仍可编辑，正在复核。三域授权/收件人/审核反馈和本地用量的原生流程继续，结束仍须真实资料新指纹、界面偏好恢复、恢复公开 `.70` 和产物清理。Windows/Linux 不派发；新 Core 审计修复交接未消费，不改当前候选身份。
+- 原始证据为 `~/edupi-install-checkpoints/v0.3.76/evidence/` 下 `mac-asset-verification.json`、`upgrade-after.json`、`task-session-install-result.json`、`memory-privacy-install-result.json`、`tool-modes-install-result.json`、`observe-and-student-restore-result.json`、`core-cache-signed-root-benchmark.json`。源码真实 Core broker/SDK 2/2 已补跑、零跳过；不能代替未完成原生流程。
+
 ## 2026-10-21 v0.3.76 装订断连修复
 
 - 原 `.75` [Mac run 39448839994](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39448839994) attempt1 已失败，取代下方运行中快照。应用质量、完整 Core 配对、真实 SDK/用量/三域宿主接线、打包 OCR/DOCX/连接器/日程/反馈、资源签名、最终 App 签名运行时与 updater 公钥检查均通过。App 公证 `83d45dba-3942-4615-b45b-1b62b06a16f7` 为 Accepted；DMG 公证 `e27f7d0d-ba84-44e1-8500-07752702e27c` 也于 16:32:50Z Accepted，但紧接的 `xcrun stapler staple` 在 Apple ticket-delivery 端点报 `NSURLErrorDomain -1005`，退出 68。后续票据验证、Gatekeeper、最终 DMG 替换和安装未执行，不能凭 Accepted 记整轮通过。
