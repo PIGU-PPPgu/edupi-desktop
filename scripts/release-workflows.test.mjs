@@ -151,11 +151,18 @@ test("official releases require Developer ID and notarization before publishing"
   assert.doesNotMatch(buildJob, /APPLE_SIGNING_IDENTITY=-|ad-hoc signed/);
   assert.match(buildJob, /node scripts\/validate-macos-staple\.mjs "\$app_path"/);
   assert.match(buildJob, /node scripts\/notarize-macos-dmg\.mjs "\$\{dmgs\[0\]\}"/);
-  assert.match(buildJob, /xcrun stapler staple "\$\{dmgs\[0\]\}"/);
+  assert.match(buildJob, /node scripts\/staple-macos-artifact\.mjs "\$\{dmgs\[0\]\}"/);
   assert.match(buildJob, /node scripts\/validate-macos-staple\.mjs "\$\{dmgs\[0\]\}"/);
   assert.match(buildJob, /spctl --assess --type open --context context:primary-signature/);
   assert.match(buildJob, /RELEASE_ID: \$\{\{ needs\.release\.outputs\.release_id \}\}/);
   assert.match(buildJob, /node scripts\/replace-release-asset\.mjs/);
+  const notary = buildJob.indexOf("node scripts/notarize-macos-dmg.mjs");
+  const staple = buildJob.indexOf("node scripts/staple-macos-artifact.mjs");
+  const validateDmg = buildJob.indexOf('node scripts/validate-macos-staple.mjs "${dmgs[0]}"');
+  const gatekeeper = buildJob.indexOf("spctl --assess --type open --context context:primary-signature");
+  const replaceDmg = buildJob.indexOf("node scripts/replace-release-asset.mjs");
+  assert.ok(notary < staple && staple < validateDmg && validateDmg < gatekeeper && gatekeeper < replaceDmg,
+    "Accepted notarization, successful stapling, validation and Gatekeeper must precede asset replacement");
   assert.match(buildJob, /--release-id "\$RELEASE_ID"/);
   assert.match(buildJob, /--tag "\$RELEASE_TAG"/);
   assert.match(buildJob, /--target "\$GITHUB_SHA"/);

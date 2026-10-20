@@ -1,13 +1,23 @@
 # 自动下载安装
 
+## 2026-10-21 v0.3.76 装订断连修复
+
+- 原 `.75` [Mac run 39448839994](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39448839994) attempt1 已失败，取代下方运行中快照。应用质量、完整 Core 配对、真实 SDK/用量/三域宿主接线、打包 OCR/DOCX/连接器/日程/反馈、资源签名、最终 App 签名运行时与 updater 公钥检查均通过。App 公证 `83d45dba-3942-4615-b45b-1b62b06a16f7` 为 Accepted；DMG 公证 `e27f7d0d-ba84-44e1-8500-07752702e27c` 也于 16:32:50Z Accepted，但紧接的 `xcrun stapler staple` 在 Apple ticket-delivery 端点报 `NSURLErrorDomain -1005`，退出 68。后续票据验证、Gatekeeper、最终 DMG 替换和安装未执行，不能凭 Accepted 记整轮通过。
+- Release `418561011` 保持 Draft，原 tag/target 不变。三项仍为未完成最终 DMG 装订的资产：DMG `659843262` / 234217511 字节 / `43655008…`；updater tar `659843688` / 235518104 字节 / `ca330f73…`；签名 `659844184` / 404 字节 / `b3c41e12…`。以上为 GitHub 元数据，不冒充三包本机全量验签。签名文件摘要已回读；tar 下载在约 8 MiB 时精确停止本轮进程，未拿部分文件作证。未完成下载目录已移入废纸篓，尚未永久删除；验签小工具移到 `.76` 复用，未安装 `.75`，唯一签名公开 `.70` 与 feed 保持。
+- 缺口是现有重试只包住 `validate`，没有包住实际失败的 `staple`。沿用原分支准备独立 `.76`，Core 仍冻结 `2fbd3726`，无新 pin 或用户功能变更。只为明确 Apple ticket-delivery URL 的已观察 `-1005/-1009` 增加最多三次装订尝试、两次 5 秒等待；所有显式 URL 都必须属于该端点，未知/混合端点、其他网络码、票据/签名错误或进程失败立即拒绝。旧验证仅保留历史无 URL 的 `-1009` 兼容，最终 Accepted→装订→验票→Gatekeeper→精确替换的安全门不变。
+- 新装订四例先红，补实现后通过；独立复核发现旧验证的显式未知 `-1009` 仍可重试，已补未知/混合 URL 先红再绿，复核无剩余必修。最终发布工具 82/82、完整 lint/branding、`release:verify` 通过，无跳过；这些是调度和拒绝边界证据，不冒充已在 Apple 网络完成装订。日志位于 `~/edupi-install-checkpoints/v0.3.76/evidence/`，原 `.75` 完整脱敏 CI 日志保留。后续经源码 PR/CI 和新一次 Mac-only 签名候选验证，不重跑 `.75`、不拼资产；若有限重试仍遇相同持续外部断连，不再自动循环建立新候选。
+- TCC 旧签名记录失配已在公开 `.70` 上通过仅重新登记两项权限修复，实际新 PID 与系统两项允许回执保留。`.76` 仍须唯一安装路径的新进程、真实 SDK/分叉/过滤、删除学生历史防回生、三域审核反馈及本地用量的原生流程，结束核对新真实资料指纹、恢复 `.70` 并清理包。Windows/Linux 不派发，正式用量收集仍默认关闭。恢复入口为 `~/edupi-install-checkpoints/v0.3.76/RESUME.md`。
+
 ## 2026-10-20 v0.3.75 固定 Core 删除隐私配对
 
 - 当前状态取代下方 `.74` 中间快照：Core [#301](https://github.com/PIGU-PPPgu/edupi/pull/301) 已正常合并为 `2fbd3726fc4bab79238f17ffaf9e8d25d14d20ae`，树与完整 [Mac CI 39440308530](https://github.com/PIGU-PPPgu/edupi/actions/runs/39440308530) 通过的 `9b73bb16` 相同，Windows 原生跳过。本轮冻结此 Core，不因随后普通 main 更新重复建候选。Runtime schema `10adc92f…`、Bridge/课次/fixture 不变；Runtime 组件为 `75b49fa4…`，Desktop 组件为 `479a5a1d…`。
 - Desktop [#367](https://github.com/PIGU-PPPgu/edupi-desktop/pull/367) 已合并为 `5efe0377`，应用 [CI 39437994940](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39437994940) 通过；原 `.74` [Mac run 39439367689](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39439367689) 在 Core 配对、应用质量、暂存运行和资源签名通过后，因新固定隐私修复在最终打包阶段主动取消。Release `418495494` 为 Draft/0 资产，原 tag/target 保留；不重跑 `.74`，也不把其通过步骤当作 `.75` 安装证据。
 - macOS 26.5.1/arm64、Node 22.23.1 上，最终 Core 的真实 SDK/用量 3/3、完整合同/打包/提醒 25/25 通过，无跳过。新增真实 SDK 回归先确认无 ID 全局记忆包含合成学生姓名且已落盘，再删除该学生，验证新回合及 Core/SDK 冷重启后的工具历史都不回生该姓名，无关已审核偏好仍可见；冷恢复还须实际完成两次模型调用且无 `prompt_error`，防止空执行假绿，最终复核 2/2 通过。独立只读复核无剩余必修项。日志为 `/private/tmp/edupi-075-final-recall-usage.log`、`edupi-075-pairing.log` 和 `edupi-075-deleted-sdk-final.log`；安装版原生删除仍待实际操作，不能用夹具 API 替代。
-- 原分支准备 `.75`，保留可信召回、三域授权/持久 outbox、公开收件人确认、审核反馈和默认关闭的本地用量接线。坏旧提醒账本不再阻塞独立内部到期工作；旧飞书结算不明和混合收件人不在本次修复内，不开启外发。后续仍须 Desktop PR/CI、唯一 Mac 签名候选、精确资产与实际安装闭环；当前尚无 `.75` tag、Release 或安装结果。
+- 源码门已完成：Desktop [#368](https://github.com/PIGU-PPPgu/edupi-desktop/pull/368) 正常合并为 `e8bae20a1cbb775b1923439487f604fd3a38d29d`，树与受测 `28389f6d` 相同；应用 [CI 39447897756](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39447897756) 的 2382 通过/38 可选跳过/0 失败、类型/lint 通过，Rust 仍仅既有 Windows 目标 zip 三漏洞失败，未豁免。唯一 annotated tag `v0.3.75` 对象 `be23160da96237c9bcc63b59804334a1710ee63b` 固定该 main，仅派发一次 [Mac Draft run 39448839994](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39448839994) attempt1，Release `418561011` 保持 Draft、尚无资产。Mac 依赖闭包和 Apple notary 路由预检成功，正在配对检查；不能提前记公证、签名或安装通过。原分支已推送；聊天附加 PR 工具达到 100 项上限，失败不影响已合并的 GitHub PR。
+- 保留可信召回、三域授权/持久 outbox、公开收件人确认、审核反馈和默认关闭的本地用量接线。坏旧提醒账本不再阻塞独立内部到期工作；旧飞书结算不明和混合收件人不在本次修复内，不开启外发。实际 Mac 签名资产与安装闭环继续执行，不复用已取消候选。
 - 最终固定 Core 的强制公开收件人三域 E2 通过：9 产物、3 次真实 SDK 完整落盘回复，空闲 70/3/4 ms、`prompt_error=0`、能力模型调用 0、无外发。`.75` 类型、完整 lint/branding、73 项发布工具和 `npm run release:verify` 通过；只新增针对删除隐私的 SDK 断言，不削弱任何授权、安全或发布门。证据已复制到 `.75/evidence/`，不代替后续安装交互。
-- 唯一 `/Applications/EduPi.app` 仍公开 `.70`，本轮隔离进程运行中。用户已允许补辅助功能/录屏并回复系统验证完成，但实际新截图仍显示认证表单，尚不记权限生效；不读取或代填密码、不重置 TCC。其他检查继续，替换前处理本次未完成请求。公开 feed 不改、Windows/Linux 不派发，真实资料重新建立安装前指纹，结束恢复 `.70` 并清理包；恢复入口为 `~/edupi-install-checkpoints/v0.3.75/RESUME.md`。
+- TCC 技术风险已定位并修复，取代旧“等待认证”状态：系统只读日志对辅助功能/录屏明确报旧代码要求不匹配，旧记录分别绑定 `99915aac…` / `328c1858…` 的固定 cdhash，当前 `.70` 为 `7fb0de47…` 的 Developer ID 稳定要求。原生“在访达中显示”和简介确认登记指向唯一 `/Applications/EduPi.app`。用户亲自通过系统验证后，仅移除这两条失效记录并从该路径重新添加；没有重置 TCC、加私有 entitlement 或改其他应用。隔离冷启动的新 `.70` PID24633 在实际设置页显示两项均已授权，路径/Bundle/Team/PID 与截图一致；系统日志也对该进程两项 preflight 返回 `authValue=2`。这仅证明公开 `.70` 重登记成功，`.75` 安装后仍须新进程和实际 observe 验证。证据在 `.75/evidence/public-tcc-repaired.json` 及相应系统日志。
+- `.70` 已正常退出，唯一安装和公开 feed 保持。此次公开版隔离前后 311 个受保护文件中 309 个逐字节相同，仅飞书日志追加 64 字节和运行事件追加 4 条通道重连记录，原字节前缀摘要保持；教师业务、模型/认证和会话不变，不能声称整个摘要未变。安装前还须重建本轮新基线；结束恢复 `.70` 并清理包，Windows/Linux 不派发。恢复入口为 `~/edupi-install-checkpoints/v0.3.75/RESUME.md`。
 
 ## 2026-10-20 v0.3.74 HFS 实测修复
 

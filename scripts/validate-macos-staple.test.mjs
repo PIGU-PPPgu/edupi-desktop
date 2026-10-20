@@ -45,6 +45,8 @@ test("invalid tickets and unrecognized failures are not retried", async () => {
     { status: 65, stderr: "The ticket is invalid" },
     { ...cloudKitConnectionLost, status: 65 },
     { status: 68, stderr: 'Error Domain=NSURLErrorDomain Code=-1005 "The network connection was lost." NSErrorFailingURLStringKey=https://example.com/other' },
+    { status: 68, stderr: 'NSURLErrorDomain Code=-1009 NSErrorFailingURLStringKey=https://example.com/untrusted' },
+    { status: 68, stderr: `${cloudKitConnectionLost.stderr} https://example.com/untrusted` },
     { status: null, error: new Error("missing xcrun") },
   ]) {
     const { calls, waits, options } = harness([result]);

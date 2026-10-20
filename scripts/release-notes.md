@@ -1,4 +1,6 @@
-EduPi Desktop 0.3.75 macOS Apple Silicon 技术试用候选，Release 保持 Draft。
+EduPi Desktop 0.3.76 macOS Apple Silicon 技术试用候选，Release 保持 Draft。
+
+`.75` 的 App 与 DMG 均获 Apple 公证 Accepted，但 DMG 装订票据时 Apple CloudKit 连接中断，整轮仍记失败且未安装。现在仅为这一票据端点的已观察断连增加最多三次装订尝试；票据无效、签名错误、未知网络错误仍立即失败，最终票据验证、签名和 Gatekeeper 门不变。原 `.75` Draft 与身份保留，不重跑或混用资产。
 
 本轮固定 Core 已合并的删除隐私收口：已删除学生的姓名不再经无 ID 全局记忆、旧记忆写入或历史工具结果回到模型；不相关的已审核偏好保留。Desktop 真实 SDK 已验证删除前可见、删除后拒绝及 Core/SDK 冷重启后的历史防回生。损坏旧主动提醒账本与独立内部到期工作隔离；旧飞书外发结算不明和混合收件人没有因此解决，不开启外发。`.74` 在完成签名前因该新固定 handoff 取消，原 tag 与无资产 Draft 保留，不重用资产。
 

@@ -463,7 +463,7 @@ jobs:
           dmgs=(src-tauri/target/${{ matrix.target }}/release/bundle/dmg/EduPi_*.dmg)
           test "${#dmgs[@]}" -eq 1
           node scripts/notarize-macos-dmg.mjs "${dmgs[0]}"
-          xcrun stapler staple "${dmgs[0]}"
+          node scripts/staple-macos-artifact.mjs "${dmgs[0]}"
           node scripts/validate-macos-staple.mjs "${dmgs[0]}"
           spctl --assess --type open --context context:primary-signature --verbose=2 "${dmgs[0]}"
           node scripts/replace-release-asset.mjs \
