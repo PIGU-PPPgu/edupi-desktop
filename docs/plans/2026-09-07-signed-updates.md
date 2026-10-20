@@ -1,5 +1,14 @@
 # 自动下载安装
 
+## 2026-10-20 v0.3.75 固定 Core 删除隐私配对
+
+- 当前状态取代下方 `.74` 中间快照：Core [#301](https://github.com/PIGU-PPPgu/edupi/pull/301) 已正常合并为 `2fbd3726fc4bab79238f17ffaf9e8d25d14d20ae`，树与完整 [Mac CI 39440308530](https://github.com/PIGU-PPPgu/edupi/actions/runs/39440308530) 通过的 `9b73bb16` 相同，Windows 原生跳过。本轮冻结此 Core，不因随后普通 main 更新重复建候选。Runtime schema `10adc92f…`、Bridge/课次/fixture 不变；Runtime 组件为 `75b49fa4…`，Desktop 组件为 `479a5a1d…`。
+- Desktop [#367](https://github.com/PIGU-PPPgu/edupi-desktop/pull/367) 已合并为 `5efe0377`，应用 [CI 39437994940](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39437994940) 通过；原 `.74` [Mac run 39439367689](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39439367689) 在 Core 配对、应用质量、暂存运行和资源签名通过后，因新固定隐私修复在最终打包阶段主动取消。Release `418495494` 为 Draft/0 资产，原 tag/target 保留；不重跑 `.74`，也不把其通过步骤当作 `.75` 安装证据。
+- macOS 26.5.1/arm64、Node 22.23.1 上，最终 Core 的真实 SDK/用量 3/3、完整合同/打包/提醒 25/25 通过，无跳过。新增真实 SDK 回归先确认无 ID 全局记忆包含合成学生姓名且已落盘，再删除该学生，验证新回合及 Core/SDK 冷重启后的工具历史都不回生该姓名，无关已审核偏好仍可见；冷恢复还须实际完成两次模型调用且无 `prompt_error`，防止空执行假绿，最终复核 2/2 通过。独立只读复核无剩余必修项。日志为 `/private/tmp/edupi-075-final-recall-usage.log`、`edupi-075-pairing.log` 和 `edupi-075-deleted-sdk-final.log`；安装版原生删除仍待实际操作，不能用夹具 API 替代。
+- 原分支准备 `.75`，保留可信召回、三域授权/持久 outbox、公开收件人确认、审核反馈和默认关闭的本地用量接线。坏旧提醒账本不再阻塞独立内部到期工作；旧飞书结算不明和混合收件人不在本次修复内，不开启外发。后续仍须 Desktop PR/CI、唯一 Mac 签名候选、精确资产与实际安装闭环；当前尚无 `.75` tag、Release 或安装结果。
+- 最终固定 Core 的强制公开收件人三域 E2 通过：9 产物、3 次真实 SDK 完整落盘回复，空闲 70/3/4 ms、`prompt_error=0`、能力模型调用 0、无外发。`.75` 类型、完整 lint/branding、73 项发布工具和 `npm run release:verify` 通过；只新增针对删除隐私的 SDK 断言，不削弱任何授权、安全或发布门。证据已复制到 `.75/evidence/`，不代替后续安装交互。
+- 唯一 `/Applications/EduPi.app` 仍公开 `.70`，本轮隔离进程运行中。用户已允许补辅助功能/录屏并回复系统验证完成，但实际新截图仍显示认证表单，尚不记权限生效；不读取或代填密码、不重置 TCC。其他检查继续，替换前处理本次未完成请求。公开 feed 不改、Windows/Linux 不派发，真实资料重新建立安装前指纹，结束恢复 `.70` 并清理包；恢复入口为 `~/edupi-install-checkpoints/v0.3.75/RESUME.md`。
+
 ## 2026-10-20 v0.3.74 HFS 实测修复
 
 - 最终 Core 状态取代本节临时 pin 快照：[#300](https://github.com/PIGU-PPPgu/edupi/pull/300) 已正常合并为 `d6698585ec50ed39c3b84593522255d0cdca3afd`，与完整 [Mac CI 39434072570](https://github.com/PIGU-PPPgu/edupi/actions/runs/39434072570) 通过的 `909b599` 树相同；Windows 原生与 retention stress 跳过。Desktop 已改用最终 main 身份；该树的真实 SDK/用量 3/3、强制公开收件人三域 E2、完整合同/打包/提醒 25/25、类型、61 项发布工具及 release:verify 通过。原 `.73` 取消与其他失败记录保留，不以新结果改写旧运行。
