@@ -1,7 +1,19 @@
 # 自动下载安装
 
+## 2026-10-20 v0.3.73 最终 Core 配对
+
+- 当前状态取代下方 `.72` 中间快照：Core [#299](https://github.com/PIGU-PPPgu/edupi/pull/299) 已正常合并为 `c9a1d0f3d77aeee4fec20cb2abe8cff3d3440771`，源码树与完整 [Mac CI 39424830485](https://github.com/PIGU-PPPgu/edupi/actions/runs/39424830485) 通过的 `6117bb9` 相同；Windows 原生和 retention stress 跳过。Desktop 沿用原分支准备独立 `.73`，固定该合并提交、Runtime schema `10adc92f…`、Runtime 组件 `f0f170b7…`、Desktop 组件 `fa0f6b53…`；Bridge 12 条公开命令和课次身份不变。当前尚无 `.73` 签名资产或安装结果。
+- Core 已移除 Darwin 文件系统族的固定注册编号，使用受限系统命令读取原生 APFS/HFS 名称，并以私有证明绑定根、挂载点及逐路径 device/inode/raw type。根、数据库与授权的持久身份格式不变，不迁移、不静默重绑定，也不扩大 Linux/Windows 允许门。独立 26 项边界回归与最终路径词法复核通过。
+- 原 `.72` 的 `unsupported_root` 未复现。[只读诊断 39416411366](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39416411366) 与 [实际 Core 重放 39417133733](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39417133733) 均通过：Mac 15 / Darwin 24.6.0、Node 22.23.2，系统与 Node 的 APFS 类型、根及挂载 device/inode 一致，原 ambient E2 通过。不能把新发现的可移植性缺陷冒充已证实的原失败原因；`.72` tag、失败 run 和 Draft/0 资产保持，不重跑。
+- macOS 26.5.1/arm64、Node 22.23.1 上，最终合并 Core 的合同与原生提醒证明 22/22、真实 SDK 可信召回及本地用量 3/3 通过，无跳过。强制公开收件人确认的三域自然消息 E2 再次通过：9 产物、3 次完整 SDK 回复、空闲 77/3/3 ms、无 prompt_error、能力模型调用 0、无外发。相同 Core 源码树的三项打包/闭包/篡改检查通过；原 25 项组合运行有一项 15 秒 one-shot 超时，负载下降后以原时限单独复核通过，原取消记录不改绿。此前 Desktop 全量 2384/36/0、类型/lint/high audit 与新版本 52 项 release/public-source 检查仍分别保留，不冒充安装验收。
+- 本机 Core 混合工作树整链的 DOCX 90 秒取消、稳定树单次生产 deadline 失败及首次 family 子进程超时保留；稳定最终源码的 DOCX 定向复核、独立后段均退出 0，最终整套门以固定源码的上述 Mac CI 为准。采样中只读 `df` 共四次、总约 60 ms，没有发现热循环；不能从随后成功推出原宿主延迟原因已定位。
+- 仅派发 Mac 候选。Windows 按用户指令暂缓，Linux 不纳入；仓库级 Windows 目标 `zip 4.6.1` 三项 RustSec 漏洞仍未豁免。公开 `.70` 与七键 feed 保持；正式用量政策/协议与云接收端未提供，真实收集默认关闭。安装时复用 `.70` 原生创建的合成任务做同 ID 跨版本回读，并验证真实 SDK 续聊/分叉、工具与 Safe Mode、三域审核和本地使用记录；恢复入口为 `~/edupi-install-checkpoints/v0.3.73/RESUME.md`。
+- 最终候选的小差异独立审查无必修发现；最终 pin 后类型、完整 lint/branding、61 项 release/public-source 工具检查通过。它们是源码门，签名包及原生交互仍需后续实际执行。
+
 ## 2026-10-20 v0.3.72 macOS 接线与安装准备
 
+- 当前取代下方构建前快照：Desktop [#364](https://github.com/PIGU-PPPgu/edupi-desktop/pull/364) 已正常合并为 `ecba24e0ef008f631e25c8f1b7e7dbdbab832839`，最终应用 [CI 39414190121](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39414190121) 通过，既有 Windows zip 审计失败如实保留。固定 annotated tag `.72` 的唯一 [Mac Draft run 39414914751](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39414914751) attempt1 在首个配对 ambient E2 的 Core 数据根准备阶段返回 `unsupported_root`，未执行打包/签名/公证/安装。Release `418320571` 仍 Draft/0 资产；公开 `.70`、feed 和真实资料未替换，不重跑或改写 `.72` 身份。
+- 相同精确 Core、本机子进程 022 掩码的完整 ambient E2 通过，权限掩码假设排除。Darwin 文件系统数字按内核注册顺序分配，Core 固定 26/23 存在可移植性缺陷；该 runner 实际数字尚待证据。只读诊断 [#365](https://github.com/PIGU-PPPgu/edupi-desktop/pull/365) 已合 `e8d3621e`，仅用原生 statfs 名称/类型与 Node 独立 device/inode 比对，未扩大允许列表、伪造证明或派发新包。[诊断 run 39416411366](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39416411366) 待结果；取得实际证据后才修复并准备新候选。
 - 状态：接线已实现、Core 已合并，正在准备 macOS 签名安装验证。Desktop 原分支从 `12bb6a75` 继续，候选版本升为 `.72`；没有改写 `.71` tag/资产，没有替换公开 `.70` 安装或 feed。Windows/Linux 本轮不构建。
 - 最终配对取代本节下方仍称待 CI/合并的中间记录：组合头 `54c51a68` 的 [Mac CI 39410686488](https://github.com/PIGU-PPPgu/edupi/actions/runs/39410686488) 全部适用门通过，Windows/retention stress skipped；[#298](https://github.com/PIGU-PPPgu/edupi/pull/298) 正常合并为 main `ae99a886532eb811682f417b7eb8cb7b47298e7a`，包含 #297 全部提交，两 PR 均已 merged。最终树与通过 CI 的组合树逐字节相同；#297 单独排队检查取消，不冒称其独立通过。Desktop 已固定最终 main、Runtime schema `10adc92f…`、Runtime 组件 `bb0945ee…` 与 Desktop 组件 `039373bc…`。
 - Desktop 全量 `2384 pass / 36 skipped / 0 fail`、类型、完整 lint/branding 和 high audit 通过。可选跳过项之外，真实 Core/SDK 用量与可信召回 3/3、合同/打包/原生提醒证明 25/25、强制公开收件人确认的三域 E2 均通过。三轮 SDK 助手完整落盘、无 prompt_error，空闲耗时 83/3/4 ms，无外发。安装操作尚未完成，不能把本机源码门提升为安装结果。
