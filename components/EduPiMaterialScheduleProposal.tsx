@@ -5,6 +5,7 @@ import type { EduPiMaterialScheduleProposal as UploadProposal } from "@/lib/edup
 import { applyMaterialSchedule, captureMaterialScheduleApply, materialScheduleCanApply, materialScheduleErrorMessage,
   readMaterialSchedule, type MaterialScheduleApplyResult, type MaterialScheduleRead } from "@/lib/edupi-material-schedule";
 import { EduPiPagination } from "./EduPiActionIcon";
+import { confirmMaterialScheduleNative } from "@/lib/desktop-native";
 
 type Props = {
   materialId: string;
@@ -25,12 +26,13 @@ export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, in
   const controller = useRef<AbortController | null>(null);
   const sequence = useRef(0);
   const expanded = useRef(false);
+  const adoptionInFlight = useRef(false);
   const load = useCallback(async () => {
     controller.current?.abort();
     const revision = ++sequence.current;
     const request = new AbortController();
     controller.current = request;
-    setBusy(true); setCurrent(null); setError(""); setApplied(null); setApplying(false);
+    setBusy(true); setCurrent(null); setError(""); setApplied(null);
     try {
       const observed = await readMaterialSchedule(materialId, undefined, undefined, request.signal);
       if (sequence.current !== revision || request.signal.aborted) return;
@@ -41,7 +43,7 @@ export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, in
   }, [materialId]);
   useEffect(() => {
     controller.current?.abort(); sequence.current += 1;
-    setCurrent(null); setApplied(null); setError(""); setPage(0); setApplying(false);
+    setCurrent(null); setApplied(null); setError(""); setPage(0);
     if (expanded.current) void load();
     return () => { controller.current?.abort(); sequence.current += 1; };
   }, [load, metadataRevision]);
@@ -58,23 +60,24 @@ export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, in
   const pages = Math.max(1, Math.ceil(lines.length / PAGE_SIZE));
   const visible = lines.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const adopt = async () => {
-    if (!current || !materialScheduleCanApply(current) || busy || applying) return;
-    if (!window.confirm(`采用这 ${current.events.length} 项安排？`)) return;
+    if (!current || !materialScheduleCanApply(current) || busy || adoptionInFlight.current) return;
     const revision = sequence.current;
     const capture = captureMaterialScheduleApply(current);
+    adoptionInFlight.current = true;
     setApplying(true); setError("");
     try {
+      if (!await confirmMaterialScheduleNative(current.events.length)) return;
+      if (sequence.current !== revision || controller.current?.signal.aborted) return;
       const result = await applyMaterialSchedule(capture);
-      onApplied?.();
-      if (sequence.current === revision) setApplied(result);
+      if (sequence.current === revision) { setApplied(result); onApplied?.(); }
     } catch (error) { if (sequence.current === revision) { setCurrent(null); setError(materialScheduleErrorMessage(error)); } }
-    finally { if (sequence.current === revision) setApplying(false); }
+    finally { adoptionInFlight.current = false; setApplying(false); }
   };
 
   return <details className="edupi-material-inbox" onToggle={event => {
     expanded.current = event.currentTarget.open;
     if (expanded.current) void load();
-    else { controller.current?.abort(); sequence.current += 1; setCurrent(null); setBusy(false); setApplying(false); }
+    else { controller.current?.abort(); sequence.current += 1; setCurrent(null); setBusy(false); }
     }}>
     <summary>安排提案 <span>{label}</span></summary>
     <div className="edupi-material-pairing__current">

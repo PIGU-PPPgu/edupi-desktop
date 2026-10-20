@@ -89,7 +89,7 @@ test("document pairing fields cannot be smuggled into another material kind", as
       documentSourceId: `document-source-${"2".repeat(32)}`,
       documentSourceFingerprint: `sha256:${"3".repeat(64)}`,
       documentPairingFingerprint: `sha256:${"4".repeat(64)}` };
-    for (const pairings of [[], [{ incomingVariantRef: "bad", currentSourceOccurrenceRef: null }],
+    for (const pairings of [[{ incomingVariantRef: "bad", currentSourceOccurrenceRef: null }],
       [{ incomingVariantRef: `document-occurrence-${"5".repeat(32)}-${"6".repeat(32)}`, currentSourceOccurrenceRef: "other\nsource" }]]) {
       const response = await POST(request({ ...base, documentPairings: pairings }));
       assert.equal(response.status, 400);
@@ -165,21 +165,11 @@ test("derives stable semantic IDs for schedule uploads without caller IDs", () =
     stableDocumentOccurrenceVariantRef({ date: "2026-10-20", name: "教研 会", type: "meeting", notes: null }));
 });
 
-test("routes PDF and DOCX schedule revisions through a distinct bounded source contract", async () => {
-  const source = await readFile(new URL("./route.ts", import.meta.url), "utf8");
-  assert.match(source, /syncDocumentScheduleFile/);
-  assert.match(source, /documentSourceId/);
-  assert.match(source, /documentSourceFingerprint/);
-  assert.match(source, /\(\?:document\|calendar\)-source-\[a-f0-9\]\{32\}/);
-  assert.match(source, /desktop-file-schedule-\[a-f0-9\]\{24\}/);
-  assert.doesNotMatch(source, /deleteDocument|removedDocumentEvent/);
-});
-
 async function materialRouteFixture(kind, proposal, oldSource = false, lessonProposal = undefined, overrides = {}) {
   const require = createRequire(import.meta.url);
   const source = await readFile(new URL("./route.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const filename = kind === "calendar" ? "schedule.ics" : kind === "pdf" ? "schedule.pdf" : "schedule.docx";
+  const filename = kind === "calendar" ? "schedule.ics" : kind === "pdf" ? "schedule.pdf" : kind === "image" ? "schedule.png" : "schedule.docx";
   const descriptor = overrides.descriptor || { staging_id: `stg_${"1".repeat(32)}`, original_name: filename,
     staging_path: `/synthetic/${filename}`, kind,
     source_hash: `sha256:${"a".repeat(64)}`, expected_size_bytes: 128, source_scope: "desktop_staging" };
@@ -190,7 +180,7 @@ async function materialRouteFixture(kind, proposal, oldSource = false, lessonPro
     "@/lib/edupi-education-intake": { EducationIntakeError, issueEducationIntake: async () => { throw new Error("unexpected direct dispatch"); } },
     "@/lib/edupi-material-staging": { listStagedMaterials: () => [descriptor], settleStagedMaterial: (...args) => calls.push(["settle", ...args]) },
     "@/lib/edupi-material-intake-flow": { intakeRecognizedMaterial: async input => {
-      calls.push(["intake", input]); assert.equal(input.recognize, false);
+      calls.push(["intake", input]); assert.equal(Object.hasOwn(input, "recognize"), false);
       return { receipts: [receipt], data: {}, materialScheduleProposal: proposal,
         ...(lessonProposal ? { materialLessonProposal: lessonProposal } : {}), recognition: { eventCount: 0, slotCount: 0 }, scheduleNeedsReview: false };
     } },
@@ -217,6 +207,22 @@ async function materialRouteFixture(kind, proposal, oldSource = false, lessonPro
   new Function("require", "module", "exports", compiled)(name => dependencies[name] || require(name), routeModule, routeModule.exports);
   return { post: routeModule.exports.POST, descriptor, receipt, calls };
 }
+
+test("retired file source updates, pairing and pure cancellation stop before any intake or sync", async () => {
+  for (const [kind, fields] of [
+    ["calendar", { calendarSourceId: `calendar-source-${"2".repeat(32)}`, calendarSourceFingerprint: `sha256:${"3".repeat(64)}` }],
+    ["calendar", { calendarImportConfirmed: true, calendarPreviewFingerprint: `sha256:${"3".repeat(64)}` }],
+    ["word", { documentSourceId: `document-source-${"2".repeat(32)}`, documentSourceFingerprint: `sha256:${"3".repeat(64)}` }],
+    ["pdf", { documentSourceId: `document-source-${"2".repeat(32)}`, documentSourceFingerprint: `sha256:${"3".repeat(64)}`,
+      documentPairingFingerprint: `sha256:${"4".repeat(64)}`, documentPairings: [] }],
+  ]) {
+    const { post, descriptor, calls } = await materialRouteFixture(kind, { material_id: "synthetic-material" }, true);
+    const response = await post(request({ kind: "material", stagingId: descriptor.staging_id, ...fields }));
+    assert.equal(response.status, 409, `${kind} must retain staging rather than entering the legacy write/delete chain`);
+    assert.equal((await response.json()).code, "file_schedule_update_unavailable");
+    assert.deepEqual(calls, [], "no material receipt, parser, old sync, delete or staging settlement");
+  }
+});
 
 test("initial ICS, DOCX and PDF intake retain the file receipt and separate proposal without automatic import", async () => {
   for (const kind of ["calendar", "word", "pdf"]) for (const status of ["proposed", "held", "unavailable"]) {
@@ -253,19 +259,19 @@ test("initial DOCX intake exposes a separate pending lesson suggestion without a
   assert.deepEqual(calls.map(item => item[0]), ["intake", "settle"]);
 });
 
-test("explicit old calendar and document source updates retain the original sync path", async () => {
+test("explicit old calendar and document source updates are unavailable without settling staging", async () => {
   for (const kind of ["calendar", "word"]) {
     const { post, descriptor, calls } = await materialRouteFixture(kind, { material_id: "synthetic-material" }, true);
     const fields = kind === "calendar" ? { calendarSourceId: `calendar-source-${"2".repeat(32)}`, calendarSourceFingerprint: `sha256:${"3".repeat(64)}` }
       : { documentSourceId: `document-source-${"2".repeat(32)}`, documentSourceFingerprint: `sha256:${"3".repeat(64)}` };
     const response = await post(request({ kind: "material", stagingId: descriptor.staging_id, materialKind: "other", recognize: true, ...fields }));
-    assert.equal(response.status, 200);
-    assert.equal(calls[0][0], kind === "calendar" ? "explicit-calendar-update" : "explicit-document-update");
-    assert.equal((await response.json()).materialReceivedOnly, undefined);
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).code, "file_schedule_update_unavailable");
+    assert.deepEqual(calls, []);
   }
 });
 
-test("real Core API PDF/image source-null, update, cancellation and replay never adopt arrangements", {
+test("real Core API receipt-only preserves files while rejecting legacy update and reentry without arrangements", {
   skip: !process.env.EDUPI_CORE_ROOT, timeout: 30_000,
 }, async () => {
   const coreRoot = realpathSync(process.env.EDUPI_CORE_ROOT);
@@ -290,13 +296,12 @@ test("real Core API PDF/image source-null, update, cancellation and replay never
     const { makePdfFixture } = await fromCore("test_material_pdf_fixture.mjs");
     const staging = await jiti.import("../../../../lib/edupi-material-staging.ts");
     const flow = await jiti.import("../../../../lib/edupi-material-intake-flow.ts");
-    const documentSync = await jiti.import("../../../../lib/edupi-document-schedule-sync.ts");
     const { projectCoreCalendarSources } = await jiti.import("../../../../lib/edupi-calendar-sources.ts");
     admission = await acquireCoreRuntimeWriterAdmission({ root: prepareCoreRuntimeRoot(dataRoot), kind: "legacy_material_schedule_read_test" });
     const snapshot = () => buildSnapshotForState(loadTeacherReviewState(), { memoryDir: environment.EDUPI_MEMORY_DIR,
       outputDir: environment.EDUPI_OUTPUT_DIR, educationIntakeState: loadEducationIntakeState() });
     const commands = [];
-    let requestNumber = 0, stagedNumber = 0, recognitionCalls = 0, cancel = false;
+    let requestNumber = 0, stagedNumber = 0, recognitionCalls = 0;
     const issue = async command => {
       commands.push(structuredClone(command));
       const id = `readonly-api-${++requestNumber}`, at = new Date().toISOString();
@@ -321,19 +326,10 @@ test("real Core API PDF/image source-null, update, cancellation and replay never
     const readSources = async () => ({ sources: projectCoreCalendarSources(loadEducationIntakeState().calendar_events),
       snapshot: { envelope: {}, payload: snapshot(), roots: {}, occurrenceEvents: loadEducationIntakeState().calendar_events } });
     const selected = (await readSources()).sources[0];
-    const recognize = async () => {
-      recognitionCalls++;
-      if (cancel) throw new DOMException("cancelled", "AbortError");
-      const candidate = { ...original };
-      delete candidate.source_occurrence_ref;
-      return { events: [candidate, { ...candidate, event_id: "new-candidate", name: "合成新增事项" }], slots: [], ocrStatus: "trusted" };
-    };
+    const recognize = async () => { recognitionCalls++; throw new Error("file receipt must never run a Desktop parser"); };
     const modules = {
       "@/lib/edupi-material-staging": staging,
       "@/lib/edupi-material-intake-flow": { intakeRecognizedMaterial: input => flow.intakeRecognizedMaterial(input, { recognize, issue }) },
-      "@/lib/edupi-document-schedule-sync": { syncDocumentScheduleFile: input => documentSync.syncDocumentScheduleFile(input, {
-        recognize, issue, readSources, readDeletions: async current => ({ snapshotId: current.snapshot.payload.snapshot_id, deletions: [], history: [], historyTruncated: false }),
-      }) },
     };
     const pdfBytes = makePdfFixture(), imageBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jKJkAAAAASUVORK5CYII=", "base64");
     const stage = (name, bytes, mimeType) => stageMaterialInputs([{ name, bytes, mimeType }], { stateDir, dataRoot, coreRoot,
@@ -349,31 +345,27 @@ test("real Core API PDF/image source-null, update, cancellation and replay never
     const updated = stage("revision.pdf", pdfBytes, "application/pdf"), updatePost = await postFor(updated);
     const updateBody = { ...base(updated), documentSourceId: sourceId, documentSourceFingerprint: selected.fingerprint };
     const update = await updatePost(request(updateBody));
-    assert.equal(update.status, 200);
-    const updateResult = await update.json();
-    assert.equal(updateResult.documentCommitted, false); assert.equal(updateResult.scheduleNeedsReview, true);
-    assert.equal((await updatePost(request(updateBody))).status, 409, "update reentry does not revive settled staging");
-    cancel = true;
-    const cancelled = stage("cancelled.pdf", pdfBytes, "application/pdf"), cancelledPost = await postFor(cancelled), beforeCancel = commands.length;
-    assert.equal((await cancelledPost(request({ ...base(cancelled), documentSourceId: sourceId, documentSourceFingerprint: selected.fingerprint }))).status, 503);
-    assert.equal(commands.length, beforeCancel);
-    assert.ok(staging.listStagedMaterials().some(item => item.staging_id === cancelled.staging_id));
+    assert.equal(update.status, 409);
+    assert.equal((await update.json()).code, "file_schedule_update_unavailable");
+    assert.equal((await updatePost(request(updateBody))).status, 409);
+    assert.ok(staging.listStagedMaterials().some(item => item.staging_id === updated.staging_id));
     const image = stage("synthetic.png", imageBytes, "image/png"), imagePost = await postFor(image);
-    for (const fields of [{ ocrStatus: "trusted" }, { documentSourceId: sourceId, documentSourceFingerprint: selected.fingerprint }]) {
-      assert.equal((await imagePost(request({ ...base(image), ...fields }))).status, 400);
+    for (const [fields, status] of [[{ ocrStatus: "trusted" }, 400], [{ documentSourceId: sourceId, documentSourceFingerprint: selected.fingerprint }, 409]]) {
+      assert.equal((await imagePost(request({ ...base(image), ...fields }))).status, status);
     }
     assert.equal((await imagePost(request(base(image)))).status, 200);
     assert.equal(commands.filter(command => command.command_type !== "intake_material").length, 0);
     assert.deepEqual(loadEducationIntakeState().calendar_events, before);
     const materials = loadEducationIntakeState().materials;
-    assert.equal(materials.length, 3);
+    assert.equal(materials.length, 2);
+    assert.equal(recognitionCalls, 0);
     for (const material of materials) {
       assert.equal(readVerifiedEducationMaterial(material.material_id).material_id, material.material_id);
       const bytes = readFileSync(join(dataRoot, material.relative_path));
       assert.equal(`sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, material.source_hash);
     }
     console.log(JSON.stringify({ case: "real_core_material_api_readonly", source_null_recognition_calls: 0,
-      schedule_write_commands: 0, retained_materials: materials.length, pdf_update_committed: false, cancelled_dispatches: 0,
+      schedule_write_commands: 0, retained_materials: materials.length, legacy_update_status: 409,
       staging_replay_status: 409, staging_reentry_status: 409, external_send: false }));
   } finally {
     await admission?.close();

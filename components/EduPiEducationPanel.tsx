@@ -45,7 +45,7 @@ import { useDragDrop } from "@/hooks/useDragDrop";
 import { createActivationRequestTracker } from "@/lib/edupi-activation-request";
 import { shouldShowBlockingEducationLoad } from "@/lib/edupi-workspace-load-state";
 import { isTauriDesktop } from "@/lib/desktop-updater";
-import { desktopApiHeaders, listDesktopStagedMaterials, removeDesktopStagedMaterial, selectFilesNative, stageDesktopMaterialFiles, stageDesktopMaterialPaths } from "@/lib/desktop-native";
+import { listDesktopStagedMaterials, removeDesktopStagedMaterial, selectFilesNative, stageDesktopMaterialFiles, stageDesktopMaterialPaths } from "@/lib/desktop-native";
 import { loadStagedMaterials, removeStagedMaterial, stageBrowserMaterialFiles, type MaterialStagingDescriptor } from "@/lib/edupi-material-staging-client";
 import type { TaskBoardLaneId } from "@/lib/edupi-task-board";
 import { calendarQuickEntryKey, calendarQuickEntryStatusLabel, type EduPiQuickEntryItem } from "@/lib/edupi-quick-entry";
@@ -53,8 +53,6 @@ import { isTaskReviewable, workCaseForTask } from "@/lib/edupi-work-case";
 import { studentRecordKey } from "@/lib/edupi-student-roster-model";
 import { materialItemRoute, objectItemForView, reviewTargetObjectId, reviewTargetRoute, viewKeepsObjectItem, type ReviewTargetRoute } from "@/lib/edupi-domain-navigation";
 import { APP_PREF_KEYS } from "@/lib/app-prefs";
-import { materialRecognitionSummary } from "@/lib/edupi-material-recognition-status";
-import type { DocumentPairingSubmission } from "@/lib/edupi-document-pairing-contract";
 import { preserveUnavailableWorkspaceResources, readEduPiWorkspace } from "@/lib/edupi-education-client";
 import { EduPiPreparationArtifactEditor } from "./EduPiPreparationArtifactEditor";
 import { EduPiArtifactUsageContext } from "./EduPiUsageObservation";
@@ -107,14 +105,7 @@ type AgentPromptMode = "insert" | "replace" | "teacher";
 type EducationIntakeApiResult = {
   error?: string;
   staged?: MaterialStagingDescriptor[];
-  recognition?: { eventCount?: number; slotCount?: number; ocrStatus?: "trusted" | "unavailable" };
-  scheduleNeedsReview?: boolean;
   receipt?: { status?: string };
-  calendarSourceId?: string;
-  documentSourceId?: string | null;
-  calendarCommitted?: boolean;
-  documentCommitted?: boolean;
-  removedEventCount?: number;
   materialReceivedOnly?: boolean;
   materialScheduleProposal?: EduPiMaterialScheduleProposal;
   materialLessonProposal?: EduPiMaterialLessonProposal;
@@ -356,9 +347,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     try {
       const response = await fetch("/api/edupi/intake", {
         method: "POST",
-        headers: body.calendarImportConfirmed === true
-          ? await desktopApiHeaders({ "Content-Type": "application/json" })
-          : { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const result = await response.json() as EducationIntakeApiResult;
@@ -375,51 +364,11 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     }
   }, [educationIntakeBusy, loadWorkspace]);
 
-  const intakeStagedMaterial = useCallback(async (item: MaterialStagingDescriptor, metadata: MaterialIntakeMetadata, scheduleSource: { sourceId: string; fingerprint: string; sourceKind: "calendar" | "document" | "timetable" } | null, pairing?: DocumentPairingSubmission | null, calendarPreviewFingerprint?: string | null) => {
-    const calendarSource = item.kind === "calendar" ? scheduleSource : null;
-    const documentSource = item.kind !== "calendar" ? scheduleSource : null;
-    const result = await submitEducationIntake({
-      kind: "material",
-      stagingId: item.staging_id,
-      title: metadata.title,
-      materialKind: metadata.materialKind,
-      subject: metadata.subject,
-      classId: metadata.classId,
-      recognize: true,
-      calendarSourceId: calendarSource?.sourceId ?? null,
-      calendarSourceFingerprint: calendarSource?.fingerprint ?? null,
-      ...(calendarPreviewFingerprint ? { calendarImportConfirmed: true, calendarPreviewFingerprint } : {}),
-      documentSourceId: documentSource?.sourceId ?? null,
-      documentSourceFingerprint: documentSource?.fingerprint ?? null,
-      documentPairingFingerprint: pairing?.recognitionFingerprint ?? null,
-      documentPairings: pairing?.pairings ?? null,
-    });
-    const eventCount = result.recognition?.eventCount || 0;
-    const slotCount = result.recognition?.slotCount || 0;
-    if (result.materialReceivedOnly) {
-      const accepted = result.receipt?.status === "accepted" || result.receipt?.status === "modified";
-      setMaterialStagingMessage({ tone: accepted ? "success" : "error", text: `${item.original_name} ${accepted ? "已接入" : "待核对"}` });
-      return result;
-    }
-    if (item.kind === "calendar") {
-      if (!result.calendarCommitted) {
-        setMaterialStagingMessage({ tone: "error", sticky: true, text: `${item.original_name} 的部分变更待核对，请以当前日历显示为准。` });
-        return result;
-      }
-      const removed = result.removedEventCount ? `，撤回 ${result.removedEventCount} 项旧安排` : "";
-      setMaterialStagingMessage({ tone: "success", text: `${item.original_name} 已导入 ${eventCount} 项日程${removed}。` });
-      return result;
-    }
-    if (result.scheduleNeedsReview) {
-      setMaterialStagingMessage({ tone: "error", sticky: true, text: `${item.original_name} 的材料已接入，识别出的时间安排尚未全部生效；请核对文件或在日程手动更正。` });
-      return result;
-    }
-    if (result.recognition?.ocrStatus === "unavailable") {
-      setMaterialStagingMessage({ tone: "error", sticky: true, text: `${item.original_name} 已接入；文字识别未完成，日程和课表未导入。请核对原文件。` });
-      return result;
-    }
-    const recognized = materialRecognitionSummary({ eventCount, slotCount, ocrStatus: result.recognition?.ocrStatus });
-    setMaterialStagingMessage({ tone: "success", text: `${item.original_name} 已接入 EduPi${recognized}。` });
+  const intakeStagedMaterial = useCallback(async (item: MaterialStagingDescriptor, metadata: MaterialIntakeMetadata) => {
+    const result = await submitEducationIntake({ kind: "material", stagingId: item.staging_id,
+      title: metadata.title, materialKind: metadata.materialKind, subject: metadata.subject, classId: metadata.classId });
+    const accepted = result.materialReceivedOnly === true && ["accepted", "modified"].includes(String(result.receipt?.status));
+    setMaterialStagingMessage({ tone: accepted ? "success" : "error", text: `${item.original_name} ${accepted ? "已接入" : "待核对"}` });
     return result;
   }, [submitEducationIntake]);
 
