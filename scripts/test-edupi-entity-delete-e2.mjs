@@ -20,14 +20,19 @@ const sources = {
   students: path.join(memoryDir, "student_profiles.json"),
   calendar: path.join(memoryDir, "calendar.json"),
   timetable: path.join(memoryDir, "timetable.json"),
-  tasks: path.join(outputDir, "rhythm_plan.json"),
+  tasks: path.join(outputDir, "task_board_state.json"),
   intake: path.join(outputDir, "education_intake_state.json"),
 };
+const shanghaiDate = (date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+const calendarDate = shanghaiDate(new Date(Date.now() + 2 * 86_400_000));
 fs.writeFileSync(sources.preferences, JSON.stringify({ entries: [{ id: "memory-delete-1", content: "称呼我为吴老师", tags: ["称呼"], count: 1 }] }));
 fs.writeFileSync(sources.students, JSON.stringify({ students: { 李四: { name: "李四", traits: ["认真"], parent_notes: [], error_patterns: [], trajectory: [], created_at: "2026-09-01T00:00:00.000Z", updated_at: "2026-09-01T00:00:00.000Z" } }, updated_at: "2026-09-01T00:00:00.000Z" }));
-fs.writeFileSync(sources.calendar, JSON.stringify({ events: [{ id: "calendar-delete-1", date: "2026-09-01", name: "开学", type: "custom", source: "teacher", confidence: "teacher_confirmed" }] }));
+fs.writeFileSync(sources.calendar, JSON.stringify({ events: [{ id: "calendar-delete-1", date: calendarDate, name: "合成校历事项", type: "custom", source: "teacher", confidence: "teacher_confirmed" }] }));
 fs.writeFileSync(sources.timetable, JSON.stringify({ slots: [{ id: "slot-delete-1", day_of_week: 1, period: 1, subject: "数学", class_name: "703", kind: "class" }] }));
-fs.writeFileSync(sources.tasks, JSON.stringify({ tasks: [{ id: "task-delete-1", title: "准备第一课", status: "planned", scope: "teacher_internal", requires_teacher_review: true, external_send: false }] }));
+fs.writeFileSync(sources.tasks, JSON.stringify({ schema_version: 3, updated_at: "2026-09-01T00:00:00.000Z",
+  manual_tasks: [{ task_id: "task-delete-1", title: "准备第一课", due_date: "2026-09-01", note: null,
+    created_at: "2026-09-01T00:00:00.000Z", preparation_source: null }],
+  stage_overrides: [], task_reviews: [], receipts: [], idempotency_records: [] }));
 const materialBytes = Buffer.from("%PDF-1.4\nEduPi entity restore E2\n", "utf8");
 const materialHash = `sha256:${crypto.createHash("sha256").update(materialBytes).digest("hex")}`;
 const materialDirectory = path.join(temp, ".edupi", "inbox", "teacher-materials");
@@ -35,8 +40,6 @@ const materialPath = path.join(materialDirectory, "material-1.pdf");
 fs.mkdirSync(materialDirectory, { recursive: true });
 fs.writeFileSync(materialPath, materialBytes);
 fs.writeFileSync(sources.intake, JSON.stringify({ schema_version: 1, updated_at: "2026-09-01T00:00:00.000Z", calendar_events: [], timetable_slots: [], materials: [{ material_id: "material-1", staging_id: "stg_00000000000000000000000000000001", source_hash: materialHash, expected_size_bytes: materialBytes.length, kind: "lesson_note", title: "第一课教案", subject: "数学", class_id: "703", relative_path: ".edupi/inbox/teacher-materials/material-1.pdf", intake_state: "accepted" }], receipts: [], review_history: [], review_targets: [{ projection_kind: "material_intake", target: { target_kind: "material_intake", target_id: "material-target-1", command_type: "intake_material" }, revision: 1, title: "第一课教案", summary: "已接收材料：第一课教案", status: "accepted", source_ids: ["material-source-1"], evidence_ids: ["material-evidence-1"], teacher_review: { state: "accepted", reviewer_id: "teacher", reviewed_at: "2026-09-01T00:00:00.000Z", note: null, revision: 1 }, external_send: false, staging_id: "stg_00000000000000000000000000000001", source_hash: materialHash, expected_size_bytes: materialBytes.length, intake_state: "accepted" }], idempotency_records: [] }));
-const originalSources = Object.fromEntries(Object.entries(sources).map(([key, file]) => [key, fs.readFileSync(file, "utf8")]));
-
 Object.assign(process.env, {
   EDUPI_CORE_ROOT: coreRoot,
   EDUPI_CORE_ALLOWED_ROOT: path.dirname(coreRoot),
@@ -47,12 +50,17 @@ Object.assign(process.env, {
   EDUPI_OUTPUT_DIR: outputDir,
   EDUPI_LOCK_DIR: lockDir,
 });
+const { buildRhythmPlan } = await import(path.join(coreRoot, "scripts/rhythm_planner.mjs"));
+const initialPlan = buildRhythmPlan({ events: JSON.parse(fs.readFileSync(sources.calendar, "utf8")).events });
+assert.equal(initialPlan.tasks.some((item) => item.task_id === "calendar_event_preparation:calendar-delete-1"), true);
+fs.writeFileSync(path.join(outputDir, "rhythm_plan.json"), JSON.stringify(initialPlan));
 
 const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
 const { DELETE, POST } = await jiti.import("../app/api/edupi/entities/[kind]/[id]/route.ts");
 const { GET: GET_DELETIONS } = await jiti.import("../app/api/edupi/entities/route.ts");
 const { GET } = await jiti.import("../app/api/edupi/education/route.ts");
 const { readEduPiEducationSnapshot } = await jiti.import("../lib/edupi-core-snapshot.ts");
+const { reminderEvents } = await jiti.import("../lib/edupi-reminder-events.ts");
 
 function request(kind, id, method = "DELETE", restoreRequestId = null) {
   return new Request(`http://localhost/api/edupi/entities/${kind}/${encodeURIComponent(id)}`, {
@@ -80,6 +88,21 @@ try {
   const initialResponse = await GET();
   let data = await initialResponse.json();
   assert.equal(initialResponse.status, 200, JSON.stringify(data));
+  const calendarTaskId = "calendar_event_preparation:calendar-delete-1";
+  assert.equal(data.tasks.some((item) => item.id === calendarTaskId), true, "current calendar must initially produce a task");
+  assert.equal(Object.values(reminderEvents(data.tasks, temp)).some((item) => item.taskId === calendarTaskId && item.completion === "due"), true,
+    "current calendar task must initially qualify for a due reminder");
+  const originalSources = Object.fromEntries(Object.entries(sources).map(([key, file]) => [key, fs.readFileSync(file, "utf8")]));
+  const assertSourcesPreserved = () => {
+    for (const [key, file] of Object.entries(sources)) {
+      assert.equal(fs.readFileSync(file, "utf8"), originalSources[key], `${key} source bytes must remain recoverable`);
+    }
+    const planPath = path.join(outputDir, "rhythm_plan.json");
+    if (fs.existsSync(planPath)) {
+      const planned = JSON.parse(fs.readFileSync(planPath, "utf8")).tasks;
+      assert.equal(planned.every((item) => item.external_send === false), true, "replanned tasks must remain local-only");
+    }
+  };
   const studentId = data.students.find((item) => item.name === "李四")?.student_id;
   assert.ok(studentId);
   const targets = [
@@ -94,17 +117,24 @@ try {
     assert.equal(hasTarget(data, target.kind, target.id), true, `${target.kind} fixture should exist before deletion`);
     const response = await DELETE(request(target.kind, target.id), { params: Promise.resolve(target) });
     const result = await response.json();
-    assert.equal(response.status, 200, JSON.stringify(result));
+    assert.equal(response.status, 200, `${target.kind}:${target.id} ${JSON.stringify(result)}`);
     data = result.data;
     target.id = result.target.id;
     assert.equal(hasTarget(data, target.kind, target.id), false, `${target.kind} should disappear from the refreshed projection`);
     assert.equal(data.entityDeletionCount, targets.indexOf(target) + 1);
+    if (target.kind === "material") {
+      assert.equal(hasTarget(data, "calendar", "calendar-delete-1"), false, "deleted calendar must stay hidden after material refresh");
+      assert.equal(data.tasks.some((item) => item.id === calendarTaskId), false,
+        "a deleted calendar source must not reappear as a preparation task");
+      assert.equal(Object.values(reminderEvents(data.tasks, temp)).some((item) => item.taskId === calendarTaskId), false,
+        "a deleted calendar task must not produce a new reminder");
+    }
   }
   const retryResponse = await DELETE(request("calendar", "calendar-delete-1"), { params: Promise.resolve({ kind: "calendar", id: "calendar-delete-1" }) });
   const retryResult = await retryResponse.json();
   assert.equal(retryResponse.status, 200, JSON.stringify(retryResult));
   assert.equal(hasTarget(retryResult.data, "calendar", "calendar-delete-1"), false);
-  for (const [key, file] of Object.entries(sources)) assert.equal(fs.readFileSync(file, "utf8"), originalSources[key], `${key} source bytes must remain recoverable`);
+  assertSourcesPreserved();
   assert.deepEqual(fs.readFileSync(materialPath), materialBytes);
   let audit = JSON.parse(fs.readFileSync(path.join(outputDir, "entity_delete_state.json"), "utf8"));
   assert.equal(audit.records.length, 6);
@@ -119,7 +149,7 @@ try {
     assert.match(restoreRecord.restoreRequestId, /^entity-restore-[A-Za-z0-9_-]{43}$/);
     const response = await POST(request(target.kind, target.id, "POST", restoreRecord.restoreRequestId), { params: Promise.resolve(target) });
     const result = await response.json();
-    assert.equal(response.status, 200, JSON.stringify(result));
+    assert.equal(response.status, 200, `${target.kind}:${target.id} ${JSON.stringify(result)}`);
     data = result.data;
     assert.equal(hasTarget(data, target.kind, result.target.id), true, `${target.kind} should return to the refreshed projection`);
   }
@@ -161,7 +191,7 @@ try {
   fs.writeFileSync(materialPath, materialBytes);
   const repairedMaterialRestore = await POST(request("material", "material-1", "POST", materialAgainRestoreId), { params: Promise.resolve({ kind: "material", id: "material-1" }) });
   assert.equal(repairedMaterialRestore.status, 200, JSON.stringify(await repairedMaterialRestore.clone().json()));
-  for (const [key, file] of Object.entries(sources)) assert.equal(fs.readFileSync(file, "utf8"), originalSources[key], `${key} source bytes must remain unchanged after restore`);
+  assertSourcesPreserved();
   assert.deepEqual(fs.readFileSync(materialPath), materialBytes);
   audit = JSON.parse(fs.readFileSync(path.join(outputDir, "entity_delete_state.json"), "utf8"));
   assert.equal(audit.records.length, 0);

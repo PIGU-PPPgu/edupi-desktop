@@ -3,11 +3,11 @@
   "core_repository": "edupi",
   "core_sdk": { "pi": "1.0.2", "pi_durable": "1.0.2" },
   "core_runtime": {
-    "core_commit": "b12b5cbfd6f26561c535a95bfbf692fbe5fdae2d",
+    "core_commit": "ae99a886532eb811682f417b7eb8cb7b47298e7a",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:1cdb84958989f632237b4595d5c121cce4b81a25c98297e09f05e44a409dc7a7",
-    "runtime_component_manifest_hash": "sha256:2dc436f77510558473ab6b675d845a3adce1f3df45c1e90537a769f15db0b294",
-    "runtime_schema_hash": "sha256:4ed2f9ecf9bb5fc7824363eff39fcf5fa6757f776abc1a2902842702df4fb3ae"
+    "component_manifest_hash": "sha256:039373bce7ecffea4d7cfc5622af28b7703ae4a65e77bc03d7940bb843007934",
+    "runtime_component_manifest_hash": "sha256:bb0945eeb9d520824500bab0926c1c8c4e64365fdca7308d60b10e1c3db05d97",
+    "runtime_schema_hash": "sha256:10adc92ff72370d2cceabc990c2b908960871946749346915da38e5bc38d840f"
   },
   "contract_identities": [
     {
@@ -206,7 +206,20 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/277",
     "https://github.com/PIGU-PPPgu/edupi/pull/278",
     "https://github.com/PIGU-PPPgu/edupi/pull/279",
-    "https://github.com/PIGU-PPPgu/edupi/pull/280"
+    "https://github.com/PIGU-PPPgu/edupi/pull/280",
+    "https://github.com/PIGU-PPPgu/edupi/pull/283",
+    "https://github.com/PIGU-PPPgu/edupi/pull/286",
+    "https://github.com/PIGU-PPPgu/edupi/pull/287",
+    "https://github.com/PIGU-PPPgu/edupi/pull/288",
+    "https://github.com/PIGU-PPPgu/edupi/pull/289",
+    "https://github.com/PIGU-PPPgu/edupi/pull/290",
+    "https://github.com/PIGU-PPPgu/edupi/pull/291",
+    "https://github.com/PIGU-PPPgu/edupi/pull/292",
+    "https://github.com/PIGU-PPPgu/edupi/pull/293",
+    "https://github.com/PIGU-PPPgu/edupi/pull/295",
+    "https://github.com/PIGU-PPPgu/edupi/pull/296",
+    "https://github.com/PIGU-PPPgu/edupi/pull/297",
+    "https://github.com/PIGU-PPPgu/edupi/pull/298"
   ],
-  "change_note": "Desktop pins Core main b12b5cb after PR #279 local L4 usage evidence and PR #280 versioned teacher-usage consent. Core Runtime schema and component manifest changed; Desktop component manifest, Bridge v1.1, occurrence v1.2 and 12 public bridge commands remain unchanged. The new teacher_usage consent, record, read and upload-batch-read APIs are held: Desktop has not wired their UI or capture flow, usage remains local-only and external_send=false. Desktop outbox requires affirmative Core capture before Pi dispatch. G2/G3/G4 Live remain off by default; DOCX proposals stay pending teacher review. Source pairing does not establish installed-app, real sleep or teacher-quality acceptance."
+  "change_note": "Paired to merged Core main ae99a886 including reviewed #297/#298; its tree matches the full Mac CI-tested combined source 54c51a6. The Runtime adds source-bound owner recall and explicit recipient preview/confirmation; Bridge v1.1, occurrence v1.2, fixtures and 12 public Bridge commands remain unchanged. Desktop now wires exact-domain grants, durable captured prompts, reviewed capability feedback and consent-bound local usage with an unknown-result outbox. No cloud upload receiver or approved policy documents are supplied, so collection stays disabled by default. G1-G5 Live remain off until explicitly enabled; G2-G5 additions are isolated macOS canaries. No external sends or automatic approval of materials/DOCX proposals."
 }

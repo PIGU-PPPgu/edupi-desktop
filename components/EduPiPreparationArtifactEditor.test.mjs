@@ -48,6 +48,7 @@ function editorHarness({ read, revise, props = {} } = {}) {
       if (name === "react") return react;
       if (name.includes("jsx-runtime")) return { jsx, jsxs: jsx };
       if (name.includes("artifact-client")) return client;
+      if (name === "./EduPiUsageObservation") return { EduPiArtifactUsageContext: { Provider: "usage-target-provider" } };
       throw new Error(`Unexpected component import: ${name}`);
     },
   });

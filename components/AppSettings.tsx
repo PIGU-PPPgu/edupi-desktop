@@ -53,6 +53,7 @@ import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { UpdateProxySettingsCard } from "./UpdateProxySettingsCard";
 import { announceComputerUseChanged, COMPUTER_USE_CHANGED_EVENT } from "./EduPiComputerUseStop";
 import { MobileBridgeSettingsCard } from "./MobileBridgeSettingsCard";
+import { EduPiUsageSettingsCard } from "./EduPiUsageSettingsCard";
 import { readForegroundSettings, writeForegroundSettings } from "@/lib/edupi-foreground-settings";
 
 const sectionCardStyle: CSSProperties = {
@@ -743,6 +744,7 @@ export function AppSettings({ onClose, initialSection = null }: { onClose: () =>
           </div>
           <TeacherContextSettingsCard />
           <ForegroundSettingsCard />
+          {desktop && <EduPiUsageSettingsCard />}
           {desktop && <UpdateProxySettingsCard onSaved={() => void checkForUpdates()} />}
 
           {desktop && (

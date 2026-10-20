@@ -96,19 +96,53 @@ function validScope(scope) {
     && /^[A-Za-z0-9][A-Za-z0-9._:@/+~=-]{0,159}$/u.test(scope.grantId);
 }
 
+function snapshotG3Bindings(bindings) {
+  const fail = () => { throw new Error("Invalid runtime bootstrap."); };
+  const ownData = (value, keys, optional = []) => {
+    if (!value || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) fail();
+    const actual = Reflect.ownKeys(value);
+    if (actual.some(key => typeof key !== "string" || ![...keys, ...optional].includes(key)) || keys.some(key => !actual.includes(key))
+      || actual.some(key => { const descriptor = Object.getOwnPropertyDescriptor(value, key); return !descriptor?.enumerable || !Object.hasOwn(descriptor, "value"); })) fail();
+  };
+  if (process.platform !== "darwin" || process.env.EDUPI_DESKTOP_ISOLATED_CANARY !== "1"
+    || !Array.isArray(bindings) || Object.getPrototypeOf(bindings) !== Array.prototype
+    || bindings.length < 1 || bindings.length > 3 || Reflect.ownKeys(bindings).length !== bindings.length + 1) fail();
+  const id = value => typeof value === "string" && /^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$/u.test(value);
+  const seen = new Set(), snapshot = [];
+  for (let index = 0; index < bindings.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(bindings, index);
+    if (!descriptor?.enumerable || !Object.hasOwn(descriptor, "value")) fail();
+    const binding = descriptor.value;
+    ownData(binding, ["domain", "grantId", "scope"], ["ownerId"]);
+    ownData(binding.scope, ["class_id", "subject"]);
+    if (!["calendar_administration", "lesson_reflection", "parent_communication"].includes(binding.domain)
+      || !id(binding.grantId) || !id(binding.scope.class_id) || Object.hasOwn(binding, "ownerId") && !id(binding.ownerId)
+      || typeof binding.scope.subject !== "string" || !binding.scope.subject.trim() || binding.scope.subject.length > 128
+      || binding.scope.subject.trim() !== binding.scope.subject || /[\u0000-\u001f\u007f]/u.test(binding.scope.subject)) fail();
+    if (seen.has(binding.domain)) fail();
+    seen.add(binding.domain);
+    snapshot.push(Object.freeze({ domain: binding.domain, grantId: binding.grantId,
+      scope: Object.freeze({ class_id: binding.scope.class_id, subject: binding.scope.subject }),
+      ...(Object.hasOwn(binding, "ownerId") ? { ownerId: binding.ownerId } : {}) }));
+  }
+  return Object.freeze(snapshot);
+}
+
 export async function startCoreRuntimeHost({ coreRoot, options }, channel = process) {
   const hasModelScope = options?.g1Scope !== undefined || options?.g2Scope !== undefined;
-  if (!options || Object.keys(options).some(key => !["dataRoot", "token", "supervisorSessionId", "coreCommit", "componentManifestHash", "port", "ambientPlanning", "ownerControlToken", "ownerMessageRegistration", "g1Scope", "g2Scope"].includes(key))
+  if (!options || Object.keys(options).some(key => !["dataRoot", "token", "supervisorSessionId", "coreCommit", "componentManifestHash", "port", "ambientPlanning", "ownerControlToken", "ownerMessageRegistration", "g1Scope", "g2Scope", "g3Bindings"].includes(key))
     || (options.ambientPlanning !== undefined && typeof options.ambientPlanning !== "boolean")
     || (options.ownerMessageRegistration !== undefined && (options.ownerMessageRegistration !== true
       || options.ambientPlanning !== true || typeof options.ownerControlToken !== "string"))
-    || hasModelScope && (options.ambientPlanning !== true || typeof options.ownerControlToken !== "string")
+    || (hasModelScope || options.g3Bindings !== undefined) && (options.ambientPlanning !== true || typeof options.ownerControlToken !== "string")
     || options.g1Scope !== undefined && !validScope(options.g1Scope)
     || options.g2Scope !== undefined && (!validScope(options.g2Scope) || options.g2Scope.subject !== "数学")) throw new Error("Invalid runtime bootstrap.");
+  const g3Bindings = options.g3Bindings === undefined ? null : snapshotG3Bindings(options.g3Bindings);
   const hostExecutor = hasModelScope ? createParentModelExecutor(channel) : null;
   try {
     const { createCoreRuntimeDaemon } = await import(pathToFileURL(path.join(coreRoot, "scripts/core_runtime_daemon.mjs")).href);
     const { g1Scope, g2Scope, ...daemonOptions } = options;
+    delete daemonOptions.g3Bindings;
     let g1Runner;
     if (g1Scope) {
       try {
@@ -139,7 +173,8 @@ export async function startCoreRuntimeHost({ coreRoot, options }, channel = proc
       if (!channel.connected) throw Object.assign(new Error("Model host unavailable."), { code: "model_unavailable" });
     }
     const daemon = await createCoreRuntimeDaemon({ ...daemonOptions,
-      ...(g1Runner || g2Live ? { ownerMessageContinuation: true } : {}),
+      ...(g1Runner || g2Live || g3Bindings ? { ownerMessageContinuation: true } : {}),
+      ...(g3Bindings ? { g3Live: Object.freeze({ allowedBindings: g3Bindings, durableCalendarAdministration: false }) } : {}),
       ...(g2Live ? { g2Live } : {}),
       ...(g1Runner ? { g1Live: { modelRunner: g1Runner, leaseMs: 300000,
         scope: { classId: g1Scope.classId, subject: g1Scope.subject }, grantId: g1Scope.grantId } } : {}) });

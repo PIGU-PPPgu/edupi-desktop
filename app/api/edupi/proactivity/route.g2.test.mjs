@@ -76,7 +76,7 @@ function fixture({ isolated = true, g1Enabled = false, g2Processor = true, force
     "next/server": { NextResponse: { json: (body, options = {}) => Response.json(body, { status: options.status || 200 }) } },
     "@/lib/bounded-form-data": { parseJsonWithinLimit: request => request.json(), RequestBodyTooLargeError: class extends Error {} },
     "@/lib/desktop-api-auth": { isDesktopApiRequestAllowed: () => true },
-    "@/lib/safe-mode": { canStartEduPiProactivity: () => true, canStartEduPiStudentFollowup: () => isolated },
+    "@/lib/safe-mode": { canStartEduPiProactivity: () => true, canStartEduPiStudentFollowup: () => isolated, canStartEduPiCapabilityDrafts: () => false },
     "@/lib/edupi-core-snapshot": {
       resolveEduPiBridgeRoots: () => { events.push({ operation: "resolve" }); return { dataRoot: { root } }; },
       readEduPiEducationSnapshot: async () => { events.push({ operation: "snapshot" }); return { workspace }; },
@@ -226,7 +226,7 @@ test("invalid G2 execution degrades reads without presenting a false empty queue
 
 test("unknown domains and non-isolated G2 enables stop before any Core access", async () => {
   const f = fixture({ isolated: false });
-  for (const query of ["?domain=parent_communication", "?domain=", "?domain=student_followup&domain=teaching_preparation"]) {
+  for (const query of ["?domain=safety_privacy", "?domain=", "?domain=student_followup&domain=teaching_preparation"]) {
     assert.equal((await f.get(query)).status, 400);
   }
   for (const domain of ["unknown", null]) {

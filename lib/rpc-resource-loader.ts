@@ -1,9 +1,9 @@
-import { DefaultResourceLoader, type ResourceLoader } from "@earendil-works/pi-coding-agent";
+import { DefaultResourceLoader, type ExtensionFactory, type ResourceLoader } from "@earendil-works/pi-coding-agent";
 
 type LoaderOptions = ConstructorParameters<typeof DefaultResourceLoader>[0];
 export type RpcToolMode = { disabled: boolean };
 
-export function rpcResourceOptions(base: LoaderOptions, mode: RpcToolMode): LoaderOptions {
+export function rpcResourceOptions(base: LoaderOptions, mode: RpcToolMode, hostFactories: ExtensionFactory[] = []): LoaderOptions {
   return {
     ...base,
     ...(mode.disabled ? {
@@ -19,6 +19,7 @@ export function rpcResourceOptions(base: LoaderOptions, mode: RpcToolMode): Load
       appendSystemPromptOverride: () => [],
     } : {}),
     extensionFactories: [
+      ...hostFactories,
       ...(mode.disabled ? [] : base.extensionFactories ?? []),
       (pi) => {
         // Reload re-registers direct custom tools even without extensions.
@@ -35,7 +36,7 @@ export function rpcResourceOptions(base: LoaderOptions, mode: RpcToolMode): Load
 }
 
 /** Keep separate loaders so tool-free reloads never rediscover extensions. */
-export function createRpcResourceLoader(initial: ResourceLoader, options: LoaderOptions, mode: RpcToolMode): ResourceLoader {
+export function createRpcResourceLoader(initial: ResourceLoader, options: LoaderOptions, mode: RpcToolMode, hostFactories: ExtensionFactory[] = []): ResourceLoader {
   let current = initial;
   let enabled = mode.disabled ? undefined : initial;
   let disabled = mode.disabled ? initial : undefined;
@@ -57,7 +58,7 @@ export function createRpcResourceLoader(initial: ResourceLoader, options: Loader
         // first enable, clear it through the restricted loader without running
         // stale third-party factories. Later reloads reuse each mode's loader.
         if (!mode.disabled) await disabled!.reload(reloadOptions);
-        next = new DefaultResourceLoader(rpcResourceOptions(options, mode));
+        next = new DefaultResourceLoader(rpcResourceOptions(options, mode, hostFactories));
         if (mode.disabled) disabled = next; else enabled = next;
       }
       await next.reload(reloadOptions);

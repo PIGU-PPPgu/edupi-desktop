@@ -7,7 +7,7 @@ import ts from "typescript";
 // Execute the component and handlers with deterministic hook scheduling and
 // deferred transport. Browser layout and React DOM behavior remain UI checks.
 function mount(initialState = "idle") {
-  const slots = [], effects = new Map(), requests = [], notifications = [];
+  const slots = [], effects = new Map(), requests = [], notifications = [], observations = [];
   const readStates = Array.isArray(initialState) ? [...initialState] : [initialState];
   let cursor = 0, dirty = false, props, tree;
   const hooks = {
@@ -18,7 +18,7 @@ function mount(initialState = "idle") {
   const jsx = (type, props) => ({ type, props });
   const exports = {};
   const code = ts.transpileModule(fs.readFileSync(new URL("./EduPiTaskPreparationAction.tsx", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
-  vm.runInNewContext(code, { exports, require: name => name === "react" ? hooks : { jsx, jsxs: jsx }, Event, window: { dispatchEvent: event => notifications.push(event.type), setInterval: () => 1, clearInterval() {} }, fetch: (url, options = {}) => options.method ? new Promise((resolve, reject) => requests.push({ body: JSON.parse(options.body), resolve, reject })) : Promise.resolve(response(new URL(url, "http://localhost").searchParams.get("taskId"), readStates.length > 1 ? readStates.shift() : readStates[0])) });
+  vm.runInNewContext(code, { exports, require: name => name === "react" ? hooks : name.includes("usage-observation") ? { observeTeacherUsage: async input => { observations.push(input); } } : name.includes("desktop-updater") ? { isTauriDesktop: () => true } : { jsx, jsxs: jsx }, Event, window: { dispatchEvent: event => notifications.push(event.type), setInterval: () => 1, clearInterval() {} }, fetch: (url, options = {}) => options.method ? new Promise((resolve, reject) => requests.push({ body: JSON.parse(options.body), resolve, reject })) : Promise.resolve(response(new URL(url, "http://localhost").searchParams.get("taskId"), readStates.length > 1 ? readStates.shift() : readStates[0])) });
   function render(next = props) {
     props = next;
     do { dirty = false; cursor = 0; tree = exports.EduPiTaskPreparationAction(props); } while (dirty);
@@ -26,10 +26,25 @@ function mount(initialState = "idle") {
     effects.clear();
     return tree.props.children[0];
   }
-  return { render, requests, notifications, unmount() { for (const slot of slots) slot?.cleanup?.(); } };
+  return { render, requests, notifications, observations, unmount() { for (const slot of slots) slot?.cleanup?.(); } };
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const response = (taskId, state = "ready") => ({ ok: true, json: async () => ({ taskId, state, prepared: 1, error: null }) });
+
+test("manual prepare and an explicit retry observe their exact candidate without logging passive reads", async () => {
+  const component = mount("idle");
+  const target = { kind: "work_candidate", targetId: "candidate-A", expectedRevision: 4 };
+  component.render({ taskId: "A", usageTarget: target, onReady() {} }); await tick();
+  assert.equal(component.observations.length, 0);
+  component.render().props.onClick();
+  assert.equal(component.observations[0].target, target);
+  assert.equal(component.observations[0].action, "manual_prepare");
+  component.requests[0].resolve({ ok: false, json: async () => ({ taskId: "A", error: "synthetic unavailable" }) }); await tick();
+  component.render().props.onClick();
+  assert.equal(component.observations[1].action, "manual_retry");
+  assert.equal(component.observations[1].target, target);
+  component.requests[1].resolve(response("A", "ready")); await tick(); component.unmount();
+});
 
 test("an initially ready task refreshes its artifacts without changing the teacher's stage", async () => {
   const component = mount("ready"); let ready = 0;

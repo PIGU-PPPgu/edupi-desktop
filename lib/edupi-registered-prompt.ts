@@ -1,5 +1,5 @@
 import type { EduPiRuntimeHandle } from "./edupi-runtime-supervisor";
-import { EDUPI_PROACTIVITY_CONVERSATION_ID, EDUPI_STUDENT_FOLLOWUP_CONVERSATION_ID } from "./edupi-proactivity-control";
+import { proactivityConversationId } from "./edupi-proactivity-control";
 import type { EduPiProactivityDomain } from "./edupi-proactivity-config";
 import { predictEduPiOwnerMessageRef } from "./edupi-ambient-message-runtime";
 import { readProactivityOwnerContext } from "./edupi-proactivity-runtime";
@@ -32,11 +32,7 @@ function canonicalTime(value: unknown): boolean {
   try { return new Date(value).toISOString() === value; } catch { return false; }
 }
 
-function conversation(domain: EduPiProactivityDomain): string {
-  if (domain === "teaching_preparation") return EDUPI_PROACTIVITY_CONVERSATION_ID;
-  if (domain === "student_followup") return EDUPI_STUDENT_FOLLOWUP_CONVERSATION_ID;
-  throw new Error("owner_message_domain_invalid");
-}
+const conversation = proactivityConversationId;
 
 export async function registerPrompt(
   host: Pick<EduPiRuntimeHandle, "call" | "callOwnerControl">,

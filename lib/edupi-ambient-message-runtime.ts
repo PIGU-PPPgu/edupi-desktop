@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { EduPiRuntimeHandle } from "./edupi-runtime-supervisor";
-import { EDUPI_PROACTIVITY_CONVERSATION_ID, EDUPI_STUDENT_FOLLOWUP_CONVERSATION_ID } from "./edupi-proactivity-control";
-import type { EduPiProactivityDomain } from "./edupi-proactivity-config";
+import { proactivityConversationId } from "./edupi-proactivity-control";
+import { isEduPiCapabilityDomain, type EduPiProactivityDomain } from "./edupi-proactivity-config";
 import { readProactivityOwnerContext } from "./edupi-proactivity-runtime";
 
 const HASH = /^sha256:[a-f0-9]{64}$/u;
@@ -116,11 +116,7 @@ async function withdrawCapturedMessage(host: Pick<EduPiRuntimeHandle, "callOwner
   return recordedAt;
 }
 
-function conversationId(domain: EduPiProactivityDomain): string {
-  if (domain === "teaching_preparation") return EDUPI_PROACTIVITY_CONVERSATION_ID;
-  if (domain === "student_followup") return EDUPI_STUDENT_FOLLOWUP_CONVERSATION_ID;
-  return fail();
-}
+const conversationId = proactivityConversationId;
 
 export function predictEduPiOwnerMessageRef(rootRef: string, ownerId: string, messageId: string, domain: EduPiProactivityDomain = "teaching_preparation"): string {
   if (!HASH.test(rootRef) || !ID.test(ownerId) || !RAW_ID.test(messageId)) fail();
@@ -173,7 +169,7 @@ export async function captureAndApplyAmbientMessage(
   if (!MESSAGE_REF.test(String(capture.message_ref || "")) || capture.message_ref !== predictedMessageRef || capture.owner_id !== context.ownerId
     || capture.capture_grant_version !== context.grantVersion || capture.external_send !== false
     || typeof captured.replayed !== "boolean"
-    || domain === "student_followup" && (capture.apply !== false || capture.live_authority !== false)) fail("proactivity_response_invalid", "capture");
+    || domain !== "teaching_preparation" && (capture.apply !== false || capture.live_authority !== false)) fail("proactivity_response_invalid", "capture");
   const messageRef = String(capture.message_ref);
   if (dependencies.onCaptured) {
     try {
@@ -188,6 +184,11 @@ export async function captureAndApplyAmbientMessage(
   }
   if (dependencies.controlScope && (!ID.test(dependencies.controlScope.classId)
     || typeof dependencies.controlScope.subject !== "string" || !dependencies.controlScope.subject)) fail();
+  if (isEduPiCapabilityDomain(domain)) {
+    // Core continuation owns natural case reconstruction, shared-queue
+    // admission and recipient/evidence checks for these domains.
+    return { status: "captured", resolutionStatus: "captured", reason: null, goalId: null, workCaseId: null, externalSend: false };
+  }
   if (domain === "student_followup") {
     const response = await host.callOwnerControl("student_followup_intent_execution_enqueue", {
       root_ref: input.rootRef, expected_owner_id: context.ownerId, message_ref: messageRef,

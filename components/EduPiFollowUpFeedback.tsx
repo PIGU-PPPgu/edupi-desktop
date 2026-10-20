@@ -6,6 +6,7 @@ import { desktopApiHeaders } from "@/lib/desktop-native";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { canRetryFeedbackEligibility, prepareTeacherFeedbackCapture, recordTeacherFeedback, TeacherFeedbackError, type TeacherFeedbackCapture } from "@/lib/edupi-teacher-feedback";
 import { EduPiTeacherValueForm, type TeacherValueDraft } from "./EduPiTodayWork";
+import { EduPiUsageVisibility } from "./EduPiUsageObservation";
 
 const EMPTY_VALUE: TeacherValueDraft = { usefulness: "", used: false, wouldUseAgain: "", baselineMinutes: "", reviewMinutes: "", note: "" };
 type FeedbackRecord = { feedback_id?: string; session_id?: string; current?: boolean; source_status?: string; target?: { kind?: string; target_id?: string; revision?: number } };
@@ -103,8 +104,8 @@ export function EduPiFollowUpFeedback({ followUp }: { followUp: EducationFollowU
   return <section className="edupi-task-feedback" aria-label="学生跟进评价">
     {!open && !recorded ? <button type="button" disabled={busy} onClick={() => { setOpen(true); setMessage(null); }}>评价本次跟进</button> : null}
     {recorded ? <span role="status">已评价</span> : null}
-    {open && !retryCapture ? <EduPiTeacherValueForm draft={draft} allowUsed={decision === "accept" || decision === "modify"} busy={busy}
-      onChange={setDraft} onSubmit={() => void submit()} onCancel={() => { setOpen(false); setDraft(EMPTY_VALUE); setMessage(null); }} /> : null}
+    {open && !retryCapture ? <EduPiUsageVisibility target={{ kind: "follow_up", targetId: followUp.followUpId, expectedRevision: followUp.revision }} action="feedback_form_opened" surface="student"><EduPiTeacherValueForm draft={draft} allowUsed={decision === "accept" || decision === "modify"} busy={busy}
+      onChange={setDraft} onSubmit={() => void submit()} onCancel={() => { setOpen(false); setDraft(EMPTY_VALUE); setMessage(null); }} /></EduPiUsageVisibility> : null}
     {retryCapture && !busy ? <div className="edupi-task-feedback__retry"><button type="button" onClick={() => void submit()}>重试记录</button><button type="button" onClick={() => { setRetryCapture(null); setOpen(false); setDraft(EMPTY_VALUE); }}>取消</button></div> : null}
     {message ? <p role="status">{message}</p> : null}
   </section>;

@@ -19,12 +19,18 @@ export function canStartEduPiStudentFollowup(platform: NodeJS.Platform = process
   return platform !== "win32" && environment.EDUPI_DESKTOP_ISOLATED_CANARY === "1";
 }
 
+export function canStartEduPiCapabilityDrafts(platform: NodeJS.Platform = process.platform,
+  environment: NodeJS.ProcessEnv = process.env): boolean {
+  return platform === "darwin" && environment.EDUPI_DESKTOP_ISOLATED_CANARY === "1";
+}
+
 // Tauri has already proved the isolated root, bundled Core and private state
 // before setting the marker on this server. Core root admission must survive
 // stopping G1; the current scope/grant separately controls model execution.
-export function coreRuntimeCanaryEnvironment(platform: NodeJS.Platform, environment: NodeJS.ProcessEnv): { EDUPI_WINDOWS_G1_CANARY?: "1" } {
+export function coreRuntimeCanaryEnvironment(platform: NodeJS.Platform, environment: NodeJS.ProcessEnv): { EDUPI_WINDOWS_G1_CANARY?: "1"; EDUPI_DESKTOP_ISOLATED_CANARY?: "1" } {
   return platform === "win32" && canStartEduPiProactivity(platform, environment)
-    ? { EDUPI_WINDOWS_G1_CANARY: "1" } : {};
+    ? { EDUPI_WINDOWS_G1_CANARY: "1" } : canStartEduPiCapabilityDrafts(platform, environment)
+      ? { EDUPI_DESKTOP_ISOLATED_CANARY: "1" } : {};
 }
 
 export type SafeModeResourceRoots = {

@@ -23,6 +23,8 @@ import { parseUnifiedPatch } from "@/lib/patch";
 import type { GitFileDiffResponse } from "@/lib/git-types";
 import { getFileIcon } from "./FileIcons";
 import { useI18n } from "@/hooks/useI18n";
+import { useArtifactUsageTarget, useUsageVisibility } from "./EduPiUsageObservation";
+import { observeTeacherUsage } from "@/lib/edupi-usage-observation";
 
 interface Props {
   filePath: string;
@@ -208,6 +210,7 @@ function getFileApiUrl(
 
 function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceSessionId?: string | null }) {
   const { t } = useI18n();
+  const usageTarget = useArtifactUsageTarget(filePath);
   const [busy, setBusy] = useState(false);
   return (
     <button
@@ -221,11 +224,15 @@ function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceS
           setBusy(true);
           try {
             const { saveLocalFileAs } = await import("@/lib/desktop-native");
-            await saveLocalFileAs(
+            const saved = await saveLocalFileAs(
               filePath,
               getFileName(filePath),
               getFileApiUrl(filePath, "download", sourceSessionId),
             );
+            if (saved && usageTarget) {
+              const { isTauriDesktop } = await import("@/lib/desktop-native");
+              if (isTauriDesktop()) void observeTeacherUsage({ target: usageTarget, action: "artifact_exported", surface: "artifact" });
+            }
           } catch (error) {
             console.error("Failed to save file:", error);
           } finally {
@@ -874,6 +881,9 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
   const [gitDiffLoading, setGitDiffLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const usageTarget = useArtifactUsageTarget(filePath);
+  const loadedPath = useRef<string | null>(null);
+  const usageRef = useUsageVisibility({ target: data && !loading && !error && loadedPath.current === filePath ? usageTarget : null, action: "draft_opened", surface: "artifact" });
   const [displayMode, setDisplayMode] = useState<DisplayMode>("source");
   const [wrapLines, setWrapLines] = useState(false);
   const [watching, setWatching] = useState(false);
@@ -892,6 +902,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
           return null;
         }
         setError(null);
+        loadedPath.current = filePath;
         setData(d);
         return d;
       })
@@ -1098,7 +1109,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
     : `${formatLanguage(language)} · ${lineCount} · ${formatSize(data!.size)}`;
 
   return (
-    <div className="file-viewer-shell">
+    <div className="file-viewer-shell" ref={usageRef}>
       <FileViewerToolbar
         filePath={filePath}
         cwd={cwd}

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { observeTeacherUsage, type UsageObservationTarget } from "@/lib/edupi-usage-observation";
+import { isTauriDesktop } from "@/lib/desktop-updater";
 
 type PreparationState = { taskId?: string | null; state: "idle" | "running" | "ready" | "error"; prepared: number; error: string | null; retryable?: boolean };
 
-export function EduPiTaskPreparationAction({ taskId, onReady }: { taskId: string; onReady: () => void }) {
+export function EduPiTaskPreparationAction({ taskId, onReady, usageTarget }: { taskId: string; onReady: () => void; usageTarget?: UsageObservationTarget | null }) {
   const [status, setStatus] = useState<PreparationState | null>(null);
   const [starting, setStarting] = useState(false);
   const onReadyRef = useRef(onReady);
@@ -59,6 +61,7 @@ export function EduPiTaskPreparationAction({ taskId, onReady }: { taskId: string
     requestOwner.current.startedHere = true;
     const current = () => requestOwner.current.taskId === taskId && requestOwner.current.sequence === sequence;
     setStarting(true);
+    if (usageTarget && isTauriDesktop()) void observeTeacherUsage({ target: usageTarget, action: status?.state === "error" ? "manual_retry" : "manual_prepare", surface: "task" });
     try {
       const response = await fetch("/api/edupi/preparation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "run", taskId }) });
       const next = await response.json() as PreparationState & { error?: string };

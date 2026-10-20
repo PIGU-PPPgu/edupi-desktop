@@ -52,6 +52,16 @@ test("the signed release workflow is manual-only", async () => {
   assert.match(release, /tauriScript: npx tauri/);
 });
 
+test("a macOS-only draft proves its target closure before creating a release", async () => {
+  const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+  const preflight = release.slice(release.indexOf("\n  notary-preflight:"), release.indexOf("\n  release:"));
+  assert.match(preflight, /name: Check out EduPi Desktop/);
+  assert.match(preflight, /name: Verify macOS dependency closure/);
+  assert.match(preflight, /cargo tree --locked --target aarch64-apple-darwin --edges normal,build/);
+  assert.match(preflight, /grep -Eq '\^zip v\(\[0-8\]\)\\\.'/);
+  assert.doesNotMatch(preflight, /--ignore RUSTSEC|cargo audit --ignore/);
+});
+
 test("paired Core checks use a private workspace-backed temporary root", async () => {
   for (const name of ["release.yml", "preview-installers.yml"]) {
     const workflow = await readFile(join(root, ".github", "workflows", name), "utf8");
@@ -62,6 +72,20 @@ test("paired Core checks use a private workspace-backed temporary root", async (
     assert.match(step, /mkdir -m 700 "\$TMPDIR"/u);
     assert.match(step, /trap 'test "\$TMPDIR" = "\$GITHUB_WORKSPACE\/\.edupi-core-test-tmp" && rm -r "\$TMPDIR"' EXIT/u);
   }
+});
+
+test("the Mac candidate exercises new host contracts against its exact pinned Core before packaging", async () => {
+  const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+  const start = release.indexOf("name: Verify macOS Core host wiring");
+  assert.ok(start >= 0);
+  const step = release.slice(start, release.indexOf("\n      - ", start));
+  assert.match(step, /if: runner\.os == 'macOS'/u);
+  assert.match(step, /EDUPI_MEMORY_RECALL_CORE_ROOT: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/u);
+  assert.match(step, /EDUPI_USAGE_TEST_CORE: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/u);
+  assert.match(step, /lib\/edupi-memory-recall-access\.test\.mjs/u);
+  assert.match(step, /lib\/edupi-teacher-usage-runtime\.test\.mjs/u);
+  assert.match(step, /test-edupi-capability-canary-e2\.mjs --require-recipient-confirmation/u);
+  assert.ok(start < release.indexOf("name: Prepare packaged Next.js server"));
 });
 
 test("staged schedule test warms its authenticated read route after server identity", async () => {

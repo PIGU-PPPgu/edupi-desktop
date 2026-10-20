@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { readEduPiProactivity, updateEduPiProactivity, type EduPiProactivityDomain, type EduPiProactivityState } from "@/lib/edupi-proactivity-client";
 import { createMissedTeacherFeedbackCapture, recordTeacherFeedback, type TeacherFeedbackCapture, type TeacherFeedbackDomain } from "@/lib/edupi-teacher-feedback";
+import { EduPiParentRecipientConfirmation } from "./EduPiParentRecipientConfirmation";
 
 type ViewProps = {
   state: EduPiProactivityState;
@@ -16,6 +17,8 @@ type ViewProps = {
 
 const scopeKey = (scope: { classId: string; subject: string }) => JSON.stringify([scope.classId, scope.subject]);
 const EXECUTION_STATUS = { queued: "已排队", claimed: "已领取", completed: "草稿已生成", failed: "生成失败", cancelled: "已取消" };
+const DOMAIN_LABELS: Record<EduPiProactivityDomain, string> = { teaching_preparation: "课前准备", student_followup: "学生跟进",
+  calendar_administration: "校历与行政", lesson_reflection: "课后复盘", parent_communication: "家长沟通" };
 type FeedbackScope = EduPiProactivityState["scopes"][number];
 
 const FEEDBACK_DOMAINS: Array<{ value: TeacherFeedbackDomain; label: string }> = [
@@ -96,14 +99,17 @@ function EduPiMissedOpportunityFeedback({ scopes, enabled }: { scopes: FeedbackS
 
 export function EduPiProactivityCanaryView({ state, selectedKey, busy, message, onSelect, onToggle }: ViewProps) {
   const studentFollowup = state.limits.domain === "student_followup";
-  const titleId = studentFollowup ? "edupi-student-followup-canary-title" : "edupi-proactivity-canary-title";
+  const capabilityDraft = state.limits.domain !== "teaching_preparation" && !studentFollowup;
+  const label = DOMAIN_LABELS[state.limits.domain];
+  const titleId = capabilityDraft ? `edupi-${state.limits.domain}-canary-title`
+    : studentFollowup ? "edupi-student-followup-canary-title" : "edupi-proactivity-canary-title";
   const blocked = Boolean(state.requiresSafeMode || state.activationBlocked);
   const active = state.activation.enabled;
   const recoveryPending = !active && state.activation.scope !== null;
   const budget = state.grant?.modelBudget;
   const operational = active && !blocked && state.grant?.status === "active" && state.capabilities !== null
     && Object.values(state.capabilities).every(Boolean) && (!studentFollowup || state.capabilities.studentFollowup === true)
-    && (studentFollowup && !budget
+    && ((studentFollowup || capabilityDraft) && !budget
       || budget && !budget.usageUnverified && budget.remainingCalls > 0);
   const budgetExhausted = active && budget && !budget.usageUnverified && budget.remainingCalls === 0;
   const ready = state.scopes.filter((scope) => scope.ready);
@@ -114,7 +120,8 @@ export function EduPiProactivityCanaryView({ state, selectedKey, busy, message, 
   const blockedLabel = state.activationBlocked === "windows_unavailable" ? "Windows 暂不可用" : state.activationBlocked ? "仅隔离试用" : null;
   return <section className="edupi-proactivity-canary" aria-labelledby={titleId}>
     <div>
-      <span><strong id={titleId}>{studentFollowup ? "学生跟进试用" : "课前准备试用"}</strong><small>{active && state.grant
+      <span><strong id={titleId}>{label}试用</strong><small>{capabilityDraft ? active || recoveryPending ? currentLabel : `${state.limits.durationDays} 天 · 内部草稿`
+        : active && state.grant
         ? budget && !budget.usageUnverified ? `${currentLabel} · 剩余 ${budget.remainingCalls} 次`
           : `${currentLabel} · 最多 ${state.limits.maxModelCalls} 次 · 剩余未知`
         : recoveryPending ? currentLabel : `${state.limits.durationDays} 天 · 最多 ${state.limits.maxModelCalls} 次模型调用`}</small></span>
@@ -122,12 +129,14 @@ export function EduPiProactivityCanaryView({ state, selectedKey, busy, message, 
         : <em>{recoveryPending ? state.activation.configurationStatus === "legacy" ? "旧授权待停止" : "停止待恢复"
           : blockedLabel || (state.requiresSafeMode ? "安全模式可试用" : state.activation.configurationStatus === "legacy" ? "旧试用已关闭" : "默认关闭")}</em>}
     </div>
-    {!active && !recoveryPending && ready.length > 0 ? <label><span>班级与学科</span><select aria-label={studentFollowup ? "学生跟进班级与学科" : "主动备课班级与学科"} value={selectedKey} disabled={busy} onChange={(event) => onSelect(event.target.value)}>{ready.map((scope) => <option key={scopeKey(scope)} value={scopeKey(scope)}>{scope.className || scope.classId} · {scope.subject}</option>)}</select></label> : null}
+    {!active && !recoveryPending && ready.length > 0 ? <label><span>班级与学科</span><select aria-label={`${label}班级与学科`} value={selectedKey} disabled={busy} onChange={(event) => onSelect(event.target.value)}>{ready.map((scope) => <option key={scopeKey(scope)} value={scopeKey(scope)}>{scope.className || scope.classId} · {scope.subject}</option>)}</select></label> : null}
     <button className={!active && !recoveryPending ? "edupi-admin-primary" : undefined} type="button" disabled={busy || !active && !recoveryPending && (!current || blocked)} onClick={onToggle}>{busy ? "处理中…" : active ? "停止主动运行" : recoveryPending ? state.activation.configurationStatus === "legacy" ? "停止旧授权" : "重试停止" : "启用试用"}</button>
     {message ? <p role="status" aria-live="polite">{message}</p>
-      : !active && state.activationBlocked === "isolated_canary_required" ? <p role="status">学生跟进需使用隔离数据目录试用。</p>
+      : !active && state.activationBlocked === "isolated_canary_required" ? <p role="status">{label}需使用隔离数据目录试用。</p>
       : !active && state.requiresSafeMode ? <p role="status">Windows 试用需用隔离数据目录以安全模式启动。</p>
-      : !active && !blocked && ready.length === 0 ? <p role="status">{studentFollowup ? "需要明确班级的数学课表和当前学生名单。" : "需要一条带班级 ID 的课表和同范围材料。"}</p> : null}
+      : !active && !blocked && ready.length === 0 ? <p role="status">{studentFollowup ? "需要明确班级的数学课表和当前学生名单。"
+        : capabilityDraft ? state.limits.domain === "parent_communication" ? "需要同一学生、学期和联系人的已审核证据。" : "需要当前已审核的学期与课程证据。"
+          : "需要一条带班级 ID 的课表和同范围材料。"}</p> : null}
     {studentFollowup ? <details className="edupi-proactivity-execution">
       <summary>执行记录</summary>
       {!state.execution?.available ? <p>执行记录暂不可用</p>
@@ -189,7 +198,7 @@ export function EduPiProactivityCanary({ onChanged, feedbackEnabled = false, dom
     const recoveryPending = !state.activation.enabled && state.activation.scope !== null;
     const enabling = !state.activation.enabled && !recoveryPending;
     if (enabling && (!selected || state.requiresSafeMode || state.activationBlocked
-      || !window.confirm(`启用 ${selected.className || selected.classId} · ${selected.subject} 的${domain === "student_followup" ? "学生跟进" : "主动备课"}试用？\n${state.limits.durationDays} 天，最多 ${state.limits.maxModelCalls} 次调用已配置模型；不会自动发给学生或家长。`))) return;
+      || !window.confirm(`启用 ${selected.className || selected.classId} · ${selected.subject} 的${DOMAIN_LABELS[domain]}试用？\n${state.limits.durationDays} 天${state.limits.maxModelCalls ? `，最多 ${state.limits.maxModelCalls} 次调用已配置模型` : "，生成教师内部草稿"}；不会自动发给学生或家长。`))) return;
     busyRef.current = true;
     ++refreshEpoch.current;
     refreshAbort.current?.abort();
@@ -200,7 +209,7 @@ export function EduPiProactivityCanary({ onChanged, feedbackEnabled = false, dom
         : { enabled: false, classId: null, subject: null, expectedUpdatedAt: state.activation.updatedAt, domain });
       setState(next);
       setMessage(enabling ? next.grant?.modelBudget && !next.grant.modelBudget.usageUnverified && next.grant.modelBudget.remainingCalls === 0 ? "额度已用完"
-        : domain === "student_followup" ? "学生跟进已启用"
+        : domain !== "teaching_preparation" ? `${DOMAIN_LABELS[domain]}已启用`
         : next.initialScan?.needsAttention ? "已启用，部分课前任务需核对" : "主动备课已启用"
         : recoveryPending && state.activation.configurationStatus === "legacy" ? "旧授权已停止" : "主动运行已停止");
       onChanged?.();
@@ -210,6 +219,7 @@ export function EduPiProactivityCanary({ onChanged, feedbackEnabled = false, dom
   };
   return <>
     <EduPiProactivityCanaryView state={state} selectedKey={selectedKey} busy={busy} message={message} onSelect={setSelectedKey} onToggle={() => void toggle()} />
+    {domain === "parent_communication" && state.activation.enabled ? <EduPiParentRecipientConfirmation /> : null}
     <EduPiMissedOpportunityFeedback scopes={state.scopes} enabled={feedbackEnabled} />
   </>;
 }

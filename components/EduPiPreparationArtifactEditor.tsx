@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { readPreparationArtifact, revisePreparationArtifact, type PreparationArtifact } from "@/lib/edupi-preparation-artifact-client";
+import { EduPiArtifactUsageContext } from "./EduPiUsageObservation";
 
-export function EduPiPreparationArtifactEditor({ artifactId, preview, onSaved, onAgent }: { artifactId: string; preview: (artifact: PreparationArtifact) => ReactNode; onSaved: (artifact: PreparationArtifact) => void; onAgent: (prompt: string) => void }) {
+export function EduPiPreparationArtifactEditor({ artifactId, workspace, preview, onSaved, onAgent }: { artifactId: string; workspace?: string; preview: (artifact: PreparationArtifact) => ReactNode; onSaved: (artifact: PreparationArtifact) => void; onAgent: (prompt: string) => void }) {
   const [artifact, setArtifact] = useState<PreparationArtifact | null>(null);
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
@@ -79,6 +80,6 @@ export function EduPiPreparationArtifactEditor({ artifactId, preview, onSaved, o
     {editing && artifact ? <div className="edupi-artifact-editor__fields">
       {!readOnly ? <label>历史版本<select aria-label="产物历史版本" disabled={busy} value={artifact.revision} onChange={event => void history(Number(event.target.value))}>{artifact.history.map(item => <option key={item.revision} value={item.revision}>版本 {item.revision} · {item.actor === "agent" ? "AI 修订" : "教师修订"}</option>)}</select></label> : null}
       <textarea aria-label="产物正文" rows={24} value={draft} disabled={busy} readOnly={readOnly} onChange={event => { if (!readOnly) setDraft(event.target.value); }} />
-    </div> : artifact && !busy && !error ? <div className="edupi-artifact-editor__preview">{preview(artifact)}</div> : null}
+    </div> : artifact && !busy && !error ? <div className="edupi-artifact-editor__preview"><EduPiArtifactUsageContext.Provider value={workspace ? { target: { kind: "artifact", targetId: artifact.artifact_id, expectedRevision: artifact.revision }, filePath: `${workspace.replace(/[\\/]$/, "")}/${artifact.relative_path}` } : null}>{preview(artifact)}</EduPiArtifactUsageContext.Provider></div> : null}
   </section>;
 }

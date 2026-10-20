@@ -32,8 +32,21 @@ jobs:
   notary-preflight:
     if: inputs.phase == 'draft' && (inputs.platform == 'all' || inputs.platform == 'macos')
     runs-on: macos-15
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
+      - name: Check out EduPi Desktop
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Verify macOS dependency closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          closure="$RUNNER_TEMP/edupi-macos-cargo-tree.txt"
+          cargo tree --locked --target aarch64-apple-darwin --edges normal,build --prefix none --manifest-path src-tauri/Cargo.toml > "$closure"
+          if grep -Eq '^zip v([0-8])\.' "$closure"; then
+            echo "::error::The macOS dependency closure contains a vulnerable zip version."
+            exit 1
+          fi
+          echo "The macOS dependency closure excludes zip versions before v9."
       - name: Check Apple notary status route before packaging
         shell: bash
         env:
@@ -257,6 +270,19 @@ jobs:
           node --test --test-name-pattern
           "bundled validation rejects|external mode still requires"
           scripts/packaged-core-bundle.test.mjs
+
+      - name: Verify macOS Core host wiring
+        if: runner.os == 'macOS'
+        env:
+          EDUPI_CORE_ROOT: ${{ github.workspace }}/.edupi-core-runtime
+          EDUPI_MEMORY_RECALL_CORE_ROOT: ${{ github.workspace }}/.edupi-core-runtime
+          EDUPI_USAGE_TEST_CORE: ${{ github.workspace }}/.edupi-core-runtime
+          TMPDIR: ${{ github.workspace }}/.edupi-core-host-test-tmp
+        run: |
+          mkdir -m 700 "$TMPDIR"
+          trap 'test "$TMPDIR" = "$GITHUB_WORKSPACE/.edupi-core-host-test-tmp" && rm -r "$TMPDIR"' EXIT
+          node --test lib/edupi-memory-recall-access.test.mjs lib/edupi-teacher-usage-runtime.test.mjs
+          node scripts/test-edupi-capability-canary-e2.mjs --require-recipient-confirmation
 
       - name: Configure updater public key
         env:
