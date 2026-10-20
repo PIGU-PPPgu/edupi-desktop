@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { EducationWorkCase, TeacherTask } from "@/lib/edupi-education-contract";
-import { capabilityFeedbackBinding, capabilityFeedbackMustRefresh, currentCapabilityFeedback, prepareCapabilityFeedback, readCapabilityFeedbackRecords } from "@/lib/edupi-capability-feedback";
+import { capabilityFeedbackBinding, capabilityFeedbackMustRefresh, recordedCapabilityFeedback, prepareCapabilityFeedback, readCapabilityFeedbackRecords } from "@/lib/edupi-capability-feedback";
 import { recordTeacherFeedback, type TeacherFeedbackCapture } from "@/lib/edupi-teacher-feedback";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { EduPiTeacherValueForm, type TeacherValueDraft } from "./EduPiTodayWork";
@@ -18,7 +18,7 @@ export function EduPiCapabilityFeedback({ task, workCase }: { task: TeacherTask;
   const [desktop, setDesktop] = useState(false);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [recorded, setRecorded] = useState(false);
+  const [recorded, setRecorded] = useState<"current" | "unverified" | null>(null);
   const [draft, setDraft] = useState<TeacherValueDraft>(EMPTY);
   const [prepared, setPrepared] = useState<TeacherFeedbackCapture | null>(null);
   const [retry, setRetry] = useState<TeacherFeedbackCapture | null>(null);
@@ -27,10 +27,10 @@ export function EduPiCapabilityFeedback({ task, workCase }: { task: TeacherTask;
   useEffect(() => { setDesktop(isTauriDesktop()); }, []);
   useEffect(() => {
     const current = ++epoch.current;
-    setOpen(false); setBusy(false); setRecorded(false); setDraft(EMPTY); setPrepared(null); setRetry(null); setMessage(null);
+    setOpen(false); setBusy(false); setRecorded(null); setDraft(EMPTY); setPrepared(null); setRetry(null); setMessage(null);
     const activeBinding = bindingRef.current;
     if (desktop && activeBinding) void readCapabilityFeedbackRecords().then(rows => {
-      if (epoch.current === current) setRecorded(Boolean(currentCapabilityFeedback(rows, activeBinding)));
+      if (epoch.current === current) setRecorded(recordedCapabilityFeedback(rows, activeBinding)?.sourceStatus ?? null);
     }).catch(() => {});
     return () => { epoch.current = current + 1; };
   }, [desktop, identity]);
@@ -43,7 +43,8 @@ export function EduPiCapabilityFeedback({ task, workCase }: { task: TeacherTask;
     try {
       const rows = await readCapabilityFeedbackRecords();
       if (epoch.current !== current) return;
-      if (currentCapabilityFeedback(rows, binding)) { setRecorded(true); return; }
+      const existing = recordedCapabilityFeedback(rows, binding);
+      if (existing) { setRecorded(existing.sourceStatus); return; }
       const capture = retry || await prepareCapabilityFeedback(binding);
       if (epoch.current !== current) return;
       setPrepared(capture); setOpen(true);
@@ -58,7 +59,8 @@ export function EduPiCapabilityFeedback({ task, workCase }: { task: TeacherTask;
     try {
       const rows = await readCapabilityFeedbackRecords();
       if (epoch.current !== current) return;
-      if (currentCapabilityFeedback(rows, binding)) { setRecorded(true); setOpen(false); setRetry(null); return; }
+      const existing = recordedCapabilityFeedback(rows, binding);
+      if (existing) { setRecorded(existing.sourceStatus); setOpen(false); setRetry(null); return; }
       const baseline = draft.baselineMinutes.trim(), review = draft.reviewMinutes.trim();
       const baselineMinutes = baseline ? Number(baseline) : null, reviewMinutes = review ? Number(review) : null;
       if (!retry && ((baselineMinutes === null) !== (reviewMinutes === null)
@@ -74,12 +76,12 @@ export function EduPiCapabilityFeedback({ task, workCase }: { task: TeacherTask;
       setRetry(capture);
       const result = await recordTeacherFeedback(capture);
       if (epoch.current !== current) return;
-      const confirmed = currentCapabilityFeedback(await readCapabilityFeedbackRecords(), binding);
+      const confirmed = recordedCapabilityFeedback(await readCapabilityFeedbackRecords(), binding, result.feedbackId);
       if (epoch.current !== current) return;
-      if (!result.current || confirmed?.feedback_id !== result.feedbackId) {
+      if (!result.current || !confirmed) {
         setRetry(null); setPrepared(null); setOpen(false); setMessage("评价状态已变化，请刷新任务。"); return;
       }
-      setRecorded(true); setRetry(null); setOpen(false); setDraft(EMPTY);
+      setRecorded(confirmed.sourceStatus); setRetry(null); setOpen(false); setDraft(EMPTY);
     } catch (error) { if (epoch.current === current) {
       if (capabilityFeedbackMustRefresh(error)) { setRetry(null); setPrepared(null); setOpen(false); setMessage("评价目标已变化，请刷新任务。"); }
       else setMessage("评价尚未核对写入，请重试。");
@@ -89,7 +91,7 @@ export function EduPiCapabilityFeedback({ task, workCase }: { task: TeacherTask;
 
   return <section className="edupi-task-feedback" aria-label="教师评价">
     {!open && !recorded ? <button type="button" disabled={busy} onClick={() => void openForm()}>评价本次草稿</button> : null}
-    {recorded ? <span role="status">已评价</span> : null}
+    {recorded ? <span role="status">{recorded === "unverified" ? "已记录，来源待核对" : "已评价"}</span> : null}
     {open && !retry ? <EduPiUsageVisibility target={{ kind: "capability_work", targetId: binding.workCaseId, expectedRevision: binding.revision }} action="feedback_form_opened" surface="task"><EduPiTeacherValueForm draft={draft} allowUsed={binding.decision === "accept" || binding.decision === "modify"}
       busy={busy} onChange={setDraft} onSubmit={() => void submit()} onCancel={() => { if (!busy) setOpen(false); }} /></EduPiUsageVisibility> : null}
     {open && retry ? <button type="button" disabled={busy} onClick={() => void submit()}>{busy ? "核对中…" : "重试记录"}</button> : null}
