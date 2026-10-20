@@ -3,10 +3,10 @@
   "core_repository": "edupi",
   "core_sdk": { "pi": "1.0.2", "pi_durable": "1.0.2" },
   "core_runtime": {
-    "core_commit": "c9a1d0f3d77aeee4fec20cb2abe8cff3d3440771",
+    "core_commit": "d6698585ec50ed39c3b84593522255d0cdca3afd",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:fa0f6b53eda58b4559e7a1c46fda2d39ae72713c8cddf8b33985c3b703a616ec",
-    "runtime_component_manifest_hash": "sha256:f0f170b77d973d3039ef14e2baed309a7061b0f152b65ee2426beb4914164247",
+    "component_manifest_hash": "sha256:ca886f2ed80a0c43232b5655a760ea3abc15298398494bff220933a610a6dae3",
+    "runtime_component_manifest_hash": "sha256:f719eb80e2206dfdc69bbaccabeea260e43260d2d9fa12e1b3be198dabc3abfd",
     "runtime_schema_hash": "sha256:10adc92ff72370d2cceabc990c2b908960871946749346915da38e5bc38d840f"
   },
   "contract_identities": [
@@ -220,7 +220,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/296",
     "https://github.com/PIGU-PPPgu/edupi/pull/297",
     "https://github.com/PIGU-PPPgu/edupi/pull/298",
-    "https://github.com/PIGU-PPPgu/edupi/pull/299"
+    "https://github.com/PIGU-PPPgu/edupi/pull/299",
+    "https://github.com/PIGU-PPPgu/edupi/pull/300"
   ],
-  "change_note": "Paired to merged Core main c9a1d0f3 including reviewed #299; its tree is identical to source 6117bb9 passed by full Mac CI 39424830485. Darwin filesystem families use internal read-only kernel-name evidence instead of fixed registration numbers, preserving existing root/database/authorization identity and Linux/Windows guards. Core #297/#298 host recall and explicit recipient confirmation remain paired. Bridge v1.1, occurrence v1.2, fixtures and 12 public Bridge commands are unchanged. Desktop wires exact-domain grants, durable captured prompts, reviewed capability feedback and consent-bound local usage with an unknown-result outbox. No cloud receiver or approved policy documents are supplied, so collection stays off by default. G1-G5 Live require explicit enabling; G2-G5 additions are isolated macOS canaries. No external sends or automatic material/DOCX approval."
+  "change_note": "Paired to merged Core main d6698585 including reviewed #300; its tree is identical to source 909b599 passed by full Mac CI 39434072570. Actual HFS+ kernel evidence exposed df JSON's exact hfs display padding; only that one space is normalized. Unknown names, private evidence binding and persistent root/database/authorization identities remain fenced. Core #297/#298 host recall and explicit recipient confirmation remain paired. Bridge v1.1, occurrence v1.2, fixtures and 12 public Bridge commands are unchanged. Desktop wires exact-domain grants, durable captured prompts, reviewed capability feedback and consent-bound local usage with an unknown-result outbox. No cloud receiver or approved policy documents are supplied, so collection stays off by default. G1-G5 Live require explicit enabling; G2-G5 additions are isolated macOS canaries. No external sends or automatic material/DOCX approval."
 }
