@@ -10,6 +10,8 @@ Core 精确提交、Runtime schema 和双组件清单以包内兼容清单为准
 
 本轮只构建 macOS Apple Silicon，不构建 Windows/Linux，不公开 Release 或更新七平台 feed；公开版仍为 v0.3.70。
 
+OpenConnector 的 MCP client/server 固定2.3.0，自有 REST 请求不跟随重定向，避免凭据正文或自定义请求头流向其他来源；目录和控制台仍不开放 MCP 服务端入口或外部动作。
+
 仓库级 Rust 审计仍报告 zip 4.6.1 的三项漏洞。该依赖由 Tauri updater 的 Windows 目标引入，官方修复要求 zip 9，现有约束没有兼容锁版修复。Mac 签名前必须通过目标依赖闭包检查，排除 zip 9 以前的版本；此门不等于仓库审计通过，也不证明 Windows 安全。
 
 Live 能力默认关闭，技术测试只在明确隔离的合成根启用。本地用量默认不收集，未配置正式政策和协议时拒绝开启；没有云端上传接线。
