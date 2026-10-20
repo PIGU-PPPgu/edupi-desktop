@@ -12,6 +12,8 @@ Core 精确提交、Runtime schema 和双组件清单以包内兼容清单为准
 
 OpenConnector 的 MCP client/server 固定2.3.0，自有 REST 请求不跟随重定向，避免凭据正文或自定义请求头流向其他来源；目录和控制台仍不开放 MCP 服务端入口或外部动作。
 
+TLS 依赖精确更新为 rustls-webpki0.103.16 与 webpki-root-certs1.0.10。官方解析、版本回归和 Mac normal/build 闭包已核对；不从依赖存在推断历史漏洞已可利用。
+
 仓库级 Rust 审计仍报告 zip 4.6.1 的三项漏洞。该依赖由 Tauri updater 的 Windows 目标引入，官方修复要求 zip 9，现有约束没有兼容锁版修复。Mac 签名前必须通过目标依赖闭包检查，排除 zip 9 以前的版本；此门不等于仓库审计通过，也不证明 Windows 安全。
 
 Live 能力默认关闭，技术测试只在明确隔离的合成根启用。本地用量默认不收集，未配置正式政策和协议时拒绝开启；没有云端上传接线。
