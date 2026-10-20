@@ -1,9 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { EduPiDocxSourceSelection } from "./EduPiDocxSourceSelection";
+import type { EduPiMaterialLessonProposal } from "@/lib/edupi-core-process-client";
 
 type Excerpt = { revision: number; status: "confirmed" | "withdrawn"; content: string; source_kind?: "docx_parsed_fragment" | "teacher_curated" };
-export function EduPiMaterialExcerpt({ materialId, onPreview, canSelectDocx = false }: { materialId: string; onPreview?: () => void; canSelectDocx?: boolean }) {
+export function EduPiMaterialExcerpt({ materialId, onPreview, canSelectDocx = false, chapterProposal, metadataRevision, available = true }: {
+  materialId: string; onPreview?: () => void; canSelectDocx?: boolean; chapterProposal?: EduPiMaterialLessonProposal;
+  metadataRevision?: number; available?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [excerpt, setExcerpt] = useState<Excerpt | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -14,9 +18,9 @@ export function EduPiMaterialExcerpt({ materialId, onPreview, canSelectDocx = fa
   const [refresh, setRefresh] = useState(0);
   const initialized = useRef(false);
   useEffect(() => {
-    if (!open) return;
+    if (!open || !available) return;
     const controller = new AbortController();
-    setBusy(true); setError("");
+    setBusy(true); setLoaded(false); setError("");
     void fetch(`/api/edupi/material-excerpt?materialId=${encodeURIComponent(materialId)}`, { signal: controller.signal, cache: "no-store" }).then(async response => {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "读取失败");
@@ -25,7 +29,7 @@ export function EduPiMaterialExcerpt({ materialId, onPreview, canSelectDocx = fa
       if (!initialized.current) { setContent(result.excerpt?.content || ""); initialized.current = true; }
     }).catch(reason => { if (!controller.signal.aborted) { setError(reason instanceof Error ? reason.message : "读取失败"); setLoaded(false); } }).finally(() => { if (!controller.signal.aborted) setBusy(false); });
     return () => controller.abort();
-  }, [open, materialId, refresh]);
+  }, [open, materialId, metadataRevision, available, refresh]);
   const save = async (decision: "confirm" | "withdraw") => {
     setBusy(true); setError("");
     try {
@@ -43,7 +47,8 @@ export function EduPiMaterialExcerpt({ materialId, onPreview, canSelectDocx = fa
     <label>核对正文<textarea aria-label="备课材料正文" rows={8} value={content} disabled={busy || !loaded} onChange={event => setContent(event.target.value)} /></label>
     {excerpt ? <p role="status">{excerpt.status === "confirmed" ? "已确认" : "已撤回"}{excerpt.source_kind === "docx_parsed_fragment" ? " · 原文片段" : ""} · 版本 {excerpt.revision}</p> : null}
     {loaded && content !== (excerpt?.content || "") ? <p role="status">当前输入未保存</p> : null}
-    {canSelectDocx && loaded ? <EduPiDocxSourceSelection materialId={materialId} expectedRevision={excerpt?.revision || 0} onSettled={confirmed => {
+    {canSelectDocx && loaded && available ? <EduPiDocxSourceSelection materialId={materialId} expectedRevision={excerpt?.revision || 0}
+      chapterProposal={chapterProposal} metadataRevision={metadataRevision} available={available} onSettled={confirmed => {
       if (confirmed) initialized.current = false;
       setRefresh(value => value + 1); window.dispatchEvent(new Event("edupi-preparation-updated"));
     }} /> : null}

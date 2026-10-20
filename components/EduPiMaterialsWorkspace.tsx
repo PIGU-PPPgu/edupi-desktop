@@ -21,6 +21,7 @@ import { materialScheduleUploadProposal } from "@/lib/edupi-material-schedule";
 import type { EduPiMaterialLessonProposal as UploadLessonProposal, EduPiMaterialScheduleProposal as UploadScheduleProposal } from "@/lib/edupi-core-process-client";
 import { EduPiMaterialScheduleProposal } from "./EduPiMaterialScheduleProposal";
 import { fetchDesktopApi } from "@/lib/desktop-native";
+import { currentDocxChapter } from "@/lib/edupi-docx-chapter-suggestion";
 
 const PAGE_SIZE = 8;
 type CalendarPreview = { stagingId: string; sourceHash: string; fingerprint: string;
@@ -77,9 +78,10 @@ function lessonProposalForDisplay(value: unknown, materialId: string, sourceHash
   return proposal;
 }
 
-export function EduPiReceivedLessonProposal({ title, proposal, data, onTask }: {
+export function EduPiReceivedLessonProposal({ title, proposal, data, onTask, onChapterReview }: {
   title: string; proposal: UploadLessonProposal; data: Pick<EducationContract, "teacherMaterials" | "tasks">;
   onTask: (task: TeacherTask) => void;
+  onChapterReview?: (materialId: string) => void;
 }) {
   const material = data.teacherMaterials?.find(item => item.material_id === proposal.material_id);
   const sameMaterialRevision = proposal.status === "proposed" && material?.available !== false
@@ -91,6 +93,8 @@ export function EduPiReceivedLessonProposal({ title, proposal, data, onTask }: {
       <strong>{title}</strong>
       {sameMaterialRevision ? <><p>{proposal.lesson_date} · {material?.subject} · {material?.class_id}</p>
         {task ? <button type="button" onClick={() => onTask(task)}>查看课次任务</button> : null}
+        {onChapterReview && currentDocxChapter(proposal, material.material_id, material.metadata_revision, material.available !== false)
+          ? <button type="button" onClick={() => onChapterReview(material.material_id)}>用于备课</button> : null}
         <small>未启动备课</small></>
         : <p>{proposal.status === "proposed" ? "材料、课表或课次已变化，请重新核对。"
           : LESSON_REASON_LABELS[proposal.reason_code] || "材料或课表待核对"}</p>}
@@ -138,6 +142,7 @@ export function EduPiMaterialsWorkspace({ data, context, query, selectedObjectId
   const calendarIntakeReady = materialIntakeReady && data.capabilities.calendar.enabled && data.capabilities.entityDelete.enabled;
   const documentScheduleReady = materialIntakeReady && (data.capabilities.calendar.enabled || data.capabilities.timetable.enabled);
   const allRows = useMemo(() => buildMaterialRows(data, query), [data, query]);
+  const selectedMaterial = data.teacherMaterials?.find(item => item.material_id === selected?.id);
   const rows = useMemo(() => allRows.filter(item => category === "all" || item.category === category), [allRows, category]);
   useEffect(() => { setPage(0); }, [category, query]);
   useEffect(() => {
@@ -474,13 +479,14 @@ export function EduPiMaterialsWorkspace({ data, context, query, selectedObjectId
         onApplied={() => window.dispatchEvent(new Event("edupi-education-refresh"))}/>
     </section>)}
     {Object.values(receivedLessonProposals).map(({ title, proposal }) => <EduPiReceivedLessonProposal key={`lesson:${proposal.material_id}`}
-      title={title} proposal={proposal} data={data} onTask={onTask} />)}
+      title={title} proposal={proposal} data={data} onTask={onTask}
+      onChapterReview={materialId => onObject(materialObjectId("all", materialId))} />)}
     {generatedError ? <p className="edupi-material-message" role="status">对话生成文件索引暂不可用</p> : null}
     {operationError ? <p role="alert">{operationError}</p> : null}
     {scheduleSourceError && sourceErrorRelevant ? <p className="edupi-material-message is-error" role="alert">{scheduleSourceError} <button type="button" className="native-button" onClick={() => void loadScheduleSources()}>重试</button></p> : null}
     {archivedId ? <p role="status">已移出材料，原文件保留。<button className="native-button" onClick={async () => { const response = await fetch("/api/edupi/artifacts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "restore", artifactId: archivedId }) }); if (response.ok) { setArchivedId(null); window.dispatchEvent(new Event("edupi-artifacts-updated")); } }}>撤销</button></p> : null}
     <section className="edupi-database"><div className="edupi-database__head edupi-material-db-grid"><span>材料</span><span>类型</span><span>学科 / 班级</span><span>来源</span><span>日期</span><span>状态</span></div>{visible.map((item) => <button type="button" className="edupi-database-button-row edupi-material-db-grid" key={item.id} onClick={() => openSelected(item)}><strong>{item.title}</strong><span>{item.type}</span><span>{item.subject}</span><span>{item.source}</span><time>{shortDate(item.date)}</time><span>{item.status}</span></button>)}{visible.length === 0 ? <div className="edupi-database__empty">{materialSource.present || stagedMaterials.length > 0 ? "数据已连接，当前分类暂无材料" : "材料索引尚未接入"}</div> : null}</section>
     <EduPiPagination label="材料分页" page={page} pages={pages} previousDisabled={page === 0} nextDisabled={page >= pages - 1} onPrevious={() => setPage((value) => value - 1)} onNext={() => setPage((value) => value + 1)}/>
-    {selected ? <aside ref={drawerRef} className="edupi-material-drawer" role="dialog" aria-modal="true" aria-label={`${selected.title}材料详情`}><header><div><span>{selected.type}</span><h2>{selected.title}</h2></div><EduPiIconButton type="button" icon="close" label="关闭材料详情" data-autofocus onClick={closeSelected}/></header><div className="edupi-material-drawer__body"><dl className="edupi-material-drawer__facts"><div><dt>状态</dt><dd>{selected.status}</dd></div><div><dt>来源</dt><dd>{selected.source}</dd></div><div><dt>学科 / 班级</dt><dd>{selected.subject}</dd></div><div><dt>日期</dt><dd>{shortDate(selected.date)}</dd></div><div><dt>说明</dt><dd>{selected.summary}</dd></div></dl><EduPiOperationHistory rows={selectedHistory} />{selected.material ? <EduPiMaterialMetadataEditor material={selected.material} classes={classes} onEducation={onEducation} onStartAgent={onStartAgent} /> : null}{selected.deleteKind === "material" ? <EduPiMaterialExcerpt key={selected.id} materialId={selected.id} canSelectDocx={Boolean(selected.filePath?.toLowerCase().endsWith(".docx"))} onPreview={selected.filePath ? () => onOpenFile(selected.filePath!) : undefined} /> : null}{selected.material ? <EduPiMaterialScheduleProposal key={`schedule:${selected.id}`} materialId={selected.id} metadataRevision={selected.material.metadata_revision} onPreview={selected.filePath ? () => onOpenFile(selected.filePath!) : undefined} onApplied={() => window.dispatchEvent(new Event("edupi-education-refresh"))}/> : null}</div><footer>{selected.filePath ? <EduPiIconButton type="button" icon="preview" label="预览材料" onClick={() => onOpenFile(selected.filePath!)}/> : null}{selected.filePath && isTauriDesktop() ? <><EduPiIconButton type="button" icon="open" label="打开文件" onClick={() => void openNative("open")}/><EduPiIconButton type="button" icon="reveal" label="显示所在文件夹" onClick={() => void openNative("reveal")}/></> : null}{selected.task ? <EduPiIconButton type="button" icon="task" label="打开关联任务" onClick={() => onTask(selected.task!)}/> : null}{canDeleteSelected ? <EduPiIconButton type="button" icon="delete" label={deleteBusy ? "正在删除材料" : "删除材料"} className="is-delete" busy={deleteBusy} disabled={deleteBusy} onClick={() => void deleteSelected()}/> : null}{!selected.material ? <EduPiIconButton type="button" icon="agent" label="补充或修订材料" className="is-primary" onClick={openMaterialAgent}/> : null}</footer></aside> : null}
+    {selected ? <aside ref={drawerRef} className="edupi-material-drawer" role="dialog" aria-modal="true" aria-label={`${selected.title}材料详情`}><header><div><span>{selected.type}</span><h2>{selected.title}</h2></div><EduPiIconButton type="button" icon="close" label="关闭材料详情" data-autofocus onClick={closeSelected}/></header><div className="edupi-material-drawer__body"><dl className="edupi-material-drawer__facts"><div><dt>状态</dt><dd>{selected.status}</dd></div><div><dt>来源</dt><dd>{selected.source}</dd></div><div><dt>学科 / 班级</dt><dd>{selected.subject}</dd></div><div><dt>日期</dt><dd>{shortDate(selected.date)}</dd></div><div><dt>说明</dt><dd>{selected.summary}</dd></div></dl><EduPiOperationHistory rows={selectedHistory} />{selected.material ? <EduPiMaterialMetadataEditor material={selected.material} classes={classes} onEducation={onEducation} onStartAgent={onStartAgent} /> : null}{selected.deleteKind === "material" ? <EduPiMaterialExcerpt key={selected.id} materialId={selected.id} canSelectDocx={Boolean(selected.filePath?.toLowerCase().endsWith(".docx"))} metadataRevision={selectedMaterial?.metadata_revision} available={Boolean(selectedMaterial && selectedMaterial.available !== false)} chapterProposal={receivedLessonProposals[selected.id]?.proposal} onPreview={selected.filePath ? () => onOpenFile(selected.filePath!) : undefined} /> : null}{selected.material ? <EduPiMaterialScheduleProposal key={`schedule:${selected.id}`} materialId={selected.id} metadataRevision={selected.material.metadata_revision} onPreview={selected.filePath ? () => onOpenFile(selected.filePath!) : undefined} onApplied={() => window.dispatchEvent(new Event("edupi-education-refresh"))}/> : null}</div><footer>{selected.filePath ? <EduPiIconButton type="button" icon="preview" label="预览材料" onClick={() => onOpenFile(selected.filePath!)}/> : null}{selected.filePath && isTauriDesktop() ? <><EduPiIconButton type="button" icon="open" label="打开文件" onClick={() => void openNative("open")}/><EduPiIconButton type="button" icon="reveal" label="显示所在文件夹" onClick={() => void openNative("reveal")}/></> : null}{selected.task ? <EduPiIconButton type="button" icon="task" label="打开关联任务" onClick={() => onTask(selected.task!)}/> : null}{canDeleteSelected ? <EduPiIconButton type="button" icon="delete" label={deleteBusy ? "正在删除材料" : "删除材料"} className="is-delete" busy={deleteBusy} disabled={deleteBusy} onClick={() => void deleteSelected()}/> : null}{!selected.material ? <EduPiIconButton type="button" icon="agent" label="补充或修订材料" className="is-primary" onClick={openMaterialAgent}/> : null}</footer></aside> : null}
   </main>;
 }

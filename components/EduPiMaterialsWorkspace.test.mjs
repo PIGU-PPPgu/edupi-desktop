@@ -46,3 +46,20 @@ test("held and unavailable DOCX proposals never expose a lesson or adoption cont
     assert.doesNotMatch(html, /查看课次任务|确认采用|自动备课/);
   }
 });
+
+test("the actual ready chapter entry only opens source review for the current material", () => {
+  const chapter = { status: "ready", title: "合成章节", source_spans: [{ path: "source", start: 3, end: 6 }],
+    content_hash: `sha256:${"c".repeat(64)}`, reason_code: null, read_only: true, requires_review: true };
+  const opened = [];
+  const value = { ...proposal, chapter_suggestion: chapter };
+  const tree = EduPiReceivedLessonProposal({ title: "合成教案.docx", proposal: value,
+    data: { teacherMaterials: [material], tasks: [task] }, onTask() { throw new Error("must not prepare"); }, onChapterReview: id => opened.push(id) });
+  const nodes = item => Array.isArray(item) ? item.flatMap(nodes) : item && typeof item === "object" ? [item, ...nodes(item.props?.children)] : [];
+  const button = nodes(tree).find(node => node.type === "button" && node.props.children === "用于备课");
+  assert.ok(button); assert.deepEqual(opened, []); button.props.onClick(); assert.deepEqual(opened, [material.material_id]);
+  for (const data of [{ teacherMaterials: [{ ...material, metadata_revision: 2 }], tasks: [task] },
+    { teacherMaterials: [{ ...material, available: false }], tasks: [task] }]) {
+    const stale = EduPiReceivedLessonProposal({ title: "合成", proposal: value, data, onTask() {}, onChapterReview() { throw new Error("stale"); } });
+    assert.equal(nodes(stale).some(node => node.type === "button" && node.props.children === "用于备课"), false);
+  }
+});

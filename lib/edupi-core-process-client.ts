@@ -36,11 +36,18 @@ export type EduPiMaterialScheduleProposal = { material_id: string; read_only: tr
   | { status: "unavailable"; read_result: null; reason_code: "owner_control_disabled" | "owner_identity_mismatch" | "material_schedule_invalid"
     | "material_schedule_unavailable" | "material_schedule_source_unavailable" | "material_schedule_stale" | "material_schedule_proposal_capacity" }
 );
+export type EduPiMaterialChapterSuggestion =
+  | { status: "ready"; title: string; source_spans: Array<{ path: string; start: number; end: number }>;
+    content_hash: string; reason_code: null; read_only: true; requires_review: true }
+  | { status: "held"; title: null; source_spans: []; content_hash: null; read_only: true; requires_review: true;
+    reason_code: "chapter_required" | "chapter_ambiguous" | "chapter_document_unavailable" | "chapter_capacity" | "chapter_span_unavailable" | "chapter_lesson_unavailable" }
+  | { status: "unavailable"; title: null; source_spans: []; content_hash: null; read_only: true; requires_review: true; reason_code: "chapter_source_unavailable" };
 export type EduPiMaterialLessonProposal = { material_id: string; read_only: true; automatic_prepare: false; external_send: false } & (
   | { status: "proposed"; source_hash: string; metadata_revision: number; lesson_date: string; lesson_date_path: string;
     lesson: { slot_id: string; task_id: string; source_event_date: string; starts_at: string; time_zone: string };
-    basis_hash: string; reason_code: null }
-  | { status: "held" | "unavailable"; lesson: null; reason_code: string }
+    basis_hash: string; reason_code: null; chapter_suggestion?: Exclude<EduPiMaterialChapterSuggestion, { status: "unavailable" }> }
+  | { status: "held"; lesson: null; reason_code: string; chapter_suggestion?: Extract<EduPiMaterialChapterSuggestion, { status: "held" }> }
+  | { status: "unavailable"; lesson: null; reason_code: string; chapter_suggestion?: Extract<EduPiMaterialChapterSuggestion, { status: "unavailable" }> }
 );
 export type EduPiCoreProcessResult<T> = { response: T; bridgeFrame: string; runtimeMetadata: {
   materialScheduleProposal?: EduPiMaterialScheduleProposal;
