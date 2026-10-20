@@ -55,6 +55,14 @@ export type MaterialRecognitionResult = {
   affected_series_refs?: string[];
   calendar_mode?: "full_snapshot" | "delta_upsert" | "delta_cancel";
 };
+
+export function isReadOnlyMaterialSchedule(descriptor: MaterialStagingDescriptor, result: MaterialRecognitionResult): boolean {
+  const extension = path.extname(descriptor.staging_path).toLowerCase();
+  // OCR confidence attests extraction consistency, not visible PDF content or
+  // Core approval. Only the existing non-OCR text formats retain this write path.
+  return result.ocrStatus !== undefined || !(descriptor.kind === "calendar" && extension === ".ics"
+    || descriptor.kind === "word" && [".docx", ".doc"].includes(extension));
+}
 type VerifiedStagedMaterial = { bytes: Buffer; extension: string };
 
 export type RecognitionModelDiagnosticCategory =

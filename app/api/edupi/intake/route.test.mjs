@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { createJiti } from "jiti";
 import { createRequire } from "node:module";
+import crypto from "node:crypto";
+import { pathToFileURL } from "node:url";
 import ts from "typescript";
 
 const { POST } = await createJiti(import.meta.url, { tsconfigPaths: true }).import("./route.ts");
@@ -173,12 +175,12 @@ test("routes PDF and DOCX schedule revisions through a distinct bounded source c
   assert.doesNotMatch(source, /deleteDocument|removedDocumentEvent/);
 });
 
-async function materialRouteFixture(kind, proposal, oldSource = false, lessonProposal = undefined) {
+async function materialRouteFixture(kind, proposal, oldSource = false, lessonProposal = undefined, overrides = {}) {
   const require = createRequire(import.meta.url);
   const source = await readFile(new URL("./route.ts", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const filename = kind === "calendar" ? "schedule.ics" : kind === "pdf" ? "schedule.pdf" : "schedule.docx";
-  const descriptor = { staging_id: `stg_${"1".repeat(32)}`, original_name: filename,
+  const descriptor = overrides.descriptor || { staging_id: `stg_${"1".repeat(32)}`, original_name: filename,
     staging_path: `/synthetic/${filename}`, kind,
     source_hash: `sha256:${"a".repeat(64)}`, expected_size_bytes: 128, source_scope: "desktop_staging" };
   const receipt = { command_type: "intake_material", status: "accepted", applied_ids: [proposal.material_id] };
@@ -209,6 +211,7 @@ async function materialRouteFixture(kind, proposal, oldSource = false, lessonPro
       assert.equal(oldSource, true, "new intake must not call the old automatic document import");
       calls.push(["explicit-document-update"]); return { receipts: [receipt], committed: true, recognition: { eventCount: 1, slotCount: 0 }, scheduleNeedsReview: false, sourceId: "old-document" };
     } },
+    ...overrides.modules,
   };
   const routeModule = { exports: {} };
   new Function("require", "module", "exports", compiled)(name => dependencies[name] || require(name), routeModule, routeModule.exports);
@@ -259,5 +262,122 @@ test("explicit old calendar and document source updates retain the original sync
     assert.equal(response.status, 200);
     assert.equal(calls[0][0], kind === "calendar" ? "explicit-calendar-update" : "explicit-document-update");
     assert.equal((await response.json()).materialReceivedOnly, undefined);
+  }
+});
+
+test("real Core API PDF/image source-null, update, cancellation and replay never adopt arrangements", {
+  skip: !process.env.EDUPI_CORE_ROOT, timeout: 30_000,
+}, async () => {
+  const coreRoot = realpathSync(process.env.EDUPI_CORE_ROOT);
+  const temp = realpathSync(mkdtempSync(join(tmpdir(), "edupi-readonly-material-api-")));
+  const dataRoot = join(temp, "data"), stateDir = join(temp, "state"), edupiHome = join(dataRoot, ".edupi");
+  const environment = { EDUPI_PROJECT_ROOT: dataRoot, EDUPI_DATA_ROOT: dataRoot, EDUPI_DATA_ALLOWED_ROOT: temp,
+    EDUPI_HOME: edupiHome, EDUPI_MEMORY_DIR: join(edupiHome, "memory"), EDUPI_OUTPUT_DIR: join(edupiHome, "output"),
+    EDUPI_LOCK_DIR: join(edupiHome, "locks"), PI_DESKTOP_STATE_DIR: stateDir, EDUPI_CORE_COMMIT: "synthetic-api-regression" };
+  const previous = new Map(Object.keys(environment).map(key => [key, process.env[key]]));
+  Object.assign(process.env, environment);
+  for (const directory of [dataRoot, stateDir, environment.EDUPI_MEMORY_DIR, environment.EDUPI_OUTPUT_DIR, environment.EDUPI_LOCK_DIR]) mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const fromCore = name => import(pathToFileURL(join(coreRoot, "scripts", name)).href);
+  const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
+  let admission;
+  try {
+    const { prepareCoreRuntimeRoot } = await fromCore("core_runtime_root.mjs");
+    const { acquireCoreRuntimeWriterAdmission } = await fromCore("core_runtime_writer_admission.mjs");
+    const { buildCommandEnvelope, handleCommandRequest } = await fromCore("edupi_bridge_command.mjs");
+    const { buildSnapshotForState } = await fromCore("edupi_bridge_snapshot.mjs");
+    const { loadTeacherReviewState } = await fromCore("teacher_review_store.mjs");
+    const { loadEducationIntakeState, readVerifiedEducationMaterial } = await fromCore("education_intake_store.mjs");
+    const { makePdfFixture } = await fromCore("test_material_pdf_fixture.mjs");
+    const staging = await jiti.import("../../../../lib/edupi-material-staging.ts");
+    const flow = await jiti.import("../../../../lib/edupi-material-intake-flow.ts");
+    const documentSync = await jiti.import("../../../../lib/edupi-document-schedule-sync.ts");
+    const { projectCoreCalendarSources } = await jiti.import("../../../../lib/edupi-calendar-sources.ts");
+    admission = await acquireCoreRuntimeWriterAdmission({ root: prepareCoreRuntimeRoot(dataRoot), kind: "legacy_material_schedule_read_test" });
+    const snapshot = () => buildSnapshotForState(loadTeacherReviewState(), { memoryDir: environment.EDUPI_MEMORY_DIR,
+      outputDir: environment.EDUPI_OUTPUT_DIR, educationIntakeState: loadEducationIntakeState() });
+    const commands = [];
+    let requestNumber = 0, stagedNumber = 0, recognitionCalls = 0, cancel = false;
+    const issue = async command => {
+      commands.push(structuredClone(command));
+      const id = `readonly-api-${++requestNumber}`, at = new Date().toISOString();
+      const envelope = buildCommandEnvelope({ contractVersion: command.command_type === "import_calendar" && command.events.some(event => event.source_occurrence_ref) ? "1.2" : "1.1",
+        messageId: id, requestId: id, issuedAt: at, snapshotId: snapshot().snapshot_id, idempotencyKey: id,
+        provenance: [{ ...command.source, source_path: null, observed_at: at, actor: "teacher", parent_ids: [] }],
+        teacherReview: { state: "pending_review", reviewer_id: null, reviewed_at: null, note: null, revision: 0 }, command });
+      const response = await handleCommandRequest({ operation: "command", request_id: id, envelope });
+      assert.equal(response.ok, true, JSON.stringify(response));
+      assert.equal(response.receipt.payload.status, "accepted", JSON.stringify(response.receipt.payload));
+      return { receipt: response.receipt.payload, data: snapshot() };
+    };
+    const sourceId = `document-source-${"8".repeat(32)}`;
+    const original = { event_id: "existing-synthetic-source", source_occurrence_ref: "existing-occurrence", date: "2026-10-22", end_date: null,
+      name: "合成原事项", type: "meeting", confidence: "inferred", notes: null };
+    // Model pre-existing source data through a separate manual control, not an
+    // unverified teacher_file import that would depend on the missing Core guard.
+    await issue({ command_type: "import_calendar", source: { source_id: sourceId, source_kind: "teacher_message", source_hash: null,
+      evidence_ids: ["synthetic-manual-source"] }, events: [original] });
+    commands.length = 0;
+    const before = loadEducationIntakeState().calendar_events;
+    const readSources = async () => ({ sources: projectCoreCalendarSources(loadEducationIntakeState().calendar_events),
+      snapshot: { envelope: {}, payload: snapshot(), roots: {}, occurrenceEvents: loadEducationIntakeState().calendar_events } });
+    const selected = (await readSources()).sources[0];
+    const recognize = async () => {
+      recognitionCalls++;
+      if (cancel) throw new DOMException("cancelled", "AbortError");
+      const candidate = { ...original };
+      delete candidate.source_occurrence_ref;
+      return { events: [candidate, { ...candidate, event_id: "new-candidate", name: "合成新增事项" }], slots: [], ocrStatus: "trusted" };
+    };
+    const modules = {
+      "@/lib/edupi-material-staging": staging,
+      "@/lib/edupi-material-intake-flow": { intakeRecognizedMaterial: input => flow.intakeRecognizedMaterial(input, { recognize, issue }) },
+      "@/lib/edupi-document-schedule-sync": { syncDocumentScheduleFile: input => documentSync.syncDocumentScheduleFile(input, {
+        recognize, issue, readSources, readDeletions: async current => ({ snapshotId: current.snapshot.payload.snapshot_id, deletions: [], history: [], historyTruncated: false }),
+      }) },
+    };
+    const pdfBytes = makePdfFixture(), imageBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jKJkAAAAASUVORK5CYII=", "base64");
+    const stage = (name, bytes, mimeType) => stageMaterialInputs([{ name, bytes, mimeType }], { stateDir, dataRoot, coreRoot,
+      idFactory: () => `stg_${(++stagedNumber).toString(16).padStart(32, "0")}` })[0];
+    const postFor = async descriptor => (await materialRouteFixture(descriptor.kind, { material_id: "synthetic" }, true, undefined, { descriptor, modules })).post;
+    const base = descriptor => ({ kind: "material", stagingId: descriptor.staging_id, materialKind: "other", recognize: true,
+      calendarSourceId: null, calendarSourceFingerprint: null, documentSourceId: null, documentSourceFingerprint: null });
+    const first = stage("synthetic.pdf", pdfBytes, "application/pdf"), firstPost = await postFor(first);
+    const initial = await firstPost(request(base(first)));
+    assert.equal(initial.status, 200); assert.equal((await initial.json()).materialReceivedOnly, true);
+    assert.equal(recognitionCalls, 0, "actual source-null API path does not invoke OCR/model recognition");
+    assert.equal((await firstPost(request(base(first)))).status, 409, "settled staging replay cannot dispatch twice");
+    const updated = stage("revision.pdf", pdfBytes, "application/pdf"), updatePost = await postFor(updated);
+    const updateBody = { ...base(updated), documentSourceId: sourceId, documentSourceFingerprint: selected.fingerprint };
+    const update = await updatePost(request(updateBody));
+    assert.equal(update.status, 200);
+    const updateResult = await update.json();
+    assert.equal(updateResult.documentCommitted, false); assert.equal(updateResult.scheduleNeedsReview, true);
+    assert.equal((await updatePost(request(updateBody))).status, 409, "update reentry does not revive settled staging");
+    cancel = true;
+    const cancelled = stage("cancelled.pdf", pdfBytes, "application/pdf"), cancelledPost = await postFor(cancelled), beforeCancel = commands.length;
+    assert.equal((await cancelledPost(request({ ...base(cancelled), documentSourceId: sourceId, documentSourceFingerprint: selected.fingerprint }))).status, 503);
+    assert.equal(commands.length, beforeCancel);
+    assert.ok(staging.listStagedMaterials().some(item => item.staging_id === cancelled.staging_id));
+    const image = stage("synthetic.png", imageBytes, "image/png"), imagePost = await postFor(image);
+    for (const fields of [{ ocrStatus: "trusted" }, { documentSourceId: sourceId, documentSourceFingerprint: selected.fingerprint }]) {
+      assert.equal((await imagePost(request({ ...base(image), ...fields }))).status, 400);
+    }
+    assert.equal((await imagePost(request(base(image)))).status, 200);
+    assert.equal(commands.filter(command => command.command_type !== "intake_material").length, 0);
+    assert.deepEqual(loadEducationIntakeState().calendar_events, before);
+    const materials = loadEducationIntakeState().materials;
+    assert.equal(materials.length, 3);
+    for (const material of materials) {
+      assert.equal(readVerifiedEducationMaterial(material.material_id).material_id, material.material_id);
+      const bytes = readFileSync(join(dataRoot, material.relative_path));
+      assert.equal(`sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`, material.source_hash);
+    }
+    console.log(JSON.stringify({ case: "real_core_material_api_readonly", source_null_recognition_calls: 0,
+      schedule_write_commands: 0, retained_materials: materials.length, pdf_update_committed: false, cancelled_dispatches: 0,
+      staging_replay_status: 409, staging_reentry_status: 409, external_send: false }));
+  } finally {
+    await admission?.close();
+    for (const [key, value] of previous) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+    rmSync(temp, { recursive: true, force: true });
   }
 });

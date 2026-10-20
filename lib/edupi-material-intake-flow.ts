@@ -1,6 +1,6 @@
 import { issueEducationIntake, type EducationIntakeCommand, type MaterialIntake } from "./edupi-education-intake";
 import type { EduPiMaterialLessonProposal, EduPiMaterialScheduleProposal } from "./edupi-core-process-client";
-import { MaterialRecognitionError, recognizeStagedMaterial, type MaterialRecognitionResult } from "./edupi-material-recognition";
+import { isReadOnlyMaterialSchedule, MaterialRecognitionError, recognizeStagedMaterial, type MaterialRecognitionResult } from "./edupi-material-recognition";
 import type { MaterialStagingDescriptor } from "./edupi-material-staging";
 import { markRecognizedTimetableNote } from "./edupi-recognition-markers";
 import { stableCalendarEventId, stableFileScheduleIssuer, stableOccurrenceCalendarEventId, stableRecognizedCalendarEventId, stableRecognizedTimetableSlotId, stableTimetableSlotId } from "./edupi-schedule-upload";
@@ -56,6 +56,7 @@ export async function intakeRecognizedMaterial(input: FlowInput, dependencies: F
   });
   const issue = dependencies.issue || issueEducationIntake;
   const recognized = input.recognize === false ? { events: [], slots: [] } : await recognize(input.descriptor);
+  const scheduleReadOnly = isReadOnlyMaterialSchedule(input.descriptor, recognized);
   const scheduleSourceId = input.scheduleSourceId || stableFileScheduleIssuer(input.descriptor.original_name, input.descriptor.source_hash);
   const baseEvents = distinctRecognized(recognized.events.map((event) => ({ ...event,
     event_id: event.source_occurrence_ref
@@ -114,8 +115,8 @@ export async function intakeRecognizedMaterial(input: FlowInput, dependencies: F
       source_scope: "desktop_staging",
     },
   }];
-  if (events.length > 0) commands.push({ command_type: "import_calendar", source: scheduleSource, events });
-  if (slots.length > 0) commands.push({
+  if (!scheduleReadOnly && events.length > 0) commands.push({ command_type: "import_calendar", source: scheduleSource, events });
+  if (!scheduleReadOnly && slots.length > 0) commands.push({
     command_type: "import_timetable",
     source: scheduleSource,
     slots: slots.map((slot) => ({ ...slot, notes: markRecognizedTimetableNote(slot.notes) })),
@@ -139,12 +140,12 @@ export async function intakeRecognizedMaterial(input: FlowInput, dependencies: F
     data,
     recognition: { eventCount: events.length, slotCount: slots.length,
       ...(recognized.ocrStatus ? { ocrStatus: recognized.ocrStatus } : {}) },
-    scheduleNeedsReview: receipts.slice(1).some((receipt) => !["accepted", "modified"].includes(String(receipt.status))
+    scheduleNeedsReview: scheduleReadOnly && input.recognize !== false || receipts.slice(1).some((receipt) => !["accepted", "modified"].includes(String(receipt.status))
       || Array.isArray(receipt.rejected_ids) && receipt.rejected_ids.length > 0),
-    calendarOccurrences: events.flatMap((event) => event.source_occurrence_ref
+    calendarOccurrences: scheduleReadOnly ? [] : events.flatMap((event) => event.source_occurrence_ref
       ? [{ sourceOccurrenceRef: event.source_occurrence_ref, eventId: event.event_id }]
       : []),
-    cancelledOccurrenceRefs: [...(recognized.cancelled_occurrence_refs || [])],
+    cancelledOccurrenceRefs: scheduleReadOnly ? [] : [...(recognized.cancelled_occurrence_refs || [])],
     ...(materialScheduleProposal ? { materialScheduleProposal } : {}),
     ...(materialLessonProposal ? { materialLessonProposal } : {}),
   };
