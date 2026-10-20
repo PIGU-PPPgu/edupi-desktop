@@ -156,6 +156,7 @@ export function validateContainedRegularFile({
 
 type ComponentManifestFile = { path?: unknown; sha256?: unknown; size?: unknown };
 type RuntimeDependencyManifest = { name?: unknown; version?: unknown; root?: unknown; files?: unknown };
+const MAX_VERIFIED_FILES = 32_768;
 const verifiedFiles = new Map<string, { stamp: string; hash: string; size: number }>();
 
 function verifyManifestFile(root: string, entry: ComponentManifestFile, seenPaths: Set<string>, allowNodeModulesSymlink = false): void {
@@ -170,12 +171,19 @@ function verifyManifestFile(root: string, entry: ComponentManifestFile, seenPath
   const stat = fs.statSync(resolved, { bigint: true });
   const stamp = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
   const cached = verifiedFiles.get(resolved);
-  if (cached?.stamp === stamp && cached.hash === entryHash && cached.size === entrySize) return;
+  if (cached?.stamp === stamp && cached.hash === entryHash && cached.size === entrySize) {
+    verifiedFiles.delete(resolved);
+    verifiedFiles.set(resolved, cached);
+    return;
+  }
   const bytes = fs.readFileSync(resolved);
   if (entrySize !== bytes.byteLength) throw new Error(`Component size mismatch: ${entryPath}`);
   if (entryHash !== sha256(bytes)) throw new Error(`Component hash mismatch: ${entryPath}`);
-  if (verifiedFiles.size >= 8192) verifiedFiles.clear();
+  verifiedFiles.delete(resolved);
   verifiedFiles.set(resolved, { stamp, hash: entryHash, size: entrySize });
+  if (verifiedFiles.size > MAX_VERIFIED_FILES) {
+    verifiedFiles.delete(verifiedFiles.keys().next().value!);
+  }
 }
 
 function verifyRuntimeDependency(root: string, dependency: RuntimeDependencyManifest, seenPaths: Set<string>, seenPackages: Set<string>): void {
