@@ -283,6 +283,7 @@ export const zhCNLocale: LocalePlugin = {
     "i18n.selectProviderModel": "选择 Provider 或模型",
     "i18n.visibleInPrompt": "在模型提示词中可见，点击以禁用",
     "i18n.hiddenFromPrompt": "在模型提示词中隐藏，点击以启用",
+    "i18n.skillReadOnly": "内置技能只读",
     "i18n.dormant": "休眠",
     "i18n.hiddenButInvocable": "对模型隐藏，仍可手动调用",
     "i18n.skillSearchPlaceholder": "例如 react、testing、deploy",

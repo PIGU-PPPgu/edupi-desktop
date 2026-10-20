@@ -45,19 +45,21 @@ function shortVersion(version?: string): string {
 function Toggle({
   enabled,
   loading,
+  readOnly = false,
   onToggle,
 }: {
   enabled: boolean;
   loading: boolean;
+  readOnly?: boolean;
   onToggle: () => void;
 }) {
   const { t } = useI18n();
   return (
     <button
       onClick={onToggle}
-      disabled={loading}
+      disabled={loading || readOnly}
       title={
-        enabled
+        readOnly ? t("i18n.skillReadOnly") : enabled
           ? t("i18n.visibleInPrompt")
           : t("i18n.hiddenFromPrompt")
       }
@@ -68,7 +70,8 @@ function Toggle({
         borderRadius: 11,
         border: "none",
         padding: 0,
-        cursor: loading ? "wait" : "pointer",
+        cursor: readOnly ? "not-allowed" : loading ? "wait" : "pointer",
+        opacity: readOnly ? 0.55 : 1,
         background: enabled ? "var(--accent)" : "var(--border)",
         position: "relative",
         transition: "background 0.18s",
@@ -166,6 +169,7 @@ function SkillDetail({
           <Toggle
             enabled={enabled}
             loading={toggling}
+            readOnly={skill.readOnly}
             onToggle={() => onToggle(skill)}
           />
         </div>
@@ -180,6 +184,11 @@ function SkillDetail({
             textAlign: "right",
           }}
         >
+          {skill.readOnly && (
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+              {t("i18n.skillReadOnly")}
+            </span>
+          )}
           {!enabled && (
             <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
               {t("i18n.hiddenButInvocable")}
@@ -864,6 +873,7 @@ export function SkillsConfig({
   }, [cwd, loadSkills]);
 
   const toggle = useCallback(async (skill: Skill) => {
+    if (skill.readOnly) return;
     const next = !skill.disableModelInvocation;
     setToggling((s) => new Set(s).add(skill.filePath));
     setSaveError(null);

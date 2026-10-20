@@ -283,6 +283,7 @@ export const enLocale: LocalePlugin = {
     "i18n.selectProviderModel": "Select a provider or model",
     "i18n.visibleInPrompt": "Visible in model prompt — click to disable",
     "i18n.hiddenFromPrompt": "Hidden from model prompt — click to enable",
+    "i18n.skillReadOnly": "Built-in skill is read-only",
     "i18n.dormant": "Dormant",
     "i18n.hiddenButInvocable": "Hidden from model, still manually invocable",
     "i18n.skillSearchPlaceholder": "e.g. react, testing, deploy",

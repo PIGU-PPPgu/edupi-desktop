@@ -41,6 +41,8 @@ export interface SkillInfo {
   filePath: string;
   baseDir: string;
   disableModelInvocation: boolean;
+  /** Files in the configured Core root cannot be edited in place. */
+  readOnly?: boolean;
   sourceInfo: {
     source?: string;
     scope?: string;
