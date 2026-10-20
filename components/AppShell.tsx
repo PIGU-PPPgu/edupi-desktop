@@ -49,6 +49,7 @@ import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { copyText } from "@/lib/clipboard";
 import { useDesktopConnection } from "@/lib/desktop-connection";
+import { DesktopConnectionNotice } from "./DesktopConnectionNotice";
 import { createDesktopCatchUpCoordinator } from "@/lib/desktop-catch-up";
 import { isTauriDesktop, listenDesktopResumeNative, listenQuickEntryNative, setCloseQuitsNative, showMainWindowNative } from "@/lib/desktop-native";
 import { getFileName } from "@/lib/file-paths";
@@ -440,7 +441,7 @@ export function AppShell() {
     }
   }, [desktopMode]);
 
-  const { state: connectionState, retry: retryConnection } = useDesktopConnection(desktopMode);
+  const { state: connectionState, retry: retryConnection, diagnostics: connectionDiagnostics } = useDesktopConnection(desktopMode);
 
   const openEducationModule = useCallback((module: EducationModule = "home") => {
     setEduPiEducationModule(module);
@@ -1509,43 +1510,7 @@ export function AppShell() {
         background: "var(--bg)",
       } as React.CSSProperties}
     >
-      {connectionState === "offline" && (
-        <div
-          role="alert"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 10,
-            flexShrink: 0,
-            padding: "7px 12px",
-            background: "color-mix(in srgb, var(--danger) 14%, var(--bg-panel))",
-            borderBottom: "1px solid color-mix(in srgb, var(--danger) 35%, var(--border))",
-            color: "var(--text)",
-            fontSize: 12,
-            zIndex: 300,
-          }}
-        >
-          <span>{translate("connection.offline")}</span>
-          <button
-            type="button"
-            onClick={retryConnection}
-            style={{
-              height: 24,
-              padding: "0 10px",
-              border: "1px solid var(--border)",
-              borderRadius: 5,
-              background: "var(--bg)",
-              color: "var(--accent)",
-              cursor: "pointer",
-              fontSize: 11,
-              fontWeight: 600,
-            }}
-          >
-            {translate("connection.retry")}
-          </button>
-        </div>
-      )}
+      <DesktopConnectionNotice state={connectionState} retry={retryConnection} diagnostics={connectionDiagnostics} />
       <SafeModeBanner />
       <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
       {/* Mobile overlay backdrop */}
