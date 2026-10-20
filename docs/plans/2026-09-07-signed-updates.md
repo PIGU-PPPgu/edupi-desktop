@@ -1,5 +1,14 @@
 # 自动下载安装
 
+## 2026-10-20 v0.3.74 HFS 实测修复
+
+- 最终 Core 状态取代本节临时 pin 快照：[#300](https://github.com/PIGU-PPPgu/edupi/pull/300) 已正常合并为 `d6698585ec50ed39c3b84593522255d0cdca3afd`，与完整 [Mac CI 39434072570](https://github.com/PIGU-PPPgu/edupi/actions/runs/39434072570) 通过的 `909b599` 树相同；Windows 原生与 retention stress 跳过。Desktop 已改用最终 main 身份；该树的真实 SDK/用量 3/3、强制公开收件人三域 E2、完整合同/打包/提醒 25/25、类型、61 项发布工具及 release:verify 通过。原 `.73` 取消与其他失败记录保留，不以新结果改写旧运行。
+- 当前取代 `.73` 的待签名状态：Desktop [#366](https://github.com/PIGU-PPPgu/edupi-desktop/pull/366) 已正常合并为 `35b8d06e4b011f98ddb6ff965c40b1275e60eef9`，与应用 [CI 39430114634](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39430114634) 通过的 `4b0e89d5` 源码树相同；Rust 审计仍为既有 Windows 目标 `zip 4.6.1` 三项漏洞失败，无豁免。唯一 [`.73` Mac run 39430899748](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/39430899748) 的预检、应用质量和已完成的配对场景通过，但在签名打包前因下述实测缺陷主动取消；Release `418435366` 为 Draft/0 资产，tag 与 target 保持，不重跑或改写。
+- 真实合成 HFS+ 镜像在 macOS 26.5.1/arm64、Node 22.23.1 下，原生 `statfs` 名称为 `hfs`、本机 raw type 为 25，`/bin/df` JSON 却输出精确 `"hfs "`，导致 `c9a1d0f` 的新采证器拒绝合法根。[Apple df 源码](https://raw.githubusercontent.com/apple-oss-distributions/file_cmds/main/df/df.c) 将 Type 列最小宽度设为 4 并使用左对齐格式，支持这一精确单空格填充；不能据数字 25 新增静态类型白名单。
+- Core [#300](https://github.com/PIGU-PPPgu/edupi/pull/300) 的 `909b59977f32c0e90c7bf2af2c77495d2cdffb64` 仅将精确 `"hfs "` 解析为 `hfs`，不通用 trim。两个新增回归先红 0/2，修复后 Darwin 全组 28/28、类型、协议、组件闭包和原 root 检查通过，独立复核无必修发现。在同一真实 HFS+ 卷上同时复现旧采证器拒绝、新采证器接受，根准备/指纹回读、嵌套目录/文件证明和符号链接别名拒绝均通过。镜像已正常卸载并移入废纸篓，64 MiB 尚未永久删除；这不是物理 HFS 磁盘或 App 安装到 HFS 的验收。
+- 当前原分支准备 `.74`，临时配对该受审提交及新 Runtime 组件 `f719eb80…`、Desktop 组件 `ca886f2e…`；Runtime schema 与公开 Bridge 能力不变。[Core Mac CI 39434072570](https://github.com/PIGU-PPPgu/edupi/actions/runs/39434072570) 仍待完成，最终候选必须换成正常合并后的精确 main，再经 Desktop PR/CI 与全新 Mac-only 签名构建。当前没有 `.74` tag、Release、包或安装证据。
+- 用户已当次允许为唯一 `/Applications/EduPi.app` 补辅助功能与录屏授权，系统现要求触控 ID/管理员密码，由用户亲自验证；未重置 TCC、未改其他应用。旧 `.70` 的新进程和系统页状态分别记录，不能把旧开关开启当成当前进程有效获准。安装后的新进程仍须实测。公开 `.70` 与 feed 保持，Windows/Linux 不派发，正式用量文档和云接收端继续缺合同而默认关闭。恢复入口为 `~/edupi-install-checkpoints/v0.3.74/RESUME.md`。
+
 ## 2026-10-20 v0.3.73 最终 Core 配对
 
 - 当前状态取代下方 `.72` 中间快照：Core [#299](https://github.com/PIGU-PPPgu/edupi/pull/299) 已正常合并为 `c9a1d0f3d77aeee4fec20cb2abe8cff3d3440771`，源码树与完整 [Mac CI 39424830485](https://github.com/PIGU-PPPgu/edupi/actions/runs/39424830485) 通过的 `6117bb9` 相同；Windows 原生和 retention stress 跳过。Desktop 沿用原分支准备独立 `.73`，固定该合并提交、Runtime schema `10adc92f…`、Runtime 组件 `f0f170b7…`、Desktop 组件 `fa0f6b53…`；Bridge 12 条公开命令和课次身份不变。当前尚无 `.73` 签名资产或安装结果。
