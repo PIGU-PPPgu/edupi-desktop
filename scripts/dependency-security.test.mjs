@@ -13,7 +13,7 @@ const { getRootDirs } = nextRequire("./utils/get-root-dirs.js");
 
 test("the complete lockfile excludes affected runtime and glob dependency versions", async () => {
   const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
-  const patched = { next: ">=16.3.6", undici: ">=8.10.2", nodemailer: ">=10.0.9", "brace-expansion": "^1.1.21 || ^3.0.9 || >=5.0.12", dompurify: ">=3.4.16", sharp: ">=0.35.5", "@modelcontextprotocol/client": ">=2.2.0" };
+  const patched = { next: ">=16.3.6", undici: ">=8.10.2", nodemailer: ">=10.0.9", "brace-expansion": "^1.1.21 || ^3.0.9 || >=5.0.12", dompurify: ">=3.4.16", sharp: ">=0.35.5", "@modelcontextprotocol/client": ">=2.3.0", "@modelcontextprotocol/server": ">=2.3.0" };
   for (const [location, entry] of Object.entries(lock.packages)) {
     const name = location.split("node_modules/").at(-1);
     assert.notEqual(name, "braces", `${location} restores the unpatched dependency`);
@@ -36,7 +36,7 @@ test("OpenConnector uses the patched MCP client and completes an in-memory tool 
   const connectorRequire = createRequire(entry);
   const clientEntry = connectorRequire.resolve("@modelcontextprotocol/client");
   const installed = JSON.parse(await readFile(path.resolve(path.dirname(clientEntry), "..", "package.json"), "utf8"));
-  assert.equal(installed.version, "2.2.0");
+  assert.equal(installed.version, "2.3.0");
   const { withMcpClient } = await import(new URL("../providers/mcp-client.js", entry));
   const methods = [];
   const endpoint = "https://synthetic-mcp.example.invalid/mcp";
