@@ -86,8 +86,8 @@ export function EduPiDocxSourceSelection({ materialId, expectedRevision, metadat
     finally { if (isCurrent()) { current.controller = null; current.version++; setView(null); setSelected(new Set()); setBusyKey(null); onSettled(confirmed); } }
   };
   return <div className="edupi-docx-source">
-    {chapterReady ? <button type="button" className="native-button" disabled={busy} onClick={() => void read(true)}>查看建议</button> : null}
-    {!chapterReady || message ? <button type="button" className="native-button" disabled={busy || !available} onClick={() => void read()}>{busy ? "处理中…" : "从 DOCX 原文选取"}</button> : null}
+    {chapterReady ? <button type="button" className="native-button" disabled={busy} onClick={() => read(true)}>查看建议</button> : null}
+    {!chapterReady || message ? <button type="button" className="native-button" disabled={busy || !available} onClick={() => read()}>{busy ? "处理中…" : "从 DOCX 原文选取"}</button> : null}
     {message ? <p role="alert">{message}</p> : null}
     {preview?.status === "held" ? <p role="status">原文包含待核对内容，请使用手动核对正文。</p> : null}
     {preview?.status === "ready" ? <>
@@ -100,7 +100,7 @@ export function EduPiDocxSourceSelection({ materialId, expectedRevision, metadat
       </label>)}</div>
       {!currentView?.suggestion && candidates.length > visibleCount ? <button type="button" className="native-button" onClick={() => setVisibleCount(value => value + 40)}>查看更多</button> : null}
       {tooLarge ? <p role="alert">最多选20处，合计不超过16 KB</p> : null}
-      <button type="button" className="native-button" disabled={busy || !spans.length || tooLarge} onClick={() => void confirm()}>确认选中内容</button>
+      <button type="button" className="native-button" disabled={busy || !spans.length || tooLarge} onClick={() => confirm()}>确认选中内容</button>
     </> : null}
   </div>;
 }

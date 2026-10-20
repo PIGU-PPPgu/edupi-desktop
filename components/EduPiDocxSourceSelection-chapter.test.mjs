@@ -66,7 +66,6 @@ async function mount(initial = {}) {
   };
   return { render, calls, settled, metadataReads, setServerMaterials: value => { serverMaterials = value; },
     respond: (i, value, status = 200) => calls[i].resolve(new Response(JSON.stringify(value), { status })),
-    flush: async () => { for (let i = 0; i < 6; i++) await new Promise(resolve => setImmediate(resolve)); },
     unmount: () => slots.forEach(slot => slot?.cleanup?.()) };
 }
 const nodes = tree => Array.isArray(tree) ? tree.flatMap(nodes) : tree && typeof tree === "object" ? [tree, ...nodes(tree.props?.children)] : [];
@@ -79,20 +78,20 @@ test("actual chapter callbacks fetch a fresh preview and preserve nonzero UTF-16
   try {
     let tree = f.render(); assert.equal(f.calls.length, 0);
     assert.ok(button(tree, "查看建议"), "ready chapter must have a review-only entry");
-    button(tree, "查看建议").props.onClick(); await f.flush();
-    button(tree, "查看建议").props.onClick();
+    const read = button(tree, "查看建议").props.onClick();
+    await button(tree, "查看建议").props.onClick();
     assert.equal(f.calls.length, 1); assert.equal(f.calls[0].init?.method, undefined);
-    f.respond(0, { preview: sample.preview }); await f.flush(); tree = f.render();
+    f.respond(0, { preview: sample.preview }); await read; tree = f.render();
     assert.equal(cannotConfirm(tree), false);
     assert.equal(f.metadataReads.length, 1, "the displayed metadata revision must be rechecked against a current server projection");
     assert.equal(f.calls.length, 1, "reading a suggestion must not confirm, create tasks or prepare");
     assert.match(text(tree), /一元一次方程/); assert.doesNotMatch(text(tree), /前缀😀 章节/);
-    button(tree, "确认选中内容").props.onClick(); await f.flush();
-    button(tree, "确认选中内容").props.onClick();
+    const confirm = button(tree, "确认选中内容").props.onClick();
+    await button(tree, "确认选中内容").props.onClick();
     assert.equal(f.calls.length, 2);
     assert.deepEqual(JSON.parse(f.calls[1].init.body), { materialId: "material-A", expectedRevision: 5,
       expectedBasisHash: sample.preview.basis_hash, sourceSpans: sample.spans });
-    f.respond(1, { excerpt: { revision: 6, status: "confirmed" } }); await f.flush();
+    f.respond(1, { excerpt: { revision: 6, status: "confirmed" } }); await confirm;
     assert.deepEqual(f.settled, [true]);
   } finally { f.unmount(); }
 });
@@ -100,14 +99,14 @@ test("actual chapter callbacks fetch a fresh preview and preserve nonzero UTF-16
 test("old-Core manual selection still reads and confirms only the teacher's checked block", async () => {
   const f = await mount({ chapterProposal: undefined });
   try {
-    button(f.render(), "从 DOCX 原文选取").props.onClick(); await f.flush();
-    f.respond(0, { preview: data().preview }); await f.flush();
+    const read = button(f.render(), "从 DOCX 原文选取").props.onClick();
+    f.respond(0, { preview: data().preview }); await read;
     const input = nodes(f.render()).find(node => node.type === "input");
     input.props.onChange({ target: { checked: true } });
-    button(f.render(), "确认选中内容").props.onClick(); await f.flush();
+    const confirm = button(f.render(), "确认选中内容").props.onClick();
     assert.deepEqual(JSON.parse(f.calls[1].init.body).sourceSpans, [{ path, start: 0, end: data().preview.blocks[0].text.length }]);
     assert.equal(f.metadataReads.length, 0);
-    f.respond(1, { error: "stale source" }, 409); await f.flush();
+    f.respond(1, { error: "stale source" }, 409); await confirm;
     assert.deepEqual(f.settled, [false]); assert.ok(cannotConfirm(f.render()));
   } finally { f.unmount(); }
 });
@@ -118,7 +117,8 @@ test("a current server metadata edit or deletion cannot be hidden by an unchange
     const f = await mount();
     try {
       f.setServerMaterials(materials);
-      button(f.render(), "查看建议").props.onClick(); await f.flush(); f.respond(0, { preview: data().preview }); await f.flush();
+      const read = button(f.render(), "查看建议").props.onClick();
+      f.respond(0, { preview: data().preview }); await read;
       assert.ok(cannotConfirm(f.render())); assert.equal(f.calls.length, 1); assert.deepEqual(f.settled, []);
     } finally { f.unmount(); }
   }
@@ -137,8 +137,8 @@ test("actual review callbacks reject foreign or changed preview, content hash an
     const sample = data(); change(sample);
     const f = await mount({ chapterProposal: sample.proposal });
     try {
-      let tree = f.render(); assert.ok(button(tree, "查看建议")); button(tree, "查看建议").props.onClick();
-      await f.flush(); f.respond(0, { preview: sample.preview }); await f.flush(); tree = f.render();
+      let tree = f.render(); assert.ok(button(tree, "查看建议")); const read = button(tree, "查看建议").props.onClick();
+      f.respond(0, { preview: sample.preview }); await read; tree = f.render();
       assert.ok(cannotConfirm(tree)); assert.equal(f.calls.length, 1);
       assert.equal(nodes(tree).some(node => node.props?.role === "alert"), true);
     } finally { f.unmount(); }
@@ -159,12 +159,12 @@ test("held, unavailable, missing old-Core chapter, deleted and metadata-stale ma
 test("a late preview cannot seed a revised or different material, and an unmounted callback cannot confirm", async () => {
   const f = await mount();
   try {
-    button(f.render(), "查看建议").props.onClick(); await f.flush();
+    const readA = button(f.render(), "查看建议").props.onClick();
     const b = data("material-B"); f.render({ materialId: "material-B", chapterProposal: b.proposal });
-    button(f.render(), "查看建议").props.onClick(); await f.flush();
-    f.respond(1, { preview: b.preview }); await f.flush(); let tree = f.render(); assert.equal(cannotConfirm(tree), false);
-    f.respond(0, { preview: data().preview }); await f.flush(); tree = f.render(); assert.equal(cannotConfirm(tree), false);
-    const captured = button(tree, "确认选中内容"); f.unmount(); captured.props.onClick(); await f.flush();
+    const readB = button(f.render(), "查看建议").props.onClick();
+    f.respond(1, { preview: b.preview }); await readB; let tree = f.render(); assert.equal(cannotConfirm(tree), false);
+    f.respond(0, { preview: data().preview }); await readA; tree = f.render(); assert.equal(cannotConfirm(tree), false);
+    const captured = button(tree, "确认选中内容"); f.unmount(); await captured.props.onClick();
     assert.equal(f.calls.length, 2, "no write may start after its material view was disposed");
     assert.deepEqual(f.settled, []);
   } finally { f.unmount(); }
@@ -173,13 +173,13 @@ test("a late preview cannot seed a revised or different material, and an unmount
 test("metadata refresh invalidates a pending preview and a late confirmation cannot settle the next material", async () => {
   const f = await mount();
   try {
-    button(f.render(), "查看建议").props.onClick(); await f.flush();
-    f.render({ metadataRevision: 2 }); f.respond(0, { preview: data().preview }); await f.flush(); assert.ok(cannotConfirm(f.render()));
+    const readA = button(f.render(), "查看建议").props.onClick();
+    f.render({ metadataRevision: 2 }); f.respond(0, { preview: data().preview }); await readA; assert.ok(cannotConfirm(f.render()));
     const b = data("material-B"); f.render({ materialId: "material-B", metadataRevision: 1, chapterProposal: b.proposal });
-    button(f.render(), "查看建议").props.onClick(); await f.flush(); f.respond(1, { preview: b.preview }); await f.flush();
-    button(f.render(), "确认选中内容").props.onClick(); await f.flush();
+    const readB = button(f.render(), "查看建议").props.onClick(); f.respond(1, { preview: b.preview }); await readB;
+    const confirm = button(f.render(), "确认选中内容").props.onClick();
     f.render({ materialId: "material-C", chapterProposal: data("material-C").proposal });
-    f.respond(2, { excerpt: { status: "confirmed", revision: 6 } }); await f.flush();
+    f.respond(2, { excerpt: { status: "confirmed", revision: 6 } }); await confirm;
     assert.deepEqual(f.settled, []);
   } finally { f.unmount(); }
 });
@@ -188,17 +188,46 @@ test("captured confirm callbacks cannot borrow authority after navigating away a
   for (const navigate of [true, false]) {
     const f = await mount();
     try {
-      button(f.render(), "查看建议").props.onClick(); await f.flush(); f.respond(0, { preview: data().preview }); await f.flush();
+      const read = button(f.render(), "查看建议").props.onClick(); f.respond(0, { preview: data().preview }); await read;
       const captured = button(f.render(), "确认选中内容");
       if (navigate) {
         f.render({ materialId: "material-B", chapterProposal: data("material-B").proposal });
         f.render({ materialId: "material-A", chapterProposal: data().proposal });
       } else {
-        button(f.render(), "查看建议").props.onClick(); await f.flush();
-        f.respond(1, { preview: { ...data().preview, basis_hash: hash("new parse basis") } }); await f.flush(); f.render();
+        const reread = button(f.render(), "查看建议").props.onClick();
+        f.respond(1, { preview: { ...data().preview, basis_hash: hash("new parse basis") } }); await reread; f.render();
       }
-      const before = f.calls.length; captured.props.onClick(); await f.flush();
+      const before = f.calls.length; await captured.props.onClick();
       assert.equal(f.calls.length, before, "a stale callback must never submit its old preview basis");
     } finally { f.unmount(); }
+  }
+});
+
+test("a digest finishing after metadata or material navigation cannot seed a stale selection", async () => {
+  const subtle = globalThis.crypto.subtle;
+  const descriptor = Object.getOwnPropertyDescriptor(subtle, "digest");
+  const digest = subtle.digest.bind(subtle);
+  for (const patch of [{ metadataRevision: 2 }, { materialId: "material-B", chapterProposal: data("material-B").proposal }]) {
+    const f = await mount();
+    let release, started;
+    const barrier = new Promise(resolve => { release = resolve; });
+    const digestStarted = new Promise(resolve => { started = resolve; });
+    Object.defineProperty(subtle, "digest", { configurable: true, value: async (...args) => {
+      started(); await barrier; return digest(...args);
+    } });
+    let read;
+    try {
+      read = button(f.render(), "查看建议").props.onClick();
+      f.respond(0, { preview: data().preview }); await digestStarted;
+      assert.ok(cannotConfirm(f.render())); assert.equal(f.metadataReads.length, 0);
+      f.render(patch); release(); await read;
+      assert.ok(cannotConfirm(f.render()), "late hashing cannot authorize a replaced or revised material");
+      assert.equal(f.metadataReads.length, 0, "an aborted read must not fetch a new metadata projection");
+      assert.equal(f.calls.length, 1); assert.deepEqual(f.settled, []);
+    } finally {
+      release(); await read; f.unmount();
+      if (descriptor) Object.defineProperty(subtle, "digest", descriptor);
+      else delete subtle.digest;
+    }
   }
 });
