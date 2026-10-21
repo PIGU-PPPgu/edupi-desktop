@@ -57,6 +57,54 @@ function readToken(file: string): string {
   } finally { fs.closeSync(descriptor); }
 }
 
+/** Host-only summary integrity. Reads an already-published key; never creates,
+ * repairs, rotates or returns the owner-control credential itself. */
+export function deriveExistingMemorySummaryKey(stateDir: string | undefined, dataRoot: string, sessionId: string): Buffer {
+  try {
+    if (!stateDir || !path.isAbsolute(stateDir) || !path.isAbsolute(dataRoot)
+      || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u.test(sessionId)) throw unavailable();
+    const canonicalData = fs.realpathSync(dataRoot), canonicalState = fs.realpathSync(stateDir);
+    if (canonicalData !== path.resolve(dataRoot) || canonicalState !== path.resolve(stateDir)) throw unavailable();
+    const roots = [canonicalData, canonicalState].map(directory => ({ directory, stat: fs.lstatSync(directory) }));
+    for (const { stat } of roots) {
+      if (!stat.isDirectory() || stat.isSymbolicLink() || typeof process.getuid === "function" && stat.uid !== process.getuid()
+        || process.platform !== "win32" && (stat.mode & 0o022) !== 0) throw unavailable();
+    }
+    const directory = path.join(canonicalState, PRIVATE_DIRECTORY), dir = fs.lstatSync(directory);
+    const relative = path.relative(canonicalData, directory);
+    if (relative === "" || relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+      || !dir.isDirectory() || dir.isSymbolicLink() || fs.realpathSync(directory) !== directory
+      || typeof process.getuid === "function" && dir.uid !== process.getuid()
+      || process.platform !== "win32" && (dir.mode & 0o077) !== 0) throw unavailable();
+    const name = crypto.createHash("sha256").update(canonicalData).digest("hex").slice(0, 32);
+    const file = path.join(directory, `${name}.key`), before = fs.lstatSync(file, { bigint: true });
+    if (!before.isFile() || before.isSymbolicLink() || before.nlink !== BigInt(1) || before.size !== BigInt(43)
+      || typeof process.getuid === "function" && before.uid !== BigInt(process.getuid())
+      || process.platform !== "win32" && (before.mode & BigInt(0o077)) !== BigInt(0)) throw unavailable();
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | NOFOLLOW);
+    try {
+      const opened = fs.fstatSync(fd, { bigint: true });
+      const fields = ["dev", "ino", "size", "mtimeNs", "ctimeNs", "nlink", "mode", "uid"] as const;
+      if (!opened.isFile() || fields.some(field => opened[field] !== before[field])) throw unavailable();
+      const value = fs.readFileSync(fd, "ascii"), after = fs.fstatSync(fd, { bigint: true }), published = fs.lstatSync(file, { bigint: true });
+      if (fields.some(field => after[field] !== before[field] || published[field] !== before[field])
+        || !published.isFile() || published.isSymbolicLink() || fs.realpathSync(file) !== file
+        || !TOKEN.test(value) || Buffer.from(value, "base64url").length !== 32
+        || Buffer.from(value, "base64url").toString("base64url") !== value) throw unavailable();
+      const currentDir = fs.lstatSync(directory);
+      if (!currentDir.isDirectory() || currentDir.dev !== dir.dev || currentDir.ino !== dir.ino || currentDir.isSymbolicLink()
+        || currentDir.mode !== dir.mode || currentDir.uid !== dir.uid || fs.realpathSync(directory) !== directory
+        || roots.some(({ directory: root, stat }) => {
+          const current = fs.lstatSync(root);
+          return !current.isDirectory() || current.isSymbolicLink() || fs.realpathSync(root) !== root || current.dev !== stat.dev
+            || current.ino !== stat.ino || current.mode !== stat.mode || current.uid !== stat.uid;
+        })) throw unavailable();
+      return crypto.createHmac("sha256", Buffer.from(value, "base64url"))
+        .update("edupi.desktop.memory-summary.integrity.v1\0").update(JSON.stringify([canonicalData, sessionId])).digest();
+    } finally { fs.closeSync(fd); }
+  } catch { throw unavailable(); }
+}
+
 export function loadOwnerControlToken(stateDir: string | undefined, dataRoot: string): string {
   if (!stateDir || !path.isAbsolute(dataRoot)) throw unavailable();
   try {
