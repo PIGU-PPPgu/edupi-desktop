@@ -492,10 +492,7 @@ html.dark .edupi-teacher-shell {
 .edupi-object-empty { padding: 14px 10px; color: var(--ep-muted); font-size: 12px; }
 .edupi-object-person { display: block; margin: 2px 0; border-radius: 7px; }
 .edupi-object-person > summary { display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 7px; cursor: pointer; list-style: none; }
-.edupi-object-person > summary::-webkit-details-marker { display: none; }
-.edupi-object-person > summary::after { margin-left: auto; color: var(--ep-dim); content: "＋"; font-size: 12px; }
 .edupi-object-person[open] > summary { background: var(--ep-surface); }
-.edupi-object-person[open] > summary::after { content: "－"; }
 .edupi-object-person > summary > span { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: var(--ep-blue-soft); color: var(--ep-blue); font-size: 12px; }
 .edupi-object-person__detail { display: flex; margin: 0 8px 8px 47px; padding: 8px 0 2px; flex-direction: column; gap: 5px; border-top: 1px solid var(--ep-border); }
 .edupi-object-person__detail p { margin: 0; color: var(--ep-muted); font-size: 10px; line-height: 1.5; }
@@ -879,7 +876,6 @@ html.dark .edupi-teacher-shell {
 .edupi-teaching-home-columns details:last-child,
 .edupi-teaching-home-columns > section > button:last-child { border-bottom: 0; }
 .edupi-teaching-home-columns summary { display: grid; min-height: 54px; gap: 4px; padding: 9px 12px; cursor: pointer; list-style: none; }
-.edupi-teaching-home-columns summary::-webkit-details-marker { display: none; }
 .edupi-teaching-home-columns summary strong,
 .edupi-teaching-home-columns > section > button strong { font-size: 11px; }
 .edupi-teaching-home-columns summary span,
@@ -1034,7 +1030,6 @@ html.dark .edupi-teacher-shell {
 .edupi-database-row { border-bottom: 1px solid var(--ep-border); }
 .edupi-database-row:last-child { border-bottom: 0; }
 .edupi-database-row > summary { min-height: 58px; cursor: pointer; list-style: none; color: var(--ep-muted); font-size: 11px; }
-.edupi-database-row > summary::-webkit-details-marker { display: none; }
 .edupi-database-row > summary:hover { background: color-mix(in srgb, var(--ep-surface-soft) 70%, transparent); }
 .edupi-database-row[open] > summary { background: var(--ep-blue-soft); }
 .edupi-database-row > summary strong { overflow: hidden; color: var(--ep-text); font-size: 12px; font-weight: 550; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
@@ -1524,37 +1519,6 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-knowledge-row { display: block; min-height: 82px; border-bottom: 1px solid var(--ep-border); }
 .edupi-knowledge-row:last-child { border-bottom: 0; }
 .edupi-knowledge-row > summary { display: grid; min-height: 82px; grid-template-columns: minmax(145px, .75fr) minmax(200px, 1.25fr) minmax(150px, .8fr) auto; align-items: center; gap: 14px; padding: 12px 14px; cursor: pointer; list-style: none; }
-.edupi-knowledge-row > summary::after { grid-column: 4; grid-row: 1; }
-.edupi-knowledge-row > summary::-webkit-details-marker,
-.edupi-note-list > details > summary::-webkit-details-marker,
-.edupi-student-focus-list > details > summary::-webkit-details-marker,
-.edupi-family-list > details > summary::-webkit-details-marker,
-.edupi-student-records > details > summary::-webkit-details-marker,
-.edupi-memory-list > details > summary::-webkit-details-marker,
-.edupi-insight-list > details > summary::-webkit-details-marker,
-.edupi-signal-list > details > summary::-webkit-details-marker,
-.edupi-brewing-list > details > summary::-webkit-details-marker,
-.edupi-growth-themes > div > details > summary::-webkit-details-marker { display: none; }
-.edupi-knowledge-row > summary::after,
-.edupi-note-list > details > summary::after,
-.edupi-student-focus-list > details > summary::after,
-.edupi-family-list > details > summary::after,
-.edupi-student-records > details > summary::after,
-.edupi-memory-list > details > summary::after,
-.edupi-insight-list > details > summary::after,
-.edupi-signal-list > details > summary::after,
-.edupi-brewing-list > details > summary::after,
-.edupi-growth-themes > div > details > summary::after { align-self: center; margin-left: auto; color: var(--ep-dim); content: "›"; font-size: 15px; transition: transform .15s ease; }
-.edupi-knowledge-row[open] > summary::after,
-.edupi-note-list > details[open] > summary::after,
-.edupi-student-focus-list > details[open] > summary::after,
-.edupi-family-list > details[open] > summary::after,
-.edupi-student-records > details[open] > summary::after,
-.edupi-memory-list > details[open] > summary::after,
-.edupi-insight-list > details[open] > summary::after,
-.edupi-signal-list > details[open] > summary::after,
-.edupi-brewing-list > details[open] > summary::after,
-.edupi-growth-themes > div > details[open] > summary::after { transform: rotate(90deg); }
 .edupi-knowledge-row > summary > div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 .edupi-knowledge-row > summary > div span { color: var(--ep-muted); font-size: 10px; }
 .edupi-knowledge-row > summary > div strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
@@ -2287,7 +2251,6 @@ details[open] > .edupi-disclosure-detail { animation: edupi-expand-in .17s ease-
   .edupi-workflow-strip li:nth-child(-n + 2) { border-bottom: 1px solid var(--ep-border); }
   .edupi-domain-roster { grid-template-columns: 1fr; }
   .edupi-knowledge-row > summary { grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
-  .edupi-knowledge-row > summary::after { grid-column: 2; grid-row: 1; }
   .edupi-knowledge-row > summary > p,
   .edupi-knowledge-row > summary > small { grid-column: 1 / -1; }
   .edupi-note-list > details > summary { align-items: flex-start; flex-direction: column; gap: 5px; }

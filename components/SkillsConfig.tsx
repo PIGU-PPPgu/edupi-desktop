@@ -1213,7 +1213,10 @@ export function SkillsConfig({
                           {activeSkills.map(renderSkillRow)}
                           {dormantSkills.length > 0 && (
                             <>
-                              <div
+                              <button
+                                type="button"
+                                className="edupi-dormant-skills-trigger"
+                                aria-expanded={dormantOpen}
                                 onClick={() =>
                                   setDormantGroupsOpen((current) => ({
                                     ...current,
@@ -1224,7 +1227,12 @@ export function SkillsConfig({
                                   display: "flex",
                                   alignItems: "center",
                                   gap: 5,
+                                  width: "100%",
                                   padding: "4px 8px 3px",
+                                  border: "none",
+                                  background: "transparent",
+                                  textAlign: "left",
+                                  fontFamily: "inherit",
                                   fontSize: 10,
                                   fontWeight: 600,
                                   color: "var(--text-dim)",
@@ -1234,11 +1242,9 @@ export function SkillsConfig({
                                   userSelect: "none",
                                 }}
                               >
-                                <span style={{ fontSize: 8 }}>
-                                  {dormantOpen ? "▾" : "▸"}
-                                </span>
+                                <span className="edupi-disclosure-icon" aria-hidden="true" />
                                 {t("i18n.dormant")} ({dormantSkills.length})
-                              </div>
+                              </button>
                               {dormantOpen && dormantSkills.map(renderSkillRow)}
                             </>
                           )}

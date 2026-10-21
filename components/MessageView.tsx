@@ -202,6 +202,7 @@ function CollapsibleUserText({ text, cwd, onOpenFile }: {
       {overflowing && (
         <button
           onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
           style={{
             display: "flex",
             alignItems: "center",
@@ -215,9 +216,7 @@ function CollapsibleUserText({ text, cwd, onOpenFile }: {
             fontSize: 11,
           }}
         >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
-            <polyline points="2 3.5 5 6.5 8 3.5" />
-          </svg>
+          <span className="edupi-disclosure-icon" aria-hidden="true" />
           {expanded ? t("i18n.collapse") : t("i18n.expand")}
         </button>
       )}
@@ -344,20 +343,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {commandName}
                   </span>
-                  <svg
-                    width="11"
-                    height="11"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    style={{ flexShrink: 0, opacity: 0.75, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
-                    aria-hidden="true"
-                  >
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
+                  <span className="edupi-disclosure-icon" aria-hidden="true" />
                 </button>
                 {commandArgs && (
                   <span style={{
@@ -808,6 +794,7 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
     >
       <button
         onClick={() => void toggle()}
+        aria-expanded={expanded}
         style={{
           display: "flex",
           alignItems: "center",
@@ -822,6 +809,7 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
           textAlign: "left",
         }}
       >
+        <span className="edupi-disclosure-icon" aria-hidden="true" />
          <span>{t("i18n.thinking")}</span>
         {duration !== undefined && (
           <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
@@ -873,6 +861,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
       {/* ── Tool call header ── */}
       <button
         onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
         style={{
           display: "flex",
           alignItems: "center",
@@ -897,9 +886,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
         {duration !== undefined && (
           <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
         )}
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
-          <polyline points="2 3.5 5 6.5 8 3.5" />
-        </svg>
+        <span className="edupi-disclosure-icon" aria-hidden="true" />
       </button>
 
       {/* ── Expanded: input args ── */}
