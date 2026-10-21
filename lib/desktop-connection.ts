@@ -17,9 +17,12 @@ export function useDesktopConnection(enabled = true): {
   state: DesktopConnectionState;
   retry: () => void;
   diagnostics: readonly DesktopConnectionProbeRecord[];
+  failureIncident: readonly DesktopConnectionProbeRecord[];
 } {
   const [state, setState] = useState<DesktopConnectionState>(enabled ? "checking" : "online");
   const [diagnostics, setDiagnostics] = useState<DesktopConnectionProbeRecord[]>([]);
+  const [failureIncident, setFailureIncident] = useState<DesktopConnectionProbeRecord[]>([]);
+  const diagnosticsRef = useRef<DesktopConnectionProbeRecord[]>([]);
   const failuresRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const probeControllerRef = useRef<AbortController | null>(null);
@@ -44,13 +47,18 @@ export function useDesktopConnection(enabled = true): {
     let outcome: DesktopProbeOutcome = "network";
     let httpStatus: number | null = null;
     let instance: DesktopConnectionProbeRecord["instance"] = "unavailable";
-    const record = () => {
+    const record = (captureIncident = false) => {
       const entry: DesktopConnectionProbeRecord = {
         sequence, startedAt, documentStartedAt: performance.timeOrigin,
         durationMs: Math.max(0, Math.round((performance.now() - started) * 10) / 10),
         visibility, settledVisibility: document.visibilityState, outcome, httpStatus, instance,
       };
-      setDiagnostics(previous => [...previous, entry].slice(-MAX_PROBE_RECORDS));
+      const recent = [...diagnosticsRef.current, entry].slice(-MAX_PROBE_RECORDS);
+      diagnosticsRef.current = recent;
+      setDiagnostics(recent);
+      // Freeze the probes that actually crossed the offline threshold. Later
+      // failures and healthy polling must not erase that incident's evidence.
+      if (captureIncident) setFailureIncident(recent);
     };
     const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, 4_000);
     try {
@@ -75,8 +83,8 @@ export function useDesktopConnection(enabled = true): {
     } catch {
       if (stoppedRef.current || probeControllerRef.current !== controller) return null;
       if (timedOut) outcome = "timeout";
-      record();
       failuresRef.current += 1;
+      record(failuresRef.current === OFFLINE_THRESHOLD);
       if (failuresRef.current >= OFFLINE_THRESHOLD) {
         setState("offline");
       } else {
@@ -145,6 +153,11 @@ export function useDesktopConnection(enabled = true): {
       stoppedRef.current = true;
       probeSequenceRef.current += 1;
       instanceIdRef.current = null;
+      failuresRef.current = 0;
+      diagnosticsRef.current = [];
+      setDiagnostics([]);
+      setFailureIncident([]);
+      setState("online");
       return;
     }
     stoppedRef.current = false;
@@ -168,5 +181,5 @@ export function useDesktopConnection(enabled = true): {
     };
   }, [checkNow, enabled]);
 
-  return { state: enabled ? state : "online", retry, diagnostics };
+  return { state: enabled ? state : "online", retry, diagnostics: enabled ? diagnostics : [], failureIncident: enabled ? failureIncident : [] };
 }
