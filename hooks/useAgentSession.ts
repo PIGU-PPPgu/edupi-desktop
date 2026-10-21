@@ -631,9 +631,22 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const acknowledgeSubmittedPrompt = useCallback((key: string, pending: {
     sessionId: string; clientRequestId: string; draftValue: string; message: string;
   }) => {
+    const sourcePending = getDraft(key)?.pendingPrompt;
+    const promotedPending = key.startsWith("new:") && key !== pending.sessionId
+      && activeDraftKeyRef.current === key && sessionIdRef.current === pending.sessionId
+      && sourcePending?.sessionId === pending.sessionId && sourcePending.clientRequestId === pending.clientRequestId
+      && sourcePending.message === pending.message && sourcePending.draftValue === pending.draftValue
+      ? getDraft(pending.sessionId)?.pendingPrompt : undefined;
+    const promoteEditedDraft = promotedPending?.sessionId === pending.sessionId
+      && promotedPending.clientRequestId === pending.clientRequestId
+      && promotedPending.message === pending.message && promotedPending.draftValue === pending.draftValue;
     chatInputRef?.current?.acknowledgeSubmittedMessage?.(key, pending.draftValue,
       pending.message.startsWith("/"), { sessionId: pending.sessionId, clientRequestId: pending.clientRequestId });
     acknowledgePendingPrompt(key, pending.clientRequestId);
+    // The target alias was staged before any newer edit. Carry the retained
+    // source draft forward before React promotes new:<cwd> to this session.
+    const retained = promoteEditedDraft ? getDraft(key) : null;
+    if (retained && !retained.pendingPrompt) setDraft(pending.sessionId, retained);
     refreshPromptRecovery(value => value + 1);
   }, [chatInputRef]);
 
@@ -1776,6 +1789,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             }
             return false;
           }
+          assertCurrentSend(sid);
           previouslyResolved = true;
           acknowledgeSubmittedPrompt(originDraftKey, pending);
           if (sendGeneration === sessionGenerationRef.current && promptRunIdRef.current === promptRunId
