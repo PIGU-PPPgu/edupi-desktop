@@ -277,11 +277,14 @@ jobs:
           EDUPI_CORE_ROOT: ${{ github.workspace }}/.edupi-core-runtime
           EDUPI_MEMORY_RECALL_CORE_ROOT: ${{ github.workspace }}/.edupi-core-runtime
           EDUPI_USAGE_TEST_CORE: ${{ github.workspace }}/.edupi-core-runtime
+          EDUPI_REMINDER_PROOF_CORE_TEST_ROOT: ${{ github.workspace }}/.edupi-core-runtime
+          EDUPI_PREPARATION_TEST_CORE: ${{ github.workspace }}/.edupi-core-runtime
           TMPDIR: ${{ github.workspace }}/.edupi-core-host-test-tmp
         run: |
           mkdir -m 700 "$TMPDIR"
           trap 'test "$TMPDIR" = "$GITHUB_WORKSPACE/.edupi-core-host-test-tmp" && rm -r "$TMPDIR"' EXIT
           node --test lib/edupi-memory-recall-access.test.mjs lib/edupi-teacher-usage-runtime.test.mjs
+          node --test lib/edupi-core-process-client.test.mjs lib/edupi-reminder-notification-proof.test.mjs 'app/api/edupi/tasks/[taskId]/execution/route.test.mjs'
           node scripts/test-edupi-capability-canary-e2.mjs --require-recipient-confirmation
 
       - name: Configure updater public key
