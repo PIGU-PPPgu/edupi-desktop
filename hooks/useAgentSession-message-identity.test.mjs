@@ -9,7 +9,10 @@ const jiti = createJiti(import.meta.url);
 const { emptyMessageHistory, messageHistoryReducer } = await jiti.import("../lib/agent-message-history.ts");
 const { normalizeToolCalls } = await jiti.import("../lib/normalize.ts");
 const compile = code => ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
-const evaluate = (code, context) => new Function(...Object.keys(context), compile(code))(...Object.values(context));
+const evaluate = (code, context) => {
+  const bindings = { reconcilePendingPrompt: async () => {}, promptSubmissionRunIdRef: { current: null }, ...context };
+  return new Function(...Object.keys(bindings), compile(code))(...Object.values(bindings));
+};
 const noop = () => {};
 const user = text => ({ role: "user", content: text, timestamp: 1000 });
 

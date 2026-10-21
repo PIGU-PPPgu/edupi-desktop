@@ -9,8 +9,8 @@ export type CapabilityFeedbackBinding = {
   decision: "accept" | "modify" | "reject" | "hold";
   status: "accepted" | "modified" | "rejected" | "held";
 };
-export type CapabilityFeedbackRecord = { feedback_id?: string; session_id?: string; current?: boolean; source_status?: string;
-  target?: { kind?: string; target_id?: string; revision?: number } };
+export type CapabilityFeedbackRecord = { feedback_id?: string; session_id?: string; current?: boolean; source_status?: string; decision?: string;
+  target?: { kind?: string; target_id?: string; revision?: number; status?: string } };
 
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:@/+~=-]{0,159}$/;
 const HASH = /^sha256:[a-f0-9]{64}$/;
@@ -60,6 +60,19 @@ export async function prepareCapabilityFeedback(binding: CapabilityFeedbackBindi
 export function currentCapabilityFeedback(records: CapabilityFeedbackRecord[], binding: CapabilityFeedbackBinding): CapabilityFeedbackRecord | null {
   return records.find(row => row.current === true && row.source_status === "current" && row.session_id === "desktop-capability-feedback"
     && row.target?.kind === "capability_work" && row.target.target_id === binding.workCaseId && row.target.revision === binding.revision) ?? null;
+}
+
+/** A durable record can await source proof without becoming current evidence. */
+export function recordedCapabilityFeedback(records: CapabilityFeedbackRecord[], binding: CapabilityFeedbackBinding,
+  feedbackId?: string): { record: CapabilityFeedbackRecord; sourceStatus: "current" | "unverified" } | null {
+  const candidates = feedbackId === undefined ? records : records.filter(row => row.feedback_id === feedbackId);
+  const current = currentCapabilityFeedback(candidates, binding);
+  if (current) return { record: current, sourceStatus: "current" };
+  const pending = candidates.find(row => row.current === true && row.source_status === "unverified"
+    && typeof row.feedback_id === "string" && Boolean(row.feedback_id) && row.session_id === "desktop-capability-feedback"
+    && row.decision === binding.decision && row.target?.kind === "capability_work" && row.target.target_id === binding.workCaseId
+    && row.target.revision === binding.revision && row.target.status === binding.status);
+  return pending ? { record: pending, sourceStatus: "unverified" } : null;
 }
 
 export async function readCapabilityFeedbackRecords(): Promise<CapabilityFeedbackRecord[]> {

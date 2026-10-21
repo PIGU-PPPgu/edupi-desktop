@@ -55,6 +55,7 @@ export type MaterialRecognitionResult = {
   affected_series_refs?: string[];
   calendar_mode?: "full_snapshot" | "delta_upsert" | "delta_cancel";
 };
+
 type VerifiedStagedMaterial = { bytes: Buffer; extension: string };
 
 export type RecognitionModelDiagnosticCategory =

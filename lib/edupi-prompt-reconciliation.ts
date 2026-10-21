@@ -17,16 +17,19 @@ function sameText(content: unknown, text: string): boolean {
 }
 
 /** Read-only proof from a Pi custom dispatch marker to its first user entry. */
-export function inspectEduPiPromptSession(entry: EduPiPromptOutboxEntry, filePath: string):
+export function inspectEduPiPromptSession(entry: Pick<EduPiPromptOutboxEntry, "sessionId" | "clientRequestId" | "command">, filePath: string):
   "confirmed" | "marker_only" | "mismatch" | "unknown" {
-  if (entry.command.images?.length) return "unknown";
+  if (entry.command.images?.length || entry.command.streamingBehavior
+    || entry.command.clientRequestId !== entry.clientRequestId) return "unknown";
   const commandHash = `sha256:${createHash("sha256").update(JSON.stringify(entry.command)).digest("hex")}`;
   let rows: Row[];
   try { rows = getSessionEntries(filePath) as Row[]; } catch { return "unknown"; }
   if (rows.length > 100_000) return "unknown";
   const markers = rows.filter(row => row.type === "custom" && row.customType === "edupi_prompt_dispatch_v1"
-    && record(row.data)?.clientRequestId === entry.clientRequestId && record(row.data)?.commandHash === commandHash);
-  if (markers.length !== 1 || typeof markers[0].id !== "string") return "unknown";
+    && record(row.data)?.clientRequestId === entry.clientRequestId);
+  if (markers.length !== 1 || typeof markers[0].id !== "string"
+    || record(markers[0].data)?.sessionId !== entry.sessionId
+    || record(markers[0].data)?.commandHash !== commandHash) return "unknown";
   const markerId = markers[0].id;
   const byId = new Map(rows.filter(row => typeof row.id === "string").map(row => [row.id as string, row]));
   const candidates = rows.filter(row => {
@@ -37,6 +40,7 @@ export function inspectEduPiPromptSession(entry: EduPiPromptOutboxEntry, filePat
       if (parent === markerId) return true;
       seen.add(parent);
       const ancestor = byId.get(parent);
+      if (ancestor?.type === "custom" && ancestor.customType === "edupi_prompt_dispatch_v1") return false;
       if (ancestor?.type === "message" && ancestor.message?.role === "user") return false;
       parent = typeof ancestor?.parentId === "string" ? ancestor.parentId : null;
     }
@@ -44,5 +48,11 @@ export function inspectEduPiPromptSession(entry: EduPiPromptOutboxEntry, filePat
   });
   if (candidates.length === 0) return "marker_only";
   if (candidates.length !== 1 || !sameText(candidates[0].message?.content, entry.command.message)) return "mismatch";
+  const accepted = rows.filter(row => row.type === "custom" && row.customType === "edupi_prompt_accepted_v1"
+    && record(row.data)?.clientRequestId === entry.clientRequestId);
+  if (accepted.length !== 1 || typeof accepted[0].id !== "string"
+    || record(accepted[0].data)?.sessionId !== entry.sessionId
+    || record(accepted[0].data)?.commandHash !== commandHash
+    || record(accepted[0].data)?.userEntryId !== candidates[0].id) return "unknown";
   return "confirmed";
 }

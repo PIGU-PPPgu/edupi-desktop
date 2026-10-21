@@ -3,11 +3,11 @@
   "core_repository": "edupi",
   "core_sdk": { "pi": "1.0.2", "pi_durable": "1.0.2" },
   "core_runtime": {
-    "core_commit": "2fbd3726fc4bab79238f17ffaf9e8d25d14d20ae",
+    "core_commit": "03bbb893bb609eb68513a65cf4fd808ab8aa30ed",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:479a5a1dfd44b6c19a374f866285cb5dfa0c1e5d930c010f2ee83aa6ccd3df59",
-    "runtime_component_manifest_hash": "sha256:75b49fa423582da73bcfa2bb7db5c6b41f946e2a78bb19d2e981f20bb0830268",
-    "runtime_schema_hash": "sha256:10adc92ff72370d2cceabc990c2b908960871946749346915da38e5bc38d840f"
+    "component_manifest_hash": "sha256:126ead4015f5f5bc9745170e694511f1efc680325212953bad934cff598601dc",
+    "runtime_component_manifest_hash": "sha256:c0c044164fbefcdec1b641dbb7a7ab2be2e41657890396c5c4a6641c0d84aa5a",
+    "runtime_schema_hash": "sha256:09752f53de531086201264bfc8c392a43435c799d1b65a87ba223a86b7715c1d"
   },
   "contract_identities": [
     {
@@ -222,7 +222,14 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/298",
     "https://github.com/PIGU-PPPgu/edupi/pull/299",
     "https://github.com/PIGU-PPPgu/edupi/pull/300",
-    "https://github.com/PIGU-PPPgu/edupi/pull/301"
+    "https://github.com/PIGU-PPPgu/edupi/pull/301",
+    "https://github.com/PIGU-PPPgu/edupi/pull/302",
+    "https://github.com/PIGU-PPPgu/edupi/pull/303",
+    "https://github.com/PIGU-PPPgu/edupi/pull/304",
+    "https://github.com/PIGU-PPPgu/edupi/pull/305",
+    "https://github.com/PIGU-PPPgu/edupi/pull/309",
+    "https://github.com/PIGU-PPPgu/edupi/pull/310",
+    "https://github.com/PIGU-PPPgu/edupi/pull/311"
   ],
-  "change_note": "Paired to the fixed merged Core #301 handoff 2fbd3726; its tree is identical to source 9b73bb16 passed by full Mac CI 39440308530. Retired-student text is fenced from broker, legacy memory writes and replayed tool context; a corrupt legacy retry ledger does not block independent internal due work. HFS exact display padding and existing root/database/authorization identities remain fenced. Runtime/Bridge schemas, occurrence v1.2, fixtures and 12 public Bridge commands are unchanged. Desktop wires trusted recall, exact-domain grants, durable captured prompts, explicit recipient confirmation, reviewed feedback and consent-bound local usage. No cloud receiver or approved policy documents are supplied, so collection stays off. G1-G5 Live require explicit enabling; G2-G5 additions are isolated macOS canaries. No external sends or automatic material/DOCX approval. Legacy Feishu unknown settlement and mixed recipients remain unverified, not fixed by this pairing."
+  "change_note": "Fixed pairing to merged Core #311 03bbb893 and feedback #310 c8066d3d. Full Mac CI 39504481691 tested b322a526; its tree equals the merged tree 8fc34936. Runtime schema adds reviewed DOCX chapter suggestions; Desktop rereads current source and metadata and confirms exact UTF-16 spans without automatic preparation. Generic file calendar/timetable writes fail closed; new ICS/DOCX adoption uses current owner read and explicit native confirmation, while PDF/image/OCR/.doc and legacy file update/cancel/pairing/timetable lack adoption authority. Bridge v1.1, occurrence v1.2, fixtures and 12 public Bridge commands remain unchanged. Trusted recall, exact-domain grants, durable captured prompts, explicit recipients, current feedback lineage and consent-bound local usage remain wired. No cloud receiver or approved policy documents are supplied, so collection stays off. Live capabilities require explicit isolated-canary enabling. No external sends or automatic material/DOCX approval. Unmerged Feishu/floor/vision/capsule work and unsupported public commands are not claimed complete."
 }

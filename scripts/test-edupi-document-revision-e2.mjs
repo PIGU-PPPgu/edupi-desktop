@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import JSZip from "jszip";
 import { createJiti } from "jiti";
+import { assertFileScheduleUpdateUnavailable, assertMaterialReceiptOnly, createMaterialScheduleTestClient, snapshotScheduleState } from "./material-schedule-e2-client.mjs";
 
 const configuredCoreRoot = process.env.EDUPI_CORE_ROOT;
 if (typeof configuredCoreRoot !== "string" || !path.isAbsolute(configuredCoreRoot)) {
@@ -13,7 +14,6 @@ if (typeof configuredCoreRoot !== "string" || !path.isAbsolute(configuredCoreRoo
 }
 const coreRoot = fs.realpathSync(configuredCoreRoot);
 const uiFixture = process.env.EDUPI_E2_UI_FIXTURE === "1";
-const duplicateLabelFixture = uiFixture && process.env.EDUPI_E2_UI_DUPLICATE_LABELS === "1";
 const keepArtifacts = process.env.EDUPI_E2_KEEP === "1" || uiFixture;
 const desktopRoot = path.resolve(new URL("..", import.meta.url).pathname);
 const compat = JSON.parse(fs.readFileSync(path.join(desktopRoot, "contracts", "edupi-core-compat.json"), "utf8"));
@@ -67,492 +67,152 @@ async function docx(text) {
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 }
 
-function modelEvent({ date, name, start, end, location, quote, notes }) {
-  return {
-    date,
-    name,
-    type: "meeting",
-    notes,
-    evidence_quote: quote,
-    time_interval: { start: `${date}T${start}+08:00`, end: `${date}T${end}+08:00`, time_zone: "Asia/Shanghai" },
-    location,
-  };
-}
 
 try {
   const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
   const staging = await jiti.import("../lib/edupi-material-staging.ts");
-  const recognition = await jiti.import("../lib/edupi-material-recognition.ts");
-  const sync = await jiti.import("../lib/edupi-document-schedule-sync.ts");
-  const sourceProjection = await jiti.import("../lib/edupi-calendar-sources.ts");
-  const intake = await jiti.import("../lib/edupi-education-intake.ts");
-  const materialFlow = await jiti.import("../lib/edupi-material-intake-flow.ts");
-  const upload = await jiti.import("../lib/edupi-schedule-upload.ts");
-  const entityDelete = await jiti.import("../lib/edupi-entity-delete.ts");
-  const intakeRoute = await jiti.import("../app/api/edupi/intake/route.ts");
-  const pairingRoute = await jiti.import("../app/api/edupi/document-pairings/route.ts");
-  const feedbackRoute = await jiti.import("../app/api/edupi/teacher-feedback/route.ts");
-  const materialScheduleRoute = await jiti.import("../app/api/edupi/material-schedule/route.ts");
-  runtimeSupervisor = await jiti.import("../lib/edupi-runtime-supervisor.ts");
-
-  async function stageAndRecognize(name, text, events, exactBytes = null, cache = false) {
-    const bytes = exactBytes || await docx(text);
-    const descriptor = staging.stageMaterialInputs([{
-      name,
-      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      bytes: new Uint8Array(bytes),
-    }])[0];
-    const output = JSON.stringify({ events, slots: [] });
-    const result = await recognition.recognizeStagedMaterial(descriptor, {
-      runModel: async (input) => {
-        assert.equal(input.text.includes(text.split("\n")[0]), true);
-        return output;
-      },
-      idFactory: () => `model-${descriptor.staging_id}`,
-    });
-    if (cache) recognition.saveRecognitionCache(descriptor, result, { modelOutput: output, sourceText: text });
-    return { descriptor, result, bytes };
-  }
-
-  async function importDocument(descriptor, result, source = null) {
-    return sync.syncDocumentScheduleFile({
-      descriptor,
-      title: descriptor.original_name,
-      materialKind: "other",
-      subject: "行政",
-      classId: "全校",
-      requestedSourceId: source?.sourceId ?? null,
-      expectedSourceFingerprint: source?.fingerprint ?? null,
-    }, { recognize: async () => result });
-  }
-
-  const legacyQuote = "通知：2026年10月18日 15:00-16:00（北京时间）在旧行政楼举行旧版升级会议。";
-  const legacyDocument = await stageAndRecognize("旧版升级安排.docx", legacyQuote, [
-    modelEvent({ date: "2026-10-18", name: "旧版升级会议", start: "15:00", end: "16:00", location: "旧行政楼", quote: legacyQuote, notes: null }),
-  ]);
-  const legacyResult = await materialFlow.intakeRecognizedMaterial({
-    descriptor: legacyDocument.descriptor,
-    materialKind: "other",
-    subject: "行政",
-    classId: "全校",
-  }, { recognize: async () => legacyDocument.result });
-  assert.equal(legacyResult.scheduleNeedsReview, false);
-  let read = await sourceProjection.readCoreCalendarSources();
-  const legacyBefore = read.snapshot.occurrenceEvents.filter((event) => event.name === "旧版升级会议");
-  assert.equal(legacyBefore.length, 1);
-  assert.equal(Object.hasOwn(legacyBefore[0], "source_occurrence_ref"), false);
-  const legacyAdoption = await importDocument(legacyDocument.descriptor, legacyDocument.result);
-  assert.equal(legacyAdoption.committed, false);
-  assert.equal(legacyAdoption.scheduleNeedsReview, true);
-  read = await sourceProjection.readCoreCalendarSources();
-  const legacyAfter = read.snapshot.occurrenceEvents.filter((event) => event.name === "旧版升级会议");
-  assert.equal(legacyAfter.length, 1, "pre-upgrade document replay must hold one adoption conflict instead of duplicating the row");
-  assert.equal(legacyAfter[0].event_id, legacyBefore[0].event_id);
-  assert.equal(legacyAfter[0].state, "held");
-
-  const earlyQuote = "通知：2026年10月16日 08:00-09:00（北京时间）在旧教学楼举行早期公开版会议。";
-  const earlyDocument = await stageAndRecognize("早期公开版安排.docx", earlyQuote, [
-    modelEvent({ date: "2026-10-16", name: "早期公开版会议", start: "08:00", end: "09:00", location: "旧教学楼", quote: earlyQuote, notes: null }),
-  ]);
-  await materialFlow.intakeRecognizedMaterial({
-    descriptor: earlyDocument.descriptor,
-    scheduleSourceId: upload.stableFileScheduleIssuer(earlyDocument.descriptor.original_name),
-    materialKind: "other",
-    subject: "行政",
-    classId: "全校",
-  }, { recognize: async () => earlyDocument.result });
-  const earlyRenamed = await stageAndRecognize("改名后的早期公开版安排.docx", earlyQuote,
-    [modelEvent({ date: "2026-10-16", name: "早期公开版会议", start: "08:00", end: "09:00", location: "旧教学楼", quote: earlyQuote, notes: null })],
-    earlyDocument.bytes);
-  const earlyAdoption = await importDocument(earlyRenamed.descriptor, earlyRenamed.result);
-  assert.equal(earlyAdoption.committed, false);
-  assert.equal(earlyAdoption.scheduleNeedsReview, true);
-  read = await sourceProjection.readCoreCalendarSources();
-  assert.equal(read.snapshot.occurrenceEvents.filter((event) => event.name === "早期公开版会议").length, 1);
-
-  const meetingQuote = "通知：2026年10月20日 09:00-10:00（北京时间）在东楼 203 举行教研会。";
-  const parentQuote = "通知：2026年10月22日 18:00-19:00（北京时间）在报告厅举行家长会。";
-  const initialText = `${meetingQuote}\n${parentQuote}`;
-  const initialEvents = [
-    modelEvent({ date: "2026-10-20", name: "教研会", start: "09:00", end: "10:00", location: "东楼 203", quote: meetingQuote, notes: null }),
-    modelEvent({ date: "2026-10-22", name: "家长会", start: "18:00", end: "19:00", location: "报告厅", quote: parentQuote, notes: null }),
-  ];
-  const initial = await stageAndRecognize("校内安排.docx", initialText, initialEvents);
-  const first = await importDocument(initial.descriptor, initial.result);
-  assert.equal(first.committed, true);
-  assert.equal(first.removedEventIds.length, 0);
-  read = await sourceProjection.readCoreCalendarSources();
-  let documentSource = read.sources.find((source) => source.sourceId === first.sourceId);
-  assert.equal(documentSource.sourceKind, "document");
-  assert.equal(documentSource.eventCount, 2);
-  const originalIds = documentSource.occurrences.map((item) => item.eventId).sort();
-
-  const renamed = await stageAndRecognize("重命名后的校内安排.docx", initialText, initialEvents, initial.bytes);
-  assert.equal(renamed.descriptor.source_hash, initial.descriptor.source_hash);
-  const replay = await importDocument(renamed.descriptor, renamed.result);
-  assert.equal(replay.sourceId, first.sourceId);
-  assert.equal(replay.committed, true);
-  read = await sourceProjection.readCoreCalendarSources();
-  documentSource = read.sources.find((source) => source.sourceId === first.sourceId);
-  assert.deepEqual(documentSource.occurrences.map((item) => item.eventId).sort(), originalIds);
-  assert.equal(documentSource.eventCount, 2);
-
-  const revisedQuote = "通知：2026年10月20日 09:00-10:00（北京时间）在东楼 203 举行教研会，地点已确认。";
-  const revision = await stageAndRecognize("校内安排-修订.docx", revisedQuote, [
-    modelEvent({ date: "2026-10-20", name: "教研会", start: "09:00", end: "10:00", location: "东楼 203", quote: revisedQuote, notes: "地点已确认" }),
-  ]);
-  const beforeRevision = documentSource;
-  const revised = await importDocument(revision.descriptor, revision.result, beforeRevision);
-  assert.equal(revised.committed, true);
-  assert.equal(revised.removedEventIds.length, 0);
-  read = await sourceProjection.readCoreCalendarSources();
-  documentSource = read.sources.find((source) => source.sourceId === first.sourceId);
-  assert.equal(documentSource.eventCount, 2, "an omitted document row must not withdraw an existing occurrence");
-  assert.equal(documentSource.occurrences.find((item) => item.content.name === "家长会") !== undefined, true);
-  assert.equal(documentSource.occurrences.find((item) => item.content.name === "教研会").content.notes, "地点已确认");
-
-  await assert.rejects(importDocument(revision.descriptor, revision.result, beforeRevision),
-    (error) => error?.code === "stale_calendar_source");
-
-  const movedQuote = "通知：2026年10月21日 14:00-15:00（北京时间）在西楼 101 举行教研会。";
-  const moved = await stageAndRecognize("校内安排-再次修订.docx", movedQuote, [
-    modelEvent({ date: "2026-10-21", name: "教研会", start: "14:00", end: "15:00", location: "西楼 101", quote: movedQuote, notes: null }),
-  ]);
-  const held = await importDocument(moved.descriptor, moved.result, documentSource);
-  assert.equal(held.committed, false);
-  assert.equal(held.scheduleNeedsReview, true);
-  read = await sourceProjection.readCoreCalendarSources();
-  documentSource = read.sources.find((source) => source.sourceId === first.sourceId);
-  assert.equal(documentSource.eventCount, 2, "a moved candidate is held instead of duplicated");
-  assert.deepEqual(documentSource.occurrences.map((item) => item.eventId).sort(), originalIds);
-
-  const crossSourceId = `calendar-source-${"9".repeat(32)}`;
-  const crossRef = "ics-cross-format-school-meeting";
-  const crossQuote = "通知：2026年10月25日 10:00-11:00（北京时间）在行政楼 301 举行跨格式校务会。";
-  const crossEvent = {
-    event_id: upload.stableOccurrenceCalendarEventId(crossSourceId, crossRef),
-    date: "2026-10-25",
-    end_date: null,
-    name: "跨格式校务会",
-    type: "meeting",
-    confidence: "teacher_confirmed",
-    notes: null,
-    source_occurrence_ref: crossRef,
-    time_interval: { start: "2026-10-25T10:00+08:00", end: "2026-10-25T11:00+08:00", time_zone: "Asia/Shanghai" },
-    location: "行政楼 301",
+  const metadata = await jiti.import("../lib/edupi-material-metadata.ts");
+  const routes = {
+    "/api/edupi/intake": await jiti.import("../app/api/edupi/intake/route.ts"),
+    "/api/edupi/education": await jiti.import("../app/api/edupi/education/route.ts"),
+    "/api/edupi/document-pairings": await jiti.import("../app/api/edupi/document-pairings/route.ts"),
+    "/api/edupi/material-schedule": await jiti.import("../app/api/edupi/material-schedule/route.ts"),
+    "/api/edupi/teacher-feedback": await jiti.import("../app/api/edupi/teacher-feedback/route.ts"),
   };
-  await intake.issueEducationIntake({ command_type: "import_calendar", source: {
-    source_id: crossSourceId,
-    source_kind: "teacher_file",
-    source_hash: `sha256:${"9".repeat(64)}`,
-    evidence_ids: ["calendar-evidence-cross-format"],
-  }, events: [crossEvent] });
-  read = await sourceProjection.readCoreCalendarSources();
-  const crossSource = read.sources.find((source) => source.sourceId === crossSourceId);
-  const crossDocument = await stageAndRecognize("跨格式校务会.docx", crossQuote, [
-    modelEvent({ date: "2026-10-25", name: "跨格式校务会", start: "10:00", end: "11:00", location: "行政楼 301", quote: crossQuote, notes: null }),
-  ]);
-  await assert.rejects(importDocument(crossDocument.descriptor, crossDocument.result),
-    (error) => error?.code === "calendar_source_selection_required");
-  const crossDedupe = await importDocument(crossDocument.descriptor, crossDocument.result, crossSource);
-  assert.equal(crossDedupe.committed, true);
-  read = await sourceProjection.readCoreCalendarSources();
-  const crossAfter = read.sources.find((source) => source.sourceId === crossSourceId);
-  assert.equal(crossAfter.eventCount, 1);
-  assert.equal(crossAfter.occurrences[0].eventId, crossEvent.event_id);
-  assert.equal(crossAfter.occurrences[0].content.confidence, "teacher_confirmed");
-
-  const repeatedFirstQuote = "通知：2026年11月2日 09:00-10:00（北京时间）在东楼 201 举行同主题研修会。";
-  const repeatedSecondQuote = "通知：2026年11月3日 14:00-15:00（北京时间）在西楼 101 举行同主题研修会。";
-  const repeatedText = `${repeatedFirstQuote}\n${repeatedSecondQuote}`;
-  const repeatedEvents = [
-    modelEvent({ date: "2026-11-02", name: "同主题研修会", start: "09:00", end: "10:00", location: "东楼 201", quote: repeatedFirstQuote, notes: null }),
-    modelEvent({ date: "2026-11-03", name: "同主题研修会", start: "14:00", end: "15:00", location: "西楼 101", quote: repeatedSecondQuote, notes: null }),
-  ];
-  const repeatedDocument = await stageAndRecognize("两场教研会.docx", repeatedText, repeatedEvents);
-  const repeatedImport = await importDocument(repeatedDocument.descriptor, repeatedDocument.result);
-  assert.equal(repeatedImport.committed, true);
-  read = await sourceProjection.readCoreCalendarSources();
-  let repeatedSource = read.sources.find((source) => source.sourceId === repeatedImport.sourceId);
-  assert.equal(repeatedSource.eventCount, 2);
-  assert.equal(new Set(repeatedSource.occurrences.map((occurrence) => occurrence.sourceOccurrenceRef)).size, 2);
-  const repeatedIds = repeatedSource.occurrences.map((occurrence) => occurrence.eventId).sort();
-  const repeatedReplay = await stageAndRecognize("改名后的两场教研会.docx", repeatedText, repeatedEvents, repeatedDocument.bytes);
-  const repeatedReplayResult = await importDocument(repeatedReplay.descriptor, repeatedReplay.result);
-  assert.equal(repeatedReplayResult.committed, true);
-  assert.equal(repeatedReplayResult.sourceId, repeatedSource.sourceId);
-  read = await sourceProjection.readCoreCalendarSources();
-  repeatedSource = read.sources.find((source) => source.sourceId === repeatedImport.sourceId);
-  assert.deepEqual(repeatedSource.occurrences.map((occurrence) => occurrence.eventId).sort(), repeatedIds);
-
-  const repeatedMovedQuote = "通知：2026年11月4日 15:00-16:00（北京时间）在西楼 102 举行同主题研修会。";
-  const repeatedRevision = await stageAndRecognize("两场教研会-修订.docx", `${repeatedFirstQuote}\n${repeatedMovedQuote}`, [
-    repeatedEvents[0],
-    modelEvent({ date: "2026-11-04", name: "同主题研修会", start: "15:00", end: "16:00", location: "西楼 102", quote: repeatedMovedQuote, notes: null }),
-  ]);
-  const repeatedHeld = await importDocument(repeatedRevision.descriptor, repeatedRevision.result, repeatedSource);
-  assert.equal(repeatedHeld.committed, false);
-  assert.equal(repeatedHeld.scheduleNeedsReview, true);
-  read = await sourceProjection.readCoreCalendarSources();
-  repeatedSource = read.sources.find((source) => source.sourceId === repeatedImport.sourceId);
-  assert.equal(repeatedSource.eventCount, 2, "one moved same-name occurrence is held without creating a third event");
-  assert.deepEqual(repeatedSource.occurrences.map((occurrence) => occurrence.eventId).sort(), repeatedIds);
-
-  const duplicateFactQuote = "通知：2026年11月5日 10:00-11:00（北京时间）在行政楼 202 举行重复校务会。";
-  const duplicateFact = modelEvent({ date: "2026-11-05", name: "重复校务会", start: "10:00", end: "11:00", location: "行政楼 202", quote: duplicateFactQuote, notes: null });
-  const duplicateFactDocument = await stageAndRecognize("重复校务会.docx", duplicateFactQuote,
-    [duplicateFact, structuredClone(duplicateFact)]);
-  const duplicateFactImport = await importDocument(duplicateFactDocument.descriptor, duplicateFactDocument.result);
-  assert.equal(duplicateFactImport.committed, true);
-  read = await sourceProjection.readCoreCalendarSources();
-  assert.equal(read.sources.find((source) => source.sourceId === duplicateFactImport.sourceId).eventCount, 1,
-    "an exact duplicate row inside one document is imported once");
-
-  async function postDocument(descriptor, source = null, pairing = null) {
-    const response = await intakeRoute.POST(new Request("http://localhost/api/edupi/intake", {
-      method: "POST",
-      headers: { host: "localhost", "content-type": "application/json", "x-pi-desktop-token": desktopToken },
-      body: JSON.stringify({
-        kind: "material",
-        stagingId: descriptor.staging_id,
-        title: descriptor.original_name,
-        materialKind: "other",
-        subject: "行政",
-        classId: "全校",
-        recognize: true,
-        calendarSourceId: null,
-        calendarSourceFingerprint: null,
-        documentSourceId: source?.sourceId ?? null,
-        documentSourceFingerprint: source?.fingerprint ?? null,
-        documentPairingFingerprint: pairing?.recognitionFingerprint ?? null,
-        documentPairings: pairing?.pairings ?? null,
-      }),
-    }));
+  runtimeSupervisor = await jiti.import("../lib/edupi-runtime-supervisor.ts");
+  const call = async (method, pathname, body) => {
+    const request = new Request("http://localhost" + pathname, { method,
+      headers: { host: "localhost", "x-pi-desktop-token": desktopToken, ...(body ? { "content-type": "application/json" } : {}) },
+      ...(body ? { body: JSON.stringify(body) } : {}) });
+    const response = await routes[new URL(request.url).pathname][method](request);
     return { response, body: await response.json() };
-  }
+  };
+  const client = createMaterialScheduleTestClient(call);
+  const bootstrapped = await call("POST", "/api/edupi/teacher-feedback", { action: "bootstrap" });
+  assert.equal(bootstrapped.response.status, 200, JSON.stringify(bootstrapped.body));
+  const stage = async (name, text) => staging.stageMaterialInputs([{ name,
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", bytes: await docx(text) }])[0];
+  const receive = (descriptor, extra = {}) => call("POST", "/api/edupi/intake", { kind: "material",
+    stagingId: descriptor.staging_id, title: descriptor.original_name, materialKind: "other",
+    subject: "行政", classId: "全校", recognize: true, ...extra });
+  const education = async () => {
+    const result = await call("GET", "/api/edupi/education");
+    assert.equal(result.response.status, 200, JSON.stringify(result.body));
+    return result.body;
+  };
 
-  const bootstrapped = await feedbackRoute.POST(new Request("http://localhost/api/edupi/teacher-feedback", {
-    method: "POST", headers: { host: "localhost", "content-type": "application/json", "x-pi-desktop-token": desktopToken },
-    body: JSON.stringify({ action: "bootstrap" }),
-  }));
-  assert.equal(bootstrapped.status, 200);
-  assert.equal((await bootstrapped.json()).ok, true);
-  const noZoneQuote = "通知：2026年10月27日 12:00-13:00（北京时间）在一号会议室举行待核对会议。";
-  const noZoneDocument = await stageAndRecognize("待核对会议.docx", noZoneQuote, [
-    modelEvent({ date: "2026-10-27", name: "待核对会议", start: "12:00", end: "13:00", location: "一号会议室", quote: noZoneQuote, notes: null }),
-  ], null, true);
-  const noZoneReceived = await postDocument(noZoneDocument.descriptor);
+  const noZone = await stage("待核对会议.docx", "2026年10月27日 12:00-13:00 待核对会议 地点：一号会议室");
+  const noZoneReceived = await receive(noZone);
   assert.equal(noZoneReceived.response.status, 200, JSON.stringify(noZoneReceived.body));
-  assert.equal(noZoneReceived.body.materialReceivedOnly, true);
-  assert.equal(noZoneReceived.body.documentCommitted, undefined);
+  assertMaterialReceiptOnly(noZoneReceived.body);
   assert.equal(noZoneReceived.body.materialScheduleProposal?.status, "held");
-  assert.equal(noZoneReceived.body.materialScheduleProposal?.read_result?.issues?.some(issue => issue.code === "missing_time_zone"), true);
-  const routeQuote = "2026年10月28日 13:00-14:00 路由合同会议 时区：Asia/Shanghai 地点：一号会议室";
-  const routeDocument = await stageAndRecognize("路由合同会议.docx", routeQuote, [
-    modelEvent({ date: "2026-10-28", name: "路由合同会议", start: "13:00", end: "14:00", location: "一号会议室", quote: routeQuote, notes: null }),
-  ], null, true);
-  const routeFirst = await postDocument(routeDocument.descriptor);
-  assert.equal(routeFirst.response.status, 200, JSON.stringify(routeFirst.body));
-  assert.equal(routeFirst.body.materialReceivedOnly, true);
-  assert.equal(routeFirst.body.documentCommitted, undefined);
-  assert.equal(routeFirst.body.materialScheduleProposal?.status, "proposed", JSON.stringify({ proposal: routeFirst.body.materialScheduleProposal }));
-  assert.equal(routeFirst.body.staged.some((item) => item.staging_id === routeDocument.descriptor.staging_id), false);
-  const materialId = routeFirst.body.materialScheduleProposal.material_id;
-  const scheduleRead = await materialScheduleRoute.GET(new Request(`http://localhost/api/edupi/material-schedule?materialId=${materialId}`, {
-    headers: { host: "localhost", "x-pi-desktop-token": desktopToken },
-  }));
-  const scheduleReadBody = await scheduleRead.json();
-  assert.equal(scheduleRead.status, 200, JSON.stringify(scheduleReadBody));
-  assert.equal(scheduleReadBody.result.status, "ready");
-  assert.equal(scheduleReadBody.result.events.length, 1);
-  const source = scheduleReadBody.result.source;
-  const scheduleApply = await materialScheduleRoute.POST(new Request("http://localhost/api/edupi/material-schedule", {
-    method: "POST", headers: { host: "localhost", "content-type": "application/json", "x-pi-desktop-token": desktopToken },
-    body: JSON.stringify({ action: "apply", materialId, expectedSourceHash: source.source_hash,
-      expectedMetadataRevision: source.metadata_revision, expectedParseFingerprint: scheduleReadBody.result.parse_fingerprint,
-      commandId: "synthetic-route-document-adoption", confirm: true }),
-  }));
-  const scheduleApplied = await scheduleApply.json();
-  assert.equal(scheduleApply.status, 200, JSON.stringify(scheduleApplied));
-  assert.equal(scheduleApplied.result.status, "accepted");
-  assert.equal(scheduleApplied.result.applied_ids.length, 1);
-  read = await sourceProjection.readCoreCalendarSources();
-  assert.equal(read.snapshot.payload.education_workspace.calendar.some(item => item.name === "路由合同会议"), true);
+  const noZoneCurrent = await client.read(noZoneReceived.body.receipt.applied_ids[0]);
+  assert.notEqual(noZoneCurrent.status, "ready");
+  assert.ok(noZoneCurrent.issues.length > 0);
+  assert.equal((await education()).calendar.length, 0, "a missing timezone cannot become a date-only imported event");
 
-  const routeBaselineQuote = "通知：2026年11月01日 13:00-14:00（北京时间）在一号会议室举行路由来源更新会议。";
-  const routeBaseline = await stageAndRecognize("路由来源基线.docx", routeBaselineQuote, [
-    modelEvent({ date: "2026-11-01", name: "路由来源更新会议", start: "13:00", end: "14:00", location: "一号会议室", quote: routeBaselineQuote, notes: null }),
-  ]);
-  const seededSource = await importDocument(routeBaseline.descriptor, routeBaseline.result);
-  assert.equal(seededSource.committed, true);
-  read = await sourceProjection.readCoreCalendarSources();
-  const routeSource = read.sources.find((item) => item.sourceId === seededSource.sourceId);
-  assert.ok(routeSource);
-  const routeRevisionQuote = "通知：2026年11月01日 13:00-14:00（北京时间）在一号会议室举行路由来源更新会议，议程已确认。";
-  const routeRevision = await stageAndRecognize("路由合同会议-修订.docx", routeRevisionQuote, [
-    modelEvent({ date: "2026-11-01", name: "路由来源更新会议", start: "13:00", end: "14:00", location: "一号会议室", quote: routeRevisionQuote, notes: "议程已确认" }),
-  ], null, true);
-  const routeUpdated = await postDocument(routeRevision.descriptor, routeSource);
-  assert.equal(routeUpdated.response.status, 200, JSON.stringify(routeUpdated.body));
-  assert.equal(routeUpdated.body.documentCommitted, true);
-  assert.equal(routeUpdated.body.documentSourceId, routeSource.sourceId);
-  read = await sourceProjection.readCoreCalendarSources();
-  const routeSourceAfterUpdate = read.sources.find((item) => item.sourceId === routeSource.sourceId);
-  const routeRevisionReplay = await stageAndRecognize("改名后的路由合同会议-修订.docx", routeRevisionQuote, [
-    modelEvent({ date: "2026-11-01", name: "路由来源更新会议", start: "13:00", end: "14:00", location: "一号会议室", quote: routeRevisionQuote, notes: "议程已确认" }),
-  ], routeRevision.bytes, true);
-  const routeReplayed = await postDocument(routeRevisionReplay.descriptor, routeSourceAfterUpdate);
-  assert.equal(routeReplayed.response.status, 200, JSON.stringify(routeReplayed.body));
-  assert.equal(routeReplayed.body.documentCommitted, true);
-  assert.equal(routeReplayed.body.documentSourceId, routeSource.sourceId);
-  const routeRevisionMaterialId = `material-${routeRevision.descriptor.staging_id.slice("stg_".length)}`;
-  const routeReplayMaterialId = `material-${routeRevisionReplay.descriptor.staging_id.slice("stg_".length)}`;
-  await entityDelete.issueEntityDelete({ kind: "material", id: routeRevisionMaterialId, note: "同字节副本删除测试" });
-  read = await sourceProjection.readCoreCalendarSources();
-  assert.equal(read.sources.some((source) => source.sourceId === routeSource.sourceId), true,
-    "one live material copy must keep its document schedule source visible");
-  await entityDelete.issueEntityDelete({ kind: "material", id: routeReplayMaterialId, note: "全部同字节副本删除测试" });
-  read = await sourceProjection.readCoreCalendarSources();
-  assert.equal(read.sources.some((source) => source.sourceId === routeSource.sourceId), false,
-    "deleting every material copy must hide its document schedule source");
-  const routeDeletionLedger = await entityDelete.readEntityDeletionLedger();
-  const routeRevisionDeletion = routeDeletionLedger.deletions.find((record) => record.kind === "material" && record.id === routeRevisionMaterialId);
-  assert.ok(routeRevisionDeletion);
-  await entityDelete.issueEntityRestore({ kind: "material", id: routeRevisionMaterialId, note: "恢复一份同字节材料",
-    restoreRequestId: entityDelete.entityRestoreRequestId(routeRevisionDeletion) });
-  read = await sourceProjection.readCoreCalendarSources();
-  assert.equal(read.sources.some((source) => source.sourceId === routeSource.sourceId), true,
-    "restoring any exact material copy must restore its document schedule source");
-  const routeAfterRestoreReplay = await stageAndRecognize("恢复后的路由合同会议-修订.docx", routeRevisionQuote, [
-    modelEvent({ date: "2026-11-01", name: "路由来源更新会议", start: "13:00", end: "14:00", location: "一号会议室", quote: routeRevisionQuote, notes: "议程已确认" }),
-  ], routeRevision.bytes, true);
-  const restoredRouteSource = read.sources.find((item) => item.sourceId === routeSource.sourceId);
-  const routeAfterRestore = await postDocument(routeAfterRestoreReplay.descriptor, restoredRouteSource);
-  assert.equal(routeAfterRestore.response.status, 200, JSON.stringify(routeAfterRestore.body));
-  assert.equal(routeAfterRestore.body.documentCommitted, true);
-  assert.equal(routeAfterRestore.body.documentSourceId, routeSource.sourceId,
-    "restored active material evidence must recover the prior source alias");
+  const text = [
+    "2026年10月28日 13:00-14:00 路由合同会议 时区：Asia/Shanghai 地点：一号会议室",
+    "2026年10月30日 16:00-17:00 来源核对会议 时区：Asia/Shanghai 地点：二号会议室",
+  ].join("\n");
+  const descriptor = await stage("校内安排.docx", text);
+  const received = await receive(descriptor);
+  assert.equal(received.response.status, 200, JSON.stringify(received.body));
+  assertMaterialReceiptOnly(received.body);
+  const materialId = received.body.receipt.applied_ids[0];
+  assert.equal(received.body.materialScheduleProposal?.material_id, materialId);
+  assert.equal(received.body.materialScheduleProposal.status, "proposed");
+  assert.equal(fs.existsSync(descriptor.staging_path), false, "staging is settled only after accepted file receipt");
+  assert.equal((await education()).calendar.length, 0);
+  let current = await client.read(materialId);
+  assert.equal(current.events.length, 2);
+  assert.equal(current.source.source_hash, descriptor.source_hash);
+  const cancelBefore = snapshotScheduleState(home);
+  assert.equal((await client.adopt(materialId, "document-cancelled", async () => false)).status, "cancelled");
+  assert.deepEqual(snapshotScheduleState(home), cancelBefore, "cancel does not adopt the proposal");
 
-  const deletionQuote = "通知：2026年10月30日 16:00-17:00（北京时间）在二号会议室举行删除传播会议。";
-  const deletionKeepQuote = "通知：2026年10月31日 09:00-10:00（北京时间）在三号会议室举行保留会议。";
-  const deletionText = `${deletionQuote}\n${deletionKeepQuote}`;
-  const deletionEvents = [
-    modelEvent({ date: "2026-10-30", name: "删除传播会议", start: "16:00", end: "17:00", location: "二号会议室", quote: deletionQuote, notes: null }),
-    modelEvent({ date: "2026-10-31", name: "保留会议", start: "09:00", end: "10:00", location: "三号会议室", quote: deletionKeepQuote, notes: null }),
-  ];
-  const deletionDocument = await stageAndRecognize("删除传播会议.docx", deletionText, deletionEvents);
-  const deletionImport = await importDocument(deletionDocument.descriptor, deletionDocument.result);
-  assert.equal(deletionImport.committed, true);
-  read = await sourceProjection.readCoreCalendarSources();
-  const deletionSource = read.sources.find((source) => source.sourceId === deletionImport.sourceId);
-  const deletionEventId = deletionSource.occurrences.find((occurrence) => occurrence.content.name === "删除传播会议").eventId;
-  await entityDelete.issueEntityDelete({ kind: "calendar", id: deletionEventId, note: "教师删除测试" });
-  read = await sourceProjection.readCoreCalendarSources();
-  const deletionRemainingSource = read.sources.find((source) => source.sourceId === deletionImport.sourceId);
-  assert.equal(deletionRemainingSource.eventCount, 1);
-  const deletionRevisionText = `${deletionText}\n修订文件字节变化，但事项语义不变。`;
-  const deletionRevision = await stageAndRecognize("删除传播会议-修订.docx", deletionRevisionText, deletionEvents);
-  assert.notEqual(deletionRevision.descriptor.source_hash, deletionDocument.descriptor.source_hash);
-  await assert.rejects(importDocument(deletionRevision.descriptor, deletionRevision.result, deletionRemainingSource),
-    (error) => error?.code === "ambiguous_schedule");
-  const deletionLedger = await entityDelete.readEntityDeletionLedger();
-  const deletionRecord = deletionLedger.deletions.find((record) => record.kind === "calendar" && record.id === deletionEventId);
-  assert.ok(deletionRecord);
-  await entityDelete.issueEntityRestore({ kind: "calendar", id: deletionEventId, note: "教师明确恢复测试",
-    restoreRequestId: entityDelete.entityRestoreRequestId(deletionRecord) });
-  read = await sourceProjection.readCoreCalendarSources();
-  const restoredSource = read.sources.find((source) => source.sourceId === deletionImport.sourceId);
-  const afterRestore = await importDocument(deletionRevision.descriptor, deletionRevision.result, restoredSource);
-  assert.equal(afterRestore.committed, true);
-  read = await sourceProjection.readCoreCalendarSources();
-  assert.equal(read.snapshot.occurrenceEvents.filter((event) => event.name === "删除传播会议").length, 1);
-  assert.equal(read.snapshot.payload.education_workspace.calendar.every((event) => event.external_send === false), true);
-  assert.equal(fs.existsSync(path.join(stateDir, "calendar-sources.json")), false);
+  const oldProof = { action: "apply", materialId, expectedSourceHash: current.source.source_hash,
+    expectedMetadataRevision: current.source.metadata_revision, expectedParseFingerprint: current.parse_fingerprint,
+    commandId: "document-old-metadata-proof", confirm: true };
+  const updated = await metadata.updateMaterialMetadata({ materialId, expectedRevision: current.source.metadata_revision,
+    patch: { title: "校内安排已核对" } });
+  assert.equal(updated.revision, current.source.metadata_revision + 1);
+  const revisionBefore = snapshotScheduleState(home);
+  const stale = await call("POST", "/api/edupi/material-schedule", oldProof);
+  assert.equal(stale.response.status, 409, JSON.stringify(stale.body));
+  assert.equal(stale.body.errorCode, "material_schedule_stale");
+  assert.deepEqual(snapshotScheduleState(home), revisionBefore);
+  current = await client.read(materialId);
+  assert.equal(current.source.metadata_revision, updated.revision);
+  assert.notEqual(current.parse_fingerprint, oldProof.expectedParseFingerprint);
+  const adopted = await client.adopt(materialId, "document-confirmed-current-revision", async proposal => {
+    assert.equal(proposal.source.source_hash, descriptor.source_hash);
+    assert.equal(proposal.source.metadata_revision, updated.revision);
+    return true;
+  });
+  assert.equal(adopted.status, "accepted");
+  assert.equal(adopted.applied_ids.length, 2);
+  const adoptedState = snapshotScheduleState(home);
+  const replay = await client.adopt(materialId, "document-confirmed-current-revision", async () => true);
+  assert.equal(replay.replayed, true);
+  assert.deepEqual(snapshotScheduleState(home), adoptedState, "same owner command replay cannot rewrite files");
+  let read = await education();
+  const names = ["路由合同会议", "来源核对会议"];
+  const ids = read.calendar.filter(item => names.includes(item.name)).map(item => item.id).sort();
+  assert.equal(ids.length, 2);
+  const canonical = JSON.parse(fs.readFileSync(path.join(home, "output", "education_intake_state.json"), "utf8"));
+  const canonicalEvents = canonical.calendar_events.filter(item => ids.includes(item.event_id));
+  assert.equal(canonicalEvents.length, ids.length);
+  assert.equal(canonicalEvents.every(item => item.evidence_ids.includes(materialId)), true);
 
-  const pairOldQuotes = duplicateLabelFixture ? [
-    "通知：2026年11月10日 09:00-10:00（北京时间）在东楼 301 举行同名配对会（一年级）。",
-    "通知：2026年11月10日 09:00-10:00（北京时间）在东楼 301 举行同名配对会（二年级）。",
-  ] : [
-    "通知：2026年11月10日 09:00-10:00（北京时间）在东楼 301 举行同名配对会。",
-    "通知：2026年11月11日 14:00-15:00（北京时间）在西楼 302 举行同名配对会。",
-  ];
-  const pairOldEvents = duplicateLabelFixture ? [
-    modelEvent({ date: "2026-11-10", name: "同名配对会", start: "09:00", end: "10:00", location: "东楼 301", quote: pairOldQuotes[0], notes: "一年级" }),
-    modelEvent({ date: "2026-11-10", name: "同名配对会", start: "09:00", end: "10:00", location: "东楼 301", quote: pairOldQuotes[1], notes: "二年级" }),
-  ] : [
-    modelEvent({ date: "2026-11-10", name: "同名配对会", start: "09:00", end: "10:00", location: "东楼 301", quote: pairOldQuotes[0], notes: null }),
-    modelEvent({ date: "2026-11-11", name: "同名配对会", start: "14:00", end: "15:00", location: "西楼 302", quote: pairOldQuotes[1], notes: null }),
-  ];
-  const pairOld = await stageAndRecognize("同名配对会.docx", pairOldQuotes.join("\n"), pairOldEvents, null, true);
-  const pairSeed = await importDocument(pairOld.descriptor, pairOld.result);
-  assert.equal(pairSeed.committed, true);
-  const pairFirst = await postDocument(pairOld.descriptor);
-  assert.equal(pairFirst.response.status, 200, JSON.stringify(pairFirst.body));
-  assert.equal(pairFirst.body.materialReceivedOnly, true);
-  assert.equal(pairFirst.body.documentCommitted, undefined);
-  read = await sourceProjection.readCoreCalendarSources();
-  const pairSource = read.sources.find(source => source.sourceId === pairSeed.sourceId);
-  assert.equal(pairSource.eventCount, 2);
-  const pairOriginalIds = pairSource.occurrences.map(occurrence => occurrence.eventId).sort();
-  const pairNewQuotes = duplicateLabelFixture ? [
-    "通知：2026年11月12日 10:00-11:00（北京时间）在东楼 303 举行同名配对会（一年级修订）。",
-    "通知：2026年11月12日 10:00-11:00（北京时间）在东楼 303 举行同名配对会（二年级修订）。",
-  ] : [
-    "通知：2026年11月12日 10:00-11:00（北京时间）在东楼 303 举行同名配对会。",
-    "通知：2026年11月13日 15:00-16:00（北京时间）在西楼 304 举行同名配对会。",
-  ];
-  const pairNewEvents = duplicateLabelFixture ? [
-    modelEvent({ date: "2026-11-12", name: "同名配对会", start: "10:00", end: "11:00", location: "东楼 303", quote: pairNewQuotes[0], notes: "一年级修订" }),
-    modelEvent({ date: "2026-11-12", name: "同名配对会", start: "10:00", end: "11:00", location: "东楼 303", quote: pairNewQuotes[1], notes: "二年级修订" }),
-  ] : [
-    modelEvent({ date: "2026-11-12", name: "同名配对会", start: "10:00", end: "11:00", location: "东楼 303", quote: pairNewQuotes[0], notes: null }),
-    modelEvent({ date: "2026-11-13", name: "同名配对会", start: "15:00", end: "16:00", location: "西楼 304", quote: pairNewQuotes[1], notes: null }),
-  ];
-  const pairRevised = await stageAndRecognize("同名配对会-修订.docx", pairNewQuotes.join("\n"), pairNewEvents, null, true);
-  const noChoice = await postDocument(pairRevised.descriptor, pairSource);
-  assert.equal(noChoice.response.status, 409);
-  assert.equal(noChoice.body.code, "ambiguous_schedule");
-  const previewResponse = await pairingRoute.POST(new Request("http://localhost/api/edupi/document-pairings", {
-    method: "POST", headers: { host: "localhost", "content-type": "application/json" },
-    body: JSON.stringify({ stagingId: pairRevised.descriptor.staging_id,
-      sourceId: pairSource.sourceId, sourceFingerprint: pairSource.fingerprint }),
-  }));
-  assert.equal(previewResponse.status, 200);
-  const preview = await previewResponse.json();
-  assert.equal(preview.groups.length, 1);
-  assert.equal(preview.groups[0].incoming.length, 2);
-  assert.equal(preview.groups[0].current.length, 2);
-  const pairings = preview.groups[0].incoming.map((incoming, index) => ({
-    incomingVariantRef: incoming.variantRef,
-    currentSourceOccurrenceRef: preview.groups[0].current[1 - index].sourceOccurrenceRef,
-  }));
-  const stalePairing = await postDocument(pairRevised.descriptor, pairSource,
-    { recognitionFingerprint: `sha256:${"f".repeat(64)}`, pairings });
-  assert.equal(stalePairing.response.status, 409);
-  assert.equal(stalePairing.body.code, "stale_calendar_source");
-  if (uiFixture) {
-    console.log(JSON.stringify({ status: "ui_fixture", temporary_root: temporaryRoot, data_root: dataRoot,
-      state_dir: stateDir, source_id: pairSource.sourceId, staging_id: pairRevised.descriptor.staging_id,
-      duplicate_labels: duplicateLabelFixture }));
-  } else {
-    const pairUpdated = await postDocument(pairRevised.descriptor, pairSource,
-      { recognitionFingerprint: preview.recognitionFingerprint, pairings });
-    assert.equal(pairUpdated.response.status, 200, JSON.stringify(pairUpdated.body));
-    assert.equal(pairUpdated.body.documentCommitted, false, "changed dates still require Core conflict review");
-    read = await sourceProjection.readCoreCalendarSources();
-    const pairedSource = read.sources.find(source => source.sourceId === pairSource.sourceId);
-    assert.equal(pairedSource.eventCount, 2, "teacher pairing must not create duplicate schedule rows");
-    assert.deepEqual(pairedSource.occurrences.map(occurrence => occurrence.eventId).sort(), pairOriginalIds);
-
-    console.log(JSON.stringify({ status: "passed", source_id: first.sourceId, exact_replay: true, additive_omission: true,
-    stale_cas_rejected: true, moved_candidate_held: true, cross_format_dedupe: true, legacy_adoption_held: true,
-    filename_issuer_adoption: true,
-    repeated_name_occurrences: true, exact_in_document_dedupe: true,
-    route_material_only: true, route_proposal_adoption: true, route_source_update: true,
-    explicit_source_replay: true, material_delete_restore_propagation: true,
-    deletion_reupload_blocked: true, explicit_restore: true, multi_item_pairing_preview: true,
-      current_occurrences: documentSource.eventCount, external_send: false }));
+  const revision = await stage("校内安排-修订.docx", text.replace("2026年10月28日", "2026年10月29日"));
+  const source = { documentSourceId: "document-source-" + "a".repeat(32), documentSourceFingerprint: "sha256:" + "b".repeat(64) };
+  const pairing = { documentPairingFingerprint: "sha256:" + "c".repeat(64),
+    documentPairings: [{ incomingVariantRef: "document-occurrence-" + "a".repeat(32) + "-" + "b".repeat(32),
+      currentSourceOccurrenceRef: "document-ref-1" }] };
+  for (const extra of [source, { ...source, ...pairing }]) {
+    const before = snapshotScheduleState(home);
+    assertFileScheduleUpdateUnavailable(await receive(revision, extra));
+    assert.deepEqual(snapshotScheduleState(home), before, "unsupported source updates and pairings cannot mutate canonical/deletion state");
+    assert.equal(fs.existsSync(revision.staging_path), true);
   }
+  const pairingBefore = snapshotScheduleState(home);
+  assertFileScheduleUpdateUnavailable(await call("POST", "/api/edupi/document-pairings", {
+    stagingId: revision.staging_id, sourceId: source.documentSourceId, sourceFingerprint: source.documentSourceFingerprint,
+  }));
+  assert.deepEqual(snapshotScheduleState(home), pairingBefore);
+  assert.equal(fs.existsSync(revision.staging_path), true);
+  assert.deepEqual((await education()).calendar.filter(item => names.includes(item.name)).map(item => item.id).sort(), ids);
+
+  await runtimeSupervisor.closeAllEduPiRuntimes();
+  const cold = await client.read(materialId);
+  assert.equal(cold.source.metadata_revision, updated.revision);
+  assert.equal(cold.source.source_hash, descriptor.source_hash);
+  assert.deepEqual((await education()).calendar.filter(item => names.includes(item.name)).map(item => item.id).sort(), ids);
+  assert.deepEqual(snapshotScheduleState(home), pairingBefore, "cold read must not apply a deferred file revision");
+
+  const tamperDescriptor = await stage("独立字节核对.docx", "2026年11月2日 10:00-11:00 字节核对会议 时区：Asia/Shanghai 地点：三号会议室");
+  const tamperReceipt = await receive(tamperDescriptor);
+  assert.equal(tamperReceipt.response.status, 200, JSON.stringify(tamperReceipt.body));
+  assertMaterialReceiptOnly(tamperReceipt.body);
+  const tamperId = tamperReceipt.body.receipt.applied_ids[0];
+  const tamperSource = await client.read(tamperId);
+  const acceptedFile = path.join(dataRoot, tamperSource.source.relative_path);
+  const bytes = fs.readFileSync(acceptedFile);
+  fs.writeFileSync(acceptedFile, Buffer.alloc(bytes.length, 0x61));
+  const tamperBefore = snapshotScheduleState(home);
+  const tampered = await call("GET", "/api/edupi/material-schedule?materialId=" + tamperId);
+  assert.equal(tampered.response.status, 409, JSON.stringify(tampered.body));
+  assert.equal(tampered.body.errorCode, "material_schedule_source_unavailable");
+  assert.deepEqual(snapshotScheduleState(home), tamperBefore, "same-length changed bytes cannot import or delete a schedule");
+  console.log(JSON.stringify({ status: uiFixture ? "ui_fixture" : "passed", core_commit: compat.core_runtime.core_commit,
+    ...(uiFixture ? { material_id: materialId, staging_id: revision.staging_id } : {}),
+    material_receipt_only: true, literal_docx_owner_adoption: true, no_desktop_model_calls: true,
+    current_metadata_revision_rechecked: true, stale_confirmation_rejected: true, user_cancel_zero_write: true,
+    exact_command_replay_no_write: true, same_length_tamper_rejected: true, cold_readback: true,
+    legacy_source_update: { supported: false, rejected_409: true, staged_retained: true },
+    multi_item_pairing: { supported: false, rejected_409: true, schedule_writes: 0, delete_writes: 0 },
+    external_send: false }));
 } finally {
   await runtimeSupervisor?.closeAllEduPiRuntimes();
   if (keepArtifacts) console.log(JSON.stringify({ status: "retained", temporary_root: temporaryRoot, data_root: dataRoot, state_dir: stateDir }));

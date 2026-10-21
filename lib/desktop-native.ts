@@ -64,6 +64,13 @@ export async function desktopApiHeaders(initial?: HeadersInit): Promise<Headers>
   return headers;
 }
 
+export async function confirmMaterialScheduleNative(eventCount: number): Promise<boolean> {
+  if (!Number.isSafeInteger(eventCount) || eventCount < 1 || eventCount > 200) throw new Error("invalid_material_schedule_count");
+  if (!isTauriDesktop()) throw new Error("desktop_only");
+  const { confirm } = await import("@tauri-apps/plugin-dialog");
+  return confirm(`采用这 ${eventCount} 项安排？`, { title: "安排提案", kind: "warning", okLabel: "确认采用", cancelLabel: "取消" });
+}
+
 /** Fetch a privileged loopback route with the per-process desktop token. */
 export async function fetchDesktopApi(apiPath: string, init: RequestInit = {}): Promise<Response> {
   if (!/^\/api\/[a-z0-9/_-]+$/iu.test(apiPath)) throw new Error("Desktop API path is invalid.");

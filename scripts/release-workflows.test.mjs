@@ -82,8 +82,13 @@ test("the Mac candidate exercises new host contracts against its exact pinned Co
   assert.match(step, /if: runner\.os == 'macOS'/u);
   assert.match(step, /EDUPI_MEMORY_RECALL_CORE_ROOT: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/u);
   assert.match(step, /EDUPI_USAGE_TEST_CORE: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/u);
+  assert.match(step, /EDUPI_REMINDER_PROOF_CORE_TEST_ROOT: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/u);
+  assert.match(step, /EDUPI_PREPARATION_TEST_CORE: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/u);
   assert.match(step, /lib\/edupi-memory-recall-access\.test\.mjs/u);
   assert.match(step, /lib\/edupi-teacher-usage-runtime\.test\.mjs/u);
+  assert.match(step, /lib\/edupi-core-process-client\.test\.mjs/u);
+  assert.match(step, /lib\/edupi-reminder-notification-proof\.test\.mjs/u);
+  assert.match(step, /app\/api\/edupi\/tasks\/\[taskId\]\/execution\/route\.test\.mjs/u);
   assert.match(step, /test-edupi-capability-canary-e2\.mjs --require-recipient-confirmation/u);
   assert.ok(start < release.indexOf("name: Prepare packaged Next.js server"));
 });

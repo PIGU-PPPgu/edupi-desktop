@@ -31,7 +31,6 @@ import type { CreateTeacherTaskInput, CreateTeacherTaskOutcome } from "@/lib/edu
 import type { CalendarIntakeInput } from "@/lib/edupi-education-intake";
 import type { EduPiKernelState } from "@/lib/edupi-kernel-client";
 import type { MaterialIntakeMetadata } from "@/lib/edupi-material-rows";
-import type { DocumentPairingSubmission } from "@/lib/edupi-document-pairing-contract";
 
 type Props = {
   view: Exclude<WorkbenchView, "chat" | "tasks" | "review">;
@@ -56,7 +55,7 @@ type Props = {
   onObject: (id: string) => void;
   onNavigate: (view: WorkbenchView, objectId?: string) => void;
   onUpload: () => void;
-  onIntakeMaterial: (item: MaterialStagingDescriptor, metadata: MaterialIntakeMetadata, scheduleSource: { sourceId: string; fingerprint: string; sourceKind: "calendar" | "document" | "timetable" } | null, pairing?: DocumentPairingSubmission | null, calendarPreviewFingerprint?: string | null) => Promise<unknown>;
+  onIntakeMaterial: (item: MaterialStagingDescriptor, metadata: MaterialIntakeMetadata) => Promise<unknown>;
   onRemoveStagedMaterial: (item: MaterialStagingDescriptor) => Promise<void>;
   onCalendarSelection: (selection: CalendarItemSelection | null) => void;
   onImportCalendar: (event: CalendarIntakeInput) => Promise<void>;

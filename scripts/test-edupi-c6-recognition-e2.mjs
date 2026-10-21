@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createJiti } from "jiti";
+import { assertMaterialReceiptOnly, createMaterialScheduleTestClient, snapshotScheduleState } from "./material-schedule-e2-client.mjs";
 
 const configuredCoreRoot = process.env.EDUPI_CORE_ROOT;
 assert.equal(typeof configuredCoreRoot, "string", "EDUPI_CORE_ROOT is required");
@@ -25,88 +26,56 @@ const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
 const staging = await jiti.import("../lib/edupi-material-staging.ts");
 const { POST } = await jiti.import("../app/api/edupi/intake/route.ts");
 const { GET } = await jiti.import("../app/api/edupi/education/route.ts");
+const scheduleRoute = await jiti.import("../app/api/edupi/material-schedule/route.ts");
+const feedbackRoute = await jiti.import("../app/api/edupi/teacher-feedback/route.ts");
+const supervisor = await jiti.import("../lib/edupi-runtime-supervisor.ts");
+const token = "synthetic-c6-receipt-owner-token-012345678901";
+const priorToken = process.env.PI_DESKTOP_API_TOKEN;
+process.env.PI_DESKTOP_API_TOKEN = token;
 
-function unavailableDiagnostic(error) {
-  const message = typeof error?.error === "string" ? error.error : "";
-  const category = typeof error?.diagnosticCategory === "string"
-    ? error.diagnosticCategory
-    : message.match(/诊断：([a-z_]+)/)?.[1];
-  const model = message.match(/模型：([A-Za-z0-9][A-Za-z0-9._:@/+~-]{0,255})/)?.[1];
-  return {
-    category: category && /^[a-z_]+$/.test(category) ? category : "model_unavailable",
-    ...(model ? { model } : {}),
-  };
-}
 
 try {
   const sourceText = path.join(temp, "第一学期安排.txt");
   const sourceDocx = path.join(temp, "第一学期安排.docx");
   fs.writeFileSync(sourceText, [
-    "2026年9月1日开学。",
-    "2026年9月25日中秋主题活动。",
-    "十月下旬举行秋季运动会，具体日期待学校通知。",
-    "每周一第1节，七年级二班数学课。",
+    "2026年9月1日开学。", "2026年9月25日中秋主题活动。",
+    "十月下旬举行秋季运动会，具体日期待学校通知。", "每周一第1节，七年级二班数学课。",
   ].join("\n"), "utf8");
   execFileSync("/usr/bin/textutil", ["-convert", "docx", "-output", sourceDocx, sourceText]);
-  const [descriptor] = staging.stageMaterialInputs([{
-    name: "第一学期安排.docx",
-    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    bytes: new Uint8Array(fs.readFileSync(sourceDocx)),
-  }]);
-
-  const intakeResponse = await POST(new Request("http://localhost/api/edupi/intake", {
-    method: "POST",
-    headers: { host: "localhost", origin: "http://localhost", "content-type": "application/json", "sec-fetch-site": "same-origin" },
-    body: JSON.stringify({ kind: "material", stagingId: descriptor.staging_id, title: descriptor.original_name, materialKind: "other", subject: "数学", classId: "class-7-2", recognize: true }),
-  }));
-  const result = await intakeResponse.json();
-  if (result?.code === "model_unavailable") {
-    assert.equal(intakeResponse.status, 503, JSON.stringify(result));
-    console.log(JSON.stringify({ status: "unavailable", code: result.code, ...unavailableDiagnostic(result) }, null, 2));
-  } else {
-    assert.equal(intakeResponse.status, 200, JSON.stringify(result));
-    assert.equal(result.recognition.eventCount, 3, JSON.stringify(result.recognition));
-    assert.equal(result.recognition.slotCount, 1, JSON.stringify(result.recognition));
-    assert.deepEqual(result.receipts.map((receipt) => receipt.command_type), ["intake_material", "import_calendar", "import_timetable"]);
-    assert.deepEqual(result.receipts.map((receipt) => receipt.status), ["accepted", "modified", "accepted"]);
-
-    const response = await GET();
-    const education = await response.json();
-    assert.equal(response.status, 200, JSON.stringify(education));
-    const opening = education.calendar.find((event) => event.date === "2026-09-01" && event.name.includes("开学"));
-    const festival = education.calendar.find((event) => event.date === "2026-09-25");
-    const held = education.calendar.find((event) => event.name.includes("运动会"));
-    assert.ok(opening);
-    assert.ok(festival);
-    for (const event of [opening, festival]) {
-      assert.equal(event.confidence, "inferred");
-      assert.equal(event.preparationStatus, "hold");
-    }
-    assert.ok(held, "ambiguous recognized facts must remain visible instead of being dropped");
-    assert.equal(held.date, null);
-    assert.equal(held.dateStatus, "invalid");
-    assert.equal(held.confidence, "inferred");
-    assert.equal(held.preparationStatus, "hold");
-    assert.match(held.notes, /十月下旬/);
-    const slot = education.timetable.find((item) => item.day_of_week === 1 && item.period === 1 && item.subject === "数学");
-    assert.ok(slot);
-    assert.match(slot.notes, /^材料识别待确认：/);
-    assert.equal(education.intakeReceipts.some((receipt) => receipt.commandType === "intake_material"), true);
-    assert.equal(education.intakeTargets.some((target) => target.commandType === "intake_material" && target.title === "第一学期安排.docx"), true);
-    assert.equal(JSON.stringify(education.intakeTargets).includes("stg_"), false);
-    assert.equal(JSON.stringify(education.intakeTargets).includes("sha256:"), false);
-    assert.deepEqual(staging.listStagedMaterials(), []);
-
-    console.log(JSON.stringify({
-      status: "passed",
-      recognized_events: result.recognition.eventCount,
-      recognized_slots: result.recognition.slotCount,
-      projected_calendar: education.calendar.length,
-      held_calendar: education.calendar.filter((event) => event.preparationStatus === "hold").length,
-      projected_timetable: education.timetable.length,
-      staging_after_receipt: 0,
-    }, null, 2));
-  }
+  const [descriptor] = staging.stageMaterialInputs([{ name: "第一学期安排.docx",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", bytes: fs.readFileSync(sourceDocx) }]);
+  const request = (pathname, method = "GET", body) => new Request("http://localhost" + pathname, { method,
+    headers: { host: "localhost", origin: "http://localhost", "content-type": "application/json", "x-pi-desktop-token": token },
+    ...(body ? { body: JSON.stringify(body) } : {}) });
+  const owner = await feedbackRoute.POST(request("/api/edupi/teacher-feedback", "POST", { action: "bootstrap" }));
+  assert.equal(owner.status, 200);
+  const response = await POST(request("/api/edupi/intake", "POST", { kind: "material", stagingId: descriptor.staging_id,
+    title: descriptor.original_name, materialKind: "other", subject: "数学", classId: "class-7-2", recognize: true }));
+  const received = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(received));
+  assertMaterialReceiptOnly(received);
+  assert.deepEqual(staging.listStagedMaterials(), []);
+  const materialId = received.receipt.applied_ids[0];
+  const client = createMaterialScheduleTestClient(async (method, pathname, body) => {
+    const response = await scheduleRoute[method](request(pathname, method, body));
+    return { response, body: await response.json() };
+  });
+  const current = await client.read(materialId);
+  assert.notEqual(current.status, "ready", "ambiguous free-form text cannot become an inferred automatic file schedule");
+  const before = snapshotScheduleState(path.join(dataRoot, ".edupi"));
+  await assert.rejects(client.adopt(materialId, "unresolved-file-must-not-apply", async () => true));
+  assert.deepEqual(snapshotScheduleState(path.join(dataRoot, ".edupi")), before);
+  const educationResponse = await GET();
+  const education = await educationResponse.json();
+  assert.equal(educationResponse.status, 200, JSON.stringify(education));
+  assert.equal(education.calendar.length, 0);
+  assert.equal(education.timetable.length, 0);
+  console.log(JSON.stringify({ status: "passed", material_received_only: true, owner_read_held: true,
+    legacy_model_schedule: { supported: false, automatic_events: 0, automatic_slots: 0 },
+    external_model_calls: 0, external_send: false }));
 } finally {
+  await supervisor.closeAllEduPiRuntimes();
+  if (priorToken === undefined) delete process.env.PI_DESKTOP_API_TOKEN;
+  else process.env.PI_DESKTOP_API_TOKEN = priorToken;
   fs.rmSync(temp, { recursive: true, force: true });
 }

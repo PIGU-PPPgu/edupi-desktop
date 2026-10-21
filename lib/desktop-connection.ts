@@ -2,27 +2,32 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { readPackagedServerIdentity } from "@/lib/desktop-connection-probe";
+import { readPackagedServerIdentity, type DesktopConnectionProbeRecord, type DesktopProbeOutcome } from "@/lib/desktop-connection-probe";
 import { relaunchAppNative } from "@/lib/desktop-native";
 
 export type DesktopConnectionState = "online" | "offline" | "checking";
 
 const PING_INTERVAL_MS = 8_000;
 const OFFLINE_THRESHOLD = 2;
+const MAX_PROBE_RECORDS = 8;
+type ProbeSettlement = { reachable: boolean; sequence: number };
 
 /** Surface a reconnect banner when the shell-verified local server is unreachable. */
 export function useDesktopConnection(enabled = true): {
   state: DesktopConnectionState;
   retry: () => void;
+  diagnostics: readonly DesktopConnectionProbeRecord[];
 } {
   const [state, setState] = useState<DesktopConnectionState>(enabled ? "checking" : "online");
+  const [diagnostics, setDiagnostics] = useState<DesktopConnectionProbeRecord[]>([]);
   const failuresRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const probeControllerRef = useRef<AbortController | null>(null);
   const instanceIdRef = useRef<string | null>(null);
-  const stoppedRef = useRef(false);
+  const stoppedRef = useRef(true);
+  const probeSequenceRef = useRef(0);
 
-  const probe = useCallback(async (): Promise<boolean | null> => {
+  const probe = useCallback(async (): Promise<ProbeSettlement | null> => {
     if (!enabled || stoppedRef.current) return null;
 
     // Wake/online/timer events can arrive together after sleep. Only the most
@@ -31,26 +36,53 @@ export function useDesktopConnection(enabled = true): {
     probeControllerRef.current?.abort();
     const controller = new AbortController();
     probeControllerRef.current = controller;
-    const timeout = window.setTimeout(() => controller.abort(), 4_000);
+    const sequence = ++probeSequenceRef.current;
+    const startedAt = Date.now();
+    const started = performance.now();
+    const visibility = document.visibilityState;
+    let timedOut = false;
+    let outcome: DesktopProbeOutcome = "network";
+    let httpStatus: number | null = null;
+    let instance: DesktopConnectionProbeRecord["instance"] = "unavailable";
+    const record = () => {
+      const entry: DesktopConnectionProbeRecord = {
+        sequence, startedAt, documentStartedAt: performance.timeOrigin,
+        durationMs: Math.max(0, Math.round((performance.now() - started) * 10) / 10),
+        visibility, settledVisibility: document.visibilityState, outcome, httpStatus, instance,
+      };
+      setDiagnostics(previous => [...previous, entry].slice(-MAX_PROBE_RECORDS));
+    };
+    const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, 4_000);
     try {
-      const instanceId = await readPackagedServerIdentity(fetch, controller.signal);
-      if (!instanceId || instanceIdRef.current && instanceIdRef.current !== instanceId) {
+      const instanceId = await readPackagedServerIdentity(fetch, controller.signal, response => {
+        outcome = response.outcome;
+        httpStatus = response.httpStatus;
+      });
+      if (stoppedRef.current || probeControllerRef.current !== controller) return null;
+      if (timedOut) throw new Error("Desktop probe deadline exceeded");
+      if (!instanceId) throw new Error("Desktop server identity unavailable");
+      if (instanceIdRef.current && instanceIdRef.current !== instanceId) {
+        outcome = "identity_mismatch";
+        instance = "changed";
         throw new Error("Desktop server identity unavailable");
       }
-      if (stoppedRef.current || probeControllerRef.current !== controller) return null;
+      instance = instanceIdRef.current ? "same" : "pinned";
       instanceIdRef.current = instanceId;
       failuresRef.current = 0;
+      record();
       setState("online");
-      return true;
+      return { reachable: true, sequence };
     } catch {
       if (stoppedRef.current || probeControllerRef.current !== controller) return null;
+      if (timedOut) outcome = "timeout";
+      record();
       failuresRef.current += 1;
       if (failuresRef.current >= OFFLINE_THRESHOLD) {
         setState("offline");
       } else {
         setState((prev) => (prev === "offline" ? "offline" : "checking"));
       }
-      return false;
+      return { reachable: false, sequence };
     } finally {
       window.clearTimeout(timeout);
       if (probeControllerRef.current === controller) {
@@ -66,19 +98,21 @@ export function useDesktopConnection(enabled = true): {
     if (!enabled || stoppedRef.current) return;
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
-      void probe().finally(() => schedule());
+      void probe().then(result => {
+        if (result && result.sequence === probeSequenceRef.current) schedule();
+      });
     }, PING_INTERVAL_MS);
   }, [enabled, probe]);
 
   const retry = useCallback(() => {
-    if (!enabled) return;
+    if (!enabled || stoppedRef.current) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
     setState("checking");
     failuresRef.current = 0;
-    void probe().then(async (reachable) => {
-      if (stoppedRef.current || reachable === null) return;
-      if (reachable) {
+    void probe().then(async (result) => {
+      if (stoppedRef.current || result === null || result.sequence !== probeSequenceRef.current) return;
+      if (result.reachable) {
         // Recreate every HTTP/SSE connection, not only the health probe.
         window.location.reload();
         return;
@@ -89,7 +123,7 @@ export function useDesktopConnection(enabled = true): {
         // Relaunching recreates both the WebView and packaged Node server.
         await relaunchAppNative();
       } catch {
-        if (!stoppedRef.current) {
+        if (!stoppedRef.current && result.sequence === probeSequenceRef.current) {
           setState("offline");
           schedule();
         }
@@ -98,15 +132,18 @@ export function useDesktopConnection(enabled = true): {
   }, [enabled, probe, schedule]);
 
   const checkNow = useCallback(() => {
-    if (!enabled) return;
+    if (!enabled || stoppedRef.current) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
-    void probe().finally(() => schedule());
+    void probe().then(result => {
+      if (result && result.sequence === probeSequenceRef.current) schedule();
+    });
   }, [enabled, probe, schedule]);
 
   useEffect(() => {
     if (!enabled) {
       stoppedRef.current = true;
+      probeSequenceRef.current += 1;
       instanceIdRef.current = null;
       return;
     }
@@ -131,5 +168,5 @@ export function useDesktopConnection(enabled = true): {
     };
   }, [checkNow, enabled]);
 
-  return { state: enabled ? state : "online", retry };
+  return { state: enabled ? state : "online", retry, diagnostics };
 }

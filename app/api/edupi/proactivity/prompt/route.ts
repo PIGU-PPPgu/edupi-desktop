@@ -110,15 +110,37 @@ export async function PUT(request: Request) {
 export async function PATCH(request: Request) {
   if (!isDesktopApiRequestAllowed(request)) return response("rejected", 403);
   try {
-    const body = record(await parseJsonWithinLimit(request, 1024));
-    if (!body || Object.keys(body).length !== 2 || !SESSION_ID.test(String(body.sessionId || ""))
+    const body = record(await parseJsonWithinLimit(request, MAX_BODY_BYTES));
+    if (!body || Object.keys(body).some(key => !["sessionId", "clientRequestId", "command"].includes(key))
+      || !SESSION_ID.test(String(body.sessionId || ""))
       || !ID.test(String(body.clientRequestId || ""))) return response("invalid", 400);
+    const supplied = body.command === undefined ? null : record(body.command);
+    if (body.command !== undefined && (!supplied || supplied.type !== "prompt"
+      || typeof supplied.message !== "string" || supplied.message.length > 500_000
+      || supplied.clientRequestId !== body.clientRequestId
+      || Object.keys(supplied).some(key => !["type", "message", "clientRequestId", "images"].includes(key))
+      || validateAgentImages(supplied.images) !== null)) return response("invalid", 400);
+    const command = supplied ? { type: "prompt" as const, message: supplied.message as string,
+      clientRequestId: supplied.clientRequestId as string,
+      ...(supplied.images === undefined ? {} : { images: supplied.images as Array<{ type: "image"; data: string; mimeType: string }> }) } : null;
     const roots = resolveEduPiBridgeRoots();
     const sessionId = String(body.sessionId), clientRequestId = String(body.clientRequestId);
     return await withEduPiAmbientSessionLock(sessionId, async () => {
       const options = { dataRoot: roots.dataRoot.root };
       const saved = readEduPiPromptOutbox(sessionId, clientRequestId, options);
-      if (!saved) return response("not_found", 404);
+      if (!saved) {
+        if (!command) return response("not_found", 404);
+        const intent = readEduPiPromptIntent(sessionId, clientRequestId, options);
+        if (!intent) return response("not_found", 404);
+        if (intent.status === "discarded") return response("cancelled", 409);
+        if (intent.status === "pending" && intent.message !== command.message) return response("conflict", 409);
+        const filePath = await resolveSessionPath(sessionId);
+        const evidence = filePath ? inspectEduPiPromptSession({ sessionId, clientRequestId, command }, filePath) : "unknown";
+        if (evidence !== "confirmed") return NextResponse.json({ status: "uncertain", evidence, externalSend: false }, { status: 202 });
+        resolveIntentIfPresent(sessionId, clientRequestId, roots.dataRoot.root);
+        return response("accepted");
+      }
+      if (command && !isDeepStrictEqual(saved.command, command)) return response("conflict", 409);
       if (["pi_accepted", "pi_accepted_withdrawn"].includes(saved.stage)) {
         resolveIntentIfPresent(sessionId, clientRequestId, roots.dataRoot.root);
         return response("accepted");

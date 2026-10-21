@@ -25,7 +25,7 @@ test("document pairing preview rejects cross-site and non-JSON requests", async 
   assert.equal((await POST(request(valid, { "content-type": "text/plain" }))).status, 415);
 });
 
-test("document pairing preview accepts only bounded exact identities before recognition", async () => {
+test("retired pairing still rejects malformed identities and never enters recognition or staging", async () => {
   for (const body of [
     { ...valid, secret: "not allowed" },
     { ...valid, stagingId: "bad" },
@@ -43,7 +43,7 @@ test("document pairing preview accepts only bounded exact identities before reco
     process.env.PI_DESKTOP_STATE_DIR = stateDir;
     const missing = await POST(request(valid));
     assert.equal(missing.status, 409);
-    assert.equal((await missing.json()).code, "staging_missing");
+    assert.equal((await missing.json()).code, "file_schedule_update_unavailable");
   } finally {
     if (previous === undefined) delete process.env.PI_DESKTOP_STATE_DIR;
     else process.env.PI_DESKTOP_STATE_DIR = previous;

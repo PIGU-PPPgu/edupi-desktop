@@ -52,14 +52,26 @@ export async function sendEduPiCapturedPrompt(input: {
   return "blocked";
 }
 
-export async function reconcileEduPiCapturedPrompt(sessionId: string, clientRequestId: string): Promise<string> {
+export async function reconcileEduPiCapturedPrompt(sessionId: string, clientRequestId: string,
+  command?: { type: "prompt"; message: string; clientRequestId: string }): Promise<string> {
   if (!isTauriDesktop()) return "unavailable";
-  const response = await fetchDesktopApi("/api/edupi/proactivity/prompt", {
-    method: "PATCH", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sessionId, clientRequestId }),
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<string>(resolve => {
+    timer = setTimeout(() => { controller.abort(); resolve("unavailable"); }, 6_000);
   });
-  const body = await response.json().catch(() => null) as { status?: unknown } | null;
-  return typeof body?.status === "string" ? body.status : "unavailable";
+  try {
+    const read = async () => {
+      const response = await fetchDesktopApi("/api/edupi/proactivity/prompt", {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, signal: controller.signal,
+        body: JSON.stringify({ sessionId, clientRequestId, ...(command ? { command } : {}) }),
+      });
+      const body = await response.json().catch(() => null) as { status?: unknown } | null;
+      if (body?.status === "accepted" && !response.ok) return "unavailable";
+      return typeof body?.status === "string" ? body.status : "unavailable";
+    };
+    return await Promise.race([read(), deadline]);
+  } finally { clearTimeout(timer!); }
 }
 
 export async function persistEduPiPromptIntent(input: { sessionId: string; clientRequestId: string;

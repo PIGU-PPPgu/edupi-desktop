@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import path from "path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { loadSkillsWithInstallInfo } from "@/lib/skills-service";
+import { isCoreSkillReadOnly, loadSkillsWithInstallInfo } from "@/lib/skills-service";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
 import { setSkillModelInvocationDisabled } from "@/lib/skill-frontmatter";
 
@@ -43,6 +43,9 @@ export async function PATCH(req: Request) {
     // too (the SDK always treats ~/.agents/skills as trusted).
     const globalSkillsDir = path.join(homedir(), ".agents", "skills");
     if (existsSync(globalSkillsDir)) allowedRoots.add(globalSkillsDir);
+    if (isCoreSkillReadOnly(filePath)) {
+      return NextResponse.json({ error: "Core skills are read-only" }, { status: 403 });
+    }
     if (!isExistingFilePathAllowed(filePath, allowedRoots)) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }

@@ -105,3 +105,16 @@ test("a DOCX with unresolved parse issues stays held and cannot be confirmed", a
   preview.status = "ready";
   assert.equal((await get()).status, 503, "a contradictory ready/issue response must fail closed");
 });
+
+test("chapter UTF-16 subranges and table cells pass through the existing source CAS without block expansion", async () => {
+  const { get, post, calls, preview } = fixture();
+  const cell = `${path}/w:tc[0]`;
+  preview.blocks = [{ path, text: "😀章节：方程" }, { path: `${path}/w:tr[0]`, text: "表格", cells: [{ path: cell, text: "等式😀" }] }];
+  const sourceSpans = [{ path, start: 5, end: 7 }, { path: cell, start: 2, end: 4 }];
+  const current = (await (await get()).json()).preview;
+  assert.equal(calls.length, 1, "reading current source cannot write a confirmation");
+  const response = await post({ materialId: "material", expectedRevision: 0, expectedBasisHash: current.basis_hash, sourceSpans });
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls.find(call => call.action === "review_source").input.sourceSpans, sourceSpans);
+  assert.deepEqual((await response.json()).excerpt.source_spans, sourceSpans);
+});

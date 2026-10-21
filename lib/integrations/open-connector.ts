@@ -318,6 +318,7 @@ export class OpenConnectorProvider implements ExternalConnectorProvider {
     try {
       const response = await this.fetchImpl(this.url(path, init.query), {
         method: init.method,
+        redirect: "error",
         headers: {
           "content-type": "application/json",
           authorization: "Bearer " + token,

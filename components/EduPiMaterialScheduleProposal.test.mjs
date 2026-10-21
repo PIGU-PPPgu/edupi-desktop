@@ -31,7 +31,7 @@ test("reopened material has no cached current claim and rereads on disclosure", 
   assert.match(source, /readMaterialSchedule\(materialId/);
   assert.match(source, /onToggle/);
   assert.match(source, /captureMaterialScheduleApply\(current/);
-  assert.match(source, /window\.confirm/);
+  assert.match(source, /confirmMaterialScheduleNative/);
   assert.match(source, /controller\.current\?\.abort/);
 });
 
@@ -40,9 +40,9 @@ async function behaviorFixture() {
   const model = await createJiti(import.meta.url, { tsconfigPaths: true }).import("../lib/edupi-material-schedule.ts");
   const source = await fs.readFile(new URL("./EduPiMaterialScheduleProposal.tsx", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-  const slots = [], effects = [], reads = [], applies = [];
-  let cursor = 0, dirty = false, confirms = false, holdApply = false;
-  const pending = [];
+  const slots = [], effects = [], reads = [], applies = [], nativeCalls = [];
+  let cursor = 0, dirty = false, confirms = false, holdApply = false, holdConfirmation = false;
+  const pending = [], pendingConfirmations = [];
   const hash = value => `sha256:${value.repeat(64)}`;
   let current = { version: 1, root_ref: hash("a"), owner_id: `owner_${"b".repeat(32)}`,
     source: { material_id: "material-synthetic", source_hash: hash("c"), metadata_revision: 2, relative_path: "synthetic.ics" },
@@ -65,7 +65,11 @@ async function behaviorFixture() {
       if (holdApply) return new Promise((resolve, reject) => pending.push({ resolve, reject }));
       return { status: "accepted", applied_ids: ["synthetic-event"], rejected_ids: [], automatic_import: false, external_send: false }; },
   };
-  const dependencies = { react, "@/lib/edupi-material-schedule": client, "./EduPiActionIcon": { EduPiPagination: () => null } };
+  const dependencies = { react, "@/lib/edupi-material-schedule": client,
+    "@/lib/desktop-native": { confirmMaterialScheduleNative: async count => {
+      nativeCalls.push(count);
+      return holdConfirmation ? new Promise(resolve => pendingConfirmations.push(resolve)) : confirms;
+    } }, "./EduPiActionIcon": { EduPiPagination: () => null } };
   const componentModule = { exports: {} };
   new Function("require", "module", "exports", "window", compiled)(name => dependencies[name] || require(name), componentModule, componentModule.exports, { confirm: () => confirms });
   let props = { materialId: "material-synthetic", initialProposal: proposal("proposed") };
@@ -76,7 +80,8 @@ async function behaviorFixture() {
     if (!tree || typeof tree !== "object") return null;
     if (tree.type === "button" && text(tree) === label) return tree;
     return button(tree.props?.children, label); };
-  return { render, button, reads, applies, text, confirm: value => { confirms = value; },
+  return { render, button, reads, applies, nativeCalls, text, confirm: value => { confirms = value; },
+    holdConfirmation: () => { holdConfirmation = true; }, finishConfirmation: value => pendingConfirmations.shift()(value),
     holdApply: () => { holdApply = true; }, finishApply: error => error ? pending.shift().reject(error)
       : pending.shift().resolve({ status: "accepted", applied_ids: ["synthetic-event"], rejected_ids: [], automatic_import: false, external_send: false }),
     update: patch => { current = { ...current, ...patch }; }, setProps: value => { props = value; },
@@ -110,6 +115,34 @@ test("disclosure reads current proof, cancel performs no apply and reopening can
     assert.equal(fixture.applies[1].expectedSourceHash, `sha256:${"e".repeat(64)}`);
     assert.equal(fixture.applies[1].expectedParseFingerprint, `sha256:${"f".repeat(64)}`);
   } finally { fixture.cleanup(); }
+});
+
+test("native confirmation is single-flight and a late answer cannot adopt a closed, replaced or reread proof", async () => {
+  for (const change of ["cancel", "close", "metadata", "reload", "A-B-A"]) {
+    const fixture = await behaviorFixture();
+    try {
+      let tree = fixture.render(); tree.props.onToggle({ currentTarget: { open: true } }); await fixture.flush(); tree = fixture.render();
+      fixture.confirm(true); fixture.holdConfirmation();
+      const adopt = fixture.button(tree, "确认采用").props.onClick;
+      adopt(); adopt(); await fixture.flush();
+      assert.equal(fixture.nativeCalls.length, 1);
+      assert.equal(fixture.applies.length, 0, "no post before a native confirmation response");
+      if (change === "close") tree.props.onToggle({ currentTarget: { open: false } });
+      if (change === "metadata" || change === "reload") {
+        fixture.update({ source: { material_id: "material-synthetic", source_hash: `sha256:${"e".repeat(64)}`, metadata_revision: 3,
+          relative_path: "synthetic.ics" }, parse_fingerprint: `sha256:${"f".repeat(64)}` });
+        if (change === "metadata") { fixture.setProps({ materialId: "material-synthetic", metadataRevision: 3 }); fixture.render(); }
+        else fixture.button(tree, "重新读取").props.onClick();
+      }
+      if (change === "A-B-A") {
+        fixture.setProps({ materialId: "material-B" }); fixture.render(); await fixture.flush();
+        fixture.setProps({ materialId: "material-synthetic" }); fixture.render();
+      }
+      await fixture.flush(); fixture.render();
+      fixture.finishConfirmation(change !== "cancel"); await fixture.flush(); fixture.render();
+      assert.equal(fixture.applies.length, 0, change);
+    } finally { fixture.cleanup(); }
+  }
 });
 
 test("late apply success and failure cannot replace the current proof after metadata refresh or disclosure reopen", async () => {

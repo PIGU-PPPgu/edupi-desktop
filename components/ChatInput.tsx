@@ -4,7 +4,7 @@ import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, f
 import type { BuiltinSlashCommandResult, CompactResultInfo, QueuedMessages, SlashCommandInfo } from "@/hooks/useAgentSession";
 import type { SkillsResponse } from "@/lib/api-types";
 import type { TextContent, UserMessage } from "@/lib/types";
-import { clearDraft, flushDraftNow, getDraft, markQueueRecoveryUncertain, releasePendingPromptForNewMessage, setDraft, subscribeDraftPersistence, type ChatDraft, type ChatDraftImage, type FailedDraftMessage } from "@/lib/draft-store";
+import { clearDraft, flushDraftNow, getDraft, markPendingPromptDraftEdited, markQueueRecoveryUncertain, releasePendingPromptForNewMessage, setDraft, subscribeDraftPersistence, type ChatDraft, type ChatDraftImage, type FailedDraftMessage } from "@/lib/draft-store";
 import { appendComposerResource, removeComposerResource, composerReferenceText, composeComposerMessage, contextHandoffMode, parseTeacherMessage, prepareQueueRecall, readableQueueBackup, visibleTeacherMessageText, type EduPiComposerContext } from "@/lib/edupi-composer-context";
 import { CHAT_RESOURCE_KINDS, type ChatResourceKind } from "@/lib/edupi-chat-resources";
 import { EduPiResourcePicker } from "./EduPiResourcePicker";
@@ -111,7 +111,9 @@ export interface ChatInputHandle {
   markQueueRecoveryUncertain: (sessionId: string, recoveryId: string) => boolean;
   refreshPendingFailedMessages: (draftKey: string) => void;
   isHoldingSubmission: (draftKey: string) => boolean;
-  acknowledgeSubmittedMessage: (draftKey: string, value: string, preserveContext: boolean) => boolean;
+  isSubmittedDraftUnedited?: (draftKey: string, value: string) => boolean;
+  acknowledgeSubmittedMessage: (draftKey: string, value: string, preserveContext: boolean,
+    request?: { sessionId: string; clientRequestId: string }) => boolean;
   replaceMessage: (message: UserMessage, allowPendingRecovery?: boolean) => boolean;
   prependText: (text: string) => void;
   addImages: (files: File[]) => void;
@@ -413,8 +415,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const isMobile = useIsMobile();
   const compactControls = isMobile || teacherMode;
   const [resourcePickerKind, setResourcePickerKind] = useState<ChatResourceKind | null>(null);
-  const [value, setValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
-  const [context, setContext] = useState<EduPiComposerContext | null>(() => (draftKey ? getDraft(draftKey)?.context ?? null : null));
+  const draftKeyRef = useRef(draftKey);
+  const editRevisionRef = useRef(0);
+  const [value, updateValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
+  const setValue = useCallback((next: React.SetStateAction<string>) => { editRevisionRef.current++; markPendingPromptDraftEdited(draftKeyRef.current); updateValue(next); }, []);
+  const [context, updateContext] = useState<EduPiComposerContext | null>(() => (draftKey ? getDraft(draftKey)?.context ?? null : null));
+  const setContext = useCallback((next: React.SetStateAction<EduPiComposerContext | null>) => { editRevisionRef.current++; markPendingPromptDraftEdited(draftKeyRef.current); updateContext(next); }, []);
   const [offeredContext, setOfferedContext] = useState<EduPiComposerContext | null>(() => (draftKey ? getDraft(draftKey)?.offeredContext ?? null : null));
   const [pendingTeacherText, setPendingTeacherText] = useState(() => (draftKey ? getDraft(draftKey)?.pendingTeacherText ?? "" : ""));
   const [pendingQueueMessages, setPendingQueueMessages] = useState<string[]>(() => (draftKey ? getDraft(draftKey)?.pendingQueueMessages ?? [] : []));
@@ -437,12 +443,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [queueMenuOpen, setQueueMenuOpen] = useState(false);
   const [queueSubmitting, setQueueSubmitting] = useState(false);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
-  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(() => (
+  const [attachedImages, updateAttachedImages] = useState<AttachedImage[]>(() => (
     draftKey ? draftImagesToAttachedImages(getDraft(draftKey)?.images) : []
   ));
+  const setAttachedImages = useCallback((next: React.SetStateAction<AttachedImage[]>) => { editRevisionRef.current++; markPendingPromptDraftEdited(draftKeyRef.current); updateAttachedImages(next); }, []);
   const [attachError, setAttachError] = useState<string | null>(null);
   const [streamingQueueAllowed, setStreamingQueueAllowed] = useState(() => !isTauriDesktop());
   const pendingPrompt = draftKey ? getDraft(draftKey)?.pendingPrompt : undefined;
+  const submittedDraftRef = useRef<{ draftKey: string; clientRequestId: string | null; sessionId: string | null;
+    revision: number; acknowledged: boolean } | null>(draftKey && pendingPrompt ? { draftKey,
+      clientRequestId: pendingPrompt.clientRequestId, sessionId: pendingPrompt.sessionId,
+      revision: editRevisionRef.current, acknowledged: false } : null);
   useEffect(() => {
     if (!isTauriDesktop()) { setStreamingQueueAllowed(true); return; }
     if (!isStreaming) { setStreamingQueueAllowed(false); return; }
@@ -500,7 +511,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const historyItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const fileIndexMetaRef = useRef<{ cwd: string; fetchedAt: number } | null>(null);
   const fileIndexFetchingRef = useRef<string | null>(null);
-  const draftKeyRef = useRef(draftKey);
   const valueRef = useRef(value);
   const contextRef = useRef(context);
   const offeredContextRef = useRef(offeredContext);
@@ -547,18 +557,38 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       textarea.style.height = "auto";
       textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
     });
-  }, []);
+  }, [setValue]);
   const dictation = useSpeechDictation({ lang: locale === "zh-CN" ? "zh-CN" : "en-US", onTranscript: appendDictationTranscript });
   const abortDictation = dictation.abort;
 
   useImperativeHandle(ref, () => ({
     isHoldingSubmission(key: string) { return submittingRef.current && draftKeyRef.current === key; },
-    acknowledgeSubmittedMessage(key: string, expectedValue: string, preserveContext: boolean) {
-      if (!submittingRef.current || draftKeyRef.current !== key || valueRef.current !== expectedValue
-        || attachedImagesRef.current.length > 0) return false;
+    isSubmittedDraftUnedited(key: string, expectedValue: string) {
+      const submitted = submittedDraftRef.current;
+      const pending = getDraft(key)?.pendingPrompt;
+      return Boolean(submittingRef.current && draftKeyRef.current === key && submitted?.draftKey === key
+        && submitted.revision === editRevisionRef.current && valueRef.current === expectedValue
+        && attachedImagesRef.current.length === 0 && pendingImageCountRef.current === 0
+        && (!pending || pending.draftUnedited === true));
+    },
+    acknowledgeSubmittedMessage(key: string, expectedValue: string, preserveContext: boolean,
+      request?: { sessionId: string; clientRequestId: string }) {
+      if (request) {
+        const activeKey = draftKeyRef.current;
+        const pending = activeKey ? getDraft(activeKey)?.pendingPrompt : undefined;
+        const submitted = submittedDraftRef.current;
+        if (!pending || pending.draftUnedited !== true || pending.sessionId !== request.sessionId || pending.clientRequestId !== request.clientRequestId
+          || pending.draftValue !== expectedValue || key !== activeKey && key !== pending.sessionId
+          || !submitted || submitted.draftKey !== activeKey || submitted.revision !== editRevisionRef.current
+          || submitted.clientRequestId !== null && submitted.clientRequestId !== request.clientRequestId
+          || submitted.sessionId !== null && submitted.sessionId !== request.sessionId) return false;
+      } else if (!submittingRef.current || draftKeyRef.current !== key) return false;
+      if (valueRef.current !== expectedValue || attachedImagesRef.current.length > 0 || pendingImageCountRef.current > 0) return false;
+      if (submittedDraftRef.current) submittedDraftRef.current.acknowledged = true;
       valueRef.current = "";
-      setValue("");
-      if (!preserveContext) { contextRef.current = null; setContext(null); }
+      updateValue("");
+      if (!preserveContext) { contextRef.current = null; updateContext(null); }
+      setAttachError(null);
       if (textareaRef.current) textareaRef.current.style.height = "auto";
       return true;
     },
@@ -817,7 +847,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       newImages.slice(accepted.length).forEach(revokeImagePreview);
       return [...prev, ...accepted];
     });
-  }, []);
+  }, [setAttachedImages]);
 
   const processImageFiles = useCallback(async (files: File[]) => {
     if (isStreaming) return;
@@ -829,6 +859,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       .filter((f) => f.type.startsWith("image/") && f.size <= MAX_ATTACHED_IMAGE_BYTES)
       .slice(0, remaining);
     if (!imageFiles.length) return;
+    markPendingPromptDraftEdited(draftKeyRef.current);
     pendingImageCountRef.current += imageFiles.length;
     try {
       const newImages = await Promise.all(
@@ -874,6 +905,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"] }],
       });
       if (paths.length === 0) return;
+      markPendingPromptDraftEdited(draftKeyRef.current);
       pendingImageCountRef.current += Math.min(paths.length, remaining);
       try {
         const images = await readDesktopImageAttachments(paths.slice(0, remaining));
@@ -902,14 +934,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (removed) revokeImagePreview(removed);
       return next;
     });
-  }, []);
+  }, [setAttachedImages]);
 
   const clearImages = useCallback(() => {
     setAttachedImages((prev) => {
       prev.forEach(revokeImagePreview);
       return [];
     });
-  }, []);
+  }, [setAttachedImages]);
 
   const clearInput = useCallback((keepContext = false) => {
     abortDictation();
@@ -925,7 +957,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [abortDictation, clearImages, draftKey]);
+  }, [abortDictation, clearImages, draftKey, setContext, setValue]);
 
   useEffect(() => {
     setDraftSaveFailed(false);
@@ -989,8 +1021,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       setDraft(draftKey, draft);
     }
     draftKeyRef.current = draftKey;
-    setValue(draft?.value ?? "");
-    setContext(draft?.context ?? null);
+    updateValue(draft?.value ?? "");
+    updateContext(draft?.context ?? null);
     setOfferedContext(draft?.offeredContext ?? null);
     setPendingTeacherText(draft?.pendingTeacherText ?? "");
     setPendingQueueMessages(draft?.pendingQueueMessages ?? []);
@@ -1001,10 +1033,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     setPendingFailedMessages(draft?.pendingFailedMessages ?? []);
     setAtQuery(null);
     setHistoryMenuOpen(false);
-    setAttachedImages((prev) => {
+    updateAttachedImages((prev) => {
       prev.forEach(revokeImagePreview);
       return draftImagesToAttachedImages(draft?.images);
     });
+    submittedDraftRef.current = draftKey && draft?.pendingPrompt ? { draftKey,
+      clientRequestId: draft.pendingPrompt.clientRequestId, sessionId: draft.pendingPrompt.sessionId,
+      revision: editRevisionRef.current, acknowledged: false } : null;
   }, [draftKey]);
 
   useEffect(() => {
@@ -1045,18 +1080,34 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     setDraft(originKey, pending);
     if (!flushDraftNow(originKey)) { setAttachError("草稿未能保存，消息未发送"); return; }
     const sentImages = attachedImagesRef.current;
+    const submittedDraft = { draftKey: originKey, clientRequestId: previous.pendingPrompt?.clientRequestId ?? null,
+      sessionId: previous.pendingPrompt?.sessionId ?? null, revision: editRevisionRef.current, acknowledged: false };
+    submittedDraftRef.current = submittedDraft;
     submittingRef.current = true;
     try {
       const accepted = await onSend(composeComposerMessage(context, msg, attachedImages.length > 0),
         attachedImages.length ? attachedImages : undefined);
-      if (accepted === false) { setAttachError("消息尚未确认，草稿已保留"); return; }
-      if (draftKeyRef.current === originKey && valueRef.current.trim() === msg && attachedImagesRef.current === sentImages) {
+      if (accepted === false) {
+        if (!submittedDraft.acknowledged && submittedDraftRef.current === submittedDraft && draftKeyRef.current === originKey
+          && editRevisionRef.current === submittedDraft.revision) {
+          setAttachError("消息尚未确认，草稿已保留");
+        }
+        return;
+      }
+      // A retry may only confirm an earlier delivery. Its request-aware ACK
+      // owns cleanup; this send's fresh revision cannot authorize it again.
+      if (previous.pendingPrompt) return;
+      if (draftKeyRef.current === originKey && valueRef.current.trim() === msg && attachedImagesRef.current === sentImages
+        && editRevisionRef.current === submittedDraft.revision) {
         clearInput((msg.startsWith("!") || msg.startsWith("/")) && attachedImages.length === 0);
       } else if (draftKeyRef.current !== originKey) {
         const original = getDraft(originKey);
         if (original?.value.trim() === msg && original.images.length === sentImages.length) clearDraft(originKey);
       }
-    } catch { setAttachError("消息未发送，草稿已保留"); }
+    } catch {
+      if (!submittedDraft.acknowledged && submittedDraftRef.current === submittedDraft && draftKeyRef.current === originKey
+        && editRevisionRef.current === submittedDraft.revision) setAttachError("消息未发送，草稿已保留");
+    }
     finally { submittingRef.current = false; }
   }, [value, context, pendingTeacherText, queueRecoveryId, attachedImages, isStreaming, onBuiltinCommand, onSend, clearInput, onAudioUnlock]);
 
@@ -1214,7 +1265,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       el.style.height = "auto";
       el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
     });
-  }, [atQuery, value]);
+  }, [atQuery, value, setValue]);
 
   useEffect(() => {
     if (atActiveIndex >= atMatches.length) {
@@ -1259,7 +1310,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       ta.style.height = "auto";
       ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
     });
-  }, []);
+  }, [setValue]);
 
   const applySlashCommand = useCallback((command: SlashCommandPaletteItem) => {
     const nextValue = `/${command.name} `;
@@ -1274,7 +1325,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       ta.style.height = "auto";
       ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
     });
-  }, []);
+  }, [setValue]);
 
   const sendQueued = useCallback(async (mode: "steer" | "followup") => {
     if (queueSubmittingRef.current) return;
@@ -1339,7 +1390,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     queueRecoveryPreviousRef.current = [];
     setQueueRecoveryPrevious([]);
     requestAnimationFrame(() => textareaRef.current?.focus());
-  }, [pendingQueueMessages, pendingFailedMessages, queueRecoveryId, clearImages]);
+  }, [pendingQueueMessages, pendingFailedMessages, queueRecoveryId, clearImages, setContext, setValue]);
 
   const dismissUncertainQueue = useCallback(() => {
     if (!queueUncertain) return;
@@ -1386,7 +1437,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       flushDraftNow(key);
     }
     requestAnimationFrame(() => textareaRef.current?.focus());
-  }, [pendingFailedMessages, pendingTeacherText, offeredContext]);
+  }, [pendingFailedMessages, pendingTeacherText, offeredContext, setAttachedImages, setContext, setValue]);
 
   const getNextSlashIndex = useCallback((direction: "up" | "down" | "left" | "right") => {
     const lastIndex = displayedSlashCommands.length - 1;
