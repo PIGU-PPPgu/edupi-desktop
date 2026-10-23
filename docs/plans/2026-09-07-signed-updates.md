@@ -1,10 +1,16 @@
 # 自动下载安装
 
+## 2026-10-24 GitHub OAuth 与写入本机预览
+
+- 当前安装状态取代下方只读预览：源码 `ac693c14bb80969a0c7d02e63b106ee693a32e9a`，含安全提交 `ef1a4e3a`、Core03，已准备完整资源并安装到唯一 `/Applications/EduPi.app` 本机 `.77`。复用未变原生壳，6 个原生资源和整 App Developer ID 重签；Team `BY3XZG2839`、CDHash `8fadb3c3fa8243ac7d0d2914325ba8457bbdf1a4`，主程序 SHA-256 `7247ff850cd8c27e28ecfa02ea4f084d4d804a83d09363648641d3f5f7639a16`。安装及清理后 strict codesign、Core/投影/Kernel ready 和 51/160/24/6 回读通过；未公证、合并、发布或改 feed。
+- 新增 GitHub OAuth/PKCE、Keychain 加密钥匙、固定测试 issue 预览确认、单次 dispatch 与独立 Action/审计回读。真实 App 已打开 OAuth 配置页，真实 Keychain 初始化、伪造回调 400 和 HTTP Action 404 通过；**尚无 OAuth 客户端/授权、实际 issue 或写入回执**。用户生成/填写 Client ID/Secret 并确认 GitHub `public_repo` 是当前必要外部条件，不能以既有 gh 登录读取账号或隔离测试替代。
+- 本功能及组件定向 531 通过/0 跳过；全套 2492 通过/40 环境跳过/0 失败，类型/lint/独立复核通过。补丁将高危审计门清零，剩 6 条既有数学链低危。已精确删除 7 个生成目录约 3.60 GiB，可用空间观测增约 3.70 GiB；临时上一份 `.77` 回退 `~/edupi-install-checkpoints/settings-redesign-20261023/oauth-issue-20261024/EduPi-before-oauth.app` 保留至真实 OAuth/issue 回读验收通过，届时删除。原 `.70` 与私有备份保留；[逐项验收](../acceptance/2026-10-23-admin-settings-redesign.md#2026-10-24-oauth-与测试-issue-当前状态)。
+
 ## 2026-10-24 JEV 与 GitHub 本机真实连接
 
 - 源码 `468f82e8c99414ed7ebb6df1773cb71b3d1b6d3e`、Core03 的本机 `.77` 预览已替换唯一安装路径。完整 Desktop 资源准备通过，未变化的原生壳复用；6 个新原生资源与整 App 重新 Developer ID 签名，CDHash `45d22da015f6c806028a1c9388c01ac34263cd90`，主程序 SHA-256 `0b532d475cfede13ee601d7022c532e74b97061e02b9ba63abc44ebc8f4d54e1`。原 updater 公钥保持，包内启动/Core/目录与原生操作后 strict codesign 通过；不作为 Apple 公证或公开发布证明。
 - 已安装 App 的 JEV 真服务连接成功1198ms，修复的是读取已有系统代理；GitHub 实际连接、取消确认、固定只读调用、executionId审计核对、真正重启回读及重启后再次调用均通过。第一份执行 `cc322af0-dec0-4452-bb71-b21f4315249e`，第二份 `38c800ce-2b83-4992-bfc6-a499f5e4894e`，没有自动重发或外部写入。
-- 正常资料、原模型/认证/JEV/GitHub/UI配置保持；提醒正常轮询补入一个状态字段已通过基线摘要精确解释，Runtime元数据和会话custom追加有记录。清理本轮8个生成目录和上一份`.77`预览，目录占用约4.51GiB，可用空间观测增4.60GiB；原`.70`回退及原私有备份保留。仍无新tag、公开Release或feed变更；[逐项验收](../acceptance/2026-10-23-admin-settings-redesign.md#2026-10-24-真实连接续验)。
+- 正常资料、原模型/认证/JEV/GitHub/UI配置保持；提醒正常轮询补入一个状态字段已通过基线摘要精确解释，Runtime元数据和会话custom追加有记录。清理本轮8个生成目录和上一份`.77`预览，目录占用约4.51GiB，可用空间观测增4.60GiB；原`.70`回退及原私有备份保留。仍无新tag、公开Release或feed变更；[逐项验收](../acceptance/2026-10-23-admin-settings-redesign.md#2026-10-24-jev-与-github-只读续验历史)。
 
 ## 2026-10-23 管理与设置改版本机预览
 
