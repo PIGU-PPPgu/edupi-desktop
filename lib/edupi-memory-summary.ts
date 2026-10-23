@@ -118,7 +118,8 @@ function verifiedAssistant(message: AgentMessage, manager: Manager, root: string
 
 /** Invalid memory-derived assistant spans are omitted as units, never scrubbed by a name glob.
  * Current surviving entries are reconstructed from Core, not copied from old tool bodies. */
-export function projectMemoryHistory(messages: AgentMessage[], manager: Manager, root: string, snapshot: Snapshot, verify: Verify = () => false) {
+function projectHistory(messages: AgentMessage[], manager: Manager, root: string, snapshot: Snapshot, verify: Verify,
+  currentAssistant: (message: AgentMessage, view: History) => Provenance | null = () => null) {
   const current = new Map(snapshot.entries.map(entry => [entry.id, entry])), view = history(manager);
   const turnFor = new Map<AgentMessage, number>(), tainted = new Set<number>(), surviving = new Map<number, Map<string, RecalledMemory>>();
   const provedResults = new Map<AgentMessage, RecalledMemory[]>(), provedAssistants = new Map<AgentMessage, Provenance>(), turnOnly = new Set<AgentMessage>(); let turn = 0;
@@ -126,7 +127,7 @@ export function projectMemoryHistory(messages: AgentMessage[], manager: Manager,
     if (message.role === "user") turn++;
     turnFor.set(message, turn);
     if (message.role === "assistant") {
-      const proof = verifiedAssistant(message, manager, root, snapshot, verify, view);
+      const proof = verifiedAssistant(message, manager, root, snapshot, verify, view) ?? currentAssistant(message, view);
       if (!proof) tainted.add(turn); else provedAssistants.set(message, proof);
     }
     if (message.role !== "toolResult") continue;
@@ -183,6 +184,9 @@ export function projectMemoryHistory(messages: AgentMessage[], manager: Manager,
   }
   return { messages: projected, memories: [...used.values()], turnKey: needsTurn ? snapshot.turnKey : null };
 }
+export function projectMemoryHistory(messages: AgentMessage[], manager: Manager, root: string, snapshot: Snapshot, verify: Verify = () => false) {
+  return projectHistory(messages, manager, root, snapshot, verify);
+}
 const summarizable = (messages: AgentMessage[]) => messages.filter(message => message.role !== "system"
   && message.role !== "custom" && message.role !== "bashExecution");
 
@@ -191,8 +195,10 @@ export function createMemorySummaryGuard(root: string, snapshot: (manager: Manag
   scopeKey: (manager: Manager) => string | null, currentTurnKey: (manager: Manager) => string | null) {
   type Binding = { services: Services; runtime: Services["modelRuntime"]; manager: SessionManager; sessionId: string; stateDir: string | undefined };
   let binding: Binding | undefined;
-  const pending = new WeakMap<Manager, { binding: Binding; key: Buffer; userEntryId: string; userHash: string;
-    sourceLeafId: string | null; scopeKey: string | null; turnKey: string | null; memories: MemoryRef[]; inputHash: string }>();
+  type Request = { binding: Binding; key: Buffer | null; userEntryId: string; userHash: string; runKey: string | null;
+    sourceLeafId: string | null; scopeKey: string | null; turnKey: string | null; memories: MemoryRef[]; inputHash: string };
+  const pending = new WeakMap<Manager, Request>();
+  const currentOutputs = new WeakMap<Manager, { runKey: string; messages: Map<string, { request: Request; parentId: string | null }> }>();
   const keyFor = (manager: Manager) => deriveExistingMemorySummaryKey(binding?.stateDir, root, manager.getSessionId());
   const sign = (value: Record<string, unknown>, key: Buffer) => ({ ...value,
     mac: createHmac("sha256", key).update("edupi.memory.provenance.v1\0").update(canonical(value)).digest("hex") });
@@ -202,6 +208,19 @@ export function createMemorySummaryGuard(root: string, snapshot: (manager: Manag
     const expected = sign(body, key).mac;
     return timingSafeEqual(Buffer.from(mac, "hex"), Buffer.from(expected, "hex"));
   };
+  function currentAssistant(message: AgentMessage, manager: Manager, checked: Snapshot, view = history(manager)): Provenance | null {
+    const current = currentOutputs.get(manager);
+    if (!current || !checked.turnKey || current.runKey !== checked.turnKey || currentTurnKey(manager) !== checked.turnKey) {
+      currentOutputs.delete(manager); return null;
+    }
+    const digest = messageHash(message), output = current.messages.get(digest), request = output?.request;
+    const matches = view.assistants.get(digest) ?? [];
+    if (!output || !request || binding !== request.binding || binding.manager !== manager || binding.sessionId !== manager.getSessionId()
+      || directory(manager.getCwd()) !== root || request.scopeKey !== checked.scopeKey || scopeKey(manager) !== checked.scopeKey
+      || request.userEntryId !== view.userEntryId || !userBound(request, view) || !usableRefs(request.memories, checked)
+      || matches.length !== 1 || matches[0].parentId !== output.parentId || view.edited.has(matches[0].id)) return null;
+    return { memories: request.memories, turnKey: current.runKey };
+  }
   function bind(services: Services, manager: SessionManager, stateDir = process.env.PI_DESKTOP_STATE_DIR) {
     const pinned = { services, runtime: services.modelRuntime, manager, sessionId: manager.getSessionId(), stateDir };
     binding = pinned;
@@ -224,8 +243,9 @@ export function createMemorySummaryGuard(root: string, snapshot: (manager: Manag
         if (checked.active && checked.status !== "current") throw held();
         let verify: Verify = () => false;
         try { verify = verifier(keyFor(manager)); } catch { /* Legacy derived content is omitted. */ }
-        if (options.failed && !verifiedAssistant(options.failed, manager, root, checked, verify)) throw held();
-        const projected = projectMemoryHistory(source, manager, root, checked, verify);
+        if (options.failed && !verifiedAssistant(options.failed, manager, root, checked, verify)
+          && !currentAssistant(options.failed, manager, checked)) throw held();
+        const projected = projectHistory(source, manager, root, checked, verify, (message, view) => currentAssistant(message, manager, checked, view));
         const messages = convertToLlm(summarizable(projected.messages));
         assertCurrent();
         const route = await pinned.runtime.resolveModel(model, messages, options);
@@ -258,14 +278,17 @@ export function createMemorySummaryGuard(root: string, snapshot: (manager: Manag
     project(messages: AgentMessage[], manager: Manager, checked: Snapshot) {
       let verify: Verify = () => false;
       try { if (binding?.manager === manager && binding.sessionId === manager.getSessionId()) verify = verifier(keyFor(manager)); } catch { /* Unproved derived history is held. */ }
-      return projectMemoryHistory(messages, manager, root, checked, verify);
+      return projectHistory(messages, manager, root, checked, verify, (message, view) => currentAssistant(message, manager, checked, view));
     },
     rememberContext(manager: Manager, original: AgentMessage[], projected: AgentMessage[], checked: Snapshot, memories: MemoryRef[], turnKey: string | null) {
+      pending.delete(manager);
       try {
         const user = latestUser(manager);
         if (!binding || binding.manager !== manager || binding.sessionId !== manager.getSessionId() || user?.type !== "message" || user.message.role !== "user"
           || !original.some(message => message.role === "user" && messageHash(message) === messageHash(user.message))) return;
-        pending.set(manager, { binding, key: keyFor(manager), userEntryId: user.id, userHash: messageHash(user.message),
+        let key: Buffer | null = null;
+        try { key = keyFor(manager); } catch { /* A live tool chain does not require a persistent owner signature. */ }
+        pending.set(manager, { binding, key, userEntryId: user.id, userHash: messageHash(user.message), runKey: checked.turnKey,
           sourceLeafId: manager.getLeafId(), scopeKey: checked.scopeKey, turnKey, memories, inputHash: hash(JSON.stringify(projected)) });
       } catch { pending.delete(manager); }
     },
@@ -274,14 +297,24 @@ export function createMemorySummaryGuard(root: string, snapshot: (manager: Manag
       const manager = ctx.sessionManager, request = pending.get(manager); pending.delete(manager);
       try {
         if (!request || binding !== request.binding || binding.manager !== manager || binding.sessionId !== manager.getSessionId() || manager.getLeafId() !== request.sourceLeafId
-          || scopeKey(manager) !== request.scopeKey || request.turnKey !== null && currentTurnKey(manager) !== request.turnKey || !timingSafeEqual(keyFor(manager), request.key)
+          || scopeKey(manager) !== request.scopeKey || request.runKey !== currentTurnKey(manager)
           || latestUser(manager)?.id !== request.userEntryId) return;
         // SDK emits message_end before appending the finalized assistant. Its
         // immediate parent must be this host-signed, content-bound metadata.
-        binding.manager.appendCustomEntry(OUTPUT_PROOF, sign({ version: 1, kind: "assistant", rootHash: hash(root),
-          sessionId: manager.getSessionId(), userEntryId: request.userEntryId, userHash: request.userHash,
-          sourceLeafId: request.sourceLeafId, scopeKey: request.scopeKey, turnKey: request.turnKey, memories: request.memories,
-          messageHash: messageHash(message), inputHash: request.inputHash }, request.key));
+        if (request.key) {
+          if (!timingSafeEqual(keyFor(manager), request.key)) return;
+          binding.manager.appendCustomEntry(OUTPUT_PROOF, sign({ version: 1, kind: "assistant", rootHash: hash(root),
+            sessionId: manager.getSessionId(), userEntryId: request.userEntryId, userHash: request.userHash,
+            sourceLeafId: request.sourceLeafId, scopeKey: request.scopeKey, turnKey: request.turnKey, memories: request.memories,
+            messageHash: messageHash(message), inputHash: request.inputHash }, request.key));
+        }
+        if (request.runKey) {
+          // Private proof binds the actual SDK output to this checked input and
+          // run only. It is never written to disk or accepted by compaction.
+          let current = currentOutputs.get(manager);
+          if (current?.runKey !== request.runKey) { current = { runKey: request.runKey, messages: new Map() }; currentOutputs.set(manager, current); }
+          current.messages.set(messageHash(message), { request, parentId: manager.getLeafId() });
+        }
       } catch { /* Never claim an output has provenance when the key/branch changed. */ }
     },
     async compact(event: SessionBeforeCompactEvent, ctx: ExtensionContext): Promise<SessionBeforeCompactResult | undefined> {
