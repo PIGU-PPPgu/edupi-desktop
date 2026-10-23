@@ -13,6 +13,73 @@ const require = createRequire(import.meta.url);
 const nextRequire = createRequire(require.resolve("@next/eslint-plugin-next"));
 const { getRootDirs } = nextRequire("./utils/get-root-dirs.js");
 
+test("KaTeX is pinned to the patched release for every installed math consumer", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
+  assert.equal(manifest.devDependencies.katex, "0.18.2");
+  assert.equal(manifest.overrides.katex, "$katex");
+  const entries = Object.entries(lock.packages).filter(([location]) => /(?:^|\/)node_modules\/katex$/.test(location));
+  assert.ok(entries.length > 0);
+  for (const [location, entry] of entries) assert.equal(entry.version, "0.18.2", location);
+  for (const consumer of [null, "mermaid", "rehype-katex", "micromark-extension-math", "@lobehub/ui"]) {
+    const consumerRequire = consumer ? createRequire(require.resolve(consumer)) : require;
+    const entry = consumerRequire.resolve("katex");
+    const installed = JSON.parse(await readFile(path.resolve(path.dirname(entry), "..", "package.json"), "utf8"));
+    assert.equal(installed.version, "0.18.2", consumer || "direct dependency");
+    assert.equal(installed.license, "MIT");
+    assert.equal(entry, require.resolve("katex"), consumer || "direct dependency");
+  }
+});
+
+test("KaTeX ignores inherited trust without changing explicitly owned trust in an isolated child", t => {
+  assert.equal(Object.hasOwn(Object.prototype, "trust"), false);
+  try {
+    const output = execFileSync(process.execPath, ["-e", String.raw`
+      const assert = require("node:assert/strict");
+      const katex = require(process.argv[1]);
+      const expression = process.argv[2];
+      let inherited, denied, owned;
+      Object.defineProperty(Object.prototype, "trust", { value: true, writable: true, configurable: true });
+      try {
+        inherited = katex.renderToString(expression, { strict: false, throwOnError: false });
+        denied = katex.renderToString(expression, { strict: false, throwOnError: false, trust: false });
+        owned = katex.renderToString(process.argv[3], { trust: true });
+      } finally { delete Object.prototype.trust; }
+      assert.doesNotMatch(inherited, /<a\b[^>]*href=/, "inherited trust must not enable a link");
+      assert.doesNotMatch(denied, /<a\b[^>]*href=/);
+      assert.match(owned, /<a\b[^>]*href="https:\/\/synthetic\.example\.invalid\/"/);
+      console.log("KaTeX " + katex.version + ": inherited trust blocked; explicit false blocked; explicit true preserved");
+    `, require.resolve("katex"), String.raw`\href{javascript:alert(1)}{synthetic}`,
+    String.raw`\href{https://synthetic.example.invalid/}{synthetic}`], { timeout: 2000, killSignal: "SIGKILL", stdio: "pipe", encoding: "utf8" });
+    t.diagnostic(output.trim());
+  } finally { assert.equal(Object.hasOwn(Object.prototype, "trust"), false); }
+});
+
+test("Mermaid's resolved KaTeX API renders fractions, roots and matrices in both output modes", async () => {
+  const mermaidRequire = createRequire(require.resolve("mermaid"));
+  const katex = mermaidRequire("katex");
+  const { DOMParser } = require("@xmldom/xmldom");
+  for (const [expression, expectedTag] of [[String.raw`\frac{1}{2}`, "mfrac"], [String.raw`\sqrt{x}`, "msqrt"],
+    [String.raw`\begin{pmatrix}1&2\\3&4\end{pmatrix}`, "mtable"]]) {
+    for (const output of ["mathml", "htmlAndMathml"]) {
+      const html = katex.renderToString(expression, { throwOnError: true, displayMode: true, output });
+      const document = new DOMParser().parseFromString(html, "application/xml");
+      assert.equal(document.getElementsByTagNameNS("http://www.w3.org/1998/Math/MathML", "math").length, 1);
+      assert.equal(document.getElementsByTagNameNS("http://www.w3.org/1998/Math/MathML", expectedTag).length, 1);
+      assert.equal(document.getElementsByTagNameNS("http://www.w3.org/1998/Math/MathML", "math")[0].getAttribute("display"), "block");
+      if (output === "htmlAndMathml") assert.match(html, /class="katex-display"/);
+      assert.doesNotMatch(html, /katex-error/);
+    }
+  }
+  const css = require.resolve("katex/dist/katex.min.css");
+  const stylesheet = await readFile(css, "utf8");
+  assert.match(stylesheet, /\.katex-display/);
+  assert.match(stylesheet, /\.katex\b/);
+  const fonts = [...stylesheet.matchAll(/url\(["']?([^)"']+\.woff2)["']?\)/g)].map(match => match[1]);
+  assert.ok(fonts.length > 0);
+  for (const font of fonts) assert.ok((await readFile(path.resolve(path.dirname(css), font))).byteLength > 0, font);
+});
+
 test("the complete lockfile excludes affected runtime and glob dependency versions", async () => {
   const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
   const patched = { next: ">=16.4.1", undici: ">=8.10.2", nodemailer: ">=10.0.9", "brace-expansion": "^1.1.21 || ^3.0.9 || >=5.0.12", dompurify: ">=3.4.17", sharp: ">=0.35.5", hono: ">=4.13.11", "ip-address": ">=10.7.4", "@modelcontextprotocol/client": ">=2.3.0", "@modelcontextprotocol/server": ">=2.3.0" };

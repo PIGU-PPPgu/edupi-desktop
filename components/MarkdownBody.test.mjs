@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import ReactMarkdown from "react-markdown";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, {
@@ -9,7 +10,7 @@ const jiti = createJiti(import.meta.url, {
   tsconfigPaths: true,
 });
 const { MarkdownBody } = await jiti.import("./MarkdownBody.tsx");
-const { normalizeDisplayMath } = await jiti.import("../lib/markdown.ts");
+const { normalizeDisplayMath, educationDocumentBody, markdownPreviewRemarkPlugins, markdownPreviewRehypePlugins } = await jiti.import("../lib/markdown.ts");
 
 function renderMarkdown(markdown) {
   return renderToStaticMarkup(
@@ -18,6 +19,41 @@ function renderMarkdown(markdown) {
       onOpenFile() {},
     }, markdown),
   );
+}
+
+function renderMarkdownPreview(markdown) {
+  return renderToStaticMarkup(React.createElement(ReactMarkdown, {
+    remarkPlugins: markdownPreviewRemarkPlugins,
+    rehypePlugins: markdownPreviewRehypePlugins,
+  }, normalizeDisplayMath(educationDocumentBody(markdown))));
+}
+
+for (const [surface, render] of [["chat", renderMarkdown], ["file preview", renderMarkdownPreview]]) {
+  test(`KaTeX renders fractions, roots and matrices through the actual ${surface} plugins`, () => {
+    const html = render(String.raw`比值 \(\frac{1}{2}\)。
+
+$$\sqrt{x}$$
+
+\[\begin{pmatrix}1&2\\3&4\end{pmatrix}\]`);
+    assert.match(html, /<mfrac>/);
+    assert.match(html, /<msqrt>/);
+    assert.match(html, /<mtable[^>]*>/);
+    assert.equal((html.match(/xmlns="http:\/\/www\.w3\.org\/1998\/Math\/MathML"/g) || []).length, 3);
+    assert.match(html, /class="katex-display"/);
+    assert.doesNotMatch(html, /katex-error/);
+  });
+
+  test(`KaTeX keeps HTML and trusted math commands blocked in ${surface}`, () => {
+    const html = render(String.raw`<script>synthetic()</script><iframe src="https://synthetic.example.invalid/"></iframe><img src="javascript:alert(1)" onerror="synthetic()">
+
+$\href{javascript:alert(1)}{synthetic}$
+
+$\includegraphics{https://synthetic.example.invalid/unapproved.png}$
+
+$\sqrt{4}$`);
+    assert.doesNotMatch(html, /<script\b|<iframe\b|\bonerror=|href="javascript:|src="https:\/\/synthetic\.example\.invalid/);
+    assert.match(html, /<msqrt>/);
+  });
 }
 
 test("opens non-file markdown links in a safe new tab", () => {
