@@ -1,5 +1,11 @@
 # 自动下载安装
 
+## 2026-10-23 管理与设置改版本机预览
+
+- 用户明确要求把页面改版安装到本机。源码 `f3c09cd653245f26013c59f1cddf6c4e3538c2bb`、Core `03bbb893` 在本机生成 arm64 0.3.77 Developer ID 签名预览并替换唯一 `/Applications/EduPi.app`。Team `BY3XZG2839`，CDHash `4f2bc0e81b5f3f97d601dc842a0e056b7b0c59ea`，主程序 SHA-256 `687d3f5e5af805d17f6b5bfc65977a81005b48674b7d73a58dc9f1e77cc9c5b7`；完整签名、原 updater 公钥和包内 Core/目录检查通过。此本地包未公证，不属于下方正式 Release run 的公证/发布证明；没有创建新 tag、Release 或改 feed。
+- 已在真实原生应用完成设置与 JEV 保存/重启、OpenConnector 服务→操作→参数→返回；JEV 上游实际 HTTP451，连接不计通过。正常资料原有 Runtime 绑定经应用内带备份事务恢复，重启后 Core/投影/Kernel ready，51 学生/160任务/24校历/6课表与17模型保持。真实业务和凭据不写测试内容；会话仅4条custom追加且原前缀保持，Runtime指纹/进程元数据及修复备份单列。当前新App以正常资料运行，旧0.3.70回退App与私有备份保留。
+- 本轮生成的缓存、重复依赖、第一预览App/重复旧App、隔离根已精确清理，约8.21GiB目录占用删除、实测可用空间增加约7.40GiB。代码/工作树/已安装App/验收证据保留。详见[本机验收](../acceptance/2026-10-23-admin-settings-redesign.md)，私有证据根为 `~/edupi-install-checkpoints/settings-redesign-20261023/`。
+
 ## 2026-10-21 v0.3.77 源码与配对门
 
 - 当前状态取代本节前序快照：Core [#311](https://github.com/PIGU-PPPgu/edupi/pull/311) 已正常合并为 `03bbb893bb609eb68513a65cf4fd808ab8aa30ed`，完整 Mac CI `39504481691` 的实际 checkout `b322a526`、PR head `2f0359f6` 与合并树均为 `8fc34936`。Desktop 同步 JSON 与严格 TypeScript adapter，固定 Runtime schema `09752f53…`、Runtime 组件 `c0c04416…`、Desktop 组件 `126ead40…`，原始 Desktop 清单 SHA `abbbe53f…`；Bridge/课次/SDK/fixtures 不变。原分支 [Draft PR #370](https://github.com/PIGU-PPPgu/edupi-desktop/pull/370) 尚待最终源码 CI/正常合并，无 `.77` tag、签名 run 或安装资产。
