@@ -23,11 +23,13 @@ test("the complete lockfile excludes affected runtime and glob dependency versio
   }
 });
 
-test("the Cargo lock excludes disclosed certificate verification and root-store versions", async () => {
+test("the Cargo lock excludes disclosed certificate and Unix I/O safety versions", async () => {
   const lock = await readFile(new URL("../src-tauri/Cargo.lock", import.meta.url), "utf8");
   const patched = {
     "rustls-webpki": ">=0.103.16 <0.104.0-alpha.1 || >=0.104.0-alpha.8",
     "webpki-root-certs": ">=1.0.10",
+    // RUSTSEC-2026-0386; exclude the separately affected 1.54.0 from 0384.
+    tokio: ">=1.51.6 <1.52.0 || >=1.53.3 <1.54.0 || >=1.54.1",
   };
   const packages = lock.split("[[package]]").slice(1).map(entry => ({
     name: entry.match(/^name = "([^"]+)"$/mu)?.[1],

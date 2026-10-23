@@ -6,6 +6,7 @@ import type { OnboardingChecklistItem, TeacherContextSnapshot } from "@/lib/edup
 import type { WorkbenchView } from "@/lib/edupi-workbench";
 import type { EduPiWorkspaceBundle } from "@/lib/edupi-education-client";
 import { APP_VERSION_DISPLAY } from "@/lib/branding";
+import { useDesktopHostIdentity } from "@/hooks/useDesktopHostIdentity";
 import { useDesktopChrome, WindowControls } from "./desktop";
 import { CONNECTOR_SETUP_IDS, EduPiConnectorSetup } from "./EduPiConnectorSetup";
 import { EduPiBackgroundJobs } from "./EduPiBackgroundJobs";
@@ -130,6 +131,7 @@ function AdminMetric({ value, label }: { value: string | number; label: string }
 
 export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, onNavigate, onOpenSettings, modelSettingsDirty, modelsPanel, initialSection = "readiness", refreshToken = 0 }: Props) {
   const desktopChrome = useDesktopChrome();
+  const nativeIdentity = useDesktopHostIdentity(desktopChrome.isDesktop);
   const [activeSection, setActiveSection] = useState<AdminSectionId>(() => visibleSection(initialSection));
   const [modelsMounted, setModelsMounted] = useState(false);
   const [snapshot, setSnapshot] = useState<AdminSnapshot>({ context: null, education: null, status: null, compatibility: null, models: null, platform: null });
@@ -205,7 +207,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
     || (!coreConnected ? snapshot.status?.core?.reason || systemStatusLabel(snapshot.status?.core?.status) : null)
     || (kernel?.status === "ready" ? coreExecutionReadinessLabel(snapshot.status?.core?.capabilities) : systemStatusLabel(kernel?.status));
   const defaultModel = snapshot.models?.defaultModel;
-  const refresh = () => setRefreshKey((value) => value + 1);
+  const refresh = () => { setRefreshKey((value) => value + 1); void nativeIdentity.refresh(); };
   const restoreDeletedEntity = useCallback(async (kind: EducationEntityDeleteKind, id: string, restoreRequestId: string): Promise<void> => {
     const result = await restoreEducationEntity(kind, id, restoreRequestId);
     setSnapshot((current) => ({ ...current, education: result.data }));
@@ -362,7 +364,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
       {activeSection === "system" ? <section className="edupi-admin-section">
         <AdminSectionHeader title="系统" meta={education?.workspace || "数据目录待连接"} onRefresh={refresh} />
         <div className="edupi-admin-list">
-          <div><span><strong>EduPi Desktop</strong><small>当前安装版本</small></span><em>v{APP_VERSION_DISPLAY}</em></div>
+          <div><span><strong>{desktopChrome.isDesktop ? "EduPi Desktop" : "EduPi Web"}</strong><small>{desktopChrome.isDesktop ? "当前运行版本" : "网页版本"}</small></span><em>{desktopChrome.isDesktop ? nativeIdentity.host ? `v${nativeIdentity.host.appVersion}` : nativeIdentity.loading ? "检测中" : "无法检测" : `v${APP_VERSION_DISPLAY}`}</em></div>
           <button type="button" disabled={coreReconnecting || coreRepairing} onClick={coreConnected ? refresh : () => void reconnectCore()} aria-label={coreConnected ? "检查 Core 状态" : "重新连接 Core"}><span><strong>EduPi Core</strong><small aria-live="polite">{coreReconnectMessage || snapshot.status?.core?.reason || systemStatusLabel(snapshot.status?.core?.lifecycle || snapshot.status?.core?.status)}</small></span><em className={coreConnected ? "is-ready" : ""}>{coreReconnecting ? "连接中" : coreRepairing ? "修复中" : loading ? "检查中" : coreConnected ? "已连接" : "重新连接"}</em></button>
           {desktopChrome.isDesktop && ["runtime_root_invalid", "runtime_state_invalid", "runtime_writer_unavailable"].some((code) => snapshot.status?.core?.reason?.includes(code)) ? <button type="button" disabled={coreRepairing || coreReconnecting} onClick={() => void repairCore()}><span><strong>修复 Core Runtime</strong><small>只清理运行状态绑定，保留教师数据</small></span><em>{coreRepairing ? "处理中" : "修复"}</em></button> : null}
           <div><span><strong>教育投影</strong><small>{snapshot.status?.projection?.reason || systemStatusLabel(snapshot.status?.projection?.status)}</small></span><em className={projectionConnected ? "is-ready" : ""}>{projectionConnected ? "已连接" : "检查"}</em></div>

@@ -43,7 +43,7 @@ test("computer-use permissions are driven by one primary action", () => {
   assert.match(source, /setInterval\(\(\) => \{/);
   assert.match(source, /aria-label="重新检测权限"/);
   assert.match(source, /aria-label="停止控制"/);
-  assert.match(source, /setPrefBool\(APP_PREF_KEYS\.computerUseEnabled, true\)/);
+  assert.doesNotMatch(source, /setPrefBool\(APP_PREF_KEYS\.computerUseEnabled, true\)/);
   assert.match(source, /await relaunchAppNative\(\)/);
   assert.doesNotMatch(source, />打开辅助功能设置<\/button>/);
   assert.doesNotMatch(source, />打开屏幕录制设置<\/button>/);
