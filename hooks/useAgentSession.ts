@@ -1789,9 +1789,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             }
             return false;
           }
-          assertCurrentSend(sid);
+          const sourcePending = getDraft(originDraftKey)?.pendingPrompt;
+          const sourceMatches = sourcePending?.sessionId === sid && sourcePending.clientRequestId === clientRequestId
+            && sourcePending.message === pending.message && sourcePending.draftValue === pending.draftValue
+            && sourcePending.occurredAt === pending.occurredAt;
+          // A reset blank-chat key may now hold another task's editor. Its old
+          // submission must not return success and clear that replacement.
+          if (!sourceMatches) assertCurrentSend(sid);
           previouslyResolved = true;
-          acknowledgeSubmittedPrompt(originDraftKey, pending);
+          if (sourceMatches) {
+            acknowledgeSubmittedPrompt(originDraftKey, pending);
+          }
           if (sendGeneration === sessionGenerationRef.current && promptRunIdRef.current === promptRunId
             && sessionIdRef.current === sid) {
             dispatchMessageHistory({ type: "remove_optimistic", requestId: clientRequestId });
