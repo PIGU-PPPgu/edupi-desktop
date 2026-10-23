@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-10-23 R14/R23 管理界面补记：`codex/settings-admin-redesign` 的 `b86569fb` 已将设置纳入管理工作区、概览与自动运行合页、JEV 归入 AI 与模型、OpenConnector 改为连接页内只读目录，并整理资源与系统页。状态为**已实现待安装版验收**，未合并、未打包或发布；开发版浏览器已实际操作导航、JEV 草稿切换和 800/520 像素布局。隔离 Core 503、Tauri 目录查询/系统设置、Windows/Linux 原生页面仍未验，R23 授权执行闭环继续部分实现，不沿用旧 Console 安装版证据追认新页面。[逐项验收](../acceptance/2026-10-23-admin-settings-redesign.md)。
+
 2026-10-21 当前正式配对：Core[#311](https://github.com/PIGU-PPPgu/edupi/pull/311)已完整Mac CI39504481691并正常合入`03bbb893`，受测/PR/合并树均`8fc34936`；Desktop JSON、严格adapter、schema/双清单同步，配对切片独立复核通过。上传ICS、文本DOCX、OCR只读、文档revision、slot alias五项source E2均实际通过，保留首轮旧adapter503及一次owner读取超时，后者完整复现通过但根因未定。类型/定向lint、精确身份与47项workflow检查通过；本机另三项限时检查在Maintenance Sleep期间取消/超时，未计通过，已按原期限纳入Mac包装前正式Core门。TLS新锁应用CI39509871662通过，Rust完整日志仅余Windows zip三项，Mac目标闭包无zip，不豁免全仓失败。原分支[Draft #370](https://github.com/PIGU-PPPgu/edupi-desktop/pull/370)待最终源码CI/正常合并，仍无`.77` tag/签名run/资产；继续唯一Mac签名与实际安装。ICS/DOCX新采用走owner当前读取/原生确认，旧更新/配对/CANCEL/EXDATE/文件课表缺owner合同仍409保暂存，不能记成功；旧8命令/两未来投影也未实现。公开70、真实数据与用户偏好保持，包就绪后从旧版UI重建跨版草稿；不构建Windows/Linux或更新feed。[精确证据与前序失败](2026-09-07-signed-updates.md#2026-10-21-v0377-源码与配对门)。
 
 2026-10-21 安全门追补：`631051b7` CI因MCP新high公告失败，未执行应用兼容门，原失败保留；`ac88d02d`将MCP client/server/core固定2.3.0，自有REST拒重定向，真实双loopback改前泄6请求、改后目标0。实际MCP宿主与传输边界5/5及独立复核通过；更新后全套2450通过/39需正式Core环境跳过/0失败、完整lint/type通过，高危/严重审计0。Core311精确CI仍排队，正式pin/签名/安装尚待，不以安全源码绿提前结案。[证据](2026-09-07-signed-updates.md#2026-10-21-v0377-源码与配对门)。
