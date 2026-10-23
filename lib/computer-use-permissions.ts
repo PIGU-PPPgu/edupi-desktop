@@ -1,4 +1,4 @@
-import type { ComputerUseHostIdentity } from "./edupi-computer-use";
+import type { ComputerUseHostIdentity, ComputerUseStatus } from "./edupi-computer-use";
 
 export type ComputerUsePermission = "accessibility" | "screen_recording";
 
@@ -17,6 +17,40 @@ export type ComputerUsePermissionFlow = {
   permission: ComputerUsePermission;
   screenRecordingRequested: boolean;
 };
+
+export function computerUseHostSessionKey(host: ComputerUseHostIdentity | undefined): string | null {
+  if (!host || !Number.isSafeInteger(host.processId) || host.processId <= 0
+    || typeof host.appVersion !== "string" || !host.appVersion.trim()
+    || typeof host.bundleId !== "string" || !host.bundleId.trim()
+    || typeof host.platform !== "string" || !host.platform.trim()
+    || !(typeof host.bundlePath === "string" && host.bundlePath.trim()
+      || typeof host.executablePath === "string" && host.executablePath.trim())) return null;
+  return JSON.stringify([host.processId, host.appVersion, host.platform, host.bundleId, host.bundlePath, host.executablePath]);
+}
+
+/** Request progress only: this window's memory never stores a permission grant. */
+export function createComputerUsePermissionFlowSession() {
+  let pending: { hostKey: string; flow: ComputerUsePermissionFlow } | null = null;
+  const read = (status: ComputerUseStatus): ComputerUsePermissionFlow | null => {
+    const hostKey = computerUseHostSessionKey(status.host);
+    if (!hostKey || pending?.hostKey !== hostKey
+      || typeof status.accessibility !== "boolean" || typeof status.screenRecording !== "boolean") {
+      pending = null;
+      return null;
+    }
+    const flow = computerUsePermissionFlowAfterStatus(status, pending.flow);
+    pending = flow ? { hostKey, flow } : null;
+    return flow;
+  };
+  return {
+    read,
+    remember(status: ComputerUseStatus, flow: ComputerUsePermissionFlow | null) {
+      const hostKey = computerUseHostSessionKey(status.host);
+      pending = hostKey && flow ? { hostKey, flow: { ...flow } } : null;
+      return read(status);
+    },
+  };
+}
 
 export type ComputerUsePrimaryAction =
   | { kind: "detect" }

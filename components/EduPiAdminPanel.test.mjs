@@ -62,7 +62,8 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.match(admin, /className="edupi-admin-sidebar"/);
   assert.match(admin, /className="edupi-admin-workspace"/);
   assert.match(admin, /APP_VERSION_DISPLAY/);
-  assert.match(admin, /当前安装版本/);
+  assert.match(admin, /当前运行版本/);
+  assert.match(admin, /网页版本/);
   assert.match(admin, />刷新状态<\/button>/);
   assert.match(admin, /reconnectEduPiCore/);
   assert.match(admin, /repairEduPiCore/);
