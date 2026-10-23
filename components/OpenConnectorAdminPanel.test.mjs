@@ -27,7 +27,7 @@ test("OpenConnector browsing stays inline with a separate bounded GitHub verific
   assert.match(catalog, /placeholder="搜索服务"/);
   assert.match(catalog, /placeholder="搜索操作"/);
   assert.match(catalog, /selectedProvider\?\.service === "github"/);
-  assert.match(catalog, /<OpenConnectorGitHubVerification \/>/);
+  assert.match(catalog, /<OpenConnectorGitHubPanel \/>/);
   assert.doesNotMatch(html, /<button[^>]*>执行<\/button>/);
   assert.match(admin, /<OpenConnectorAdminPanel \/>/);
   assert.doesNotMatch(admin, /<OpenConnectorConsolePanel/);

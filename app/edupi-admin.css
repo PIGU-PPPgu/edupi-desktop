@@ -220,6 +220,14 @@
 .openconnector-verification summary { cursor: pointer; }
 .openconnector-verification code, .openconnector-verification pre { font-size: 11px; }
 .openconnector-verification .native-inline-alert { margin-top: 12px; }
+.openconnector-github__setup { margin-top: 20px; }
+.openconnector-github__client { display: grid; gap: 14px; margin-top: 16px; }
+.openconnector-admin__browser .openconnector-github__client label { padding: 0; font-weight: 500; }
+.openconnector-github__client > button { justify-self: start; }
+.openconnector-github__callback { display: grid; gap: 6px; color: var(--text-muted); font-size: 12px; }
+.openconnector-github__callback code { overflow-wrap: anywhere; color: var(--text); }
+.openconnector-github__body { margin: 14px 0; padding: 12px; overflow-wrap: anywhere; white-space: pre-wrap; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); line-height: 1.7; }
+.openconnector-github__settings > button { margin-top: 12px; }
 @media (max-width: 680px) { .openconnector-admin__browser { grid-template-columns: minmax(0, 1fr); } .openconnector-admin__providers { border-right: 0; border-bottom: 1px solid var(--border); } .openconnector-admin__providers ul { max-height: 180px; } .openconnector-admin__header { align-items: flex-start; flex-direction: column; gap: 5px; } }
 .edupi-admin-section__header {
   display: flex;

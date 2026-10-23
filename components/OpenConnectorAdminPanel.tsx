@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { fetchDesktopApi } from "@/lib/desktop-native";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import type { CatalogAction, CatalogProvider, CatalogQuery, CatalogResult } from "@/lib/openconnector-catalog-contract";
-import { OpenConnectorGitHubVerification } from "./OpenConnectorGitHubVerification";
+import { OpenConnectorGitHubPanel } from "./OpenConnectorGitHubPanel";
 
 type InspectResult = Extract<CatalogResult, { kind: "inspect" }>;
 const PROVIDER_PAGE_SIZE = 60;
@@ -228,7 +228,7 @@ export function OpenConnectorAdminPanel() {
       </section>
 
       <section className="openconnector-admin__content" aria-label="服务详情">
-      {selectedProvider?.service === "github" ? <OpenConnectorGitHubVerification /> : null}
+      {selectedProvider?.service === "github" ? <OpenConnectorGitHubPanel /> : null}
       {selectedAction ? <section className="openconnector-admin__inspect" aria-label={`${selectedAction.action.name} 参数`}>
         <button type="button" className="openconnector-admin__back" onClick={() => setSelectedAction(null)}>← 返回操作</button>
         <h3 ref={inspectHeadingRef} tabIndex={-1}>{selectedAction.action.name}</h3><span>{selectedAction.action.id}</span>

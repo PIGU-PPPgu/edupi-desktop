@@ -1,6 +1,19 @@
 # R23 外部 Action 权限与受管 Runtime 规格
 
-状态：通用真实 Action 权威合同尚未实现；2026-10-23 按用户明确要求增加下述管理页固定只读验证边界。生产 Agent 的旧环境变量执行入口仍隔离，唯一任务账本仍是 [产品闭环路线图](../plans/2026-09-06-product-closure-roadmap.md)。
+状态：通用真实 Action 权威合同尚未实现；管理页按用户明确要求提供固定只读验证，并于 2026-10-24 扩展下述 GitHub OAuth 与测试 issue 边界。生产 Agent 的旧环境变量执行入口仍隔离，唯一任务账本仍是 [产品闭环路线图](../plans/2026-09-06-product-closure-roadmap.md)。
+
+## 管理页 GitHub OAuth 与测试 Issue
+
+用户明确要求真实 OAuth 授权，并创建一个标记清楚的测试 issue。本入口限定公开仓库 `PIGU-PPPgu/edupi-desktop`，不开放模型自动写入或任意连接器 Action。
+
+- 使用账号本人注册的 GitHub OAuth 客户端，真实执行授权码、S256 PKCE 与 state 校验；不把既有 GitHub CLI token 导入冒充 OAuth。上游 GitHub catalog 通过正式 `assets.catalogDir` 加入 `public_repo`；只请求这一项公开仓库权限，不请求默认的 `repo`、`workflow` 或 `delete_repo`。客户端密钥由用户在应用配置页填写，保存后清空表单，不回显或写入浏览器存储。
+- 持久 runtime 的 OAuth、客户端及连接秘密字段必须以 AES-GCM 加密；数据库中的公开元数据和审计字段不属于整文件加密。独立 32 字节加密钥匙由本产品专用 macOS Keychain 项持有。钥匙串写入、runtime 初始化和客户端配置只通过私有 stdin，秘密不进入命令行参数、环境、普通状态文件、日志或 WebView 返回值。原 GitHub CLI 的认证保持独立。
+- 授权回调只监听 `127.0.0.1` 随机端口的 `GET /oauth/callback`，拒绝其他 HTTP 入口；不暴露 Action、连接管理、admin/runtime token。拒绝无效、过期、重复或已取消的 state，回调只显示静态结果。GitHub 允许 loopback 回调使用动态端口，注册路径固定 `/oauth/callback`。
+- 服务端生成一次不可编辑的目标、标题、正文和唯一请求标记；页面展示完整快照后才提交 draft ID。标题为 `[EduPi OAuth TEST] <requestId>`，正文含 `edupi-openconnector-test:<requestId>`；拒绝其他仓库、真实业务正文、labels、assignees 或调用者提供的 Action/URL。写入前回读仓库公开性、Issues 状态与当前权限，并绑定 OAuth 连接、账号、输入摘要和请求 ID。
+- manager 先持久化 `pending`，host 另以排他创建的持久 dispatch 记录拒绝重复 POST。重复确认、重启和上游 24 小时重放窗口之外都不得重派。超时或丢失响应记为 `unknown`，仅通过测试标记和 issue 回读核对，找不到时保持待核对。
+- 创建后用独立 `github.get_issue` 回读，核对仓库、编号、标题、正文、创建者及标记；创建和回读分别按 executionId 核对上游审计，才显示“已创建并回读”。原回执与 issue 位置持久化，重启后仍可再次从 GitHub 读取；一次验证完成后不提供创建第二个测试 issue 的入口。
+- scope 是 GitHub 的公开仓库权限；本机 host 的写入面仅为这一项固定测试。桌面 token 和页面确认不宣称不可模拟的人手授权，也不替代下文通用 Core grant 与操作系统隔离。旧生产 Agent 执行门和 Core `external_send:false` 保持原义。
+- GitHub 客户端注册、密钥生成/填写及提供商授权需要账号本人完成必要步骤。只有真实 OAuth、写入、回读和本机安装证据齐备时才计该子项通过，配置界面或模拟测试不计成功；其他服务、任意写入及其他系统仍单列未验。
 
 ## 管理页 GitHub 只读验证
 
