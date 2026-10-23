@@ -110,7 +110,7 @@ export async function POST(request: Request) {
         elements: [{ id: "noop", role: "button", label: "Do not click", operations: ["CLICK"] }],
       },
       history: [],
-    }, request.signal);
+    }, AbortSignal.any([request.signal, AbortSignal.timeout(config.timeoutMs)]));
     return NextResponse.json({
       ok: true,
       provider: decision.provider,
@@ -119,6 +119,11 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const code = error instanceof DecisionProviderError ? error.reason : "connection_failed";
-    return NextResponse.json({ error: "JEV 连接测试失败。", code }, { status: 502 });
+    const upstreamStatus = error instanceof DecisionProviderError ? error.upstreamStatus : undefined;
+    const message = code === "timeout" ? "JEV 请求超时，请检查网络或调整超时设置。"
+      : upstreamStatus === 401 || upstreamStatus === 403 ? "JEV 授权失败，请检查 API Key。"
+        : upstreamStatus ? `JEV 服务返回 HTTP ${upstreamStatus}，请联系服务提供方。`
+          : code === "service_unavailable" ? "JEV 服务暂不可用，请稍后重试。" : "JEV 连接测试失败。";
+    return NextResponse.json({ error: message, code, ...(upstreamStatus ? { upstreamStatus } : {}) }, { status: 502 });
   }
 }

@@ -162,6 +162,7 @@
 
 .openconnector-admin { min-width: 0; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border); }
 .edupi-admin-section__header + .openconnector-admin { margin-top: 20px; padding-top: 0; border-top: 0; }
+.edupi-admin-catalog .openconnector-admin { margin-top: 18px; padding-top: 0; border-top: 0; }
 .openconnector-admin__header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .openconnector-admin__header > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
 .openconnector-admin__header h2 { margin: 0; font-size: 15px; font-weight: 650; }
@@ -239,8 +240,6 @@
 .edupi-admin-work-details li strong { font-size: 11px; font-weight: 600; }
 .edupi-admin-work-details li span,
 .edupi-admin-work-details > small { color: var(--text-muted); font-size: 10px; }
-.edupi-admin-connection-title { margin: 24px 0 0; font-size: 13px; font-weight: 650; }
-.edupi-admin-connection-title + .edupi-admin-list { margin-top: 10px; }
 
 .edupi-admin-readiness {
   overflow: hidden;
@@ -524,9 +523,9 @@
   min-height: 580px;
   margin-top: 18px;
 }
-.edupi-admin-model-tabs { display: flex; gap: 6px; margin-top: 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
-.edupi-admin-model-tabs button { min-width: 96px; border-color: transparent; background: transparent; color: var(--text-muted); }
-.edupi-admin-model-tabs button[aria-pressed="true"] { border-color: var(--border); background: var(--bg-panel); color: var(--text); font-weight: 650; }
+.edupi-admin-tabs { display: flex; gap: 6px; margin-top: 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.edupi-admin-tabs button { min-width: 96px; border-color: transparent; background: transparent; color: var(--text-muted); }
+.edupi-admin-tabs button[aria-pressed="true"] { border-color: var(--border); background: var(--bg-panel); color: var(--text); font-weight: 650; }
 
 .edupi-admin-embedded-models .models-settings-embedded {
   width: 100% !important;

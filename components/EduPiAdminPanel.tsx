@@ -92,6 +92,7 @@ const FALLBACK_CHECKLIST: OnboardingChecklistItem[] = [
   { id: "material", label: "放入第一份真实材料", status: "optional", description: "作业、错题或课堂记录" },
 ];
 const connectorSetupIds = new Set<string>(CONNECTOR_SETUP_IDS);
+const CONNECTOR_CAPABILITY_LABELS: Record<string, string> = { messages: "消息", calendar: "日程", documents: "文档", drive: "云盘", attachments: "附件", timetable: "课表", roster: "名单", notices: "通知" };
 function connectorStatusLabel(status: string | undefined): string {
   if (status === "connected" || status === "conversation_verified") return "已连接";
   if (status === "configured") return "已配置";
@@ -139,6 +140,8 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
   const [activeSection, setActiveSection] = useState<AdminSectionId>(() => visibleSection(initialSection));
   const [modelsMounted, setModelsMounted] = useState(() => visibleSection(initialSection) === "models");
   const [modelPane, setModelPane] = useState<"chat" | "browser">("chat");
+  const [connectionPane, setConnectionPane] = useState<"services" | "catalog">(() => initialSection === "openconnector" ? "catalog" : "services");
+  const [catalogMounted, setCatalogMounted] = useState(() => initialSection === "openconnector");
   const [settingsMounted, setSettingsMounted] = useState(() => visibleSection(initialSection) === "settings");
   const [snapshot, setSnapshot] = useState<AdminSnapshot>({ context: null, education: null, status: null, compatibility: null, models: null, platform: null });
   const [loading, setLoading] = useState(true);
@@ -147,19 +150,20 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
   const [coreReconnectMessage, setCoreReconnectMessage] = useState<string | null>(null);
   const [coreRepairing, setCoreRepairing] = useState(false);
   const [selectedConnector, setSelectedConnector] = useState<string | null>(null);
-  const firstNavRef = useRef<HTMLButtonElement>(null);
+  const activeNavRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const workspaceRef = useRef<HTMLElement>(null);
   const openSection = useCallback((section: AdminSectionId) => {
     const visible = visibleSection(section);
     if (visible === "models") setModelsMounted(true);
     if (visible === "settings") setSettingsMounted(true);
+    if (section === "openconnector") { setConnectionPane("catalog"); setCatalogMounted(true); }
     setActiveSection(visible);
   }, []);
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    firstNavRef.current?.focus();
+    activeNavRef.current?.focus();
     return () => {
       const previous = previousFocusRef.current;
       if (previous && document.contains(previous)) previous.focus();
@@ -265,7 +269,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
         {ADMIN_SECTIONS.map((section) => <button
           type="button"
           key={section.id}
-          ref={section.id === "readiness" ? firstNavRef : undefined}
+          ref={section.id === activeSection ? activeNavRef : undefined}
           aria-current={activeSection === section.id ? "page" : undefined}
           disabled={settingsBusy && activeSection === "settings" && section.id !== "settings"}
           onClick={() => openSection(section.id)}
@@ -344,23 +348,30 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
       </section> : null}
 
       {activeSection === "connections" ? <section className="edupi-admin-section">
-        <AdminSectionHeader title="连接" onRefresh={refresh} />
-        {snapshot.platform?.connectors?.connectors?.length ? <><h2 className="edupi-admin-connection-title">服务连接</h2>
+        <AdminSectionHeader title="连接" onRefresh={connectionPane === "services" ? refresh : undefined} />
+        <div className="edupi-admin-tabs" role="group" aria-label="连接类别">
+          <button type="button" aria-pressed={connectionPane === "services"} aria-controls="edupi-connections-services" onClick={() => setConnectionPane("services")}>服务连接</button>
+          <button type="button" aria-pressed={connectionPane === "catalog"} aria-controls="edupi-connections-catalog" onClick={() => { setCatalogMounted(true); setConnectionPane("catalog"); }}>OpenConnector</button>
+        </div>
+        <div id="edupi-connections-services" hidden={connectionPane !== "services"}>
+        {snapshot.platform?.connectors?.connectors?.length ? <>
         <div className="edupi-admin-list">{snapshot.platform.connectors.connectors.map((connector) => {
           const id = connector.connector_id || "";
           const connected = connector.status === "connected" || connector.status === "conversation_verified";
-          const content = <><span><strong>{connector.label || id}</strong><small>{connector.capabilities?.join(" · ")}</small></span><em className={connected ? "is-ready" : ""}>{connectorStatusLabel(connector.status)}{connectorSetupIds.has(id) ? " ›" : ""}</em></>;
+          const capabilities = connector.capabilities?.map(value => CONNECTOR_CAPABILITY_LABELS[value] || value).join(" · ");
+          const content = <><span><strong>{connector.label || id}</strong>{capabilities ? <small>{capabilities}</small> : null}</span><em className={connected ? "is-ready" : ""}>{connectorStatusLabel(connector.status)}{connectorSetupIds.has(id) ? " ›" : ""}</em></>;
           return connectorSetupIds.has(id)
             ? <button type="button" key={id} onClick={() => setSelectedConnector(id)}>{content}</button>
             : <div key={id}>{content}</div>;
         })}</div></> : null}
         {selectedConnector ? <EduPiConnectorSetup connectorId={selectedConnector} status={snapshot.platform?.connectors?.connectors?.find((item) => item.connector_id === selectedConnector)?.status || "not_configured"} onClose={() => setSelectedConnector(null)} onConfigured={refresh} /> : null}
-        <OpenConnectorAdminPanel />
+        </div>
+        {catalogMounted ? <div id="edupi-connections-catalog" className="edupi-admin-catalog" hidden={connectionPane !== "catalog"}><OpenConnectorAdminPanel /></div> : null}
       </section> : null}
 
       {modelsMounted ? <section className="edupi-admin-section is-models" hidden={activeSection !== "models"}>
         <AdminSectionHeader title="AI 与模型" meta={modelPane === "chat" ? snapshot.models === null ? "模型数据不可用" : defaultModel ? `${defaultModel.provider} / ${defaultModel.modelId}` : "默认模型待配置" : undefined} />
-        <div className="edupi-admin-model-tabs" role="group" aria-label="模型类别">
+        <div className="edupi-admin-tabs" role="group" aria-label="模型类别">
           <button id="edupi-models-chat-tab" type="button" aria-pressed={modelPane === "chat"} aria-controls="edupi-models-chat" onClick={() => setModelPane("chat")}>对话模型</button>
           <button id="edupi-models-browser-tab" type="button" aria-pressed={modelPane === "browser"} aria-controls="edupi-models-browser" onClick={() => setModelPane("browser")}>浏览器决策</button>
         </div>
