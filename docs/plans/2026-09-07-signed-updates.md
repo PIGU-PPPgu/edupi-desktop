@@ -1,5 +1,11 @@
 # 自动下载安装
 
+## 2026-10-24 JEV 与 GitHub 本机真实连接
+
+- 源码 `468f82e8c99414ed7ebb6df1773cb71b3d1b6d3e`、Core03 的本机 `.77` 预览已替换唯一安装路径。完整 Desktop 资源准备通过，未变化的原生壳复用；6 个新原生资源与整 App 重新 Developer ID 签名，CDHash `45d22da015f6c806028a1c9388c01ac34263cd90`，主程序 SHA-256 `0b532d475cfede13ee601d7022c532e74b97061e02b9ba63abc44ebc8f4d54e1`。原 updater 公钥保持，包内启动/Core/目录与原生操作后 strict codesign 通过；不作为 Apple 公证或公开发布证明。
+- 已安装 App 的 JEV 真服务连接成功1198ms，修复的是读取已有系统代理；GitHub 实际连接、取消确认、固定只读调用、executionId审计核对、真正重启回读及重启后再次调用均通过。第一份执行 `cc322af0-dec0-4452-bb71-b21f4315249e`，第二份 `38c800ce-2b83-4992-bfc6-a499f5e4894e`，没有自动重发或外部写入。
+- 正常资料、原模型/认证/JEV/GitHub/UI配置保持；提醒正常轮询补入一个状态字段已通过基线摘要精确解释，Runtime元数据和会话custom追加有记录。清理本轮8个生成目录和上一份`.77`预览，目录占用约4.51GiB，可用空间观测增4.60GiB；原`.70`回退及原私有备份保留。仍无新tag、公开Release或feed变更；[逐项验收](../acceptance/2026-10-23-admin-settings-redesign.md#2026-10-24-真实连接续验)。
+
 ## 2026-10-23 管理与设置改版本机预览
 
 - 用户明确要求把页面改版安装到本机。源码 `f3c09cd653245f26013c59f1cddf6c4e3538c2bb`、Core `03bbb893` 在本机生成 arm64 0.3.77 Developer ID 签名预览并替换唯一 `/Applications/EduPi.app`。Team `BY3XZG2839`，CDHash `4f2bc0e81b5f3f97d601dc842a0e056b7b0c59ea`，主程序 SHA-256 `687d3f5e5af805d17f6b5bfc65977a81005b48674b7d73a58dc9f1e77cc9c5b7`；完整签名、原 updater 公钥和包内 Core/目录检查通过。此本地包未公证，不属于下方正式 Release run 的公证/发布证明；没有创建新 tag、Release 或改 feed。
