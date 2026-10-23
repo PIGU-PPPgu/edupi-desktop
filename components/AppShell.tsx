@@ -166,14 +166,6 @@ export function AppShell() {
   }, []);
   useEffect(() => {
     const handler = () => {
-      setAppSettingsOpen(false);
-      setEduPiEducationModule("context");
-    };
-    window.addEventListener("edupi-open-context", handler);
-    return () => window.removeEventListener("edupi-open-context", handler);
-  }, []);
-  useEffect(() => {
-    const handler = () => {
       setAppSettingsSection("mobile");
       setAppSettingsOpen(true);
     };
@@ -186,6 +178,14 @@ export function AppShell() {
   const [adminModelsDirty, setAdminModelsDirty] = useState(false);
   const [proactiveOpenRequest, setProactiveOpenRequest] = useState(0);
   const [edupiEducationModule, setEduPiEducationModule] = useState<EducationModule | null>("home");
+  useEffect(() => {
+    const handler = () => {
+      setAppSettingsOpen(false);
+      setEduPiEducationModule("context");
+    };
+    window.addEventListener("edupi-open-context", handler);
+    return () => window.removeEventListener("edupi-open-context", handler);
+  }, []);
   const edupiChatActive = edupiEducationModule !== null && searchParams.get("view") === "chat";
   const [projectTrust, setProjectTrust] = useState<ProjectTrustStatus | null>(null);
   const [projectTrustDialogOpen, setProjectTrustDialogOpen] = useState(false);

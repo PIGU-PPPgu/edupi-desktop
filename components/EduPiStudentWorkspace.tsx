@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { EducationContract, EducationEntityDeleteKind, FamilyContact, TeacherTask } from "@/lib/edupi-education-contract";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { studentRecordKey, studentRecordName } from "@/lib/edupi-student-roster-model";
@@ -176,7 +176,7 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   const classNames = [...new Set(data.students.map(student => String(student.class_name || "")).filter(Boolean))].sort();
   const students = directory.filtered.map(row => row.student);
   const selected = data.students.find((student, index) => studentRecordKey(student, index) === selectedStudentId) || null;
-  const selectedName = selected ? studentRecordName(selected) : null;
+  const selectedName = useMemo(() => selected ? studentRecordName(selected) : null, [selected]);
   const uniqueSelectedName = Boolean(selectedName && (data.studentNameCounts ? data.studentNameCounts[selectedName] === 1 : data.students.filter(student => studentRecordName(student) === selectedName).length === 1));
   const patterns = selected ? records(selected.error_patterns) : [];
   const trajectory = selected ? records(selected.trajectory) : [];

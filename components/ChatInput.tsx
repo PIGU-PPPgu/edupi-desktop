@@ -487,9 +487,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     cwd: string;
     values: Record<string, boolean>;
   } | null>(null);
-  const skillDormancy = cwd && skillDormancyState?.cwd === cwd
+  const skillDormancy = React.useMemo(() => cwd && skillDormancyState?.cwd === cwd
     ? skillDormancyState.values
-    : {};
+    : {}, [cwd, skillDormancyState]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -1115,7 +1115,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     ? value.slice(1).toLowerCase()
     : null;
 
-  const filteredSlashCommands = (() => {
+  const filteredSlashCommands = React.useMemo(() => {
     if (slashQuery === null) return [];
     const commands = [...(isStreaming ? [] : BUILTIN_SLASH_COMMANDS), ...(slashCommands ?? [])];
     return [...commands]
@@ -1130,12 +1130,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         return SLASH_SOURCE_ORDER[a.source] - SLASH_SOURCE_ORDER[b.source]
           || MODEL_OPTION_COLLATOR.compare(a.name, b.name);
       });
-  })();
+  }, [isStreaming, slashCommands, slashQuery, t]);
 
   const {
     commands: displayedSlashCommands,
     groups: groupedSlashCommands,
-  } = buildSlashCommandLayout(filteredSlashCommands, skillDormancy);
+  } = React.useMemo(() => buildSlashCommandLayout(filteredSlashCommands, skillDormancy), [filteredSlashCommands, skillDormancy]);
 
   const slashCommandCountLabel = filteredSlashCommands.length === 1
     ? t(slashQuery ? "chat.match" : "chat.command")
