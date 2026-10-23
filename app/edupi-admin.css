@@ -201,6 +201,25 @@
 .openconnector-admin__inspect dt { overflow-wrap: anywhere; font-size: 11px; font-weight: 600; }
 .openconnector-admin__inspect dd,
 .openconnector-admin__inspect > small { margin: 0; overflow-wrap: anywhere; color: var(--text-muted); font-size: 11px; }
+.openconnector-verification { padding: 20px; border-bottom: 1px solid var(--border); }
+.openconnector-verification > header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.openconnector-verification h3, .openconnector-verification h4 { margin: 0; font-size: 13px; font-weight: 600; }
+.openconnector-verification header span, .openconnector-verification p, .openconnector-verification summary { color: var(--text-muted); font-size: 12px; }
+.openconnector-verification p { margin: 12px 0; }
+.openconnector-verification button { padding: 7px 12px; font-size: 12px; }
+.openconnector-verification button.is-primary { color: #fff; border-color: var(--accent); background: var(--accent); }
+.openconnector-verification__buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.openconnector-verification__confirm, .openconnector-verification__receipt { margin-top: 18px; }
+.openconnector-verification__receipt { padding-top: 16px; border-top: 1px solid var(--border); }
+.openconnector-verification__receipt > strong { font-size: 12px; }
+.openconnector-verification dl { display: grid; gap: 8px; margin: 12px 0; }
+.openconnector-verification dl > div { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 12px; font-size: 12px; }
+.openconnector-verification dt { color: var(--text-muted); }
+.openconnector-verification dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.openconnector-verification details { margin-top: 14px; }
+.openconnector-verification summary { cursor: pointer; }
+.openconnector-verification code, .openconnector-verification pre { font-size: 11px; }
+.openconnector-verification .native-inline-alert { margin-top: 12px; }
 @media (max-width: 680px) { .openconnector-admin__browser { grid-template-columns: minmax(0, 1fr); } .openconnector-admin__providers { border-right: 0; border-bottom: 1px solid var(--border); } .openconnector-admin__providers ul { max-height: 180px; } .openconnector-admin__header { align-items: flex-start; flex-direction: column; gap: 5px; } }
 .edupi-admin-section__header {
   display: flex;

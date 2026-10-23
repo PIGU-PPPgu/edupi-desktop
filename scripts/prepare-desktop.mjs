@@ -164,8 +164,10 @@ async function assembleOpenConnectorCatalog() {
   await mkdir(openConnectorResourcesDir, { recursive: true });
   await copyFile(join(rootDir, "desktop", "open-connector-catalog-host.mjs"), join(openConnectorResourcesDir, "host.mjs"));
   await copyFile(join(rootDir, "desktop", "open-connector-console-host.mjs"), join(openConnectorResourcesDir, "console-host.mjs"));
+  await copyFile(join(rootDir, "desktop", "open-connector-verification-host.mjs"), join(openConnectorResourcesDir, "verification-host.mjs"));
   await cp(join(rootDir, "desktop", "open-connector-console-assets"), join(openConnectorResourcesDir, "web"), { recursive: true });
   await copyPackageClosure(rootDir, openConnectorResourcesDir, "@oomol-lab/open-connector");
+  await copyPackageClosure(rootDir, openConnectorResourcesDir, "undici");
 }
 
 async function readPackageVersion(packageDir) {

@@ -18,7 +18,7 @@ test("admin accepts only bounded projected provider, action and inspect results"
   assert.equal(isCatalogResult({ kind: "inspect", action, fields: [{ name: "packageName", type: { html: "bad" } }], limited: false }), false);
 });
 
-test("OpenConnector browsing stays inside connections and exposes no execution", async () => {
+test("OpenConnector browsing stays inline with a separate bounded GitHub verification surface", async () => {
   const html = renderToStaticMarkup(React.createElement(OpenConnectorAdminPanel));
   const admin = await readFile(new URL("./EduPiAdminPanel.tsx", import.meta.url), "utf8");
   const catalog = await readFile(new URL("./OpenConnectorAdminPanel.tsx", import.meta.url), "utf8");
@@ -26,7 +26,8 @@ test("OpenConnector browsing stays inside connections and exposes no execution",
   assert.match(html, /仅桌面应用可查询/);
   assert.match(catalog, /placeholder="搜索服务"/);
   assert.match(catalog, /placeholder="搜索操作"/);
-  assert.match(html, /账号与执行未接入/);
+  assert.match(catalog, /selectedProvider\?\.service === "github"/);
+  assert.match(catalog, /<OpenConnectorGitHubVerification \/>/);
   assert.doesNotMatch(html, /<button[^>]*>执行<\/button>/);
   assert.match(admin, /<OpenConnectorAdminPanel \/>/);
   assert.doesNotMatch(admin, /<OpenConnectorConsolePanel/);

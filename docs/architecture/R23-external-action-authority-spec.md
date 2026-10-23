@@ -1,12 +1,23 @@
 # R23 外部 Action 权限与受管 Runtime 规格
 
-状态：设计约束；真实 Action 权威合同尚未实现。生产 Agent 的旧环境变量执行入口已隔离，唯一任务账本仍是 [产品闭环路线图](../plans/2026-09-06-product-closure-roadmap.md)。
+状态：通用真实 Action 权威合同尚未实现；2026-10-23 按用户明确要求增加下述管理页固定只读验证边界。生产 Agent 的旧环境变量执行入口仍隔离，唯一任务账本仍是 [产品闭环路线图](../plans/2026-09-06-product-closure-roadmap.md)。
+
+## 管理页 GitHub 只读验证
+
+本机用户要求在已安装应用完成一个真实服务的连接与调用。本轮仅实现 `github.get_current_user`，不把该验证计为通用外部执行合同完成。
+
+- 管理页使用本机 GitHub CLI 已登录账号；通过官方 OpenConnector API Key 连接验证取得账号身份，显示账号及读取范围后由页面发起固定读取。服务、Action 和空输入由 host 写死，调用者不能提供目标 URL、其他 Action、请求方法或参数。其他服务仍只有目录与参数查看。
+- 凭据由后端执行固定 `gh auth token --hostname github.com` 取回，经私有 stdin 传入一次性受管进程。该进程的 admin/runtime token 与 SQLite 加密钥匙均随机生成、仅驻内存；临时库必须加密，结束即关闭并删除。凭据不经过 WebView、环境变量、命令行参数、日志或长期复制文件。
+- 本机私有状态只保存已确认账号、凭据指纹和脱敏回执。每次读取重新验证现有登录，账号或凭据发生变化须重新连接。调用先写 `pending`，相同请求 ID 只回读，超时或进程中断保留 `unknown`；执行后按上游 executionId 回读审计，再保存结果。重启读取同一回执。
+- Action policy 只允许这一项，所有通用代理禁用。页面、API 和管道均不暴露任意连接器执行；不修改旧 `ensureCoreAuthority()`、不打开测试开关、不注册生产 Agent 工具，也不修改 Core `external_send:false`。
+- 此管理页的桌面 token 是来源校验，不宣称不可模拟的人手确认或同用户进程间凭据隔离。该固定只读验证不能授权其他数据访问、外部写入或模型自动执行；这些能力继续适用下文完整合同与隔离门禁。
+- 本轮范围为 macOS 本机验证；其他系统的凭据获取与原生操作另行验收。
 
 ## 目标与假设
 
 老师可以从明确的事项发起外部 Action，先看见实际连接、目标和完整输入，再逐次确认；Core 决定是否允许执行，持久化成功、失败或结果不明的回执。JEV 只提供浏览器下一步建议，不进入对话模型或本合同。
 
-当前设计假设：保留 `edupi-bridge-v1.1` 的教育工作区语义；新的外部执行合同独立版本化。OpenConnector headless runtime 由 Desktop 管理生命周期。首个可打包阶段只验证目录/inspect 与隔离假 Provider 的 POST，不对真实 Provider 执行 Action；`no_auth` 也可能产生外部副作用。不开放入站 Action HTTP 端口。私有管道减少网络暴露，但同用户 Agent shell 仍可能接触管道或凭据，不能独自构成授权隔离。
+当前通用执行设计假设：保留 `edupi-bridge-v1.1` 的教育工作区语义；新的外部执行合同独立版本化。OpenConnector headless runtime 由 Desktop 管理生命周期。首个已交付打包阶段只验证目录/inspect 与隔离假 Provider 的 POST；后续管理页仅开放上节固定只读验证，其他真实 Action 仍等待本节合同，`no_auth` 也可能产生外部副作用。不开放入站 Action HTTP 端口。私有管道减少网络暴露，但同用户 Agent shell 仍可能接触管道或凭据，不能独自构成授权隔离。
 
 ## 合同
 
@@ -26,7 +37,7 @@
 - 原生确认弹窗也不等于人手确认：Agent 可能通过桌面自动化合成点击。确认凭证不得返回 WebView 或 Agent 工具；必须实测合成输入无法签发授权，否则有凭据执行保持关闭。
 - 不把现有 G3 内部草稿 grant 的 `external_send=false` 改成 true，也不把 v1.1 的 unsupported command 偷换为外部执行。
 - 不把 runtime bootstrap/admin token 暴露给模型、WebView、局域网手机网关或普通桌面 API。管理连接与执行 Action 分权；默认 capability 白名单还须受 Core WorkCase 约束。
-- 没有经过跨平台验证的授权与隔离时，可先打包目录和受管 runtime，并对本机隔离假 Provider 测试 POST；真实 `no_auth`、API Key、OAuth Action 一律不开放，也不宣称 R23 完成。
+- 没有经过跨平台验证的授权与隔离时，通用执行仍只允许目录和隔离假 Provider 测试；上节固定管理页读取之外的真实 `no_auth`、API Key、OAuth Action 一律不开放，不宣称 R23 通用执行完成。
 
 ## 代码位置与风格
 

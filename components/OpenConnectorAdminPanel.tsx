@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { fetchDesktopApi } from "@/lib/desktop-native";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import type { CatalogAction, CatalogProvider, CatalogQuery, CatalogResult } from "@/lib/openconnector-catalog-contract";
+import { OpenConnectorGitHubVerification } from "./OpenConnectorGitHubVerification";
 
 type InspectResult = Extract<CatalogResult, { kind: "inspect" }>;
 const PROVIDER_PAGE_SIZE = 60;
@@ -216,7 +217,7 @@ export function OpenConnectorAdminPanel() {
   }
 
   return <section className="openconnector-admin" aria-label="OpenConnector 目录">
-    <header className="openconnector-admin__header"><div><h2>OpenConnector</h2><span>只读目录 · 账号与执行未接入</span></div><em>{providerTotal === null ? "服务目录" : `${providerTotal} 个服务`}</em></header>
+    <header className="openconnector-admin__header"><div><h2>OpenConnector</h2></div><em>{providerTotal === null ? "服务目录" : `${providerTotal} 个服务`}</em></header>
     {error ? <div className="native-inline-alert is-error" role="alert">{error}{desktop && providers.length === 0 && busy === null ? <button type="button" onClick={() => void loadProviders()}>重试</button> : null}</div> : null}
     {!desktop ? <div className="openconnector-admin__unavailable" role="status">仅桌面应用可查询</div> : <div className="openconnector-admin__browser">
       <section className="openconnector-admin__providers" aria-label="服务目录">
@@ -226,6 +227,8 @@ export function OpenConnectorAdminPanel() {
         {filteredProviders.length > visibleProviderCount ? <button className="openconnector-admin__more" type="button" onClick={() => setVisibleProviderCount((count) => count + PROVIDER_PAGE_SIZE)}>显示更多</button> : null}
       </section>
 
+      <section className="openconnector-admin__content" aria-label="服务详情">
+      {selectedProvider?.service === "github" ? <OpenConnectorGitHubVerification /> : null}
       {selectedAction ? <section className="openconnector-admin__inspect" aria-label={`${selectedAction.action.name} 参数`}>
         <button type="button" className="openconnector-admin__back" onClick={() => setSelectedAction(null)}>← 返回操作</button>
         <h3 ref={inspectHeadingRef} tabIndex={-1}>{selectedAction.action.name}</h3><span>{selectedAction.action.id}</span>
@@ -238,6 +241,7 @@ export function OpenConnectorAdminPanel() {
         {selectedProvider && !busy && !searched && error ? <button type="button" onClick={() => void selectProvider(selectedProvider)}>重试读取</button> : null}
         {searched && actions.length > 0 ? <ul>{actions.map((action) => <li key={action.id}><button type="button" disabled={busy !== null} onClick={() => void inspectAction(action)}><strong>{action.name}</strong><small>{action.service} · {action.description || action.id}</small></button></li>)}</ul> : null}
       </section>}
+      </section>
     </div>}
   </section>;
 }

@@ -148,7 +148,7 @@ test("JEV connection errors report the upstream status without returning its bod
     const body = await response.json();
     assert.equal(response.status, 502);
     assert.equal(body.upstreamStatus, 451);
-    assert.match(body.error, /HTTP 451/);
+    assert.match(body.error, /地区不可用/);
     assert.equal(JSON.stringify(body).includes("private-upstream-detail"), false);
   } finally {
     server.closeAllConnections();

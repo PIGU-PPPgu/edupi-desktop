@@ -121,6 +121,7 @@ export async function POST(request: Request) {
     const code = error instanceof DecisionProviderError ? error.reason : "connection_failed";
     const upstreamStatus = error instanceof DecisionProviderError ? error.upstreamStatus : undefined;
     const message = code === "timeout" ? "JEV 请求超时，请检查网络或调整超时设置。"
+      : upstreamStatus === 451 ? "JEV 当前网络出口所在地区不可用，请检查系统网络设置。"
       : upstreamStatus === 401 || upstreamStatus === 403 ? "JEV 授权失败，请检查 API Key。"
         : upstreamStatus ? `JEV 服务返回 HTTP ${upstreamStatus}，请联系服务提供方。`
           : code === "service_unavailable" ? "JEV 服务暂不可用，请稍后重试。" : "JEV 连接测试失败。";
