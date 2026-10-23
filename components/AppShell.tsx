@@ -166,6 +166,7 @@ export function AppShell() {
   useEffect(() => {
     const handler = () => {
       setAppSettingsOpen(false);
+      setEduPiAdminOpen(false);
       setEduPiEducationModule("context");
     };
     window.addEventListener("edupi-open-context", handler);
@@ -174,7 +175,9 @@ export function AppShell() {
   useEffect(() => {
     const handler = () => {
       setAppSettingsSection("mobile");
-      setAppSettingsOpen(true);
+      setAppSettingsOpen(false);
+      setEduPiAdminSection("settings");
+      setEduPiAdminOpen(true);
     };
     window.addEventListener("edupi-open-settings", handler);
     return () => window.removeEventListener("edupi-open-settings", handler);
@@ -183,6 +186,7 @@ export function AppShell() {
   const [edupiAdminOpen, setEduPiAdminOpen] = useState(false);
   const [edupiAdminSection, setEduPiAdminSection] = useState<AdminSectionId>("readiness");
   const [adminModelsDirty, setAdminModelsDirty] = useState(false);
+  const [adminUpdateBusy, setAdminUpdateBusy] = useState(false);
   const [proactiveOpenRequest, setProactiveOpenRequest] = useState(0);
   const [edupiEducationModule, setEduPiEducationModule] = useState<EducationModule | null>("home");
   const edupiChatActive = edupiEducationModule !== null && searchParams.get("view") === "chat";
@@ -455,6 +459,8 @@ export function AppShell() {
   }, [router, searchParams]);
 
   const openEduPiAdmin = useCallback((section: AdminSectionId = "readiness") => {
+    setAppSettingsOpen(false);
+    setAppSettingsSection(null);
     setEduPiAdminSection(section);
     setEduPiAdminOpen(true);
   }, []);
@@ -866,16 +872,20 @@ export function AppShell() {
       return true;
     }
     if (action.action === "open_settings") {
-      setAppSettingsOpen(true);
+      openEduPiAdmin("settings");
       return true;
     }
     if (action.action === "open_context") {
+      if (adminUpdateBusy) return false;
       setAppSettingsOpen(false);
+      setEduPiAdminOpen(false);
       setEduPiEducationModule("context");
       return true;
     }
     if (action.action === "close_panel") {
+      if (adminUpdateBusy) return false;
       setAppSettingsOpen(false);
+      setEduPiAdminOpen(false);
       setModelsConfigOpen(false);
       setSkillsConfigOpen(false);
       setPluginsConfigOpen(false);
@@ -923,7 +933,7 @@ export function AppShell() {
     }
     router.replace(`/?${params.toString()}`, { scroll: false });
     return true;
-  }, [router, searchParams]);
+  }, [adminUpdateBusy, openEduPiAdmin, router, searchParams]);
 
   const [reminderDraft, setReminderDraft] = useState<{ taskId: string; title: string; context?: EduPiComposerContext; openId?: string } | null>(null);
   const continueReminder = useCallback(async (taskId: string) => {
@@ -1372,7 +1382,7 @@ export function AppShell() {
     { id: "models", label: "模型设置", onClick: () => setModelsConfigOpen(true), disabled: false, icon: <span aria-hidden="true">⌘</span> },
     { id: "skills", label: "教学能力", onClick: () => setSkillsConfigOpen(true), disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd, icon: <span aria-hidden="true">◇</span> },
     { id: "plugins", label: "扩展管理", onClick: () => setPluginsConfigOpen(true), disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd, icon: <span aria-hidden="true">◌</span> },
-    { id: "settings", label: "教师设置", onClick: () => setAppSettingsOpen(true), disabled: false, iconOnly: true, icon: <span aria-hidden="true">⚙</span> },
+    { id: "settings", label: "教师设置", onClick: () => edupiEducationModule ? openEduPiAdmin("settings") : setAppSettingsOpen(true), disabled: false, iconOnly: true, icon: <span aria-hidden="true">⚙</span> },
   ];
 
   const renderSessionSidebar = (presentation: "default" | "embedded-chat" = "default") => (
@@ -2075,7 +2085,7 @@ export function AppShell() {
               activeAgentSessionId={selectedSession?.id ?? null}
               onActivateAgentSession={handleActivateEducationAgentSession}
               onOpenAdmin={() => openEduPiAdmin()}
-              onOpenSettings={() => setAppSettingsOpen(true)}
+              onOpenSettings={() => openEduPiAdmin("settings")}
               onOpenProactive={openEduPiProactive}
               onOpenGuide={() => setFirstRunGuideOpen(true)}
               onOpenPhoneControl={openPhoneControl}
@@ -2284,17 +2294,18 @@ export function AppShell() {
       refreshToken={modelsRefreshKey}
       initialSection={edupiAdminSection}
       modelSettingsDirty={adminModelsDirty}
+      settingsBusy={adminUpdateBusy}
       modelsPanel={<ModelsConfig
         embedded
         onClose={() => setAdminModelsDirty(false)}
         onDirtyChange={setAdminModelsDirty}
         onSaved={() => setModelsRefreshKey((k) => k + 1)}
       />}
-      onClose={() => setEduPiAdminOpen(false)}
+      settingsPanel={<AppSettings embedded initialSection={appSettingsSection} onUpgradeInProgressChange={setAdminUpdateBusy} onClose={() => setEduPiAdminOpen(false)} />}
+      onClose={() => { if (!adminUpdateBusy) setEduPiAdminOpen(false); }}
       onOpenContext={() => { setEduPiAdminOpen(false); openEducationModule("context"); }}
       onAskStudentUpdate={askEduPiToUpdateStudents}
       onNavigate={openEducationView}
-      onOpenSettings={() => { setEduPiAdminOpen(false); setAppSettingsOpen(true); }}
     />}
     {firstRunGuideOpen && (
       <EduPiFirstRunGuide
@@ -2309,7 +2320,7 @@ export function AppShell() {
         onSkip={finishFirstRunGuide}
       />
     )}
-    <UpdateReminder onOpenSettings={() => setAppSettingsOpen(true)} />
+    <UpdateReminder onOpenSettings={() => openEduPiAdmin("settings")} />
     </EduPiForegroundProvider>
   );
 }

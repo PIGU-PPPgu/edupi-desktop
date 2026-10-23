@@ -86,10 +86,10 @@ function notificationStatusLabel(status: NotificationPermissionStatus | null): s
   return "已开启";
 }
 
-function TeacherContextSettingsCard() {
+function TeacherContextSettingsCard({ disabled = false }: { disabled?: boolean }) {
   const [context, setContext] = useState<TeacherContextSnapshot | null>(null);
   useEffect(() => { fetch("/api/edupi/onboarding", { cache: "no-store" }).then((response) => response.json()).then(setContext).catch(() => undefined); }, []);
-  return <div className="native-settings-card app-settings-context" style={sectionCardStyle}><div><div style={sectionTitleStyle}>教师信息</div><div className="settings-context-summary"><strong>{context?.name || "尚未设置称呼"}</strong><span>{context?.school || "学校待设置"} · {context?.subject || "学科待设置"} · {context?.grade || "年级待设置"}</span></div></div><button type="button" className="native-button" onClick={() => window.dispatchEvent(new CustomEvent("edupi-open-context"))}>编辑</button></div>;
+  return <div className="native-settings-card app-settings-context" style={sectionCardStyle}><div><div style={sectionTitleStyle}>教师信息</div><div className="settings-context-summary"><strong>{context?.name || "尚未设置称呼"}</strong><span>{context?.school || "学校待设置"} · {context?.subject || "学科待设置"} · {context?.grade || "年级待设置"}</span></div></div><button type="button" className="native-button" disabled={disabled} onClick={() => window.dispatchEvent(new CustomEvent("edupi-open-context"))}>编辑</button></div>;
 }
 
 function ForegroundSettingsCard() {
@@ -453,7 +453,7 @@ function VersionChip({
   );
 }
 
-export function AppSettings({ onClose, initialSection = null }: { onClose: () => void; initialSection?: "mobile" | null }) {
+export function AppSettings({ onClose, initialSection = null, embedded = false, onUpgradeInProgressChange }: { onClose: () => void; initialSection?: "mobile" | null; embedded?: boolean; onUpgradeInProgressChange?: (busy: boolean) => void }) {
   const { t, locale, setLocale, supportedLocales } = useI18n();
   const { theme, setTheme } = useTheme();
   const desktop = isTauriDesktop();
@@ -470,6 +470,9 @@ export function AppSettings({ onClose, initialSection = null }: { onClose: () =>
   const [testingNotification, setTestingNotification] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState<NotificationPermissionStatus | null>(null);
   const updateCheckSequenceRef = useRef(0);
+
+  useEffect(() => { onUpgradeInProgressChange?.(Boolean(upgradeProgress)); }, [onUpgradeInProgressChange, upgradeProgress]);
+  useEffect(() => () => onUpgradeInProgressChange?.(false), [onUpgradeInProgressChange]);
 
   const refreshNotificationStatus = useCallback(async () => {
     if (!desktop) return;
@@ -512,11 +515,11 @@ export function AppSettings({ onClose, initialSection = null }: { onClose: () =>
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !upgradeProgress) onClose();
+      if (event.key === "Escape" && !upgradeProgress && !embedded) onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, upgradeProgress]);
+  }, [embedded, onClose, upgradeProgress]);
 
   useEffect(() => {
     if (initialSection !== "mobile") return;
@@ -618,49 +621,11 @@ export function AppSettings({ onClose, initialSection = null }: { onClose: () =>
     }
   };
 
-  return (
-    <div
-      className="native-modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !upgradeProgress) onClose();
-      }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1200,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 18,
-        background: "rgba(0,0,0,0.4)",
-      }}
-    >
-      <section
-        className="native-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="app-settings-title"
-        style={{
-          width: "min(620px, 100%)",
-          height: "auto",
-          maxHeight: "min(720px, calc(100vh - 36px))",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          border: "1px solid var(--border)",
-          borderRadius: 12,
-          background: "var(--bg-panel)",
-          color: "var(--text)",
-          boxShadow: "0 22px 70px rgba(0,0,0,0.32)",
-        }}
-      >
-        <header className="native-modal-header" style={{ display: "flex", flexShrink: 0, alignItems: "flex-start", gap: 14, padding: "20px 22px 17px", borderBottom: "1px solid var(--border)" }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <h2 className="native-modal-title" id="app-settings-title" style={{ margin: 0, fontSize: 18, lineHeight: 1.25 }}>
-              设置
-            </h2>
-            <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+  const content = <>
+        <header className="app-settings-header">
+          <div className="app-settings-header__main">
+            {embedded ? <h1 id="app-settings-title">设置</h1> : <h2 className="native-modal-title" id="app-settings-title">设置</h2>}
+            <div className="app-settings-header__actions">
               <VersionChip
                 currentValue={currentVersionText}
                 latestValue={latestReleaseText}
@@ -713,7 +678,7 @@ export function AppSettings({ onClose, initialSection = null }: { onClose: () =>
               </div>
             )}
           </div>
-          <button
+          {!embedded ? <button
             className="native-modal-close"
             type="button"
             onClick={onClose}
@@ -723,10 +688,12 @@ export function AppSettings({ onClose, initialSection = null }: { onClose: () =>
             style={{ padding: "1px 5px", border: 0, background: "transparent", color: "var(--text-muted)", cursor: upgradeProgress ? "default" : "pointer", fontSize: 21, lineHeight: 1, opacity: upgradeProgress ? 0.35 : 1 }}
           >
             ×
-          </button>
+          </button> : null}
         </header>
 
-        <div style={{ minHeight: 0, flex: 1, overflowY: "auto", padding: "18px 22px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="app-settings-body">
+          <section className="app-settings-group" aria-label="常规">
+          <h2>常规</h2>
           <div className="app-settings-quick">
             <div className="native-settings-card" style={sectionCardStyle}>
               <div style={sectionTitleStyle}>{t("appSettings.languageSection")}</div>
@@ -742,22 +709,22 @@ export function AppSettings({ onClose, initialSection = null }: { onClose: () =>
               </div>
             </div>
           </div>
-          <TeacherContextSettingsCard />
+          <TeacherContextSettingsCard disabled={Boolean(upgradeProgress)} />
           <ForegroundSettingsCard />
-          {desktop && <EduPiUsageSettingsCard />}
-          {desktop && <UpdateProxySettingsCard onSaved={() => void checkForUpdates()} />}
+          </section>
 
-          {desktop && (
-            <EduPiDataSettingsCard />
-          )}
+          {desktop ? <section className="app-settings-group" aria-label="数据与更新">
+          <h2>数据与更新</h2>
+          <EduPiUsageSettingsCard />
+          <UpdateProxySettingsCard onSaved={() => void checkForUpdates()} />
+          <EduPiDataSettingsCard />
+          </section> : null}
 
-          {desktop && <MobileBridgeSettingsCard />}
+          {desktop ? <section className="app-settings-group" aria-label="设备">
+          <h2>设备</h2>
+          <MobileBridgeSettingsCard />
+          <ComputerUseSettingsCard />
 
-          {desktop && (
-            <ComputerUseSettingsCard />
-          )}
-
-          {desktop && (
             <div className="native-settings-card" style={sectionCardStyle}>
               <div style={sectionTitleStyle}>{t("appSettings.desktopSection")}</div>
               <div style={sectionHintStyle}>{t("appSettings.desktopHint")}</div>
@@ -830,9 +797,12 @@ export function AppSettings({ onClose, initialSection = null }: { onClose: () =>
                 </button>
               </div>
             </div>
-          )}
+          </section> : null}
         </div>
-      </section>
-    </div>
-  );
+  </>;
+
+  if (embedded) return <div className="app-settings-page" aria-labelledby="app-settings-title">{content}</div>;
+  return <div className="native-modal-backdrop app-settings-backdrop" role="presentation" onMouseDown={(event) => {
+    if (event.target === event.currentTarget && !upgradeProgress) onClose();
+  }}><section className="native-modal app-settings-modal" role="dialog" aria-modal="true" aria-labelledby="app-settings-title">{content}</section></div>;
 }

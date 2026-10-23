@@ -18,18 +18,18 @@ test("admin accepts only bounded projected provider, action and inspect results"
   assert.equal(isCatalogResult({ kind: "inspect", action, fields: [{ name: "packageName", type: { html: "bad" } }], limited: false }), false);
 });
 
-test("separate OpenConnector admin exposes provider browsing and action search without execution", async () => {
+test("OpenConnector browsing stays inside connections and exposes no execution", async () => {
   const html = renderToStaticMarkup(React.createElement(OpenConnectorAdminPanel));
   const admin = await readFile(new URL("./EduPiAdminPanel.tsx", import.meta.url), "utf8");
-  const consolePanel = await readFile(new URL("./OpenConnectorConsolePanel.tsx", import.meta.url), "utf8");
-  assert.match(html, /aria-label="OpenConnector 管理后台"/);
-  assert.match(html, /搜索服务/);
-  assert.match(html, /搜索操作/);
+  const catalog = await readFile(new URL("./OpenConnectorAdminPanel.tsx", import.meta.url), "utf8");
+  assert.match(html, /aria-label="OpenConnector 目录"/);
+  assert.match(html, /仅桌面应用可查询/);
+  assert.match(catalog, /placeholder="搜索服务"/);
+  assert.match(catalog, /placeholder="搜索操作"/);
   assert.match(html, /账号与执行未接入/);
   assert.doesNotMatch(html, /<button[^>]*>执行<\/button>/);
-  assert.match(admin, /\{ id: "openconnector", label: "OpenConnector" \}/);
-  assert.match(consolePanel, /<OpenConnectorAdminPanel \/>/);
-  assert.match(admin, /<OpenConnectorConsolePanel onBack=/);
+  assert.match(admin, /<OpenConnectorAdminPanel \/>/);
+  assert.doesNotMatch(admin, /<OpenConnectorConsolePanel/);
   assert.doesNotMatch(admin, /OpenConnectorCatalogCard/);
 });
 

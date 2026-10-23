@@ -27,11 +27,16 @@ test("an older release check cannot overwrite a newer proxy-backed refresh", () 
   assert.match(check, /finally \{\s*if \(isCurrent\(\)\) setLoading\(false\)/);
 });
 
-test("settings keeps its header separate from the scrollable content", () => {
-  assert.match(source, /height: "auto"/);
-  assert.match(source, /maxHeight: "min\(720px, calc\(100vh - 36px\)\)"/);
-  assert.match(source, /className="native-modal-header" style=\{\{ display: "flex", flexShrink: 0/);
-  assert.match(source, /<div style=\{\{ minHeight: 0, flex: 1, overflowY: "auto"/);
+test("settings shares content between the management page and the standalone dialog", async () => {
+  const css = await readFile(new URL("../app/edupi-settings.css", import.meta.url), "utf8");
+  assert.match(source, /if \(embedded\) return <div className="app-settings-page"/);
+  assert.match(source, /className="native-modal app-settings-modal" role="dialog"/);
+  assert.match(source, /<header className="app-settings-header">/);
+  assert.match(source, /<div className="app-settings-body">/);
+  assert.match(source, /onUpgradeInProgressChange\?\.\(Boolean\(upgradeProgress\)\)/);
+  for (const group of ["常规", "数据与更新", "设备"]) assert.match(source, new RegExp(`aria-label="${group}"`));
+  assert.match(css, /\.app-settings-modal \{[^}]*max-height/);
+  assert.match(css, /\.app-settings-body \{[^}]*overflow-y: auto/);
   assert.doesNotMatch(source, /appSettings\.taglineDetails/);
   assert.doesNotMatch(source, /<MetaChip/);
 });

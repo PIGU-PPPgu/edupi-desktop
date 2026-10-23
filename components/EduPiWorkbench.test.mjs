@@ -587,7 +587,7 @@ test("background jobs expose every available artifact for native opening", async
   assert.match(jobs, /backgroundJobRecovery/);
   assert.match(jobs, /查看“\$\{job\.title\}”技术详情/);
   assert.match(jobs, /failureLabels\[job\.error \|\| ""\] \|\| "处理未完成"/);
-  assert.match(admin, /onModels=\{\(\) => setActiveSection\("models"\)\}/);
+  assert.match(admin, /onModels=\{\(\) => openSection\("models"\)\}/);
   assert.match(css, /\.edupi-background-job-artifacts/);
   assert.match(css, /\.edupi-background-job-details/);
 });

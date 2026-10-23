@@ -18,7 +18,11 @@ test("management center is a full admin workspace with persistent navigation", a
 
   for (const endpoint of ["/api/edupi/workspace", "/api/edupi/status", "/api/models"]) assert.match(admin, new RegExp(endpoint.replaceAll("/", "\\/")));
   assert.doesNotMatch(admin, /\/api\/edupi\/(?:onboarding|education)/);
-  for (const label of ["管理中心", "概览", "自动运行", "工作与资源", "连接", "AI 与模型", "回收站", "系统"]) assert.match(admin, new RegExp(label));
+  for (const label of ["管理中心", "概览", "自动运行", "工作与资源", "连接", "AI 与模型", "设置", "回收站", "系统"]) assert.match(admin, new RegExp(label));
+  const navigation = admin.slice(admin.indexOf("export const ADMIN_SECTIONS"), admin.indexOf("const FALLBACK_CHECKLIST"));
+  assert.doesNotMatch(navigation, /label: "自动运行"|label: "OpenConnector"/);
+  assert.match(admin, /section === "automation"\) return "readiness"/);
+  assert.match(admin, /section === "openconnector"\) return "connections"/);
   for (const label of ["教学能力", "学校平台", "教师与学生", "校历与课表", "上传内容", "任务与产物"]) {
     assert.doesNotMatch(admin.slice(admin.indexOf("export const ADMIN_SECTIONS"), admin.indexOf("const FALLBACK_CHECKLIST")), new RegExp(`label: "${label}"`));
   }
@@ -29,15 +33,18 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.match(admin, /skill\.can_reuse/);
   assert.match(admin, /tenant\.core_mode/);
   assert.match(admin, /tenant\.harness_count/);
-  assert.match(admin, /<OpenConnectorConsolePanel onBack=/);
-  assert.match(admin, /activeSection === "openconnector" \? " is-console"/);
+  assert.match(admin, /<OpenConnectorAdminPanel \/>/);
+  assert.doesNotMatch(admin, /<OpenConnectorConsolePanel|is-console/);
   assert.match(admin, /<JevSettingsCard \/>/);
+  assert.ok(admin.indexOf("<OpenConnectorAdminPanel />") > admin.indexOf('activeSection === "connections"'));
+  assert.ok(admin.indexOf("<JevSettingsCard />") > admin.indexOf('activeSection !== "models"'));
+  assert.match(admin, /settingsMounted \? <section className="edupi-admin-section is-settings"/);
   for (const label of ["运行中", "待确认", "已完成", "主动运行", "待交付", "教师反馈", "最近自动运行"]) assert.match(admin, new RegExp(label));
   assert.match(admin, /formatCoreSchedulerStatus/);
   assert.match(admin, /kernelRunTitle/);
   assert.match(admin, /kernelRunDetail/);
   assert.match(admin, /kernelRunAction/);
-  assert.match(admin, /if \(target === "models"\) setActiveSection\("models"\); else leaveAdmin/);
+  assert.match(admin, /if \(target === "models"\) openSection\("models"\); else leaveAdmin/);
   assert.doesNotMatch(admin, /formatNextScheduledRun/);
   assert.match(admin, /ADMIN_SECTIONS/);
   assert.match(admin, /has-desktop-drag-region/);
@@ -47,8 +54,10 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.match(admin, /setSelectedConnector/);
   assert.match(admin, /initialSection\?: AdminSectionId/);
   assert.match(admin, /useState<AdminSectionId>\(\(\) => visibleSection\(initialSection\)\)/);
-  assert.match(admin, /setActiveSection\(visibleSection\(initialSection\)\)/);
-  assert.match(admin, /useState\(false\);[\s\S]+?activeSection === "models"[\s\S]+?setModelsMounted\(true\)/);
+  assert.match(admin, /openSection\(initialSection\)/);
+  assert.match(admin, /if \(visible === "models"\) setModelsMounted\(true\)/);
+  assert.match(admin, /if \(visible === "settings"\) setSettingsMounted\(true\)/);
+  assert.match(admin, /disabled=\{settingsBusy && activeSection === "settings"/);
   assert.match(admin, /hidden=\{activeSection !== "models"\}/);
   assert.match(admin, /workspaceRef\.current\?\.scrollTo\(\{ top: 0 \}\)/);
   assert.match(admin, /modelSettingsDirty && !window\.confirm/);
@@ -89,7 +98,7 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.doesNotMatch(panel, /<EduPiDeletedEntities/);
   assert.equal((admin.match(/<p(?:\s|>)/g) || []).length, 0);
   assert.match(admin, /FALLBACK_CHECKLIST/);
-  assert.match(admin, /数据读取失败/);
+  assert.match(admin, /!allSourcesLoaded \? "暂不可用"/);
   assert.match(admin, /模型数据不可用/);
   assert.match(admin, /默认模型待配置/);
   assert.doesNotMatch(admin, /education\?\.[a-zA-Z]+\.length \|\| 0/);
@@ -116,14 +125,14 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.match(appShell, /openPhoneControl/);
   assert.match(appShell, /onOpenPhoneControl=\{openPhoneControl\}/);
   assert.match(appShell, /onOpenAdmin=\{\(\) => openEduPiAdmin\(\)\}/);
-  assert.match(appShell, /onOpenSettings=\{\(\) => setAppSettingsOpen\(true\)\}/);
+  assert.match(appShell, /onOpenSettings=\{\(\) => openEduPiAdmin\("settings"\)\}/);
   assert.match(appShell, /edupiAdminOpen && <EduPiAdminPanel/);
   assert.match(appShell, /modelsPanel=\{<ModelsConfig[\s\S]+?embedded[\s\S]+?onDirtyChange=\{setAdminModelsDirty\}[\s\S]+?onSaved=/);
   assert.match(appShell, /inert=\{edupiAdminOpen \? true : undefined\}/);
   assert.match(appShell, /aria-hidden=\{edupiAdminOpen \? true : undefined\}/);
   assert.match(appShell, /onAskStudentUpdate=\{askEduPiToUpdateStudents\}/);
-  assert.match(appShell, /onOpenSettings=\{\(\) => \{ setEduPiAdminOpen\(false\); setAppSettingsOpen\(true\); \}\}/);
-  assert.match(admin, /<strong>应用更新<\/strong><small>检查、下载并安装新版本<\/small><\/span><em>检查更新<\/em>/);
+  assert.match(appShell, /settingsPanel=\{<AppSettings embedded/);
+  assert.doesNotMatch(admin, /<strong>应用更新<\/strong>/);
   assert.ok(admin.indexOf('className="edupi-admin-list"', admin.indexOf('activeSection === "system"')) < admin.indexOf("<EduPiCoreCompatibility", admin.indexOf('activeSection === "system"')));
   assert.match(appShell, /params\.set\("view", view\)/);
   assert.doesNotMatch(workspace, /edupi-dashboard-readiness/);

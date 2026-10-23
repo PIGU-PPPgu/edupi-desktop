@@ -215,26 +215,29 @@ export function OpenConnectorAdminPanel() {
     }
   }
 
-  return <section className="openconnector-admin" aria-label="OpenConnector 管理后台">
-    <header className="openconnector-admin__header"><div><h1>OpenConnector</h1><span>{providerTotal === null ? "服务目录" : `${providerTotal} 个服务`}</span></div><em>账号与执行未接入</em></header>
+  return <section className="openconnector-admin" aria-label="OpenConnector 目录">
+    <header className="openconnector-admin__header"><div><h2>OpenConnector</h2><span>只读目录 · 账号与执行未接入</span></div><em>{providerTotal === null ? "服务目录" : `${providerTotal} 个服务`}</em></header>
     {error ? <div className="native-inline-alert is-error" role="alert">{error}{desktop && providers.length === 0 && busy === null ? <button type="button" onClick={() => void loadProviders()}>重试</button> : null}</div> : null}
-    <div className={`openconnector-admin__browser${selectedAction ? " has-inspect" : ""}`}>
+    {!desktop ? <div className="openconnector-admin__unavailable" role="status">仅桌面应用可查询</div> : <div className="openconnector-admin__browser">
       <section className="openconnector-admin__providers" aria-label="服务目录">
-        <label>搜索服务<input type="search" value={providerQuery} disabled={!desktop || busy === "providers"} maxLength={120} autoComplete="off" onChange={(event) => { setProviderQuery(event.target.value); setVisibleProviderCount(PROVIDER_PAGE_SIZE); }} /></label>
+        <label>服务<input type="search" placeholder="搜索服务" value={providerQuery} disabled={!desktop || busy === "providers"} maxLength={120} autoComplete="off" onChange={(event) => { setProviderQuery(event.target.value); setVisibleProviderCount(PROVIDER_PAGE_SIZE); }} /></label>
         <div className="openconnector-admin__count" role="status">{!desktop ? "仅桌面应用可查询" : busy === "providers" ? "正在读取服务" : providerTotal === null ? "服务目录暂不可用" : `${filteredProviders.length} 个匹配服务${providerLimited ? " · 目录未完整" : ""}`}</div>
         <ul>{filteredProviders.slice(0, visibleProviderCount).map((provider) => <li key={provider.service}><button type="button" disabled={busy !== null} aria-pressed={selectedProvider?.service === provider.service} onClick={() => void selectProvider(provider)}><strong>{provider.displayName}</strong><small>{provider.service}</small></button></li>)}</ul>
         {filteredProviders.length > visibleProviderCount ? <button className="openconnector-admin__more" type="button" onClick={() => setVisibleProviderCount((count) => count + PROVIDER_PAGE_SIZE)}>显示更多</button> : null}
       </section>
 
-      <section className="openconnector-admin__actions" aria-label="操作目录">
-        <header><h2>{selectedProvider?.displayName || "操作"}</h2>{selectedProvider ? <span>{selectedProvider.authTypes.join(" · ") || "无需账户"}{selectedProvider.categories.length ? ` · ${selectedProvider.categories.join(" · ")}` : ""}</span> : null}</header>
-        <form role="search" onSubmit={(event) => void searchActions(event)}><label>搜索操作<input type="search" value={actionQuery} disabled={!desktop || busy !== null} maxLength={200} autoComplete="off" onChange={(event) => changeActionQuery(event.target.value)} /></label><button type="submit" disabled={!desktop || busy !== null || !actionQuery.trim()}>查找</button></form>
+      {selectedAction ? <section className="openconnector-admin__inspect" aria-label={`${selectedAction.action.name} 参数`}>
+        <button type="button" className="openconnector-admin__back" onClick={() => setSelectedAction(null)}>← 返回操作</button>
+        <h3 ref={inspectHeadingRef} tabIndex={-1}>{selectedAction.action.name}</h3><span>{selectedAction.action.id}</span>
+        <dl>{selectedAction.fields.map((field) => <div key={field.name}><dt>{field.name}{field.required ? " · 必填" : ""}</dt><dd>{field.description || field.type}</dd></div>)}</dl>
+        {selectedAction.fields.length === 0 ? <small>无需输入参数</small> : null}{selectedAction.limited ? <small>仅显示前 30 项参数</small> : null}
+      </section> : <section className="openconnector-admin__actions" aria-label="操作目录">
+        <header><h3>{selectedProvider?.displayName || "操作"}</h3>{selectedProvider ? <span>{selectedProvider.authTypes.join(" · ") || "无需账户"}{selectedProvider.categories.length ? ` · ${selectedProvider.categories.join(" · ")}` : ""}</span> : null}</header>
+        <form role="search" onSubmit={(event) => void searchActions(event)}><label>操作<input type="search" placeholder="搜索操作" value={actionQuery} disabled={!desktop || busy !== null} maxLength={200} autoComplete="off" onChange={(event) => changeActionQuery(event.target.value)} /></label><button type="submit" disabled={!desktop || busy !== null || !actionQuery.trim()}>查找</button></form>
         <div className="openconnector-admin__count" role="status">{busy === "actions" ? "正在读取操作" : busy === "search" ? "正在查找" : searched ? `${actions.length} 项${limited ? " · 可缩小关键词" : ""}` : selectedProvider ? "操作暂不可用" : "选择服务或搜索操作"}</div>
         {selectedProvider && !busy && !searched && error ? <button type="button" onClick={() => void selectProvider(selectedProvider)}>重试读取</button> : null}
-        {searched && actions.length > 0 ? <ul>{actions.map((action) => <li key={action.id}><button type="button" disabled={busy !== null} aria-pressed={selectedAction?.action.id === action.id} onClick={() => void inspectAction(action)}><strong>{action.name}</strong><small>{action.service} · {action.description || action.id}</small></button></li>)}</ul> : null}
-      </section>
-
-      {selectedAction ? <section className="openconnector-admin__inspect" aria-label={`${selectedAction.action.name} 参数`}><h2 ref={inspectHeadingRef} tabIndex={-1}>{selectedAction.action.name}</h2><span>{selectedAction.action.id}</span><dl>{selectedAction.fields.map((field) => <div key={field.name}><dt>{field.name}{field.required ? " · 必填" : ""}</dt><dd>{field.description || field.type}</dd></div>)}</dl>{selectedAction.fields.length === 0 ? <small>无需输入参数</small> : null}{selectedAction.limited ? <small>仅显示前 30 项参数</small> : null}</section> : null}
-    </div>
+        {searched && actions.length > 0 ? <ul>{actions.map((action) => <li key={action.id}><button type="button" disabled={busy !== null} onClick={() => void inspectAction(action)}><strong>{action.name}</strong><small>{action.service} · {action.description || action.id}</small></button></li>)}</ul> : null}
+      </section>}
+    </div>}
   </section>;
 }
