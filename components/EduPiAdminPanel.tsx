@@ -207,7 +207,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
     || (!coreConnected ? snapshot.status?.core?.reason || systemStatusLabel(snapshot.status?.core?.status) : null)
     || (kernel?.status === "ready" ? coreExecutionReadinessLabel(snapshot.status?.core?.capabilities) : systemStatusLabel(kernel?.status));
   const defaultModel = snapshot.models?.defaultModel;
-  const refresh = () => setRefreshKey((value) => value + 1);
+  const refresh = () => { setRefreshKey((value) => value + 1); void nativeIdentity.refresh(); };
   const restoreDeletedEntity = useCallback(async (kind: EducationEntityDeleteKind, id: string, restoreRequestId: string): Promise<void> => {
     const result = await restoreEducationEntity(kind, id, restoreRequestId);
     setSnapshot((current) => ({ ...current, education: result.data }));

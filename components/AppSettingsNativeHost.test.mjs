@@ -34,7 +34,8 @@ async function fixture(options = {}) {
   let status = options.status ?? nativeStatus();
   let getStatus = () => options.statusError ? Promise.reject(new Error("synthetic IPC failure")) : Promise.resolve(status);
   let requestPermission = () => Promise.resolve(status);
-  const calls = { reads: 0, requests: [], enable: [], restart: 0, preferences: [] };
+  let mutateControl = enabled => Promise.resolve({ ...status, enabled });
+  const calls = { reads: 0, requests: [], enable: [], restart: 0, preferences: [], announcements: [] };
   const preferences = new Map([["computerUseEnabled", options.enabledPreference ?? false]]);
   const savedGlobals = Object.fromEntries(["window", "document", "HTMLElement", "IS_REACT_ACT_ENVIRONMENT"].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   const window = new EventTarget();
@@ -58,8 +59,8 @@ async function fixture(options = {}) {
     "@/lib/desktop-computer-use": {
       getComputerUseStatusNative: () => { calls.reads++; return getStatus(); },
       requestComputerUsePermissionNative: permission => { calls.requests.push(permission); return requestPermission(permission); },
-      setComputerUseEnabledNative: async enabled => { calls.enable.push(enabled); return { ...status, enabled }; },
-      emergencyStopComputerUseNative: async () => { calls.enable.push(false); return { ...status, enabled: false }; },
+      setComputerUseEnabledNative: enabled => { calls.enable.push(enabled); return mutateControl(enabled); },
+      emergencyStopComputerUseNative: () => { calls.enable.push(false); return mutateControl(false); },
     },
     "@/lib/desktop-native": {
       getNotificationPermissionStatusNative: async () => ({ authorizationStatus: 0 }),
@@ -72,7 +73,10 @@ async function fixture(options = {}) {
       setPrefBool: (key, value) => { calls.preferences.push([key, value]); preferences.set(key, value); } },
     "@/hooks/useTheme": { useTheme: () => ({ theme: "light", setTheme() {} }) },
     "@/lib/edupi-foreground-settings": { readForegroundSettings: () => ({ graceDays: 3 }), writeForegroundSettings: async () => {} },
-    "./EduPiComputerUseStop": { COMPUTER_USE_CHANGED_EVENT: "synthetic-control-changed", announceComputerUseChanged() {} },
+    "./EduPiComputerUseStop": { COMPUTER_USE_CHANGED_EVENT: "synthetic-control-changed", announceComputerUseChanged(enabled) {
+      calls.announcements.push(enabled);
+      window.dispatchEvent(new CustomEvent("synthetic-control-changed", { detail: enabled }));
+    } },
     "./EduPiConnectorSetup": { CONNECTOR_SETUP_IDS: [], EduPiConnectorSetup: blank },
     "./desktop": { useDesktopChrome: () => ({ isDesktop: options.desktop !== false, isMacOS: options.desktop !== false, dragRegionProps: {} }), WindowControls: blank },
   };
@@ -115,10 +119,11 @@ async function fixture(options = {}) {
       { createNodeMock: () => ({ focus() {}, scrollTo() {} }) }); });
   };
   const button = label => renderer.root.findAllByType("button").find(node => text(node) === label || node.props["aria-label"] === label);
-  const click = async label => { const node = button(label); assert.ok(node, `button ${label}`); assert.equal(node.props.disabled, false); await act(async () => node.props.onClick()); };
+  const click = async label => { const node = button(label); assert.ok(node, `button ${label}`); assert.notEqual(node.props.disabled, true); await act(async () => node.props.onClick()); };
   return {
     calls, errors, preferences, window, mount, unmount, click, button,
     setStatus(next) { status = next; }, setStatusReader(next) { getStatus = next; }, setRequest(next) { requestPermission = next; },
+    setControlMutation(next) { mutateControl = next; },
     versionChip: () => renderer.root.findByType("header").findByType("a"),
     desktopRow: () => renderer.root.findAllByType("strong").find(node => /^EduPi (Desktop|Web)$/.test(text(node))).parent.parent,
     content: () => text(renderer.root),
@@ -288,5 +293,270 @@ for (const enabledPreference of [false, true]) test(`permission restart preserve
     assert.equal(ui.preferences.get("computerUseEnabled"), enabledPreference);
     assert.deepEqual(ui.calls.preferences, [], "permission restart must not promote or overwrite the control preference");
     assert.deepEqual(ui.calls.enable, []); assert.deepEqual(ui.calls.requests, ["screen_recording"]);
+  } finally { await ui.cleanup(); }
+});
+
+for (const recovery of ["refresh", "reopen"]) test(`review followup: a rejected screen request can retry after ${recovery}`, async () => {
+  const ui = await fixture();
+  try {
+    await ui.mount(); ui.setRequest(() => Promise.reject(new Error("synthetic permission IPC rejection")));
+    await ui.click("申请权限");
+    assert.match(ui.content(), /synthetic permission IPC rejection/);
+    if (recovery === "refresh") await ui.click("检测权限"); else await ui.mount();
+    assert.ok(ui.button("申请权限"), "rejected IPC must not be restored as a completed permission request");
+    assert.equal(ui.button("授权后重启"), undefined);
+    ui.setRequest(() => Promise.resolve(nativeStatus())); await ui.click("申请权限");
+    assert.deepEqual(ui.calls.requests, ["screen_recording", "screen_recording"]);
+    assert.ok(ui.button("授权后重启")); assert.deepEqual(ui.calls.enable, []);
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: a late rejection cannot clear a newer host's screen request", async () => {
+  const ui = await fixture(); const oldRequest = deferred();
+  try {
+    await ui.mount(); ui.setRequest(() => oldRequest.promise); await ui.click("申请权限");
+    ui.setStatus(nativeStatus(702)); await ui.mount();
+    ui.setRequest(() => Promise.resolve(nativeStatus(702))); await ui.click("申请权限");
+    await act(async () => oldRequest.reject(new Error("old PID rejected")));
+    await ui.click("重新检测权限"); await ui.mount();
+    assert.ok(ui.button("授权后重启")); assert.match(ui.content(), /待系统确认或重启/);
+    assert.deepEqual(ui.calls.requests, ["screen_recording", "screen_recording"]);
+    assert.deepEqual(ui.calls.enable, []);
+  } finally { await ui.cleanup(); }
+});
+
+for (const surface of ["settings", "admin"]) test(`review followup: ${surface} manual refresh retries failed native identity without remounting`, async () => {
+  const ui = await fixture({ statusError: true });
+  try {
+    await ui.mount(surface);
+    assert.match(surface === "settings" ? text(ui.versionChip()) : text(ui.desktopRow()), /无法检测/);
+    const reads = ui.calls.reads;
+    ui.setStatusReader(() => Promise.resolve(nativeStatus()));
+    await ui.click(surface === "settings" ? "检查更新" : "刷新状态");
+    assert.equal(ui.calls.reads, reads + 1, "manual refresh must make a new read-only native identity request");
+    assert.match(surface === "settings" ? text(ui.versionChip()) : text(ui.desktopRow()), /v0\.3\.77/);
+    assert.deepEqual(ui.calls.requests, []); assert.deepEqual(ui.calls.enable, []);
+  } finally { await ui.cleanup(); }
+});
+
+for (const surface of ["settings", "admin"]) test(`review followup: ${surface} ignores a late identity retry after a newer retry or unmount`, async () => {
+  const ui = await fixture({ statusError: true }); const older = deferred(), unmounted = deferred();
+  const refresh = surface === "settings" ? "检查更新" : "刷新状态";
+  const label = () => surface === "settings" ? text(ui.versionChip()) : text(ui.desktopRow());
+  try {
+    await ui.mount(surface); ui.setStatusReader(() => older.promise); await ui.click(refresh);
+    ui.setStatusReader(() => Promise.resolve(nativeStatus())); await ui.click(refresh);
+    await act(async () => older.resolve(nativeStatus(701, { host: { ...nativeStatus().host, appVersion: "0.3.76" } })));
+    assert.match(label(), /v0\.3\.77/); assert.doesNotMatch(label(), /v0\.3\.76/);
+    ui.setStatusReader(() => unmounted.promise); await ui.click(refresh); await ui.unmount();
+    ui.setStatusReader(() => Promise.resolve(nativeStatus(702))); await ui.mount(surface);
+    await act(async () => unmounted.reject(new Error("old retry rejected")));
+    assert.match(label(), /v0\.3\.77/); assert.deepEqual(ui.calls.requests, []); assert.deepEqual(ui.calls.enable, []);
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: web manual update and admin refresh never call native identity", async () => {
+  const ui = await fixture({ desktop: false });
+  try {
+    await ui.mount(); await ui.click("检查更新");
+    await ui.mount("admin"); await ui.click("刷新状态");
+    assert.equal(ui.calls.reads, 0); assert.deepEqual(ui.calls.requests, []); assert.deepEqual(ui.calls.enable, []);
+  } finally { await ui.cleanup(); }
+});
+
+for (const enabled of [false, true]) test(`review followup: control ${enabled} persists its native receipt after a focus read supersedes rendering`, async () => {
+  const ui = await fixture({ enabledPreference: !enabled,
+    status: nativeStatus(701, { enabled: !enabled, screenRecording: true }) });
+  const mutation = deferred(); ui.setControlMutation(() => mutation.promise);
+  try {
+    await ui.mount(); await ui.click(enabled ? "开启控制" : "停止控制");
+    await act(async () => ui.window.dispatchEvent(new Event("focus")));
+    assert.equal(ui.button(enabled ? "开启控制" : "停止控制").props.disabled, true, "finishing a read cannot release mutation busy");
+    await act(async () => mutation.resolve(nativeStatus(701, { enabled, screenRecording: true })));
+    assert.equal(ui.preferences.get("computerUseEnabled"), enabled, "a newer read must not discard a definite native control result");
+    assert.deepEqual(ui.calls.announcements, [enabled]); assert.deepEqual(ui.calls.enable, [enabled]);
+    assert.ok(ui.button(enabled ? "停止控制" : "开启控制")); assert.deepEqual(ui.calls.requests, []);
+    assert.equal(ui.button(enabled ? "停止控制" : "开启控制").props.disabled, false, "the confirmed action settles its busy state");
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: a confirmed stop rejects an older focus read even when the read finishes last", async () => {
+  const ui = await fixture({ enabledPreference: true, status: nativeStatus(701, { enabled: true, screenRecording: true }) });
+  const mutation = deferred(), staleRead = deferred(); ui.setControlMutation(() => mutation.promise);
+  try {
+    await ui.mount(); await ui.click("停止控制"); ui.setStatusReader(() => staleRead.promise);
+    await act(async () => ui.window.dispatchEvent(new Event("focus")));
+    await act(async () => mutation.resolve(nativeStatus(701, { enabled: false, screenRecording: true })));
+    await act(async () => staleRead.resolve(nativeStatus(701, { enabled: true, screenRecording: true })));
+    assert.equal(ui.preferences.get("computerUseEnabled"), false); assert.deepEqual(ui.calls.announcements, [false]);
+    assert.ok(ui.button("开启控制")); assert.deepEqual(ui.calls.requests, []);
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: a late enable result cannot overwrite a newer explicit stop", async () => {
+  const ui = await fixture({ status: nativeStatus(701, { screenRecording: true }) }); const enable = deferred();
+  ui.setControlMutation(value => value ? enable.promise : Promise.resolve(nativeStatus(701, { screenRecording: true, enabled: false })));
+  try {
+    await ui.mount(); await ui.click("开启控制"); ui.setStatus(nativeStatus(701, { screenRecording: true, enabled: true }));
+    await ui.mount(); await ui.click("停止控制");
+    await act(async () => enable.resolve(nativeStatus(701, { screenRecording: true, enabled: true })));
+    assert.equal(ui.preferences.get("computerUseEnabled"), false);
+    assert.deepEqual(ui.calls.announcements, [false]); assert.deepEqual(ui.calls.enable, [true, false]);
+    assert.ok(ui.button("开启控制"));
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: a late enable result cannot overwrite an announced emergency stop", async () => {
+  const ui = await fixture({ status: nativeStatus(701, { screenRecording: true }) }); const enable = deferred();
+  ui.setControlMutation(() => enable.promise);
+  try {
+    await ui.mount(); await ui.click("开启控制");
+    await act(async () => ui.window.dispatchEvent(new CustomEvent("synthetic-control-changed", { detail: false })));
+    await act(async () => enable.resolve(nativeStatus(701, { screenRecording: true, enabled: true })));
+    assert.equal(ui.preferences.get("computerUseEnabled"), false); assert.deepEqual(ui.calls.announcements, []);
+    assert.ok(ui.button("开启控制"));
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: a late mutation from an old PID cannot persist into a newer native host", async () => {
+  const ui = await fixture({ status: nativeStatus(701, { screenRecording: true }) }); const enable = deferred();
+  ui.setControlMutation(() => enable.promise);
+  try {
+    await ui.mount(); await ui.click("开启控制"); ui.setStatus(nativeStatus(702, { screenRecording: true })); await ui.mount();
+    await act(async () => enable.resolve(nativeStatus(701, { screenRecording: true, enabled: true })));
+    assert.equal(ui.preferences.get("computerUseEnabled"), false); assert.deepEqual(ui.calls.announcements, []);
+    assert.ok(ui.button("开启控制"));
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: a rejected request after unmount clears only its own pending ticket", async () => {
+  const ui = await fixture(); const request = deferred();
+  try {
+    await ui.mount(); ui.setRequest(() => request.promise); await ui.click("申请权限"); await ui.unmount();
+    await act(async () => request.reject(new Error("unmounted request rejected")));
+    await ui.mount(); assert.ok(ui.button("申请权限")); assert.equal(ui.button("授权后重启"), undefined);
+    assert.deepEqual(ui.calls.requests, ["screen_recording"]);
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: an old rejected ticket cannot cancel a newer pending request in the same PID", async () => {
+  const ui = await fixture(); const old = deferred();
+  try {
+    await ui.mount(); ui.setRequest(() => old.promise); await ui.click("申请权限");
+    ui.setStatus(nativeStatus(701, { screenRecording: true })); await ui.mount();
+    ui.setStatus(nativeStatus()); await ui.click("重新检测权限");
+    ui.setRequest(() => Promise.resolve(nativeStatus())); await ui.click("申请权限");
+    await act(async () => old.reject(new Error("superseded request rejected")));
+    await ui.click("重新检测权限"); await ui.mount(); assert.ok(ui.button("授权后重启"));
+    assert.deepEqual(ui.calls.requests, ["screen_recording", "screen_recording"]);
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: a screen rejection after accessibility succeeds rolls back the screen ticket", async () => {
+  const ui = await fixture({ status: nativeStatus(701, { accessibility: false }) });
+  ui.setRequest(permission => permission === "accessibility" ? Promise.resolve(nativeStatus()) : Promise.reject(new Error("screen request rejected")));
+  try {
+    await ui.mount(); await ui.click("申请权限"); ui.setStatus(nativeStatus()); await ui.click("检测权限");
+    assert.ok(ui.button("申请权限")); assert.equal(ui.button("授权后重启"), undefined);
+    assert.deepEqual(ui.calls.requests, ["accessibility", "screen_recording"]); assert.deepEqual(ui.calls.enable, []);
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: the latest same-host stop receipt persists after its settings instance unmounts", async () => {
+  const ui = await fixture({ enabledPreference: true, status: nativeStatus(701, { enabled: true, screenRecording: true }) });
+  const stop = deferred(); ui.setControlMutation(() => stop.promise);
+  try {
+    await ui.mount(); await ui.click("停止控制"); await ui.unmount();
+    await act(async () => stop.resolve(nativeStatus(701, { enabled: false, screenRecording: true })));
+    assert.equal(ui.preferences.get("computerUseEnabled"), false); assert.deepEqual(ui.calls.announcements, [false]);
+    assert.deepEqual(ui.calls.enable, [false]); assert.deepEqual(ui.calls.requests, []);
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: an older stop receipt cannot overwrite a newer explicit enable", async () => {
+  const ui = await fixture({ enabledPreference: true, status: nativeStatus(701, { enabled: true, screenRecording: true }) });
+  const oldStop = deferred(); ui.setControlMutation(enabled => enabled
+    ? Promise.resolve(nativeStatus(701, { enabled: true, screenRecording: true })) : oldStop.promise);
+  try {
+    await ui.mount(); await ui.click("停止控制"); ui.setStatus(nativeStatus(701, { screenRecording: true })); await ui.mount();
+    await ui.click("开启控制"); await act(async () => oldStop.resolve(nativeStatus(701, { screenRecording: true })));
+    assert.equal(ui.preferences.get("computerUseEnabled"), true); assert.deepEqual(ui.calls.announcements, [true]);
+    assert.deepEqual(ui.calls.enable, [false, true]); assert.ok(ui.button("停止控制"));
+    assert.equal(ui.button("停止控制").props.disabled, false);
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: a focus IPC failure cannot discard a same-host confirmed stop", async () => {
+  const ui = await fixture({ enabledPreference: true, status: nativeStatus(701, { enabled: true, screenRecording: true }) });
+  const stop = deferred(); ui.setControlMutation(() => stop.promise);
+  try {
+    await ui.mount(); await ui.click("停止控制");
+    ui.setStatusReader(() => Promise.reject(new Error("focus read failed")));
+    await act(async () => ui.window.dispatchEvent(new Event("focus")));
+    assert.equal(ui.button("检测权限").props.disabled, true);
+    await act(async () => stop.resolve(nativeStatus(701, { enabled: false, screenRecording: true })));
+    assert.equal(ui.preferences.get("computerUseEnabled"), false); assert.deepEqual(ui.calls.announcements, [false]);
+    assert.equal(ui.button("检测权限").props.disabled, false);
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: an unattributed late true event cannot invalidate a pending explicit stop", async () => {
+  const ui = await fixture({ enabledPreference: true, status: nativeStatus(701, { enabled: true, screenRecording: true }) });
+  const stop = deferred(); ui.setControlMutation(() => stop.promise);
+  try {
+    await ui.mount(); await ui.click("停止控制");
+    await act(async () => ui.window.dispatchEvent(new CustomEvent("synthetic-control-changed", { detail: true })));
+    assert.equal(ui.button("停止控制").props.disabled, true);
+    await act(async () => stop.resolve(nativeStatus(701, { enabled: false, screenRecording: true })));
+    assert.equal(ui.preferences.get("computerUseEnabled"), false); assert.deepEqual(ui.calls.announcements, [false]);
+    assert.equal(ui.button("开启控制").props.disabled, false);
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: an external stop announcement does not settle a pending permission request", async () => {
+  const ui = await fixture(); const permission = deferred(); ui.setRequest(() => permission.promise);
+  try {
+    await ui.mount(); await ui.click("申请权限");
+    await act(async () => ui.window.dispatchEvent(new CustomEvent("synthetic-control-changed", { detail: false })));
+    assert.equal(ui.button("授权后重启").props.disabled, true);
+    await act(async () => permission.resolve(nativeStatus()));
+    assert.equal(ui.button("授权后重启").props.disabled, false);
+    assert.deepEqual(ui.calls.requests, ["screen_recording"]); assert.deepEqual(ui.calls.enable, []);
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: a rejection updates the same pending ticket already restored by a newer instance", async () => {
+  const ui = await fixture(); const old = deferred();
+  try {
+    await ui.mount(); ui.setRequest(() => old.promise); await ui.click("申请权限"); await ui.mount();
+    assert.ok(ui.button("授权后重启"));
+    await act(async () => old.reject(new Error("restored ticket rejected")));
+    assert.ok(ui.button("申请权限"), "the cancelled ticket must stop displaying restart without an extra native read");
+    assert.equal(ui.button("授权后重启"), undefined);
+    assert.deepEqual(ui.calls.requests, ["screen_recording"]); assert.deepEqual(ui.calls.enable, []);
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: an external stop also supersedes an enable whose settings instance already unmounted", async () => {
+  const ui = await fixture({ status: nativeStatus(701, { screenRecording: true }) }); const enable = deferred();
+  ui.setControlMutation(() => enable.promise);
+  try {
+    await ui.mount(); await ui.click("开启控制"); await ui.unmount();
+    await act(async () => ui.window.dispatchEvent(new CustomEvent("synthetic-control-changed", { detail: false })));
+    await act(async () => enable.resolve(nativeStatus(701, { enabled: true, screenRecording: true })));
+    assert.equal(ui.preferences.get("computerUseEnabled"), false); assert.deepEqual(ui.calls.announcements, []);
+    assert.deepEqual(ui.calls.enable, [true]);
+  } finally { await ui.cleanup(); }
+});
+
+test("review followup: admin observing a newer native PID invalidates an unmounted settings receipt", async () => {
+  const ui = await fixture({ enabledPreference: true, status: nativeStatus(701, { enabled: true, screenRecording: true }) });
+  const stop = deferred(); ui.setControlMutation(() => stop.promise);
+  try {
+    await ui.mount(); await ui.click("停止控制");
+    ui.setStatus(nativeStatus(702, { screenRecording: true })); await ui.mount("admin");
+    await act(async () => stop.resolve(nativeStatus(701, { enabled: false, screenRecording: true })));
+    assert.equal(ui.preferences.get("computerUseEnabled"), true, "old PID cannot change another host's preference");
+    assert.deepEqual(ui.calls.announcements, []); assert.deepEqual(ui.calls.enable, [false]);
   } finally { await ui.cleanup(); }
 });

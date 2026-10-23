@@ -44,6 +44,7 @@ import { testDesktopNotification } from "@/lib/desktop-notify";
 import {
   computerUseHostSessionKey,
   createComputerUsePermissionFlowSession,
+  computerUseControlSession,
   computerUsePermissionLabel,
   computerUseHostLabel,
   computerUsePrimaryAction,
@@ -120,12 +121,16 @@ let computerUseStatusSequence = 0;
 function ComputerUseSettingsCard() {
   const [status, setStatus] = useState<ComputerUseStatus | null>(null);
   const [flow, setFlow] = useState<ComputerUsePermissionFlow | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [readingStatus, setReadingStatus] = useState(false);
+  const busy = actionBusy || readingStatus;
   const [error, setError] = useState<string | null>(null);
   const flowRef = useRef<ComputerUsePermissionFlow | null>(null);
   const statusRef = useRef<ComputerUseStatus | null>(null);
   const mountedRef = useRef(false);
   const permissionRequestInMountRef = useRef(false);
+  const actionSequenceRef = useRef(0);
+  const actionKindRef = useRef<"permission" | "control" | "restart" | null>(null);
 
   const setPermissionFlow = useCallback((next: ComputerUsePermissionFlow | null) => {
     flowRef.current = next;
@@ -133,6 +138,7 @@ function ComputerUseSettingsCard() {
   }, []);
 
   const applyStatus = useCallback((next: ComputerUseStatus) => {
+    computerUseControlSession.observe(next);
     statusRef.current = next;
     setStatus(next);
     const nextFlow = computerUsePermissionSession.read(next);
@@ -154,13 +160,19 @@ function ComputerUseSettingsCard() {
     permissionRequestInMountRef.current = true;
     const requestId = ++computerUseStatusSequence;
     const isCurrent = () => mountedRef.current && requestId === computerUseStatusSequence;
-    setBusy(true);
+    const actionId = ++actionSequenceRef.current;
+    actionKindRef.current = "permission";
+    let requestedStatus = current;
+    let requestedFlow: ComputerUsePermissionFlow | null = null;
+    setActionBusy(true);
+    setReadingStatus(false);
     setError(null);
     try {
       const pendingFlow: ComputerUsePermissionFlow = permission === "accessibility"
         ? { permission, screenRecordingRequested: false }
         : { permission, screenRecordingRequested: true };
-      setPermissionFlow(computerUsePermissionSession.remember(current, pendingFlow));
+      requestedFlow = computerUsePermissionSession.remember(current, pendingFlow);
+      setPermissionFlow(requestedFlow);
       let next = await requestComputerUsePermissionNative(permission);
       if (!isCurrent()) return;
       applyStatus(next);
@@ -175,14 +187,20 @@ function ComputerUseSettingsCard() {
           permission: "screen_recording",
           screenRecordingRequested: true,
         };
-        setPermissionFlow(computerUsePermissionSession.remember(next, screenFlow));
+        requestedStatus = next;
+        requestedFlow = computerUsePermissionSession.remember(next, screenFlow);
+        setPermissionFlow(requestedFlow);
         next = await requestComputerUsePermissionNative("screen_recording");
         if (isCurrent()) applyStatus(next);
       }
     } catch (cause) {
+      computerUsePermissionSession.cancel(requestedStatus, requestedFlow);
       if (isCurrent()) statusFailed(cause);
     } finally {
-      if (isCurrent()) setBusy(false);
+      if (mountedRef.current && actionId === actionSequenceRef.current) {
+        setActionBusy(false);
+        actionKindRef.current = null;
+      }
     }
   }, [applyStatus, setPermissionFlow, statusFailed]);
 
@@ -191,7 +209,7 @@ function ComputerUseSettingsCard() {
     const isCurrent = () => mountedRef.current && requestId === computerUseStatusSequence;
     const currentFlow = flowRef.current;
     const hostKey = computerUseHostSessionKey(statusRef.current?.host);
-    setBusy(true);
+    setReadingStatus(true);
     setError(null);
     try {
       const next = await getComputerUseStatusNative();
@@ -203,7 +221,7 @@ function ComputerUseSettingsCard() {
     } catch (cause) {
       if (isCurrent()) statusFailed(cause);
     } finally {
-      if (isCurrent()) setBusy(false);
+      if (isCurrent()) setReadingStatus(false);
     }
   }, [applyStatus, requestPermission, statusFailed]);
 
@@ -215,9 +233,22 @@ function ComputerUseSettingsCard() {
     return () => { mountedRef.current = false; permissionRequestInMountRef.current = false; };
   }, [readStatus]);
 
+  useEffect(() => computerUsePermissionSession.subscribeToCancellation(() => {
+    const current = statusRef.current;
+    if (current) setPermissionFlow(computerUsePermissionSession.peek(current));
+  }), [setPermissionFlow]);
+
   useEffect(() => {
     const update = (event: Event) => {
       const enabled = (event as CustomEvent<boolean>).detail === true;
+      const change = computerUseControlSession.acceptChange(enabled);
+      if (!change.accepted) return;
+      computerUseStatusSequence++;
+      setReadingStatus(false);
+      if (actionKindRef.current === "control" && !change.controlPending) {
+        setActionBusy(false);
+        actionKindRef.current = null;
+      }
       setStatus((current) => {
         const next = current ? { ...current, enabled } : current;
         statusRef.current = next;
@@ -243,34 +274,55 @@ function ComputerUseSettingsCard() {
   }, [busy, flow?.permission, readStatus]);
 
   const updateEnabled = async (enabled: boolean) => {
+    const ticket = computerUseControlSession.begin(statusRef.current, enabled);
+    if (!ticket) return;
     const requestId = ++computerUseStatusSequence;
     const isCurrent = () => mountedRef.current && requestId === computerUseStatusSequence;
-    setBusy(true);
+    const actionId = ++actionSequenceRef.current;
+    actionKindRef.current = "control";
+    setActionBusy(true);
+    setReadingStatus(false);
     setError(null);
+    const observePendingChange = (event: Event) => {
+      computerUseControlSession.acceptChange((event as CustomEvent<boolean>).detail === true);
+    };
+    window.addEventListener(COMPUTER_USE_CHANGED_EVENT, observePendingChange);
     try {
       const next = enabled ? await setComputerUseEnabledNative(true) : await emergencyStopComputerUseNative();
-      if (!isCurrent()) return;
-      applyStatus(next);
+      if (!computerUseControlSession.isCurrent(ticket, next)) return;
+      if (isCurrent()) applyStatus(next);
+      computerUseControlSession.finish(ticket);
       setPrefBool(APP_PREF_KEYS.computerUseEnabled, next.enabled);
       announceComputerUseChanged(next.enabled);
     } catch (cause) {
-      if (isCurrent()) statusFailed(cause);
+      if (computerUseControlSession.isCurrent(ticket) && isCurrent()) statusFailed(cause);
     } finally {
-      if (isCurrent()) setBusy(false);
+      window.removeEventListener(COMPUTER_USE_CHANGED_EVENT, observePendingChange);
+      computerUseControlSession.finish(ticket);
+      if (mountedRef.current && actionId === actionSequenceRef.current) {
+        setActionBusy(false);
+        actionKindRef.current = null;
+      }
     }
   };
 
   const restartForPermission = async () => {
     const requestId = ++computerUseStatusSequence;
     const isCurrent = () => mountedRef.current && requestId === computerUseStatusSequence;
-    setBusy(true);
+    const actionId = ++actionSequenceRef.current;
+    actionKindRef.current = "restart";
+    setActionBusy(true);
+    setReadingStatus(false);
     setError(null);
     try {
       await relaunchAppNative();
     } catch (cause) {
       if (isCurrent()) setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      if (isCurrent()) setBusy(false);
+      if (mountedRef.current && actionId === actionSequenceRef.current) {
+        setActionBusy(false);
+        actionKindRef.current = null;
+      }
     }
   };
 
@@ -720,7 +772,7 @@ export function AppSettings({ onClose, initialSection = null, onOpenConnectionDe
                 className="native-button"
                 type="button"
                 disabled={loading || Boolean(upgradeProgress)}
-                onClick={() => void checkForUpdates()}
+                onClick={() => { void nativeIdentity.refresh(); void checkForUpdates(); }}
               >
                 {loading ? t("appSettings.checking") : t("appSettings.checkUpdates")}
               </button>
