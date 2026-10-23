@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -13,7 +15,7 @@ const { getRootDirs } = nextRequire("./utils/get-root-dirs.js");
 
 test("the complete lockfile excludes affected runtime and glob dependency versions", async () => {
   const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
-  const patched = { next: ">=16.3.6", undici: ">=8.10.2", nodemailer: ">=10.0.9", "brace-expansion": "^1.1.21 || ^3.0.9 || >=5.0.12", dompurify: ">=3.4.16", sharp: ">=0.35.5", "@modelcontextprotocol/client": ">=2.3.0", "@modelcontextprotocol/server": ">=2.3.0" };
+  const patched = { next: ">=16.4.1", undici: ">=8.10.2", nodemailer: ">=10.0.9", "brace-expansion": "^1.1.21 || ^3.0.9 || >=5.0.12", dompurify: ">=3.4.17", sharp: ">=0.35.5", hono: ">=4.13.11", "ip-address": ">=10.7.4", "@modelcontextprotocol/client": ">=2.3.0", "@modelcontextprotocol/server": ">=2.3.0" };
   for (const [location, entry] of Object.entries(lock.packages)) {
     const name = location.split("node_modules/").at(-1);
     assert.notEqual(name, "braces", `${location} restores the unpatched dependency`);
@@ -72,6 +74,40 @@ test("OpenConnector uses the patched MCP client and completes an in-memory tool 
   assert.equal(result.content[0].text, "synthetic result");
   assert.ok(methods.includes("server/discover"));
   assert.ok(methods.includes("tools/call"));
+});
+
+test("connector Hono static serving cannot bypass a protected prefix by double decoding", async () => {
+  const connectorRequire = createRequire(import.meta.resolve("@oomol-lab/open-connector"));
+  const { Hono } = await import(pathToFileURL(connectorRequire.resolve("hono")).href);
+  const { serveStatic } = await import(pathToFileURL(connectorRequire.resolve("hono/serve-static")).href);
+  const app = new Hono(), reads = [];
+  app.use("/private/*", context => context.text("denied", 403));
+  app.use("*", serveStatic({ root: "assets", getContent(filename) {
+    reads.push(filename);
+    if (filename.endsWith("/private/secret.txt")) return new TextEncoder().encode("SYNTHETIC_PROTECTED_STATIC_BODY");
+    if (filename.endsWith("/public.txt")) return new TextEncoder().encode("SYNTHETIC_PUBLIC_STATIC_BODY");
+    return null;
+  } }));
+  const publicResponse = await app.request("http://localhost/public.txt");
+  assert.equal(publicResponse.status, 200); assert.equal(await publicResponse.text(), "SYNTHETIC_PUBLIC_STATIC_BODY");
+  assert.equal((await app.request("http://localhost/private/secret.txt")).status, 403);
+  const encoded = await app.request("http://localhost/%2570rivate/secret.txt");
+  assert.equal(encoded.status, 404); assert.equal((await encoded.text()).includes("SYNTHETIC_PROTECTED_STATIC_BODY"), false);
+  assert.equal(reads.some(filename => filename.endsWith("/private/secret.txt")), false);
+});
+
+test("the connector's SOCKS address parser rejects a pathological IPv6 zone in a bounded child", () => {
+  const connectorRequire = createRequire(import.meta.resolve("@oomol-lab/open-connector"));
+  const imapRequire = createRequire(connectorRequire.resolve("imapflow"));
+  const socksRequire = createRequire(imapRequire.resolve("socks"));
+  execFileSync(process.execPath, ["-e", `
+    const assert = require("node:assert/strict");
+    const { Address4, Address6 } = require(process.argv[1]);
+    assert.equal(Address4.isValid("127.0.0.1"), true);
+    assert.equal(Address6.isValid("::1"), true);
+    assert.equal(Address6.isValid("fe80::1%en0"), true);
+    assert.equal(Address6.isValid("%".repeat(1_000_000) + "\\n"), false);
+  `, socksRequire.resolve("ip-address")], { timeout: 2000, killSignal: "SIGKILL", stdio: "pipe" });
 });
 
 test("Next root matching preserves static, absolute, brace and stepped patterns", async () => {

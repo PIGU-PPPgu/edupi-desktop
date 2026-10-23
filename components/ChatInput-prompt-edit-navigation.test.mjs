@@ -80,6 +80,8 @@ function editor(store, key = "A") {
     let onSendCalls = 0, requestAck = null;
     const ackContext = { useCallback: callback => callback, refreshPromptRecovery: noop,
       acknowledgePendingPrompt: store.acknowledgePendingPrompt,
+      activeDraftKeyRef: refs.draftKeyRef, sessionIdRef: { current: pending.sessionId },
+      getDraft: store.getDraft, setDraft: store.setDraft,
       chatInputRef: { current: { acknowledgeSubmittedMessage: (...args) => { requestAck = ack(...args); return requestAck; } } } };
     const hookAck = new Function(...Object.keys(ackContext), compile(`${acknowledging}\nreturn acknowledgeSubmittedPrompt;`))(...Object.values(ackContext));
     const bindings = { ...context, draftKey: originKey, value: state.value, context: state.context, attachedImages: state.images,

@@ -18,13 +18,13 @@ function fixture() {
   let open = false, retries = 0, dismiss;
   const exports = {};
   vm.runInNewContext(compiled, { exports, Date, require(name) {
-    if (name === "react") return { useState: () => [open, value => { open = value; }] };
     if (name === "react/jsx-runtime") return require(name);
     if (name === "@/hooks/useI18n") return { useI18n: () => ({ t: key => ({ "connection.offline": "连接已断开", "connection.retry": "重新连接" })[key] }) };
     if (name === "@/hooks/useModalDismiss") return { useModalDismiss: onDismiss => { dismiss = onDismiss; return { current: null }; } };
     throw new Error(`Unexpected dependency: ${name}`);
   } });
-  const render = (state, diagnostics = []) => exports.DesktopConnectionNotice({ state, diagnostics, retry() { retries++; } });
+  const render = (state, diagnostics = [], failureIncident = []) => exports.DesktopConnectionNotice({ state, diagnostics, failureIncident,
+    detailsOpen: open, onOpenDetails: () => { open = true; }, onCloseDetails: () => { open = false; }, retry() { retries++; } });
   return { render, retries: () => retries, dismiss: () => dismiss() };
 }
 

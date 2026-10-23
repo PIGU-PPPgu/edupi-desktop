@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
 import type { DesktopConnectionState } from "@/lib/desktop-connection";
@@ -17,8 +16,23 @@ const visibilityLabel = (value: DocumentVisibilityState) => value === "visible" 
 const timeLabel = (value: number) => new Date(value).toLocaleTimeString("zh-CN", { hour12: false, fractionalSecondDigits: 3 });
 const cellStyle = { padding: "8px 10px", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" } as const;
 
-function ConnectionDetails({ records, onClose }: { records: readonly DesktopConnectionProbeRecord[]; onClose: () => void }) {
+function ProbeTable({ records, label }: { records: readonly DesktopConnectionProbeRecord[]; label: string }) {
+  return <table aria-label={label} style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+    <thead><tr>{["序号", "时间", "耗时", "前后台", "结果", "实例"].map(label => <th key={label} scope="col" style={cellStyle}>{label}</th>)}</tr></thead>
+    <tbody>{records.map(record => <tr key={record.sequence}>
+      <th scope="row" style={cellStyle}>{record.sequence}</th>
+      <td style={cellStyle}><time dateTime={new Date(record.startedAt).toISOString()}>{timeLabel(record.startedAt)}</time></td>
+      <td style={cellStyle}>{record.durationMs} ms</td>
+      <td style={cellStyle}>{visibilityLabel(record.visibility)}{record.visibility !== record.settledVisibility ? ` → ${visibilityLabel(record.settledVisibility)}` : ""}</td>
+      <td style={cellStyle}>{outcomeLabels[record.outcome]}{record.httpStatus !== null ? ` ${record.httpStatus}` : ""}</td>
+      <td style={cellStyle}>{instanceLabels[record.instance]}</td>
+    </tr>)}</tbody>
+  </table>;
+}
+
+function ConnectionDetails({ records, incident, onClose }: { records: readonly DesktopConnectionProbeRecord[]; incident: readonly DesktopConnectionProbeRecord[]; onClose: () => void }) {
   const panelRef = useModalDismiss<HTMLDivElement>(onClose);
+  const first = records[0] ?? incident[0];
   return (
     <div role="presentation" style={{ position: "fixed", inset: 0, zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.4)" }}
       onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
@@ -28,21 +42,12 @@ function ConnectionDetails({ records, onClose }: { records: readonly DesktopConn
           <button type="button" className="native-button" data-autofocus onClick={onClose}>关闭</button>
         </header>
         <div style={{ overflow: "auto", padding: 12, fontSize: 12 }}>
-          {records.length > 0 ? <>
+          {first ? <>
             <dl style={{ display: "flex", gap: 12, margin: "0 0 12px", color: "var(--text-muted)" }}>
-              <dt>文档启动</dt><dd style={{ margin: 0 }}><time dateTime={new Date(records[0].documentStartedAt).toISOString()}>{new Date(records[0].documentStartedAt).toLocaleString("zh-CN", { hour12: false })}</time></dd>
+              <dt>文档启动</dt><dd style={{ margin: 0 }}><time dateTime={new Date(first.documentStartedAt).toISOString()}>{new Date(first.documentStartedAt).toLocaleString("zh-CN", { hour12: false })}</time></dd>
             </dl>
-            <table aria-label="最近连接探测" style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-              <thead><tr>{["序号", "时间", "耗时", "前后台", "结果", "实例"].map(label => <th key={label} scope="col" style={cellStyle}>{label}</th>)}</tr></thead>
-              <tbody>{records.map(record => <tr key={record.sequence}>
-                <th scope="row" style={cellStyle}>{record.sequence}</th>
-                <td style={cellStyle}><time dateTime={new Date(record.startedAt).toISOString()}>{timeLabel(record.startedAt)}</time></td>
-                <td style={cellStyle}>{record.durationMs} ms</td>
-                <td style={cellStyle}>{visibilityLabel(record.visibility)}{record.visibility !== record.settledVisibility ? ` → ${visibilityLabel(record.settledVisibility)}` : ""}</td>
-                <td style={cellStyle}>{outcomeLabels[record.outcome]}{record.httpStatus !== null ? ` ${record.httpStatus}` : ""}</td>
-                <td style={cellStyle}>{instanceLabels[record.instance]}</td>
-              </tr>)}</tbody>
-            </table>
+            {incident.length > 0 && <section><h3 style={{ margin: "0 0 6px", fontSize: 12 }}>最近断连</h3><ProbeTable records={incident} label="最近断连探测" /></section>}
+            {records.length > 0 && <section>{incident.length > 0 && <h3 style={{ margin: "12px 0 6px", fontSize: 12 }}>最近探测</h3>}<ProbeTable records={records} label="最近连接探测" /></section>}
           </> : <div>暂无记录</div>}
         </div>
       </div>
@@ -50,19 +55,22 @@ function ConnectionDetails({ records, onClose }: { records: readonly DesktopConn
   );
 }
 
-export function DesktopConnectionNotice({ state, retry, diagnostics }: {
+export function DesktopConnectionNotice({ state, retry, diagnostics, failureIncident, detailsOpen, onOpenDetails, onCloseDetails }: {
   state: DesktopConnectionState;
   retry: () => void;
   diagnostics: readonly DesktopConnectionProbeRecord[];
+  failureIncident: readonly DesktopConnectionProbeRecord[];
+  detailsOpen: boolean;
+  onOpenDetails: () => void;
+  onCloseDetails: () => void;
 }) {
   const { t } = useI18n();
-  const [detailsOpen, setDetailsOpen] = useState(false);
   return <>
     {state === "offline" && <div role="alert" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexShrink: 0, padding: "7px 12px", background: "color-mix(in srgb, var(--danger) 14%, var(--bg-panel))", borderBottom: "1px solid color-mix(in srgb, var(--danger) 35%, var(--border))", color: "var(--text)", fontSize: 12, zIndex: 300 }}>
       <span>{t("connection.offline")}</span>
       <button type="button" onClick={retry} style={{ height: 24, padding: "0 10px", border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg)", color: "var(--accent)", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>{t("connection.retry")}</button>
-      <button type="button" onClick={() => setDetailsOpen(true)} style={{ padding: 0, border: 0, background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}>连接详情</button>
+      <button type="button" onClick={onOpenDetails} style={{ padding: 0, border: 0, background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}>连接详情</button>
     </div>}
-    {detailsOpen && <ConnectionDetails records={diagnostics} onClose={() => setDetailsOpen(false)} />}
+    {detailsOpen && <ConnectionDetails records={diagnostics} incident={failureIncident} onClose={onCloseDetails} />}
   </>;
 }

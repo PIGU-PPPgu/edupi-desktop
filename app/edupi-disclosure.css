@@ -1,0 +1,149 @@
+/* Native disclosure state remains owned by details/summary. The positioned
+   icon never becomes an extra flex/grid item or changes a summary's display. */
+:where(details > summary):not(:where(.markdown-body *, .edupi-background-job-details > summary)),
+:where(.session-time-group__header[aria-expanded]) {
+  --edupi-disclosure-inset: 0px;
+  position: relative;
+  min-block-size: 24px;
+  padding-block: 3px;
+  padding-inline-end: 4px;
+  border-radius: 4px;
+  list-style: none;
+  cursor: pointer;
+}
+
+:root body details > summary:not(:where(.markdown-body *, .edupi-background-job-details > summary)),
+:root body .session-time-group__header[aria-expanded] {
+  padding-inline-start: calc(var(--edupi-disclosure-inset) + 18px);
+}
+
+:where(details > summary):not(:where(.markdown-body *, .edupi-background-job-details > summary))::marker {
+  content: "";
+}
+
+:where(details > summary):not(:where(.markdown-body *, .edupi-background-job-details > summary))::-webkit-details-marker {
+  display: none;
+}
+
+:root body details > summary:not(:where(.markdown-body *, .edupi-background-job-details > summary))::before,
+:root body .session-time-group__header[aria-expanded]::before {
+  position: absolute;
+  inset-inline-start: var(--edupi-disclosure-inset);
+  top: 50%;
+  margin-top: -6px;
+  content: "";
+}
+
+:root body details > summary:not(:where(.markdown-body *, .edupi-background-job-details > summary))::before,
+:root body .session-time-group__header[aria-expanded]::before,
+:root body button > .edupi-disclosure-icon:not(:where(.markdown-body *)) {
+  width: 12px;
+  height: 12px;
+  background-color: currentColor;
+  color: var(--ep-muted, var(--text-muted));
+  -webkit-mask: var(--edupi-disclosure-mask) center / 12px 12px no-repeat;
+  mask: var(--edupi-disclosure-mask) center / 12px 12px no-repeat;
+  pointer-events: none;
+  transform: rotate(0deg);
+  transition: transform 140ms ease;
+}
+
+:root body button > .edupi-disclosure-icon:not(:where(.markdown-body *)) {
+  display: inline-block;
+  flex: 0 0 12px;
+}
+
+:root {
+  --edupi-disclosure-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M6 3.5 10.5 8 6 12.5' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+:root body details[open] > summary:not(:where(.markdown-body *, .edupi-background-job-details > summary))::before,
+:root body .session-time-group__header[aria-expanded="true"]::before,
+:root body button[aria-expanded="true"] > .edupi-disclosure-icon:not(:where(.markdown-body *)) {
+  transform: rotate(90deg);
+}
+
+:where(details > summary):not(:where(.markdown-body *, .edupi-background-job-details > summary)):hover,
+:where(.session-time-group__header[aria-expanded]):hover {
+  background-color: color-mix(in srgb, var(--ep-muted, var(--text-muted)) 7%, transparent);
+}
+
+:where(details > summary):not(:where(.markdown-body *, .edupi-background-job-details > summary)):focus-visible,
+:where(.session-time-group__header[aria-expanded]):focus-visible {
+  outline: 2px solid var(--ep-blue, var(--accent));
+  outline-offset: 2px;
+}
+
+/* Preserve the surrounding surface's existing horizontal inset. */
+:where(.session-time-group__header[aria-expanded]) { --edupi-disclosure-inset: 4px; }
+:where(.edupi-object-person > summary) { --edupi-disclosure-inset: 8px; }
+:where(.edupi-chat-advanced > summary) { --edupi-disclosure-inset: 9px; }
+:where(
+  .edupi-deleted-facts > summary,
+  .edupi-teaching-home-columns summary,
+  .edupi-today-work__more > summary,
+  .edupi-review-fields summary
+) { --edupi-disclosure-inset: 12px; }
+:where(.edupi-material-inbox > summary) { --edupi-disclosure-inset: 13px; }
+:where(
+  .edupi-priority-row > summary,
+  .edupi-core-compatibility summary,
+  .edupi-knowledge-row > summary,
+  .edupi-note-list > details > summary,
+  .edupi-student-focus-list > details > summary,
+  .edupi-family-list > details > summary,
+  .edupi-memory-list > details > summary,
+  .edupi-memory-more summary,
+  .edupi-insight-list > details > summary,
+  .edupi-brewing-list > details > summary,
+  .edupi-growth-themes > div > details > summary
+) { --edupi-disclosure-inset: 14px; }
+:where(.edupi-import-drawer > summary) { --edupi-disclosure-inset: 15px; }
+:where(
+  .edupi-student-drawer__scroll > details > summary,
+  .edupi-teaching-core-facts > div > details > summary,
+  .edupi-student-records > details > summary,
+  .edupi-task-detail-evidence-section > summary
+) { --edupi-disclosure-inset: 16px; }
+:where(.edupi-missed-feedback > summary, .edupi-prompt-outbox > summary) { --edupi-disclosure-inset: 18px; }
+
+/* Database headers and cells share exact column boundaries. Use their existing
+   14px gutter for the icon instead of introducing a column or shifting cells. */
+:root body .edupi-database-row > summary:not(:where(.markdown-body *, .edupi-background-job-details > summary)) {
+  --edupi-disclosure-inset: 0px;
+  padding-inline-start: 14px;
+}
+
+/* The compact runtime trigger owns inline padding. An inline icon fits that
+   text-only summary without overriding inline styles or affecting its label. */
+:root body .chat-composer-controls details > summary:not(:where(.markdown-body *, .edupi-background-job-details > summary)) {
+  padding-inline-start: 8px;
+}
+:root body .chat-composer-controls details > summary:not(:where(.markdown-body *, .edupi-background-job-details > summary))::before {
+  position: static;
+  display: inline-block;
+  margin: 0 6px 0 0;
+  vertical-align: -1px;
+}
+
+/* This is a section disclosure, unlike file/session tree rows and menu buttons. */
+.session-time-group__header[aria-expanded] > span:first-child { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root body details > summary:not(:where(.markdown-body *, .edupi-background-job-details > summary))::before,
+  :root body .session-time-group__header[aria-expanded]::before,
+  :root body button > .edupi-disclosure-icon:not(:where(.markdown-body *)) {
+    transition: none;
+    /* The native theme sets a nonzero duration with !important on all pseudos. */
+    transition-duration: 0s !important;
+  }
+}
+
+@media (forced-colors: active) {
+  :root body details > summary:not(:where(.markdown-body *, .edupi-background-job-details > summary))::before,
+  :root body .session-time-group__header[aria-expanded]::before,
+  :root body button > .edupi-disclosure-icon:not(:where(.markdown-body *)) {
+    color: CanvasText;
+    forced-color-adjust: none;
+  }
+}

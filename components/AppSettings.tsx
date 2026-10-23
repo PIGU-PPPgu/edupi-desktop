@@ -453,7 +453,7 @@ function VersionChip({
   );
 }
 
-export function AppSettings({ onClose, initialSection = null }: { onClose: () => void; initialSection?: "mobile" | null }) {
+export function AppSettings({ onClose, initialSection = null, onOpenConnectionDetails }: { onClose: () => void; initialSection?: "mobile" | null; onOpenConnectionDetails?: () => void }) {
   const { t, locale, setLocale, supportedLocales } = useI18n();
   const { theme, setTheme } = useTheme();
   const desktop = isTauriDesktop();
@@ -762,6 +762,7 @@ export function AppSettings({ onClose, initialSection = null }: { onClose: () =>
               <div style={sectionTitleStyle}>{t("appSettings.desktopSection")}</div>
               <div style={sectionHintStyle}>{t("appSettings.desktopHint")}</div>
               <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                {onOpenConnectionDetails && <button type="button" className="native-button" onClick={onOpenConnectionDetails}>连接详情</button>}
                 <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
                   <input
                     type="checkbox"

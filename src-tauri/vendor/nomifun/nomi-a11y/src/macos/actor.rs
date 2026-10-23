@@ -74,6 +74,8 @@ type AXObserverCallback = unsafe extern "C" fn(*mut c_void, *const c_void, CFStr
 
 #[link(name = "ApplicationServices", kind = "framework")]
 unsafe extern "C" {
+    fn AXIsProcessTrusted() -> u8;
+    fn AXUIElementGetTypeID() -> usize;
     fn AXUIElementCreateSystemWide() -> *const c_void;
     fn AXUIElementCreateApplication(pid: i32) -> *const c_void;
     fn AXUIElementCopyAttributeValue(
@@ -108,6 +110,10 @@ unsafe extern "C" {
 
 const AX_VALUE_CGPOINT: u32 = 1;
 const AX_VALUE_CGSIZE: u32 = 2;
+// Apple's AXError.h uses signed 32-bit error codes.
+const AX_ERROR_CANNOT_COMPLETE: i32 = -25204;
+const AX_ERROR_API_DISABLED: i32 = -25211;
+const AX_ERROR_NO_VALUE: i32 = -25212;
 
 // ---- AxElem: RAII owner of one AXUIElement (thread-confined, !Send) -----
 
@@ -462,20 +468,81 @@ struct State {
     cached: Option<CachedWalk>,
 }
 
-unsafe fn focused_app() -> Result<AxElem, A11yError> {
-    let sw = AxElem::from_create(AXUIElementCreateSystemWide()).ok_or_else(|| {
-        A11yError::Backend("AXUIElementCreateSystemWide returned null".to_string())
-    })?;
-    copy_elem_attr(sw.ptr(), "AXFocusedApplication").ok_or_else(|| {
+// Owns a value returned by the Copy API on success. Keeping result decoding
+// separate permits deterministic tests without querying any application's UI.
+unsafe fn focused_app_from_read(
+    ax_error: i32,
+    value: *const c_void,
+    trusted: bool,
+    host_pid: u32,
+) -> Result<AxElem, A11yError> {
+    let diagnostic = format!("ax_error={ax_error}, trusted={trusted}, host_pid={host_pid}");
+    if !trusted {
+        // Only a successful Copy publishes an owned CF value. Do not inspect
+        // an error output, and release a successful value before refusing it.
+        if ax_error == 0 && !value.is_null() {
+            CFRelease(value);
+        }
         let app = crate::host_app_label();
-        A11yError::Permission(format!(
-            "No focused application is readable — Accessibility permission is not in effect for \
-             {app}. Grant it in System Settings → Privacy & Security → Accessibility (the entry is \
-             named \"{app}\"), then COMPLETELY quit and reopen {app} — macOS does not apply this \
-             permission to an already-running process. Computer-use runs inside {app} itself, so \
-             do not grant a terminal or editor."
+        return Err(A11yError::Permission(format!(
+            "The current {app} process is not a trusted accessibility client. \
+             AXFocusedApplication read refused ({diagnostic})."
+        )));
+    }
+    match ax_error {
+        AX_ERROR_NO_VALUE => {
+            return Err(A11yError::NotFound(format!(
+                "AXFocusedApplication has no value: kAXErrorNoValue ({diagnostic})."
+            )));
+        }
+        AX_ERROR_CANNOT_COMPLETE => {
+            return Err(A11yError::Backend(format!(
+                "AXFocusedApplication messaging failed or the application is busy: \
+                 kAXErrorCannotComplete ({diagnostic})."
+            )));
+        }
+        AX_ERROR_API_DISABLED => {
+            return Err(A11yError::Backend(format!(
+                "AXFocusedApplication API is disabled while this process reports trusted: \
+                 kAXErrorAPIDisabled ({diagnostic})."
+            )));
+        }
+        0 => {}
+        _ => {
+            return Err(A11yError::Backend(format!(
+                "AXFocusedApplication lookup failed ({diagnostic})."
+            )));
+        }
+    }
+    if value.is_null() {
+        return Err(A11yError::Backend(format!(
+            "AXFocusedApplication returned null with kAXErrorSuccess ({diagnostic})."
+        )));
+    }
+    if CFGetTypeID(value) != AXUIElementGetTypeID() {
+        CFRelease(value);
+        return Err(A11yError::Backend(format!(
+            "AXFocusedApplication returned a non-AXUIElement CF value ({diagnostic})."
+        )));
+    }
+    // The successful, type-checked +1 value is now owned by AxElem.
+    Ok(AxElem(value))
+}
+
+unsafe fn focused_app() -> Result<AxElem, A11yError> {
+    let trusted = AXIsProcessTrusted() != 0;
+    let host_pid = std::process::id();
+    let sw = AxElem::from_create(AXUIElementCreateSystemWide()).ok_or_else(|| {
+        A11yError::Backend(format!(
+            "AXUIElementCreateSystemWide returned null \
+             (ax_error=not_called, trusted={trusted}, host_pid={host_pid})."
         ))
-    })
+    })?;
+    let attribute = CFString::new("AXFocusedApplication");
+    let mut value = std::ptr::null();
+    let ax_error =
+        AXUIElementCopyAttributeValue(sw.ptr(), attribute.as_concrete_TypeRef(), &mut value);
+    focused_app_from_read(ax_error, value, trusted, host_pid)
 }
 
 unsafe fn focused_window(app: &AxElem) -> Option<AxElem> {
@@ -784,5 +851,130 @@ impl ActorHandle {
         self.send(Cmd::Focus(pid, tx))?;
         rx.recv()
             .map_err(|_| A11yError::Backend("AX actor dropped the reply".to_string()))?
+    }
+}
+
+#[cfg(test)]
+mod focused_app_tests {
+    use super::*;
+
+    fn failure(result: Result<AxElem, A11yError>) -> A11yError {
+        match result {
+            Err(error) => error,
+            Ok(_) => panic!("invalid focused-app read must be rejected"),
+        }
+    }
+
+    fn assert_diagnostics(error: &A11yError, ax_error: i32, trusted: bool) {
+        let text = error.to_string();
+        assert!(text.contains(&format!("ax_error={ax_error}")), "{text}");
+        assert!(text.contains(&format!("trusted={trusted}")), "{text}");
+        assert!(
+            text.contains(&format!("host_pid={}", std::process::id())),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn focused_app_no_value_is_not_a_missing_permission_when_trusted() {
+        let error = failure(unsafe {
+            focused_app_from_read(-25212, std::ptr::null(), true, std::process::id())
+        });
+        assert!(matches!(error, A11yError::NotFound(_)));
+        assert!(error.to_string().contains("kAXErrorNoValue"));
+        assert_diagnostics(&error, -25212, true);
+    }
+
+    #[test]
+    fn focused_app_cannot_complete_preserves_messaging_error() {
+        let error = failure(unsafe {
+            focused_app_from_read(-25204, std::ptr::null(), true, std::process::id())
+        });
+        assert!(matches!(error, A11yError::Backend(_)));
+        assert!(error.to_string().contains("kAXErrorCannotComplete"));
+        assert_diagnostics(&error, -25204, true);
+    }
+
+    #[test]
+    fn focused_app_api_disabled_does_not_claim_a_trusted_process_lacks_a_grant() {
+        let error = failure(unsafe {
+            focused_app_from_read(-25211, std::ptr::null(), true, std::process::id())
+        });
+        assert!(matches!(error, A11yError::Backend(_)));
+        assert!(error.to_string().contains("kAXErrorAPIDisabled"));
+        assert_diagnostics(&error, -25211, true);
+    }
+
+    #[test]
+    fn focused_app_success_with_null_is_a_distinct_backend_failure() {
+        let error = failure(unsafe {
+            focused_app_from_read(0, std::ptr::null(), true, std::process::id())
+        });
+        assert!(matches!(error, A11yError::Backend(_)));
+        assert!(error.to_string().contains("returned null with kAXErrorSuccess"));
+        assert_diagnostics(&error, 0, true);
+    }
+
+    #[test]
+    fn focused_app_success_with_the_wrong_cf_type_is_rejected() {
+        let text = CFString::new("SYNTHETIC_NOT_A_UI_ELEMENT");
+        let error = failure(unsafe {
+            // Supply an owned synthetic CF object, not an accessibility query.
+            focused_app_from_read(
+                0,
+                CFRetain(text.as_CFTypeRef()),
+                true,
+                std::process::id(),
+            )
+        });
+        assert!(matches!(error, A11yError::Backend(_)));
+        assert!(error.to_string().contains("non-AXUIElement"));
+        assert_diagnostics(&error, 0, true);
+    }
+
+    #[test]
+    fn focused_app_untrusted_process_has_an_explicit_permission_error() {
+        let error = failure(unsafe {
+            focused_app_from_read(-25211, std::ptr::null(), false, std::process::id())
+        });
+        assert!(matches!(error, A11yError::Permission(_)));
+        assert!(error.to_string().contains("not a trusted accessibility client"));
+        assert_diagnostics(&error, -25211, false);
+    }
+
+    #[test]
+    fn focused_app_untrusted_process_cannot_use_a_successful_value() {
+        let error = failure(unsafe {
+            // Creating a reference to this test process performs no AX read.
+            let value = AXUIElementCreateApplication(std::process::id() as i32);
+            assert!(!value.is_null());
+            focused_app_from_read(0, value, false, std::process::id())
+        });
+        assert!(matches!(error, A11yError::Permission(_)));
+        assert_diagnostics(&error, 0, false);
+    }
+
+    #[test]
+    fn focused_app_unknown_error_code_is_preserved_without_permission_guessing() {
+        let error = failure(unsafe {
+            focused_app_from_read(-12345, std::ptr::null(), true, std::process::id())
+        });
+        assert!(matches!(error, A11yError::Backend(_)));
+        assert_diagnostics(&error, -12345, true);
+    }
+
+    #[test]
+    fn focused_app_success_accepts_only_a_real_typed_ax_value() {
+        let value = unsafe {
+            // AX reference construction and type checks do not inspect any UI.
+            let value = AXUIElementCreateApplication(std::process::id() as i32);
+            assert!(!value.is_null());
+            assert_eq!(CFGetTypeID(value), AXUIElementGetTypeID());
+            focused_app_from_read(0, value, true, std::process::id())
+        }
+        .unwrap_or_else(|error| panic!("typed focused-app value was rejected: {error}"));
+        assert_eq!(unsafe { CFGetTypeID(value.ptr()) }, unsafe {
+            AXUIElementGetTypeID()
+        });
     }
 }

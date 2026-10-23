@@ -216,7 +216,9 @@ test("sizes the message tail from the rendered bottom composer", () => {
   assert.match(chatWindowSource, /bottomComposerScrollFrameRef = useRef<number \| null>\(null\)/);
   assert.match(chatWindowSource, /distanceFromBottom <= Math\.abs\(nextHeight - previousHeight\) \+ 1/);
   assert.match(chatWindowSource, /scrollToBottom\("auto"\)/);
-  assert.match(chatWindowSource, /<div ref=\{bottomComposerRef\} className="absolute inset-x-0 bottom-0 z-20">/);
+  assert.match(chatWindowSource, /<div ref=\{isEmptyNew \? undefined : bottomComposerRef\} className=\{isEmptyNew\s*\? "flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8"\s*: "absolute inset-x-0 bottom-0 z-20"\}>/);
+  assert.equal([...chatWindowSource.matchAll(/<div ref=\{[^}]*bottomComposerRef\}/g)].length, 1,
+    "empty and active layouts must keep one shared composer rather than remounting it");
   assert.match(chatWindowSource, /height: bottomComposerHeight/);
 });
 

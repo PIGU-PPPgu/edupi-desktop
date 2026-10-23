@@ -300,11 +300,18 @@ test("a session switch during a resolved-intent read never revives the delivered
   await flush();
   f.context.sessionGenerationRef.current++;
   f.context.sessionIdRef.current = "another-session";
+  f.context.activeDraftKeyRef.current = "another-session";
+  f.store.setDraft("another-session", { value: "另一会话的新草稿", images: [], context: selectedContext });
+  f.store.flushDraftNow("another-session");
+  const otherDraft = f.cold("another-session");
   finishIntent();
   assert.equal(await sent, true);
   assert.equal(f.cold(f.draftKey), null);
+  assert.deepEqual(f.cold("another-session"), otherDraft);
   assert.equal(f.recoveries.some(item => item.type === "pending" || item.type === "replace"), false);
   assert.equal(f.desktopPrompts.length, 0);
+  assert.equal(f.commands.filter(command => command.type === "prompt").length, 0);
+  assert.equal(f.promoted.length, 0);
 });
 
 test("a resolved intent without exact Pi persistence proof keeps its pending identity and never replays", async () => {

@@ -125,6 +125,7 @@ export function AppShell() {
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
   const [pluginsConfigOpen, setPluginsConfigOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
+  const [connectionDetailsOpen, setConnectionDetailsOpen] = useState(false);
   const [foregroundSettings, setForegroundSettings] = useState(readForegroundSettings);
   useEffect(() => {
     const refresh = () => setForegroundSettings(readForegroundSettings());
@@ -165,14 +166,6 @@ export function AppShell() {
   }, []);
   useEffect(() => {
     const handler = () => {
-      setAppSettingsOpen(false);
-      setEduPiEducationModule("context");
-    };
-    window.addEventListener("edupi-open-context", handler);
-    return () => window.removeEventListener("edupi-open-context", handler);
-  }, []);
-  useEffect(() => {
-    const handler = () => {
       setAppSettingsSection("mobile");
       setAppSettingsOpen(true);
     };
@@ -185,6 +178,14 @@ export function AppShell() {
   const [adminModelsDirty, setAdminModelsDirty] = useState(false);
   const [proactiveOpenRequest, setProactiveOpenRequest] = useState(0);
   const [edupiEducationModule, setEduPiEducationModule] = useState<EducationModule | null>("home");
+  useEffect(() => {
+    const handler = () => {
+      setAppSettingsOpen(false);
+      setEduPiEducationModule("context");
+    };
+    window.addEventListener("edupi-open-context", handler);
+    return () => window.removeEventListener("edupi-open-context", handler);
+  }, []);
   const edupiChatActive = edupiEducationModule !== null && searchParams.get("view") === "chat";
   const [projectTrust, setProjectTrust] = useState<ProjectTrustStatus | null>(null);
   const [projectTrustDialogOpen, setProjectTrustDialogOpen] = useState(false);
@@ -441,7 +442,7 @@ export function AppShell() {
     }
   }, [desktopMode]);
 
-  const { state: connectionState, retry: retryConnection, diagnostics: connectionDiagnostics } = useDesktopConnection(desktopMode);
+  const { state: connectionState, retry: retryConnection, diagnostics: connectionDiagnostics, failureIncident: connectionFailureIncident } = useDesktopConnection(desktopMode);
 
   const openEducationModule = useCallback((module: EducationModule = "home") => {
     setEduPiEducationModule(module);
@@ -1510,7 +1511,8 @@ export function AppShell() {
         background: "var(--bg)",
       } as React.CSSProperties}
     >
-      <DesktopConnectionNotice state={connectionState} retry={retryConnection} diagnostics={connectionDiagnostics} />
+      <DesktopConnectionNotice state={connectionState} retry={retryConnection} diagnostics={connectionDiagnostics} failureIncident={connectionFailureIncident}
+        detailsOpen={connectionDetailsOpen} onOpenDetails={() => setConnectionDetailsOpen(true)} onCloseDetails={() => setConnectionDetailsOpen(false)} />
       <SafeModeBanner />
       <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
       {/* Mobile overlay backdrop */}
@@ -2279,7 +2281,8 @@ export function AppShell() {
         onReloaded={() => setSessionKey((k) => k + 1)}
       />
     )}
-    {appSettingsOpen && <AppSettings initialSection={appSettingsSection} onClose={() => { setAppSettingsOpen(false); setAppSettingsSection(null); }} />}
+    {appSettingsOpen && <AppSettings initialSection={appSettingsSection} onClose={() => { setAppSettingsOpen(false); setAppSettingsSection(null); }}
+      onOpenConnectionDetails={() => { setAppSettingsOpen(false); setAppSettingsSection(null); setConnectionDetailsOpen(true); }} />}
     {edupiAdminOpen && <EduPiAdminPanel
       refreshToken={modelsRefreshKey}
       initialSection={edupiAdminSection}

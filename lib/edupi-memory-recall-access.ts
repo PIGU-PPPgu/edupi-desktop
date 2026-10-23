@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineTool, SessionManager, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
@@ -9,6 +9,7 @@ import { resolveEduPiBridgeRoots } from "./edupi-core-snapshot";
 import { ensureEduPiRuntime } from "./edupi-runtime-supervisor";
 import { proactivityConversationId } from "./edupi-proactivity-control";
 import { isSafeModeEnabled } from "./safe-mode";
+import { createMemorySummaryGuard, memoryHistoryIds, projectMemoryHistory } from "./edupi-memory-summary";
 
 const hash = (text: string) => `sha256:${createHash("sha256").update(text).digest("hex")}`;
 const canonical = (directory: string) => { try { return realpathSync(directory); } catch { return resolve(directory); } };
@@ -24,7 +25,8 @@ type RecallParameters = Static<typeof parameters>;
 type Entry = { id: string; category: typeof categories[number]; content: string; source_fingerprint: string;
   student_id: string | null; student: string | null; managed_method: boolean };
 type Recall = { status: "current" | "held"; reason_code: string | null; entries: Entry[] };
-type Turn = { manager: SessionManager; sessionId: string; clientRequestId: string; text: string; active: boolean };
+type Turn = { manager: SessionManager; sessionId: string; clientRequestId: string; text: string; active: boolean; captured: boolean;
+  sourceNonce: string; startingLeafId: string | null; startingUserId: string | null; boundUserId: string | null; boundUserHash: string | null };
 type Dependencies = {
   disabled?: () => boolean;
   readOutbox?: typeof readEduPiPromptOutbox;
@@ -76,9 +78,26 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
     return { rootRef, call: (request: Record<string, unknown>, signal?: AbortSignal) => host.callOwnerControl("owner_memory_recall", request, signal) };
   });
 
+  function sourceCurrent(turn: Turn, manager: unknown): boolean {
+    if (!turn.active || activeTurns.get(turn.manager) !== turn || manager !== turn.manager || !(manager instanceof SessionManager)
+      || manager.getSessionId() !== turn.sessionId || canonical(manager.getCwd()) !== root) return false;
+    const branch = manager.getBranch(), start = turn.startingLeafId === null ? -1 : branch.findIndex(entry => entry.id === turn.startingLeafId);
+    if (turn.startingLeafId !== null && start < 0) return false;
+    const users = branch.slice(start + 1).filter(entry => entry.type === "message" && entry.message.role === "user");
+    const latest = users[0];
+    if (users.length !== 1 || latest?.type !== "message" || latest.message.role !== "user" || latest.id === turn.startingUserId
+      || turn.boundUserId !== null && latest.id !== turn.boundUserId
+      || branch.some(entry => entry.type === "context_edit" && entry.targetId === latest.id)) return false;
+    const digest = hash(JSON.stringify(latest.message));
+    if (turn.boundUserHash !== null && digest !== turn.boundUserHash) return false;
+    // Bind the actual public SDK entry after legitimate input/skill/image
+    // normalization. Core capture below still requires the original raw text.
+    turn.boundUserId = latest.id; turn.boundUserHash = digest;
+    return true;
+  }
+
   function current(turn: Turn, manager: unknown): EduPiPromptOutboxEntry | null {
-    if (!turn.active || activeTurns.get(turn.manager) !== turn || disabled() || manager !== turn.manager || !(manager instanceof SessionManager)
-      || manager.getSessionId() !== turn.sessionId || canonical(manager.getCwd()) !== root) return null;
+    if (!turn.captured || disabled() || !sourceCurrent(turn, manager) || !(manager instanceof SessionManager)) return null;
     const branch = manager.getBranch();
     const latestUserIndex = branch.findLastIndex(entry => entry.type === "message" && entry.message.role === "user");
     const latest = branch[latestUserIndex];
@@ -134,53 +153,70 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
           : result.status === "held" ? "当前会话未绑定可用记忆范围。" : "没有找到当前范围的相关记忆。" }], details: result };
       },
   });
+  function scopeKey(manager: unknown): string | null {
+    const turn = turns.getStore(), outbox = turn ? current(turn, manager) : null;
+    if (!outbox) return null;
+    const binding = outbox.bindings.find(item => item.domain === "teaching_preparation") ?? outbox.bindings[0];
+    return hash(JSON.stringify([root, outbox.sessionId, binding.domain, binding.ownerId, binding.grantId, binding.grantVersion]));
+  }
+  function currentTurnKey(manager: unknown): string | null {
+    const turn = turns.getStore();
+    // This is only a local current-run identity. It never grants Core recall.
+    return turn && sourceCurrent(turn, manager) ? hash(JSON.stringify([root, turn.sessionId, turn.boundUserId, turn.sourceNonce])) : null;
+  }
+  async function memorySnapshot(manager: Parameters<typeof projectMemoryHistory>[1], messages: Parameters<typeof projectMemoryHistory>[0]) {
+    let result = await recall(manager, { limit: 50 });
+    // Revalidate recent returned IDs per category, before Core applies its
+    // result cap. A category/query result can lie beyond the general summary.
+    const history = memoryHistoryIds(messages, manager);
+    if (history.length) {
+      const ids = [...new Set([...history, ...result.entries.map(entry => entry.id)])].slice(0, 50);
+      // Discard earlier bodies after awaiting the authoritative batch. A
+      // revoked grant or changed source cannot survive as cached context.
+      result = await recall(manager, { limit: 50 }, undefined, ids);
+    }
+    const scope = scopeKey(manager);
+    return { entries: result.entries, scopeKey: scope, turnKey: currentTurnKey(manager), status: result.status, active: scope !== null };
+  }
+  const summary = createMemorySummaryGuard(root, memorySnapshot, scopeKey, currentTurnKey);
   const extension: ExtensionFactory = pi => {
+    pi.on("session_before_compact", (event, ctx) => summary.compact(event, ctx));
+    // The public tree hook cannot replace the default summarizer's inputs.
+    // Navigation itself stays available; a protected abandoned-branch summary is held.
+    pi.on("session_before_tree", (event, ctx) => canonical(ctx.sessionManager.getCwd()) === root
+      && event.preparation.userWantsSummary ? { cancel: true } : undefined);
+    pi.on("message_end", (event, ctx) => summary.sealAssistant(event.message, ctx));
     pi.on("context", async (event, ctx) => {
-      let result = await recall(ctx.sessionManager, { limit: 50 });
-      // Revalidate recent returned IDs per category, before Core applies its
-      // result cap. A category/query result can lie beyond the general summary.
-      const history = new Map<string, Entry["category"]>();
-      for (const message of [...event.messages].reverse()) {
-        if (message.role !== "toolResult" || message.toolName !== "memory_recall") continue;
-        const previous = message.details as { entries?: Entry[] } | undefined;
-        if (!Array.isArray(previous?.entries)) continue;
-        for (const entry of previous.entries) {
-          if (history.size >= 50) break;
-          if (entry && typeof entry.id === "string" && entry.id.length <= 160 && categories.includes(entry.category)) history.set(entry.id, entry.category);
-        }
+      try {
+        if (canonical(ctx.sessionManager.getCwd()) !== root) return undefined;
+        const snapshot = await memorySnapshot(ctx.sessionManager, event.messages);
+        const entries = snapshot.entries;
+        const { messages, memories, turnKey } = summary.project(event.messages, ctx.sessionManager, snapshot);
+        const automatic = entries.filter(entry => ["preferences", "semester", "class"].includes(entry.category)
+          || entry.category === "teaching" && entry.managed_method).slice(0, 12);
+        const projected = automatic.length ? [{ role: "user" as const, content: [{ type: "text" as const, text: `[EduPi 长期记忆]\n${automatic.map(entry => entry.content).join("\n")}\n[历史记忆供参考]` }], timestamp: Date.now() }, ...messages] : messages;
+        summary.rememberContext(ctx.sessionManager, event.messages, projected, snapshot,
+          [...new Map([...memories, ...automatic].map(entry => [entry.id, { id: entry.id, category: entry.category, source_fingerprint: entry.source_fingerprint }])).values()], turnKey);
+        return { messages: projected };
+      } catch {
+        // Extension errors are non-fatal in Pi. Abort explicitly so a failed
+        // privacy projection cannot be swallowed and replaced by raw history.
+        try { ctx.abort(); } catch { /* Empty history remains fail-closed. */ }
+        return { messages: [] };
       }
-      if (history.size) {
-        const ids = [...new Set([...history.keys(), ...result.entries.map(entry => entry.id)])].slice(0, 50);
-        // Discard earlier bodies after awaiting the authoritative batch. A
-        // revoked grant or changed source cannot survive as cached context.
-        result = await recall(ctx.sessionManager, { limit: 50 }, undefined, ids);
-      }
-      const entries = result.entries;
-      const provedEntries = new Map(entries.map(entry => [entry.id, entry]));
-      const messages = event.messages.map(message => {
-        if (message.role !== "toolResult" || !["memory_recall", "memory_write", "memory_forget", "student_note"].includes(message.toolName)) return message;
-        const previous = message.details as { entries?: Entry[] } | undefined;
-        const proved = message.toolName === "memory_recall" && Array.isArray(previous?.entries)
-          ? previous.entries.flatMap(old => {
-            const current = old && typeof old === "object" ? provedEntries.get(old.id) : undefined;
-            return current && current.source_fingerprint === old?.source_fingerprint ? [current] : [];
-          }) : [];
-        return { ...message, content: [{ type: "text" as const, text: proved.length ? proved.map(entry => entry.content).join("\n") : "历史记忆结果已失效。" }], details: { entries: proved } };
-      });
-      const automatic = entries.filter(entry => ["preferences", "semester", "class"].includes(entry.category)
-        || entry.category === "teaching" && entry.managed_method).slice(0, 12);
-      if (!automatic.length) return { messages };
-      return { messages: [{ role: "user", content: [{ type: "text", text: `[EduPi 长期记忆]\n${automatic.map(entry => entry.content).join("\n")}\n[历史记忆供参考]` }], timestamp: Date.now() }, ...messages] };
     });
   };
 
-  return { extension, tool, recall, invalidate,
+  return { extension, tool, recall, invalidate, bindSummarization: summary.bind,
     async run<T>(manager: SessionManager, command: { message: string; clientRequestId?: string },
       captured: boolean, callback: () => Promise<T>): Promise<T> {
       invalidate(manager);
-      if (!captured || !command.clientRequestId || disabled() || !(manager instanceof SessionManager)
+      if (!(manager instanceof SessionManager)
         || canonical(manager.getCwd()) !== root) return turns.run(null, callback);
-      const turn = { manager, sessionId: manager.getSessionId(), clientRequestId: command.clientRequestId, text: command.message, active: true };
+      const previousUser = manager.getBranch().findLast(entry => entry.type === "message" && entry.message.role === "user");
+      const turn: Turn = { manager, sessionId: manager.getSessionId(), clientRequestId: command.clientRequestId ?? "", text: command.message, active: true,
+        captured: captured && !!command.clientRequestId && !disabled(), sourceNonce: randomUUID(), startingLeafId: manager.getLeafId(),
+        startingUserId: previousUser?.id ?? null, boundUserId: null, boundUserHash: null };
       activeTurns.set(manager, turn);
       try { return await turns.run(turn, callback); } finally {
         turn.active = false;

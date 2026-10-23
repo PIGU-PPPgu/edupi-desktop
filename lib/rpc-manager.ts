@@ -1651,6 +1651,7 @@ export async function startRpcSession(
         ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
       });
       services.resourceLoader = createRpcResourceLoader(services.resourceLoader, { ...resourceOptions, settingsManager: services.settingsManager }, toolMode, [memoryRecall.extension]);
+      memoryRecall.bindSummarization(services, sessionManager);
       const defaultProvider = services.settingsManager.getDefaultProvider();
       const defaultModelId = services.settingsManager.getDefaultModel();
       const authModel = initialModel

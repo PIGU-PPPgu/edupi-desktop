@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>折叠样式</title>
+  <link rel="stylesheet" href="../../app/native-theme.css">
+  <link rel="stylesheet" href="../../app/edupi-admin.css">
+  <link rel="stylesheet" href="../../app/edupi-settings.css">
+  <link rel="stylesheet" href="../../app/edupi-workbench.css">
+  <link rel="stylesheet" href="../../app/edupi-student-graph.css">
+  <link rel="stylesheet" href="../../app/edupi-resource-picker.css">
+  <link rel="stylesheet" href="../../app/edupi-chat-resources.css">
+  <link rel="stylesheet" href="../../app/edupi-disclosure.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; padding: 20px; background: var(--bg); color: var(--text); font: 14px/1.45 var(--font-ui); }
+    .fixture-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .fixture-toolbar h1 { margin: 0; font-size: 17px; }
+    .fixture-toolbar select { color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 4px; }
+    .fixture-toolbar output { color: var(--text-muted); font-size: 12px; }
+    .fixture-toolbar output[data-failed="true"] { color: var(--danger); }
+    .fixture-frame.edupi-teacher-shell { position: static; display: block; width: min(var(--fixture-width, 1100px), 100%); min-height: 0; padding: 14px; overflow: visible; border: 1px solid var(--ep-border); border-radius: 8px; }
+    .fixture-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); align-items: start; gap: 14px; }
+    .fixture-section { min-width: 0; padding: 12px; border: 1px solid var(--ep-border); border-radius: 7px; background: var(--ep-surface); }
+    .fixture-section h2 { margin: 0 0 8px; font-size: 12px; color: var(--ep-muted); font-weight: 500; }
+    .fixture-section p { margin: 7px 0; font-size: 12px; }
+    .fixture-section details > div:not([class]) { padding: 8px 0; font-size: 12px; }
+    .fixture-wide { grid-column: 1 / -1; }
+    .fixture-database { overflow-x: auto; }
+    .fixture-database .edupi-database { width: max(100%, 850px); margin-top: 0; }
+    .fixture-database .edupi-database + .edupi-database { margin-top: 10px; }
+    .fixture-counters { margin-top: 8px; color: var(--ep-muted); font-size: 11px; }
+    .fixture-failures { max-width: 900px; white-space: pre-wrap; color: var(--danger); font-size: 12px; }
+    .fixture-tree { display: flex; align-items: center; gap: 6px; border: 0; background: transparent; color: inherit; font: inherit; }
+    .fixture-tree svg { width: 12px; height: 12px; }
+    .fixture-label { font-size: 12px; }
+    /* Session group layout normally comes from the Tailwind entry stylesheet. */
+    .session-time-group__header { display: flex; width: calc(100% - 20px); align-items: center; gap: 6px; margin: 8px 10px 3px; padding: 3px 4px; border: 0; background: transparent; color: var(--text-dim); font: 700 10px var(--font-ui); text-align: left; }
+    .session-time-group__header small { margin-left: auto; font-size: 10px; font-weight: 500; }
+  </style>
+</head>
+<body>
+  <header class="fixture-toolbar">
+    <h1>折叠样式</h1>
+    <label><input id="theme" type="checkbox"> 深色</label>
+    <label>宽度 <select id="width"><option value="1100">1100</option><option>320</option><option>768</option><option>1024</option><option>1440</option></select></label>
+    <output id="checks" role="status">检查中</output>
+    <output id="motion"></output>
+  </header>
+  <main class="fixture-frame edupi-teacher-shell">
+    <div class="fixture-grid">
+      <section class="fixture-section">
+        <h2>设置</h2>
+        <details id="fixture-toggle"><summary>历史记录</summary><p>只收起前台，不删除记录。</p></details>
+        <details class="update-proxy-card"><summary>更新代理 <span class="update-proxy-card__status">读取失败</span></summary><p>代理地址未设置。</p></details>
+        <details><summary>本地记录</summary><p>本地记录为空。</p></details>
+        <div class="fixture-counters">历史记录切换 <output id="toggle-count">0</output> 次</div>
+      </section>
+      <section class="fixture-section">
+        <h2>历史与计数</h2>
+        <details class="edupi-operation-history"><summary>操作历史 <span>12</span></summary><p>测试记录</p></details>
+        <details class="edupi-context-history" open><summary>字段历史 <span>3</span></summary><p>版本 3</p></details>
+        <details class="edupi-material-excerpt"><summary>用于备课</summary><p>材料摘录</p></details>
+        <details class="edupi-material-inbox"><summary>待接入材料 <span>2</span></summary><p>测试材料</p></details>
+      </section>
+      <section class="fixture-section edupi-student-drawer__scroll">
+        <h2>学生与嵌套来源</h2>
+        <details open><summary>学习事实 <span>4</span></summary><div>
+          <p>测试学习事实</p>
+          <details><summary>来源 2</summary><p>隔离测试材料</p></details>
+        </div></details>
+        <details><summary>家校记录 <span>3</span></summary><div>测试家校记录</div></details>
+        <details><summary>档案历史 <span>6</span></summary><div>测试档案历史</div></details>
+      </section>
+      <section class="fixture-section">
+        <h2>人物与高级</h2>
+        <details class="edupi-object-person"><summary><span>测</span><strong>测试人物</strong></summary><p>隔离测试对象</p></details>
+        <details class="edupi-chat-advanced"><summary>高级</summary><div>测试高级设置</div></details>
+        <div class="chat-composer-controls"><details><summary style="font-size:12px;padding:6px 8px;white-space:nowrap">运行详情</summary><p>测试运行状态</p></details></div>
+        <section class="session-time-group">
+          <button class="session-time-group__header" type="button" aria-expanded="false" aria-controls="fixture-session-list"><span>▸</span><span>今天</span><small>2</small></button>
+          <div id="fixture-session-list" hidden>测试会话 A · 测试会话 B</div>
+        </section>
+      </section>
+      <section class="fixture-section">
+        <h2>聊天折叠</h2>
+        <div class="process-details" style="margin-bottom:14px">
+          <button class="process-details-trigger" type="button" aria-expanded="false" data-custom="process" style="display:flex;align-items:center;gap:8px;width:auto;min-height:24px;padding:2px 0;border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-size:12px;text-align:left" title="展开过程">
+            <span class="edupi-disclosure-icon" aria-hidden="true"></span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">过程详情 · 2 条消息 · 1 次工具调用</span>
+          </button>
+          <div class="process-details-content" style="margin-top:8px" data-custom-content="process" hidden>隔离测试过程内容</div>
+        </div>
+        <div class="message-user-bubble">
+          <button aria-expanded="false" data-custom="command" title="展开" style="display:flex;align-items:center;gap:6px;flex-shrink:0;padding:0;background:none;border:none;cursor:pointer;color:var(--accent);font-family:var(--font-mono);font-size:13px;text-align:left">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">/skill:review</span><span class="edupi-disclosure-icon" aria-hidden="true"></span>
+          </button>
+          <pre data-custom-content="command" hidden>隔离测试命令正文</pre>
+        </div>
+        <div style="margin-top:12px;border:1px solid var(--border);border-radius:6px;overflow:hidden;font-size:13px">
+          <button aria-expanded="false" data-custom="thinking" style="display:flex;align-items:center;gap:6px;width:100%;padding:6px 10px;background:var(--bg-panel);border:none;color:var(--text-muted);cursor:pointer;font-size:12px;text-align:left">
+            <span class="edupi-disclosure-icon" aria-hidden="true"></span><span>思考</span><span style="margin-left:auto;font-size:11px;color:var(--text-dim);font-variant-numeric:tabular-nums">2s</span>
+          </button>
+          <div data-custom-content="thinking" style="padding:8px 10px;border-top:1px solid var(--border)" hidden>隔离测试思考内容</div>
+        </div>
+        <div style="margin-top:12px;border-radius:7px;overflow:hidden;font-size:12px;border:1px solid rgba(34,197,94,.25);background:rgba(34,197,94,.04)">
+          <button aria-expanded="false" data-custom="tool" style="display:flex;align-items:center;gap:7px;width:100%;padding:6px 10px;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;text-align:left;min-width:0">
+            <span style="color:var(--success);font-family:var(--font-mono);font-weight:600;font-size:11px;flex-shrink:0">read</span><span style="color:var(--text-dim);font-family:var(--font-mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">test-material.txt</span><span style="font-size:11px;color:var(--text-dim);flex-shrink:0;font-variant-numeric:tabular-nums">1s</span><span class="edupi-disclosure-icon" aria-hidden="true"></span>
+          </button>
+          <pre data-custom-content="tool" style="margin:0;padding:8px 10px;background:var(--bg-subtle);border-top:1px solid rgba(34,197,94,.2)" hidden>{ "path": "test-material.txt" }</pre>
+        </div>
+      </section>
+      <section class="fixture-section">
+        <h2>长文与技能分组</h2>
+        <div data-custom-content="long" style="max-height:220px;overflow:hidden;mask-image:linear-gradient(to bottom,black calc(100% - 48px),transparent 100%)">
+          <p>隔离测试长文第 1 行</p><p>隔离测试长文第 2 行</p><p>隔离测试长文第 3 行</p><p>隔离测试长文第 4 行</p><p>隔离测试长文第 5 行</p><p>隔离测试长文第 6 行</p><p>隔离测试长文第 7 行</p><p>隔离测试长文第 8 行</p><p>隔离测试长文第 9 行</p><p>隔离测试长文第 10 行</p>
+        </div>
+        <button aria-expanded="false" data-custom="long" style="display:flex;align-items:center;gap:4px;margin-top:2px;padding:2px 0;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11px">
+          <span class="edupi-disclosure-icon" aria-hidden="true"></span><span data-custom-label>展开</span>
+        </button>
+        <button class="edupi-dormant-skills-trigger" type="button" aria-expanded="false" data-custom="skills" style="display:flex;align-items:center;gap:5px;width:100%;padding:4px 8px 3px;border:none;background:transparent;text-align:left;font-family:inherit;font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;cursor:pointer;user-select:none">
+          <span class="edupi-disclosure-icon" aria-hidden="true"></span>休眠 (3)
+        </button>
+        <div data-custom-content="skills" hidden>测试技能 A · 测试技能 B · 测试技能 C</div>
+      </section>
+      <section class="fixture-section fixture-wide">
+        <h2>网格与多行</h2>
+        <details class="edupi-knowledge-row"><summary><div><strong>测试教学重点</strong><span>七年级数学</span></div><p>分式运算中的符号与通分。</p><small>两条来源</small></summary><p>测试教学重点内容</p></details>
+        <div class="edupi-family-list"><details><summary><div><strong>测试家校记录</strong><span>待核对</span></div><p>这是一条较长的隔离测试记录，用于检查多行折叠标题与箭头不会重叠。</p><small>2026-10-21</small></summary><p>测试记录内容</p></details></div>
+        <div class="edupi-memory-list"><details><summary><strong>测试当前记忆</strong><span>来源 2 · 版本 4</span></summary><p>测试记忆内容</p></details></div>
+      </section>
+      <section class="fixture-section fixture-wide fixture-database">
+        <h2>数据库</h2>
+        <div class="edupi-database" data-grid="记忆">
+          <div class="edupi-database__head edupi-memory-db-grid"><span>记忆</span><span>关联对象</span><span>标签</span><span>累计</span><span>更新时间</span></div>
+          <details class="edupi-database-row"><summary class="edupi-memory-db-grid"><strong>测试记忆内容</strong><span>测试班级</span><span>课堂</span><span>2 次</span><time>10-21</time></summary><div class="edupi-database-row__detail"><div><span>版本</span><strong>4</strong></div></div></details>
+        </div>
+        <div class="edupi-database" data-grid="洞察">
+          <div class="edupi-database__head edupi-insight-db-grid"><span>类型</span><span>内容</span><span>状态</span><span>依据</span><span>最近时间</span></div>
+          <details class="edupi-database-row"><summary class="edupi-insight-db-grid"><span>学习</span><strong>测试观察内容</strong><span>待核对</span><span>3</span><time>10-21</time></summary><div class="edupi-database-row__detail"><div><span>依据</span><strong>3 条</strong></div></div></details>
+        </div>
+        <div class="edupi-database" data-grid="方法">
+          <div class="edupi-database__head edupi-edupi-growth-db-grid"><span>教学方法</span><span>状态</span><span>试用</span><span>依据</span><span>最近更新</span></div>
+          <details class="edupi-database-row edupi-method-row"><summary class="edupi-edupi-growth-db-grid"><strong>测试教学方法</strong><span>草稿</span><span>2</span><span>3</span><time>10-21</time></summary><div class="edupi-method-detail"><p>测试方法正文</p><details class="edupi-method-technical"><summary>技术信息</summary><p>测试版本 1</p></details></div></details>
+        </div>
+      </section>
+      <section class="fixture-section">
+        <h2>特殊入口</h2>
+        <details class="edupi-background-job-details"><summary aria-label="查看测试任务技术详情" title="技术详情"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4M8 4.5v.5" stroke="currentColor" stroke-width="1.5"/></svg></summary><code>测试诊断</code></details>
+        <button type="button" class="fixture-tree" aria-expanded="false"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5" stroke="currentColor" stroke-width="1.5"/></svg>测试文件树</button>
+      </section>
+      <section class="fixture-section markdown-body">
+        <h2>Markdown</h2>
+        <details><summary>用户内容中的折叠</summary><p>保留 Markdown 内容原本的原生折叠样式。</p></details>
+      </section>
+    </div>
+  </main>
+  <pre id="failures" class="fixture-failures" hidden></pre>
+  <script>
+    const frame = document.querySelector(".fixture-frame");
+    const checksOutput = document.querySelector("#checks");
+    const failuresOutput = document.querySelector("#failures");
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+    let toggleCount = 0;
+    let refreshTimer;
+
+    function checkLayout() {
+      const failures = [];
+      let count = 0;
+      const check = (condition, label) => { count++; if (!condition) failures.push(label); };
+      const summaries = [...document.querySelectorAll("details > summary:not(.markdown-body *, .edupi-background-job-details > summary)")];
+      for (const summary of summaries) {
+        const icon = getComputedStyle(summary, "::before");
+        const style = getComputedStyle(summary);
+        const label = summary.textContent.trim().slice(0, 24);
+        const inline = Boolean(summary.closest(".chat-composer-controls"));
+        check(icon.content === '""' && icon.position === (inline ? "static" : "absolute"), `${label}：单一图标布局`);
+        check(icon.width === "12px" && icon.height === "12px", `${label}：图标尺寸`);
+        check((icon.maskImage || icon.webkitMaskImage).startsWith('url("data:image/svg+xml,'), `${label}：共享细线图标`);
+        check(style.listStyleType === "none", `${label}：系统 marker 已移除`);
+        check(["none", "normal"].includes(getComputedStyle(summary, "::after").content), `${label}：无第二箭头`);
+        const matrix = new DOMMatrix(icon.transform);
+        const open = summary.parentElement.open;
+        check(Math.abs(matrix.a - (open ? 0 : 1)) < .01 && Math.abs(matrix.b - (open ? 1 : 0)) < .01, `${label}：开合方向`);
+        if (reducedMotion.matches) check(icon.transitionDuration === "0s", `${label}：减少动态效果`);
+        if (summary.matches(":focus-visible")) check(style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 2, `${label}：键盘焦点`);
+      }
+      for (const database of document.querySelectorAll("[data-grid]")) {
+        const header = database.querySelector(".edupi-database__head");
+        const summary = database.querySelector("summary");
+        check(getComputedStyle(summary).display === "grid", `${database.dataset.grid}：保留 grid`);
+        check(getComputedStyle(header).gridTemplateColumns === getComputedStyle(summary).gridTemplateColumns, `${database.dataset.grid}：表头列宽`);
+        [...header.children].forEach((cell, index) => {
+          check(Math.abs(cell.getBoundingClientRect().left - summary.children[index].getBoundingClientRect().left) < 1, `${database.dataset.grid}：第 ${index + 1} 列对齐`);
+        });
+      }
+      const info = document.querySelector(".edupi-background-job-details > summary");
+      check(getComputedStyle(info).width === "28px" && getComputedStyle(info).display === "grid", "技术入口：保留 28px 图标按钮");
+      check(["none", "normal"].includes(getComputedStyle(info, "::before").content), "技术入口：不叠加箭头");
+      const markdown = document.querySelector(".markdown-body summary");
+      check(["none", "normal"].includes(getComputedStyle(markdown, "::before").content), "Markdown：无产品箭头");
+      check(getComputedStyle(markdown).listStyleType !== "none", "Markdown：保留原生 marker");
+      check(["none", "normal"].includes(getComputedStyle(document.querySelector(".fixture-tree"), "::before").content), "文件树：无重复箭头");
+      const group = document.querySelector(".session-time-group__header");
+      check(getComputedStyle(group.firstElementChild).display === "none", "会话分组：字符箭头已替换");
+      const groupMatrix = new DOMMatrix(getComputedStyle(group, "::before").transform);
+      check(Math.abs(groupMatrix.b - (group.getAttribute("aria-expanded") === "true" ? 1 : 0)) < .01, "会话分组：aria-expanded 方向");
+      const nativeIcon = getComputedStyle(summaries[0], "::before");
+      for (const button of document.querySelectorAll("button[data-custom]")) {
+        const icon = button.querySelector(".edupi-disclosure-icon");
+        const style = getComputedStyle(icon);
+        const label = button.dataset.custom;
+        check(icon.getAttribute("aria-hidden") === "true", `${label}：装饰图标`);
+        check(style.width === "12px" && style.height === "12px" && style.flexBasis === "12px", `${label}：共享尺寸`);
+        check((style.maskImage || style.webkitMaskImage) === (nativeIcon.maskImage || nativeIcon.webkitMaskImage), `${label}：共享细线图标`);
+        check(style.color === nativeIcon.color, `${label}：共享颜色`);
+        check(style.transitionDuration === (reducedMotion.matches ? "0s" : "0.14s"), `${label}：共享动效`);
+        const open = button.getAttribute("aria-expanded") === "true";
+        const matrix = new DOMMatrix(style.transform);
+        check(Math.abs(matrix.a - (open ? 0 : 1)) < .01 && Math.abs(matrix.b - (open ? 1 : 0)) < .01, `${label}：开合方向`);
+        check(["none", "normal"].includes(getComputedStyle(button, "::before").content), `${label}：无重复箭头`);
+        if (button.matches(":focus-visible")) check(getComputedStyle(button).outlineStyle !== "none", `${label}：键盘焦点`);
+      }
+      checksOutput.value = `${count - failures.length}/${count} 布局检查通过`;
+      checksOutput.dataset.failed = String(failures.length > 0);
+      failuresOutput.textContent = failures.join("\n");
+      failuresOutput.hidden = failures.length === 0;
+      document.querySelector("#motion").value = reducedMotion.matches ? "减少动态效果" : "标准动态效果";
+    }
+
+    const scheduleCheck = () => { clearTimeout(refreshTimer); refreshTimer = setTimeout(checkLayout, 180); };
+    document.querySelector("#theme").addEventListener("change", event => { document.documentElement.classList.toggle("dark", event.target.checked); scheduleCheck(); });
+    document.querySelector("#width").addEventListener("change", event => { frame.style.setProperty("--fixture-width", `${event.target.value}px`); scheduleCheck(); });
+    document.querySelector("#fixture-toggle").addEventListener("toggle", () => { document.querySelector("#toggle-count").value = ++toggleCount; });
+    document.querySelector(".session-time-group__header").addEventListener("click", event => {
+      const button = event.currentTarget;
+      const open = button.getAttribute("aria-expanded") !== "true";
+      button.setAttribute("aria-expanded", String(open));
+      document.querySelector("#fixture-session-list").hidden = !open;
+      scheduleCheck();
+    });
+    for (const button of document.querySelectorAll("button[data-custom]")) {
+      button.addEventListener("click", () => {
+        const open = button.getAttribute("aria-expanded") !== "true";
+        button.setAttribute("aria-expanded", String(open));
+        const content = document.querySelector(`[data-custom-content="${button.dataset.custom}"]`);
+        if (button.dataset.custom === "long") {
+          content.style.maxHeight = open ? "none" : "220px";
+          content.style.overflow = open ? "visible" : "hidden";
+          content.style.maskImage = open ? "none" : "linear-gradient(to bottom, black calc(100% - 48px), transparent 100%)";
+          button.querySelector("[data-custom-label]").textContent = open ? "收起" : "展开";
+        } else content.hidden = !open;
+        scheduleCheck();
+      });
+    }
+    document.addEventListener("toggle", scheduleCheck, true);
+    document.addEventListener("focusin", scheduleCheck);
+    addEventListener("resize", scheduleCheck);
+    addEventListener("load", scheduleCheck);
+    reducedMotion.addEventListener("change", scheduleCheck);
+  </script>
+</body>
+</html>
