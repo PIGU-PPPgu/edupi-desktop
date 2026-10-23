@@ -11,7 +11,7 @@ import ts from "typescript";
 const require = createRequire(import.meta.url), jiti = createJiti(import.meta.url, { tsconfigPaths: true });
 const originalAct = globalThis.IS_REACT_ACT_ENVIRONMENT; globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 after(() => { if (originalAct === undefined) delete globalThis.IS_REACT_ACT_ENVIRONMENT; else globalThis.IS_REACT_ACT_ENVIRONMENT = originalAct; });
-const filenames = { connection: "../lib/desktop-connection.ts", notice: "./DesktopConnectionNotice.tsx", settings: "./AppSettings.tsx", shell: "./AppShell.tsx", dismiss: "../hooks/useModalDismiss.ts" };
+const filenames = { connection: "../lib/desktop-connection.ts", notice: "./DesktopConnectionNotice.tsx", settings: "./AppSettings.tsx", shell: "./AppShell.tsx", dismiss: "../hooks/useModalDismiss.ts", nativeIdentity: "../hooks/useDesktopHostIdentity.ts" };
 const compiled = Object.fromEntries(await Promise.all(Object.entries(filenames).map(async ([name, file]) => [name, ts.transpileModule(await readFile(new URL(file, import.meta.url), "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
 }).outputText])));
@@ -82,6 +82,7 @@ async function fixture(t, { fullShell = false, enabled = true, desktop = true, i
         if (specifier === "./DesktopConnectionNotice") return load("notice");
         if (specifier === "./AppSettings") return load("settings");
         if (specifier === "@/hooks/useModalDismiss") return load("dismiss");
+        if (specifier === "@/hooks/useDesktopHostIdentity") return load("nativeIdentity");
         if (Object.hasOwn(modules, specifier)) return modules[specifier];
         if (specifier.endsWith(".css")) return {};
         if (specifier.startsWith("./")) return new Proxy({}, { get: () => Empty });
