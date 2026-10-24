@@ -1,5 +1,13 @@
 # 自动下载安装
 
+## 2026-10-24 Rust1.90与Mac原生编译
+
+- 本项取代下方同日的工具链/原生编译暂停状态。用户本轮恢复工具链升级和原生编译，继续禁止打包、安装客户端和清理，Windows延期。原树`5deaabf5`加原有`.78`版本准备实际受验；原七项未提交文件的前后SHA逐项相同，未更改Rust源码、Cargo清单或依赖锁，不将本地`.78`称为发布候选。官方rustup安装精确Rust1.90.0并设为默认，原stable1.88保留；首次直连超时经系统既有代理解决，未修改全局网络/镜像或更新rustup。
+- 环境为本机arm64/macOS26.6/Xcode26.6/SDK26.5。Rust1.90.0执行`cargo build --locked --offline --target aarch64-apple-darwin`，调试及`--release`两轮均退出0、无编译警告或错误；release使用项目现有thin LTO/单codegen unit/opt-level=s/strip设置。实际产生并核对arm64 Mach-O主程序、动态库及静态库，链接的最低macOS为11.0；这不是macOS11实机运行证明。
+- 两轮保留默认`custom-protocol`和全部security/capability配置，仅用进程级`TAURI_CONFIG={"bundle":{"active":false,"resources":[]}}`关闭打包及包资源暂存；不生成Next服务器包、不执行Tauri bundler，也不运行产出的客户端。完整test targets实际编译和链接成功；独立审阅后精确执行37项无文件删除/无真实UI副作用的原生测试，37pass/0fail/0ignored，其余21项只编译、未执行，不能计通过。涵盖原生宿主身份、权限输入/快照边界、通知目标与门禁等局部逻辑，不冒充真实TCC或通知交互。
+- 私有证据为`.77/evidence/mac-native-rust190-verification-20261024.json`及所列build/test/link/toolchain日志。原Cargo锁SHA仍`0270941a27fc153655a0b36c6175b2fd4cab45f8153f90b7f8da0d3eae2d7813`；调试主程序SHA`2cf9259d673dff0a54d6eaf834b0b665545a3b50919798eda1de99a0b643db07`，release主程序SHA`cd365663a4b83a17a3df84bb81fdcbb64774a19f82e1e05af388bfad05e509fd`。当前原生编译/链接门通过；打包资源、签名公证、客户端安装运行及真实ACL/TCC仍不在本轮证据内，旧全仓Rust审计结果不改记绿。`src-tauri/target`约5.8GiB、生成schema388KiB及新工具链506MiB按用户要求保留，可用空间约1TiB；正式App进程未操作、Core9f及旧根封存边界不变，未清理、未派发安装包CI。
+- 新增风险另记待处理：本轮推送时只读核实[Dependabot告警34](https://github.com/PIGU-PPPgu/edupi-desktop/security/dependabot/34)为运行时Zod4.6.5的[高危资源消耗公告](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)，当前锁和本地安装均为4.6.5，补丁门槛为4.6.6；已有[Dependabot PR377](https://github.com/PIGU-PPPgu/edupi-desktop/pull/377)提供4.6.7更新。该PR未消费或验收，本轮未改npm依赖、不将之前npm报告0当成当前结论；原生编译证据不覆盖此Node运行时风险。
+
 ## 2026-10-24 Mac依赖树与共享渲染风险
 
 - 当前源码head `ed57ed1f6c60fc31acf600280e6474d038c3c9db`/tree `2f8da7fca26d32139e8a993c165e53b488c44b9a`经[PR375](https://github.com/PIGU-PPPgu/edupi-desktop/pull/375)正常合入 `a6abeba9beface90170b19d2d4e1deee199202da`。唯一源码[CI40004124906](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/40004124906)实际checkout `5a43b648765fcd7dbf3302a517d1554ad7d9849b`与head/合并同树；应用job120587561902成功2556pass/42条件skip/0fail/0cancel/type/lint，安全回归13/13、npm报告0。Rust job120587562211仍失败，实际仅3旧zip错误及7条warning，其对应8个包名均不在frozen Mac图；不改称全仓或整轮CI全绿，无admin/auto/规则更改。未打包或安装，Core pin9f、feed、唯一App及真实资料不改。原.78准备和私有诊断未提交；Windows延期、不清理。

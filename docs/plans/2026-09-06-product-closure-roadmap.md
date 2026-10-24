@@ -1,5 +1,9 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-10-24 Mac原生编译门通过，取代下方同日的1.88/未编译状态：按新授权将本机默认Rust升级至精确1.90.0并保留旧1.88；原树`5deaabf5`及原`.78`准备差异保持，Rust源码/依赖锁未改。arm64调试与现有release优化配置的locked/offline编译、链接均通过，无编译警告或错误；全部test targets编译成功，安全白名单原生单测37pass/0fail，21项仅编译。为遵守不打包，进程级配置只禁用bundle及包资源暂存，默认功能与权限配置不降级；不启动或安装客户端，未做真实TCC或公证，不称完整生产包验证。target约5.8GiB及新工具链按要求保留，未清理、未派Windows或安装包CI。[本轮证据](2026-09-07-signed-updates.md#2026-10-24-rust190与mac原生编译)。
+
+2026-10-24 新增Node风险待处理：推送提示并只读核实Zod4.6.5高危告警34，锁/安装版本一致，已有Dependabot PR377更新4.6.7；本轮Rust编译任务未消费该更新，不以原生编译成功或旧npm报告0覆盖新告警。[准确边界](2026-09-07-signed-updates.md#2026-10-24-rust190与mac原生编译)。
+
 2026-10-24 Mac依赖风险收口：原缺缓存已按固定锁补齐，arm64的`cargo tree --locked --offline --edges normal,build`和完整target metadata实际通过，不是原生编译证明。官方tauri-utils2.10.2/urlpattern0.6移除5个停止维护的UNIC包，最终Mac树346包/metadata359节点；原报告及最终Rust报告涉及的包名均不在该Mac图，原Windows依赖选择保持。KaTeX精确0.18.2统一全部消费者，隔离污染反例先红后绿、npm审计各级0；真实CUA公式/矩阵/Mermaid内嵌MathML及两管线安全负例通过。最低Rust与指南对齐1.90/Node22.19；本机仅1.88，未安装工具链或编译App。[PR375](https://github.com/PIGU-PPPgu/edupi-desktop/pull/375)已正常合入`a6abeba9`，与源码CI40004124906实际checkout5a43b64/headed57同树2f8da7fc；应用2556pass/42条件skip/0fail/0cancel/type/lint，完整Rust仍仅3旧zip错误/7条非Mac警告，未豁免或称全仓全绿。独立复核通过，原.78准备/诊断保留，不构建、安装或清理，Core pin仍9f。[当前证据](2026-09-07-signed-updates.md#2026-10-24-mac依赖树与共享渲染风险)。
 
 2026-10-24 当前源码收口：R06/R14/R15的宿主版本/权限进度由 `e95400b4` 实现，`0930349d`仅修既有测试夹具；远端三项P2再由 `13a377dd` 补齐失败申请撤销、原页面只读重试，以及不受刷新吞掉的控制确认回执。真实组件组合76/76、独立新增25/25及6个并发探针、最新CUA隔离源码预览通过，原18项测试体和连接测试不改断言。另以 `e98c7303` 精确锁定Tokio1.53.3，官方crate摘要/安全10项/root metadata通过；CI确认0386消除，仍3个旧zip错误/12条警告，未豁免。新Mac离线依赖树缺旧归档未完成；Core pin9f、Windows依赖边不变。[PR373](https://github.com/PIGU-PPPgu/edupi-desktop/pull/373)已正常合入 `dd4ea313`，与最终CI39996430535受测checkoutc8d24f3/head13a同树c433182a；应用2547pass/42条件skip/0fail/0cancel/type/lint通过，三条意见在修复实测后正常关闭，无admin/auto或规则变更。前两次CI和失败保留，不称全仓Rust或整轮全绿。不构建、不安装、不清理，原.78准备和诊断改动保留未提交。[当前证据](2026-09-07-signed-updates.md#2026-10-24-原生身份与权限进度)。
