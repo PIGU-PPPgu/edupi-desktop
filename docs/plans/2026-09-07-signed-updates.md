@@ -6,6 +6,7 @@
 - 环境为本机arm64/macOS26.6/Xcode26.6/SDK26.5。Rust1.90.0执行`cargo build --locked --offline --target aarch64-apple-darwin`，调试及`--release`两轮均退出0、无编译警告或错误；release使用项目现有thin LTO/单codegen unit/opt-level=s/strip设置。实际产生并核对arm64 Mach-O主程序、动态库及静态库，链接的最低macOS为11.0；这不是macOS11实机运行证明。
 - 两轮保留默认`custom-protocol`和全部security/capability配置，仅用进程级`TAURI_CONFIG={"bundle":{"active":false,"resources":[]}}`关闭打包及包资源暂存；不生成Next服务器包、不执行Tauri bundler，也不运行产出的客户端。完整test targets实际编译和链接成功；独立审阅后精确执行37项无文件删除/无真实UI副作用的原生测试，37pass/0fail/0ignored，其余21项只编译、未执行，不能计通过。涵盖原生宿主身份、权限输入/快照边界、通知目标与门禁等局部逻辑，不冒充真实TCC或通知交互。
 - 私有证据为`.77/evidence/mac-native-rust190-verification-20261024.json`及所列build/test/link/toolchain日志。原Cargo锁SHA仍`0270941a27fc153655a0b36c6175b2fd4cab45f8153f90b7f8da0d3eae2d7813`；调试主程序SHA`2cf9259d673dff0a54d6eaf834b0b665545a3b50919798eda1de99a0b643db07`，release主程序SHA`cd365663a4b83a17a3df84bb81fdcbb64774a19f82e1e05af388bfad05e509fd`。当前原生编译/链接门通过；打包资源、签名公证、客户端安装运行及真实ACL/TCC仍不在本轮证据内，旧全仓Rust审计结果不改记绿。`src-tauri/target`约5.8GiB、生成schema388KiB及新工具链506MiB按用户要求保留，可用空间约1TiB；正式App进程未操作、Core9f及旧根封存边界不变，未清理、未派发安装包CI。
+- 新增风险另记待处理：本轮推送时只读核实[Dependabot告警34](https://github.com/PIGU-PPPgu/edupi-desktop/security/dependabot/34)为运行时Zod4.6.5的[高危资源消耗公告](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)，当前锁和本地安装均为4.6.5，补丁门槛为4.6.6；已有[Dependabot PR377](https://github.com/PIGU-PPPgu/edupi-desktop/pull/377)提供4.6.7更新。该PR未消费或验收，本轮未改npm依赖、不将之前npm报告0当成当前结论；原生编译证据不覆盖此Node运行时风险。
 
 ## 2026-10-24 Mac依赖树与共享渲染风险
 
