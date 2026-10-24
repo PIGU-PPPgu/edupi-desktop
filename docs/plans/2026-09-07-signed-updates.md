@@ -1,10 +1,16 @@
 # 自动下载安装
 
-## 2026-10-24 GitHub OAuth 与写入本机预览
+## 2026-10-24 GitHub OAuth 写入与重启通过
 
-- 当前安装状态取代下方只读预览：源码 `ac693c14bb80969a0c7d02e63b106ee693a32e9a`，含安全提交 `ef1a4e3a`、Core03，已准备完整资源并安装到唯一 `/Applications/EduPi.app` 本机 `.77`。复用未变原生壳，6 个原生资源和整 App Developer ID 重签；Team `BY3XZG2839`、CDHash `8fadb3c3fa8243ac7d0d2914325ba8457bbdf1a4`，主程序 SHA-256 `7247ff850cd8c27e28ecfa02ea4f084d4d804a83d09363648641d3f5f7639a16`。安装及清理后 strict codesign、Core/投影/Kernel ready 和 51/160/24/6 回读通过；未公证、合并、发布或改 feed。
-- 新增 GitHub OAuth/PKCE、Keychain 加密钥匙、固定测试 issue 预览确认、单次 dispatch 与独立 Action/审计回读。真实 App 已打开 OAuth 配置页，真实 Keychain 初始化、伪造回调 400 和 HTTP Action 404 通过；**尚无 OAuth 客户端/授权、实际 issue 或写入回执**。用户生成/填写 Client ID/Secret 并确认 GitHub `public_repo` 是当前必要外部条件，不能以既有 gh 登录读取账号或隔离测试替代。
-- 本功能及组件定向 531 通过/0 跳过；全套 2492 通过/40 环境跳过/0 失败，类型/lint/独立复核通过。补丁将高危审计门清零，剩 6 条既有数学链低危。已精确删除 7 个生成目录约 3.60 GiB，可用空间观测增约 3.70 GiB；临时上一份 `.77` 回退 `~/edupi-install-checkpoints/settings-redesign-20261023/oauth-issue-20261024/EduPi-before-oauth.app` 保留至真实 OAuth/issue 回读验收通过，届时删除。原 `.70` 与私有备份保留；[逐项验收](../acceptance/2026-10-23-admin-settings-redesign.md#2026-10-24-oauth-与测试-issue-当前状态)。
+- 当前唯一 `/Applications/EduPi.app` 为源码补丁 `45abdc9e` 的本地 `.77` 签名预览；server 基线 `ac693c14`、Core03 与其余 53,588 文件保持，实际只更换 GitHub host 并重签。修复 GitHub 真回调的固定 `iss` 被未知参数门误拒；回归先红后绿 7/7，无跳过，独立复核同组通过。Team `BY3XZG2839`，CDHash `579b10bfb551b2b5590bf696ad4f4b1262de31d6`，主程序 SHA-256 `e90925c4cac191eb2d76fe6f3d3adb59061670ffa2894745ef61d11140db73ed`，安装及操作后 strict codesign 通过；未公证、合并、发布或改 feed。
+- 用户完成客户端和 OAuth 授权后，真实应用创建并回读 [TEST issue #379](https://github.com/PIGU-PPPgu/edupi-desktop/issues/379)。正常退出至进程 0，再真正启动 PID `13429 → 23413`，同一 OAuth/回执/issue 保留；再次实际回读产生新 read execution ID，写入 ID 保持。持久 dispatch 和远端明确 TEST issue 数均为 1，没有重复创建。当前完整管理页 GitHub 手动测试子项验收通过；R23 通用权限合同与其他服务仍分别保留。
+- Core/投影/Kernel ready，51/160/24/6、配置和教师记录保持，Runtime/提醒状态及会话 custom 追加另记。验收后清理两份旧 `.77` 临时 App 与测试副本约 1.81 GiB，观测可用空间增约 1.85 GiB；只保留已安装新版、原 `.70` 回退和必要数据/证据。长期 token 续期、实服断网恢复等未验；[完整证据](../acceptance/2026-10-23-admin-settings-redesign.md#2026-10-24-github-oauth-写入与重启验收通过)。
+
+## 2026-10-24 GitHub OAuth 与写入初装历史
+
+- 此初装历史对应源码 `ac693c14bb80969a0c7d02e63b106ee693a32e9a`，含安全提交 `ef1a4e3a`、Core03，曾准备完整资源并安装到唯一 `/Applications/EduPi.app` 本机 `.77`；当前安装由上方 issuer 补丁取代。复用未变原生壳，6 个原生资源和整 App Developer ID 重签；Team `BY3XZG2839`、CDHash `8fadb3c3fa8243ac7d0d2914325ba8457bbdf1a4`，主程序 SHA-256 `7247ff850cd8c27e28ecfa02ea4f084d4d804a83d09363648641d3f5f7639a16`。当时安装及清理后 strict codesign、Core/投影/Kernel ready 和 51/160/24/6 回读通过；未公证、合并、发布或改 feed。
+- 当时新增 GitHub OAuth/PKCE、Keychain 加密钥匙、固定测试 issue 预览确认、单次 dispatch 与独立 Action/审计回读，真实 Keychain 和回调边界通过；客户端/授权、实际 issue 和回执当时均未完成。后续用户完成客户端和同意后，实服流程才按上方结果验收通过；既有 gh 登录读取账号与隔离测试始终不代替 OAuth 验收。
+- 本功能及组件定向 531 通过/0 跳过；全套 2492 通过/40 环境跳过/0 失败，类型/lint/独立复核通过。补丁将高危审计门清零，剩 6 条既有数学链低危。已精确删除 7 个生成目录约 3.60 GiB，可用空间观测增约 3.70 GiB；当时保留的上一份 `.77` 临时回退，已在上方实服验收通过后删除。原 `.70` 与私有备份保留；[初装历史](../acceptance/2026-10-23-admin-settings-redesign.md#2026-10-24-oauth-与测试-issue-初次安装历史)。
 
 ## 2026-10-24 JEV 与 GitHub 本机真实连接
 

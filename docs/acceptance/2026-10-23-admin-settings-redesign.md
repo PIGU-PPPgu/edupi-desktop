@@ -1,8 +1,36 @@
 # 管理中心与设置重做验收
 
-## 2026-10-24 OAuth 与测试 Issue 当前状态
+## 2026-10-24 GitHub OAuth 写入与重启验收通过
 
-本节取代下方安装版本和当前验收状态。用户追加的 GitHub OAuth → 明确标记的测试 issue → 应用内结果回读，已实现并安装，**真实流程仍外部阻塞，未完成验收**。当前没有 OAuth 连接、测试草稿或写入回执，也没有创建测试 issue；前轮通过已有 GitHub CLI 登录读取账号的证据不算 OAuth 验收。
+本节取代下方首次安装的外部阻塞状态。用户已在 GitHub 注册 OAuth 客户端、生成并在真实应用保存凭据、完成授权；本机应用随后完成 **OAuth → 明确标记的测试 issue → 独立回读 → 真退出重启 → 同一回执保留 → 再次回读且无重复创建**。此管理页固定测试子项验收通过，R23 通用 Core grant/Receipt 和其他服务不因此完成。
+
+### 真实故障与修复
+
+- 浏览器实际返回的 loopback 回调包含 `code`、`state`、`iss=https://github.com/login/oauth`，旧宿主因未知 `iss` 参数显示“授权状态无效”。没有把授权码、state、Client Secret 或 token 写入证据。源码 `45abdc9ef920ea5a94fd321c4113f42a93310e25` 仅补上单一、精确匹配的 GitHub 发行方校验；错误/空/重复 issuer、未知参数、伪造 state 和重放继续在 token 交换前拒绝。`iss` 的校验依据 [RFC 9207](https://www.rfc-editor.org/rfc/rfc9207.html#section-2.4)，本次 GitHub 具体取值来自真实回调；无 issuer 的兼容路径仍受固定 GitHub endpoint、state 与 PKCE 保护。
+- 新回归先以 `400 !== 303` 复现，再 7/7 通过、0 跳过；独立只读复核重跑同组 7/7 通过，源码和测试副本摘要一致，语法检查及 diff 检查通过。测试使用已安装 OpenConnector `1.6.5` 依赖闭包的隔离副本，没有安装重复依赖。未为这两份 `.mjs` 修改重跑全套/typecheck/lint；下方 2492/40 和 531 项结果属于 `ac693c14` 基线，不能当成本补丁全套结果。
+
+### 本机实际操作
+
+| 操作 | 预期 | 实际结果 |
+| --- | --- | --- |
+| 修复后从应用点击授权 GitHub | 真实 OAuth 连接，正确账号与 scope | 页面显示 `PIGU-PPPgu · OAuth 已授权`，账号 ID `59789742`，连接 `6ad11879-eac9-4678-8a81-c20f65f9c05d`，`authType:oauth2`，仅 `public_repo`。未使用已有 gh token 代替应用 OAuth。 |
+| 应用创建预览 → 确认创建一次 | 固定仓库、明确 TEST 和唯一标记，实际写入后回读 | 创建 [测试 issue #379](https://github.com/PIGU-PPPgu/edupi-desktop/issues/379)，标题 `[EduPi OAuth TEST] 5c4c664a-b81d-41cc-830a-57c8809b689c`，正文仅为测试说明与 `edupi-openconnector-test:5c4c664a-b81d-41cc-830a-57c8809b689c`。应用显示“已创建并回读”，状态打开、创建者 `PIGU-PPPgu`，正文逐项核对。 |
+| 读取写入与回读执行记录 | 两次独立 Action 与审计 | 写入 `f69373e7-d729-48d5-997d-9c34365824e1`，首次回读 `9c74b4ea-188a-4e0d-8c1a-e342b7b4d457`；`auditPersisted:true`、`readbackVerified:true`，原生界面显示“已保存并核对”。 |
+| 正常退出并重新启动 App | 冷进程恢复同一 OAuth、issue 和回执，无启动重发 | 退出前无运行中的 Agent；正常 Quit 后 App 与 helper 进程为 0，通过原生应用入口重新启动，主进程 PID `13429 → 23413`。冷启动快照和重开的 GitHub 页面保留同一连接、回执、#379、写入 ID 与首次回读 ID，持久 dispatch 仍为 1。 |
+| 重启后点击重新读取结果 | 实际 GET 回读，不能再 POST | 回读 ID 更新为 `d69e2c83-7b4e-4550-81a0-e6793911d67c`，写入 ID、issue、回执 ID 和正文保持，审计再次核对。独立只读 GitHub 列表在重启前后均仅有一个本次标记/TEST issue #379；没有重复创建。独立 gh 检查只用于远端核对，不代替应用调用。 |
+
+### 安装、资料与清理
+
+- 唯一 `/Applications/EduPi.app` 仍为本地 `0.3.77` Developer ID 预览。只替换 `open-connector/github-host.mjs` 并重签，server 基线 `ac693c14`、Core03 和其余 **53,588 个文件**内容摘要一致；没有重复构建 Next 或 Rust。Team `BY3XZG2839`，CDHash `579b10bfb551b2b5590bf696ad4f4b1262de31d6`，主程序 SHA-256 `e90925c4cac191eb2d76fe6f3d3adb59061670ffa2894745ef61d11140db73ed`，宿主 SHA-256 `68f245c67faa7cf6efa3b91fda8120f6d618157a64ca253badeba75cd6574425`。安装与原生操作后 strict codesign 通过，原更新公钥保持；未公证、合并或公开发布。
+- 重启后实际回读 Core/投影/Kernel ready，正常资料 51 学生、160 任务、24 校历、6 课表，Core `03bbb893bb609eb68513a65cf4fd808ab8aa30ed`，`externalSend:false`。317 个保护文件无增删，教师记录和模型/认证/JEV/GitHub/UI 配置逐字节保持；Runtime 元数据及提醒运行状态文件的变化单列，没有把整棵资料目录记为不变。原会话仅追加 1062 字节、4 条 custom，原前缀摘要保持。新 OAuth 状态在原独立私有目录，Keychain、加密凭据和回执保留。
+- 实服验收通过后已删除 `EduPi-before-oauth.app`、`EduPi-before-issuer-fix.app` 和 `issuer-fix-test/` 三个任务生成目录；删除前核对精确路径、两份旧主程序摘要、无进程使用及测试依赖链接目标。删除占用约 **1.81 GiB**，观测可用空间增加约 **1.85 GiB**；本轮临时 App 副本为 0。保留已安装新版、原 `.70` 回退、源码、原数据备份、Keychain、真实 OAuth 回执及证据。
+- 本次所要求的 macOS OAuth/写入/回读/真重启/无重复流程已验证。长期 token 到期续期、真实凭据轮换、断网/响应丢失的实服恢复和其他平台未验；隔离测试覆盖不能替代这些实服条件。测试 issue 按用户要求保持公开、打开、明确标记，没有附加关闭或删除操作。
+
+证据沿用本轮私有 `oauth-issue-20261024/evidence/`：`issuer-failure-diagnosis.json`、`issuer-regression-before.log`、`issuer-regression-after.log`、`issuer-installed-preview.json`、`oauth-live-connected.json`、`test-issue-preview.json`、`issue-write-receipt.json`、`receipt-before-restart.json`、`receipt-native-quit.json`、`receipt-cold-start.json`、`receipt-after-restart-read.json`、`remote-before-restart.json`、`remote-after-restart.json`、`oauth-issue-native-acceptance.json`、`issue-after-restart-native.png`、`issuer-data-protection.json` 和 `issuer-cleanup.json`。此前无客户端、无效 issuer 和其他失败记录保留，不计为通过。
+
+## 2026-10-24 OAuth 与测试 Issue 初次安装历史
+
+本节为 `ac693c14` 初装时的历史快照，当前验收以上方 `45abdc9e` 实服结果为准。当时 GitHub OAuth → 明确标记的测试 issue → 应用内结果回读已实现并安装，但客户端和授权缺失，真实流程外部阻塞，尚无连接、草稿、回执或 issue。前轮通过已有 GitHub CLI 登录读取账号的证据不算 OAuth 验收；后续没有据此补称实服通过。
 
 ### 已安装代码与边界
 
@@ -26,10 +54,10 @@
 - Next `16.4.3`、DOMPurify `3.4.17`、Hono `4.13.13`、ip-address `10.7.4` 消除本轮发现的严重/中危依赖公告；最终 `npm audit --audit-level=high` 通过，仍有 6 条既有数学渲染链低危公告。eslint-config-next 保留原 `16.3.8`，其 react-hooks 精确固定原 `7.0.1`；尝试升级导致的 18 条既有模块 lint 失败保留日志，没有关闭规则。
 - 317 个保护文件无增删，模型、认证、JEV、GitHub CLI 和 UI 配置逐字节保持，教师记录文件保持。Runtime 元数据随启动更新；一个原会话追加 531 字节、2 条 custom，原前缀摘要保持。提醒运行状态文件从 430776 变为 430674 字节；记录到旧 App 在安装前的正常 notification_claimed/deferred 活动，已单列变化，不把整棵 `.edupi` 记为字节未变，也未回写真实提醒来消除差异。
 - 已精确删除 7 个可重建目录：Desktop/Core 两处本轮依赖、`.next-desktop`、生成的 server、Pi Agent Server、Core 和 OpenConnector 资源。删除目录占用约 3.60 GiB，观测可用空间增加约 3.70 GiB；安装资源无外部依赖符号链接，已安装 App、源码、Keychain 与 OAuth 状态保留。
-- 临时回退副本 `~/edupi-install-checkpoints/settings-redesign-20261023/oauth-issue-20261024/EduPi-before-oauth.app` 用于当前尚未完成的真实 OAuth/写入验收，验收通过后删除；原 `.70` 回退 App 与原私有数据备份继续保留。
+- 当时保留临时回退 `~/edupi-install-checkpoints/settings-redesign-20261023/oauth-issue-20261024/EduPi-before-oauth.app` 等待真实 OAuth/写入验收；该条件已由上方实服结果满足，副本现已删除。原 `.70` 回退 App 与原私有数据备份继续保留。
 - 前轮 JEV 原生连接成功证据仍有效。本轮依赖升级后已安装后端真实测试返回 200、`jev-1.14.0`、535ms；这是后端回归，没有再计一次原生 JEV 按钮验收。
 
-本轮未验：真实 Client Secret 保存、GitHub OAuth 授权、创建测试 issue、应用内结果回读与重启后回读、真实 OAuth 凭据轮换/网络中断及 Windows/Linux。新凭据生成与填写由用户接手，依据浏览器工具的 credential hand-off 规则；当前 App 保持在空的 OAuth 配置页。用户完成后应从同一安装版继续，无需重建：授权 → 核对 OAuth 账号 → 预览并确认唯一测试 issue → 独立回读 → 真退出重启后回读同一回执并确认无重发。
+初装时 Client Secret 保存、GitHub OAuth、issue 创建与回读、真重启回读均未验；后续已由用户按浏览器 credential hand-off 规则完成新凭据填写，并在上方真实应用流程逐项通过。真实 OAuth 凭据轮换/网络中断及 Windows/Linux 仍未验，不能把当前 macOS 结果扩展到这些条件。
 
 私有证据根：`~/edupi-install-checkpoints/settings-redesign-20261023/oauth-issue-20261024/evidence/`。主要文件：`installed-preview.json`、`installed-client-setup.json`、`oauth-setup.png`、`after-cleanup.json`、`after-cleanup-oauth-state.json`、`after-cleanup-signature.json`、`packaged-oauth-host.json`、`final-tests.log`、`all-tests-after-deps.log`、`types-final.log`、`lint-final.log`、`audit-final.log`、`data-protection-final.json`、`reminder-operational-summary.json`、`cleanup.json`。其中首次过宽的数据摘要比较及静态完成页负测的原始失败保留，后续记录已明确修正判断。
 
