@@ -1,5 +1,15 @@
 # 自动下载安装
 
+## 2026-10-24 HTTP与邮件依赖安全修补
+
+- 本项取代下方Undici/Nodemailer待处理及npm仍有告警的旧状态。[PR381](https://github.com/PIGU-PPPgu/edupi-desktop/pull/381)已正常合入`3c57391a72331deaf3466b0c9d9e3acc730a4bb8`；head `2ca7f52699b7b3588152a934f622ecf28c65a973`、CI实际checkout `a84dacc0e9cf8fed677b357ed2f2f365f9ec9c7a`与合并同树`5c76d30345f9b7ac69dc4170d22f9dfc58eff5f6`。仅4文件，Undici8.10.2→8.12.2直接依赖及原override、Nodemailer10.0.10→10.1.4原scoped override、安全回归与现有说明文档；未引入新框架、改Pi1.0.2/Core9f身份或放开连接器权限。
+- 来源已按代码核对：`instrumentation.ts → lib/http-dispatcher.ts`在Node后台配置Undici代理/全局fetch，`lib/update-proxy-server.ts`也直接使用；Pi/OpenAI路径共享解析到该npm包，Node内嵌副本不因本次npm升级而改变。Nodemailer来自OpenConnector1.6.5完整目录及mailparser，提供邮件解析/MIME/SMTP实现；catalog宿主仍Action/Proxy deny-all、Console仅GET，包存在不等于自动发送。完整目录带入未启用实现扩大维护面，是既有R23取舍，本轮不裁剪或新增邮件功能。告警是已知版本风险，不是攻击取证结论；同一leaf还会沿多条SDK依赖链显示。
+- 本机macOS arm64/Node22.23.1/npm10.9.8；CI Ubuntu x64/Node22.19.0。两包Node engines分别≥22.19/≥20，MIT与MIT-0；registry/tarball摘要和4条npm ECDSA签名均实际匹配，官方gitHead一致。只以ignore-scripts更新2包，根Undici声明及两个leaf的version/resolved/integrity以外，全部锁元数据与原快照deepEqual，无包增删，OTEL/Zod4.6.7/SDK保持；原7项未提交路径逐项SHA仍同。
+- 旧包8项真实反例失败已保留：SRI算法大小写绕过、实际Desktop dispatcher在>5enc截断响应下导致独立child退出、3类EventSource保留状态上限、4类地址/MIME误路由及版本门。补丁后最终定向12/12通过、0skip，涵盖真实代理、Pi SDK、MCP、Zod和普通MIME正例；只用loopback/禁网MockAgent/内存MIME，无真实SMTP或模型调用。初轮11pass/1fail不是新依赖回归：旧10.0.10与新10.1.4均实际复现quoted local-part中角字符的既有MimeNode归一化，最终parser仍严格原完整地址，MIME检查既定exact canonical单收件人，不宣称完整邮箱保真；未改包代码、删除病例或把原失败记pass。
+- 新[CI40106979190](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/40106979190)应用job120910588876成功：npm审计各级0，安全回归20/20且0skip，应用套2605项中2563pass/0fail/42skip，type/lint/branding通过；42项含Core/隔离runtime条件和pdftotext缺项，不计通过。本地完整lint/branding2及tsc也实际exit0。Rust job120910588670仍失败于旧zip4.6.1三项0367/0368/0369与7条warning，未豁免或称整轮绿；这些包名与保持不变的已验Mac依赖图交集0，没有派Windows构建。
+- npm本地原锁1high/7moderate→新锁各级0，属于已知依赖告警清零，不保证不存在未知风险。独立供应链/冻结diff/完整CI证据审阅无P0–P2；普通merge无admin/force/规则修改。私有证据为`.77/evidence/http-mail-regression-{red,fixed-green}-20261024.log`、初轮失败green日志、`http-mail-mime-baseline-20261024.json`、`http-mail-audit-{before,after}-20261024.json`、`http-mail-installed-tree-20261024.json`、`http-mail-ci-{app,rust}-20261024.log`、`http-mail-ci-summary-20261024.json`与`http-mail-review-20261024/`。
+- 未打包/安装或操作已装客户端、未重跑native编译、未清理、未改真实资料/模型凭据/TCC/launchd/时钟能源/Release/feed；Windows继续延期。既有5.8GiB target与所有新旧fixture、包资料及日志保留，约1TiB可用；源码修补不代表已装客户端已更新或真实SMTP/远程模型流程通过。
+
 ## 2026-10-24 Zod高危修补
 
 - 本项取代下方Zod待处理记录。现有[PR377](https://github.com/PIGU-PPPgu/edupi-desktop/pull/377)在原分支验证后正常合入`b260e91973e125b44d35837b271831fe57a593b7`；最终head `a57513f1fc8d3c0c5ef46df2ed906dc8647fb7dc`与合并树均为`d2b1b780d24082a8cb3722bc6d6ccb5a13dac968`。相对实际main基线`ebe59381`仅修改Zod锁项和安全回归；保留原bot ancestry，以普通FF更新原feature和既有bot分支，没有替代分支、force/admin/审计豁免或规则变更。原7项未提交修改逐项SHA不变，Core9f/SDK身份及Cargo锁保持。
