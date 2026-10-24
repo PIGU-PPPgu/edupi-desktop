@@ -10,9 +10,10 @@ brace-expansion and minimatch versions without modifying installed packages.
 The old 0.84.1 postinstall replacement script has been removed. `npm ci` and
 the installed-tree regression still verify actual resolutions, not just the lock.
 
-Undici remains explicitly pinned to 8.10.2. npm 10 failed to resolve the previous
+Undici remains explicitly pinned to 8.12.2. npm 10 failed to resolve the previous
 `$undici` override during the major upgrade; the explicit version preserves the
-same security bound and matches Core. The high/critical audit gate is unchanged.
+Desktop network security bound without changing the Pi 1.0.2 or Core identities.
+The high/critical audit gate is unchanged.
 
 `core_sdk` in the compatibility manifest binds the Desktop SDK and Core Durable
 versions. Release verification rejects a stale Desktop Pi version, and Core
@@ -22,13 +23,40 @@ internal executor; Desktop does not create a second execution database.
 
 ## OpenConnector 1.6.5
 
-The mail dependency is scoped to Nodemailer 10.0.10. The catalog/Console version
+The mail dependency is scoped to Nodemailer 10.1.4. The catalog/Console version
 and Action deny-all policy remain unchanged. Regression tests compose and parse
 MIME in memory, with no SMTP connection or outgoing message.
 
+## Why these dependencies are present
+
+Undici is the existing HTTP client, not a new application framework.
+`instrumentation.ts` configures the proxy-aware dispatcher in
+`lib/http-dispatcher.ts`; the configured update proxy also uses Undici directly.
+Pi and OpenAI SDK paths share that resolved package. Node's embedded Undici is a
+separate copy; upgrading the npm package does not change the Node binary.
+
+Nodemailer arrives through OpenConnector's full catalog package, both as a mail
+implementation and through `mailparser`'s address parser. The catalog host blocks
+all Actions and Proxies by default, and the Console is read-only. Including the
+package does not enable mail sending. The full
+catalog therefore carries implementation dependencies for capabilities that are
+not currently exposed; reducing that closure is a separate architectural change.
+
+Security advisories identify affected package versions, not evidence that an
+attack occurred. A single vulnerable leaf can also appear under multiple SDKs in
+an audit report. Locking versions makes builds reproducible; new advisories still
+require compatible dependency updates and behavioral regression checks.
+
+The current tests cover SRI token case handling, rejected truncated/over-encoded
+responses through the actual Desktop dispatcher, bounded EventSource parser
+state, and recipient-domain boundaries through parsing and in-memory MIME.
+MimeNode's existing normalization of angle characters inside quoted local parts
+is unchanged; these tests do not claim full quoted-mailbox preservation or real
+SMTP interoperability.
+
 ## Next lint
 
-Next and its lint config are 16.3.8. The private `vendor/next-root-glob` adapter
+Next and its lint config are 16.4.2. The private `vendor/next-root-glob` adapter
 replaces their only fast-glob call; all lint rules remain enabled. Its README
 records scope, sources and removal criteria. Tests cover root-directory matching
 and the actual internal-link rule, not just dependency metadata.
