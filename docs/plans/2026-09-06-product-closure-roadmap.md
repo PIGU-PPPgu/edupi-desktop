@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-10-24 R14/R23 新增续验进行中：用户要求在本机安装版验证 token 续期、GitHub 路径断网/恢复、授权恢复与同一写入请求去重，并补齐 OpenConnector 官方服务 Logo、中文搜索与分类。原 #379 正常授权/写入/重启验收保持；新异常场景和目录改版尚未计通过。实现、独立复核、签名安装及实机证据沿用本任务；受控本地到期与真实 GitHub 刷新交换必须分别记录，不能称为自然等待八小时到期，不改全机网络。
+
 2026-10-24 R23 GitHub OAuth/测试 issue 当前状态：**本机管理页子项验收通过**。用户完成客户端注册和授权后，源码补丁 `45abdc9e` 修复真实 GitHub 回调的固定 `iss` 被误拒，已重签装入唯一 `/Applications/EduPi.app` 本地 `.77`，server 基线 `ac693c14` 和 Core03 保持。真实应用 OAuth 账号 `PIGU-PPPgu`、scope仅public_repo，预览确认后创建并回读 [TEST issue #379](https://github.com/PIGU-PPPgu/edupi-desktop/issues/379)；正常 Quit 至进程0，再启动PID13429→23413，同一OAuth/issue/回执保留，重新GET回读ID更新、写入ID保持，持久dispatch和远端测试issue均只有1，没有重复创建。补丁回归先红后绿7/7、独立复核7/7、语法/diff、原生操作后签名通过，不将基线全套结果冒称补丁全套。教师记录/配置和51/160/24/6保持，Runtime/提醒状态及会话custom另记。验收后清理两份旧`.77`临时App与测试副本约1.81GiB，观测空闲增1.85GiB；原`.70`和私有备份保留。R23通用Core grant/Receipt、其他服务、跨平台和长期token续期仍未完成/未验；未公证、合并或公开发布。[逐项证据](../acceptance/2026-10-23-admin-settings-redesign.md#2026-10-24-github-oauth-写入与重启验收通过)。
 
 2026-10-24 R23 真实连接续验历史：源码 `468f82e8` 的前轮本地 `.77` 预览已通过 JEV 真实原生连接1198ms和既有gh登录下固定 `github.get_current_user` 调用/审计/真重启回读，未执行 OAuth 或写入。JEV451根因是Node未读取已有macOS系统HTTP代理，直连命中地区限制；修复未改系统网络或密钥。前轮528项定向、类型/lint、独立复核和签名通过，清理约4.51GiB。本轮新安装及OAuth欠项以上方当前状态为准；[历史证据](../acceptance/2026-10-23-admin-settings-redesign.md#2026-10-24-jev-与-github-只读续验历史)。

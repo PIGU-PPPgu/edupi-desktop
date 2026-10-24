@@ -34,3 +34,19 @@ test("status without packaged host reports unsupported and returns no credential
     if (oldRoot === undefined) delete process.env.EDUPI_OPENCONNECTOR_CATALOG_ROOT; else process.env.EDUPI_OPENCONNECTOR_CATALOG_ROOT = oldRoot;
   }
 });
+
+test("acceptance expiry is unavailable unless the server explicitly enables it", async () => {
+  const oldToken = process.env.PI_DESKTOP_API_TOKEN, oldGate = process.env.EDUPI_OPENCONNECTOR_GITHUB_ACCEPTANCE;
+  process.env.PI_DESKTOP_API_TOKEN = token; delete process.env.EDUPI_OPENCONNECTOR_GITHUB_ACCEPTANCE;
+  try {
+    const response = await route.POST(request("POST", { op: "expireTokenForAcceptance" }));
+    assert.equal(response.status, 403); assert.equal((await response.json()).code, "github_acceptance_disabled");
+    for (const op of ["checkConnection", "refreshOAuth", "expireTokenForAcceptance"]) {
+      assert.equal((await route.POST(request("POST", { op, acceptanceEnabled: true }))).status, 400);
+      assert.equal((await route.POST(request("POST", { op }, { "x-pi-desktop-token": "wrong" }))).status, 403);
+    }
+  } finally {
+    if (oldToken === undefined) delete process.env.PI_DESKTOP_API_TOKEN; else process.env.PI_DESKTOP_API_TOKEN = oldToken;
+    if (oldGate === undefined) delete process.env.EDUPI_OPENCONNECTOR_GITHUB_ACCEPTANCE; else process.env.EDUPI_OPENCONNECTOR_GITHUB_ACCEPTANCE = oldGate;
+  }
+});

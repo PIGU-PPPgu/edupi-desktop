@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 function reply(body: unknown, status: number) { return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } }); }
 function failure(error: unknown) {
   const code = error instanceof GitHubManagerError ? error.code : "github_oauth_unavailable";
-  const status = code === "github_oauth_busy" ? 429 : code === "github_oauth_unsupported" ? 501
-    : ["github_connection_changed", "github_authorization_changed", "github_request_conflict", "github_draft_changed", "github_write_already_started"].includes(code) ? 409
+  const status = code === "github_acceptance_disabled" ? 403 : code === "github_oauth_busy" ? 429 : code === "github_oauth_unsupported" ? 501
+    : ["github_connection_changed", "github_account_changed", "github_authorization_required", "github_refresh_token_required", "github_oauth_connection_required", "github_authorization_changed", "github_request_conflict", "github_draft_changed", "github_write_already_started"].includes(code) ? 409
       : code === "github_client_required" ? 400 : 503;
   return reply({ ok: false, code }, status);
 }

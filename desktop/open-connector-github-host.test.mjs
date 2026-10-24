@@ -9,6 +9,7 @@ import { createGitHubOAuthHost, fixedGitHubTestInput, isFixedGitHubTestInput, is
 const CLIENT_ID = "oauth-client-fixture";
 const CLIENT_SECRET = "test-client-secret-never-production-123456";
 const TOKEN = "test-oauth-access-token-never-production-123456";
+const REFRESH = "test-oauth-refresh-token-never-production-123456";
 const profile = { login: "PIGU-PPPgu", id: 59789742, html_url: "https://github.com/PIGU-PPPgu", public_repos: 42 };
 const repo = { full_name: "PIGU-PPPgu/edupi-desktop", private: false, has_issues: true, archived: false, disabled: false,
   owner: { login: "PIGU-PPPgu" }, html_url: "https://github.com/PIGU-PPPgu/edupi-desktop", permissions: { push: true, admin: true } };
@@ -24,26 +25,49 @@ async function fixture(options = {}) {
   let authorization;
   let tokenRequests = 0;
   let createRequests = 0;
+  let refreshRequests = 0;
+  let currentToken = TOKEN;
+  let currentRefresh = REFRESH;
+  const tokenProfiles = new Map([[TOKEN, profile]]);
   globalThis.fetch = async (input, init) => {
     const incoming = input instanceof Request ? input : new Request(input, init);
     const url = new URL(incoming.url);
     calls.push({ method: incoming.method, pathname: url.pathname });
+    if (options.offline) throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
     if (incoming.url === "https://github.com/login/oauth/access_token") {
       tokenRequests += 1;
       const text = await incoming.text();
       const body = incoming.headers.get("content-type")?.includes("json") ? JSON.parse(text) : Object.fromEntries(new URLSearchParams(text));
       assert.equal(body.client_id, CLIENT_ID);
       assert.equal(body.client_secret, CLIENT_SECRET);
+      if (body.grant_type === "refresh_token") {
+        refreshRequests += 1;
+        assert.equal(body.refresh_token, currentRefresh);
+        assert.equal(body.code, undefined);
+        if (options.beforeRefreshResponse) await options.beforeRefreshResponse();
+        if (options.refreshResponse) return options.refreshResponse();
+        if (options.refreshRejected) return Response.json({ error: "bad_refresh_token" }, { status: 400 });
+        tokenProfiles.delete(currentToken);
+        currentToken = `${TOKEN}-${refreshRequests}`; currentRefresh = `${REFRESH}-${refreshRequests}`;
+        tokenProfiles.set(currentToken, profile);
+        return Response.json({ access_token: currentToken, refresh_token: currentRefresh, expires_in: 28800, token_type: "bearer", scope: "public_repo" });
+      }
+      assert.equal(body.grant_type, "authorization_code");
       assert.equal(body.code, "fixture-authorization-code");
       assert.equal(body.redirect_uri, host.callbackUrl);
       assert.match(body.code_verifier, /^[A-Za-z0-9._~-]{43,128}$/u);
       assert.equal(createHash("sha256").update(body.code_verifier).digest("base64url"), authorization.searchParams.get("code_challenge"));
-      return Response.json({ access_token: TOKEN, token_type: "bearer", scope: "public_repo" });
+      const exchangedToken = options.authorizationToken ?? currentToken;
+      tokenProfiles.set(exchangedToken, options.authorizationProfile ?? profile);
+      return Response.json({ access_token: exchangedToken, token_type: "bearer", scope: "public_repo",
+        ...(options.expiring ? { refresh_token: currentRefresh, expires_in: 28800 } : {}) });
     }
     assert.equal(url.origin, "https://api.github.com", "all provider calls must stay on the fixed GitHub API");
-    assert.equal(incoming.headers.get("authorization"), `Bearer ${TOKEN}`);
+    const accessToken = incoming.headers.get("authorization")?.replace(/^Bearer /u, "");
+    assert.equal(tokenProfiles.has(accessToken), true, "only current or separately issued fixture tokens may access GitHub");
     const headers = { "x-oauth-scopes": "public_repo" };
-    if (url.pathname === "/user" && incoming.method === "GET") return Response.json(profile, { headers });
+    if (url.pathname === "/user" && incoming.method === "GET") return options.accessRejected
+      ? Response.json({ message: "Bad credentials" }, { status: 401 }) : Response.json(options.profile ?? tokenProfiles.get(accessToken), { headers });
     if (url.pathname === "/repos/PIGU-PPPgu/edupi-desktop" && incoming.method === "GET") return Response.json({ ...repo, ...options.repo }, { headers });
     if (url.pathname === "/repos/PIGU-PPPgu/edupi-desktop/issues" && incoming.method === "POST") {
       createRequests += 1;
@@ -66,16 +90,18 @@ async function fixture(options = {}) {
   const encryptionKey = randomBytes(32).toString("hex");
   async function start() {
     const { createConnectorRuntime } = await import("@oomol-lab/open-connector");
-    host = await createGitHubOAuthHost({ dataDir: directory, encryptionKey, runtimeFactory: async (runtimeOptions) => {
+    host = await createGitHubOAuthHost({ dataDir: directory, encryptionKey, acceptanceEnabled: options.acceptanceEnabled === true, runtimeFactory: async (runtimeOptions) => {
       const runtime = await createConnectorRuntime(runtimeOptions);
       captured = { runtime, options: runtimeOptions };
       return runtime;
     } });
   }
-  async function startAuthorization() {
-    const configured = await host.handle(request("configure", { clientId: CLIENT_ID, clientSecret: CLIENT_SECRET }));
-    assert.deepEqual(configured.data, { clientConfigured: true });
-    const started = await host.handle(request("startOAuth"));
+  async function startAuthorization(connectionId) {
+    if (!connectionId) {
+      const configured = await host.handle(request("configure", { clientId: CLIENT_ID, clientSecret: CLIENT_SECRET }));
+      assert.deepEqual(configured.data, { clientConfigured: true });
+    }
+    const started = await host.handle(request("startOAuth", connectionId ? { connectionId, expectedAccountId: String(profile.id) } : {}));
     assert.equal(started.ok, true);
     authorization = new URL(started.data.authorizationUrl);
     const callback = new URL(host.callbackUrl);
@@ -96,9 +122,9 @@ async function fixture(options = {}) {
   }
   await start();
   return {
-    directory, originalFetch, calls, issues, start, startAuthorization, authorize,
+    directory, originalFetch, calls, issues, start, startAuthorization, authorize, options,
     get host() { return host; }, get captured() { return captured; },
-    get tokenRequests() { return tokenRequests; }, get createRequests() { return createRequests; },
+    get tokenRequests() { return tokenRequests; }, get createRequests() { return createRequests; }, get refreshRequests() { return refreshRequests; },
     close: async () => { try { await host?.close(); } finally { globalThis.fetch = originalFetch; await rm(directory, { recursive: true, force: true }); } },
   };
 }
@@ -124,7 +150,7 @@ test("real upstream OAuth uses public_repo and PKCE, accepts one callback, then 
     assert.equal(connection.authType, "oauth2");
     assert.equal(connection.accountId, String(profile.id));
     const authorization = new URL(started.data.authorizationUrl);
-    assert.equal(authorization.searchParams.get("scope"), "public_repo");
+    assert.equal(authorization.searchParams.get("scope"), "public_repo offline_access");
     assert.equal(authorization.searchParams.get("code_challenge_method"), "S256");
     assert.equal(f.tokenRequests, 1);
     assert.equal((await f.originalFetch(callback, { redirect: "manual" })).status, 400);
@@ -259,5 +285,179 @@ test("lost write response stays unknown and reconciliation only reads the marked
     const replay = await f.host.handle(request("createTestIssue", { connectionId: connection.id, requestId, input }));
     assert.equal(replay.data.status, "unknown");
     assert.equal(f.createRequests, 1);
+  } finally { await f.close(); }
+});
+
+test("manual refresh uses the pinned SDK refresh grant, persists rotated credentials and returns only safe metadata", async () => {
+  const f = await fixture({ expiring: true });
+  try {
+    const { connection } = await f.authorize();
+    const before = await f.host.handle(request("checkConnection", { connectionId: connection.id }));
+    assert.deepEqual(Object.keys(before.data.token).sort(), ["expiresAt", "hasRefreshToken", "refreshedAt"]);
+    assert.equal(before.data.token.hasRefreshToken, true); assert.equal(before.data.token.refreshedAt, null);
+    const refreshed = await f.host.handle(request("refreshOAuth", { connectionId: connection.id }));
+    assert.equal(refreshed.ok, true); assert.equal(f.refreshRequests, 1);
+    assert.deepEqual(refreshed.data.connection, connection);
+    assert.ok(Date.parse(refreshed.data.token.refreshedAt) > 0);
+    assert.ok(Date.parse(refreshed.data.token.expiresAt) > Date.now() + 28000000);
+    for (const secret of [TOKEN, REFRESH, CLIENT_SECRET, f.captured.options.encryptionKey]) assert.equal(JSON.stringify(refreshed).includes(secret), false);
+    await f.host.close(); await f.start();
+    const restored = await f.host.handle(request("checkConnection", { connectionId: connection.id }));
+    assert.equal(restored.ok, true); assert.deepEqual(restored.data.token, refreshed.data.token);
+    assert.equal(f.refreshRequests, 1, "restart uses the persisted new access token without refreshing again");
+    for (const file of ["connect.sqlite", "connect.sqlite-wal"]) {
+      const bytes = await readFile(path.join(f.directory, file)).catch(() => Buffer.alloc(0));
+      for (const secret of [TOKEN, REFRESH, CLIENT_SECRET]) assert.equal(bytes.includes(Buffer.from(secret)), false);
+    }
+  } finally { await f.close(); }
+});
+
+test("controlled expiry is host-gated and a later read runs the actual SDK automatic refresh path", async () => {
+  const f = await fixture({ expiring: true });
+  try {
+    const { connection } = await f.authorize();
+    const count = f.calls.length;
+    assert.equal((await f.host.handle(request("expireTokenForAcceptance", { connectionId: connection.id }))).code, "github_acceptance_disabled");
+    assert.equal(f.calls.length, count);
+    await f.host.close(); f.options.acceptanceEnabled = true; await f.start();
+    const expired = await f.host.handle(request("expireTokenForAcceptance", { connectionId: connection.id }));
+    assert.equal(expired.ok, true); assert.ok(Date.parse(expired.data.token.expiresAt) < Date.now());
+    assert.equal(f.refreshRequests, 0, "changing local expiry does not exchange a token by itself");
+    const read = await f.host.handle(request("checkConnection", { connectionId: connection.id }));
+    assert.equal(read.ok, true); assert.equal(f.refreshRequests, 1);
+    assert.ok(Date.parse(read.data.token.expiresAt) > Date.now());
+    assert.ok(read.data.token.refreshedAt);
+  } finally { await f.close(); }
+  const noRefresh = await fixture({ acceptanceEnabled: true });
+  try {
+    const { connection } = await noRefresh.authorize();
+    assert.equal((await noRefresh.host.handle(request("expireTokenForAcceptance", { connectionId: connection.id }))).code, "github_refresh_token_required");
+    assert.equal((await noRefresh.host.handle(request("refreshOAuth", { connectionId: connection.id }))).code, "github_refresh_token_required");
+  } finally { await noRefresh.close(); }
+});
+
+test("network failure and revoked refresh are distinct, and neither discards usable credentials", async () => {
+  const f = await fixture({ expiring: true });
+  try {
+    const { connection } = await f.authorize();
+    f.options.offline = true;
+    assert.equal((await f.host.handle(request("checkConnection", { connectionId: connection.id }))).code, "github_connection_offline");
+    assert.equal((await f.host.handle(request("refreshOAuth", { connectionId: connection.id }))).code, "github_connection_offline");
+    f.options.offline = false; f.options.refreshRejected = true;
+    assert.equal((await f.host.handle(request("refreshOAuth", { connectionId: connection.id }))).code, "github_authorization_required");
+    assert.equal((await f.host.handle(request("checkConnection", { connectionId: connection.id }))).ok, true);
+    f.options.accessRejected = true;
+    assert.equal((await f.host.handle(request("checkConnection", { connectionId: connection.id }))).code, "github_authorization_required");
+    f.options.accessRejected = false;
+    f.options.refreshRejected = false;
+    f.options.refreshResponse = () => Response.json({ error: "bad_refresh_token" }, { status: 503 });
+    assert.equal((await f.host.handle(request("refreshOAuth", { connectionId: connection.id }))).code, "github_connection_offline", "a transient HTTP status takes precedence over credential-like response text");
+    f.options.refreshResponse = undefined;
+    assert.equal((await f.host.handle(request("refreshOAuth", { connectionId: connection.id }))).ok, true);
+  } finally { await f.close(); }
+});
+
+for (const scenario of [
+  { name: "429 temporarily_unavailable", response: () => Response.json({ error: "temporarily_unavailable" }, { status: 429 }) },
+  { name: "503 empty response", response: () => new Response(null, { status: 503 }) },
+  { name: "unrecognized successful response", response: () => new Response("proxy response without token fields", { status: 200 }) },
+]) test(`SDK refresh ${scenario.name} remains retryable through manual and automatic refresh`, async () => {
+  const f = await fixture({ expiring: true, acceptanceEnabled: true });
+  try {
+    const { connection } = await f.authorize();
+    f.options.refreshResponse = scenario.response;
+    const manual = await f.host.handle(request("refreshOAuth", { connectionId: connection.id }));
+    assert.equal(manual.code, "github_connection_offline");
+    assert.equal((await f.host.handle(request("expireTokenForAcceptance", { connectionId: connection.id }))).ok, true);
+    const automatic = await f.host.handle(request("checkConnection", { connectionId: connection.id }));
+    assert.equal(automatic.code, "github_connection_offline"); assert.equal(f.refreshRequests, 2);
+    for (const secret of [TOKEN, REFRESH, CLIENT_SECRET]) assert.equal(JSON.stringify([manual, automatic]).includes(secret), false);
+    f.options.refreshResponse = undefined;
+    const recovered = await f.host.handle(request("checkConnection", { connectionId: connection.id }));
+    assert.equal(recovered.ok, true); assert.equal(f.refreshRequests, 3);
+    assert.deepEqual(recovered.data.connection, connection); assert.equal(f.createRequests, 0);
+  } finally { await f.close(); }
+});
+
+test("by-id reconnect updates one connection and a different account is refused", async () => {
+  const f = await fixture({ expiring: true });
+  try {
+    const { connection } = await f.authorize();
+    const { started, callback } = await f.startAuthorization(connection.id);
+    assert.equal((await f.originalFetch(callback, { redirect: "manual" })).status, 303);
+    const result = await f.host.handle(request("pollOAuth", { requestId: started.data.requestId }));
+    assert.equal(result.ok, true); assert.deepEqual(result.data.connection, connection);
+    const response = await f.captured.runtime.fetch(new Request(`${new URL(f.host.callbackUrl).origin}/v1/connections`, { headers: { authorization: `Bearer ${f.captured.options.adminToken}` } }));
+    assert.equal((await response.json()).data.length, 1);
+    f.options.profile = { ...profile, id: 12345, login: "another-account", html_url: "https://github.com/another-account" };
+    assert.equal((await f.host.handle(request("checkConnection", { connectionId: connection.id }))).code, "github_account_changed");
+  } finally { await f.close(); }
+});
+
+test("a wrong-account code callback is rejected before replacing a good connection and its issue remains readable", async () => {
+  const f = await fixture({ expiring: true });
+  try {
+    const { connection } = await f.authorize();
+    const requestId = randomUUID(), input = fixedGitHubTestInput(requestId);
+    const written = await f.host.handle(request("createTestIssue", { connectionId: connection.id, requestId, input }));
+    assert.equal(written.data.status, "succeeded");
+    const { DatabaseSync } = await import("node:sqlite");
+    const revision = () => {
+      const database = new DatabaseSync(path.join(f.directory, "connect.sqlite"), { readOnly: true });
+      try { return database.prepare("select revision from connections where id = ?").get(connection.id).revision; }
+      finally { database.close(); }
+    };
+    const originalRevision = revision();
+    for (const wrong of [
+      { ...profile, login: "another-account", id: 12345, html_url: "https://github.com/another-account" },
+      { ...profile, id: profile.id + 1 },
+    ]) {
+      const { started, callback } = await f.startAuthorization(connection.id);
+      f.options.authorizationToken = `${TOKEN}-wrong-account-${wrong.id}`;
+      f.options.authorizationProfile = wrong;
+      assert.equal((await f.originalFetch(callback, { redirect: "manual" })).status, 400);
+      const polled = await f.host.handle(request("pollOAuth", { requestId: started.data.requestId }));
+      assert.equal(polled.data.status, "failed"); assert.equal(polled.data.code, "github_account_changed");
+      assert.equal(revision(), originalRevision, "the SDK must not commit the rejected credential");
+      assert.equal(JSON.stringify(polled).includes(f.options.authorizationToken), false);
+      const count = f.tokenRequests;
+      assert.equal((await f.originalFetch(callback, { redirect: "manual" })).status, 400);
+      assert.equal(f.tokenRequests, count, "the rejected callback cannot exchange its code a second time");
+    }
+    const read = await f.host.handle(request("reconcileIssue", { connectionId: connection.id, requestId, input, issueNumber: written.data.issue.number }));
+    assert.equal(read.ok, true); assert.equal(read.data.status, "succeeded");
+    assert.deepEqual(read.data.issue, written.data.issue); assert.equal(read.data.writeExecutionId, written.data.writeExecutionId);
+    const replay = await f.host.handle(request("createTestIssue", { connectionId: connection.id, requestId, input }));
+    assert.equal(replay.data.writeExecutionId, written.data.writeExecutionId); assert.equal(f.createRequests, 1);
+  } finally { await f.close(); }
+});
+
+test("initial authorization also refuses an unexpected account before storing any connection", async () => {
+  const f = await fixture({ expiring: true, authorizationToken: `${TOKEN}-wrong-first-account`,
+    authorizationProfile: { ...profile, login: "another-account", id: 12345, html_url: "https://github.com/another-account" } });
+  try {
+    const { started, callback } = await f.startAuthorization();
+    assert.equal((await f.originalFetch(callback, { redirect: "manual" })).status, 400);
+    const polled = await f.host.handle(request("pollOAuth", { requestId: started.data.requestId }));
+    assert.equal(polled.data.status, "failed"); assert.equal(polled.data.code, "github_account_changed");
+    const response = await f.captured.runtime.fetch(new Request(`${new URL(f.host.callbackUrl).origin}/v1/connections`, { headers: { authorization: `Bearer ${f.captured.options.adminToken}` } }));
+    assert.deepEqual((await response.json()).data, []);
+    assert.equal((await f.originalFetch(callback, { redirect: "manual" })).status, 400); assert.equal(f.tokenRequests, 1);
+  } finally { await f.close(); }
+});
+
+test("refresh CAS refuses a concurrent credential replacement without returning token material", async () => {
+  const f = await fixture({ expiring: true });
+  try {
+    const { connection } = await f.authorize();
+    f.options.beforeRefreshResponse = async () => {
+      const { DatabaseSync } = await import("node:sqlite");
+      const database = new DatabaseSync(path.join(f.directory, "connect.sqlite"));
+      try { database.prepare("update connections set revision = ? where id = ?").run(randomUUID(), connection.id); }
+      finally { database.close(); }
+    };
+    const result = await f.host.handle(request("refreshOAuth", { connectionId: connection.id }));
+    assert.equal(result.code, "github_connection_changed"); assert.equal(f.refreshRequests, 1);
+    for (const secret of [TOKEN, REFRESH, CLIENT_SECRET]) assert.equal(JSON.stringify(result).includes(secret), false);
   } finally { await f.close(); }
 });

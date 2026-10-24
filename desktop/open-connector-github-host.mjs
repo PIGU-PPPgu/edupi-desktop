@@ -1,9 +1,10 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { realpathSync } from "node:fs";
 import { chmod, lstat, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
 import path, { isAbsolute, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const OWNER = "PIGU-PPPgu";
 const REPO = "edupi-desktop";
@@ -12,6 +13,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const ACTIONS = ["github.get_current_user", "github.get_repository", "github.create_issue", "github.get_issue", "github.list_repository_issues"];
 const MAX_FRAME = 32 * 1024;
 const MAX_RESPONSE = 512 * 1024;
+const oauthResponses = new AsyncLocalStorage();
+const credentialRejections = new Set(["bad_refresh_token", "invalid_grant", "invalid_client", "incorrect_client_credentials", "bad credentials", "invalid credentials",
+  "the refresh token passed is incorrect or expired.", "the refresh token is invalid or has expired.", "the refresh token passed is invalid, expired, or revoked.",
+  "the client_id and/or client_secret passed are incorrect."]);
 
 function record(value) { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
 function keys(value, expected) { return record(value) && Object.keys(value).sort().join(",") === [...expected].sort().join(","); }
@@ -19,6 +24,83 @@ function uuid(value) { return typeof value === "string" && UUID.test(value); }
 function safeError(code) { const error = new Error(code); error.code = code; return error; }
 function fail(code = "github_oauth_unavailable") { throw safeError(code); }
 function canonicalHash(value) { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
+function timestamp(value) { return typeof value === "string" && value.length <= 40 && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null; }
+function tokenProjection(credential) {
+  return { hasRefreshToken: typeof credential.refreshToken === "string" && credential.refreshToken.length > 0,
+    expiresAt: timestamp(credential.expiresAt), refreshedAt: timestamp(credential.metadata?.refreshedAt) };
+}
+function oauthFailure(error) {
+  if (error?.code === "oauth_token_refresh_failed") {
+    // SDK 1.6.5 keeps provider error text but omits the response status. Capture only that status at our transport boundary.
+    const status = oauthResponses.getStore()?.tokenStatus ?? error.status ?? error.details?.status;
+    const message = typeof error.message === "string" ? error.message.trim().toLowerCase() : "";
+    if ((status === 400 || status === 401) && credentialRejections.has(message)) return "github_authorization_required";
+    return "github_connection_offline";
+  }
+  if (["oauth_token_expired", "oauth_refresh_unavailable", "oauth_client_config_required", "authorization_failed"].includes(error?.code)) return "github_authorization_required";
+  return "github_oauth_unavailable";
+}
+
+/** The package deliberately keeps credentials out of its public HTTP API. Keep this pinned adapter inside the private host. */
+async function openCredentialAccess(dataDir, encryptionKey, origin, catalogDir) {
+  const entry = realpathSync(fileURLToPath(import.meta.resolve("@oomol-lab/open-connector")));
+  const packageRoot = path.resolve(path.dirname(entry), "../..");
+  const manifest = JSON.parse(await readFile(path.join(packageRoot, "package.json"), "utf8"));
+  if (manifest.name !== "@oomol-lab/open-connector" || manifest.version !== "1.6.5"
+    || entry !== path.join(packageRoot, "src/server/connector-runtime.js")) fail("github_runtime_version_unsupported");
+  const load = async (relative) => {
+    const file = path.join(packageRoot, relative), stat = await lstat(file);
+    if (!stat.isFile() || stat.isSymbolicLink() || realpathSync(file) !== file) fail("github_runtime_version_unsupported");
+    return import(pathToFileURL(file).href);
+  };
+  const [{ DatabaseSync }, { AesGcmSecretCodec }, { SqliteConnectionStore, SqliteOAuthClientConfigStore },
+    { OAuthClientConfigService }, { OAuthCredentialRefreshService }] = await Promise.all([
+    import("node:sqlite"), load("src/server/secrets/secret-codec.js"), load("src/server/storage/sqlite-runtime-store.js"),
+    load("src/oauth/oauth-client-config-service.js"), load("src/oauth/oauth-credential-refresh-service.js"),
+  ]);
+  const databasePath = path.join(dataDir, "connect.sqlite"), stat = await lstat(databasePath);
+  if (!stat.isFile() || stat.isSymbolicLink()) fail("github_state_invalid");
+  const provider = JSON.parse(await readFile(path.join(catalogDir, "github.json"), "utf8"));
+  const database = new DatabaseSync(databasePath);
+  try {
+    database.exec("PRAGMA busy_timeout = 2000");
+    const codec = new AesGcmSecretCodec(encryptionKey);
+    const store = new SqliteConnectionStore(database, codec);
+    const configs = new OAuthClientConfigService({ catalog: { providers: [provider] }, origin, store: new SqliteOAuthClientConfigStore(database, codec) });
+    const refresher = new OAuthCredentialRefreshService(configs);
+    async function stored(id) {
+      const row = database.prepare("select connection_name from connections where id = ? and service = 'github'").get(id);
+      const connection = row && await store.get("github", row.connection_name);
+      if (!connection || connection.id !== id || connection.credential.authType !== "oauth2") fail("github_oauth_connection_required");
+      return connection;
+    }
+    async function replace(connection, credential) {
+      if (!await store.updateCredential({ ...connection, credential })) fail("github_connection_changed");
+      return tokenProjection(credential);
+    }
+    return {
+      metadata: async (id) => tokenProjection((await stored(id)).credential),
+      assertAccount: async (id, expectedAccountId) => {
+        const user = (await stored(id)).credential.metadata?.currentUser;
+        if (user?.login !== LOGIN || String(user.id) !== expectedAccountId) fail("github_connection_changed");
+      },
+      refresh: async (id) => {
+        const connection = await stored(id);
+        if (!connection.credential.refreshToken) fail("github_refresh_token_required");
+        let credential;
+        try { credential = await refresher.refresh("github", connection.credential); }
+        catch (error) { fail(oauthFailure(error)); }
+        return replace(connection, credential);
+      },
+      expire: async (id) => {
+        const connection = await stored(id);
+        if (!connection.credential.refreshToken) fail("github_refresh_token_required");
+        return replace(connection, { ...connection.credential, expiresAt: new Date(Date.now() - 60_000).toISOString() });
+      },
+      close: () => database.close(),
+    };
+  } catch (error) { database.close(); throw error; }
+}
 
 export function fixedGitHubTestInput(requestId) {
   if (!uuid(requestId)) fail("invalid_github_request");
@@ -67,6 +149,43 @@ async function configureNetwork(network) {
   return async () => { globalThis.fetch = originalFetch; setGlobalDispatcher(originalDispatcher); await agent.close(); };
 }
 
+function observeOAuthResponses() {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const response = await originalFetch(input, init);
+    const context = oauthResponses.getStore();
+    const url = input instanceof Request ? input.url : String(input);
+    if (context && url === "https://github.com/login/oauth/access_token") {
+      context.tokenStatus = response.status;
+      if (context.callback && response.ok) {
+        try {
+          const payload = await readJson(response.clone());
+          const accessToken = payload?.access_token ?? payload?.token;
+          if (typeof accessToken === "string" && accessToken) {
+            const profileResponse = await originalFetch("https://api.github.com/user", {
+              method: "GET", redirect: "manual", signal: AbortSignal.any([context.callback.controller.signal, AbortSignal.timeout(25_000)]),
+              headers: { accept: "application/vnd.github+json", authorization: `Bearer ${accessToken}`, "user-agent": "EduPi-GitHub-OAuth" },
+            });
+            if (!profileResponse.ok) {
+              await profileResponse.body?.cancel().catch(() => {});
+              fail([401, 403].includes(profileResponse.status) ? "github_authorization_required" : "github_connection_offline");
+            }
+            const profile = await readJson(profileResponse);
+            if (profile?.login !== LOGIN || !Number.isSafeInteger(profile.id) || profile.id <= 0 || profile.html_url !== `https://github.com/${LOGIN}`
+              || context.callback.expectedAccountId && String(profile.id) !== context.callback.expectedAccountId) fail("github_account_changed");
+          }
+        } catch (error) {
+          context.callback.failureCode = typeof error?.code === "string" && /^github_[a-z_]{1,64}$/u.test(error.code) ? error.code : "github_connection_offline";
+          await response.body?.cancel().catch(() => {});
+          throw safeError(context.callback.failureCode);
+        }
+      }
+    }
+    return response;
+  };
+  return () => { globalThis.fetch = originalFetch; };
+}
+
 async function privateDirectory(directory) {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const stat = await lstat(directory);
@@ -107,6 +226,9 @@ export async function prepareGitHubOAuthAssets(dataDir, assetDirectory) {
   oauth.scopes = ["public_repo"];
   oauth.authorizationOptions = [{ id: "public_repo", label: "Public repositories", description: "Create the marked verification issue in the selected public repository.", required: true, defaultSelected: true, risk: "sensitive" }];
   oauth.pkce = { method: "S256" };
+  // offline_access requests token rotation without granting another repository permission.
+  oauth.authorizationParams = { scope: "public_repo offline_access" };
+  oauth.authorizationRequestFields = { scope: false };
   provider.auth = [oauth];
   provider.authTypes = ["oauth2"];
   provider.actions = provider.actions.filter((action) => ACTIONS.includes(action.id));
@@ -126,7 +248,7 @@ function isSafeAuthorizationUrl(value, callbackUrl) {
     return url.origin === "https://github.com" && url.pathname === "/login/oauth/authorize"
       && !url.username && !url.password && !url.hash
       && [...url.searchParams.keys()].every((key) => allowed.has(key) && url.searchParams.getAll(key).length === 1)
-      && url.searchParams.get("scope") === "public_repo" && url.searchParams.get("redirect_uri") === callbackUrl
+      && url.searchParams.get("scope") === "public_repo offline_access" && url.searchParams.get("redirect_uri") === callbackUrl
       && url.searchParams.get("response_type") === "code" && uuid(url.searchParams.get("state"))
       && /^[A-Za-z0-9_-]{43}$/u.test(url.searchParams.get("code_challenge") || "")
       && url.searchParams.get("code_challenge_method") === "S256";
@@ -138,11 +260,12 @@ function validOperation(request) {
   if (request.op === "configure") return keys(request, ["id", "op", "clientId", "clientSecret"])
     && typeof request.clientId === "string" && /^[A-Za-z0-9_.-]{6,128}$/u.test(request.clientId)
     && typeof request.clientSecret === "string" && /^[A-Za-z0-9_-]{16,256}$/u.test(request.clientSecret);
-  if (request.op === "startOAuth") return keys(request, ["id", "op"]);
+  if (request.op === "startOAuth") return keys(request, request.connectionId === undefined ? ["id", "op"] : ["id", "op", "connectionId", "expectedAccountId"])
+    && (request.connectionId === undefined || uuid(request.connectionId) && typeof request.expectedAccountId === "string" && /^[1-9][0-9]{0,19}$/u.test(request.expectedAccountId));
   if (request.op === "pollOAuth" || request.op === "cancelOAuth") return keys(request, ["id", "op", "requestId"]) && uuid(request.requestId);
   if (request.op === "status") return keys(request, request.connectionId === undefined ? ["id", "op"] : ["id", "op", "connectionId"])
     && (request.connectionId === undefined || uuid(request.connectionId));
-  if (request.op === "readAccount") return keys(request, ["id", "op", "connectionId"]) && uuid(request.connectionId);
+  if (["readAccount", "checkConnection", "refreshOAuth", "expireTokenForAcceptance"].includes(request.op)) return keys(request, ["id", "op", "connectionId"]) && uuid(request.connectionId);
   if (request.op === "createTestIssue" || request.op === "reconcileIssue") {
     const fields = ["id", "op", "connectionId", "requestId", "input"];
     if (request.op === "reconcileIssue" && request.issueNumber !== undefined) fields.push("issueNumber");
@@ -160,17 +283,21 @@ function projectIssue(value, input, login) {
   return { number: value.number, url: value.html_url, title: value.title, body: value.body, state: value.state, author: value.user.login };
 }
 
-export async function createGitHubOAuthHost({ dataDir, encryptionKey, network, runtimeFactory } = {}) {
+export async function createGitHubOAuthHost({ dataDir, encryptionKey, network, runtimeFactory, acceptanceEnabled = false } = {}) {
   if (!isAbsolute(dataDir || "") || typeof encryptionKey !== "string" || !/^[a-f0-9]{64}$/u.test(encryptionKey)) fail("invalid_github_init");
+  if (typeof acceptanceEnabled !== "boolean") fail("invalid_github_init");
   await privateDirectory(dataDir);
   const dispatchDir = path.join(dataDir, "test-dispatches");
   await privateDirectory(dispatchDir);
   const closeNetwork = await configureNetwork(network);
+  const closeObservation = observeOAuthResponses();
   const tokens = { adminToken: randomBytes(32).toString("hex"), runtimeToken: randomBytes(32).toString("hex") };
   const secrets = new Set([encryptionKey, tokens.adminToken, tokens.runtimeToken]);
   const authStates = new Map();
   const socketSet = new Set();
   let runtime;
+  let assets;
+  let credentials;
   let closed = false;
   let origin;
   const server = http.createServer(async (incoming, outgoing) => {
@@ -198,7 +325,7 @@ export async function createGitHubOAuthHost({ dataDir, encryptionKey, network, r
       }
       pending.used = true;
       pending.controller = new AbortController();
-      const response = await runtime.fetch(new Request(url, { signal: AbortSignal.any([AbortSignal.timeout(30_000), pending.controller.signal]) }));
+      const response = await oauthResponses.run({ callback: pending }, () => runtime.fetch(new Request(url, { signal: AbortSignal.any([AbortSignal.timeout(30_000), pending.controller.signal]) })));
       await response.body?.cancel().catch(() => {});
       if (!response.ok && response.status !== 302) { outgoing.writeHead(400); outgoing.end("授权未完成，请返回 EduPi 重试。"); return; }
       outgoing.writeHead(303, { Location: "/oauth/callback" }); outgoing.end();
@@ -212,14 +339,17 @@ export async function createGitHubOAuthHost({ dataDir, encryptionKey, network, r
     for (const socket of socketSet) socket.destroy();
     await new Promise((resolveClose) => server.close(resolveClose));
     try { if (runtime) await runtime.close(); }
-    finally { await closeNetwork(); }
+    finally {
+      try { if (credentials) (await credentials.catch(() => null))?.close(); }
+      finally { closeObservation(); await closeNetwork(); }
+    }
   }
 
   try {
     await new Promise((resolveListen, rejectListen) => { server.once("error", rejectListen); server.listen(0, "127.0.0.1", resolveListen); });
     origin = `http://127.0.0.1:${server.address().port}`;
     const { createConnectorRuntime, getConnectorAssetDirectory } = await import("@oomol-lab/open-connector");
-    const assets = await prepareGitHubOAuthAssets(dataDir, getConnectorAssetDirectory());
+    assets = await prepareGitHubOAuthAssets(dataDir, getConnectorAssetDirectory());
     runtime = await (runtimeFactory ?? createConnectorRuntime)({
       dataDir, publicOrigin: origin, encryptionKey, ...tokens, assets,
       actionPolicy: { allowedActions: ACTIONS, blockedProxies: ["*"] },
@@ -227,6 +357,7 @@ export async function createGitHubOAuthHost({ dataDir, encryptionKey, network, r
     });
   } catch (error) { await close(); throw error; }
   const callbackUrl = `${origin}/oauth/callback`;
+  const credentialAccess = () => credentials ??= openCredentialAccess(dataDir, encryptionKey, origin, assets.catalogDir);
 
   async function call(route, token, init = {}) {
     const response = await runtime.fetch(new Request(new URL(route, origin), {
@@ -244,14 +375,20 @@ export async function createGitHubOAuthHost({ dataDir, encryptionKey, network, r
     if (!uuid(executionId) || result.body?.meta?.auditPersisted !== true) fail("github_audit_unavailable");
     const audit = await call(`/api/runs/${executionId}`, tokens.adminToken);
     if (!audit.ok || audit.body?.id !== executionId || audit.body?.actionId !== actionId || audit.body?.service !== "github"
-      || audit.body?.connectionId !== connection.id || typeof audit.body?.ok !== "boolean") fail("github_audit_unavailable");
-    if (!result.ok || result.body?.success !== true || audit.body.ok !== true) fail("github_action_failed");
+      || audit.body?.connectionId !== undefined && audit.body.connectionId !== connection.id || typeof audit.body?.ok !== "boolean") fail("github_audit_unavailable");
+    if (!result.ok || result.body?.success !== true || audit.body.ok !== true) {
+      const error = { code: result.body?.errorCode, message: result.body?.message };
+      const mapped = oauthFailure(error);
+      fail(mapped !== "github_oauth_unavailable" ? mapped : error.code === "provider_error" ? "github_connection_offline" : "github_action_failed");
+    }
+    if (audit.body.connectionId !== connection.id) fail("github_audit_unavailable");
     return { data: result.body.data, executionId };
   }
 
   async function connectionFor(id) {
     const reply = await call(`/v1/connections/by-id/${id}`, tokens.adminToken);
     const connection = reply.body?.data;
+    if (connection?.status === "reauth_required") fail("github_authorization_required");
     if (!reply.ok || reply.body?.success !== true || connection?.id !== id || connection.service !== "github"
       || connection.status !== "active" || connection.authType !== "oauth2" || !uuid(connection.alias)
       || !Array.isArray(connection.scopes) || connection.scopes.length !== 1 || connection.scopes[0] !== "public_repo") fail("github_oauth_connection_required");
@@ -368,12 +505,18 @@ export async function createGitHubOAuthHost({ dataDir, encryptionKey, network, r
         if (!reply.ok || reply.body?.configured !== true) fail("github_oauth_configuration_failed");
         data = { clientConfigured: true };
       } else if (request.op === "startOAuth") {
-        const reply = await call("/v1/connections/github/connect", tokens.adminToken, { method: "POST", body: "{}" });
+        if (request.connectionId) {
+          await (await credentialAccess()).assertAccount(request.connectionId, request.expectedAccountId);
+        }
+        for (const pending of authStates.values()) pending.controller?.abort();
+        authStates.clear();
+        const route = request.connectionId ? `/v1/connections/by-id/${request.connectionId}/connect` : "/v1/connections/github/connect";
+        const reply = await call(route, tokens.adminToken, { method: "POST", body: "{}" });
         const value = reply.body?.data;
         if (!reply.ok || reply.body?.success !== true || !uuid(value?.connectionRequestId) || !isSafeAuthorizationUrl(value?.authorizationUrl, callbackUrl)
           || typeof value.expiresAt !== "string" || !Number.isFinite(Date.parse(value.expiresAt))) fail("github_oauth_start_failed");
         const state = new URL(value.authorizationUrl).searchParams.get("state");
-        authStates.set(state, { requestId: value.connectionRequestId, expiresAt: value.expiresAt, used: false });
+        authStates.set(state, { requestId: value.connectionRequestId, expiresAt: value.expiresAt, used: false, expectedAccountId: request.expectedAccountId });
         data = { requestId: value.connectionRequestId, authorizationUrl: value.authorizationUrl, expiresAt: value.expiresAt };
       } else if (request.op === "cancelOAuth") {
         for (const [state, pending] of authStates) if (pending.requestId === request.requestId) {
@@ -385,10 +528,20 @@ export async function createGitHubOAuthHost({ dataDir, encryptionKey, network, r
         const reply = await call(`/v1/connection-requests/${request.requestId}`, tokens.adminToken);
         const value = reply.body?.data;
         if (!reply.ok || reply.body?.success !== true || value?.service !== "github") fail("github_oauth_request_missing");
-        if (value.status === "connected" && uuid(value.appId)) data = { status: "connected", connection: (await connectionFor(value.appId)).public };
-        else data = { status: value.status === "expired" ? "expired" : value.status === "failed" ? "failed" : "pending" };
+        if (value.status === "connected" && uuid(value.appId)) data = { status: "connected", connection: (await connectionFor(value.appId)).public,
+          token: await (await credentialAccess()).metadata(value.appId) };
+        else {
+          const failureCode = [...authStates.values()].find((pending) => pending.requestId === request.requestId)?.failureCode;
+          data = { status: value.status === "expired" ? "expired" : value.status === "failed" ? "failed" : "pending", ...(failureCode ? { code: failureCode } : {}) };
+        }
       } else if (request.op === "status") {
         data = { clientConfigured: await configured(), callbackUrl, connection: request.connectionId ? (await connectionFor(request.connectionId)).public : null };
+      } else if (request.op === "checkConnection" || request.op === "refreshOAuth") {
+        if (request.op === "refreshOAuth") await (await credentialAccess()).refresh(request.connectionId);
+        data = { connection: (await connectionFor(request.connectionId)).public, token: await (await credentialAccess()).metadata(request.connectionId) };
+      } else if (request.op === "expireTokenForAcceptance") {
+        if (!acceptanceEnabled) fail("github_acceptance_disabled");
+        data = { token: await (await credentialAccess()).expire(request.connectionId) };
       } else if (request.op === "readAccount") {
         const connection = await connectionFor(request.connectionId);
         const profile = connection.profile;
@@ -406,7 +559,7 @@ export async function createGitHubOAuthHost({ dataDir, encryptionKey, network, r
       return { id: request.id, ok: false, code };
     }
   }
-  return { callbackUrl, handle, close };
+  return { callbackUrl, handle: (request) => oauthResponses.run({}, () => handle(request)), close };
 }
 
 async function* frames(input) {
@@ -435,9 +588,12 @@ async function main() {
   try {
     for await (const request of frames(process.stdin)) {
       if (!host) {
-        const expected = request?.network === undefined ? ["id", "op", "encryptionKey"] : ["id", "op", "encryptionKey", "network"];
-        if (!keys(request, expected) || !uuid(request.id) || request.op !== "init") fail("invalid_github_init");
-        host = await createGitHubOAuthHost({ dataDir, encryptionKey: request.encryptionKey, network: request.network });
+        const expected = ["id", "op", "encryptionKey"];
+        if (request?.network !== undefined) expected.push("network");
+        if (request?.acceptanceEnabled !== undefined) expected.push("acceptanceEnabled");
+        if (!keys(request, expected) || !uuid(request.id) || request.op !== "init"
+          || request.acceptanceEnabled !== undefined && typeof request.acceptanceEnabled !== "boolean") fail("invalid_github_init");
+        host = await createGitHubOAuthHost({ dataDir, encryptionKey: request.encryptionKey, network: request.network, acceptanceEnabled: request.acceptanceEnabled });
         process.stdout.write(`${JSON.stringify({ id: request.id, ok: true, data: { ready: true, callbackUrl: host.callbackUrl } })}\n`);
       } else process.stdout.write(`${JSON.stringify(await host.handle(request))}\n`);
     }

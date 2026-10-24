@@ -1,13 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { fetchDesktopApi } from "@/lib/desktop-native";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import type { CatalogAction, CatalogProvider, CatalogQuery, CatalogResult } from "@/lib/openconnector-catalog-contract";
+import { isGitHubOAuthStatus } from "@/lib/openconnector-github-contract";
+import { CONNECTOR_SCENARIOS, connectorScenario, connectorScenarioLabel, discoverConnectorProviders, type ConnectorScenario } from "@/lib/openconnector-discovery";
 import { OpenConnectorGitHubPanel } from "./OpenConnectorGitHubPanel";
+import { OpenConnectorProviderIcon } from "./OpenConnectorProviderIcon";
 
 type InspectResult = Extract<CatalogResult, { kind: "inspect" }>;
-const PROVIDER_PAGE_SIZE = 60;
+const PROVIDER_PAGE_SIZE = 48;
 
 function isAction(value: unknown): value is CatalogAction {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -77,8 +80,12 @@ export function OpenConnectorAdminPanel() {
   const [providerTotal, setProviderTotal] = useState<number | null>(null);
   const [providerLimited, setProviderLimited] = useState(false);
   const [providerQuery, setProviderQuery] = useState("");
+  const [scenario, setScenario] = useState<ConnectorScenario>("all");
   const [visibleProviderCount, setVisibleProviderCount] = useState(PROVIDER_PAGE_SIZE);
   const [selectedProvider, setSelectedProvider] = useState<CatalogProvider | null>(null);
+  const [githubConnected, setGitHubConnected] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionsLoaded, setActionsLoaded] = useState(false);
   const [providerActions, setProviderActions] = useState<CatalogAction[]>([]);
   const [providerActionsLimited, setProviderActionsLimited] = useState(false);
   const [actions, setActions] = useState<CatalogAction[]>([]);
@@ -89,7 +96,19 @@ export function OpenConnectorAdminPanel() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const controllerRef = useRef<AbortController | null>(null);
+  const catalogRef = useRef<HTMLDivElement>(null);
+  const detailHeadingRef = useRef<HTMLHeadingElement>(null);
   const inspectHeadingRef = useRef<HTMLHeadingElement>(null);
+  const providerTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const actionTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const scrollRef = useRef<{ element: HTMLElement; top: number } | null>(null);
+  const restoreCatalogRef = useRef(false);
+  const restoreActionRef = useRef(false);
+  const connectionVersionRef = useRef(0);
+  const handleConnectionChange = useCallback((connected: boolean) => {
+    connectionVersionRef.current += 1;
+    setGitHubConnected(connected);
+  }, []);
 
   const loadProviders = useCallback(async () => {
     controllerRef.current?.abort();
@@ -115,31 +134,87 @@ export function OpenConnectorAdminPanel() {
     const available = isTauriDesktop();
     setDesktop(available);
     if (available) void loadProviders();
-    return () => controllerRef.current?.abort();
+    const connectionController = new AbortController();
+    const connectionVersion = connectionVersionRef.current;
+    if (available) void (async () => {
+      try {
+        const response = await fetchDesktopApi("/api/desktop/openconnector/github", {
+          signal: AbortSignal.any([connectionController.signal, AbortSignal.timeout(5_000)]),
+        });
+        const body = await response.json().catch(() => null);
+        if (!connectionController.signal.aborted && connectionVersion === connectionVersionRef.current
+          && response.ok && body?.ok === true && isGitHubOAuthStatus(body.data)) {
+          setGitHubConnected(Boolean(body.data.supported && body.data.connection?.authType === "oauth2"));
+        }
+      } catch { /* Connection discovery does not block the service directory. */ }
+    })();
+    return () => { controllerRef.current?.abort(); connectionController.abort(); };
   }, [loadProviders]);
-  useEffect(() => { if (selectedAction) inspectHeadingRef.current?.focus(); }, [selectedAction]);
 
-  const filteredProviders = useMemo(() => {
-    const query = providerQuery.trim().toLocaleLowerCase();
-    if (!query) return providers;
-    return providers.filter((provider) => [provider.service, provider.displayName, provider.scenario, ...provider.categories]
-      .some((text) => text.toLocaleLowerCase().includes(query)));
-  }, [providers, providerQuery]);
+  useLayoutEffect(() => {
+    if (selectedProvider) {
+      if (scrollRef.current) scrollRef.current.element.scrollTop = 0;
+      detailHeadingRef.current?.focus({ preventScroll: true });
+    } else if (restoreCatalogRef.current) {
+      restoreCatalogRef.current = false;
+      providerTriggerRef.current?.focus({ preventScroll: true });
+      if (scrollRef.current) scrollRef.current.element.scrollTop = scrollRef.current.top;
+    }
+  }, [selectedProvider]);
+  useLayoutEffect(() => {
+    if (selectedAction) inspectHeadingRef.current?.focus({ preventScroll: true });
+    else if (restoreActionRef.current) {
+      restoreActionRef.current = false;
+      actionTriggerRef.current?.focus({ preventScroll: true });
+    }
+  }, [selectedAction]);
 
-  async function selectProvider(provider: CatalogProvider) {
-    if (busy) return;
+  const connectedServices = useMemo(() => new Set(githubConnected ? ["github"] : []), [githubConnected]);
+  const searchedProviders = useMemo(() => discoverConnectorProviders(providers, {
+    query: providerQuery, connectedServices,
+  }), [providers, providerQuery, connectedServices]);
+  const filteredProviders = useMemo(() => scenario === "all" ? searchedProviders
+    : searchedProviders.filter((provider) => connectorScenario(provider) === scenario), [searchedProviders, scenario]);
+  const scenarioCounts = useMemo(() => new Map(CONNECTOR_SCENARIOS.map((option) => [option.id,
+    option.id === "all" ? searchedProviders.length
+      : searchedProviders.filter((provider) => connectorScenario(provider) === option.id).length,
+  ])), [searchedProviders]);
+
+  function selectProvider(provider: CatalogProvider, trigger: HTMLButtonElement) {
     controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    setBusy("actions");
-    setError("");
+    controllerRef.current = null;
+    providerTriggerRef.current = trigger;
+    const scrollElement = catalogRef.current?.closest<HTMLElement>(".edupi-admin-workspace");
+    scrollRef.current = scrollElement ? { element: scrollElement, top: scrollElement.scrollTop } : null;
     setSelectedProvider(provider);
     setSelectedAction(null);
+    setActionsOpen(false);
+    setActionsLoaded(false);
     setActionQuery("");
     setActions([]);
     setProviderActions([]);
     setSearched(false);
     setLimited(false);
+    setBusy(null);
+    setError("");
+  }
+
+  function returnToCatalog() {
+    controllerRef.current?.abort();
+    controllerRef.current = null;
+    restoreCatalogRef.current = true;
+    setSelectedProvider(null);
+    setSelectedAction(null);
+    setBusy(null);
+    setError("");
+  }
+
+  async function loadProviderActions(provider: CatalogProvider) {
+    if (busy) return;
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    setBusy("actions");
+    setError("");
     try {
       const result = await requestCatalog({ op: "actions", service: provider.service }, controller.signal);
       if (controller.signal.aborted) return;
@@ -147,6 +222,7 @@ export function OpenConnectorAdminPanel() {
       setProviderActions(result.actions);
       setProviderActionsLimited(result.limited);
       setActions(result.actions);
+      setActionsLoaded(true);
       setSearched(true);
       setLimited(result.limited);
     } catch (cause) {
@@ -159,7 +235,7 @@ export function OpenConnectorAdminPanel() {
   async function searchActions(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const query = actionQuery.trim();
-    if (!query || busy) return;
+    if (!query || busy || !selectedProvider) return;
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -168,9 +244,9 @@ export function OpenConnectorAdminPanel() {
     setSelectedAction(null);
     setSearched(false);
     try {
-      const result = await requestCatalog({ op: "search", query, ...(selectedProvider ? { service: selectedProvider.service } : {}) }, controller.signal);
+      const result = await requestCatalog({ op: "search", query, service: selectedProvider.service }, controller.signal);
       if (controller.signal.aborted) return;
-      if (result.kind !== "search" || selectedProvider && result.actions.some((action) => action.service !== selectedProvider.service)) throw new Error("目录暂不可用");
+      if (result.kind !== "search" || result.actions.some((action) => action.service !== selectedProvider.service)) throw new Error("目录暂不可用");
       setActions(result.actions);
       setLimited(result.limited);
       setSearched(true);
@@ -181,14 +257,14 @@ export function OpenConnectorAdminPanel() {
     }
   }
 
-  async function inspectAction(action: CatalogAction) {
+  async function inspectAction(action: CatalogAction, trigger: HTMLButtonElement) {
     if (busy) return;
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
+    actionTriggerRef.current = trigger;
     setBusy("inspect");
     setError("");
-    setSelectedAction(null);
     try {
       const result = await requestCatalog({ op: "inspect", actionId: action.id }, controller.signal);
       if (controller.signal.aborted) return;
@@ -205,43 +281,55 @@ export function OpenConnectorAdminPanel() {
   function changeActionQuery(value: string) {
     setActionQuery(value);
     setSelectedAction(null);
-    if (value.trim()) {
-      setActions([]);
-      setSearched(false);
-      setLimited(false);
-    } else {
-      setActions(selectedProvider ? providerActions : []);
-      setSearched(Boolean(selectedProvider));
-      setLimited(selectedProvider ? providerActionsLimited : false);
-    }
+    setActions(value.trim() ? [] : providerActions);
+    setSearched(!value.trim() && actionsLoaded);
+    setLimited(!value.trim() && providerActionsLimited);
   }
 
   return <section className="openconnector-admin" aria-label="OpenConnector 目录">
-    <header className="openconnector-admin__header"><div><h2>OpenConnector</h2></div><em>{providerTotal === null ? "服务目录" : `${providerTotal} 个服务`}</em></header>
-    {error ? <div className="native-inline-alert is-error" role="alert">{error}{desktop && providers.length === 0 && busy === null ? <button type="button" onClick={() => void loadProviders()}>重试</button> : null}</div> : null}
-    {!desktop ? <div className="openconnector-admin__unavailable" role="status">仅桌面应用可查询</div> : <div className="openconnector-admin__browser">
-      <section className="openconnector-admin__providers" aria-label="服务目录">
-        <label>服务<input type="search" placeholder="搜索服务" value={providerQuery} disabled={!desktop || busy === "providers"} maxLength={120} autoComplete="off" onChange={(event) => { setProviderQuery(event.target.value); setVisibleProviderCount(PROVIDER_PAGE_SIZE); }} /></label>
-        <div className="openconnector-admin__count" role="status">{!desktop ? "仅桌面应用可查询" : busy === "providers" ? "正在读取服务" : providerTotal === null ? "服务目录暂不可用" : `${filteredProviders.length} 个匹配服务${providerLimited ? " · 目录未完整" : ""}`}</div>
-        <ul>{filteredProviders.slice(0, visibleProviderCount).map((provider) => <li key={provider.service}><button type="button" disabled={busy !== null} aria-pressed={selectedProvider?.service === provider.service} onClick={() => void selectProvider(provider)}><strong>{provider.displayName}</strong><small>{provider.service}</small></button></li>)}</ul>
-        {filteredProviders.length > visibleProviderCount ? <button className="openconnector-admin__more" type="button" onClick={() => setVisibleProviderCount((count) => count + PROVIDER_PAGE_SIZE)}>显示更多</button> : null}
-      </section>
-
-      <section className="openconnector-admin__content" aria-label="服务详情">
-      {selectedProvider?.service === "github" ? <OpenConnectorGitHubPanel /> : null}
-      {selectedAction ? <section className="openconnector-admin__inspect" aria-label={`${selectedAction.action.name} 参数`}>
-        <button type="button" className="openconnector-admin__back" onClick={() => setSelectedAction(null)}>← 返回操作</button>
-        <h3 ref={inspectHeadingRef} tabIndex={-1}>{selectedAction.action.name}</h3><span>{selectedAction.action.id}</span>
-        <dl>{selectedAction.fields.map((field) => <div key={field.name}><dt>{field.name}{field.required ? " · 必填" : ""}</dt><dd>{field.description || field.type}</dd></div>)}</dl>
-        {selectedAction.fields.length === 0 ? <small>无需输入参数</small> : null}{selectedAction.limited ? <small>仅显示前 30 项参数</small> : null}
-      </section> : <section className="openconnector-admin__actions" aria-label="操作目录">
-        <header><h3>{selectedProvider?.displayName || "操作"}</h3>{selectedProvider ? <span>{selectedProvider.authTypes.join(" · ") || "无需账户"}{selectedProvider.categories.length ? ` · ${selectedProvider.categories.join(" · ")}` : ""}</span> : null}</header>
-        <form role="search" onSubmit={(event) => void searchActions(event)}><label>操作<input type="search" placeholder="搜索操作" value={actionQuery} disabled={!desktop || busy !== null} maxLength={200} autoComplete="off" onChange={(event) => changeActionQuery(event.target.value)} /></label><button type="submit" disabled={!desktop || busy !== null || !actionQuery.trim()}>查找</button></form>
-        <div className="openconnector-admin__count" role="status">{busy === "actions" ? "正在读取操作" : busy === "search" ? "正在查找" : searched ? `${actions.length} 项${limited ? " · 可缩小关键词" : ""}` : selectedProvider ? "操作暂不可用" : "选择服务或搜索操作"}</div>
-        {selectedProvider && !busy && !searched && error ? <button type="button" onClick={() => void selectProvider(selectedProvider)}>重试读取</button> : null}
-        {searched && actions.length > 0 ? <ul>{actions.map((action) => <li key={action.id}><button type="button" disabled={busy !== null} onClick={() => void inspectAction(action)}><strong>{action.name}</strong><small>{action.service} · {action.description || action.id}</small></button></li>)}</ul> : null}
-      </section>}
-      </section>
-    </div>}
+    {!desktop ? <div className="openconnector-admin__unavailable" role="status">仅桌面应用可查询</div> : <>
+      <div className="openconnector-admin__catalog" ref={catalogRef} hidden={Boolean(selectedProvider)}>
+        <div className="openconnector-admin__toolbar">
+          <label className="openconnector-admin__search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg><input type="search" aria-label="搜索服务" placeholder="搜索服务" value={providerQuery} disabled={busy === "providers"} maxLength={120} autoComplete="off" onChange={(event) => { setProviderQuery(event.target.value); setVisibleProviderCount(PROVIDER_PAGE_SIZE); }} /></label>
+          <span className="openconnector-admin__count" role="status">{busy === "providers" ? "正在读取服务" : providerTotal === null ? "服务目录暂不可用" : `${filteredProviders.length} 个服务${providerLimited ? " · 目录未完整" : ""}`}</span>
+        </div>
+        <div className="openconnector-admin__filters" role="group" aria-label="服务场景">
+          {CONNECTOR_SCENARIOS.map((option) => <button key={option.id} type="button" aria-pressed={scenario === option.id} disabled={busy === "providers" || option.id !== "all" && !scenarioCounts.get(option.id)} onClick={() => { setScenario(option.id); setVisibleProviderCount(PROVIDER_PAGE_SIZE); }}>{option.label}</button>)}
+        </div>
+        {error && !selectedProvider ? <div className="native-inline-alert is-error" role="alert">{error}{busy === null ? <button type="button" onClick={() => void loadProviders()}>重试</button> : null}</div> : null}
+        <ul className="openconnector-admin__grid" aria-label="服务目录" aria-busy={busy === "providers"}>
+          {filteredProviders.slice(0, visibleProviderCount).map((provider) => <li key={provider.service}><button className="openconnector-admin__provider" type="button" disabled={busy === "providers"} onClick={(event) => selectProvider(provider, event.currentTarget)}>
+            <OpenConnectorProviderIcon service={provider.service} displayName={provider.displayName} />
+            <span className="openconnector-admin__provider-name"><strong>{provider.displayName}</strong><small>{connectorScenarioLabel(provider)}</small></span>
+            {connectedServices.has(provider.service) ? <span className="openconnector-admin__connected">已连接</span> : <span className="openconnector-admin__chevron" aria-hidden="true">›</span>}
+          </button></li>)}
+        </ul>
+        {providerTotal !== null && filteredProviders.length === 0 ? <div className="openconnector-admin__empty" role="status">没有匹配的服务<button type="button" onClick={() => { setProviderQuery(""); setScenario("all"); setVisibleProviderCount(PROVIDER_PAGE_SIZE); }}>清除筛选</button></div> : null}
+        {filteredProviders.length > visibleProviderCount ? <button className="openconnector-admin__more" type="button" onClick={() => setVisibleProviderCount((count) => count + PROVIDER_PAGE_SIZE)}>显示更多<span>{Math.min(visibleProviderCount, filteredProviders.length)} / {filteredProviders.length}</span></button> : null}
+      </div>
+      {selectedProvider ? <div className="openconnector-admin__detail">
+        <button type="button" className="openconnector-admin__back" onClick={returnToCatalog}><span aria-hidden="true">←</span> 返回服务</button>
+        <header className="openconnector-admin__identity"><OpenConnectorProviderIcon service={selectedProvider.service} displayName={selectedProvider.displayName} large /><div><h2 ref={detailHeadingRef} tabIndex={-1}>{selectedProvider.displayName}</h2><span>{connectorScenarioLabel(selectedProvider)}<code>{selectedProvider.service}</code></span></div>{selectedProvider.service === "github" ? githubConnected ? <span className="openconnector-admin__connected">已连接</span> : null : <span className="openconnector-admin__scope">只读目录</span>}</header>
+        {selectedProvider.service === "github" ? <OpenConnectorGitHubPanel onConnectionChange={handleConnectionChange} /> : null}
+        <details className="openconnector-admin__operations" open={actionsOpen} onToggle={(event) => {
+          const open = event.currentTarget.open;
+          setActionsOpen(open);
+          if (open && !actionsLoaded && !busy) void loadProviderActions(selectedProvider);
+        }}><summary>操作目录</summary>
+          {error ? <div className="native-inline-alert is-error" role="alert">{error}{busy === null && !actionsLoaded ? <button type="button" onClick={() => void loadProviderActions(selectedProvider)}>重试读取</button> : null}</div> : null}
+          <div className="openconnector-admin__actions" hidden={Boolean(selectedAction)}>
+            <form role="search" onSubmit={(event) => void searchActions(event)}><label><input type="search" aria-label="搜索操作" placeholder="搜索操作" value={actionQuery} disabled={busy !== null} maxLength={200} autoComplete="off" onChange={(event) => changeActionQuery(event.target.value)} /></label><button type="submit" disabled={busy !== null || !actionQuery.trim()}>查找</button></form>
+            <div className="openconnector-admin__count" role="status">{busy === "actions" ? "正在读取操作" : busy === "search" ? "正在查找" : busy === "inspect" ? "正在读取参数" : searched ? `${actions.length} 项操作${limited ? " · 可缩小关键词" : ""}` : ""}</div>
+            {searched && actions.length > 0 ? <ul>{actions.map((action) => <li key={action.id}><button type="button" disabled={busy !== null} onClick={(event) => void inspectAction(action, event.currentTarget)}><strong>{action.name}</strong><small>{action.description || action.id}</small><span aria-hidden="true">›</span></button></li>)}</ul> : null}
+          </div>
+          {selectedAction ? <section className="openconnector-admin__inspect" aria-label={`${selectedAction.action.name} 参数`}>
+            <button type="button" className="openconnector-admin__back" onClick={() => { restoreActionRef.current = true; setSelectedAction(null); }}>← 返回操作</button>
+            <h3 ref={inspectHeadingRef} tabIndex={-1}>{selectedAction.action.name}</h3><code>{selectedAction.action.id}</code>
+            <dl>{selectedAction.fields.map((field) => <div key={field.name}><dt>{field.name}{field.required ? " · 必填" : ""}</dt><dd>{field.description || field.type}</dd></div>)}</dl>
+            {selectedAction.fields.length === 0 ? <small>无需输入参数</small> : null}{selectedAction.limited ? <small>仅显示前 30 项参数</small> : null}
+          </section> : null}
+        </details>
+      </div> : null}
+    </>}
   </section>;
 }

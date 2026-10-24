@@ -10,6 +10,12 @@ export type GitHubOAuthConnection = {
   scopes: string[];
   authType: "oauth2";
 };
+export type GitHubOAuthToken = { hasRefreshToken: boolean; expiresAt: string | null; refreshedAt: string | null };
+export type GitHubConnectionHealth = {
+  status: "unknown" | "ready" | "offline" | "authorization_required";
+  checkedAt: string | null;
+  code?: string;
+};
 export type GitHubOAuthRequest = {
   requestId: string;
   authorizationUrl: string;
@@ -54,10 +60,16 @@ export type GitHubOAuthStatus = {
   connection: GitHubOAuthConnection | null;
   draft: GitHubTestIssueDraft | null;
   receipt: GitHubTestIssueReceipt | null;
+  token?: GitHubOAuthToken;
+  health?: GitHubConnectionHealth;
+  diagnostics?: { acceptanceEnabled: boolean };
 };
 export type GitHubOAuthOperation =
   | { op: "configureOAuth"; clientId: string; clientSecret: string }
   | { op: "startOAuth" }
+  | { op: "checkConnection" }
+  | { op: "refreshOAuth" }
+  | { op: "expireTokenForAcceptance" }
   | { op: "pollOAuth"; requestId: string }
   | { op: "cancelOAuth"; requestId: string }
   | { op: "prepareTestIssue" }
@@ -95,7 +107,7 @@ export function parseGitHubOAuthOperation(value: unknown): GitHubOAuthOperation 
     return { op: "configureOAuth", clientId: value.clientId, clientSecret: value.clientSecret };
   }
   if (keys === "op") {
-    if (value.op === "startOAuth" || value.op === "prepareTestIssue") return { op: value.op };
+    if (["startOAuth", "prepareTestIssue", "checkConnection", "refreshOAuth", "expireTokenForAcceptance"].includes(value.op as string)) return { op: value.op } as GitHubOAuthOperation;
   }
   if ((value.op === "pollOAuth" || value.op === "cancelOAuth") && keys === "op,requestId" && isGitHubRequestId(value.requestId)) return { op: value.op, requestId: value.requestId };
   if (value.op === "createTestIssue" && keys === "draftId,op" && isGitHubRequestId(value.draftId)) return { op: "createTestIssue", draftId: value.draftId };
@@ -106,6 +118,19 @@ export function parseGitHubOAuthOperation(value: unknown): GitHubOAuthOperation 
 export function isGitHubOAuthConnection(value: unknown): value is GitHubOAuthConnection {
   return object(value) && only(value, ["id", "login", "accountId", "scopes", "authType"]) && isGitHubRequestId(value.id) && login(value.login) && accountId(value.accountId)
     && value.authType === "oauth2" && Array.isArray(value.scopes) && value.scopes.length === 1 && value.scopes[0] === "public_repo";
+}
+
+export function isGitHubOAuthToken(value: unknown): value is GitHubOAuthToken {
+  return object(value) && only(value, ["hasRefreshToken", "expiresAt", "refreshedAt"])
+    && typeof value.hasRefreshToken === "boolean" && (value.expiresAt === null || timestamp(value.expiresAt))
+    && (value.refreshedAt === null || timestamp(value.refreshedAt));
+}
+
+export function isGitHubConnectionHealth(value: unknown): value is GitHubConnectionHealth {
+  return object(value) && only(value, ["status", "checkedAt", "code"])
+    && ["unknown", "ready", "offline", "authorization_required"].includes(value.status as string)
+    && (value.checkedAt === null || timestamp(value.checkedAt))
+    && (value.code === undefined || typeof value.code === "string" && /^github_[a-z_]{1,70}$/u.test(value.code));
 }
 
 export function isGitHubCallbackUrl(value: unknown): value is string {
@@ -167,5 +192,8 @@ export function isGitHubOAuthStatus(value: unknown): value is GitHubOAuthStatus 
     && (value.authorization === null || isGitHubOAuthRequest(value.authorization))
     && (value.connection === null || isGitHubOAuthConnection(value.connection))
     && (value.draft === null || isGitHubTestIssueDraft(value.draft))
-    && (value.receipt === null || isGitHubTestIssueReceipt(value.receipt));
+    && (value.receipt === null || isGitHubTestIssueReceipt(value.receipt))
+    && (value.token === undefined || isGitHubOAuthToken(value.token))
+    && (value.health === undefined || isGitHubConnectionHealth(value.health))
+    && (value.diagnostics === undefined || object(value.diagnostics) && only(value.diagnostics, ["acceptanceEnabled"]) && typeof value.diagnostics.acceptanceEnabled === "boolean");
 }

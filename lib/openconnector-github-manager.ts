@@ -7,7 +7,7 @@ import { writePrivateFileAtomicSync } from "./atomic-file";
 import { loadOrCreateGitHubRuntimeKey } from "./desktop-keychain";
 import { readDesktopSystemProxy, type DesktopSystemProxy } from "./desktop-system-proxy";
 import {
-  isGitHubCallbackUrl, isGitHubOAuthConnection, isGitHubOAuthRequest, isGitHubOAuthStatus,
+  isGitHubCallbackUrl, isGitHubOAuthConnection, isGitHubOAuthRequest, isGitHubOAuthStatus, isGitHubOAuthToken,
   isGitHubTestIssueDraft, isGitHubTestIssueReceipt, makeTestIssueInput, parseGitHubOAuthOperation,
   type GitHubOAuthConnection, type GitHubOAuthOperation, type GitHubOAuthStatus, type GitHubTestIssueReceipt,
 } from "./openconnector-github-contract";
@@ -20,11 +20,11 @@ export type GitHubManagerOptions = {
   nodeExecutable?: string;
   timeoutMs?: number;
   getEncryptionKey?: (databaseExists: boolean) => Promise<string>;
-  hostFactory?: (runtimeDir: string, key: string, network?: DesktopSystemProxy) => Promise<GitHubHostClient>;
+  hostFactory?: (runtimeDir: string, key: string, network?: DesktopSystemProxy, acceptanceEnabled?: boolean) => Promise<GitHubHostClient>;
   readSystemProxy?: () => Promise<DesktopSystemProxy | undefined>;
   proxyEnv?: NodeJS.ProcessEnv;
 };
-type SavedState = Omit<GitHubOAuthStatus, "supported" | "callbackUrl"> & { version: 1 };
+type SavedState = Omit<GitHubOAuthStatus, "supported" | "callbackUrl" | "diagnostics"> & { version: 1 };
 type HostEntry = { client: GitHubHostClient; root: string };
 
 export class GitHubManagerError extends Error {
@@ -41,10 +41,13 @@ declare global {
 const hosts = globalThis.__edupiGitHubOAuthHosts ??= new Map<string, Promise<HostEntry>>();
 const active = globalThis.__edupiGitHubOAuthActive ??= new Set<string>();
 
-const empty = (): SavedState => ({ version: 1, clientConfigured: false, clientId: null, authorization: null, connection: null, draft: null, receipt: null });
+const empty = (): SavedState => ({ version: 1, clientConfigured: false, clientId: null, authorization: null, connection: null, draft: null, receipt: null,
+  token: { hasRefreshToken: false, expiresAt: null, refreshedAt: null }, health: { status: "unknown", checkedAt: null } });
+const acceptanceEnabled = () => process.env.EDUPI_OPENCONNECTOR_GITHUB_ACCEPTANCE === "1";
 function project(state: SavedState, callbackUrl: string | null): GitHubOAuthStatus {
   return { supported: true, clientConfigured: state.clientConfigured, clientId: state.clientId, callbackUrl,
-    authorization: state.authorization, connection: state.connection, draft: state.draft, receipt: state.receipt };
+    authorization: state.authorization, connection: state.connection, draft: state.draft, receipt: state.receipt,
+    token: state.token ?? empty().token, health: state.health ?? empty().health, diagnostics: { acceptanceEnabled: acceptanceEnabled() } };
 }
 async function resolveDirectory(options: GitHubManagerOptions): Promise<string | null> {
   const parent = options.stateDir ?? process.env.PI_DESKTOP_STATE_DIR;
@@ -73,7 +76,8 @@ async function loadState(dir: string): Promise<SavedState> {
     || value.draft && (!isGitHubTestIssueDraft(value.draft) || value.draft.inputHash !== inputHash(value.draft.input))) fail("github_state_invalid");
   const status = value as unknown as SavedState;
   return { version: 1, clientConfigured: status.clientConfigured, clientId: status.clientId, authorization: status.authorization,
-    connection: status.connection, draft: status.draft, receipt: status.receipt };
+    connection: status.connection, draft: status.draft, receipt: status.receipt,
+    token: status.token ?? empty().token, health: status.health ?? empty().health };
 }
 function saveState(dir: string, state: SavedState): void { writePrivateFileAtomicSync(path.join(dir, "state.json"), JSON.stringify(state) + "\n"); }
 function recoverPending(dir: string, state: SavedState): void {
@@ -94,6 +98,7 @@ async function withLock<T>(dir: string, operation: () => Promise<T>): Promise<T>
 }
 
 function localProxy(value: string): string | null {
+  if (value.length > 256 || /[\u0000-\u0020\u007f]/u.test(value)) return null;
   try {
     const u = new URL(value), port = Number(u.port || "80");
     return u.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(u.hostname) && Number.isInteger(port) && port > 0 && port <= 65535
@@ -102,6 +107,12 @@ function localProxy(value: string): string | null {
 }
 async function networkOptions(options: GitHubManagerOptions): Promise<DesktopSystemProxy | undefined> {
   const env = options.proxyEnv ?? process.env;
+  const override = env.EDUPI_OPENCONNECTOR_GITHUB_PROXY;
+  if (override !== undefined) {
+    const proxy = localProxy(override);
+    if (!proxy) fail("github_proxy_unsupported");
+    return { httpProxy: proxy, httpsProxy: proxy, noProxy: "localhost,127.0.0.1,::1,[::1]" };
+  }
   const http = env.http_proxy || env.HTTP_PROXY, https = env.https_proxy || env.HTTPS_PROXY;
   if (http || https) {
     const httpProxy = http ? localProxy(http) : undefined, httpsProxy = https ? localProxy(https) : undefined;
@@ -126,7 +137,7 @@ async function spawnHost(dir: string, options: GitHubManagerOptions, onTerminate
   try { key = await (options.getEncryptionKey ?? ((exists: boolean) => loadOrCreateGitHubRuntimeKey({ databaseExists: exists })))(databaseExists); }
   catch { fail("github_keychain_unavailable"); }
   if (!/^[a-f0-9]{64}$/u.test(key)) fail("github_keychain_unavailable");
-  if (options.hostFactory) return { client: await options.hostFactory(runtimeDir, key, network), root };
+  if (options.hostFactory) return { client: await options.hostFactory(runtimeDir, key, network, acceptanceEnabled()), root };
   const node = options.nodeExecutable ?? process.execPath;
   if (!path.isAbsolute(node)) fail();
   const child = spawn(node, [path.join(root, "github-host.mjs"), runtimeDir], {
@@ -168,7 +179,7 @@ async function spawnHost(dir: string, options: GitHubManagerOptions, onTerminate
     pending.set(id, { resolve, reject, timer });
     child.stdin.write(JSON.stringify({ id, ...operation }) + "\n");
   });
-  const init = await request({ op: "init", encryptionKey: key, ...(network ? { network } : {}) });
+  const init = await request({ op: "init", encryptionKey: key, acceptanceEnabled: acceptanceEnabled(), ...(network ? { network } : {}) });
   key = "";
   if (!record(init) || init.ready !== true || !isGitHubCallbackUrl(init.callbackUrl)) { terminate(); fail(); }
   const client: GitHubHostClient = { callbackUrl: init.callbackUrl, request, close: async () => {
@@ -196,11 +207,16 @@ export async function closeGitHubOAuthHost(stateDir: string): Promise<void> {
 }
 
 async function refreshConnection(client: GitHubHostClient, state: SavedState): Promise<GitHubOAuthConnection | null> {
-  const data = await client.request({ op: "status", ...(state.connection ? { connectionId: state.connection.id } : {}) });
-  if (!record(data) || typeof data.clientConfigured !== "boolean") fail();
-  state.clientConfigured = data.clientConfigured;
+  if (!state.connection) fail("github_oauth_connection_required");
+  const data = await client.request({ op: "checkConnection", connectionId: state.connection.id });
+  if (!record(data)) fail();
   if (data.connection === null || data.connection === undefined) return null;
   if (!isGitHubOAuthConnection(data.connection)) fail("github_connection_changed");
+  if (data.token !== undefined) {
+    if (!isGitHubOAuthToken(data.token)) fail();
+    state.token = data.token;
+  }
+  state.health = { status: "ready", checkedAt: new Date().toISOString() };
   return data.connection;
 }
 
@@ -211,13 +227,7 @@ export async function readGitHubOAuthStatus(options: GitHubManagerOptions = {}):
     return await withLock(dir, async () => {
       const state = await loadState(dir);
       recoverPending(dir, state);
-      const client = await hostFor(dir, options);
-      if (state.connection) {
-        const actual = await refreshConnection(client, state);
-        if (!actual || actual.id !== state.connection.id || actual.accountId !== state.connection.accountId) state.connection = null;
-      }
-      saveState(dir, state);
-      return project(state, client.callbackUrl);
+      return project(state, null);
     });
   } catch (error) {
     if (error instanceof GitHubManagerError && error.code === "github_oauth_busy") return project(await loadState(dir), null);
@@ -237,9 +247,23 @@ function applyReceiptData(receipt: GitHubTestIssueReceipt, data: unknown): GitHu
   return next;
 }
 
+function sameConnection(actual: GitHubOAuthConnection | null, expected: GitHubOAuthConnection | null): boolean {
+  return Boolean(actual && expected && actual.id === expected.id && actual.accountId === expected.accountId && actual.login === expected.login);
+}
+function rememberFailure(state: SavedState, error: unknown): void {
+  const code = error instanceof GitHubManagerError ? error.code : "github_oauth_unavailable";
+  const authorization = ["github_authorization_required", "github_oauth_connection_required", "github_account_changed", "github_connection_changed", "github_refresh_token_required", "github_oauth_request_missing"].includes(code);
+  const offline = ["github_connection_offline", "github_action_failed", "github_oauth_unavailable", "github_host_unavailable", "github_host_timeout", "github_oauth_start_failed"].includes(code);
+  if (authorization || offline) state.health = { status: authorization ? "authorization_required" : "offline", checkedAt: new Date().toISOString(), code };
+  else if (["github_issue_mismatch", "github_issue_not_found_yet", "github_write_audit_unavailable", "github_readback_unavailable", "github_audit_unavailable", "github_runtime_version_unsupported"].includes(code)) {
+    state.health = { status: "unknown", checkedAt: new Date().toISOString(), code };
+  }
+}
+
 export async function runGitHubOAuthOperation(input: GitHubOAuthOperation, options: GitHubManagerOptions = {}): Promise<GitHubOAuthStatus> {
   const operation = parseGitHubOAuthOperation(input);
   if (!operation) fail("invalid_github_request");
+  if (operation.op === "expireTokenForAcceptance" && !acceptanceEnabled()) fail("github_acceptance_disabled");
   const dir = await resolveDirectory(options);
   if (!dir) fail("github_oauth_unsupported");
   return withLock(dir, async () => {
@@ -249,63 +273,95 @@ export async function runGitHubOAuthOperation(input: GitHubOAuthOperation, optio
       if (state.receipt.draftId !== operation.draftId) fail("github_request_conflict");
       return project(state, null);
     }
-    const client = await hostFor(dir, options);
-    if (operation.op === "configureOAuth") {
-      if (state.receipt) fail("github_write_already_started");
-      const result = await client.request({ op: "configure", clientId: operation.clientId, clientSecret: operation.clientSecret });
-      if (!record(result) || result.clientConfigured !== true) fail();
-      state.clientConfigured = true; state.clientId = operation.clientId; state.authorization = null; state.connection = null; state.draft = null;
-    } else if (operation.op === "startOAuth") {
-      if (!state.clientConfigured || state.receipt) fail(state.receipt ? "github_write_already_started" : "github_client_required");
-      const result = await client.request({ op: "startOAuth" });
-      if (!record(result) || !isGitHubOAuthRequest({ ...result, status: "pending" })) fail();
-      state.authorization = { requestId: result.requestId as string, authorizationUrl: result.authorizationUrl as string, expiresAt: result.expiresAt as string, status: "pending" };
-      state.connection = null; state.draft = null;
-    } else if (operation.op === "pollOAuth" || operation.op === "cancelOAuth") {
-      if (state.authorization?.requestId !== operation.requestId) fail("github_authorization_changed");
-      if (operation.op === "cancelOAuth") {
-        await client.request({ op: "cancelOAuth", requestId: operation.requestId });
-        state.authorization.status = "cancelled";
-      } else if (state.authorization.status === "pending") {
-        const result = await client.request({ op: "pollOAuth", requestId: operation.requestId });
-        if (!record(result) || !["pending", "connected", "failed", "expired"].includes(result.status as string)) fail();
-        state.authorization.status = result.status as "pending" | "connected" | "failed" | "expired";
-        if (result.status === "connected") {
-          if (!isGitHubOAuthConnection(result.connection)) fail("github_connection_changed");
-          state.connection = result.connection;
-        }
-      }
-    } else {
-      const connection = await refreshConnection(client, state);
-      if (!connection || !state.connection || connection.id !== state.connection.id || connection.accountId !== state.connection.accountId
-        || connection.login !== state.connection.login) fail("github_connection_changed");
-      if (operation.op === "prepareTestIssue") {
-        if (state.receipt) return project(state, client.callbackUrl);
-        if (!state.draft) {
-          const requestId = randomUUID(), canonical = makeTestIssueInput(requestId);
-          state.draft = { id: randomUUID(), requestId, connectionId: connection.id, accountId: connection.accountId, login: connection.login,
-            input: canonical, inputHash: inputHash(canonical), createdAt: new Date().toISOString() };
+    try {
+      const client = await hostFor(dir, options);
+      if (operation.op === "checkConnection") {
+        if (!sameConnection(await refreshConnection(client, state), state.connection)) fail("github_connection_changed");
+      } else if (operation.op === "refreshOAuth" || operation.op === "expireTokenForAcceptance") {
+        if (!state.connection) fail("github_oauth_connection_required");
+        const result = await client.request({ op: operation.op, connectionId: state.connection.id });
+        if (!record(result) || !isGitHubOAuthToken(result.token)) fail();
+        if (operation.op === "refreshOAuth") {
+          if (!isGitHubOAuthConnection(result.connection) || !sameConnection(result.connection, state.connection)) fail("github_connection_changed");
+          state.health = { status: "ready", checkedAt: new Date().toISOString() };
+        } else state.health = { status: "unknown", checkedAt: null };
+        state.token = result.token;
+      } else if (operation.op === "configureOAuth") {
+        if (state.receipt) fail("github_write_already_started");
+        const result = await client.request({ op: "configure", clientId: operation.clientId, clientSecret: operation.clientSecret });
+        if (!record(result) || result.clientConfigured !== true) fail();
+        state.clientConfigured = true; state.clientId = operation.clientId; state.authorization = null; state.connection = null; state.draft = null;
+        state.token = empty().token; state.health = empty().health;
+      } else if (operation.op === "startOAuth") {
+        if (!state.clientConfigured) fail("github_client_required");
+        const result = await client.request({ op: "startOAuth", ...(state.connection ? { connectionId: state.connection.id, expectedAccountId: state.connection.accountId } : {}) });
+        if (!record(result) || !isGitHubOAuthRequest({ ...result, status: "pending" })) fail();
+        state.authorization = { requestId: result.requestId as string, authorizationUrl: result.authorizationUrl as string, expiresAt: result.expiresAt as string, status: "pending" };
+        state.health = { status: "unknown", checkedAt: null };
+      } else if (operation.op === "pollOAuth" || operation.op === "cancelOAuth") {
+        if (state.authorization?.requestId !== operation.requestId) fail("github_authorization_changed");
+        if (operation.op === "cancelOAuth") {
+          await client.request({ op: "cancelOAuth", requestId: operation.requestId });
+          state.authorization.status = "cancelled";
+        } else if (state.authorization.status === "pending") {
+          const result = await client.request({ op: "pollOAuth", requestId: operation.requestId });
+          if (!record(result) || !["pending", "connected", "failed", "expired"].includes(result.status as string)) fail();
+          if (result.status === "connected") {
+            if (!isGitHubOAuthConnection(result.connection) || state.connection && !sameConnection(result.connection, state.connection)) {
+              state.authorization.status = "failed";
+              fail("github_connection_changed");
+            }
+            state.connection = result.connection;
+            if (result.token !== undefined) {
+              if (!isGitHubOAuthToken(result.token)) fail();
+              state.token = result.token;
+            }
+            state.health = { status: "ready", checkedAt: new Date().toISOString() };
+          }
+          state.authorization.status = result.status as "pending" | "connected" | "failed" | "expired";
+          if (result.status === "failed" || result.status === "expired") {
+            state.health = { status: "authorization_required", checkedAt: new Date().toISOString(), code: "github_authorization_required" };
+            if (typeof result.code === "string" && /^github_[a-z_]{1,70}$/u.test(result.code)) rememberFailure(state, new GitHubManagerError(result.code));
+          }
         }
       } else {
-        const draft = state.draft;
-        if (!draft || draft.connectionId !== connection.id || draft.accountId !== connection.accountId || draft.login !== connection.login
-          || draft.inputHash !== inputHash(draft.input)) fail("github_draft_changed");
-        if (operation.op === "createTestIssue") {
-          if (draft.id !== operation.draftId) fail("github_draft_changed");
-          state.receipt = { id: draft.requestId, draftId: draft.id, requestId: draft.requestId, connectionId: connection.id,
-            accountId: connection.accountId, login: connection.login, status: "pending", createdAt: new Date().toISOString(), auditPersisted: false, readbackVerified: false };
-          saveState(dir, state);
-          try { state.receipt = applyReceiptData(state.receipt, await client.request({ op: "createTestIssue", connectionId: connection.id, requestId: draft.requestId, input: draft.input })); }
-          catch { state.receipt = { ...state.receipt, status: "unknown", completedAt: new Date().toISOString(), code: "github_write_unknown", auditPersisted: false, readbackVerified: false }; }
+        const connection = await refreshConnection(client, state);
+        if (!sameConnection(connection, state.connection) || !connection) fail("github_connection_changed");
+        if (operation.op === "prepareTestIssue") {
+          if (state.receipt) return project(state, client.callbackUrl);
+          if (!state.draft) {
+            const requestId = randomUUID(), canonical = makeTestIssueInput(requestId);
+            state.draft = { id: randomUUID(), requestId, connectionId: connection.id, accountId: connection.accountId, login: connection.login,
+              input: canonical, inputHash: inputHash(canonical), createdAt: new Date().toISOString() };
+          }
         } else {
-          const receipt = state.receipt;
-          if (!receipt || operation.receiptId !== receipt.id) fail("github_request_conflict");
-          try { state.receipt = applyReceiptData(receipt, await client.request({ op: "reconcileIssue", connectionId: connection.id, requestId: draft.requestId, input: draft.input, ...(receipt.issue ? { issueNumber: receipt.issue.number } : {}) })); }
-          catch { state.receipt = { ...receipt, status: "unknown", code: "github_readback_unavailable", completedAt: new Date().toISOString(), readbackVerified: false }; }
+          const draft = state.draft;
+          if (!draft || draft.connectionId !== connection.id || draft.accountId !== connection.accountId || draft.login !== connection.login
+            || draft.inputHash !== inputHash(draft.input)) fail("github_draft_changed");
+          if (operation.op === "createTestIssue") {
+            if (draft.id !== operation.draftId) fail("github_draft_changed");
+            state.receipt = { id: draft.requestId, draftId: draft.id, requestId: draft.requestId, connectionId: connection.id,
+              accountId: connection.accountId, login: connection.login, status: "pending", createdAt: new Date().toISOString(), auditPersisted: false, readbackVerified: false };
+            saveState(dir, state);
+            try { state.receipt = applyReceiptData(state.receipt, await client.request({ op: "createTestIssue", connectionId: connection.id, requestId: draft.requestId, input: draft.input })); }
+            catch (error) { rememberFailure(state, error); state.receipt = { ...state.receipt, status: "unknown", completedAt: new Date().toISOString(), code: "github_write_unknown", auditPersisted: false, readbackVerified: false }; }
+          } else {
+            const receipt = state.receipt;
+            if (!receipt || operation.receiptId !== receipt.id) fail("github_request_conflict");
+            const result = applyReceiptData(receipt, await client.request({ op: "reconcileIssue", connectionId: connection.id, requestId: draft.requestId, input: draft.input, ...(receipt.issue ? { issueNumber: receipt.issue.number } : {}) }));
+            if (receipt.status === "succeeded" && result.status !== "succeeded") fail(result.code ?? "github_readback_unavailable");
+            state.receipt = result;
+          }
         }
       }
+      saveState(dir, state);
+      return project(state, client.callbackUrl);
+    } catch (error) {
+      if (operation.op === "pollOAuth" && state.authorization?.status === "pending" && error instanceof GitHubManagerError
+        && ["github_account_changed", "github_connection_changed", "github_authorization_required", "github_oauth_request_missing"].includes(error.code)) state.authorization.status = "failed";
+      rememberFailure(state, error);
+      saveState(dir, state);
+      throw error;
     }
-    saveState(dir, state);
-    return project(state, client.callbackUrl);
   });
 }
