@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-10-24 Zod源码修补通过，取代下方待处理状态：PR377最终head a57513f1正常合入b260e919，与新CI实际checkout26bebb53同树d2b1b780。锁仅Zod4.6.5→4.6.7三字段变化，原OTEL optional peer保留；新增回归旧三项红/新定向四项绿、六类有界集合提前拒绝、真实MCP内存调用、完整lint/branding/type通过，独立审阅无新增P0–P2。新CI仍因既有Undici与Rust报告失败、后续应用步骤skipped，不称全绿；同公告原锁2high7mod→新锁1high7mod，除Zod外结果逐字段相同。GitHub告警34首读仍open待后台同步，未伪记关闭；不扩大其他包升级、不打包安装清理、Windows不动。[本轮证据](2026-09-07-signed-updates.md#2026-10-24-zod高危修补)。
+
 2026-10-24 Mac原生编译门通过，取代下方同日的1.88/未编译状态：按新授权将本机默认Rust升级至精确1.90.0并保留旧1.88；原树`5deaabf5`及原`.78`准备差异保持，Rust源码/依赖锁未改。arm64调试与现有release优化配置的locked/offline编译、链接均通过，无编译警告或错误；全部test targets编译成功，安全白名单原生单测37pass/0fail，21项仅编译。为遵守不打包，进程级配置只禁用bundle及包资源暂存，默认功能与权限配置不降级；不启动或安装客户端，未做真实TCC或公证，不称完整生产包验证。target约5.8GiB及新工具链按要求保留，未清理、未派Windows或安装包CI。[本轮证据](2026-09-07-signed-updates.md#2026-10-24-rust190与mac原生编译)。
 
 2026-10-24 新增Node风险待处理：推送提示并只读核实Zod4.6.5高危告警34，锁/安装版本一致，已有Dependabot PR377更新4.6.7；本轮Rust编译任务未消费该更新，不以原生编译成功或旧npm报告0覆盖新告警。[准确边界](2026-09-07-signed-updates.md#2026-10-24-rust190与mac原生编译)。
