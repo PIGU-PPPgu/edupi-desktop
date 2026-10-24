@@ -1,5 +1,12 @@
 # 自动下载安装
 
+## 2026-10-24 官方目录与恢复本机验收通过
+
+- 唯一 `/Applications/EduPi.app` 已换入正常 `.77` 预览 `fd007801`，Core03、原updater公钥和13326个Core/壳文件保持。Team BY3XZG2839，CDHash `ee251e2a50819bd5ad313532e664efa0bffc35d8`，主程序SHA `345f533347c53fbbb375f3226518b5a61970c05144f00a77805fa8345599c08b`，7个原生资源与整App签名/操作后strict通过；未公证、合并、发布或修改feed/tag。
+- 官方Logo/中文分类搜索/详情键盘返回与单结果布局实机通过。真实手动refresh、受控本地到期真实SDK自动refresh、GitHub路径断网失败保留回执、离线冷启/恢复、同连接重新授权与原请求去重均完成；#379、写入审计、dispatch始终各1。自然等待8小时、首次未知写响应丢失等边界未计通过。
+- 最终验收环境键移除、到期测试按钮消失、中继停止；停掉后正常App检查/回读/去重仍通过。2526通过/40环境跳过、类型/lint/独立复核、高危补丁门通过，剩6low。Core/投影/Kernel ready、51/160/24/6与教师记录/配置保持，运行日志和custom追加另记。
+- 共清理8个本轮生成目录/临时旧App，约5.13GiB、观测空闲增5.25GiB；临时App副本0，原`.70`及数据/证据/源码保留。中途锁屏为已解除的历史限制，未停在目录或模拟端点。[逐项验收](../acceptance/2026-10-23-admin-settings-redesign.md#2026-10-24-官方目录与连接恢复验收通过)。
+
 ## 2026-10-24 GitHub OAuth 写入与重启通过
 
 - 当前唯一 `/Applications/EduPi.app` 为源码补丁 `45abdc9e` 的本地 `.77` 签名预览；server 基线 `ac693c14`、Core03 与其余 53,588 文件保持，实际只更换 GitHub host 并重签。修复 GitHub 真回调的固定 `iss` 被未知参数门误拒；回归先红后绿 7/7，无跳过，独立复核同组通过。Team `BY3XZG2839`，CDHash `579b10bfb551b2b5590bf696ad4f4b1262de31d6`，主程序 SHA-256 `e90925c4cac191eb2d76fe6f3d3adb59061670ffa2894745ef61d11140db73ed`，安装及操作后 strict codesign 通过；未公证、合并、发布或改 feed。

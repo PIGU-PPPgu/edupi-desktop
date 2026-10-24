@@ -1,5 +1,45 @@
 # 管理中心与设置重做验收
 
+## 2026-10-24 官方目录与连接恢复验收通过
+
+本节取代下方正常 OAuth 与中途锁屏快照的当前状态。**本次 macOS 目录、真实手动续期、受控到期后的真实 SDK 自动续期、GitHub 路径离线/冷启动/恢复、同 ID 重新授权和原请求去重均验收通过。** 最终正常版 `fd007801` 已安装到唯一 `/Applications/EduPi.app`，验收专用环境键已移除，中继已停止；应用停在新版服务目录。未新增第二个测试 Issue。
+
+### 目录与用途
+
+- GitHub 是上一轮指定的授权/写入验收样例。日常目录现在先展示服务品牌与连接入口，测试 Issue、执行 ID 和续期操作收进“连接诊断”。
+- 核对 [OpenConnector 原版图标插件](https://github.com/oomol-lab/open-connector/blob/c6f55b58f98bae95c14d0848eb612dfa09b80291/web/provider-icons-plugin.ts) 和官方目录后，补入固定 Logo/别名映射，仅合并本地已有的 1554 个能力。1549 个 Logo 符合官方 CDN 固定路径，88 个本地服务有官方别名，5 项字母兜底；这是元数据覆盖数，不是逐一加载全部图片。来源、过滤与商标边界见 [说明](../../lib/openconnector-provider-metadata.md)。
+- 原生截图看到 GitHub、飞书、钉钉、企业微信、腾讯文档、WPS、Gmail、Google Drive/Docs/Sheets/Slides/Calendar、Outlook 等 Logo。中文搜索“飞书”3项、“钉钉”2项、“谷歌云盘”1项，沟通分类与搜索可叠加。打开 Feishu 同页详情后返回，搜索/分类/原按钮焦点保持；Enter打开、Shift+Tab到返回、Enter返回均实际通过。
+- Workday的`WO`兜底可见；实机发现的单结果空灰格以 `auto-fill → auto-fit` 修复。最终正常版再次搜索 Workday，单项已自然铺满，没有余下灰格；最终目录默认不展开测试细节。
+
+### 真实恢复流程
+
+| 操作 | 预期 | 实际结果 |
+| --- | --- | --- |
+| 原生检查连接 → 刷新授权 | 真正使用已有 refresh token 向 GitHub 交换并验证账号 | 初始真实 expiry `2026-10-24T19:24:37.839Z`；手动刷新后 expiry `2026-10-24T23:15:00.964Z`、refreshedAt `15:15:00.964Z`，连接 ready。原账号 `59789742`、连接 `6ad11879-eac9-4678-8a81-c20f65f9c05d` 与业务 scope `public_repo` 保持；未输出令牌。 |
+| 原生触发本地到期 → 切断 GitHub 路径 → 检查/读 Issue | SDK进入自动续期分支，真实网络失败保留事实 | 验收开关将本地 expiry提前至 `15:15:58.924Z`；专用CONNECT中继拒绝并关闭既有tunnel，检查与读回失败，页面显示“连接中断/重试连接”，原成功回执/issue/审计不降级。refreshedAt仍为手动那次，未冒称失败时续期成功。 |
+| 离线点击验证去重 | 重放同一draftId，不再写入 | 返回相同receipt与写入ID；中继拒绝计数和已建立tunnel计数均不增加，成功create_issue审计仍1，dispatch仍1。 |
+| 保持离线 → 正常Quit → 真正冷启动 → 打开目录和回执 | 离线也能读取已保存状态 | Quit后App/helper为0，主PID `97578 → 45149`；目录1554可读，同一授权、#379与成功回执可见。GET投影没有启动GitHub host，也没有新增网络尝试。 |
+| 恢复中继 → 原生重试连接 | 原SDK根据本地到期时间真正自动刷新 | 新refreshedAt `2026-10-24T15:27:37.278Z`，expiry `23:27:37.278Z`，health恢复ready。使用真实GitHub刷新交换，不是模拟端点；这是受控本地到期，不是自然等待8小时。 |
+| 已有回执时重新授权 → 回读 → 验证去重 | 同连接恢复，原写入事实不变 | 真实新OAuth request连接成功，连接ID/账号仍相同，scope仍public_repo；原receipt/draft保留。回读ID变为 `559c655a-e3ce-4517-ba24-bd4ba1594337`，写入ID仍 `f69373e7-d729-48d5-997d-9c34365824e1`，线上重放未增加写审计。 |
+| 安装正常版 → 移除验收配置 → 停中继 → 再检查/回读/重放 | 成品不依赖测试代理或到期入口 | Info中两个验收环境键均无，原生“触发本地到期”按钮消失，中继PID43540和51327监听停止。停掉后实际检查ready，再读ID `5dbcad4f-68e3-42be-98d3-4be3e5cbe15b`；同回执/写入ID保留。独立远端核对、写审计和dispatch始终各1，只有原 [TEST #379](https://github.com/PIGU-PPPgu/edupi-desktop/issues/379)。 |
+
+### 实现与检查
+
+- GET只读本地持久状态，不用网络可用性决定能否展示历史回执。续期采用固定SDK `1.6.5` 官方内部service/store和CAS；新授权在SDK保存前核对固定账号及可信数字ID。没有恢复旧刷新令牌快照。
+- 独立复核发现并修复了恢复GET无截止、429/503误判为凭据失效、错误账号先覆盖旧凭据。源代码批次 `887b68a0` 全套 **2526通过、40环境跳过、0失败**；类型、完整lint、差异检查通过。`fd007801`仅追加一行CSS修正，13项目录定向与最终原生布局复验通过，未据此冒称重跑一遍全套。
+- 初始依赖审计2high/7moderate/6low失败保留；仅补既有Undici `8.12.2`、Nodemailer `10.1.4`、Zod锁版本 `4.6.7`，SDK保持1.6.5。补丁后high门通过，剩6项既有数学链低危。
+- 断网仅作用于GitHub host，TLS透传，不记录请求头/正文；系统代理和其他应用网络未改。SDK错误账号/刷新响应异常等隔离回归不当作真人实服证据。
+- 中途Mac锁屏导致桌面工具拒绝操作，之后实际AX访问恢复，再继续完成以上流程。`locked-resume-state.json`等false/待验快照保留为历史，最终结论以 `recovery-native-final-proof.json` 为准。
+
+### 最终安装、保护和清理
+
+- 唯一安装为本地0.3.77签名预览，源码 `fd007801038acfbe264f019ef16d1fd29df7044d`，Core `03bbb893bb609eb68513a65cf4fd808ab8aa30ed`。Team `BY3XZG2839`、CDHash `ee251e2a50819bd5ad313532e664efa0bffc35d8`，主程序SHA256 `345f533347c53fbbb375f3226518b5a61970c05144f00a77805fa8345599c08b`，host SHA256 `00bed1f04691b975d9fbc80740a95e3e8e19c433db7091c3905b39d47fcd47ef`。7个原生资源和整App重签，13326个Core/壳其余文件及原updater公钥保持；最终操作和清理后strict签名通过。未公证、合并或公开发布。
+- Core/投影/Kernel ready，51学生/160任务/24校历/6课表，external_send=false。317保护文件无增删，教师记录、模型/认证/JEV/GitHub/UI配置保持。Runtime/提醒运行态单列；桥接日志追加1551字节、运行日志追加1106字节、原会话追加1593字节/6custom，原前缀均保持，没有回写用户文件消除差异。
+- 删除本轮6个生成缓存/资源/依赖目录和2份临时旧App，合计目录占用约 **5.13GiB**，系统可用空间观测增约 **5.25GiB**；任务临时App副本为0，中继已退出。只保留已安装正常预览、原`.70`回退、源码、真实凭据/数据和证据；既有Core工作树/依赖未删除。
+- 未验边界：自然等待完整8小时过期、首次POST已被接受但响应丢失的真实未知写恢复、真实错误账号/本地身份metadata损坏和其他平台。成功回执重放不等于首次未知写恢复；5个服务的字母兜底及未逐一加载全部1549张图片不伪报为全图标通过。R23通用Core grant/Receipt与受管浏览器欠项继续保留。
+
+证据根 `~/edupi-install-checkpoints/settings-redesign-20261023/oauth-recovery-catalog-20261024/evidence/`：`recovery-native-final-proof.json`汇总断言；各阶段为`native-initial-check`、`native-manual-refresh`、`native-locally-expired`、`native-offline-before/after-replay`、`native-offline-cold-start`、`native-offline-ui-restored`、`native-online-auto-refresh`、`native-reauthorization-observed`、`native-online-after-replay`、`normal-after-relay-stop`、`normal-final-before/after-replay`的JSON；`normal-native-gates.json`、`relay-stopped.json`、`remote-normal-final.json`、`normal-installed-preview.json`、`recovery-final-data-protection.json`、`build-cleanup.json`、`validation-app-cleanup.json`。实机图片为`final-catalog-native.png`、`normal-workday-fit.png`、`native-offline-replay.png`与`native-offline-cold-receipt.png`。
+
 ## 2026-10-24 GitHub OAuth 写入与重启验收通过
 
 本节取代下方首次安装的外部阻塞状态。用户已在 GitHub 注册 OAuth 客户端、生成并在真实应用保存凭据、完成授权；本机应用随后完成 **OAuth → 明确标记的测试 issue → 独立回读 → 真退出重启 → 同一回执保留 → 再次回读且无重复创建**。此管理页固定测试子项验收通过，R23 通用 Core grant/Receipt 和其他服务不因此完成。
