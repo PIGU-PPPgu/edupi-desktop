@@ -1,5 +1,14 @@
 # 自动下载安装
 
+## 2026-10-24 Zod高危修补
+
+- 本项取代下方Zod待处理记录。现有[PR377](https://github.com/PIGU-PPPgu/edupi-desktop/pull/377)在原分支验证后正常合入`b260e91973e125b44d35837b271831fe57a593b7`；最终head `a57513f1fc8d3c0c5ef46df2ed906dc8647fb7dc`与合并树均为`d2b1b780d24082a8cb3722bc6d6ccb5a13dac968`。相对实际main基线`ebe59381`仅修改Zod锁项和安全回归；保留原bot ancestry，以普通FF更新原feature和既有bot分支，没有替代分支、force/admin/审计豁免或规则变更。原7项未提交修改逐项SHA不变，Core9f/SDK身份及Cargo锁保持。
+- Zod4.6.5→4.6.7只改version/resolved/integrity，原PR顺带删除的OpenTelemetry optional peer1.9.0已保留，其他锁元数据与包清单不变。官方tarball的SHA512/SHA1、锁及npm registry ECDSA验签相符，MIT、无安装生命周期；8个关键文件与官方`b500a2ee`相同。源码依赖安装使用ignore-scripts，仅changed1package，既有React peer警告未规避；不是安装客户端。
+- 本地环境macOS arm64/Node22.23.1/npm10.9.8，CI Ubuntu24.04.5/Node22.19.0/npm10.9.3。实际旧版三项红、新版定向四项通过：所有Zod消费者解析到同一补丁包，classic/Mini×array/set/map六例超上界时从128/256次元素校验及对应issues变为0次/1条too_big；正常边界保留、内界非法拒绝，真实OpenConnector内存MCP调用通过。子进程限制96MiB/5秒，不制造真实OOM，不声称无界集合也受保护。最终完整lint/branding两项及tsc均exit0，独立冻结diff/供应链/证据审阅无新增P0–P2。
+- 新[CI40097755762](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/40097755762)实际checkout `26bebb537bf4afca0886bc27f89184642cb0c144`与head/合并同树。audit job120883470970实际失败于独立Undici高危，报告1high/4moderate包项、无Zod，安装树和应用兼容步骤明确skipped，不计通过；Rust job120883471207仍3旧zip漏洞/7warning、exit1。旧bot头CI的2556pass/42skip不替代本次跳过步骤，整轮不记绿。
+- 同公告的原锁只读audit对照为2high/7moderate，新锁1high/7moderate；移除旧报告中的Zod后，其他findings逐字段完全相同。Undici、Nodemailer及派生项为独立基线风险，本次未扩大修补或隐藏失败。Zod在当前npm审计中已消失，GitHub SBOM也已识别4.6.7；但告警34回读仍open/fixed_at null，未手动dismiss或提前记关闭。
+- 私有证据为`.77/evidence/zod377-regression-{red,green}-20261024.log`、`zod377-npm-audit-{before-refreshed,after}-20261024.json`、`zod377-final-{lint,typecheck}-20261024.log`、`zod377-final-{audit,rust}-job-20261024.log`及`zod377-review-*-summary.json`。最终锁SHA`13e11b65d702ae929e4bc6cf8d95fcbdde6f14814d82d0df7c1dc0fa68a6cf32`、test SHA`bb812d55c5a89b43df8e3c1a366b122a71298bf91ee2b962c10e6780722cb305`。未重复native编译、未打包/安装客户端或清理、未派Windows/安装包CI；已装App未操作，真实数据/凭据/TCC/launchd/时钟能源/Release/feed不改，既有5.8GiB target及新增审计快照均保留。
+
 ## 2026-10-24 Rust1.90与Mac原生编译
 
 - 本项取代下方同日的工具链/原生编译暂停状态。用户本轮恢复工具链升级和原生编译，继续禁止打包、安装客户端和清理，Windows延期。原树`5deaabf5`加原有`.78`版本准备实际受验；原七项未提交文件的前后SHA逐项相同，未更改Rust源码、Cargo清单或依赖锁，不将本地`.78`称为发布候选。官方rustup安装精确Rust1.90.0并设为默认，原stable1.88保留；首次直连超时经系统既有代理解决，未修改全局网络/镜像或更新rustup。
