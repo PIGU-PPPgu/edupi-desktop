@@ -13,6 +13,63 @@ const require = createRequire(import.meta.url);
 const nextRequire = createRequire(require.resolve("@next/eslint-plugin-next"));
 const { getRootDirs } = nextRequire("./utils/get-root-dirs.js");
 
+test("Zod consumers resolve the patched shared validation package", async () => {
+  const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
+  const manifestPath = require.resolve("zod/package.json");
+  const consumers = Object.entries(lock.packages).filter(([, entry]) => entry.dependencies?.zod);
+  assert.ok(consumers.length > 0);
+  for (const [location] of consumers) {
+    const consumerRequire = createRequire(new URL(`../${location}/package.json`, import.meta.url));
+    assert.equal(consumerRequire.resolve("zod/package.json"), manifestPath, location);
+  }
+  const installed = JSON.parse(await readFile(manifestPath, "utf8"));
+  assert.ok(semver.gte(installed.version, "4.6.6"), installed.version);
+  assert.equal(installed.version, lock.packages["node_modules/zod"].version);
+  assert.equal(installed.license, "MIT");
+});
+
+test("Zod rejects oversized bounded collections before validating their elements", t => {
+  const output = execFileSync(process.execPath, ["--max-old-space-size=96", "-e", String.raw`
+    const assert = require("node:assert/strict");
+    const results = [];
+    for (const entry of JSON.parse(process.argv[1])) {
+      const z = require(entry.path);
+      for (const kind of ["array", "set", "map"]) {
+        let visits = 0;
+        const element = z.custom(value => { visits++; return typeof value === "string"; });
+        const raw = kind === "array" ? z.array(element) : kind === "set" ? z.set(element) : z.map(element, element);
+        const schema = entry.mini
+          ? raw.check(kind === "array" ? z.maxLength(2) : z.maxSize(2))
+          : raw.max(2);
+        const bad = Array.from({ length: 128 }, (_, i) => i);
+        const oversized = kind === "array" ? bad : kind === "set" ? new Set(bad) : new Map(bad.map(i => [i, i]));
+        const result = z.safeParse(schema, oversized);
+        results.push({ variant: entry.mini ? "mini" : "classic", kind, visits,
+          success: result.success, issues: result.error?.issues.length, code: result.error?.issues[0]?.code });
+        visits = 0;
+        const valid = kind === "array" ? ["a", "b"] : kind === "set" ? new Set(["a", "b"]) : new Map([["a", "A"], ["b", "B"]]);
+        const accepted = z.safeParse(schema, valid);
+        assert.equal(accepted.success, true);
+        assert.deepEqual(accepted.data, valid);
+        assert.equal(visits, kind === "map" ? 4 : 2);
+        const invalid = kind === "array" ? [1] : kind === "set" ? new Set([1]) : new Map([[1, 1]]);
+        assert.equal(z.safeParse(schema, invalid).success, false);
+      }
+    }
+    console.log(JSON.stringify(results));
+  `, JSON.stringify([{ path: require.resolve("zod"), mini: false },
+    { path: require.resolve("zod/v4/mini"), mini: true }])], {
+    timeout: 5000, killSignal: "SIGKILL", maxBuffer: 128 * 1024, encoding: "utf8", stdio: "pipe",
+  });
+  const results = JSON.parse(output);
+  t.diagnostic(output.trim());
+  assert.equal(results.length, 6);
+  for (const result of results) {
+    assert.deepEqual(result, { variant: result.variant, kind: result.kind,
+      visits: 0, success: false, issues: 1, code: "too_big" });
+  }
+});
+
 test("KaTeX is pinned to the patched release for every installed math consumer", async () => {
   const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
@@ -82,7 +139,7 @@ test("Mermaid's resolved KaTeX API renders fractions, roots and matrices in both
 
 test("the complete lockfile excludes affected runtime and glob dependency versions", async () => {
   const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
-  const patched = { next: ">=16.4.1", undici: ">=8.10.2", nodemailer: ">=10.0.9", "brace-expansion": "^1.1.21 || ^3.0.9 || >=5.0.12", dompurify: ">=3.4.17", sharp: ">=0.35.5", hono: ">=4.13.11", "ip-address": ">=10.7.4", "@modelcontextprotocol/client": ">=2.3.0", "@modelcontextprotocol/server": ">=2.3.0" };
+  const patched = { next: ">=16.4.1", undici: ">=8.10.2", nodemailer: ">=10.0.9", "brace-expansion": "^1.1.21 || ^3.0.9 || >=5.0.12", dompurify: ">=3.4.17", sharp: ">=0.35.5", hono: ">=4.13.11", "ip-address": ">=10.7.4", zod: ">=4.6.6", "@modelcontextprotocol/client": ">=2.3.0", "@modelcontextprotocol/server": ">=2.3.0" };
   for (const [location, entry] of Object.entries(lock.packages)) {
     const name = location.split("node_modules/").at(-1);
     assert.notEqual(name, "braces", `${location} restores the unpatched dependency`);
