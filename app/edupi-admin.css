@@ -177,7 +177,7 @@
 .openconnector-admin__filters button { min-height: 30px; padding: 0 10px; border-color: transparent; border-radius: 5px; background: transparent; color: var(--text-muted); font-size: 11px; white-space: nowrap; }
 .openconnector-admin__filters button[aria-pressed="true"] { border-color: var(--border); background: var(--bg-panel); color: var(--text); font-weight: 650; }
 .openconnector-admin__filters button:disabled { opacity: .4; }
-.openconnector-admin__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 1px; overflow: hidden; margin: 0; padding: 1px; border: 1px solid var(--border); border-radius: 8px; background: var(--border); list-style: none; }
+.openconnector-admin__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 1px; overflow: hidden; margin: 0; padding: 1px; border: 1px solid var(--border); border-radius: 8px; background: var(--border); list-style: none; }
 .openconnector-admin__grid:empty { display: none; }
 .openconnector-admin__grid > li { min-width: 0; background: var(--bg-panel); }
 .openconnector-admin__grid .openconnector-admin__provider { display: flex; width: 100%; min-height: 76px; align-items: center; gap: 12px; padding: 14px; border: 0; border-radius: 0; background: transparent; text-align: left; }
