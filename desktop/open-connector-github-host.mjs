@@ -189,9 +189,10 @@ export async function createGitHubOAuthHost({ dataDir, encryptionKey, network, r
       if (!url.search) { outgoing.end("<!doctype html><meta charset=utf-8><title>EduPi</title><p>授权流程已处理，请返回 EduPi 读取状态。</p>"); return; }
       const state = url.searchParams.get("state");
       const pending = authStates.get(state);
-      const allowed = new Set(["state", "code", "error", "error_description"]);
+      const allowed = new Set(["state", "code", "error", "error_description", "iss"]);
       if (!uuid(state) || !pending || pending.used || Date.parse(pending.expiresAt) <= Date.now()
         || [...url.searchParams.keys()].some((key) => !allowed.has(key) || url.searchParams.getAll(key).length !== 1)
+        || (url.searchParams.has("iss") && url.searchParams.get("iss") !== "https://github.com/login/oauth")
         || (!url.searchParams.get("code") && !url.searchParams.get("error"))) {
         outgoing.writeHead(400); outgoing.end("授权状态无效，请返回 EduPi 重新授权。"); return;
       }

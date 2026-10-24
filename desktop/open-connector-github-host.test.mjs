@@ -72,7 +72,7 @@ async function fixture(options = {}) {
       return runtime;
     } });
   }
-  async function authorize() {
+  async function startAuthorization() {
     const configured = await host.handle(request("configure", { clientId: CLIENT_ID, clientSecret: CLIENT_SECRET }));
     assert.deepEqual(configured.data, { clientConfigured: true });
     const started = await host.handle(request("startOAuth"));
@@ -81,6 +81,11 @@ async function fixture(options = {}) {
     const callback = new URL(host.callbackUrl);
     callback.searchParams.set("state", authorization.searchParams.get("state"));
     callback.searchParams.set("code", "fixture-authorization-code");
+    return { started, callback };
+  }
+  async function authorize({ issuer = "https://github.com/login/oauth" } = {}) {
+    const { started, callback } = await startAuthorization();
+    if (issuer !== null) callback.searchParams.set("iss", issuer);
     const response = await originalFetch(callback, { redirect: "manual" });
     assert.equal(response.status, 303);
     assert.equal(response.headers.get("location"), "/oauth/callback");
@@ -91,7 +96,7 @@ async function fixture(options = {}) {
   }
   await start();
   return {
-    directory, originalFetch, calls, issues, start, authorize,
+    directory, originalFetch, calls, issues, start, startAuthorization, authorize,
     get host() { return host; }, get captured() { return captured; },
     get tokenRequests() { return tokenRequests; }, get createRequests() { return createRequests; },
     close: async () => { try { await host?.close(); } finally { globalThis.fetch = originalFetch; await rm(directory, { recursive: true, force: true }); } },
@@ -179,6 +184,43 @@ test("callback listener rejects forged state, non-callback routes and cancelled 
     callback.searchParams.set("state", auth.searchParams.get("state")); callback.searchParams.set("code", "fixture-authorization-code");
     assert.equal((await f.originalFetch(callback)).status, 400);
     assert.equal(f.tokenRequests, 0);
+  } finally { await f.close(); }
+});
+
+test("callback accepts one exact GitHub issuer and rejects malformed issuers before token exchange", async () => {
+  const f = await fixture();
+  try {
+    const { started, callback } = await f.startAuthorization();
+    for (const issuer of ["", "https://attacker.invalid/login/oauth", "https://github.com/login/oauth/", "https://github.com/login/oauth#fragment", "https://github.com@attacker.invalid/login/oauth"]) {
+      const invalid = new URL(callback);
+      invalid.searchParams.set("iss", issuer);
+      assert.equal((await f.originalFetch(invalid, { redirect: "manual" })).status, 400);
+      assert.equal(f.tokenRequests, 0);
+    }
+    const duplicate = new URL(callback);
+    duplicate.searchParams.append("iss", "https://github.com/login/oauth");
+    duplicate.searchParams.append("iss", "https://github.com/login/oauth");
+    assert.equal((await f.originalFetch(duplicate, { redirect: "manual" })).status, 400);
+    const unexpected = new URL(callback);
+    unexpected.searchParams.set("iss", "https://github.com/login/oauth");
+    unexpected.searchParams.set("unexpected", "value");
+    assert.equal((await f.originalFetch(unexpected, { redirect: "manual" })).status, 400);
+    assert.equal(f.tokenRequests, 0);
+    callback.searchParams.set("iss", "https://github.com/login/oauth");
+    assert.equal((await f.originalFetch(callback, { redirect: "manual" })).status, 303);
+    assert.equal(f.tokenRequests, 1, "invalid issuer probes must not consume the legitimate pending state");
+    assert.equal((await f.host.handle(request("pollOAuth", { requestId: started.data.requestId }))).data.status, "connected");
+    assert.equal((await f.originalFetch(callback, { redirect: "manual" })).status, 400);
+    assert.equal(f.tokenRequests, 1);
+  } finally { await f.close(); }
+});
+
+test("callback remains compatible with GitHub responses without an issuer parameter", async () => {
+  const f = await fixture();
+  try {
+    const { connection } = await f.authorize({ issuer: null });
+    assert.equal(connection.authType, "oauth2");
+    assert.equal(f.tokenRequests, 1);
   } finally { await f.close(); }
 });
 
