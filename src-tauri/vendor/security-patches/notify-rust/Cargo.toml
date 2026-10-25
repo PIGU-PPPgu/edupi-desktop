@@ -89,9 +89,10 @@ path = "tests/realworld.rs"
 [dependencies.futures-lite]
 version = "2.6.0"
 
-[dev-dependencies.async-std]
-version = "1.12.0"
-features = ["attributes"]
+[dev-dependencies.tokio]
+version = "1"
+features = ["macros", "rt-multi-thread", "time"]
+default-features = false
 
 [dev-dependencies.color-backtrace]
 version = "0.7"
@@ -105,11 +106,6 @@ version = "1.0"
 [target.'cfg(all(unix, not(target_os = "macos")))'.dev-dependencies.zbus]
 version = "6.1.0"
 features = ["service", "tokio-multithread"]
-default-features = false
-
-[target.'cfg(all(unix, not(target_os = "macos")))'.dev-dependencies.tokio]
-version = "1"
-features = ["rt-multi-thread"]
 default-features = false
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies.dbus]

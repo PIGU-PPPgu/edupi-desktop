@@ -39,6 +39,8 @@ exclude = [
   "vendor/security-patches/wry",
   "vendor/security-patches/zbus-lockstep",
   "vendor/security-patches/zbus-lockstep-macros",
+  "vendor/security-patches/rav1e",
+  "vendor/security-patches/pulp",
 ]
 
 [lib]
@@ -115,6 +117,8 @@ atspi-connection = { path = "vendor/security-patches/atspi-connection" }
 atspi-proxies = { path = "vendor/security-patches/atspi-proxies" }
 zbus-lockstep = { path = "vendor/security-patches/zbus-lockstep" }
 zbus-lockstep-macros = { path = "vendor/security-patches/zbus-lockstep-macros" }
+rav1e = { path = "vendor/security-patches/rav1e" }
+pulp = { path = "vendor/security-patches/pulp" }
 
 [features]
 default = ["custom-protocol"]

@@ -5,6 +5,8 @@
 没有用兼容包替换 `zvariant`、修改审计忽略项或删除 Linux 功能。
 `Cargo.toml.orig` 保留发布时原文；构建使用修改后的 `Cargo.toml`。
 
+测试 workspace 使用已有 Tokio 开发依赖，示例中的等待调用同步迁移到 `tokio::time::sleep`，不再带入停止维护的 async-std。
+
 ## 来源
 
 下载归档的 SHA-256 与 crates.io sparse index 对照后才展开。

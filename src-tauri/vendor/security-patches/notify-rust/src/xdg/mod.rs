@@ -141,7 +141,7 @@ impl NotificationHandle {
     ///
     /// ```no_run
     /// # use notify_rust::*;
-    /// # use async_std::task::sleep;
+    /// # use tokio::time::sleep;
     /// # use std::time::Duration;
     /// # use futures_lite::future::zip;
     /// # async fn wait_for_action_async_example() -> Result<(), Box<dyn std::error::Error>> {

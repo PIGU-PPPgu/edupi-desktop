@@ -248,6 +248,8 @@ version = "0.11"
 
 [dev-dependencies.image]
 version = "0.25"
+default-features = false
+features = ["ico", "png"]
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies.block2]
 version = "0.6"

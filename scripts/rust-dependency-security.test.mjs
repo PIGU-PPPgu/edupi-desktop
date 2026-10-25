@@ -18,7 +18,7 @@ for (const [name, minimum] of [["zip", "9.0.5"], ["glib", "0.22.0"], ["chacha20"
 }
 
 test("retired GLib macro and split D-Bus type crates are absent", () => {
-  for (const name of ["proc-macro-error", "zbus_names", "zvariant", "zvariant_derive"]) {
+  for (const name of ["proc-macro-error", "zbus_names", "zvariant", "zvariant_derive", "async-std", "paste"]) {
     assert.equal(packages.some(entry => entry.name === name), false, `${name} restores a retired dependency`);
   }
   const bus = packages.filter(entry => entry.name === "zbus");
