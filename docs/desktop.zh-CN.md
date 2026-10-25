@@ -6,7 +6,7 @@ Pi Agent 使用 Tauri 封装本地 Web UI 与 Agent 服务，支持 Apple Silico
 
 - macOS 11 或更新版本（Apple Silicon）、Windows 10/11 x64，或安装了 WebKitGTK 4.1 与 GTK 3 的 Linux x64 发行版
 - 构建时需要 Node.js 22.19 或更新版本
-- Rust 1.90 或更新版本
+- macOS/Windows 使用 Rust 1.90 或更新版本；Linux 的 GTK 0.19 / GLib 0.22 绑定需要 Rust 1.92 或更新版本
 - macOS 使用 Xcode Command Line Tools；Windows 使用 Microsoft C++ Build Tools；Linux 使用 GTK/WebKitGTK 开发包
 
 ## 开发模式

@@ -1,8 +1,8 @@
 //! Linux AT-SPI2 backend.
 //!
 //! AT-SPI2 is a D-Bus protocol; the `atspi` crate is a pure-Rust (zbus) async
-//! client. We mirror the macOS actor: a dedicated thread owns a current-thread
-//! tokio runtime + the `AccessibilityConnection`, and the synchronous
+//! client. A dedicated actor owns a Tokio runtime with a background worker
+//! and the `AccessibilityConnection`, and the synchronous
 //! `A11yEngine` methods `block_on` async AT-SPI calls via a command channel.
 //!
 //! Status: skeleton (reports honest capabilities; observe/invoke wired in

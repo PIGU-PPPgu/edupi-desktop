@@ -7,6 +7,7 @@ on:
       - "package-lock.json"
       - "scripts/prepare-security-dependencies.mjs"
       - "scripts/dependency-security.test.mjs"
+      - "scripts/rust-dependency-security.test.mjs"
       - "vendor/next-root-glob/**"
       - ".github/dependabot.yml"
       - ".github/workflows/security-audit.yml"
@@ -21,6 +22,7 @@ on:
       - "package-lock.json"
       - "scripts/prepare-security-dependencies.mjs"
       - "scripts/dependency-security.test.mjs"
+      - "scripts/rust-dependency-security.test.mjs"
       - "vendor/next-root-glob/**"
       - ".github/dependabot.yml"
       - ".github/workflows/security-audit.yml"
@@ -77,4 +79,44 @@ jobs:
         run: cargo install cargo-audit --locked
 
       - name: Fail on RustSec advisories
-        run: cargo audit --file src-tauri/Cargo.lock
+        run: cargo audit --file src-tauri/Cargo.lock --deny warnings
+
+  linux-source:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
+      CARGO_BUILD_JOBS: "2"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      TAURI_CONFIG: '{"bundle":{"active":false,"resources":[]}}'
+    steps:
+      - name: Check out EduPi Desktop
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up Linux source compiler
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.92.0
+      - name: Prepare Linux source dependencies
+        timeout-minutes: 15
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: l
+        run: |
+          sudo apt-get update
+          sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get install --no-install-recommends -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libxdo-dev libxtst-dev libxcb1-dev libclang-dev libpipewire-0.3-dev libgbm-dev nasm dbus
+      - name: Check Linux source and test targets
+        run: cargo check --locked --all-targets --manifest-path src-tauri/Cargo.toml
+      - name: Verify GLib main-context dispatch
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml -p tao --lib main_context_channel::tests -- --test-threads=1
+      - name: Verify D-Bus wire compatibility
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml -p atspi-common --lib zbus6_wire_tests -- --test-threads=1
+      - name: Verify private D-Bus notification lifecycle
+        run: timeout 180s dbus-run-session -- env EDUPI_TEST_DBUS_ISOLATED=1 cargo test --locked --manifest-path src-tauri/Cargo.toml -p notify-rust --lib zbus6_ -- --test-threads=1
+      - name: Verify private D-Bus single instance
+        run: timeout 180s dbus-run-session -- env EDUPI_TEST_DBUS_ISOLATED=1 cargo test --locked --manifest-path src-tauri/Cargo.toml -p tauri-plugin-single-instance --lib zbus6_single_instance_callback_and_name_release -- --test-threads=1
+      - name: Verify private D-Bus portal responses
+        run: timeout 180s dbus-run-session -- env EDUPI_TEST_DBUS_ISOLATED=1 cargo test --locked --manifest-path src-tauri/Cargo.toml -p xcap --lib zbus6_portal_success_cancel_and_failure -- --test-threads=1
+      - name: Check optional image codec compatibility
+        run: cargo check --locked --manifest-path src-tauri/Cargo.toml -p xcap --all-features

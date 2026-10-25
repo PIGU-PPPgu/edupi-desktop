@@ -19,8 +19,20 @@ test("dependency security is checked on PRs, main, and a daily schedule", async 
   assert.match(workflow, /if: github\.event_name != 'schedule'/);
   assert.match(workflow, /npm test\s+node_modules\/\.bin\/tsc --noEmit\s+npm run lint/);
   assert.match(workflow, /run: cargo install cargo-audit --locked/);
-  assert.match(workflow, /run: cargo audit --file src-tauri\/Cargo\.lock/);
+  assert.match(workflow, /run: cargo audit --file src-tauri\/Cargo\.lock --deny warnings/);
+  assert.doesNotMatch(workflow, /--(?:ignore|no-yanked|target-os|target-arch|stale)\b/);
   assert.doesNotMatch(workflow, /rustsec\/audit-check/);
+});
+
+test("Linux compatibility checks compile source without a Windows runner or packaging", async () => {
+  const workflow = await read(".github/workflows/security-audit.yml");
+  const linux = workflow.slice(workflow.indexOf("  linux-source:"));
+  assert.match(linux, /runs-on: ubuntu-latest/);
+  assert.match(linux, /toolchain: 1\.92\.0/);
+  assert.match(linux, /cargo check --locked --all-targets/);
+  assert.match(linux, /main_context_channel::tests/);
+  assert.match(linux, /dbus-run-session -- env EDUPI_TEST_DBUS_ISOLATED=1/);
+  assert.doesNotMatch(linux, /windows-latest|tauri build|next build|cargo install|rm -|cargo clean/);
 });
 
 test("Dependabot opens grouped security updates without routine version noise", async () => {
