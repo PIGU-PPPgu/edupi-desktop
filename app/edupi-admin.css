@@ -99,9 +99,9 @@
   padding: 28px 32px 48px;
 }
 
-.edupi-admin-section.is-models { width: min(880px, 100%); }
+.edupi-admin-section.is-models { width: min(784px, 100%); }
 .edupi-admin-section.is-connections { width: min(1040px, 100%); }
-.edupi-admin-section.is-settings { width: min(784px, 100%); }
+.edupi-admin-section.is-settings { width: min(704px, 100%); }
 .edupi-admin-section-break { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
 .edupi-admin-section-break h2 { margin: 0; font-size: 14px; font-weight: 650; }
 .edupi-admin-section-break span { color: var(--text-muted); font-size: 11px; }
