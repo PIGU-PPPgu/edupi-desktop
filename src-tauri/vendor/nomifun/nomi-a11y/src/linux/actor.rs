@@ -8,8 +8,8 @@
 //! unavailable on Wayland, where the tool's pixel fallback is degraded anyway).
 
 use std::collections::HashMap;
+use std::sync::mpsc::{channel, Sender};
 use std::sync::Mutex;
-use std::sync::mpsc::{Sender, channel};
 
 use atspi::connection::AccessibilityConnection;
 use atspi::proxy::accessible::ObjectRefExt;
@@ -52,8 +52,8 @@ fn detect_caps() -> Capabilities {
     let session = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
     let wayland =
         session.eq_ignore_ascii_case("wayland") || std::env::var_os("WAYLAND_DISPLAY").is_some();
-    let x11 = !wayland
-        && (session.eq_ignore_ascii_case("x11") || std::env::var_os("DISPLAY").is_some());
+    let x11 =
+        !wayland && (session.eq_ignore_ascii_case("x11") || std::env::var_os("DISPLAY").is_some());
     Capabilities {
         os: "linux".to_string(),
         tree_read: true,
@@ -95,9 +95,10 @@ async fn find_active_window(conn: &AccessibilityConnection) -> Result<ObjectRefO
         .root_accessible_on_registry()
         .await
         .map_err(|e| A11yError::Backend(format!("cannot read the AT-SPI registry root: {e}")))?;
-    let apps = root.get_children().await.map_err(|e| {
-        A11yError::Backend(format!("cannot list accessible applications: {e}"))
-    })?;
+    let apps = root
+        .get_children()
+        .await
+        .map_err(|e| A11yError::Backend(format!("cannot list accessible applications: {e}")))?;
 
     let mut first_window: Option<ObjectRefOwned> = None;
     for app in apps {
@@ -168,36 +169,37 @@ async fn walk_window(
 
         let bounds = match ComponentProxy::builder(zconn)
             .destination(dest.clone())
-            .and_then(|b| b.path(path.clone()))
+            .path(path.clone())
+            .build()
+            .await
         {
-            Ok(builder) => match builder.build().await {
-                Ok(comp) => comp.get_extents(CoordType::Screen).await.ok().map(|(x, y, w, h)| {
-                    Rect {
-                        x: x as f64,
-                        y: y as f64,
-                        w: w as f64,
-                        h: h as f64,
-                    }
+            Ok(comp) => comp
+                .get_extents(CoordType::Screen)
+                .await
+                .ok()
+                .map(|(x, y, w, h)| Rect {
+                    x: x as f64,
+                    y: y as f64,
+                    w: w as f64,
+                    h: h as f64,
                 }),
-                Err(_) => None,
-            },
             Err(_) => None,
         };
 
         let has_action = match ActionProxy::builder(zconn)
             .destination(dest.clone())
-            .and_then(|b| b.path(path.clone()))
+            .path(path.clone())
+            .build()
+            .await
         {
-            Ok(builder) => match builder.build().await {
-                Ok(act) => act.n_actions().await.map(|n| n > 0).unwrap_or(false),
-                Err(_) => false,
-            },
+            Ok(act) => act.n_actions().await.map(|n| n > 0).unwrap_or(false),
             Err(_) => false,
         };
 
         let focusable = states.contains(AtspiState::Focusable);
         let editable = states.contains(AtspiState::Editable);
-        let enabled = states.contains(AtspiState::Enabled) || states.contains(AtspiState::Sensitive);
+        let enabled =
+            states.contains(AtspiState::Enabled) || states.contains(AtspiState::Sensitive);
 
         if let Some(b) = bounds {
             if b.w > 0.0 && b.h > 0.0 && (has_action || focusable || editable) {
@@ -303,11 +305,10 @@ async fn do_invoke(
             "ref [{r}] is from an older snapshot; re-run observe and use a fresh [ref]"
         )));
     }
-    let obj = state
-        .registry
-        .get(&r)
-        .cloned()
-        .ok_or_else(|| A11yError::NotFound(format!("no element [{r}] in the latest snapshot")))?;
+    let obj =
+        state.registry.get(&r).cloned().ok_or_else(|| {
+            A11yError::NotFound(format!("no element [{r}] in the latest snapshot"))
+        })?;
 
     let zconn = conn.connection();
     let acc = obj
@@ -321,8 +322,7 @@ async fn do_invoke(
         ElementAction::Press | ElementAction::LeftClick | ElementAction::DoubleClick => {
             let act = ActionProxy::builder(zconn)
                 .destination(dest)
-                .and_then(|b| b.path(path))
-                .map_err(|e| A11yError::Backend(format!("action proxy: {e}")))?
+                .path(path)
                 .build()
                 .await
                 .map_err(|e| A11yError::Backend(format!("action proxy: {e}")))?;
@@ -344,7 +344,9 @@ async fn do_invoke(
                 Ok(false) => Err(A11yError::Backend(format!(
                     "do_action on [{r}] returned false; try a pixel click"
                 ))),
-                Err(e) => Err(A11yError::Backend(format!("do_action on [{r}] failed: {e}"))),
+                Err(e) => Err(A11yError::Backend(format!(
+                    "do_action on [{r}] failed: {e}"
+                ))),
             }
         }
         ElementAction::RightClick => Err(A11yError::Unsupported {
@@ -354,8 +356,7 @@ async fn do_invoke(
         ElementAction::Focus => {
             let comp = ComponentProxy::builder(zconn)
                 .destination(dest)
-                .and_then(|b| b.path(path))
-                .map_err(|e| A11yError::Backend(format!("component proxy: {e}")))?
+                .path(path)
                 .build()
                 .await
                 .map_err(|e| A11yError::Backend(format!("component proxy: {e}")))?;
@@ -364,14 +365,15 @@ async fn do_invoke(
                     changed: true,
                     message: format!("focused element [{r}]"),
                 }),
-                Err(e) => Err(A11yError::Backend(format!("grab_focus on [{r}] failed: {e}"))),
+                Err(e) => Err(A11yError::Backend(format!(
+                    "grab_focus on [{r}] failed: {e}"
+                ))),
             }
         }
         ElementAction::SetValue(v) => {
             let et = EditableTextProxy::builder(zconn)
                 .destination(dest)
-                .and_then(|b| b.path(path))
-                .map_err(|e| A11yError::Backend(format!("editable-text proxy: {e}")))?
+                .path(path)
                 .build()
                 .await
                 .map_err(|e| A11yError::Backend(format!("editable-text proxy: {e}")))?;
@@ -407,7 +409,9 @@ impl ActorHandle {
         std::thread::Builder::new()
             .name("nomi-a11y-linux".to_string())
             .spawn(move || {
-                let rt = match tokio::runtime::Builder::new_current_thread()
+                // Keep bus readers and the P2P listener alive while rx.recv() waits.
+                let rt = match tokio::runtime::Builder::new_multi_thread()
+                    .worker_threads(1)
                     .enable_all()
                     .build()
                 {

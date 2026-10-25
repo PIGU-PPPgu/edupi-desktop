@@ -24,11 +24,11 @@ nomi-tools = { path = "vendor/nomifun/nomi-tools" }
 nomi-types = { path = "vendor/nomifun/nomi-types" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.151"
-tauri = { version = "2.10.2", features = ["tray-icon"] }
-tauri-plugin-clipboard-manager = "^2"
-tauri-plugin-dialog = "^2"
-tauri-plugin-notification = "^2"
-tauri-plugin-process = "^2"
+tauri = { version = "2.12.5", features = ["tray-icon"] }
+tauri-plugin-clipboard-manager = "2.3.2"
+tauri-plugin-dialog = "2.7.2"
+tauri-plugin-notification = "2.3.3"
+tauri-plugin-process = "2.3.1"
 tauri-plugin-updater = "2.14.0"
 tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
 
@@ -51,7 +51,36 @@ windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Globa
 
 [dev-dependencies]
 base64 = "0.22"
-tauri = { version = "2.12", features = ["test"] }
+tauri = { version = "2.12.5", features = ["test"] }
+
+[target.'cfg(unix)'.dev-dependencies]
+# The stream regression API is unstable; keep the tested library exact.
+zip = { version = "=9.0.5", default-features = false }
+
+[patch.crates-io]
+# Upstream ba98bfa: retain updater 2.14 and move its Windows ZIP reader to v9.
+tauri-plugin-updater = { path = "vendor/security-patches/tauri-plugin-updater" }
+# Maintained GTK/GLib bindings; Linux requires Rust 1.92.
+tauri = { path = "vendor/security-patches/tauri" }
+tauri-runtime = { path = "vendor/security-patches/tauri-runtime" }
+tauri-runtime-wry = { path = "vendor/security-patches/tauri-runtime-wry" }
+tao = { path = "vendor/security-patches/tao" }
+wry = { path = "vendor/security-patches/wry" }
+muda = { path = "vendor/security-patches/muda" }
+webkit2gtk = { path = "vendor/security-patches/webkit2gtk" }
+webkit2gtk-sys = { path = "vendor/security-patches/webkit2gtk-sys" }
+libappindicator = { path = "vendor/security-patches/libappindicator" }
+libappindicator-sys = { path = "vendor/security-patches/libappindicator-sys" }
+rfd = { path = "vendor/security-patches/rfd" }
+# Preserve the existing Linux integrations while moving D-Bus types to zbus 6.
+notify-rust = { path = "vendor/security-patches/notify-rust" }
+tauri-plugin-single-instance = { path = "vendor/security-patches/tauri-plugin-single-instance" }
+xcap = { path = "vendor/security-patches/xcap" }
+atspi-common = { path = "vendor/security-patches/atspi-common" }
+atspi-connection = { path = "vendor/security-patches/atspi-connection" }
+atspi-proxies = { path = "vendor/security-patches/atspi-proxies" }
+zbus-lockstep = { path = "vendor/security-patches/zbus-lockstep" }
+zbus-lockstep-macros = { path = "vendor/security-patches/zbus-lockstep-macros" }
 
 [features]
 default = ["custom-protocol"]

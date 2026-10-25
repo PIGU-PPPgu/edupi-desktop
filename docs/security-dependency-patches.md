@@ -56,8 +56,9 @@ SMTP interoperability.
 
 ## Native updater
 
-The Rust and JavaScript updater are pinned at 2.14.0, with Tauri 2.12 and its
-matching JavaScript API. This is the published crate, not the unreleased branch.
+The JavaScript updater remains 2.14.0, with Tauri 2.12 and its matching API.
+The Rust updater uses the official 2.14.0 source plus the upstream Windows ZIP 9
+dependency patch recorded in [ZIP-PATCH.md](../src-tauri/vendor/security-patches/ZIP-PATCH.md).
 Its install entry verifies the package bytes again before filesystem access.
 The macOS installer also includes upstream's 2.13.2 bundle exchange and recovery
 fix: a failed replacement restores the previous app or preserves its backup and
@@ -76,9 +77,27 @@ trusted comment includes one; this check did not exist in the old plugin.
 No restore-from-cache feature is enabled. The plugin's new default `system-proxy`
 feature uses OS proxy settings when no explicit updater proxy is supplied, matching
 the existing settings UI; explicit loopback proxy forwarding remains tested.
-Published updater 2.14.0 still requires Windows-only zip 4; the upstream
-branch's zip 9 dependency is not part of this release. The full Rust audit retains
-those findings and the deferred Windows/Linux warnings without an allowlist.
+The published updater 2.14.0 still requires Windows-only ZIP 4; the local parent
+patch moves that reader to the locked ZIP 9.0.5 without changing codecs or
+disabling ZIP support. Unix library regressions retain their synthetic fixtures;
+they are separate from deferred Windows compilation and installation.
+
+## Rust maintenance dependencies
+
+The complete lock uses published GTK 0.19 / GLib 0.22 and zbus 6.1 instead of the
+retired GLib macro and split D-Bus type crates. Parent adapters preserve Linux
+notifications, single-instance callbacks, portal/Wayland and AT-SPI behavior.
+Archive checksums, exact local differences and removal criteria are recorded in
+[GTK-PATCHES.md](../src-tauri/vendor/security-patches/GTK-PATCHES.md) and
+[ZBUS-PATCHES.md](../src-tauri/vendor/security-patches/ZBUS-PATCHES.md).
+Linux source checks use Rust 1.92; the macOS compiler floor remains 1.90.
+
+The withdrawn ChaCha20 and Windows clipboard versions are replaced by their
+compatible 0.10.2 and 5.4.3 releases. Version guards do not replace behavioral
+tests or the full `cargo audit --deny warnings` gate. No advisory is allowlisted,
+target-filtered or suppressed. Third-party Rust source includes embedded
+JavaScript, which is excluded from application ESLint; application rules remain
+enabled and the native code is checked by Rust and targeted protocol tests.
 
 ## Next lint
 

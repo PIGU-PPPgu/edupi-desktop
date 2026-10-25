@@ -28,7 +28,7 @@ windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 atspi = "0.30"
-zbus = { version = "5", features = ["tokio"] }
+zbus = { version = "6.1.0", default-features = false, features = ["proxy", "tokio"] }
 tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
