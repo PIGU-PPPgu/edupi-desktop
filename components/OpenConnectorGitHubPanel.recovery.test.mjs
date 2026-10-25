@@ -32,7 +32,7 @@ function untilAborted(signal) {
 
 // Run the component's actual event handlers with isolated transport and manual
 // deadlines, without starting a browser, native host, or network connection.
-function mountPanel(transport) {
+function mountPanel(transport, { initialStatus = connected, onConnectionChange } = {}) {
   const slots = [], effects = new Map(), deadlines = [], requests = [];
   let cursor = 0, dirty = false, tree;
   const sameDeps = (left, right) => left && right && left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
@@ -52,7 +52,7 @@ function mountPanel(transport) {
   };
   const jsx = (type, props) => ({ type, props: props || {} });
   const modules = { react: hooks, "react/jsx-runtime": { jsx, jsxs: jsx },
-    "@/lib/desktop-native": { fetchDesktopApi: async (_url, options) => { requests.push(options); return requests.length === 1 ? reply(connected) : transport(options, requests.length); } },
+    "@/lib/desktop-native": { fetchDesktopApi: async (_url, options) => { requests.push(options); return requests.length === 1 ? reply(await initialStatus) : transport(options, requests.length); } },
     "@/lib/openconnector-github-contract": contract,
   };
   const exports = {};
@@ -63,7 +63,7 @@ function mountPanel(transport) {
     let attempts = 0;
     do {
       assert.ok(attempts++ < 20, "component effects should settle");
-      cursor = 0; dirty = false; tree = exports.OpenConnectorGitHubPanel();
+      cursor = 0; dirty = false; tree = exports.OpenConnectorGitHubPanel({ onConnectionChange });
       const pending = [...effects]; effects.clear();
       for (const [index, effect] of pending) { slots[index]?.cleanup?.(); slots[index] = { deps: effect.deps, cleanup: effect.callback() }; }
     } while (dirty);
@@ -104,5 +104,28 @@ test("a failed operation reloads durable health with one GET and keeps retry man
     assert.match(textOf(panel.render()), /连接中断/u);
     await tick(); panel.render();
     assert.deepEqual(panel.requests.map((request) => request.method), ["GET", "POST", "GET"]);
+  } finally { panel.unmount(); }
+});
+
+
+test("connection projection waits for loaded status and publishes safe identity and health", async () => {
+  let resolveInitial;
+  const changes = [];
+  const initialStatus = new Promise((resolve) => { resolveInitial = resolve; });
+  const disconnected = { ...connected, connection: null, health: { status: "unknown", checkedAt: null } };
+  const panel = mountPanel(async () => reply(disconnected), { initialStatus, onConnectionChange: (...args) => changes.push(args) });
+  try {
+    panel.render(); await tick();
+    assert.equal(changes.length, 0, "an unopened status projection must not announce a disconnect");
+    resolveInitial(connected); await tick(); panel.render();
+    assert.equal(changes.length, 1);
+    assert.equal(changes[0][0], true);
+    assert.equal(changes[0][1].connection.login, "PIGU-PPPgu");
+    assert.equal(changes[0][1].health.status, "ready");
+    assert.match(textOf(panel.render()), /PIGU-PPPgu.*连接正常/);
+    panel.button("检查连接").props.onClick(); await tick(); panel.render();
+    assert.equal(changes.at(-1)[0], false);
+    assert.equal(changes.at(-1)[1].connection, null, "an actual empty connection response still propagates disconnect");
+    assert.match(textOf(panel.render()), /未连接/);
   } finally { panel.unmount(); }
 });

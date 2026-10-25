@@ -59,7 +59,7 @@ function timeLabel(value?: string | null): string {
   return value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value)) : "尚未取得";
 }
 
-export function OpenConnectorGitHubPanel({ onConnectionChange }: { onConnectionChange?: (connected: boolean) => void } = {}) {
+export function OpenConnectorGitHubPanel({ onConnectionChange }: { onConnectionChange?: (connected: boolean, status?: GitHubOAuthStatus) => void } = {}) {
   const [status, setStatus] = useState<GitHubOAuthStatus | null>(null);
   const [busy, setBusy] = useState<string | null>("status");
   const [error, setError] = useState("");
@@ -105,7 +105,10 @@ export function OpenConnectorGitHubPanel({ onConnectionChange }: { onConnectionC
   }, [run]);
   useEffect(() => { if (status?.clientId) setClientId(status.clientId); }, [status?.clientId]);
   useEffect(() => { if (preview) previewRef.current?.focus(); }, [preview]);
-  useEffect(() => { onConnectionChange?.(Boolean(status?.connection && status.health?.status !== "authorization_required")); }, [onConnectionChange, status?.connection, status?.health?.status]);
+  useEffect(() => {
+    if (!status) return;
+    onConnectionChange?.(Boolean(status.connection && status.health?.status !== "authorization_required"), status);
+  }, [onConnectionChange, status]);
   useEffect(() => {
     if (busy || status?.authorization?.status !== "pending") return;
     const requestId = status.authorization.requestId;

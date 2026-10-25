@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { fetchDesktopApi } from "@/lib/desktop-native";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import type { CatalogAction, CatalogProvider, CatalogQuery, CatalogResult } from "@/lib/openconnector-catalog-contract";
-import { isGitHubOAuthStatus } from "@/lib/openconnector-github-contract";
+import { isGitHubOAuthStatus, type GitHubOAuthStatus } from "@/lib/openconnector-github-contract";
 import { CONNECTOR_SCENARIOS, connectorScenarioLabel, type ConnectorScenario } from "@/lib/openconnector-discovery";
 import { buildConnectionDirectory, connectionPurposeLabel, findConnectionApps, managedConnectionState, type ConnectionApp, type ManagedConnection } from "@/lib/edupi-connection-directory";
 import { EduPiConnectorSetup } from "./EduPiConnectorSetup";
@@ -130,11 +130,18 @@ export function OpenConnectorAdminPanel({ managedConnections = [], onManagedConf
   const restoreCatalogRef = useRef(false);
   const restoreActionRef = useRef(false);
   const connectionVersionRef = useRef(0);
-  const handleConnectionChange = useCallback((connected: boolean) => {
+  const handleConnectionChange = useCallback((connected: boolean, next?: GitHubOAuthStatus) => {
+    if (next && !isGitHubOAuthStatus(next)) return;
     connectionVersionRef.current += 1;
-    setGitHubConnected(connected);
-    setGitHubHealth("unknown");
-    if (!connected) setGitHubLogin(null);
+    const saved = next ? Boolean(next.supported && next.connection?.authType === "oauth2") : connected;
+    setGitHubConnected(saved);
+    setConnectionsLoaded(true);
+    setConnectionError("");
+    if (!saved) { setGitHubLogin(null); setGitHubHealth("unknown"); }
+    else if (next?.connection) {
+      setGitHubLogin(next.connection.login);
+      setGitHubHealth(next.health?.status || "unknown");
+    }
   }, []);
 
   const loadProviders = useCallback(async () => {

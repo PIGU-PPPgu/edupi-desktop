@@ -303,3 +303,30 @@ test("opening an existing connection does not cancel the independent app catalog
   assert.ok(panel.buttons().some((node) => node.props.className === "openconnector-admin__provider" && textOf(node).includes("Google Drive")));
   panel.unmount();
 });
+
+
+test("opening GitHub details preserves loaded account and health until a real disconnect", async () => {
+  const ready = { ...emptyStatus, clientConfigured: true, clientId: "aaaaaaaaaaaaaaaaaaaa",
+    connection: { id: "6ad11879-eac9-4678-8a81-c20f65f9c05d", login: "PIGU-PPPgu", accountId: "59789742", scopes: ["public_repo"], authType: "oauth2" },
+    health: { status: "ready", checkedAt: "2026-10-24T00:00:00.000Z" } };
+  const panel = mountPanel({ status: ready }); panel.render(); await tick();
+  const saved = () => panel.buttons().find((node) => node.props.className === "connection-settings__saved-app" && textOf(node).includes("GitHub"));
+  assert.match(textOf(saved()), /GitHub.*PIGU-PPPgu.*已连接/);
+  saved().props.onClick({ currentTarget: { focus() {} } }); panel.render();
+  const notify = panel.find((node) => node.type === "github-panel").props.onConnectionChange;
+  notify(true, ready); panel.render();
+  notify(true); panel.render(); // A legacy boolean-only callback must not discard known metadata.
+  panel.buttons().find((node) => textOf(node).includes("返回我的连接")).props.onClick(); panel.render();
+  assert.match(textOf(saved()), /GitHub.*PIGU-PPPgu.*已连接/);
+  saved().props.onClick({ currentTarget: { focus() {} } }); panel.render();
+  const notifyAgain = panel.find((node) => node.type === "github-panel").props.onConnectionChange;
+  notifyAgain(false, { ...ready, health: { status: "authorization_required", checkedAt: null } }); panel.render();
+  panel.buttons().find((node) => textOf(node).includes("返回我的连接")).props.onClick(); panel.render();
+  assert.match(textOf(saved()), /GitHub.*PIGU-PPPgu.*需要重新授权/);
+  saved().props.onClick({ currentTarget: { focus() {} } }); panel.render();
+  panel.find((node) => node.type === "github-panel").props.onConnectionChange(false, emptyStatus); panel.render();
+  panel.buttons().find((node) => textOf(node).includes("返回我的连接")).props.onClick(); panel.render();
+  assert.equal(saved(), undefined);
+  assert.doesNotMatch(textOf(panel.render()), /PIGU-PPPgu/);
+  panel.unmount();
+});
