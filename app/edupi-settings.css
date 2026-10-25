@@ -77,10 +77,24 @@
 .settings-permission-identity dl > div { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; }
 .settings-permission-identity dt { color: var(--text-muted); }
 .settings-permission-identity dd { margin: 0; overflow-wrap: anywhere; }
-.app-settings-page { width: min(760px, 100%); margin: 0 auto; }
+.app-settings-page { width: min(640px, 100%); margin: 0; }
 .app-settings-page .app-settings-header { padding: 0; border-bottom: 0; }
-.app-settings-page .app-settings-body { gap: 24px; overflow: visible; padding: 28px 0 0; }
-.app-settings-page .native-settings-card { margin: 0 !important; padding: 24px 0 !important; border: 0 !important; border-bottom: 1px solid var(--border) !important; border-radius: 0 !important; background: transparent !important; }
+.app-settings-page .app-settings-header h1 { font-size: 22px; }
+.app-settings-page .app-settings-body { gap: 20px; overflow: visible; padding: 16px 0 0; }
+.app-settings-page .app-settings-row { min-height: 52px; gap: 16px; padding: 10px 0; }
+.app-settings-page[data-page="general"] .app-settings-row,
+.app-settings-page[data-page="notifications"] .app-settings-row { display: grid; grid-template-columns: minmax(160px, 196px) minmax(0, 1fr); gap: 4px 20px; }
+.app-settings-page[data-page="general"] .app-settings-row__control,
+.app-settings-page[data-page="notifications"] .app-settings-row__control { min-width: 0; max-width: 100%; justify-content: flex-start; margin-left: 0; }
+.app-settings-page .app-settings-choices { max-width: 100%; }
+.app-settings-page .app-settings-toggle > .app-settings-row__label { display: contents; }
+.app-settings-page .app-settings-toggle > .app-settings-row__label > span { grid-column: 1; grid-row: 1; font-weight: 500; }
+.app-settings-page .app-settings-toggle > .app-settings-row__label > small { grid-column: 1 / -1; grid-row: 2; color: var(--text-muted); font-size: 12px; }
+.app-settings-page .app-settings-toggle > input { grid-column: 2; grid-row: 1; justify-self: start; }
+.app-settings-page .app-settings-help { padding-bottom: 12px; }
+.app-settings-page .app-settings-profile > div { min-height: 48px; grid-template-columns: 160px minmax(0, 1fr); gap: 20px; padding: 10px 0; }
+.app-settings-page .app-settings-actions { padding-top: 16px; }
+.app-settings-page .native-settings-card { margin: 0 !important; padding: 16px 0 !important; border: 0 !important; border-bottom: 1px solid var(--border) !important; border-radius: 0 !important; background: transparent !important; }
 .app-settings-page .native-settings-card:first-child { padding-top: 16px !important; }
 .app-settings-page .native-button { min-height: 32px; padding: 6px 12px; font-size: 12px; }
 .app-settings-page .app-settings-choices .native-button { min-height: 28px; padding: 4px 12px; }
@@ -96,6 +110,13 @@
   .app-settings-toggle { flex-wrap: nowrap; }
   .app-settings-toggle > input { margin-top: 2px; }
   .app-settings-update > .app-settings-row { padding-bottom: 16px; }
+}
+@media (max-width: 520px) {
+  .app-settings-page[data-page="general"] .app-settings-row,
+  .app-settings-page[data-page="notifications"] .app-settings-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .app-settings-page[data-page="general"] .app-settings-toggle,
+  .app-settings-page[data-page="notifications"] .app-settings-toggle { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; }
+  .app-settings-page .app-settings-profile > div { grid-template-columns: 72px minmax(0, 1fr); gap: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .app-settings-toggle > input,
