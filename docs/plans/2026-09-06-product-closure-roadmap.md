@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-10-25 R15/R22的Mac更新路径源码修补通过，安装继续暂停：[PR383](https://github.com/PIGU-PPPgu/edupi-desktop/pull/383)正常合入2d4fdce6，head e9de2b27/实际CI checkout fdc60d1e/合并同树5a6e6ef5。正式updater2.14补安装入口复验和上游Mac旧App恢复保护，必要同步Tauri2.12/API及原生链，Core9f/Pi不改；本机Rust1.90的locked/offline生产check、6项纯mock签名拒绝、JS10项/依赖4项/type/lint通过。新CI应用npm0/安全20pass/全套2567pass42skip0fail，Rust仍3旧zip/7非Macwarning，未豁免或称整轮绿；新Mac348节点不含这些包。requireSignedVersion仍false兼容旧签名，新版新增可信version匹配与默认system-proxy，准确边界已记录；旧minisign已有的S拒绝不冒充新修复。GitHub旧Zod34已自动fixed、open alerts0，覆盖下方同步滞后状态。原修改保留，不打包/安装/清理或做Windows，实际App替换/失败恢复与原生WebView仍未验。[本轮技术证据](2026-09-07-signed-updates.md#2026-10-25-mac更新路径源码风险)。
+
 2026-10-24 HTTP/邮件依赖修补通过，取代下方npm非Zod待处理状态：PR381正常合入3c57391a，head2ca7f526/实际CI checkouta84dacc0/合并同树5c76d303。Undici8.12.2、scoped Nodemailer10.1.4之外锁元数据保持，Pi1.0.2/Core9f与catalog外发deny-all不改；依赖来源是现有网络层及完整连接器目录，未换架构或开邮件功能。旧8项红、最终本机12项定向通过；MIME既有归一化经旧/新版实际基线澄清，未伪造修复。新CI应用成功：npm各级0、安全20/20、全套2563pass/42skip/0fail/type/lint；Rust仍旧3zip/7warning而不记整轮绿，其包名不在保持不变的Mac图。独立审阅通过，原7dirty/真实数据/凭据保持，不打包安装清理或做Windows，已装App未更新。[本轮证据](2026-09-07-signed-updates.md#2026-10-24-http与邮件依赖安全修补)。
 
 2026-10-24 Zod源码修补通过，取代下方待处理状态：PR377最终head a57513f1正常合入b260e919，与新CI实际checkout26bebb53同树d2b1b780。锁仅Zod4.6.5→4.6.7三字段变化，原OTEL optional peer保留；新增回归旧三项红/新定向四项绿、六类有界集合提前拒绝、真实MCP内存调用、完整lint/branding/type通过，独立审阅无新增P0–P2。新CI仍因既有Undici与Rust报告失败、后续应用步骤skipped，不称全绿；同公告原锁2high7mod→新锁1high7mod，除Zod外结果逐字段相同。GitHub告警34首读仍open待后台同步，未伪记关闭；不扩大其他包升级、不打包安装清理、Windows不动。[本轮证据](2026-09-07-signed-updates.md#2026-10-24-zod高危修补)。
