@@ -54,6 +54,32 @@ MimeNode's existing normalization of angle characters inside quoted local parts
 is unchanged; these tests do not claim full quoted-mailbox preservation or real
 SMTP interoperability.
 
+## Native updater
+
+The Rust and JavaScript updater are pinned at 2.14.0, with Tauri 2.12 and its
+matching JavaScript API. This is the published crate, not the unreleased branch.
+Its install entry verifies the package bytes again before filesystem access.
+The macOS installer also includes upstream's 2.13.2 bundle exchange and recovery
+fix: a failed replacement restores the previous app or preserves its backup and
+reports the path if restoration fails. See the [upstream release](https://github.com/tauri-apps/plugins-workspace/releases/tag/updater-v2.14.0).
+
+The mock-runtime tests accept a valid public test signature and reject changed
+bytes, changed trusted comments and a signed-version mismatch before installation.
+They do not install a valid package or test App replacement. The existing
+minisign-verify 0.2.5 already checks canonical Ed25519 scalars; 0.3.0 preserves that
+protection and is not presented as a newly repaired vulnerability here.
+
+Transport verification, downgrade defaults, signing keys and feeds are unchanged.
+`requireSignedVersion` stays at its default `false` for existing unversioned
+signatures. The new plugin still rejects a mismatched version when a signed
+trusted comment includes one; this check did not exist in the old plugin.
+No restore-from-cache feature is enabled. The plugin's new default `system-proxy`
+feature uses OS proxy settings when no explicit updater proxy is supplied, matching
+the existing settings UI; explicit loopback proxy forwarding remains tested.
+Published updater 2.14.0 still requires Windows-only zip 4; the upstream
+branch's zip 9 dependency is not part of this release. The full Rust audit retains
+those findings and the deferred Windows/Linux warnings without an allowlist.
+
 ## Next lint
 
 Next and its lint config are 16.4.2. The private `vendor/next-root-glob` adapter

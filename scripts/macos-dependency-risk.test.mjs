@@ -5,6 +5,7 @@ import semver from "semver";
 
 const cargoLock = await readFile(new URL("../src-tauri/Cargo.lock", import.meta.url), "utf8");
 const cargoManifest = await readFile(new URL("../src-tauri/Cargo.toml", import.meta.url), "utf8");
+const npmLock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
 const packages = cargoLock.split("[[package]]").slice(1).map(entry => ({
   name: entry.match(/^name = "([^"]+)"$/mu)?.[1],
   version: entry.match(/^version = "([^"]+)"$/mu)?.[1],
@@ -25,4 +26,21 @@ test("the native URL-scope dependency no longer retains the unmaintained UNIC ch
 test("the native manifest declares the compiler floor required by maintained Tauri utilities", () => {
   const requiredRust = cargoManifest.match(/^rust-version = "([^"]+)"$/mu)?.[1];
   assert.ok(requiredRust && semver.gte(semver.coerce(requiredRust), "1.90.0"), "tauri-utils 2.10 requires Rust 1.90");
+});
+
+test("the native updater includes install-time verification and macOS bundle recovery", () => {
+  for (const [name, minimum] of [["tauri-plugin-updater", "2.14.0"], ["minisign-verify", "0.3.0"]]) {
+    const entries = packages.filter(entry => entry.name === name);
+    assert.ok(entries.length, `${name} must remain present`);
+    for (const entry of entries) assert.ok(semver.gte(entry.version, minimum), `${name} ${entry.version} predates the updater security baseline`);
+  }
+});
+
+test("the updater and Tauri APIs stay aligned across Rust and JavaScript", () => {
+  const tauri = packages.find(entry => entry.name === "tauri");
+  const updater = packages.find(entry => entry.name === "tauri-plugin-updater");
+  const api = npmLock.packages["node_modules/@tauri-apps/api"];
+  const plugin = npmLock.packages["node_modules/@tauri-apps/plugin-updater"];
+  assert.equal(`${semver.major(tauri.version)}.${semver.minor(tauri.version)}`, `${semver.major(api.version)}.${semver.minor(api.version)}`);
+  assert.equal(updater.version, plugin.version);
 });
