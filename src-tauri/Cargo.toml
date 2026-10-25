@@ -7,6 +7,40 @@ license = "MIT"
 edition = "2021"
 rust-version = "1.90.0"
 
+[workspace]
+resolver = "2"
+default-members = ["."]
+members = [
+  "vendor/security-patches/tao",
+  "vendor/security-patches/atspi-common",
+  "vendor/security-patches/notify-rust",
+  "vendor/security-patches/tauri-plugin-single-instance",
+  "vendor/security-patches/xcap",
+]
+exclude = [
+  "vendor/nomifun/nomi-computer",
+  "vendor/nomifun/nomi-a11y",
+  "vendor/nomifun/nomi-types",
+  "vendor/nomifun/nomi-config",
+  "vendor/nomifun/nomi-protocol",
+  "vendor/nomifun/nomi-tools",
+  "vendor/security-patches/atspi-connection",
+  "vendor/security-patches/atspi-proxies",
+  "vendor/security-patches/libappindicator",
+  "vendor/security-patches/libappindicator-sys",
+  "vendor/security-patches/muda",
+  "vendor/security-patches/rfd",
+  "vendor/security-patches/tauri",
+  "vendor/security-patches/tauri-plugin-updater",
+  "vendor/security-patches/tauri-runtime",
+  "vendor/security-patches/tauri-runtime-wry",
+  "vendor/security-patches/webkit2gtk",
+  "vendor/security-patches/webkit2gtk-sys",
+  "vendor/security-patches/wry",
+  "vendor/security-patches/zbus-lockstep",
+  "vendor/security-patches/zbus-lockstep-macros",
+]
+
 [lib]
 name = "pi_agent_desktop_lib"
 crate-type = ["staticlib", "cdylib", "lib"]
