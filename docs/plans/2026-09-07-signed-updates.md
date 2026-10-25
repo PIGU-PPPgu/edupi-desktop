@@ -1,5 +1,14 @@
 # 自动下载安装
 
+## 2026-10-25 Mac更新路径源码风险
+
+- R15/R22状态为源码验证通过、安装暂停，取代下方同项旧依赖状态。[PR383](https://github.com/PIGU-PPPgu/edupi-desktop/pull/383)正常合入`2d4fdce60d614e02f8528364d1becde6f4fbe40b`；head `e9de2b27fbed6d8aca7d716ae2c42fdaf64eb588`、实际CI checkout `fdc60d1e86bb78e750c0c47adda8c5667654cdff`与合并同树`5a6e6ef554c2d1ab1e8131af2f286b133d868a27`。正式Rust/JS updater2.14.0补安装入口复验及上游Mac旧App交换/恢复保护，必要同步Tauri2.12.5/API2.12.0及其原生依赖；无新缓存恢复入口，Core9f/Pi1.0.2及授权配置不改。失败恢复仍须实际安装验证，不把上游实现和编译当成安装验收。
+- 本机macOS arm64/Node22.23.1/Rust1.90，固定锁离线生产默认features的`cargo check`27.17s通过；平台metadata348节点，无原8个Rust finding包、声明MSRV均≤1.90。独立安全审阅后的`cargo test --test updater_security`实际6pass/0fail/0ignored：有效公开测试签名仅verify，篡改字节和签名版本不符的install均在文件安装前拒绝；未运行EduPi main/setup、有效安装、网络、UI/TCC或删除。过程配置只禁bundle/resources暂存，custom-protocol与安全配置保持。新fixture私有API/空配置/空endpoint和JS缺省header的早期失败保留，修正后才记通过。
+- 真实JavaScript SDK的两分支包含乱序Channel进度、下载资源身份、安装拒绝不重启及接受后才重启，相关10/10、依赖门4/4、类型/完整lint/branding2通过。新[CI40177375623](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/40177375623)的应用job121120900162成功：Ubuntu24.04/Node22.19、npm各级0、安全20/20、全套2567pass/42skip/0fail/0cancel/type/lint通过；42项保留Core/隔离runtime条件和pdftotext缺项，不计通过。完整日志及受测树独立复核通过，没有重跑旧源码套或派发签名构建。
+- 同轮Rust job121120900273仍因zip4.6.1的0367/0368/0369失败，另有原7条非Mac警告；所有finding与新Mac图交集0，不称全仓/整轮绿、不ignore或改规则。正式updater2.14仍声明Windows-only zip^4，上游分支zip9尚不在已发布crate，不能强塞大版本或伪称修复；Windows/Linux特有链延期。当前npm及GitHub open alerts均0，旧Zod34已由GitHub自动fixed于`2026-10-24T18:59:53Z`，未手动dismiss，覆盖下方平台状态滞后记录。
+- 准确兼容边界：旧minisign0.2.5已严格检查S<L，0.3不是本项目新增非规范签名修补；`requireSignedVersion`仍默认false兼容旧无version签名，但新版对带可信version的comment新增一致性拒绝。上游默认新增system-proxy，空代理时会读取OS代理，显式loopback代理转发已测，不能说路由语义完全不变；未改钥匙/更新源/系统代理设置。npm仅两目标条目及声明变化，Cargo变化为必要Tauri链与测试依赖；28个新registry版本、23份可用归档/777源码文件及两npm包的官方摘要/安装文件已独立核对。
+- 私有证据为`.77/evidence/risk-followup-verification-20261025.json`、`risk-followup-mac-{metadata,check}-20261025.*`、`risk-followup-native-updater-tests-final-20261025.log`、`risk-followup-updater-source-green-20261025.log`、`risk-followup-mac-guards-final-20261025.log`、完整CI两job日志及checkout JSON。原5个非Cargo路径逐字保持，两个Cargo原`.78`准备差异保留未提交；本轮不打包、安装/操作真实App或清理，不改真实资料/模型凭据/TCC/launchd/时钟能源/Release/feed。target约7.9GiB、私有Cargo缓存1.5GiB与全部旧新证据均保留，可用约999GiB；原合成升级根封存、心跳暂停。
+
 ## 2026-10-24 HTTP与邮件依赖安全修补
 
 - 本项取代下方Undici/Nodemailer待处理及npm仍有告警的旧状态。[PR381](https://github.com/PIGU-PPPgu/edupi-desktop/pull/381)已正常合入`3c57391a72331deaf3466b0c9d9e3acc730a4bb8`；head `2ca7f52699b7b3588152a934f622ecf28c65a973`、CI实际checkout `a84dacc0e9cf8fed677b357ed2f2f365f9ec9c7a`与合并同树`5c76d30345f9b7ac69dc4170d22f9dfc58eff5f6`。仅4文件，Undici8.10.2→8.12.2直接依赖及原override、Nodemailer10.0.10→10.1.4原scoped override、安全回归与现有说明文档；未引入新框架、改Pi1.0.2/Core9f身份或放开连接器权限。
