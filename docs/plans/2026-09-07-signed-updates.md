@@ -1,5 +1,15 @@
 # 自动下载安装
 
+## 2026-10-26 完整Rust依赖告警源码修复
+
+- 本项覆盖下方“3ZIP漏洞/7非Mac警告延期”的旧源码状态，R15/R22/R23为源码验证通过、安装仍暂停。[PR385](https://github.com/PIGU-PPPgu/edupi-desktop/pull/385)正常合入`77b8b081f249960eed844d72616502cd5a79e758`；head `96d71daa5c2e5f1642c9fed7d8c12b81d5c2bf06`、实际CI checkout `058ed4c63845f64ee42e703e81b6bb517cb5a8fe`与合并同树`7e56d2795b9ec0b55c16247df4329982f6bd9b85`。ZIP锁9.0.5，chacha20锁0.10.2、clipboard-win锁5.4.3；GTK0.19/GLib0.22及zbus6.1替代旧unsound/退休宏与分拆类型库，不通过删平台功能、改名或伪造版本隐藏告警。
+- 已发布父库尚未配套维护绑定，22个原版本父源码按官方归档SHA/VCS/许可证保留，实际修改限于依赖/必要API接线及测试。ZIP仅移植上游ba98bfa；Tao通道用维护实现保留主线程/FIFO/优先级/关闭语义，GTK/portal/X11/Wayland、通知、单实例、AT-SPI/P2P及lockstep验证保留。测试workspace明确5包加根包，默认仅根包；开发依赖中新引入的async-std/paste曾被严格门实际拒绝，改为现有Tokio和维护pastey别名后重新通过，xcap可选全图像格式仍保留。根Rust floor保持Mac1.90，Linux绑定按1.92验证；Core9f/Pi1.0.2、钥匙/更新源/权限不改。
+- 最终[CI40223742082](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/40223742082)三job全部成功，独立日志/受测树复核无新增P0–P2。Rust job121260657010实际`cargo audit --file src-tauri/Cargo.lock --deny warnings`检查720包，漏洞/维护/unsound/yank告警均0，无ignore、target过滤或降级。应用job121260656764：npm各级0、安全20pass、全套2573pass/42skip/0fail/0cancel、type/lint/branding2pass；42项保留Core/隔离runtime条件及工具缺项，不计通过。普通ready/merge无admin/force/保护规则变化。
+- Linux job121260656996使用Ubuntu24.04/Rust1.92，实际all-targets源码检查2m13s通过；GLib通道5、AT-SPI wire1、私有总线通知2、重复单实例回调1、portal成功/取消/失败1，合计10pass/0ignored，其他1147filtered未运行。通知含两种Tokio运行时中的同步show/update/close，不触真实通知；portal不调用真实屏幕捕获。xcap全功能源检查25.70s通过。Mac本机Rust1.90生产默认check19.59s与6项内存签名/安装前拒绝通过；上游和条件编译的rustc警告另有日志，不将“RustSec零告警”写成“编译零警告”。
+- 保留所有先前失败：首轮GTK私有trait路径失败已修，第二轮生产编译过但测试包非workspace未执行，第三轮运行前9项通过但portal因缺GBM开发库未链接、审计拒绝新dev警告；最终补齐测试workspace、维护开发依赖、GBM/NASM和sudo环境后才记通过。ZIP私有真实库旧4.6.1为2fail/3pass，新9.0.5为5pass；旧0369流病例未重现，不能宣称三公告均红→绿，库测试也不替代Windows updater运行。原日志和所有合成fixture保留，未重试被平台中断的旧复现。
+- 来源/差异/移除条件见`src-tauri/vendor/security-patches/`四份说明。私有证据为`.77/evidence/rust-remaining-verification-20261026.json`、最终三job完整日志、CI checkout JSON和各早期失败日志。源码和许可证按记录差异保留；独立Cargo.lock及缓存标记未纳入，统一使用根锁。独立归档差异复核通过，原有上游空白保留，不改Git规则压掉检查。已有未使用的异步创建后混合同步通知API限制不声称修复；本项不扩大为完整GUI验收。
+- 原5个非Cargo路径字节保持，两个Cargo原`.78`准备差异保留未提交；本轮未Windows构建、未打包/安装或操作真实客户端、未清理，不改真实资料/模型凭据/TCC/launchd/时钟能源/Release/feed。所有旧新源码、编译缓存及fixture保留；旧升级根封存、心跳暂停。Windows运行、真实升级/失败恢复及图像格式运行仍未验，按用户本轮源码范围后置。
+
 ## 2026-10-25 Mac更新路径源码风险
 
 - R15/R22状态为源码验证通过、安装暂停，取代下方同项旧依赖状态。[PR383](https://github.com/PIGU-PPPgu/edupi-desktop/pull/383)正常合入`2d4fdce60d614e02f8528364d1becde6f4fbe40b`；head `e9de2b27fbed6d8aca7d716ae2c42fdaf64eb588`、实际CI checkout `fdc60d1e86bb78e750c0c47adda8c5667654cdff`与合并同树`5a6e6ef554c2d1ab1e8131af2f286b133d868a27`。正式Rust/JS updater2.14.0补安装入口复验及上游Mac旧App交换/恢复保护，必要同步Tauri2.12.5/API2.12.0及其原生依赖；无新缓存恢复入口，Core9f/Pi1.0.2及授权配置不改。失败恢复仍须实际安装验证，不把上游实现和编译当成安装验收。
