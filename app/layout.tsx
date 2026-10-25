@@ -14,6 +14,8 @@ import "./edupi-help.css";
 import "./edupi-context.css";
 import "./edupi-sidebar.css";
 import "./edupi-settings.css";
+import "./models-settings.css";
+import "./edupi-connections-settings.css";
 import "./edupi-rhythm-review.css";
 import "./edupi-workbench.css";
 import "./edupi-student-graph.css";

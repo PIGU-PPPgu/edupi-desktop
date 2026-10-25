@@ -1186,7 +1186,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [activeView, drawer, onPrepareAgentPrompt, onReplaceAgentPrompt, onPrepareTeacherDraft, pendingAgentPrompt, pendingAgentPromptMode]);
 
   if (shouldShowBlockingEducationLoad(education)) {
-    return <section className={`edupi-teacher-shell is-loading${desktopChrome.isDesktop ? " has-desktop-drag-region" : ""}`}>{desktopChrome.isDesktop ? <div className="edupi-window-drag-region" {...desktopChrome.dragRegionProps}><WindowControls /></div> : null}<div className="edupi-workbench-loading" role={loadError ? "alert" : "status"}><span>π</span><strong>{loadError || "正在读取教育工作区"}</strong>{loadError ? <div><button type="button" onClick={retryLoadWorkspace}>重试</button><button type="button" onClick={onOpenAdmin}>打开管理中心</button></div> : null}</div></section>;
+    return <section className={`edupi-teacher-shell is-loading${desktopChrome.isDesktop ? " has-desktop-drag-region" : ""}`}>{desktopChrome.isDesktop ? <div className="edupi-window-drag-region" {...desktopChrome.dragRegionProps}><WindowControls /></div> : null}<div className="edupi-workbench-loading" role={loadError ? "alert" : "status"}><span>π</span><strong>{loadError || "正在读取教育工作区"}</strong>{loadError ? <div><button type="button" onClick={retryLoadWorkspace}>重试</button><button type="button" onClick={onOpenAdmin}>打开设置</button></div> : null}</div></section>;
   }
 
   const taskStage = activeStage;

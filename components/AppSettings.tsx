@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { AppComponentReleaseInfo, AppUpdatesResponse } from "@/lib/app-update-types";
 import {
   APP_DISTRIBUTION_NAME,
@@ -64,14 +64,14 @@ const sectionCardStyle: CSSProperties = {
 };
 
 const sectionTitleStyle: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 700,
+  fontSize: 13,
+  fontWeight: 600,
 };
 
 const sectionHintStyle: CSSProperties = {
   marginTop: 3,
   color: "var(--text-muted)",
-  fontSize: 11,
+  fontSize: 12,
   lineHeight: 1.5,
 };
 
@@ -86,10 +86,44 @@ function notificationStatusLabel(status: NotificationPermissionStatus | null): s
   return "已开启";
 }
 
+export type AppSettingsPage = "general" | "profile" | "notifications" | "devices" | "data" | "about";
+
+const PAGE_TITLES: Record<AppSettingsPage, string> = {
+  general: "常规", profile: "教师信息", notifications: "通知", devices: "设备与权限", data: "数据与隐私", about: "关于与更新",
+};
+
+function SettingsRow({ id, label, description, children }: { id: string; label: string; description?: string; children: ReactNode }) {
+  return <div className="app-settings-row" data-setting-id={id} tabIndex={-1}>
+    <div className="app-settings-row__label"><span>{label}</span>{description ? <small>{description}</small> : null}</div>
+    <div className="app-settings-row__control">{children}</div>
+  </div>;
+}
+
+function SettingsToggleRow({ id, label, hint, checked, onChange, disabled = false }: { id: string; label: string; hint?: string; checked: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
+  return <label className="app-settings-row app-settings-toggle" data-setting-id={id} tabIndex={-1}>
+    <span className="app-settings-row__label"><span>{label}</span>{hint ? <small id={`${id}-hint`}>{hint}</small> : null}</span>
+    <input type="checkbox" role="switch" checked={checked} aria-checked={checked} aria-describedby={hint ? `${id}-hint` : undefined} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
+  </label>;
+}
+
 function TeacherContextSettingsCard({ disabled = false }: { disabled?: boolean }) {
   const [context, setContext] = useState<TeacherContextSnapshot | null>(null);
-  useEffect(() => { fetch("/api/edupi/onboarding", { cache: "no-store" }).then((response) => response.json()).then(setContext).catch(() => undefined); }, []);
-  return <div className="native-settings-card app-settings-context" style={sectionCardStyle}><div><div style={sectionTitleStyle}>教师信息</div><div className="settings-context-summary"><strong>{context?.name || "尚未设置称呼"}</strong><span>{context?.school || "学校待设置"} · {context?.subject || "学科待设置"} · {context?.grade || "年级待设置"}</span></div></div><button type="button" className="native-button" disabled={disabled} onClick={() => window.dispatchEvent(new CustomEvent("edupi-open-context"))}>编辑</button></div>;
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/edupi/onboarding", { cache: "no-store", signal: controller.signal }).then((response) => {
+      if (!response.ok) throw new Error("context_unavailable");
+      return response.json();
+    }).then((value: TeacherContextSnapshot) => { if (!controller.signal.aborted) setContext(value); }).catch(() => { if (!controller.signal.aborted) setError(true); });
+    return () => controller.abort();
+  }, []);
+  const rows = [
+    ["称呼", context?.name], ["学校", context?.school], ["学科", context?.subject], ["年级", context?.grade], ["班级", context?.classes?.join("、")],
+  ];
+  return <div className="app-settings-context" data-setting-id="teacher-profile" tabIndex={-1}>
+    {error ? <p className="app-settings-error" role="alert">教师信息暂不可用</p> : <dl className="app-settings-profile">{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{context ? value || "未设置" : "正在读取"}</dd></div>)}</dl>}
+    <div className="app-settings-actions"><button type="button" className="native-button" disabled={disabled} onClick={() => window.dispatchEvent(new CustomEvent("edupi-open-context"))}>编辑资料</button></div>
+  </div>;
 }
 
 function ForegroundSettingsCard() {
@@ -103,13 +137,13 @@ function ForegroundSettingsCard() {
     window.addEventListener("edupi-foreground-save-failed", failed);
     return () => { window.removeEventListener("edupi-foreground-settings-changed", refresh); window.removeEventListener("storage", refresh); window.removeEventListener("edupi-foreground-save-failed", failed); };
   }, []);
-  return <div className="native-settings-card" style={sectionCardStyle}><label className="settings-foreground-days"><span>过期事务收起</span><input type="number" min={0} max={365} step={1} value={settings.graceDays} aria-label="过期事务收起天数" onChange={event => {
+  return <div data-setting-id="foreground" tabIndex={-1}><label className="app-settings-row settings-foreground-days"><span>过期事务收起</span><span className="app-settings-row__control"><input type="number" min={0} max={365} step={1} value={settings.graceDays} aria-label="过期事务收起天数" onChange={event => {
     const days = event.currentTarget.valueAsNumber;
     if (!Number.isInteger(days) || days < 0 || days > 365) return;
     const next = { ...readForegroundSettings(), graceDays: days };
     void writeForegroundSettings(next).then(() => setError(null), () => setError("当前窗口已生效，重启设置未保存"));
     setSettings(next);
-  }} /><span>天后</span></label>{error ? <div role="alert">{error}</div> : null}<details><summary>历史记录</summary><p style={sectionHintStyle}>只收起前台，不删除记录；可在历史中找回。课前工作按上课日期判断。</p></details></div>;
+  }} /><span>天后</span></span></label>{error ? <div className="app-settings-error" role="alert">{error}</div> : null}<details className="app-settings-help"><summary>收起规则</summary><p>只收起前台，不删除记录；可在历史中找回。课前工作按上课日期判断。</p></details></div>;
 }
 
 function ComputerUseSettingsCard() {
@@ -246,7 +280,7 @@ function ComputerUseSettingsCard() {
     return updateEnabled(primaryAction.kind === "enable");
   };
   const activePermission = flow?.permission;
-  return <div className="native-settings-card" style={sectionCardStyle}>
+  return <div className="native-settings-card app-settings-device" data-setting-id="computer-use" tabIndex={-1} style={sectionCardStyle}>
     <div style={sectionTitleStyle}>桌面控制</div>
     <details className="settings-permission-identity"><summary>{computerUseHostLabel(status?.host)}</summary><dl>
       <div><dt>安装路径</dt><dd>{status?.host?.bundlePath || status?.host?.executablePath || "未检测"}</dd></div>
@@ -315,25 +349,21 @@ function EduPiDataSettingsCard() {
     }
   };
 
-  return <div className="native-settings-card" style={sectionCardStyle}>
-    <div style={sectionTitleStyle}>{t("appSettings.dataSection")}</div>
-    <div style={{ marginTop: 8, display: "grid", gap: 5, fontSize: 11 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-        <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{t("appSettings.dataDirectory")}</span>
-        <code style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={status?.dataRoot}>{status?.dataRoot || "…"}</code>
-      </div>
-      <div style={{ color: "var(--text-muted)" }}>
+  return <div className="native-settings-card app-settings-data" data-setting-id="data-root" tabIndex={-1} style={sectionCardStyle}>
+    <div className="app-settings-row">
+      <div className="app-settings-row__label"><span>数据目录</span><code title={status?.dataRoot}>{status?.dataRoot || "正在读取"}</code></div>
+      <button type="button" className="native-button" disabled={!status?.canChangeDataRoot || busy} onClick={() => void changeRoot()}>{t("appSettings.dataChoose")}</button>
+    </div>
+    <details className="app-settings-help"><summary>目录选项</summary>
+      <div className="app-settings-data__source">
         {t("appSettings.dataSource", { source: status ? t(`appSettings.dataSource.${status.dataSource}`) : "…" })}
         <span style={{ marginLeft: 10 }}>{t("appSettings.coreSource", { source: status ? t(`appSettings.coreSource.${status.coreSource}`) : "…" })}</span>
       </div>
+      <button type="button" className="native-button" disabled={!status?.canChangeDataRoot || busy} onClick={() => void resetRoot()}>{t("appSettings.dataReset")}</button>
+    </details>
       {status?.fallbackReason ? <div className="native-inline-alert is-error" role="status">{t("appSettings.dataFallback", { reason: status.fallbackReason })}</div> : null}
       {status && !status.canChangeDataRoot ? <div style={sectionHintStyle}>{t("appSettings.dataEnvironmentLocked")}</div> : null}
       {error ? <div className="native-inline-alert is-error" role="alert">{error}</div> : null}
-      <div style={{ display: "flex", gap: 8, marginTop: 5 }}>
-        <button type="button" className="native-button native-button-primary" disabled={!status?.canChangeDataRoot || busy} onClick={() => void changeRoot}>{t("appSettings.dataChoose")}</button>
-        <button type="button" className="native-button" disabled={!status?.canChangeDataRoot || busy} onClick={() => void resetRoot}>{t("appSettings.dataReset")}</button>
-      </div>
-    </div>
   </div>;
 }
 function ChoiceButton({
@@ -351,12 +381,6 @@ function ChoiceButton({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      style={{
-        minWidth: 88,
-        borderColor: active ? "var(--accent)" : "var(--border)",
-        color: active ? "var(--accent)" : "var(--text-muted)",
-        fontWeight: active ? 700 : 500,
-      }}
     >
       {children}
     </button>
@@ -453,10 +477,15 @@ function VersionChip({
   );
 }
 
-export function AppSettings({ onClose, initialSection = null, embedded = false, onUpgradeInProgressChange }: { onClose: () => void; initialSection?: "mobile" | null; embedded?: boolean; onUpgradeInProgressChange?: (busy: boolean) => void }) {
+export function AppSettings({ onClose, initialSection = null, embedded = false, page, onUpgradeInProgressChange }: { onClose: () => void; initialSection?: "mobile" | null; embedded?: boolean; page?: AppSettingsPage; onUpgradeInProgressChange?: (busy: boolean) => void }) {
   const { t, locale, setLocale, supportedLocales } = useI18n();
   const { theme, setTheme } = useTheme();
   const desktop = isTauriDesktop();
+  const currentPage = page ?? (initialSection === "mobile" ? "devices" : "general");
+  const [visitedPages, setVisitedPages] = useState<AppSettingsPage[]>(() => [currentPage]);
+  const showsPage = (target: AppSettingsPage) => !embedded || currentPage === target || visitedPages.includes(target);
+  const showNotifications = !embedded || currentPage === "notifications";
+  const showUpdates = !embedded || currentPage === "about";
   const [components, setComponents] = useState<AppComponentReleaseInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -471,6 +500,10 @@ export function AppSettings({ onClose, initialSection = null, embedded = false, 
   const [notificationStatus, setNotificationStatus] = useState<NotificationPermissionStatus | null>(null);
   const updateCheckSequenceRef = useRef(0);
 
+  useEffect(() => {
+    setVisitedPages((current) => current.includes(currentPage) ? current : [...current, currentPage]);
+  }, [currentPage]);
+
   useEffect(() => { onUpgradeInProgressChange?.(Boolean(upgradeProgress)); }, [onUpgradeInProgressChange, upgradeProgress]);
   useEffect(() => () => onUpgradeInProgressChange?.(false), [onUpgradeInProgressChange]);
 
@@ -484,8 +517,9 @@ export function AppSettings({ onClose, initialSection = null, embedded = false, 
   }, [desktop]);
 
   useEffect(() => {
+    if (!showNotifications) return;
     void refreshNotificationStatus();
-  }, [refreshNotificationStatus]);
+  }, [refreshNotificationStatus, showNotifications]);
 
   const checkForUpdates = useCallback(async (signal?: AbortSignal) => {
     const requestId = ++updateCheckSequenceRef.current;
@@ -508,10 +542,11 @@ export function AppSettings({ onClose, initialSection = null, embedded = false, 
   }, []);
 
   useEffect(() => {
+    if (!showUpdates) return;
     const controller = new AbortController();
     void checkForUpdates(controller.signal);
     return () => controller.abort();
-  }, [checkForUpdates]);
+  }, [checkForUpdates, showUpdates]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -523,6 +558,7 @@ export function AppSettings({ onClose, initialSection = null, embedded = false, 
 
   useEffect(() => {
     if (initialSection !== "mobile") return;
+    if (embedded && currentPage !== "devices") return;
     let innerFrame = 0;
     const outerFrame = requestAnimationFrame(() => {
       innerFrame = requestAnimationFrame(() => {
@@ -533,7 +569,7 @@ export function AppSettings({ onClose, initialSection = null, embedded = false, 
       cancelAnimationFrame(outerFrame);
       if (innerFrame) cancelAnimationFrame(innerFrame);
     };
-  }, [initialSection]);
+  }, [currentPage, embedded, initialSection]);
 
   const appRelease = useMemo(
     () => components.find((component) => component.project === "edupi-desktop"),
@@ -622,186 +658,110 @@ export function AppSettings({ onClose, initialSection = null, embedded = false, 
   };
 
   const content = <>
-        <header className="app-settings-header">
-          <div className="app-settings-header__main">
-            {embedded ? <h1 id="app-settings-title">设置</h1> : <h2 className="native-modal-title" id="app-settings-title">设置</h2>}
-            <div className="app-settings-header__actions">
-              <VersionChip
-                currentValue={currentVersionText}
-                latestValue={latestReleaseText}
-                versionsMatch={versionsMatch}
-                updateAvailable={updateAvailable}
-                href={appRelease?.releaseUrl ?? APP_RELEASES_URL}
-                title={statusText}
-                ariaLabel={versionAriaLabel}
-                versionLabel={t("appSettings.version")}
-                currentLabel={t("appSettings.currentVersion")}
-                latestLabel={t("appSettings.latestRelease")}
-                upgradeAvailableLabel={t("appSettings.upgradeAvailable")}
-              />
-              <button
-                className="native-button"
-                type="button"
-                disabled={loading || Boolean(upgradeProgress)}
-                onClick={() => void checkForUpdates()}
-              >
-                {loading ? t("appSettings.checking") : t("appSettings.checkUpdates")}
-              </button>
-              {desktop && (updateAvailable || upgradeProgress) && (
-                <button
-                  className="native-button native-button-primary"
-                  type="button"
-                  disabled={!canUpgrade}
-                  onClick={() => void handleUpgrade()}
-                  title={t("appSettings.updateNote", { name: APP_DISTRIBUTION_NAME })}
-                  style={{ minWidth: 112 }}
-                >
-                  {upgradeLabel}
-                </button>
-              )}
-            </div>
-            {upgradePreflightOpen ? <div className="settings-update-preflight" role="group" aria-label="安装前确认"><p>更新需要替换当前应用并重启，请先保存正在进行的工作。macOS 可能要求“App 管理”授权；该权限由系统核对，EduPi 不会自动打开开关。</p><div><button type="button" className="native-button" onClick={() => setUpgradePreflightOpen(false)}>取消</button><button type="button" className="native-button native-button-primary" onClick={() => void handleUpgrade(true)}>继续更新</button></div></div> : null}
-            {upgradeError && (
-              <div className="native-inline-alert is-error" role="alert" style={{ marginTop: 9 }}>
-                <div>{upgradeError}</div>
-                {upgradeErrorDetails ? (
-                  <details style={{ marginTop: 5, fontSize: 11 }}>
-                    <summary style={{ cursor: "pointer" }}>{t("appSettings.updateDiagnostics")}</summary>
-                    <div style={{ marginTop: 5, display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px", color: "var(--text-muted)" }}>
-                      <span>{t("appSettings.updateStage")}</span><span>{t(`appSettings.updateStage.${upgradeErrorDetails.stage}`)}</span>
-                      <span>{t("appSettings.updateHost")}</span><span>{upgradeErrorDetails.host}</span>
-                      <span>{t("appSettings.updateRetries")}</span><span>{upgradeErrorDetails.retryCount}</span>
-                      <span>{t("appSettings.updateErrorCode")}</span><span>{upgradeErrorDetails.errorCode}</span>
-                    </div>
-                  </details>
-                ) : null}
-              </div>
-            )}
-          </div>
-          {!embedded ? <button
-            className="native-modal-close"
-            type="button"
-            onClick={onClose}
-            disabled={Boolean(upgradeProgress)}
-            aria-label={t("appSettings.close")}
-            title={t("appSettings.close")}
-            style={{ padding: "1px 5px", border: 0, background: "transparent", color: "var(--text-muted)", cursor: upgradeProgress ? "default" : "pointer", fontSize: 21, lineHeight: 1, opacity: upgradeProgress ? 0.35 : 1 }}
-          >
-            ×
-          </button> : null}
-        </header>
+    <header className="app-settings-header">
+      <div className="app-settings-header__main">
+        {embedded ? <h1 id="app-settings-title">{PAGE_TITLES[currentPage]}</h1> : <h2 className="native-modal-title" id="app-settings-title">设置</h2>}
+      </div>
+      {!embedded ? <button className="native-modal-close" type="button" onClick={onClose} disabled={Boolean(upgradeProgress)} aria-label={t("appSettings.close")} title={t("appSettings.close")}>×</button> : null}
+    </header>
 
-        <div className="app-settings-body">
-          <section className="app-settings-group" aria-label="常规">
-          <h2>常规</h2>
-          <div className="app-settings-quick">
-            <div className="native-settings-card" style={sectionCardStyle}>
-              <div style={sectionTitleStyle}>{t("appSettings.languageSection")}</div>
-              <div className="app-settings-quick__choices">
-                {supportedLocales.map((plugin) => <ChoiceButton key={plugin.id} active={locale === plugin.id} onClick={() => setLocale(plugin.id as typeof locale)}>{plugin.label}</ChoiceButton>)}
-              </div>
-            </div>
-            <div className="native-settings-card" style={sectionCardStyle}>
-              <div style={sectionTitleStyle}>{t("appSettings.appearanceSection")}</div>
-              <div className="app-settings-quick__choices">
-                <ChoiceButton active={theme === "light"} onClick={() => setTheme("light")}>{t("appSettings.themeLight")}</ChoiceButton>
-                <ChoiceButton active={theme === "dark"} onClick={() => setTheme("dark")}>{t("appSettings.themeDark")}</ChoiceButton>
-              </div>
+    <div className="app-settings-body">
+      {showsPage("general") ? <section className="app-settings-group" aria-label="常规" hidden={embedded && currentPage !== "general"}>
+        {!embedded ? <h2>常规</h2> : null}
+        <SettingsRow id="language" label={t("appSettings.languageSection")}>
+          <div className="app-settings-choices" role="group" aria-label={t("appSettings.languageSection")}>
+            {supportedLocales.map((plugin) => <ChoiceButton key={plugin.id} active={locale === plugin.id} onClick={() => setLocale(plugin.id as typeof locale)}>{plugin.label}</ChoiceButton>)}
+          </div>
+        </SettingsRow>
+        <SettingsRow id="appearance" label={t("appSettings.appearanceSection")}>
+          <div className="app-settings-choices" role="group" aria-label={t("appSettings.appearanceSection")}>
+            <ChoiceButton active={theme === "light"} onClick={() => setTheme("light")}>{t("appSettings.themeLight")}</ChoiceButton>
+            <ChoiceButton active={theme === "dark"} onClick={() => setTheme("dark")}>{t("appSettings.themeDark")}</ChoiceButton>
+          </div>
+        </SettingsRow>
+        <ForegroundSettingsCard />
+        {desktop ? <SettingsToggleRow id="window-close" label={t("appSettings.closeQuits")} hint={t("appSettings.closeQuitsHint")} checked={closeQuits} onChange={(next) => {
+          setCloseQuits(next);
+          setPrefBool(APP_PREF_KEYS.closeQuits, next);
+          void setCloseQuitsNative(next);
+        }} /> : null}
+      </section> : null}
+
+      {showsPage("profile") ? <section className="app-settings-group" aria-label="教师信息" hidden={embedded && currentPage !== "profile"}>
+        {!embedded ? <h2>教师信息</h2> : null}
+        <TeacherContextSettingsCard disabled={Boolean(upgradeProgress)} />
+      </section> : null}
+
+      {desktop && showsPage("notifications") ? <section className="app-settings-group" aria-label="通知" hidden={embedded && currentPage !== "notifications"}>
+        {!embedded ? <h2>通知</h2> : null}
+        <SettingsToggleRow id="completion-notifications" label={t("appSettings.notifyOnComplete")} hint="窗口在后台时发送。" checked={notifyOnComplete} onChange={(next) => {
+          setNotifyOnComplete(next);
+          setPrefBool(APP_PREF_KEYS.notifyOnComplete, next);
+        }} />
+        <SettingsRow id="notification-permission" label="系统通知">
+          <span className={notificationAuthorized ? "app-settings-state is-ready" : "app-settings-state"} aria-live="polite">{notificationStatusLabel(notificationStatus)}</span>
+          <button type="button" className="native-button" disabled={testingNotification || !notifyOnComplete} onClick={async () => {
+            setTestingNotification(true);
+            setNotificationTest("");
+            try {
+              await testDesktopNotification();
+              await refreshNotificationStatus();
+              setNotificationTest("系统已接受通知；点击通知应打开提醒");
+            } catch (error) {
+              await refreshNotificationStatus();
+              setNotificationTest(error instanceof Error ? error.message : "通知测试失败");
+            } finally { setTestingNotification(false); }
+          }}>{testingNotification ? "发送中…" : "测试通知跳转"}</button>
+        </SettingsRow>
+        {notificationTest ? <p className="app-settings-feedback" role="status">{notificationTest}</p> : null}
+      </section> : null}
+
+      {desktop && showsPage("devices") ? <section className="app-settings-group" aria-label="设备与权限" hidden={embedded && currentPage !== "devices"}>
+        {!embedded ? <h2>设备与权限</h2> : null}
+        <div data-setting-id="mobile" tabIndex={-1}><MobileBridgeSettingsCard /></div>
+        <ComputerUseSettingsCard />
+      </section> : null}
+
+      {desktop && showsPage("data") ? <section className="app-settings-group" aria-label="数据与隐私" hidden={embedded && currentPage !== "data"}>
+        {!embedded ? <h2>数据与隐私</h2> : null}
+        <EduPiDataSettingsCard />
+        <div data-setting-id="usage" tabIndex={-1}><EduPiUsageSettingsCard /></div>
+      </section> : null}
+
+      {showsPage("about") ? <section className="app-settings-group" aria-label="关于与更新" hidden={embedded && currentPage !== "about"}>
+        {!embedded ? <h2>关于与更新</h2> : null}
+        <div className="app-settings-update" data-setting-id="updates" tabIndex={-1}>
+          <div className="app-settings-row">
+            <div className="app-settings-row__label"><strong>EduPi</strong><small aria-live="polite">{statusText}</small></div>
+            <div className="app-settings-row__control">
+              <button className="native-button" type="button" disabled={loading || Boolean(upgradeProgress)} onClick={() => void checkForUpdates()}>{loading ? t("appSettings.checking") : t("appSettings.checkUpdates")}</button>
+              {desktop && (updateAvailable || upgradeProgress) ? <button className="native-button native-button-primary" type="button" disabled={!canUpgrade} onClick={() => void handleUpgrade()} title={t("appSettings.updateNote", { name: APP_DISTRIBUTION_NAME })}>{upgradeLabel}</button> : null}
             </div>
           </div>
-          <TeacherContextSettingsCard disabled={Boolean(upgradeProgress)} />
-          <ForegroundSettingsCard />
-          </section>
-
-          {desktop ? <section className="app-settings-group" aria-label="数据与更新">
-          <h2>数据与更新</h2>
-          <EduPiUsageSettingsCard />
-          <UpdateProxySettingsCard onSaved={() => void checkForUpdates()} />
-          <EduPiDataSettingsCard />
-          </section> : null}
-
-          {desktop ? <section className="app-settings-group" aria-label="设备">
-          <h2>设备</h2>
-          <MobileBridgeSettingsCard />
-          <ComputerUseSettingsCard />
-
-            <div className="native-settings-card" style={sectionCardStyle}>
-              <div style={sectionTitleStyle}>{t("appSettings.desktopSection")}</div>
-              <div style={sectionHintStyle}>{t("appSettings.desktopHint")}</div>
-              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-                <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={closeQuits}
-                    onChange={(event) => {
-                      const next = event.target.checked;
-                      setCloseQuits(next);
-                      setPrefBool(APP_PREF_KEYS.closeQuits, next);
-                      void setCloseQuitsNative(next);
-                    }}
-                    style={{ marginTop: 2 }}
-                  />
-                  <span>
-                    <div style={{ fontSize: 12, fontWeight: 600 }}>{t("appSettings.closeQuits")}</div>
-                    <div style={{ marginTop: 2, color: "var(--text-dim)", fontSize: 11, lineHeight: 1.45 }}>
-                      {t("appSettings.closeQuitsHint")}
-                    </div>
-                  </span>
-                </label>
-                <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={notifyOnComplete}
-                    onChange={(event) => {
-                      const next = event.target.checked;
-                      setNotifyOnComplete(next);
-                      setPrefBool(APP_PREF_KEYS.notifyOnComplete, next);
-                    }}
-                    style={{ marginTop: 2 }}
-                  />
-                  <span>
-                    <div style={{ fontSize: 12, fontWeight: 600 }}>{t("appSettings.notifyOnComplete")}</div>
-                    <div style={{ marginTop: 2, color: "var(--text-dim)", fontSize: 11, lineHeight: 1.45 }}>
-                      {t("appSettings.notifyOnCompleteHint")}
-                    </div>
-                  </span>
-                </label>
-                <button
-                  type="button"
-                  className="native-button"
-                  disabled={testingNotification || !notifyOnComplete}
-                  onClick={async () => {
-                    setTestingNotification(true);
-                    setNotificationTest("");
-                    try {
-                      await testDesktopNotification();
-                      await refreshNotificationStatus();
-                      setNotificationTest("系统已接受通知；点击通知应打开提醒");
-                    } catch (error) {
-                      await refreshNotificationStatus();
-                      setNotificationTest(error instanceof Error ? error.message : "通知测试失败");
-                    } finally { setTestingNotification(false); }
-                  }}
-                >
-                  {testingNotification ? "发送中…" : "测试通知跳转"}
-                </button>
-                <div className="computer-use-status-row"><strong>系统通知</strong><span className={notificationAuthorized ? "is-ready" : "is-off"}>{notificationStatusLabel(notificationStatus)}</span></div>
-                {notificationTest ? <p role="status">{notificationTest}</p> : null}
-                <button
-                  type="button"
-                  className="native-button"
-                  onClick={() => void quitAppNative()}
-                  style={{ alignSelf: "flex-start", marginTop: 2 }}
-                >
-                  {t("appSettings.quitApp")}
-                </button>
-              </div>
-            </div>
-          </section> : null}
+          <VersionChip currentValue={currentVersionText} latestValue={latestReleaseText} versionsMatch={versionsMatch} updateAvailable={updateAvailable} href={appRelease?.releaseUrl ?? APP_RELEASES_URL} title={statusText} ariaLabel={versionAriaLabel} versionLabel={t("appSettings.version")} currentLabel={t("appSettings.currentVersion")} latestLabel={t("appSettings.latestRelease")} upgradeAvailableLabel={t("appSettings.upgradeAvailable")} />
+          {upgradePreflightOpen ? <div className="settings-update-preflight" role="group" aria-label="安装前确认"><p>更新需要替换当前应用并重启，请先保存正在进行的工作。macOS 可能要求“App 管理”授权；该权限由系统核对，EduPi 不会自动打开开关。</p><div><button type="button" className="native-button" onClick={() => setUpgradePreflightOpen(false)}>取消</button><button type="button" className="native-button native-button-primary" onClick={() => void handleUpgrade(true)}>继续更新</button></div></div> : null}
+          {upgradeError ? <div className="native-inline-alert is-error app-settings-feedback" role="alert">
+            <div>{upgradeError}</div>
+            {upgradeErrorDetails ? <details className="app-settings-update__diagnostics">
+              <summary>{t("appSettings.updateDiagnostics")}</summary>
+              <dl>
+                <div><dt>{t("appSettings.updateStage")}</dt><dd>{t(`appSettings.updateStage.${upgradeErrorDetails.stage}`)}</dd></div>
+                <div><dt>{t("appSettings.updateHost")}</dt><dd>{upgradeErrorDetails.host}</dd></div>
+                <div><dt>{t("appSettings.updateRetries")}</dt><dd>{upgradeErrorDetails.retryCount}</dd></div>
+                <div><dt>{t("appSettings.updateErrorCode")}</dt><dd>{upgradeErrorDetails.errorCode}</dd></div>
+              </dl>
+            </details> : null}
+          </div> : null}
         </div>
+        {desktop ? <>
+          <div data-setting-id="update-proxy" tabIndex={-1}><UpdateProxySettingsCard onSaved={() => void checkForUpdates()} /></div>
+          <div className="app-settings-actions app-settings-quit"><button type="button" className="native-button" onClick={() => void quitAppNative()}>{t("appSettings.quitApp")}</button></div>
+        </> : null}
+      </section> : null}
+    </div>
   </>;
 
-  if (embedded) return <div className="app-settings-page" aria-labelledby="app-settings-title">{content}</div>;
+  if (embedded) return <div className="app-settings-page" data-page={currentPage} aria-labelledby="app-settings-title">{content}</div>;
   return <div className="native-modal-backdrop app-settings-backdrop" role="presentation" onMouseDown={(event) => {
     if (event.target === event.currentTarget && !upgradeProgress) onClose();
   }}><section className="native-modal app-settings-modal" role="dialog" aria-modal="true" aria-labelledby="app-settings-title">{content}</section></div>;

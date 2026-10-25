@@ -164,3 +164,43 @@
 - 初版开发页的 `.next/`、重复依赖与 `/tmp/edupi-settings-ui.pUeiUj/` 已在上一轮清理，约 2.1 GiB；本轮新的精确清理结果记录于 `evidence/cleanup-products.json`。
 - 本轮已删除 `.next-desktop/`、`src-tauri/target/`，资源目录中的 `server/`、`Pi Agent Server.app/`、`edupi-core/`、`open-connector/`，Desktop/Core 两处重复依赖、任务 Cargo 缓存、第一预览 App 与隔离资料/状态。15 个生成目录及一个签名探针已回查不存在；另将两份旧 App 合并为一个回退副本。合计目录占用约 8.21 GiB，实测可用空间增加 7.40 GiB；两个源码工作树保持，原 Core 脏工作树未改动。
 - 保留已安装新版、一个旧版回退 App 和本任务私有数据/偏好备份，供本机预览确认后回退使用；不删除其他任务、真实资料、原 Core 脏工作树或废纸篓。
+
+## 2026-10-25 设置结构重排
+
+当前状态：已实现待安装验收。此轮重新打开设置界面的产品验收；此前 OAuth、续期和断网证据仍有效，不以连接功能验证代替设置易用性。实现基线为 `a7bed53c`，本机基线为 `/Applications/EduPi.app` 0.3.77、Core `03bbb893`。
+
+### 参考依据
+
+仅采用官方资料，将产品事实与 EduPi 的设计决定分开记录。
+
+| 官方参考 | 已核对事实 | EduPi 设计决定 |
+| --- | --- | --- |
+| [Linear Workspaces](https://linear.app/docs/workspaces)、[Preferences](https://linear.app/docs/account-preferences) | 个人偏好、团队设置与 Administration 分区；默认视图、主题和桌面行为属于个人偏好 | 统一设置入口，以个人、AI 与服务、本机分组；不为本地单教师应用虚构成员、计费或组织管理 |
+| [Notion Workspace settings](https://www.notion.com/help/workspace-settings) | 设置搜索进入对应页面、标明路径并突出具体项目 | 搜索语言、通知、JEV、辅助功能、更新代理等关键词，进入并聚焦真实控件 |
+| [Notion Connections](https://www.notion.com/help/add-and-manage-connections-with-the-api) | 连接按应用归组，同一应用的多种能力共用一个目录入口 | 飞书、钉钉、企业微信各一个品牌入口，详情选择用途；移除服务连接/OpenConnector 来源 tabs |
+| [Slack Notifications](https://slack.com/help/articles/201355156-Configure-your-Slack-notifications) | 通知在 Preferences 的 Notifications 中集中配置 | 通知独立成页，系统权限与任务完成提醒放在一起 |
+| [Microsoft App settings](https://learn.microsoft.com/en-us/windows/apps/design/app-settings/guidelines-for-app-settings) | 内容限宽、相关项目分组，标签和动作有一致位置；高级内容按需展开 | 常用页采用单列设置行；普通偏好即时生效；版本/更新归关于页，合同和组件清单归诊断 |
+
+Linear 官方图片及浏览器参考页在本轮工具中超时或不可读，不声称操作过 Linear、Notion 登录后的客户端。以上为官方文档事实；EduPi 改版前设置页已经在真实安装 App 中打开并截图。
+
+### 信息结构
+
+改版前可复现：工作台“设置/管理中心”进入同一壳；壳内又有“设置/系统”；设置长页混合教师资料、外观、用量、数据目录、设备权限和更新。AI 页嵌套旧侧栏编辑器，连接按技术来源分成两套目录。
+
+- 个人：常规、教师信息、通知。
+- AI 与服务：AI 与模型、应用连接、自动运行。
+- 本机：设备与权限、数据与隐私、关于与更新。
+- 低频入口：回收站、诊断。
+
+JEV 继续归 AI 与模型，概览和自主运行继续同页。工作与资源中转页退出日常导航，教学能力/学校空间信息保留在诊断的教育数据折叠中。模型页展示真实默认模型与服务列表，添加和详情在页内往返。应用连接先显示真实已有连接，添加时进入统一品牌目录；已配置、凭据已验证与已连接不混称。
+
+本轮不发起新的服务授权，不创建新的 GitHub issue，不扩展 R23 通用执行权限；原固定 GitHub TEST #379 回执应保留。
+
+### 证据入口
+
+本轮私有证据目录：`$CHECKPOINT/settings-architecture-20261025/evidence/`。
+
+- `settings-before-native.png`：真实 0.3.77 设置长页。
+- `native-before-health.json`：Core/投影/Kernel ready，51 学生、160 任务、24 校历、6 课表，externalSend=false。
+- `settings-protected-before.json`：317 个教学、配置、认证和会话文件的摘要，无原内容。
+- `settings-targeted.log`：针对性检查；最终安装验收将补充到本节。

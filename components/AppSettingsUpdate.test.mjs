@@ -34,7 +34,7 @@ test("settings shares content between the management page and the standalone dia
   assert.match(source, /<header className="app-settings-header">/);
   assert.match(source, /<div className="app-settings-body">/);
   assert.match(source, /onUpgradeInProgressChange\?\.\(Boolean\(upgradeProgress\)\)/);
-  for (const group of ["常规", "数据与更新", "设备"]) assert.match(source, new RegExp(`aria-label="${group}"`));
+  for (const group of ["常规", "教师信息", "通知", "数据与隐私", "设备与权限", "关于与更新"]) assert.match(source, new RegExp(`aria-label="${group}"`));
   assert.match(css, /\.app-settings-modal \{[^}]*max-height/);
   assert.match(css, /\.app-settings-body \{[^}]*overflow-y: auto/);
   assert.doesNotMatch(source, /appSettings\.taglineDetails/);

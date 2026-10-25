@@ -165,6 +165,7 @@ export function AppShell() {
   }, []);
   useEffect(() => {
     const handler = () => {
+      if (adminUpdateBusyRef.current) return;
       setAppSettingsOpen(false);
       setEduPiAdminOpen(false);
       setEduPiEducationModule("context");
@@ -174,9 +175,10 @@ export function AppShell() {
   }, []);
   useEffect(() => {
     const handler = () => {
+      if (adminUpdateBusyRef.current) return;
       setAppSettingsSection("mobile");
       setAppSettingsOpen(false);
-      setEduPiAdminSection("settings");
+      setEduPiAdminSection("devices");
       setEduPiAdminOpen(true);
     };
     window.addEventListener("edupi-open-settings", handler);
@@ -184,9 +186,11 @@ export function AppShell() {
   }, []);
 
   const [edupiAdminOpen, setEduPiAdminOpen] = useState(false);
-  const [edupiAdminSection, setEduPiAdminSection] = useState<AdminSectionId>("readiness");
+  const [edupiAdminSection, setEduPiAdminSection] = useState<AdminSectionId>("general");
   const [adminModelsDirty, setAdminModelsDirty] = useState(false);
   const [adminUpdateBusy, setAdminUpdateBusy] = useState(false);
+  const adminUpdateBusyRef = useRef(adminUpdateBusy);
+  adminUpdateBusyRef.current = adminUpdateBusy;
   const [proactiveOpenRequest, setProactiveOpenRequest] = useState(0);
   const [edupiEducationModule, setEduPiEducationModule] = useState<EducationModule | null>("home");
   const edupiChatActive = edupiEducationModule !== null && searchParams.get("view") === "chat";
@@ -458,7 +462,8 @@ export function AppShell() {
     router.replace(`/?${params.toString()}`, { scroll: false });
   }, [router, searchParams]);
 
-  const openEduPiAdmin = useCallback((section: AdminSectionId = "readiness") => {
+  const openEduPiAdmin = useCallback((section: AdminSectionId = "general") => {
+    if (adminUpdateBusyRef.current) return;
     setAppSettingsOpen(false);
     setAppSettingsSection(null);
     setEduPiAdminSection(section);
@@ -2301,7 +2306,7 @@ export function AppShell() {
         onDirtyChange={setAdminModelsDirty}
         onSaved={() => setModelsRefreshKey((k) => k + 1)}
       />}
-      settingsPanel={<AppSettings embedded initialSection={appSettingsSection} onUpgradeInProgressChange={setAdminUpdateBusy} onClose={() => setEduPiAdminOpen(false)} />}
+      settingsPanel={(page) => <AppSettings embedded page={page} initialSection={appSettingsSection} onUpgradeInProgressChange={setAdminUpdateBusy} onClose={() => setEduPiAdminOpen(false)} />}
       onClose={() => { if (!adminUpdateBusy) setEduPiAdminOpen(false); }}
       onOpenContext={() => { setEduPiAdminOpen(false); openEducationModule("context"); }}
       onAskStudentUpdate={askEduPiToUpdateStudents}
@@ -2320,7 +2325,7 @@ export function AppShell() {
         onSkip={finishFirstRunGuide}
       />
     )}
-    <UpdateReminder onOpenSettings={() => openEduPiAdmin("settings")} />
+    <UpdateReminder onOpenSettings={() => openEduPiAdmin("about")} />
     </EduPiForegroundProvider>
   );
 }

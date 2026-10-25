@@ -8,7 +8,7 @@ import { createJiti } from "jiti";
 const source = fs.readFileSync(new URL("./EduPiConnectorSetup.tsx", import.meta.url), "utf8");
 const { connectorRequirement, EduPiConnectorSetup } = await createJiti(import.meta.url, { tsconfigPaths: true, jsx: { runtime: "automatic" } }).import("./EduPiConnectorSetup.tsx");
 test("Feishu maximum scopes and DingTalk QR onboarding remain actionable and secret-safe", () => {
-  for (const label of ["最大权限一键接入", "一键创建并授权", "复制最大权限", "199 项应用权限", "打开开放平台", "App ID", "App Secret", "验证并保存", "钉钉扫码一键接入", "扫码创建并授权", "复制运行时命令", "Client ID", "Client Secret"]) assert.match(source, new RegExp(label));
+  for (const label of ["机器人应用", "创建并授权", "复制权限清单", "199 项应用权限", "打开开放平台", "App ID", "App Secret", "验证并保存", "由钉钉管理员扫码授权", "扫码创建并授权", "复制运行时命令", "Client ID", "Client Secret"]) assert.match(source, new RegExp(label));
   assert.match(source, /\/api\/edupi\/connectors\/feishu/);
   assert.match(source, /\/api\/edupi\/connectors\/dingtalk\/register/);
   assert.match(source, /credentials_verified/);
@@ -36,4 +36,14 @@ test("every projected connector has one reachable setup or requirement surface",
   const configured = renderToStaticMarkup(React.createElement(EduPiConnectorSetup, { connectorId: "email", status: "configured", onClose() {}, onConfigured() {} }));
   assert.match(configured, /已完成接入/);
   assert.doesNotMatch(configured, /需要管理员接入/);
+});
+
+
+test("embedded setup keeps native handlers inline and tucks instructions behind disclosure", () => {
+  for (const connectorId of ["feishu", "dingtalk"]) {
+    const html = renderToStaticMarkup(React.createElement(EduPiConnectorSetup, { embedded: true, connectorId, status: "not_configured", onClose() {}, onConfigured() {} }));
+    assert.doesNotMatch(html, /aria-label="关闭连接设置"|role="dialog"/);
+    assert.match(html, /<summary>接入说明<\/summary>/);
+    assert.match(html, /type="password"/);
+  }
 });

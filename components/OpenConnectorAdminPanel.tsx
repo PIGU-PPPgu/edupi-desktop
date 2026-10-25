@@ -5,7 +5,9 @@ import { fetchDesktopApi } from "@/lib/desktop-native";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import type { CatalogAction, CatalogProvider, CatalogQuery, CatalogResult } from "@/lib/openconnector-catalog-contract";
 import { isGitHubOAuthStatus } from "@/lib/openconnector-github-contract";
-import { CONNECTOR_SCENARIOS, connectorScenario, connectorScenarioLabel, discoverConnectorProviders, type ConnectorScenario } from "@/lib/openconnector-discovery";
+import { CONNECTOR_SCENARIOS, connectorScenarioLabel, type ConnectorScenario } from "@/lib/openconnector-discovery";
+import { buildConnectionDirectory, connectionPurposeLabel, findConnectionApps, managedConnectionState, type ConnectionApp, type ManagedConnection } from "@/lib/edupi-connection-directory";
+import { EduPiConnectorSetup } from "./EduPiConnectorSetup";
 import { OpenConnectorGitHubPanel } from "./OpenConnectorGitHubPanel";
 import { OpenConnectorProviderIcon } from "./OpenConnectorProviderIcon";
 
@@ -74,16 +76,34 @@ async function requestCatalog(input: CatalogQuery, signal: AbortSignal): Promise
   throw new Error("目录暂不可用");
 }
 
-export function OpenConnectorAdminPanel() {
+function ConnectionAppIcon({ app, large = false }: { app: ConnectionApp; large?: boolean }) {
+  if (app.iconService) return <OpenConnectorProviderIcon service={app.iconService} displayName={app.displayName} large={large} />;
+  return <span className={`openconnector-provider-icon connection-app-icon${large ? " is-large" : ""}`} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{app.managedId === "email" ? <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m4 7 8 6 8-6" /></> : app.managedId === "cloud_drive" ? <path d="M7 18h11a4 4 0 0 0 .5-8 6.5 6.5 0 0 0-12.3-1A4.5 4.5 0 0 0 7 18Z" /> : <><path d="m3 10 9-6 9 6M5 10v10h14V10M9 20v-6h6v6M3 20h18" /><path d="M10 9h4" /></>}</svg></span>;
+}
+
+export function OpenConnectorAdminPanel({ managedConnections = [], onManagedConfigured }: {
+  managedConnections?: readonly ManagedConnection[];
+  onManagedConfigured?: () => void;
+} = {}) {
   const [desktop, setDesktop] = useState(false);
   const [providers, setProviders] = useState<CatalogProvider[]>([]);
   const [providerTotal, setProviderTotal] = useState<number | null>(null);
   const [providerLimited, setProviderLimited] = useState(false);
+  const [providerLoading, setProviderLoading] = useState(false);
+  const [providerError, setProviderError] = useState("");
   const [providerQuery, setProviderQuery] = useState("");
   const [scenario, setScenario] = useState<ConnectorScenario>("all");
   const [visibleProviderCount, setVisibleProviderCount] = useState(PROVIDER_PAGE_SIZE);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+  const [purpose, setPurpose] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<CatalogProvider | null>(null);
   const [githubConnected, setGitHubConnected] = useState(false);
+  const [githubLogin, setGitHubLogin] = useState<string | null>(null);
+  const [githubHealth, setGitHubHealth] = useState<string>("unknown");
+  const [connectionsLoaded, setConnectionsLoaded] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
+  const [connectionRefreshKey, setConnectionRefreshKey] = useState(0);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [actionsLoaded, setActionsLoaded] = useState(false);
   const [providerActions, setProviderActions] = useState<CatalogAction[]>([]);
@@ -96,8 +116,13 @@ export function OpenConnectorAdminPanel() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const controllerRef = useRef<AbortController | null>(null);
+  const providerControllerRef = useRef<AbortController | null>(null);
   const catalogRef = useRef<HTMLDivElement>(null);
   const detailHeadingRef = useRef<HTMLHeadingElement>(null);
+  const purposeHeadingRef = useRef<HTMLHeadingElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const addConnectionRef = useRef<HTMLButtonElement>(null);
+  const purposeTriggerRef = useRef<HTMLButtonElement | null>(null);
   const inspectHeadingRef = useRef<HTMLHeadingElement>(null);
   const providerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const actionTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -108,14 +133,16 @@ export function OpenConnectorAdminPanel() {
   const handleConnectionChange = useCallback((connected: boolean) => {
     connectionVersionRef.current += 1;
     setGitHubConnected(connected);
+    setGitHubHealth("unknown");
+    if (!connected) setGitHubLogin(null);
   }, []);
 
   const loadProviders = useCallback(async () => {
-    controllerRef.current?.abort();
+    providerControllerRef.current?.abort();
     const controller = new AbortController();
-    controllerRef.current = controller;
-    setBusy("providers");
-    setError("");
+    providerControllerRef.current = controller;
+    setProviderLoading(true);
+    setProviderError("");
     try {
       const result = await requestCatalog({ op: "providers" }, controller.signal);
       if (controller.signal.aborted) return;
@@ -124,9 +151,9 @@ export function OpenConnectorAdminPanel() {
       setProviderTotal(result.total);
       setProviderLimited(result.limited);
     } catch (cause) {
-      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "目录暂不可用");
+      if (!controller.signal.aborted) setProviderError(cause instanceof Error ? cause.message : "目录暂不可用");
     } finally {
-      if (controllerRef.current === controller) setBusy(null);
+      if (providerControllerRef.current === controller) setProviderLoading(false);
     }
   }, []);
 
@@ -137,6 +164,7 @@ export function OpenConnectorAdminPanel() {
     const connectionController = new AbortController();
     const connectionVersion = connectionVersionRef.current;
     if (available) void (async () => {
+      setConnectionError("");
       try {
         const response = await fetchDesktopApi("/api/desktop/openconnector/github", {
           signal: AbortSignal.any([connectionController.signal, AbortSignal.timeout(5_000)]),
@@ -145,14 +173,17 @@ export function OpenConnectorAdminPanel() {
         if (!connectionController.signal.aborted && connectionVersion === connectionVersionRef.current
           && response.ok && body?.ok === true && isGitHubOAuthStatus(body.data)) {
           setGitHubConnected(Boolean(body.data.supported && body.data.connection?.authType === "oauth2"));
-        }
-      } catch { /* Connection discovery does not block the service directory. */ }
+          setGitHubLogin(body.data.supported ? body.data.connection?.login ?? null : null);
+          setGitHubHealth(body.data.health?.status || "unknown");
+        } else if (!connectionController.signal.aborted && connectionVersion === connectionVersionRef.current) throw new Error("connection_status_unavailable");
+      } catch { if (!connectionController.signal.aborted) setConnectionError("连接状态暂不可用"); }
+      finally { if (!connectionController.signal.aborted) setConnectionsLoaded(true); }
     })();
-    return () => { controllerRef.current?.abort(); connectionController.abort(); };
-  }, [loadProviders]);
+    return () => { controllerRef.current?.abort(); providerControllerRef.current?.abort(); connectionController.abort(); };
+  }, [loadProviders, connectionRefreshKey]);
 
   useLayoutEffect(() => {
-    if (selectedProvider) {
+    if (selectedAppId) {
       if (scrollRef.current) scrollRef.current.element.scrollTop = 0;
       detailHeadingRef.current?.focus({ preventScroll: true });
     } else if (restoreCatalogRef.current) {
@@ -160,7 +191,13 @@ export function OpenConnectorAdminPanel() {
       providerTriggerRef.current?.focus({ preventScroll: true });
       if (scrollRef.current) scrollRef.current.element.scrollTop = scrollRef.current.top;
     }
-  }, [selectedProvider]);
+  }, [selectedAppId]);
+  useLayoutEffect(() => {
+    if (catalogOpen) searchRef.current?.focus({ preventScroll: true });
+  }, [catalogOpen]);
+  useLayoutEffect(() => {
+    if (purpose) purposeHeadingRef.current?.focus({ preventScroll: true });
+  }, [purpose]);
   useLayoutEffect(() => {
     if (selectedAction) inspectHeadingRef.current?.focus({ preventScroll: true });
     else if (restoreActionRef.current) {
@@ -169,44 +206,60 @@ export function OpenConnectorAdminPanel() {
     }
   }, [selectedAction]);
 
-  const connectedServices = useMemo(() => new Set(githubConnected ? ["github"] : []), [githubConnected]);
-  const searchedProviders = useMemo(() => discoverConnectorProviders(providers, {
-    query: providerQuery, connectedServices,
-  }), [providers, providerQuery, connectedServices]);
-  const filteredProviders = useMemo(() => scenario === "all" ? searchedProviders
-    : searchedProviders.filter((provider) => connectorScenario(provider) === scenario), [searchedProviders, scenario]);
+  const directory = useMemo(() => buildConnectionDirectory(providers, managedConnections, githubConnected), [providers, managedConnections, githubConnected]);
+  const selectedApp = directory.find((app) => app.id === selectedAppId) || null;
+  const savedApps = directory.filter((app) => app.id === "github" && githubConnected || managedConnectionState(app.managedStatus).saved);
+  const searchedApps = useMemo(() => findConnectionApps(directory, providerQuery), [directory, providerQuery]);
+  const filteredApps = useMemo(() => findConnectionApps(directory, providerQuery, scenario), [directory, providerQuery, scenario]);
   const scenarioCounts = useMemo(() => new Map(CONNECTOR_SCENARIOS.map((option) => [option.id,
-    option.id === "all" ? searchedProviders.length
-      : searchedProviders.filter((provider) => connectorScenario(provider) === option.id).length,
-  ])), [searchedProviders]);
+    option.id === "all" ? searchedApps.length : findConnectionApps(searchedApps, "", option.id).length,
+  ])), [searchedApps]);
+  const hasPurposeChoice = Boolean(selectedApp && (selectedApp.services.length > 1 || selectedApp.managedId && selectedApp.services.length > 0));
+  const appStatus = (app: ConnectionApp) => app.id === "github" && githubConnected
+    ? githubHealth === "offline" ? "连接中断" : githubHealth === "authorization_required" ? "需要重新授权" : githubHealth === "ready" ? "已连接" : "已授权"
+    : managedConnectionState(app.managedStatus).label;
 
-  function selectProvider(provider: CatalogProvider, trigger: HTMLButtonElement) {
+  function clearActions() {
+    setSelectedAction(null); setActionsOpen(false); setActionsLoaded(false);
+    setActionQuery(""); setActions([]); setProviderActions([]);
+    setSearched(false); setLimited(false); setBusy(null); setError("");
+  }
+
+  function selectApp(app: ConnectionApp, trigger: HTMLButtonElement) {
     controllerRef.current?.abort();
     controllerRef.current = null;
     providerTriggerRef.current = trigger;
     const scrollElement = catalogRef.current?.closest<HTMLElement>(".edupi-admin-workspace");
     scrollRef.current = scrollElement ? { element: scrollElement, top: scrollElement.scrollTop } : null;
-    setSelectedProvider(provider);
-    setSelectedAction(null);
-    setActionsOpen(false);
-    setActionsLoaded(false);
-    setActionQuery("");
-    setActions([]);
-    setProviderActions([]);
-    setSearched(false);
-    setLimited(false);
-    setBusy(null);
-    setError("");
+    setSelectedAppId(app.id);
+    const immediate = app.managedId && app.services.length === 0 ? "managed" : !app.managedId && app.services.length <= 1 ? app.services[0]?.service || null : null;
+    setPurpose(immediate);
+    setSelectedProvider(immediate && immediate !== "managed" ? app.services[0] || null : null);
+    clearActions();
+  }
+
+  function choosePurpose(value: string, trigger: HTMLButtonElement) {
+    controllerRef.current?.abort(); controllerRef.current = null;
+    purposeTriggerRef.current = trigger;
+    setPurpose(value);
+    setSelectedProvider(value === "managed" ? null : selectedApp?.services.find((provider) => provider.service === value) || null);
+    clearActions();
+  }
+
+  function returnToPurposes() {
+    controllerRef.current?.abort(); controllerRef.current = null;
+    setPurpose(null); setSelectedProvider(null); clearActions();
+    requestAnimationFrame(() => purposeTriggerRef.current?.focus({ preventScroll: true }));
   }
 
   function returnToCatalog() {
-    controllerRef.current?.abort();
-    controllerRef.current = null;
+    controllerRef.current?.abort(); controllerRef.current = null;
     restoreCatalogRef.current = true;
-    setSelectedProvider(null);
-    setSelectedAction(null);
-    setBusy(null);
-    setError("");
+    setSelectedAppId(null); setPurpose(null); setSelectedProvider(null); clearActions();
+  }
+
+  function openCatalog() {
+    setCatalogOpen(true);
   }
 
   async function loadProviderActions(provider: CatalogProvider) {
@@ -286,31 +339,7 @@ export function OpenConnectorAdminPanel() {
     setLimited(!value.trim() && providerActionsLimited);
   }
 
-  return <section className="openconnector-admin" aria-label="OpenConnector 目录">
-    {!desktop ? <div className="openconnector-admin__unavailable" role="status">仅桌面应用可查询</div> : <>
-      <div className="openconnector-admin__catalog" ref={catalogRef} hidden={Boolean(selectedProvider)}>
-        <div className="openconnector-admin__toolbar">
-          <label className="openconnector-admin__search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg><input type="search" aria-label="搜索服务" placeholder="搜索服务" value={providerQuery} disabled={busy === "providers"} maxLength={120} autoComplete="off" onChange={(event) => { setProviderQuery(event.target.value); setVisibleProviderCount(PROVIDER_PAGE_SIZE); }} /></label>
-          <span className="openconnector-admin__count" role="status">{busy === "providers" ? "正在读取服务" : providerTotal === null ? "服务目录暂不可用" : `${filteredProviders.length} 个服务${providerLimited ? " · 目录未完整" : ""}`}</span>
-        </div>
-        <div className="openconnector-admin__filters" role="group" aria-label="服务场景">
-          {CONNECTOR_SCENARIOS.map((option) => <button key={option.id} type="button" aria-pressed={scenario === option.id} disabled={busy === "providers" || option.id !== "all" && !scenarioCounts.get(option.id)} onClick={() => { setScenario(option.id); setVisibleProviderCount(PROVIDER_PAGE_SIZE); }}>{option.label}</button>)}
-        </div>
-        {error && !selectedProvider ? <div className="native-inline-alert is-error" role="alert">{error}{busy === null ? <button type="button" onClick={() => void loadProviders()}>重试</button> : null}</div> : null}
-        <ul className="openconnector-admin__grid" aria-label="服务目录" aria-busy={busy === "providers"}>
-          {filteredProviders.slice(0, visibleProviderCount).map((provider) => <li key={provider.service}><button className="openconnector-admin__provider" type="button" disabled={busy === "providers"} onClick={(event) => selectProvider(provider, event.currentTarget)}>
-            <OpenConnectorProviderIcon service={provider.service} displayName={provider.displayName} />
-            <span className="openconnector-admin__provider-name"><strong>{provider.displayName}</strong><small>{connectorScenarioLabel(provider)}</small></span>
-            {connectedServices.has(provider.service) ? <span className="openconnector-admin__connected">已连接</span> : <span className="openconnector-admin__chevron" aria-hidden="true">›</span>}
-          </button></li>)}
-        </ul>
-        {providerTotal !== null && filteredProviders.length === 0 ? <div className="openconnector-admin__empty" role="status">没有匹配的服务<button type="button" onClick={() => { setProviderQuery(""); setScenario("all"); setVisibleProviderCount(PROVIDER_PAGE_SIZE); }}>清除筛选</button></div> : null}
-        {filteredProviders.length > visibleProviderCount ? <button className="openconnector-admin__more" type="button" onClick={() => setVisibleProviderCount((count) => count + PROVIDER_PAGE_SIZE)}>显示更多<span>{Math.min(visibleProviderCount, filteredProviders.length)} / {filteredProviders.length}</span></button> : null}
-      </div>
-      {selectedProvider ? <div className="openconnector-admin__detail">
-        <button type="button" className="openconnector-admin__back" onClick={returnToCatalog}><span aria-hidden="true">←</span> 返回服务</button>
-        <header className="openconnector-admin__identity"><OpenConnectorProviderIcon service={selectedProvider.service} displayName={selectedProvider.displayName} large /><div><h2 ref={detailHeadingRef} tabIndex={-1}>{selectedProvider.displayName}</h2><span>{connectorScenarioLabel(selectedProvider)}<code>{selectedProvider.service}</code></span></div>{selectedProvider.service === "github" ? githubConnected ? <span className="openconnector-admin__connected">已连接</span> : null : <span className="openconnector-admin__scope">只读目录</span>}</header>
-        {selectedProvider.service === "github" ? <OpenConnectorGitHubPanel onConnectionChange={handleConnectionChange} /> : null}
+  const providerOperations = selectedProvider ? <>
         <details className="openconnector-admin__operations" open={actionsOpen} onToggle={(event) => {
           const open = event.currentTarget.open;
           setActionsOpen(open);
@@ -329,7 +358,51 @@ export function OpenConnectorAdminPanel() {
             {selectedAction.fields.length === 0 ? <small>无需输入参数</small> : null}{selectedAction.limited ? <small>仅显示前 30 项参数</small> : null}
           </section> : null}
         </details>
-      </div> : null}
-    </>}
+  </> : null;
+
+  return <section className="openconnector-admin connection-settings" aria-label="OpenConnector 目录" data-setting-id="applications">
+    <div className="openconnector-admin__catalog" ref={catalogRef} hidden={Boolean(selectedApp)}>
+      {!catalogOpen ? <section className="connection-settings__saved" aria-label="我的连接">
+        <header><h2>我的连接</h2><button ref={addConnectionRef} type="button" className="edupi-admin-primary" onClick={openCatalog}>添加连接</button></header>
+        {connectionError ? <div className="native-inline-alert is-error" role="alert">{connectionError}<button type="button" onClick={() => setConnectionRefreshKey((value) => value + 1)}>重新读取</button></div> : null}
+        {savedApps.length ? <ul>{savedApps.map((app) => <li key={app.id}><button type="button" className="connection-settings__saved-app" onClick={(event) => selectApp(app, event.currentTarget)}>
+          <ConnectionAppIcon app={app} /><span><strong>{app.displayName}</strong><small>{app.id === "github" ? githubLogin || "OAuth" : app.managedId === "feishu" || app.managedId === "dingtalk" ? "机器人对话" : "学校连接"}</small></span><em>{appStatus(app)}</em><span className="openconnector-admin__chevron" aria-hidden="true">›</span>
+        </button></li>)}</ul> : <div className="connection-settings__empty" role="status">{desktop && !connectionsLoaded ? "正在读取连接" : connectionError ? "暂时无法读取已保存的连接" : "还没有添加连接"}</div>}
+      </section> : <>
+        <button type="button" className="openconnector-admin__back" onClick={() => { setCatalogOpen(false); requestAnimationFrame(() => addConnectionRef.current?.focus()); }}><span aria-hidden="true">←</span> 我的连接</button>
+        <div className="openconnector-admin__toolbar">
+          <label className="openconnector-admin__search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg><input ref={searchRef} type="search" aria-label="搜索服务" placeholder="搜索应用" value={providerQuery} disabled={providerLoading} maxLength={120} autoComplete="off" onChange={(event) => { setProviderQuery(event.target.value); setVisibleProviderCount(PROVIDER_PAGE_SIZE); }} /></label>
+          <span className="openconnector-admin__count" role="status">{providerLoading ? "正在读取应用" : providerTotal === null ? "外部目录暂不可用" : `${filteredApps.length} 个应用${providerLimited ? " · 目录未完整" : ""}`}</span>
+        </div>
+        <div className="openconnector-admin__filters" role="group" aria-label="服务场景">
+          {CONNECTOR_SCENARIOS.map((option) => <button key={option.id} type="button" aria-pressed={scenario === option.id} disabled={option.id !== "all" && !scenarioCounts.get(option.id)} onClick={() => { setScenario(option.id); setVisibleProviderCount(PROVIDER_PAGE_SIZE); }}>{option.label}</button>)}
+        </div>
+        {!desktop ? <div className="openconnector-admin__unavailable" role="status">外部应用目录仅桌面应用可查询</div> : null}
+        {providerError ? <div className="native-inline-alert is-error" role="alert">{providerError}{!providerLoading ? <button type="button" onClick={() => void loadProviders()}>重试</button> : null}</div> : null}
+        <ul className="openconnector-admin__grid" aria-label="服务目录" aria-busy={providerLoading}>
+          {filteredApps.slice(0, visibleProviderCount).map((app) => <li key={app.id}><button className="openconnector-admin__provider" type="button" onClick={(event) => selectApp(app, event.currentTarget)}>
+            <ConnectionAppIcon app={app} />
+            <span className="openconnector-admin__provider-name"><strong>{app.displayName}</strong><small>{app.managedId && app.services.length === 0 ? "学校连接" : CONNECTOR_SCENARIOS.find((item) => item.id === app.scenario)?.label}</small></span>
+            {app.id === "github" && githubConnected || managedConnectionState(app.managedStatus).saved ? <span className="openconnector-admin__connected">{appStatus(app)}</span> : <span className="openconnector-admin__chevron" aria-hidden="true">›</span>}
+          </button></li>)}
+        </ul>
+        {providerTotal !== null && filteredApps.length === 0 ? <div className="openconnector-admin__empty" role="status">没有匹配的应用<button type="button" onClick={() => { setProviderQuery(""); setScenario("all"); setVisibleProviderCount(PROVIDER_PAGE_SIZE); }}>清除筛选</button></div> : null}
+        {filteredApps.length > visibleProviderCount ? <button className="openconnector-admin__more" type="button" onClick={() => setVisibleProviderCount((count) => count + PROVIDER_PAGE_SIZE)}>显示更多<span>{Math.min(visibleProviderCount, filteredApps.length)} / {filteredApps.length}</span></button> : null}
+      </>}
+    </div>
+    {selectedApp ? <div className="openconnector-admin__detail">
+      <button type="button" className="openconnector-admin__back" onClick={returnToCatalog}><span aria-hidden="true">←</span> {catalogOpen ? "返回应用" : "返回我的连接"}</button>
+      <header className="openconnector-admin__identity"><ConnectionAppIcon app={selectedApp} large /><div><h2 ref={detailHeadingRef} tabIndex={-1}>{selectedApp.displayName}</h2><span>{CONNECTOR_SCENARIOS.find((item) => item.id === selectedApp.scenario)?.label}</span></div>{selectedApp.id === "github" && githubConnected || managedConnectionState(selectedApp.managedStatus).saved ? <span className="openconnector-admin__connected">{appStatus(selectedApp)}</span> : !selectedApp.managedId && selectedApp.id !== "github" ? <span className="openconnector-admin__scope">只读目录</span> : null}</header>
+      {selectedApp.id === "github" ? <OpenConnectorGitHubPanel onConnectionChange={handleConnectionChange} /> : null}
+      {hasPurposeChoice ? <section className="connection-settings__purposes" aria-label="连接用途" hidden={Boolean(purpose)}><h3>连接用途</h3><ul>
+        {selectedApp.managedId ? <li><button type="button" onClick={(event) => choosePurpose("managed", event.currentTarget)}><span><strong>机器人对话</strong><small>在应用中接收消息并与 EduPi 对话</small></span><em>{managedConnectionState(selectedApp.managedStatus).label}</em><span aria-hidden="true">›</span></button></li> : null}
+        {selectedApp.services.map((provider) => <li key={provider.service}><button type="button" onClick={(event) => choosePurpose(provider.service, event.currentTarget)}><span><strong>{connectionPurposeLabel(provider)}</strong><small>{connectorScenarioLabel(provider)}</small></span><em>只读目录</em><span aria-hidden="true">›</span></button></li>)}
+      </ul></section> : null}
+      {purpose ? <section className="connection-settings__purpose">
+        {hasPurposeChoice ? <><button type="button" className="openconnector-admin__back" onClick={returnToPurposes}>← 返回用途</button><h3 ref={purposeHeadingRef} tabIndex={-1}>{purpose === "managed" ? "机器人对话" : selectedProvider ? connectionPurposeLabel(selectedProvider) : "连接设置"}</h3></> : null}
+        {purpose === "managed" && selectedApp.managedId ? <EduPiConnectorSetup embedded connectorId={selectedApp.managedId} status={selectedApp.managedStatus || "not_configured"} onClose={hasPurposeChoice ? returnToPurposes : returnToCatalog} onConfigured={() => onManagedConfigured?.()} /> : null}
+        {providerOperations}
+      </section> : null}
+    </div> : null}
   </section>;
 }
