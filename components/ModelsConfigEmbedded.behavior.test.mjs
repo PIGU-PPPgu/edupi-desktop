@@ -28,7 +28,7 @@ const nodes = (node) => Array.isArray(node) ? node.flatMap(nodes)
 
 // Exercise the actual parent component handlers. Provider/auth internals remain
 // component boundaries; all transports stay isolated and never read credentials.
-function mountModels({ embedded = true, readOverview = async () => overview } = {}) {
+function mountModels({ embedded = true, cwd, readOverview = async () => overview } = {}) {
   const slots = [], effects = new Map(), requests = [], modalFlags = [], dirtyChanges = [];
   let cursor = 0, dirty = false, tree, savedCount = 0;
   const sameDeps = (left, right) => left && right && left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
@@ -63,7 +63,7 @@ function mountModels({ embedded = true, readOverview = async () => overview } = 
     "@/hooks/useI18n": { useI18n: () => ({ t: (key) => key }) },
     "@/hooks/useModalDismiss": { useModalDismiss: (_callback, enabled = true) => { modalFlags.push(enabled); return hooks.useRef(null); } },
     "@/lib/desktop-native": {},
-    "@/lib/fetch-timeout": { fetchJsonWithDeadline: async (url) => { requests.push({ url }); return { response: reply(null), body: await readOverview() }; } },
+    "@/lib/fetch-timeout": { fetchJsonWithDeadline: async (url) => { requests.push({ url }); return { response: reply(null), body: await readOverview(url) }; } },
     "@/lib/model-config-normalize": normalize,
     "@/lib/model-setup-presets": presets,
     "./ConfirmDangerButton": { ConfirmDangerButton: () => null },
@@ -75,7 +75,7 @@ function mountModels({ embedded = true, readOverview = async () => overview } = 
       assert.ok(modules[name], `module ${name}`); return modules[name];
     }, fetch: transport, setTimeout: () => 0, clearTimeout() {}, console,
   });
-  const props = { embedded, onClose() {}, onDirtyChange: (value) => dirtyChanges.push(value), onSaved: () => { savedCount += 1; } };
+  const props = { embedded, cwd, onClose() {}, onDirtyChange: (value) => dirtyChanges.push(value), onSaved: () => { savedCount += 1; } };
   function render() {
     let attempts = 0;
     do {
@@ -87,6 +87,7 @@ function mountModels({ embedded = true, readOverview = async () => overview } = 
     return tree;
   }
   return { requests, modalFlags, dirtyChanges, render,
+    rerender(nextProps) { Object.assign(props, nextProps); return render(); },
     get savedCount() { return savedCount; },
     button(label) { const found = nodes(render()).find((node) => node.type === "button" && textOf(node) === label); assert.ok(found, `button ${label}`); return found; },
     service(label) { const found = nodes(render()).find((node) => node.type === "button" && node.props.className === "models-page__row" && textOf(node).includes(label)); assert.ok(found, `service ${label}`); return found; },
@@ -168,6 +169,51 @@ test("unavailable overview is retryable and does not invent a default or OAuth m
     panel.button("重新读取").props.onClick(); await tick();
     assert.match(textOf(panel.render()), /DeepSeek · deepseek-chat/);
     assert.match(textOf(panel.service("Codex")), /1 个模型/);
+  } finally { panel.unmount(); }
+});
+
+test("embedded overview encodes the trusted workspace directory in its models request", async () => {
+  const cwd = "/Users/teacher/课程资料 & AI";
+  const panel = mountModels({ cwd });
+  try {
+    panel.render(); await tick();
+    assert.ok(panel.requests.some((request) => request.url === `/api/models?cwd=${encodeURIComponent(cwd)}`));
+    assert.equal(panel.requests.some((request) => request.url === "/api/models"), false);
+    assert.match(textOf(panel.render()), /DeepSeek · deepseek-chat/);
+    assert.equal(panel.requests.some((request) => request.options?.method === "PUT"), false);
+  } finally { panel.unmount(); }
+});
+
+test("overview reloads when the workspace arrives after the initial unscoped read", async () => {
+  const cwd = "/Users/teacher/edupi";
+  const panel = mountModels({ readOverview: async (url) => { if (url === "/api/models") throw new Error("cwd is not allowed"); return overview; } });
+  try {
+    panel.render(); await tick();
+    assert.match(textOf(panel.render()), /暂时无法读取/);
+    panel.rerender({ cwd }); await tick();
+    assert.match(textOf(panel.render()), /DeepSeek · deepseek-chat/);
+    assert.deepEqual(panel.requests.filter((request) => request.url.startsWith("/api/models?") || request.url === "/api/models").map((request) => request.url), [
+      "/api/models", `/api/models?cwd=${encodeURIComponent(cwd)}`,
+    ]);
+  } finally { panel.unmount(); }
+});
+
+test("a late overview from the previous workspace cannot replace the new workspace result", async () => {
+  const oldCwd = "/Users/teacher/old-workspace", newCwd = "/Users/teacher/new-workspace";
+  let resolveOld, resolveNew;
+  const panel = mountModels({ cwd: oldCwd, readOverview: (url) => new Promise((resolve) => {
+    if (url === `/api/models?cwd=${encodeURIComponent(oldCwd)}`) resolveOld = resolve;
+    else if (url === `/api/models?cwd=${encodeURIComponent(newCwd)}`) resolveNew = resolve;
+    else assert.fail(`Unexpected overview URL ${url}`);
+  }) });
+  try {
+    panel.render(); await tick();
+    panel.rerender({ cwd: newCwd }); await tick();
+    resolveNew({ ...overview, defaultModel: { provider: "deepseek", modelId: "new-workspace-model" } }); await tick();
+    assert.match(textOf(panel.render()), /DeepSeek · new-workspace-model/);
+    resolveOld({ ...overview, defaultModel: { provider: "deepseek", modelId: "old-workspace-model" } }); await tick();
+    assert.match(textOf(panel.render()), /DeepSeek · new-workspace-model/);
+    assert.doesNotMatch(textOf(panel.render()), /old-workspace-model/);
   } finally { panel.unmount(); }
 });
 

@@ -47,6 +47,8 @@ test("one settings workspace provides grouped navigation and preserves real capa
   assert.doesNotMatch(rail, /管理中心/);
   assert.match(panel, /打开设置/);
   assert.match(appShell, /settingsPanel=\{\(page\) => <AppSettings embedded page=\{page\}/);
+  assert.match(appShell, /modelsPanel=\{\(cwd\) => <ModelsConfig\s+embedded\s+cwd=\{cwd\}/);
+  assert.match(admin, /modelsPanel\(education\?\.workspace\)/);
   assert.match(appShell, /<UpdateReminder onOpenSettings=\{\(\) => openEduPiAdmin\("about"\)\}/);
   assert.match(appShell, /setEduPiAdminSection\("devices"\)/);
   assert.match(appShell, /inert=\{edupiAdminOpen \? true : undefined\}/);

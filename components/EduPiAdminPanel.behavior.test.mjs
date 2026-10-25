@@ -114,7 +114,7 @@ function mountAdmin(initialSection = "connections") {
     clearTimeout: (id) => timers.delete(id),
   });
   const props = {
-    initialSection, modelSettingsDirty: false, settingsBusy: false, modelsPanel: null,
+    initialSection, modelSettingsDirty: false, settingsBusy: false, modelsPanel: () => null,
     onClose() {}, onOpenContext() {}, onAskStudentUpdate() {}, onNavigate() {},
     settingsPanel: (page) => jsx("app-settings", { page }),
   };

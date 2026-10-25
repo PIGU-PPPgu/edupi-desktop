@@ -2027,11 +2027,12 @@ function AddProviderPicker({
 interface ModelsConfigProps {
   onClose: () => void;
   embedded?: boolean;
+  cwd?: string;
   onDirtyChange?: (dirty: boolean) => void;
   onSaved?: () => void;
 }
 
-export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved }: ModelsConfigProps) {
+export function ModelsConfig({ onClose, embedded = false, cwd, onDirtyChange, onSaved }: ModelsConfigProps) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
   const [config, setConfig] = useState<ModelsJson>({ providers: {} });
@@ -2082,14 +2083,15 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
     if (!embedded) return;
     const version = ++overviewVersionRef.current;
     setOverviewLoading(true);
-    void fetchJsonWithDeadline<NonNullable<typeof modelOverview>>("/api/models", 10_000)
+    const url = cwd ? `/api/models?cwd=${encodeURIComponent(cwd)}` : "/api/models";
+    void fetchJsonWithDeadline<NonNullable<typeof modelOverview>>(url, 10_000)
       .then(({ response, body }) => {
         if (!response.ok) throw new Error("models unavailable");
         if (version === overviewVersionRef.current) setModelOverview(body);
       })
       .catch(() => { if (version === overviewVersionRef.current) setModelOverview(null); })
       .finally(() => { if (version === overviewVersionRef.current) setOverviewLoading(false); });
-  }, [embedded]);
+  }, [cwd, embedded]);
 
   useEffect(() => {
     refreshModelOverview();

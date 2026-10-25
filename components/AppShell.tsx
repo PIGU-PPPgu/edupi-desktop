@@ -2300,8 +2300,9 @@ export function AppShell() {
       initialSection={edupiAdminSection}
       modelSettingsDirty={adminModelsDirty}
       settingsBusy={adminUpdateBusy}
-      modelsPanel={<ModelsConfig
+      modelsPanel={(cwd) => <ModelsConfig
         embedded
+        cwd={cwd}
         onClose={() => setAdminModelsDirty(false)}
         onDirtyChange={setAdminModelsDirty}
         onSaved={() => setModelsRefreshKey((k) => k + 1)}

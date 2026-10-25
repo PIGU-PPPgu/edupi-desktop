@@ -64,7 +64,7 @@ type Props = {
   onNavigate: (view: WorkbenchView) => void;
   modelSettingsDirty: boolean;
   settingsBusy?: boolean;
-  modelsPanel: ReactNode;
+  modelsPanel: (cwd?: string) => ReactNode;
   settingsPanel: (page: AppSettingsPage) => ReactNode;
   initialSection?: AdminSectionId;
   refreshToken?: number;
@@ -379,7 +379,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
           <button id="edupi-models-chat-tab" type="button" aria-pressed={modelPane === "chat"} aria-controls="edupi-models-chat" onClick={() => setModelPane("chat")}>对话模型</button>
           <button id="edupi-models-browser-tab" type="button" aria-pressed={modelPane === "browser"} aria-controls="edupi-models-browser" onClick={() => setModelPane("browser")}>浏览器决策</button>
         </div>
-        <div id="edupi-models-chat" data-setting-id="chat-models" className="edupi-admin-embedded-models" aria-labelledby="edupi-models-chat-tab" hidden={modelPane !== "chat"}>{modelsPanel}</div>
+        <div id="edupi-models-chat" data-setting-id="chat-models" className="edupi-admin-embedded-models" aria-labelledby="edupi-models-chat-tab" hidden={modelPane !== "chat"}>{modelsPanel(education?.workspace)}</div>
         <div id="edupi-models-browser" data-setting-id="browser-decision" aria-labelledby="edupi-models-browser-tab" hidden={modelPane !== "browser"}><JevSettingsCard /></div>
       </section> : null}
 
