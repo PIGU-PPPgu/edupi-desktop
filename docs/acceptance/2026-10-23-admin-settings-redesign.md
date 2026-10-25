@@ -1,5 +1,7 @@
 # 管理中心与设置重做验收
 
+当前设置界面以本文件的 **2026-10-25 设置结构重排**为准：`f7224b98` 已安装并完成 macOS 原生操作验收。下方 2026-10-24 是连接恢复的历史基线，其后端边界继续保留。
+
 ## 2026-10-24 官方目录与连接恢复验收通过
 
 本节取代下方正常 OAuth 与中途锁屏快照的当前状态。**本次 macOS 目录、真实手动续期、受控到期后的真实 SDK 自动续期、GitHub 路径离线/冷启动/恢复、同 ID 重新授权和原请求去重均验收通过。** 最终正常版 `fd007801` 已安装到唯一 `/Applications/EduPi.app`，验收专用环境键已移除，中继已停止；应用停在新版服务目录。未新增第二个测试 Issue。
@@ -167,7 +169,7 @@
 
 ## 2026-10-25 设置结构重排
 
-当前状态：已实现待安装验收。此轮重新打开设置界面的产品验收；此前 OAuth、续期和断网证据仍有效，不以连接功能验证代替设置易用性。实现基线为 `a7bed53c`，本机基线为 `/Applications/EduPi.app` 0.3.77、Core `03bbb893`。
+当前状态：macOS 本机验收通过。此状态取代本轮初始的“已实现待安装验收”；此前 OAuth、续期和断网证据仍有效，不以连接功能验证代替设置易用性。实现基线为 `a7bed53c`，最终源码 `f7224b98d6f9eb67f14da8d8869a48e944ddd14f`，唯一安装 App 仍为 `/Applications/EduPi.app` 0.3.77 本地预览，Core `03bbb893`。本轮未合并、公开发布、公证或修改 feed/tag；用户观感不计为自动通过。
 
 ### 参考依据
 
@@ -200,7 +202,41 @@ JEV 继续归 AI 与模型，概览和自主运行继续同页。工作与资源
 
 本轮私有证据目录：`$CHECKPOINT/settings-architecture-20261025/evidence/`。
 
-- `settings-before-native.png`：真实 0.3.77 设置长页。
+- `settings-before-native.jpg`：真实 0.3.77 设置长页。
 - `native-before-health.json`：Core/投影/Kernel ready，51 学生、160 任务、24 校历、6 课表，externalSend=false。
 - `settings-protected-before.json`：317 个教学、配置、认证和会话文件的摘要，无原内容。
-- `settings-targeted.log`：针对性检查；最终安装验收将补充到本节。
+- `settings-targeted.log` 与 `checks.json`：阶段检查及最终检查的分开记录。截图原始字节为 JPEG，已按实际格式改扩展名，没有改动像素；`image-format-names.json` 保留映射。
+
+### 本机实际操作
+
+| 流程 | 实际结果 | 证据 |
+| --- | --- | --- |
+| 工作台进入设置 | 只有一个设置入口；个人、AI 与服务、本机三组及回收站/诊断可直接进入 | `delivery-settings-ready.jpg`、`delivery-workbench.txt` |
+| 搜索 JEV | 仅一个结果，Enter 进入 AI 与模型的浏览器决策并聚焦；原密钥仅显示已保存占位 | `delivery-jev-target.txt/.jpg` |
+| 搜索更新代理 | 直接进入关于与更新，展开代理控件并聚焦 | `native-proxy-search-target.txt/.jpg` |
+| 模型服务 | 真实默认 `DeepSeek / deepseek-v4-flash`，17 个可用模型；OAuth/API Key/自定义服务状态分开；添加服务在页内打开，返回恢复按钮焦点 | `delivery-models.txt/.jpg`、`final-model-provider-picker.txt/.jpg`、`final-model-picker-return.txt` |
+| 应用目录 | 1553 个应用；飞书/钉钉/企业微信按品牌各一个入口；当前可见的常用应用官方 Logo 加载后已实际目视检查 | `delivery-directory-loaded.jpg`；初次加载图片尚未完成的截图保留，不作为图标已显示证据 |
+| 飞书用途与返回 | 中文查询仅一项；机器人接入与只读目录按用途选择；没有弹窗或自动授权；Shift+Tab/Enter 返回原用途，再返回目录保留查询与焦点 | `native-directory-feishu.txt`、`native-feishu-purposes.txt/.jpg`、`native-feishu-keyboard-back.txt`、`native-feishu-catalog-return.txt` |
+| 代理草稿 | 输入未保存的本机测试地址，切常规再回关于，草稿仍在；最后还原已保存值，保存按钮禁用，未写入代理配置 | `native-proxy-unsaved.txt`、`native-proxy-draft-retained.txt/.jpg`、`native-proxy-draft-restored.txt` |
+| 数据目录取消 | 实际打开原生目录选择器并取消；目录、进程及教师资料不变 | `native-data-picker-cancelled.txt`、`data-protection.json` |
+| 资料、通知、设备、运行、诊断、回收站 | 分别打开并回读最终数据；原教师资料可进入真实上下文流程后关闭；未触发恢复、试用、通知或新授权 | `native-teacher-profile-loaded.txt`、`native-notifications.txt/.jpg`、`native-devices-permissions.txt/.jpg`、`final-automation.txt/.jpg`、`final-diagnostics.txt/.jpg`、`final-recycle-loaded.txt` |
+| 外观与窗口 | 浅色→深色→浅色即时生效；1440 级窗口与较窄窗口均实际观察，较窄截图为 1610×1610 像素，设置行与模型列表无重叠 | `final-dark-theme.jpg`、`final-light-theme-restored.jpg`、`native-narrow-general.jpg`、`native-narrow-models.jpg` |
+| 冷启动及账号往返 | 正常退出后同一路径启动，最终 PID `64955`；原 GitHub 账号和健康显示在详情往返后不再丢失；旧 #379 回执保留，未创建新 Issue | `delivery-native-health.json`、`delivery-connections-before.txt`、`delivery-connections-after.txt/.jpg`、`final-existing-receipt-preserved.txt` |
+
+### 实机发现与修复
+
+- 新鲜复核发现的三个问题均已修复：访问过的设置页保留挂载以保存草稿；搜索等待动态页面目标出现并清理观察器；升级期间所有受控跳转与外部设置入口都受 busy 保护。实际 handler/lifecycle 测试和本机代理草稿往返通过。
+- 首次安装版默认模型摘要返回 403：新增请求缺少 cwd，服务器安装目录被现有规则拒绝。修复传入教育工作区，而没有放宽 allow-list 或项目信任；真实同端点带 cwd 回读 200、17 个模型，随后安装版显示真实默认模型。失败与修复证据保留在 `native-model-summary-root-cause.json`、`native-cwd-fix-tests.log`。
+- 查看已有 GitHub 详情后，未加载的空状态会清空父列表账号。修复只在实际状态取得后通知，并回传已经校验的安全状态；无新探测、续期或写入。`delivery-connections-before/after` 证明同一账号及状态保留。
+
+### 校验与数据保护
+
+- 最终 `npm test`：2601 总数、2561 通过、40 环境跳过、0 失败；最终类型检查、ESLint 和 diff 检查通过。早期旧布局断言及文档路径断言失败保留，不计通过；修正后最终全套结果见 `tests-delivery.log`。这些检查不替代上表原生操作。
+- 原生签名 strict/deep 通过，Team `BY3XZG2839`，CDHash `ecf91a3cc5cc1160800dfc522058176cbd65107b`；主程序 SHA256 `047de5319d4bceefa6d496e0ff08f03a828236898e3c9994692fed42eebf4242`。只替换 Desktop server，33,709 个 Core/壳/OpenConnector 文件摘要保持，原 updater 公钥保持；无验收环境键、无中继。详见 `settings-delivery-installed.json`。
+- Core、投影、Kernel 均 ready，原数据根保持，51 学生、160 任务、24 校历、6 课表，externalSend=false。
+- 317 个受保护文件前后均在，无增删；教学、模型、认证及偏好内容摘要保持。7 个运行状态变化单列，其中 1 个日志仅追加且原前缀摘要保持；未修改或恢复用户文件来隐藏差异。见 `data-protection.json`。
+- 本轮 6 个生成目录和 3 个临时 App 副本均已删除，目录占用合计约 6.04 GiB；有完整前后计量的两批清理使可用空间增加约 5.25 GiB，早先单独删除的一份 App 只计目录占用。安装 App 不依赖已删除路径，临时 App 副本为 0；原 `.70` 回退、数据、认证、证据、源码及原 Core 依赖保留。
+
+### 尚未验证
+
+Windows/Linux 原生界面、40 项环境跳过、新的公开升级安装链路均不计通过。本轮没有新的公开更新包，也没有扩展其他服务的授权或执行能力；R23 通用受管浏览器与 Core grant/Receipt 继续部分实现。本地用量仍显示原有未收集状态，没有替教师作出采集同意。
