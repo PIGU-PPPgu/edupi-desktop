@@ -78,8 +78,6 @@
 .edupi-settings-automation-domains > details > summary { display: flex; min-height: 56px; align-items: center; gap: 12px; cursor: pointer; list-style: none; font-size: 13px; }
 .edupi-settings-automation-domains > details > summary::-webkit-details-marker { display: none; }
 .edupi-settings-automation-domains > details > summary small { margin-left: auto; color: var(--text-muted); font-size: 12px; }
-.edupi-settings-automation-domains > details > summary::after { content: '›'; color: var(--text-muted); font-size: 18px; }
-.edupi-settings-automation-domains > details[open] > summary::after { transform: rotate(90deg); }
 .edupi-settings-diagnostics { margin-top: 20px; border-top: 1px solid var(--border); }
 .edupi-settings-diagnostics > summary { padding: 14px 0; color: var(--text-muted); cursor: pointer; font-size: 13px; }
 .edupi-admin-panel .edupi-settings-data-link { display: flex; width: 100%; min-height: 52px; align-items: center; gap: 12px; margin-top: 16px; padding: 10px 0; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; text-align: left; font-size: 13px; }
@@ -187,8 +185,6 @@
 .openconnector-admin__operations { margin-top: 24px; border-top: 1px solid var(--border); }
 .openconnector-admin__operations > summary { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; color: var(--text-muted); cursor: pointer; font-size: 12px; font-weight: 550; list-style: none; }
 .openconnector-admin__operations > summary::-webkit-details-marker { display: none; }
-.openconnector-admin__operations > summary::after { content: "›"; font-size: 18px; }
-.openconnector-admin__operations[open] > summary::after { transform: rotate(90deg); }
 .openconnector-admin__actions form { display: flex; align-items: center; gap: 8px; padding-bottom: 14px; }
 .openconnector-admin__actions form label { min-width: 0; flex: 1; }
 .openconnector-admin__actions input { width: 100%; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; outline: none; background: var(--bg-panel); color: var(--text); font: inherit; font-size: 12px; }
@@ -248,8 +244,6 @@
 .openconnector-github .openconnector-github__diagnostics { margin-top: 20px; border-top: 1px solid var(--border); }
 .openconnector-github__diagnostics > summary { display: flex; min-height: 46px; align-items: center; justify-content: space-between; padding: 8px 0; font-size: 12px; list-style: none; }
 .openconnector-github__diagnostics > summary::-webkit-details-marker { display: none; }
-.openconnector-github__diagnostics > summary::after { content: "›"; font-size: 18px; }
-.openconnector-github__diagnostics[open] > summary::after { transform: rotate(90deg); }
 .openconnector-github__client { max-width: 480px; }
 .edupi-admin-section__header {
   display: flex;
@@ -307,8 +301,6 @@
   list-style: none;
 }
 .edupi-admin-readiness > summary::-webkit-details-marker { display: none; }
-.edupi-admin-readiness > summary::after { margin-left: auto; color: var(--text-muted); content: "⌄"; font-size: 15px; }
-.edupi-admin-readiness[open] > summary::after { transform: rotate(180deg); }
 .edupi-admin-readiness > summary span { font-size: 13px; font-weight: 600; }
 .edupi-admin-readiness > summary strong { color: var(--text-muted); font-size: 11px; font-weight: 500; }
 .edupi-admin-readiness__bar { height: 3px; background: var(--border); }

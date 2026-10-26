@@ -11,7 +11,7 @@
  */
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 
 type Props = {
   width?: number;
@@ -20,14 +20,21 @@ type Props = {
   footer?: ReactNode;
   ariaLabel?: string;
   className?: string;
+  hidden?: boolean;
+  containerRef?: RefObject<HTMLElement | null>;
+  id?: string;
 };
 
-export function EduPiContentSider({ width = 248, header, children, footer, ariaLabel, className = "" }: Props) {
+export function EduPiContentSider({ width, header, children, footer, ariaLabel, className = "", hidden = false, containerRef, id }: Props) {
   return (
     <aside
       aria-label={ariaLabel}
+      ref={containerRef}
+      id={id}
+      hidden={hidden}
+      inert={hidden}
       className={`edupi-content-sider ${className}`}
-      style={{ width }}
+      style={width === undefined ? undefined : { width }}
     >
       {header ? <div className="edupi-content-sider__header">{header}</div> : null}
       <div className="edupi-content-sider__scroll">{children}</div>

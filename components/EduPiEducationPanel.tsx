@@ -23,6 +23,7 @@ import { EduPiPersistentChatHost } from "./EduPiPersistentChatHost";
 import { EduPiInspector } from "./EduPiInspector";
 import { EduPiNavigationRail } from "./EduPiNavigationRail";
 import { EduPiObjectSider } from "./EduPiObjectSider";
+import { EduPiObjectNavigationRestore, restoreObjectNavigationFocus, type ObjectNavigationFocusRequest } from "./EduPiObjectNavigationRestore";
 import { EduPiTaskDetailDrawer } from "./EduPiTaskDetailDrawer";
 import { EduPiTaskRunContext, type EduPiTaskRunInfo } from "./EduPiTaskRunContext";
 import { taskPreparedArtifacts } from "@/lib/edupi-task-artifacts";
@@ -204,7 +205,40 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const workspaceLoadSequenceRef = useRef(0);
   const workspaceMinimumApplySequenceRef = useRef(0);
   const objectSider = useEduPiContentSiderCollapse(false);
+  const setObjectSiderCollapsed = objectSider.setCollapsed;
   const navigationRail = useEduPiContentSiderCollapse(false, APP_PREF_KEYS.edupiNavigationRailCollapsed);
+
+  const objectNavigationRef = useRef<HTMLElement | null>(null);
+  const objectNavigationMainRef = useRef<HTMLDivElement | null>(null);
+  const objectNavigationCollapseRef = useRef<HTMLButtonElement | null>(null);
+  const objectNavigationRestoreRef = useRef<HTMLButtonElement | null>(null);
+  const objectNavigationScroll = useRef(new Map<WorkbenchView, number>());
+  const objectNavigationFocus = useRef<ObjectNavigationFocusRequest | null>(null);
+  const collapseObjectNavigation = useCallback(() => {
+    const scroll = objectNavigationRef.current?.querySelector<HTMLElement>(".edupi-content-sider__scroll");
+    objectNavigationScroll.current.set(activeView, scroll?.scrollTop ?? 0);
+    objectNavigationFocus.current = { target: "restore", from: document.activeElement };
+    setObjectSiderCollapsed(true);
+  }, [activeView, setObjectSiderCollapsed]);
+  const expandObjectNavigation = useCallback(() => {
+    objectNavigationFocus.current = { target: "list", from: document.activeElement };
+    setObjectSiderCollapsed(false);
+  }, [setObjectSiderCollapsed]);
+  const focusObjectNavigation = useCallback(() => {
+    objectNavigationFocus.current = restoreObjectNavigationFocus(objectNavigationFocus.current, {
+      document,
+      collapsed: objectSider.collapsed,
+      restoreButton: objectNavigationRestoreRef.current,
+      collapseButton: objectNavigationCollapseRef.current,
+      scroll: objectNavigationRef.current?.querySelector<HTMLElement>(".edupi-content-sider__scroll") ?? null,
+      scrollTop: objectNavigationScroll.current.get(activeView) ?? 0,
+    });
+  }, [activeView, objectSider.collapsed]);
+  useEffect(() => {
+    const frame = requestAnimationFrame(focusObjectNavigation);
+    return () => cancelAnimationFrame(frame);
+  }, [focusObjectNavigation]);
+
 
   const commitEducationSnapshot = useCallback((nextEducation: EducationContract) => {
     workspaceMinimumApplySequenceRef.current = Math.max(workspaceMinimumApplySequenceRef.current, workspaceLoadSequenceRef.current + 1);
@@ -772,15 +806,15 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     const id = studentRecordKey(student, Math.max(0, index));
     setSelectedStudentId(id);
     updateLocation(activeView, undefined, undefined, inspectorOpen, id);
-    if (window.matchMedia("(max-width: 820px)").matches && !objectSider.collapsed) objectSider.toggle();
-  }, [activeView, education?.students, inspectorOpen, objectSider, updateLocation]);
+    if (window.matchMedia("(max-width: 820px)").matches && !objectSider.collapsed) collapseObjectNavigation();
+  }, [activeView, collapseObjectNavigation, education?.students, inspectorOpen, objectSider, updateLocation]);
 
   const selectObject = useCallback((id: string) => {
     if (id === "review:board" || id.startsWith("review:list:")) setReviewMode("board");
     setSelectedObjectId(id);
     updateLocation(activeView, undefined, undefined, inspectorOpen, selectedStudentId, id);
-    if (window.matchMedia("(max-width: 820px)").matches && !objectSider.collapsed) objectSider.toggle();
-  }, [activeView, inspectorOpen, objectSider, selectedStudentId, updateLocation]);
+    if (window.matchMedia("(max-width: 820px)").matches && !objectSider.collapsed) collapseObjectNavigation();
+  }, [activeView, collapseObjectNavigation, inspectorOpen, objectSider, selectedStudentId, updateLocation]);
 
   const reviewTask = useCallback(async (action: TaskReviewAction, payload: ReviewPayload) => {
     if (!activeTask?.id || !education) return;
@@ -1233,8 +1267,9 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       <div className="edupi-teacher-app">
         <div className={`edupi-teacher-body${activeView === "chat" ? " is-chat" : ""}${showingReminders ? " is-reminders" : ""}${bodyControlsVisible ? " has-body-controls" : ""}${detailSurfaceOpen ? " has-detail-surface" : ""}${objectSiderAvailable ? " has-object-sider" : ""}${objectSiderAvailable && objectSider.collapsed ? " is-object-sider-collapsed" : ""}${inspectorAvailable && inspectorOpen ? " has-inspector" : ""}${hasTaskPane ? " has-task-pane" : ""}`} style={bodyControlStyle}>
           {bodyControlsVisible ? <div className="edupi-teacher-body__controls">{loadError ? <button className="edupi-teacher-body__icon-button" type="button" onClick={retryLoadWorkspace} aria-label="重试读取工作区" title={`重试读取工作区：${loadError}`}><RetryWorkspaceIcon /></button> : null}{inspectorAvailable ? <button className={`edupi-teacher-body__icon-button${inspectorOpen ? " is-open" : ""}`} type="button" onClick={toggleInspector} aria-label={inspectorOpen ? "收起检查" : "打开检查"} title={inspectorOpen ? "收起检查" : "打开检查"} aria-pressed={inspectorOpen}><InspectorIcon /></button> : null}</div> : null}
-          {activeView === "chat" && !showingReminders ? <aside className="edupi-chat-session-sidebar" aria-label="对话与文件">{chatSidebar}</aside> : showObjectSider ? <EduPiObjectSider view={activeView} data={education} context={context} memoryScopes={memoryScopes} teachingSkills={teachingSkills} query={query} onQuery={updateQuery} selectedStudentId={selectedStudentId} onStudent={selectStudent} selectedObjectId={selectedObjectId} onObject={selectObject} onNavigate={selectView} selectedTaskKey={activeTask ? taskKey(activeTask) : null} onTask={selectTask} onReviewTarget={focusC1Review} selectedCalendarSourceId={calendarSelection?.sourceId ?? null} onCalendarItem={selectCalendarItem} onUpload={openUpload} onCollapse={objectSider.toggle} /> : objectSiderAvailable ? <button type="button" className="edupi-object-sider-strip" onClick={objectSider.toggle} aria-label="展开列表"><span aria-hidden="true">›</span></button> : null}
-          <div className={`edupi-teacher-main${activeView === "chat" ? " is-chat" : ""}`}>
+          {activeView === "chat" && !showingReminders ? <aside className="edupi-chat-session-sidebar" aria-label="对话与文件">{chatSidebar}</aside> : objectSiderAvailable ? <EduPiObjectSider hidden={!showObjectSider} containerRef={objectNavigationRef} collapseButtonRef={objectNavigationCollapseRef} view={activeView} data={education} context={context} memoryScopes={memoryScopes} teachingSkills={teachingSkills} query={query} onQuery={updateQuery} selectedStudentId={selectedStudentId} onStudent={selectStudent} selectedObjectId={selectedObjectId} onObject={selectObject} onNavigate={selectView} selectedTaskKey={activeTask ? taskKey(activeTask) : null} onTask={selectTask} onReviewTarget={focusC1Review} selectedCalendarSourceId={calendarSelection?.sourceId ?? null} onCalendarItem={selectCalendarItem} onUpload={openUpload} onCollapse={collapseObjectNavigation} /> : null}
+          <div ref={objectNavigationMainRef} className={`edupi-teacher-main${activeView === "chat" ? " is-chat" : ""}`}>
+            {objectSiderAvailable && objectSider.collapsed ? <EduPiObjectNavigationRestore rootRef={objectNavigationMainRef} buttonRef={objectNavigationRestoreRef} view={activeView} onExpand={expandObjectNavigation} onReady={focusObjectNavigation} /> : null}
             <EduPiTaskRunContext.Provider value={chatTaskInfo}>
               <EduPiPersistentChatHost mode={showingReminders ? "hidden" : drawer === "agent" ? "drawer" : activeView === "chat" ? "main" : "hidden"} task={drawer === "agent" ? currentAgentTask : null} onClose={closeDrawer} onPreparePrompt={onPrepareAgentPrompt}>{chatPanel}</EduPiPersistentChatHost>
             </EduPiTaskRunContext.Provider>

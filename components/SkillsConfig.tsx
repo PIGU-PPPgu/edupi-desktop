@@ -5,6 +5,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
 import { handleExternalLinkClick } from "@/lib/desktop-native";
+import { DisclosureChevron } from "./DisclosureChevron";
 import type {
   SkillInfo as Skill,
   SkillInstallScope,
@@ -1213,32 +1214,19 @@ export function SkillsConfig({
                           {activeSkills.map(renderSkillRow)}
                           {dormantSkills.length > 0 && (
                             <>
-                              <div
+                              <button
+                                type="button"
+                                className="disclosure-trigger is-row"
+                                aria-expanded={dormantOpen}
                                 onClick={() =>
                                   setDormantGroupsOpen((current) => ({
                                     ...current,
                                     [grpLabel]: !dormantOpen,
                                   }))
                                 }
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 5,
-                                  padding: "4px 8px 3px",
-                                  fontSize: 10,
-                                  fontWeight: 600,
-                                  color: "var(--text-dim)",
-                                  textTransform: "uppercase",
-                                  letterSpacing: "0.06em",
-                                  cursor: "pointer",
-                                  userSelect: "none",
-                                }}
                               >
-                                <span style={{ fontSize: 8 }}>
-                                  {dormantOpen ? "▾" : "▸"}
-                                </span>
-                                {t("i18n.dormant")} ({dormantSkills.length})
-                              </div>
+                                <span>{t("i18n.dormant")}</span><small>{dormantSkills.length}</small><DisclosureChevron open={dormantOpen} />
+                              </button>
                               {dormantOpen && dormantSkills.map(renderSkillRow)}
                             </>
                           )}

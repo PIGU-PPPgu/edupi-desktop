@@ -22,6 +22,7 @@ import "./edupi-student-graph.css";
 import "./edupi-foreground.css";
 import "./edupi-resource-picker.css";
 import "./edupi-chat-resources.css";
+import "./edupi-disclosure.css";
 import { PRODUCT_NAME } from "@/lib/branding";
 
 const notoSansMono = Noto_Sans_Mono({

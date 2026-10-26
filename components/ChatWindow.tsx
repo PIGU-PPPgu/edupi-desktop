@@ -6,6 +6,7 @@ import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { MessageView } from "./MessageView";
+import { DisclosureChevron } from "./DisclosureChevron";
 import { EduPiConversationFiles } from "./EduPiConversationFiles";
 import { EduPiProactiveHub } from "./EduPiProactiveHub";
 import { EduPiRuntimeFlow } from "./EduPiRuntimeFlow";
@@ -209,7 +210,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
   return (
     <div className="process-details" style={{ marginBottom: 14 }}>
       <button
-        className="process-details-trigger"
+        className="process-details-trigger disclosure-trigger is-inline"
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
@@ -229,12 +230,10 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
         }}
         title={expanded ? t("chat.collapseProcess") : t("chat.expandProcess")}
       >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
-          <polyline points="4 2.5 7.5 6 4 9.5" />
-        </svg>
         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {parts.join(" · ")}
         </span>
+        <DisclosureChevron open={expanded} />
       </button>
       {expanded && (
         <div className="process-details-content" style={{ marginTop: 8 }}>

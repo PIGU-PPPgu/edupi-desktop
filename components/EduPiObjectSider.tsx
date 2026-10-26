@@ -1,5 +1,7 @@
 "use client";
 
+import type { RefObject } from "react";
+import { EduPiSidebarIcon } from "./EduPiSidebarIcon";
 import type { EducationContract, EducationFollowUp, EducationMemoryCandidate, EducationObservation, TeacherTask } from "@/lib/edupi-education-contract";
 import type { ReviewTargetRoute } from "@/lib/edupi-domain-navigation";
 import { endOfWeek, filterTimetableSlots, getCalendarEntries, startOfWeek, type CalendarItemSelection } from "@/lib/edupi-calendar-model";
@@ -39,6 +41,9 @@ type Props = {
   onCalendarItem?: (selection: CalendarItemSelection) => void;
   onUpload: () => void;
   onCollapse: () => void;
+  hidden?: boolean;
+  containerRef?: RefObject<HTMLElement | null>;
+  collapseButtonRef?: RefObject<HTMLButtonElement | null>;
   onNavigate?: (view: WorkbenchView, objectId?: string) => void;
 };
 
@@ -83,19 +88,19 @@ function C1ReviewRow({ target, onClick }: { target: C1ObjectTarget; onClick: () 
 }
 
 function CategoryRow({ label, count, selected, onClick }: { label: string; count?: number; selected: boolean; onClick: () => void }) {
-  return <button type="button" className={`edupi-object-category${selected ? " is-selected" : ""}`} onClick={onClick}><strong>{label}</strong>{count !== undefined ? <span>{count}</span> : null}<em>›</em></button>;
+  return <button type="button" className={`edupi-object-category${selected ? " is-selected" : ""}`} onClick={onClick}><strong>{label}</strong>{count !== undefined ? <span>{count}</span> : null}</button>;
 }
 
-function ObjectStudentRow({ student, index, selected, onClick }: { student: Record<string, unknown>; index: number; selected: boolean; onClick: () => void }) {
+function ObjectStudentRow({ student, selected, onClick }: { student: Record<string, unknown>; selected: boolean; onClick: () => void }) {
   const name = studentRecordName(student);
   const patterns = Array.isArray(student.error_patterns) ? student.error_patterns : [];
   const trajectory = Array.isArray(student.trajectory) ? student.trajectory : [];
   const latest = patterns.find((item) => item && typeof item === "object") as Record<string, unknown> | undefined;
   const summary = [typeof student.class_name === "string" ? student.class_name : null, latest ? recordLabel(latest, ["description", "desc"], "学习问题") : null, trajectory.length > 0 ? `${trajectory.length} 条成长记录` : null].filter(Boolean).join(" · ");
-  return <button type="button" className={`edupi-object-row edupi-object-student${selected ? " is-selected" : ""}`} onClick={onClick}><span className={`edupi-object-student__avatar is-tint-${index % 4}`}>{name.slice(0, 1)}</span><span className="edupi-object-row__copy"><strong>{name}</strong>{summary ? <small>{summary}</small> : null}</span><em>›</em></button>;
+  return <button type="button" className={`edupi-object-row edupi-object-student${selected ? " is-selected" : ""}`} onClick={onClick}><span className="edupi-object-student__avatar" aria-hidden="true">{name.slice(0, 1)}</span><span className="edupi-object-row__copy"><strong>{name}</strong>{summary ? <small>{summary}</small> : null}</span></button>;
 }
 
-export function EduPiObjectSider({ view, data, context, memoryScopes, teachingSkills, query, onQuery, selectedStudentId, onStudent, selectedObjectId, onObject, selectedTaskKey, onTask, onReviewTarget, selectedCalendarSourceId, onCalendarItem, onUpload, onCollapse, onNavigate }: Props) {
+export function EduPiObjectSider({ view, data, context, memoryScopes, teachingSkills, query, onQuery, selectedStudentId, onStudent, selectedObjectId, onObject, selectedTaskKey, onTask, onReviewTarget, selectedCalendarSourceId, onCalendarItem, onUpload, onCollapse, onNavigate, hidden = false, containerRef, collapseButtonRef }: Props) {
   const policy = useEduPiForegroundPolicy();
   const allTasks = data.tasks.filter((task) => matchesTaskQuery(task, query));
   const columns = projectTaskBoard(data.tasks, data.taskSessions, data.workCandidates, query, { ...policy, ...data });
@@ -156,13 +161,13 @@ export function EduPiObjectSider({ view, data, context, memoryScopes, teachingSk
   const taskRows = (rows: TeacherTask[], stage: TaskStage, list = "all") => <EduPiListPreview rows={rows} renderRow={task => <TaskRow key={taskKey(task)} task={task} selected={taskKey(task) === selectedTaskKey} onClick={() => onTask(task, stage)} />} onShowAll={() => stage === "artifact" ? onNavigate?.("artifacts") : onNavigate?.("workspace", `workspace:list:${list}`)} />;
 
   return (
-    <EduPiContentSider width={244} ariaLabel={`${viewTitles[view]}对象列表`} header={<><div className="edupi-object-sider__header"><div><strong>{viewTitles[view]}</strong></div><button type="button" onClick={onCollapse} aria-label="收起列表">‹</button></div><label className="edupi-object-sider__search"><span aria-hidden="true">⌕</span><input type="search" value={query} onChange={(event) => onQuery(event.target.value)} placeholder={`搜索${viewTitles[view]}`} aria-label={`搜索${viewTitles[view]}`} /></label></>}>
+    <EduPiContentSider id="edupi-object-navigation" containerRef={containerRef} hidden={hidden} ariaLabel={`${viewTitles[view]}对象列表`} header={<><div className="edupi-object-sider__header"><div><strong>{viewTitles[view]}</strong></div><button ref={collapseButtonRef} type="button" onClick={onCollapse} aria-label="收起列表" title="收起列表" aria-controls="edupi-object-navigation" aria-expanded={true}><EduPiSidebarIcon expanded /></button></div><label className="edupi-object-sider__search"><span aria-hidden="true">⌕</span><input type="search" value={query} onChange={(event) => onQuery(event.target.value)} placeholder={`搜索${view === "homeroom" || view === "students" ? "学生" : viewTitles[view]}`} aria-label={`搜索${view === "homeroom" || view === "students" ? "学生" : viewTitles[view]}`} /></label></>}>
       {view === "dashboard" ? <><section className="edupi-object-group"><GroupTitle count={pending.length}>需要处理</GroupTitle>{taskRows(pending, "review", "actionable")}{pending.length === 0 ? <div className="edupi-object-empty">暂无待处理事项</div> : null}</section><section className="edupi-object-group"><GroupTitle count={reviewed.length}>最近完成</GroupTitle>{taskRows(reviewed, "brief", "done")}</section></> : null}
       {view === "teaching" ? <section className="edupi-object-group"><GroupTitle>教学工作区</GroupTitle>{TEACHING_SECTIONS.map((section) => <CategoryRow key={section.id} label={section.label} count={section.id === "schedule" ? timetable.length : section.id === "knowledge" ? subjectKnowledge.length + teachingPriorities.length + (data.factSpine?.teachingView.acceptedFactIds.length || 0) : section.id === "tasks" ? teachingTasks.length : section.id === "memory" ? memories.filter((item) => item.category === "teaching").length : undefined} selected={teachingSection === section.id} onClick={() => onObject(`teaching:${section.id}`)} />)}</section> : null}
-      {view === "homeroom" ? <><section className="edupi-object-group"><GroupTitle count={homeroomTasks.length}>学生跟进</GroupTitle>{taskRows(homeroomTasks, "run")}{homeroomTasks.length === 0 ? <div className="edupi-object-empty">暂无跟进事项</div> : null}</section><section className="edupi-object-group"><GroupTitle count={students.length}>学生</GroupTitle>{students.map((student, index) => { const id = studentRecordKey(student, index); return <ObjectStudentRow key={id} student={student} index={index} selected={id === selectedStudentId} onClick={() => onStudent(student)} />; })}</section></> : null}
+      {view === "homeroom" ? <>{homeroomTasks.length > 0 ? <section className="edupi-object-group"><GroupTitle count={homeroomTasks.length}>学生跟进</GroupTitle>{taskRows(homeroomTasks, "run")}</section> : null}<section className="edupi-object-group"><GroupTitle count={students.length}>学生</GroupTitle>{students.map((student, index) => { const id = studentRecordKey(student, index); return <ObjectStudentRow key={id} student={student} selected={id === selectedStudentId} onClick={() => onStudent(student)} />; })}</section></> : null}
       {view === "tasks" ? <>{TASK_CATEGORY_CONFIG.map((category) => { const rows = tasksByCategory[category.id]; return rows.length > 0 ? <section className="edupi-object-group" key={category.id}><GroupTitle count={rows.length}>{category.label}</GroupTitle>{taskRows(rows, "brief", `all:${category.id}`)}</section> : null; })}{tasks.length === 0 ? <div className="edupi-object-empty">暂无匹配任务</div> : null}</> : null}
       {view === "review" ? <><section className="edupi-object-group"><GroupTitle>审核入口</GroupTitle><CategoryRow label="审核看板" count={pendingReview.length + pendingC1.length + pendingFacts.length} selected={selectedObjectId === "review:board" || !selectedObjectId} onClick={() => onObject("review:board")} /></section><section className="edupi-object-group"><GroupTitle count={pendingFacts.length}>事实</GroupTitle><CategoryRow label="事实确认" count={pendingFacts.length} selected={selectedObjectId === "review:board" || !selectedObjectId} onClick={() => onObject("review:board")} /></section><section className="edupi-object-group"><GroupTitle count={pendingC1.length}>审核内容</GroupTitle><EduPiListPreview rows={pendingC1} renderRow={target => <C1ReviewRow key={`${target.kind}:${target.id}`} target={target} onClick={() => onReviewTarget?.({ kind: target.kind, id: target.id })} />} onShowAll={() => onObject("review:list:content")} />{pendingC1.length === 0 ? <div className="edupi-object-empty">暂无待确认内容</div> : null}</section><section className="edupi-object-group"><GroupTitle count={pendingReview.length}>任务审核</GroupTitle>{taskRows(pendingReview, "review", "review")}{pendingReview.length === 0 ? <div className="edupi-object-empty">暂无待审核任务</div> : null}</section></> : null}
-      {view === "students" ? <><section className="edupi-object-group"><GroupTitle>班级</GroupTitle>{(context?.classes?.length ? context.classes : [context?.grade || "年级待设置"]).map((name) => <div className="edupi-object-fact" key={name}><strong>{name}</strong><span>{context?.subject || "学科待设置"}</span></div>)}</section><section className="edupi-object-group"><GroupTitle count={students.length}>学生</GroupTitle>{students.map((student, index) => { const id = studentRecordKey(student, index); return <ObjectStudentRow key={id} student={student} index={index} selected={id === selectedStudentId} onClick={() => onStudent(student)} />; })}{students.length === 0 ? <div className="edupi-object-empty">暂无学生事实</div> : null}</section></> : null}
+      {view === "students" ? <><section className="edupi-object-group"><GroupTitle>班级</GroupTitle>{(context?.classes?.length ? context.classes : [context?.grade || "年级待设置"]).map((name) => <div className="edupi-object-fact" key={name}><strong>{name}</strong><span>{context?.subject || "学科待设置"}</span></div>)}</section><section className="edupi-object-group"><GroupTitle count={students.length}>学生</GroupTitle>{students.map((student, index) => { const id = studentRecordKey(student, index); return <ObjectStudentRow key={id} student={student} selected={id === selectedStudentId} onClick={() => onStudent(student)} />; })}{students.length === 0 ? <div className="edupi-object-empty">暂无学生事实</div> : null}</section></> : null}
       {view === "calendar" ? <><section className="edupi-object-group"><GroupTitle count={weekEntries.length}>本周课程</GroupTitle><EduPiListPreview rows={weekEntries} onShowAll={() => onObject("calendar:list:courses")} renderRow={entry => {
         const slot = timetable.find(item => (item.slot_id || item.id) === entry.sourceId);
         const recognized = isRecognizedTimetableNote(slot?.notes);

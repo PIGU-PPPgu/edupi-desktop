@@ -3,6 +3,7 @@
 import type { WorkbenchView } from "@/lib/edupi-workbench";
 import { workbenchViews } from "@/lib/edupi-workbench";
 import { useRouter } from "next/navigation";
+import { EduPiSidebarIcon } from "./EduPiSidebarIcon";
 
 type Props = {
   activeView: WorkbenchView;
@@ -61,7 +62,7 @@ export function EduPiNavigationRail({ activeView, pendingReviewCount, runningAge
   };
   return (
     <nav className={`edupi-teacher-rail${collapsed ? " is-collapsed" : ""}`} aria-label="EduPi 主导航">
-      <div className="edupi-teacher-rail__brand"><span>π</span><div><strong>EduPi</strong><small>{workspaceLabel}</small></div><button type="button" className="edupi-teacher-rail__collapse" onClick={onCollapse} title={collapsed ? "展开主导航" : "收起主导航"} aria-label={collapsed ? "展开主导航" : "收起主导航"} aria-expanded={!collapsed}><span aria-hidden="true">{collapsed ? "›" : "‹"}</span></button></div>
+      <div className="edupi-teacher-rail__brand"><span>π</span><div><strong>EduPi</strong><small>{workspaceLabel}</small></div><button type="button" className="edupi-teacher-rail__collapse" onClick={onCollapse} title={collapsed ? "展开主导航" : "收起主导航"} aria-label={collapsed ? "展开主导航" : "收起主导航"} aria-expanded={!collapsed}><EduPiSidebarIcon expanded={!collapsed} /></button></div>
       <div className="edupi-teacher-rail__items">
         {groups.map((group) => <section className="edupi-teacher-rail__group" key={group.label}><div className="edupi-teacher-rail__group-title">{group.label}</div>{group.views.map(item)}</section>)}
       </div>

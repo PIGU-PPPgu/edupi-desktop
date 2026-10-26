@@ -149,7 +149,7 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   assert.match(panel, /activeAgentSessionId/);
   assert.match(panel, /useEduPiContentSiderCollapse/);
   assert.match(`${panel}\n${objectSider}`, /收起列表/);
-  assert.match(panel, /aria-label="展开列表"/);
+  assert.match(await read("./EduPiObjectNavigationRestore.tsx"), /aria-label="展开列表"/);
   assert.doesNotMatch(panel, />列表<\/button>/);
   assert.match(panel, /\/api\/edupi\/tasks\/\$\{encodeURIComponent\(pendingTaskBinding\.taskId\)\}\/session/);
   assert.match(appShell, /onActivateAgentSession=/);
@@ -232,10 +232,8 @@ test("refreshes education data after Core imports without remounting chat", asyn
   const appShell = await read("./AppShell.tsx");
   const panel = await read("./EduPiEducationPanel.tsx");
   const conversationFiles = await read("./EduPiConversationFiles.tsx");
-  const loadEffect = panel.slice(
-    panel.indexOf("useEffect(() => {"),
-    panel.indexOf("useEffect(() => {", panel.indexOf("useEffect(() => {") + 1),
-  );
+  const loadEffectEnd = panel.indexOf("}, [loadWorkspace, refreshKey]);");
+  const loadEffect = panel.slice(panel.lastIndexOf("useEffect(() => {", loadEffectEnd), loadEffectEnd + "}, [loadWorkspace, refreshKey]);".length);
   const agentEndHandler = appShell.slice(
     appShell.indexOf("const handleAgentEnd"),
     appShell.indexOf("const handleEducationImportCompleted"),
@@ -561,7 +559,7 @@ test("Cmd K and the tray open one EduPi quick entry across tasks, calendar, arti
 
 test("the CSS defines a harness workspace with an optional object browser and responsive fallback", async () => {
   const css = await read("../app/edupi-workbench.css");
-  assert.match(css, /grid-template-columns: 220px minmax\(0, 1fr\)/);
+  assert.match(css, /grid-template-columns: 208px minmax\(0, 1fr\)/);
   assert.match(css, /\.edupi-teacher-body\.has-object-sider/);
   assert.match(css, /\.edupi-command-center/);
   assert.match(css, /\.edupi-today-layout/);

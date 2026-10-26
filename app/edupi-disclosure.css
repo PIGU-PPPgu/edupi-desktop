@@ -1,0 +1,132 @@
+/* Shared disclosure controls. Native details keep their state and lazy-load
+   contracts; only their presentation is shared with button disclosures. */
+body details > summary::-webkit-details-marker { display: none; }
+body details > summary::marker { content: ""; }
+:where(details > summary) { display: flex; align-items: center; gap: 12px; }
+
+body details:not(.edupi-background-job-details) > summary {
+  position: relative;
+  width: 100% !important;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 10px 36px 10px 12px !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent;
+  color: var(--text);
+  list-style: none !important;
+  cursor: pointer;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  line-height: 1.5;
+  letter-spacing: normal;
+  text-transform: none;
+  transition: background 120ms ease;
+}
+
+body details:not(.edupi-background-job-details) > summary::after {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 0 !important;
+  border-top: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  color: var(--text-muted);
+  opacity: .75;
+  content: "" !important;
+  pointer-events: none;
+  transform: translateY(-50%) rotate(45deg) !important;
+  transition: transform 120ms ease;
+}
+
+body details[open]:not(.edupi-background-job-details) > summary::after {
+  transform: translateY(-70%) rotate(135deg) !important;
+}
+
+body details:not(.edupi-background-job-details) > summary:hover,
+body details[open]:not(.edupi-background-job-details) > summary {
+  background: color-mix(in srgb, var(--text) 4%, transparent) !important;
+}
+
+body details:not(.edupi-background-job-details) > summary:focus-visible,
+.disclosure-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+body details:not(.edupi-background-job-details):not(.edupi-database-row):not(.edupi-knowledge-row) {
+  border: 0 !important;
+  border-radius: 6px;
+  background: transparent !important;
+}
+
+body details[open]:not(.edupi-background-job-details):not(.edupi-database-row):not(.edupi-knowledge-row) > summary {
+  margin-bottom: 8px;
+}
+
+/* Data rows retain their grid and align with their column headings. */
+.edupi-database__head { padding-right: 36px; }
+body details.edupi-database-row > summary { min-height: 58px; padding-top: 12px !important; padding-bottom: 12px !important; }
+body details.edupi-knowledge-row > summary { min-height: 82px; padding-top: 16px !important; padding-bottom: 16px !important; }
+body .edupi-knowledge-row > summary > div { min-width: 0; }
+
+/* Diagnostic popovers remain a compact information action. */
+body .edupi-background-job-details > summary { list-style: none; }
+body .edupi-background-job-details > summary::after { content: none !important; }
+
+.disclosure-trigger,
+body .process-details-trigger {
+  display: inline-flex;
+  min-height: 36px !important;
+  align-items: center;
+  gap: 12px !important;
+  padding: 8px 10px !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px !important;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+}
+
+.disclosure-trigger:hover,
+body .process-details-trigger:hover {
+  background: var(--bg-hover) !important;
+  color: var(--text) !important;
+}
+
+.disclosure-chevron {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  margin-left: auto;
+  color: var(--text-muted);
+  transform: rotate(0deg);
+  transition: transform 120ms ease;
+}
+
+.disclosure-chevron[data-open="true"] { transform: rotate(90deg); }
+.disclosure-trigger.is-inline { width: fit-content; }
+.disclosure-trigger.is-row { width: 100%; }
+.disclosure-trigger.is-row > span { min-width: 0; }
+.process-details-content { border: 0; border-radius: 0; background: transparent; }
+.session-time-group__header.disclosure-trigger { width: calc(100% - 20px); }
+.session-time-group__header.disclosure-trigger small { margin-left: auto; }
+.session-time-group__header .disclosure-chevron { margin-left: 0; }
+.message-disclosure:not(.is-error) { border-color: var(--border) !important; background: transparent !important; }
+.session-tree-disclosure .disclosure-chevron { margin-left: 0; }
+.session-tree-disclosure:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  body details > summary,
+  body details > summary::after,
+  .disclosure-chevron { transition: none; }
+}

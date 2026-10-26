@@ -10,6 +10,7 @@ import { isUserFacingMemory, taskDisplayTitle, taskKey, taskStatusLabel } from "
 import { EduPiRosterPreview, type RosterPreview } from "./EduPiRosterPreview";
 import { EduPiStudentEvents } from "./EduPiStudentEvents";
 import { EduPiStudentFacts } from "./EduPiStudentFacts";
+import { DisclosureChevron } from "./DisclosureChevron";
 import { EduPiFamilyRecords } from "./EduPiFamilyRecords";
 import { EduPiStudentMemoryActions } from "./EduPiStudentMemoryActions";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
@@ -355,7 +356,7 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
     {classNames.length > 0 ? <label>班级 <select value={classFilter} onChange={event => setClassFilter(event.target.value)}><option value="">全部班级</option>{classNames.map(name => <option key={name} value={name}>{name}</option>)}</select></label> : null}
     {lastError ? <details className="edupi-student-message is-error"><summary>最近一次操作失败</summary><p>{lastError}</p><button type="button" onClick={() => setLastError(null)}>清除</button></details> : null}
     {preview ? <EduPiRosterPreview key={preview.sourceName} preview={preview} busy={busy} onCancel={() => setPreview(null)} onImport={(csv) => void confirmImport(csv)} /> : null}
-    <div className="edupi-student-events-toggle"><button type="button" aria-expanded={showRecords} onClick={()=>setShowRecords(value=>!value)}>{showRecords?"收起学生记录":"学习与互动记录"}</button>{selectedName?<span>当前：{selectedName}</span>:null}</div>
+    <div className="edupi-student-events-toggle"><button type="button" className="disclosure-trigger is-inline" aria-expanded={showRecords} onClick={()=>setShowRecords(value=>!value)}><span>{showRecords?"收起学生记录":"学习与互动记录"}</span><DisclosureChevron open={showRecords} /></button>{selectedName?<span>当前：{selectedName}</span>:null}</div>
     {showRecords&&!selectedName?<EduPiStudentEvents key="all" student={null} semesterRange={currentSemesterRange} onAgent={onStartAgent}/>:null}
     <section className="edupi-student-directory" aria-label="学生名单"><header><h2>学生</h2>{students.length > 0 ? <span>{students.length} 名学生</span> : null}</header><div>{directory.rows.map(({ student, key }, index) => { const name = studentRecordName(student); const problemCount = records(student.error_patterns).filter((item) => item.status !== "resolved").length; return <button type="button" key={key} className={key === selectedStudentId ? "is-selected" : ""} onClick={() => { setEditor(null); onStudent(student); }}><span className={`is-tint-${index % 4}`}>{name.slice(0, 1)}</span><strong>{name}</strong>{student.class_name ? <small>{String(student.class_name)}</small> : null}{problemCount > 0 ? <small>{problemCount} 条学习问题</small> : null}</button>; })}</div>{students.length === 0 ? <button type="button" className="edupi-student-directory__empty" onClick={() => inputRef.current?.click()}>导入学生名单</button> : null}</section>
     {directory.pages > 1 ? <EduPiPagination label="学生分页" page={directory.page} pages={directory.pages} previousDisabled={directory.page === 0} nextDisabled={directory.page === directory.pages - 1} onPrevious={() => setPagination({ filterKey, page: directory.page - 1 })} onNext={() => setPagination({ filterKey, page: directory.page + 1 })}/> : null}

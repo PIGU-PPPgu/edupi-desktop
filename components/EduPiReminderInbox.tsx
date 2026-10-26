@@ -9,6 +9,7 @@ import { compareForegroundReminders, isReminderForeground, paginateForeground, r
 import type { EducationContract } from "@/lib/edupi-education-contract";
 import { readEduPiWorkspace } from "@/lib/edupi-education-client";
 import { useEduPiForegroundPolicy } from "./EduPiForeground";
+import { DisclosureChevron } from "./DisclosureChevron";
 
 type ReminderFilter = "pending" | "snoozed" | "handled" | "history";
 
@@ -216,8 +217,9 @@ export function EduPiReminderInbox({
           <button type="button" className="edupi-reminder-inbox__back" onClick={onClose}>返回对话</button>
         </header>
       ) : (
-        <button type="button" className="native-button" aria-expanded={open} onClick={() => { if (!open) setLoading(true); setOpen(!open); }}>
+        <button type="button" className="disclosure-trigger is-row" aria-expanded={open} onClick={() => { if (!open) setLoading(true); setOpen(!open); }}>
           提醒{pending.length ? ` ${pending.length}` : ""}
+          <DisclosureChevron open={open} />
         </button>
       )}
 

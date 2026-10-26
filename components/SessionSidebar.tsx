@@ -7,6 +7,7 @@ import type { EducationModule } from "@/lib/edupi-education-ui";
 import { useI18n } from "@/hooks/useI18n";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { ProjectPicker } from "./ProjectPicker";
+import { DisclosureChevron } from "./DisclosureChevron";
 import { AnimatedDropdown, PathLabel, displayCwd, getRecentProjects } from "./path-ui";
 import { APP_PREF_KEYS, getPrefJson, removePref, setPrefJson } from "@/lib/app-prefs";
 import { notifyDesktop } from "@/lib/desktop-notify";
@@ -1299,12 +1300,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           const collapsed = collapsedTimeGroups.has(group.key);
           return (
             <section className="session-time-group" key={group.key}>
-              <button type="button" className="session-time-group__header" aria-expanded={!collapsed} onClick={() => setCollapsedTimeGroups((previous) => {
+              <button type="button" className="session-time-group__header disclosure-trigger is-row" aria-expanded={!collapsed} onClick={() => setCollapsedTimeGroups((previous) => {
                 const next = new Set(previous);
                 if (next.has(group.key)) next.delete(group.key); else next.add(group.key);
                 return next;
               })}>
-                <span>{collapsed ? "▸" : "▾"}</span><span>{group.label}</span><small>{group.nodes.length}</small>
+                <span>{group.label}</span><small>{group.nodes.length}</small><DisclosureChevron open={!collapsed} />
               </button>
               {!collapsed && group.nodes.map((node) => (
                 <SessionTreeItem key={node.session.id} node={node} selectedSessionId={selectedSessionId} runningSessionIds={runningSessionIds} unreadSessionIds={unreadSessionIds} onSelectSession={handleSelectSessionFromList} onRenamed={loadSessions} onSessionDeleted={(id) => { onSessionDeleted?.(id); loadSessions(); }} depth={0} />
@@ -1795,6 +1796,9 @@ function SessionItem({
           {/* Collapse toggle — always visible when has children */}
           {hasChildren && (
             <button
+              type="button"
+              className="session-tree-disclosure"
+              aria-expanded={!collapsed}
               onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
               title={collapsed ? "Expand forks" : "Collapse forks"}
               style={{
@@ -1802,13 +1806,9 @@ function SessionItem({
                 width: 20, height: 20, padding: 0, flexShrink: 0,
                 background: "none", border: "none",
                 color: "var(--text-dim)", cursor: "pointer",
-                transform: collapsed ? "rotate(-90deg)" : "none",
-                transition: "transform 0.15s",
               }}
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="2 3.5 5 6.5 8 3.5" />
-              </svg>
+              <DisclosureChevron open={!collapsed} />
             </button>
           )}
 
