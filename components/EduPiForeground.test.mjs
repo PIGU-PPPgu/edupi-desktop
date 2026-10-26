@@ -30,7 +30,7 @@ test("board previews ten per lane and routes history to a separate paginated pag
   assert.match(history, /任务历史/);
   assert.match(history, /过期记录/);
   assert.match(history, /保留显示/);
-  assert.match(history, /aria-label="列表分页"/);
+  assert.doesNotMatch(history, /aria-label="列表分页"/);
 });
 
 test("done cards show the actual candidate completion date and omit only the generic source caption", () => {
@@ -102,6 +102,15 @@ test("a complete list renders ten rows with enabled navigation to the rest", () 
   assert.match(html, /21 项 · 1 \/ 3 页/);
   assert.doesNotMatch(html, /条目 20/);
   assert.match(html, />下一页</);
+});
+
+test("empty and single-page lists omit disabled pagination without dropping any rows", () => {
+  for (const length of [0, 1, 10]) {
+    const html = render(React.createElement(EduPiPagedRows, { rows: Array.from({ length }, (_, index) => index), memoryKey: `synthetic-single-${length}`, renderRow: index => React.createElement("p", { key: index }, `条目 ${index}`) }));
+    assert.doesNotMatch(html, /aria-label="列表分页"|上一页|下一页|1 \/ 1 页/);
+    assert.equal((html.match(/条目 /g) || []).length, length);
+    if (length === 0) assert.match(html, /暂无事项/);
+  }
 });
 
 test("this week's teaching grid projects actual lessons across the national holiday", () => {

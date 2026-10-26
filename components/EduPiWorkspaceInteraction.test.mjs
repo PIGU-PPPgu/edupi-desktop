@@ -99,9 +99,13 @@ test("board category and list callbacks round trip through the route and plain r
   clickCategory(app, "学生跟进");
   assert.equal(app.calls.routes.at(-1), "workspace:board:student");
   assert.equal(currentCategory(app), "学生跟进");
-  app.button("历史 2").props.onClick();
+  app.button("历史 1").props.onClick();
   assert.equal(app.calls.routes.at(-1), "workspace:list:history:student");
   assert.equal(app.select("任务类型").props.value, "student");
+  app.button("← 工作区").props.onClick();
+  assert.equal(app.calls.routes.at(-1), "workspace:board:student");
+  assert.equal(currentCategory(app), "学生跟进");
+  app.button("历史 1").props.onClick();
   app.select("列表状态").props.onChange({ target: { value: "progress" } });
   assert.equal(app.calls.routes.at(-1), "workspace:list:progress:student");
   app.select("任务类型").props.onChange({ target: { value: "all" } });
@@ -115,6 +119,17 @@ test("board category and list callbacks round trip through the route and plain r
   assert.equal(currentCategory(app), "全部");
   app.setProps({ selectedObjectId: null });
   assert.equal(currentCategory(app), "全部");
+});
+
+test("history count matches the category and search results that its action opens", () => {
+  const app = mount("EduPiWorkspaceBoard", { query: "备课" });
+  app.button("历史 1").props.onClick();
+  const list = nodes(app.render()).find(node => node.type === "paged-rows");
+  assert.deepEqual(Array.from(list.props.rows, task => task.id), ["teaching"]);
+  app.button("← 工作区").props.onClick();
+  clickCategory(app, "学生跟进");
+  app.button("历史 0").props.onClick();
+  assert.equal(nodes(app.render()).find(node => node.type === "paged-rows").props.rows.length, 0);
 });
 
 test("explicit board routes win over the local history fallback while an uncontrolled board still navigates", () => {

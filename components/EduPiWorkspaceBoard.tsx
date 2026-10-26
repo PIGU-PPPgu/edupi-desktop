@@ -136,6 +136,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   const scopedTasks = category === "all" ? data.tasks : data.tasks.filter((task) => taskCategory(task) === category);
   const columns = projectTaskBoard(scopedTasks, data.taskSessions, data.workCandidates, query, { ...policy, ...data });
   const historyColumns = projectTaskBoard(scopedTasks, data.taskSessions, data.workCandidates, query);
+  const historyCount = historyColumns.reduce((total, column) => total + column.tasks.length, 0);
   const listId = route?.startsWith("workspace:list:") ? parts[2] : "";
   const listColumn = columns.find(column => column.id === listId);
   const inList = Boolean(listColumn || listId === "history" || listId === "all" || listId === "actionable");
@@ -259,7 +260,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   const ghostTask = draggedTaskId ? taskById.get(draggedTaskId) ?? null : null;
   if (inList) {
     const listTasks = listColumn?.tasks || (listId === "history" ? historyColumns : columns).flatMap(column => column.tasks).filter(task => listId !== "actionable" || isTaskActionable(task));
-    return <main className="edupi-module-workspace"><header className="edupi-module-heading"><div><button type="button" className="edupi-back-link" onClick={() => navigate("workspace:board")}>← 工作区</button><h1>{listColumn?.label || (listId === "history" ? "任务历史" : listId === "actionable" ? "需要处理" : "任务")}</h1></div></header>
+    return <main className="edupi-module-workspace"><header className="edupi-module-heading"><div><button type="button" className="edupi-back-link" onClick={() => navigate(`workspace:board${category === "all" ? "" : `:${category}`}`)}>← 工作区</button><h1>{listColumn?.label || (listId === "history" ? "任务历史" : listId === "actionable" ? "需要处理" : "任务")}</h1></div></header>
       <div className="edupi-foreground-controls"><select aria-label="列表状态" value={listId} onChange={event => openList(event.target.value)}><option value="all">全部状态</option><option value="actionable">需要处理</option>{columns.map(column => <option key={column.id} value={column.id}>{column.label}</option>)}<option value="history">历史</option></select><select aria-label="任务类型" value={category} onChange={event => changeCategory(event.target.value as typeof category)}><option value="all">全部类型</option>{TASK_CATEGORY_CONFIG.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span>{query.trim() ? `搜索：${query}` : null}</span></div>
       <EduPiPagedRows rows={listTasks} memoryKey={`workspace:${listId}:${category}:${query}`} renderRow={task => {
         const lane = taskBoardLane(task, task.id ? data.taskSessions[task.id] : null, task.id ? candidateByTask.get(task.id) : null);
@@ -273,7 +274,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
     <main className="edupi-workspace-board" onPointerMove={(event) => { if (!draggedTaskIdRef.current) { const start = dragStartRef.current; if (!start || Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 6) return; suppressClickRef.current = true; beginDrag(start, event.clientX, event.clientY); } queueGhostPosition(event.clientX, event.clientY); setDropTarget(dragTarget(event)?.stage ?? null); }} onPointerUp={(event) => { const target = dragTarget(event); stopDragging(); if (target) void move(target.task, target.stage); }} onPointerCancel={stopDragging} onPointerLeave={() => { if (draggedTaskIdRef.current) stopDragging(); }}>
       <header className="edupi-workspace-board__heading">
         <div><h1>工作区</h1><p>{visibleCount} 项</p></div>
-        <div className="edupi-workspace-board__actions"><button type="button" onClick={() => openList("history")}>历史 <span>{data.tasks.length}</span></button><button type="button" className="is-primary" onClick={() => setCreateOpen((open) => !open)}>新建任务</button></div>
+        <div className="edupi-workspace-board__actions"><button type="button" onClick={() => openList("history")}>历史 <span>{historyCount}</span></button><button type="button" className="is-primary" onClick={() => setCreateOpen((open) => !open)}>新建任务</button></div>
       </header>
       {mergeSuggestions}
       <div className="edupi-task-category-segment edupi-segmented-control" role="group" aria-label="任务类型">

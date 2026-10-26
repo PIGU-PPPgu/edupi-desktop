@@ -10,6 +10,7 @@ const { EduPiReviewBoard } = await jiti.import("./EduPiReviewBoard.tsx");
 const { EduPiMemoryDatabase } = await jiti.import("./EduPiMemoryDatabase.tsx");
 const { EduPiGrowthWorkspace } = await jiti.import("./EduPiGrowthWorkspace.tsx");
 const { EduPiMaterialsWorkspace } = await jiti.import("./EduPiMaterialsWorkspace.tsx");
+const { EduPiObjectSider } = await jiti.import("./EduPiObjectSider.tsx");
 const noop = () => {};
 const render = (component, props) => renderToStaticMarkup(React.createElement(component, props));
 const review = (data, query = "", selectedObjectId = "review:board") => render(EduPiReviewBoard, {
@@ -20,6 +21,19 @@ test("an empty review page has one status instead of five empty groups", () => {
   const html = review(buildEducationContract());
   assert.match(html, /role="status">暂无待确认事项/);
   assert.doesNotMatch(html, /edupi-review-mini-board|<h2>/);
+  assert.doesNotMatch(review(buildEducationContract(), "", "review:list:facts"), /列表分页|上一页|下一页/);
+});
+
+test("review navigation keeps its entry points while omitting empty content groups", () => {
+  const data = buildEducationContract();
+  const props = { view: "review", data, context: null, memoryScopes: null, teachingSkills: { skills: [], teacherGrowth: [] }, query: "", selectedStudentId: null, selectedObjectId: null, selectedTaskKey: null, onQuery: noop, onStudent: noop, onObject: noop, onTask: noop, onUpload: noop, onCollapse: noop };
+  const empty = render(EduPiObjectSider, props);
+  assert.match(empty, /审核看板|事实确认/);
+  assert.doesNotMatch(empty, /暂无待确认内容|暂无待审核任务|审核内容|任务审核/);
+  data.observations = [{ observationId: "synthetic-observation", text: "合成课堂观察", studentIds: [], evidenceIds: [], provenance: [], teacherReview: { state: "pending_review" } }];
+  const pending = render(EduPiObjectSider, props);
+  assert.match(pending, /审核内容/);
+  assert.match(pending, /合成课堂观察/);
 });
 
 test("review groups contain only available work and search keeps a distinct empty state", () => {

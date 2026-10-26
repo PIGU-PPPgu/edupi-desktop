@@ -653,7 +653,9 @@ html.dark .edupi-teacher-shell {
 .edupi-student-drawer > header span { color: var(--ep-blue); font-size: 9px; font-weight: 700; }
 .edupi-student-drawer > header h2 { margin: 5px 0 2px; font-size: 21px; }
 .edupi-student-drawer > header p { margin: 0; color: var(--ep-muted); font-size: 10px; }
-.edupi-student-drawer__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 5px; }
+.edupi-student-drawer > header > div:first-child { flex: 1; min-width: 0; }
+.edupi-student-drawer > header p { overflow-wrap: anywhere; }
+.edupi-student-drawer__actions { display: flex; flex: 0 0 auto; flex-wrap: nowrap; justify-content: flex-end; align-items: center; gap: 5px; }
 .edupi-student-drawer__actions button { height: 28px; flex-shrink: 0; white-space: nowrap; padding: 0 8px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface); color: var(--ep-muted); cursor: pointer; font-size: 11px; }
 .edupi-student-drawer__actions button:hover { border-color: var(--ep-border-strong); color: var(--ep-text); }
 .edupi-student-drawer__actions button.is-delete { border-color: color-mix(in srgb, var(--ep-red) 35%, var(--ep-border)); color: var(--ep-red); }
@@ -937,7 +939,7 @@ html.dark .edupi-teacher-shell {
 @media (max-width: 700px) { .edupi-material-pairing label { grid-template-columns: 1fr; } }
 .edupi-material-message { margin: 10px 0 0; color: var(--ep-muted); font-size: 12px; line-height: 1.5; }
 .edupi-material-message.is-error { padding: 8px 10px; border-left: 2px solid var(--ep-orange); background: var(--ep-orange-soft); color: var(--ep-text); }
-.edupi-material-drawer { position: fixed; z-index: 110; top: 0; right: 0; bottom: 0; display: grid; width: min(400px, 94vw); grid-template-rows: auto minmax(0, 1fr) auto; border-left: 1px solid var(--ep-border); background: var(--ep-surface); box-shadow: -14px 0 34px rgba(18, 24, 32, .16); animation: edupiCalendarDetailIn .16s ease-out; }
+.edupi-material-drawer { position: absolute; z-index: 110; top: 0; right: 0; bottom: 0; display: grid; width: min(400px, 94vw); grid-template-rows: auto minmax(0, 1fr) auto; border-left: 1px solid var(--ep-border); background: var(--ep-surface); box-shadow: -14px 0 34px rgba(18, 24, 32, .16); animation: edupiCalendarDetailIn .16s ease-out; }
 .edupi-material-drawer > header { display: flex; min-height: 88px; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px; border-bottom: 1px solid var(--ep-border); }
 .edupi-material-drawer > header span { color: var(--ep-blue); font-size: 9px; font-weight: 700; }
 .edupi-material-drawer > header h2 { margin: 6px 0 0; font-size: 19px; line-height: 1.35; }
@@ -1495,7 +1497,7 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-today-work__details dl > div { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 7px; }
 .edupi-today-work__details dt { color: var(--ep-muted); font-size: 10px; }
 .edupi-today-work__details dd { margin: 0; color: var(--ep-text); font-family: var(--font-mono); font-size: 9px; overflow-wrap: anywhere; }
-.edupi-today-work__actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 9px; }
+.edupi-today-work__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .edupi-today-work__decision { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 10px; margin-top: 9px; padding: 5px 7px 5px 9px; border-radius: 6px; background: var(--ep-surface-soft); color: var(--ep-muted); font-size: 11px; }
 .edupi-today-work__decision.is-accepted, .edupi-today-work__decision.is-modified { background: var(--ep-green-soft); color: var(--ep-green); }
 .edupi-today-work__decision.is-rejected, .edupi-today-work__decision.is-suppressed { background: var(--ep-red-soft); color: var(--ep-red); }
@@ -2288,7 +2290,6 @@ details[open] > .edupi-disclosure-detail { animation: edupi-expand-in .17s ease-
   .edupi-context-field-version > b { grid-column: 1 / -1; }
   .edupi-task-detail-drawer { width: 100%; }
   .edupi-task-detail-summary dl { grid-template-columns: 1fr; gap: 8px; }
-  .edupi-today-work__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .edupi-today-work__actions button,
   .edupi-today-work__editor-actions button,
   .edupi-today-work__editor input,
