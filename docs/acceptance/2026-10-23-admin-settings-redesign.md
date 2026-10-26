@@ -1,6 +1,6 @@
 # 管理中心与设置重做验收
 
-当前继续执行 **2026-10-26 主导航与全应用折叠重做**，尚未安装本轮变化。用户拒绝旧折叠外观、主导航样式和二级导航细线轨道；此前自适应居中与功能证据保留，不能当作用户认可。现装版本仍为 `cd14396d` 的唯一 `/Applications/EduPi.app`。既有 Runtime/用量记录校验异常单列，不称应用全功能健康。
+当前 **2026-10-26 主导航与全应用折叠重做** 已完成本机安装与交互验收。唯一 `/Applications/EduPi.app` 为 `cafce3a4` 的本地0.3.77预览，二级栏收起不留细线，主导航和共享折叠样式已更新；此前自适应居中保持。下方历轮版本是历史证据，用户观感仍由用户判断。既有 Runtime/用量记录校验异常单列，不称应用全功能健康。
 
 ## 2026-10-24 官方目录与连接恢复验收通过
 
@@ -321,11 +321,44 @@ Windows/Linux实机、全套回归、用量正常分支的本机披露与新的�
 
 ## 2026-10-26 主导航与全应用折叠重做
 
-延续R18，当前实现中。用户附图指出主导航不美观、二级导航折叠成细线、此前原生折叠控件都需要改。采用本机真实界面与源码盘点，不将范围只限于设置页。
+延续R18，本轮源码、安装与macOS交互验收完成。用户附图指出主导航不美观、二级导航折叠成细线、此前原生折叠控件都需要改。采用本机真实界面与源码盘点，覆盖设置及工作台，保留上一轮自适应居中。
 
 - 基线：`87155a05`，安装UI为`cd14396d`。原生details有97个源码站点/44个组件；另有聊天过程、长文本、思考/工具内容和会话分组按钮。二级栏细线由18px列、窄条DOM和右边框组成，旧测试将它误作契约；主网格264px与内容栏244px也不一致。
 - 设计：主导航采用克制的品牌尺寸、正常字重和中性选中态；二级栏完全隐藏并从模块标题栏恢复，保留查询、选中、滚动和焦点。共享折叠标题、尾部细线指示、悬浮/焦点/展开态；数据表行保留grid，纯图标诊断保留原尺寸；原details、onToggle、受控open与内容DOM继续承担懒加载/取消/草稿契约。
 - 参考：[Linear侧栏官方示例](https://linear.app/changelog/2024-12-18-personalized-sidebar)图片已实际读取；[Notion侧栏](https://www.notion.com/help/navigate-with-the-sidebar)文档核对显式恢复入口。没有操作第三方登录客户端。官方图片、用户两张图和改版前原生展开/收起在私有`$CHECKPOINT/navigation-disclosure-20261026/evidence/`。
-- 待验：本轮源码/行为检查、真实安装的宽窄窗/深浅色/导航收起恢复/跨模块/搜索与滚动焦点、代表性折叠与聊天内容、重启资料保持。旧Runtime/用量异常保留边界，不启动新的授权或外部写入。
+- 覆盖：97个原生details站点共享新样式，另统一聊天过程、长文本、思考/工具、会话分组等按钮。保留原生语义及内容DOM；纯图标后台诊断弹层保持28px，记忆/知识库的表格行继续使用grid。实际操作覆盖下表代表性分支，未声称逐个填充并点击全部97个数据分支。
 
-源码复核补正：独立审查复现窄窗日程列表遮住详情、学生详情的模态焦点阻止已恢复列表操作。选择日程现在先收起列表；显式恢复的列表按当前模块取得前景焦点，主内容暂不可交互，Escape只收起列表。模块切换退出此前景状态，学生选择和草稿保留；窄窗详情链接先显示详情，不自动覆盖列表。实际modal hook、实际Calendar/selectView回调及布局状态回归已加入。最终全套2575通过、40环境跳过、0失败，类型/完整lint通过；尚待安装版操作。中间5项失败为旧属性顺序/可空数据正则和隔离harness依赖更新，不删除原断言，失败日志保留。
+源码复核补正：独立审查复现窄窗日程列表遮住详情、学生详情的模态焦点阻止已恢复列表操作。选择日程现在先收起列表；显式恢复的列表按当前模块取得前景焦点，主内容暂不可交互，Escape只收起列表。模块切换退出此前景状态，学生选择和草稿保留；窄窗详情链接先显示详情，不自动覆盖列表。实际modal hook、实际Calendar/selectView回调及布局状态回归已加入。
+
+### 本机安装与交互证据
+
+源码先由`77a6493c`完成共享样式与导航，再由`cafce3a4e3e2015570b60d9c98a5c24ac267ec14`修正窄窗焦点和详情覆盖；最终仅安装后者。私有证据根为`$CHECKPOINT/navigation-disclosure-20261026/evidence/`，汇总在`native-acceptance.json`。
+
+| 实际操作 | 结果与证据 |
+| --- | --- |
+| 宽窗主导航、图标模式、恢复文字 | 2880×1800截图；中性选中态、正常字重，旧蓝色粗条移除。`delivery-expanded.jpg`、`primary-navigation-icons.jpg` |
+| 收起二级栏，再按Enter恢复 | 隐藏整个列表和网格列，标题旁恢复入口可达；不留18px线条，恢复后焦点返回收起按钮。`new-secondary-collapsed.txt`、`delivery-collapsed.jpg`、`sider-scroll-restored.txt` |
+| 列表滚动、收起/恢复；搜索陈、收起/恢复 | 已目视对照同一李怡淼起始位置；查询仍为陈且3个结果。`sider-scroll-before.jpg`、`sider-scroll-restored.jpg`、`sider-query-restored.txt` |
+| 窄窗1612×1612选学生、恢复列表、Tab、Escape | 详情先可见；恢复列表后Tab进入搜索，Escape仅关闭列表，同一学生ID保留。`narrow-student-detail.jpg`、`narrow-student-list-tab.txt`、`narrow-student-list-escape.txt` |
+| 窄窗日程列表选课程，再恢复/关闭列表 | 选中即让出详情；标题恢复入口和Escape可用，原课程ID保持。`narrow-calendar-detail.jpg`、`narrow-calendar-list-recovered.txt`、`narrow-calendar-escape.txt` |
+| 展开日程列表后切班级、恢复宽窗 | 新模块可交互，不残留此前景状态或空列。`narrow-module-switch.txt`、`wide-navigation-restored.jpg` |
+| 学生档案历史、成长记录 | 整行展开，历史读取结束为真实空状态，Enter收起；成长记录内容可读。`student-history-loaded.txt`、`student-growth-disclosure.jpg` |
+| 常规规则、深浅色 | 同一整行与细箭头在两种外观可辨；最终恢复中文/浅色/3天/关闭退出关。`settings-disclosure-dark.jpg`、`cold-settings-preferences.txt` |
+| 模型高级参数、草稿收起/切页/放弃 | 未保存名称在收起和切页后保留；放弃后重进恢复原值。没有保存模型或密钥。`model-advanced-expanded.jpg`、`model-draft-retained.txt`、`model-draft-discarded.txt` |
+| JEV用途/高级、连接操作目录、自动运行准备状态 | 均实际展开，输入和状态行完整；未发起JEV测试、OAuth或外部写入。`jev-disclosures-expanded.jpg`、`connector-operations-expanded.jpg`、`automation-readiness-expanded.jpg` |
+| 教育记忆表格行 | 展开后各列与表头仍对齐，历史入口和操作可达；未修改/删除教师记忆。`memory-grid-expanded.jpg` |
+| 现有聊天的过程、思考、工具和会话时间分组 | 实际展开回读已有内容，无新提示词、工具执行或模型调用。`chat-process-expanded.jpg`、`chat-thinking-expanded.jpg`、`chat-tool-expanded.jpg`、`chat-session-group-expanded.txt` |
+| 正常Quit至App进程0，再冷启动 | 新PID77713，班级51人、默认DeepSeek及模型服务状态、原设置偏好保持；首页/status/workspace均200。`cold-quit-processes.json`、`cold-restart-health.json`、`cold-class-restored.txt`、`cold-models-restored.txt` |
+
+### 检查、保护与清理
+
+- 最终`npm test`为2615总数、2575通过、40环境跳过、0失败；`node_modules/.bin/tsc --noEmit`、`npm run lint`、CSS解析和diff通过。54项披露、35项导航与26项叠层检查有重叠，不相加。见`full-tests-verified.log`、`types-verified.log`、`lint-verified.log`、`overlay-related-fixed.log`与`checks.json`。中间旧属性顺序/可空数据正则、隔离harness依赖和图标mock失败均保留，更新后通过，没有删除行为断言。
+- 最终`desktop:prepare`通过。字体站点构建仅使用已有127.0.0.1:7897代理环境；系统网络未改，成品无代理或验收专用环境键。Team `BY3XZG2839`、CDHash `13e25553d191b3cd56cdd4a990b362099849fff6`，主程序SHA256 `9e1e213b58c9a813ffbe4d1d020c8cdb93d3d905f7a594bb441ff61015627f24`。Core03、33,709个非server文件、GitHub宿主及原更新公钥保持，清理后strict/deep再次通过。见`navigation-installed.json`、`post-cleanup.json`；未合并、发布、公证或改feed/tag。
+- 全程与安装前后两组快照均314文件，无增删，教师业务与模型/认证/JEV/UI配置摘要保持。6个变化是提醒状态、桥接状态、3份追加日志和现有会话custom追加；从本轮开始为6条/1593字节，从安装前为4条/1062字节，原前缀保持。Mac重启前的初始快照未被安装快照覆盖，未回写用户文件掩盖差异。见`data-protection.json`、`install-data-protection.json`。
+- 删除6个确认忽略且可重建目录和2个本轮临时App，目录占用合计约5.12GiB，分批观测可用空间增加约5.15GiB；临时App副本0，安装App无外部符号链接依赖。保留源码、原.70回退、教师资料、认证、证据和原Core依赖。见`unused-candidate-cleanup.json`、`build-cleanup.json`、`cleanup-apps.json`、`post-cleanup.json`。
+
+### 未验与既有异常
+
+原有`runtime_root_invalid`和学生学习图的Core admission拒绝仍在；投影ready，51学生/160任务/24校历/6课表保持，externalSend=false。用量页仍实际显示“本地记录校验失败，收集已停止”，因此其正常数据披露分支未作本机通过。直接无Desktop凭据读取models得到403，原响应不计通过，默认模型改由真实App冷启动界面核对。未擦除或修复Runtime库。
+
+Windows/Linux原生、40项环境跳过、全部97个披露的数据分支、自然到期/新OAuth/离线/新写入和公开升级链路未在本轮复验；此前连接恢复证据保持历史有效，不作为本轮新增结果。R23整体仍部分实现，用户视觉认可不自动勾选。
