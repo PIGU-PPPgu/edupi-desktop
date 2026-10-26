@@ -341,14 +341,18 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
       <div className="edupi-settings-content" hidden={Boolean(searchQuery.trim())}>
       {activeSection === "readiness" ? <section className="edupi-admin-section">
         <AdminSectionHeader title="自动运行" onRefresh={refresh} />
+        <div className="edupi-admin-section-break edupi-settings-automation-status" data-setting-id="automation-status"><h2>运行状态</h2><span>{snapshot.status?.core?.status === "ready" ? formatCoreSchedulerStatus(snapshot.status.core.scheduler, kernelRuns.length) : "运行状态不可用"}</span></div>
+        <div className="edupi-admin-metrics"><AdminMetric value={kernelSummary?.running ?? "—"} label="运行中" /><AdminMetric value={kernelSummary?.needs_review ?? "—"} label="待确认" /><AdminMetric value={kernelSummary?.succeeded ?? "—"} label="已完成" /></div>
+        <dl className="edupi-settings-runtime-state">
+          <div><dt>主动运行</dt><dd>{snapshot.status?.proactivity?.status === "active" ? "主动" : snapshot.status?.proactivity?.status === "paused" ? "已暂停" : snapshot.status?.proactivity?.status === "disabled" ? "按需" : "不可用"}</dd></div>
+          <div><dt>待交付</dt><dd>{snapshot.status?.proactivity?.currentAttentionDeliveries ?? "—"}</dd></div>
+          <div><dt>教师反馈</dt><dd>{snapshot.status?.proactivity?.teacherFeedback ? "可记录" : "未启用"}</dd></div>
+        </dl>
         <details className="edupi-admin-readiness">
           <summary><span>准备状态</span><strong>{loading ? "正在读取" : !allSourcesLoaded ? "暂不可用" : `${completeCount}/${readiness.length} 项完成`}</strong></summary>
           {allSourcesLoaded ? <div className="edupi-admin-readiness__bar" aria-hidden="true"><span style={{ width: `${readiness.length ? (completeCount / readiness.length) * 100 : 0}%` }} /></div> : null}
           <div className="edupi-admin-readiness__items">{readiness.map((item) => <button type="button" key={item.id} onClick={item.action}><i className={item.complete ? "is-complete" : ""} aria-hidden="true">{item.complete ? "✓" : "·"}</i><span>{item.label}</span><em>{item.complete ? "完成" : "去设置"}</em></button>)}</div>
         </details>
-        <div className="edupi-admin-section-break" data-setting-id="automation-status"><h2>运行状态</h2><span>{snapshot.status?.core?.status === "ready" ? formatCoreSchedulerStatus(snapshot.status.core.scheduler, kernelRuns.length) : "运行状态不可用"}</span></div>
-        <div className="edupi-admin-metrics"><AdminMetric value={kernelSummary?.running ?? "—"} label="运行中" /><AdminMetric value={kernelSummary?.needs_review ?? "—"} label="待确认" /><AdminMetric value={kernelSummary?.succeeded ?? "—"} label="已完成" /></div>
-        <div className="edupi-admin-metrics"><AdminMetric value={snapshot.status?.proactivity?.status === "active" ? "主动" : snapshot.status?.proactivity?.status === "paused" ? "已暂停" : snapshot.status?.proactivity?.status === "disabled" ? "按需" : "不可用"} label="主动运行" /><AdminMetric value={snapshot.status?.proactivity?.currentAttentionDeliveries ?? "—"} label="待交付" /><AdminMetric value={snapshot.status?.proactivity?.teacherFeedback ? "可记录" : "未启用"} label="教师反馈" /></div>
         <div className="edupi-settings-automation-domains" data-setting-id="automation-domains"><h2>主动运行范围</h2>{([
           ["teaching_preparation", "课前准备"], ["student_followup", "学生跟进"], ["calendar_administration", "校历与行政"], ["lesson_reflection", "课后复盘"], ["parent_communication", "家长沟通"],
         ] as const).map(([domain, label]) => <details key={domain}><summary><span>{label}</span><small>试用配置</small></summary><EduPiProactivityCanary domain={domain} feedbackEnabled={snapshot.status?.proactivity?.teacherFeedback === true} onChanged={refresh} /></details>)}</div>

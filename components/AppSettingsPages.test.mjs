@@ -61,7 +61,7 @@ function loadSettings({ hooks = React, jsxRuntime = runtime, realProxy = false }
 
 const pageItems = {
   general: ["language", "appearance", "foreground", "window-close"], profile: ["teacher-profile"],
-  notifications: ["completion-notifications", "notification-permission"], devices: ["mobile", "computer-use"],
+  notifications: ["completion-notifications", "notification-permission"], devices: ["computer-use", "mobile"],
   data: ["data-root", "usage"], about: ["updates", "update-proxy"],
 };
 

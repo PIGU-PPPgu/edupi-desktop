@@ -718,8 +718,8 @@ export function AppSettings({ onClose, initialSection = null, embedded = false, 
 
       {desktop && showsPage("devices") ? <section className="app-settings-group" aria-label="设备与权限" hidden={embedded && currentPage !== "devices"}>
         {!embedded ? <h2>设备与权限</h2> : null}
-        <div data-setting-id="mobile" tabIndex={-1}><MobileBridgeSettingsCard /></div>
         <ComputerUseSettingsCard />
+        <div data-setting-id="mobile" tabIndex={-1}><MobileBridgeSettingsCard /></div>
       </section> : null}
 
       {desktop && showsPage("data") ? <section className="app-settings-group" aria-label="数据与隐私" hidden={embedded && currentPage !== "data"}>
