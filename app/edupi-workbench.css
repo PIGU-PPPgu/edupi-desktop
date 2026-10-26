@@ -2034,8 +2034,7 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-workbench-loading > span { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 11px; background: var(--ep-text); color: var(--ep-surface); font-family: Georgia, serif; font-size: 24px; }
 .edupi-workbench-loading strong { font-size: 13px; }
 .edupi-workbench-loading button { height: 32px; padding: 0 12px; border: 1px solid var(--ep-blue); border-radius: 6px; background: var(--ep-blue); color: white; cursor: pointer; font-size: 12px; }
-/* Motion: restrained transitions + view-switch fade, disabled for reduced motion */
-@keyframes edupi-view-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+/* Keep work pages visible before animation frames resume after app activation. */
 @keyframes edupi-backdrop-in { from { opacity: 0; } }
 @keyframes edupi-panel-in { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
 @keyframes edupi-toast-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
@@ -2043,10 +2042,6 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 @keyframes edupi-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .7; transform: scale(.93); } }
 @keyframes edupi-flow-running { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ep-blue) 36%, transparent); } 50% { box-shadow: 0 0 0 4px transparent; } }
 @keyframes edupi-flow-queued { 0%, 100% { opacity: 1; } 50% { opacity: .38; } }
-.edupi-module-workspace,
-.edupi-workspace-board,
-.edupi-task-workspace,
-.edupi-review-surface { animation: edupi-view-in .18s ease-out both; }
 .edupi-review-board-workspace { max-width: 1380px; }
 .edupi-review-mini-board { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; margin-top: 24px; }
 .edupi-review-mini-board > section { min-width: 0; overflow: hidden; border: 1px solid var(--ep-border); border-radius: 8px; background: var(--ep-surface); }
