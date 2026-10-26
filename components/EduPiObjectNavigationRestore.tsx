@@ -4,9 +4,19 @@ import { useEffect, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { EduPiSidebarIcon } from "./EduPiSidebarIcon";
 
+export function objectNavigationLayout({ collapsed, narrow, modalOpen, revealedView, view }: {
+  collapsed: boolean; narrow: boolean; modalOpen: boolean; revealedView: string | null; view: string;
+}) {
+  const revealed = revealedView === view;
+  return {
+    collapsed: collapsed || (narrow && modalOpen && !revealed),
+    foreground: narrow && modalOpen && !collapsed && revealed,
+  };
+}
+
 export function findObjectNavigationHeader(root: HTMLElement, narrow: boolean): HTMLElement | null {
   const selectors = narrow
-    ? [".edupi-student-drawer > header", ".edupi-module-heading, .edupi-task-workspace__header, .edupi-c1-review__heading, .edupi-c1-review-task-bridge__heading", "main > header"]
+    ? [".edupi-student-drawer > header", ".edupi-calendar-detail > header", "[role='dialog'] > header", ".edupi-module-heading, .edupi-task-workspace__header, .edupi-c1-review__heading, .edupi-c1-review-task-bridge__heading", "main > header"]
     : [".edupi-module-heading, .edupi-task-workspace__header, .edupi-c1-review__heading, .edupi-c1-review-task-bridge__heading", "main > header"];
   for (const selector of selectors) {
     for (const header of root.querySelectorAll<HTMLElement>(selector)) {

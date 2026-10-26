@@ -23,12 +23,15 @@ type Props = {
   hidden?: boolean;
   containerRef?: RefObject<HTMLElement | null>;
   id?: string;
+  foreground?: boolean;
 };
 
-export function EduPiContentSider({ width, header, children, footer, ariaLabel, className = "", hidden = false, containerRef, id }: Props) {
+export function EduPiContentSider({ width, header, children, footer, ariaLabel, className = "", hidden = false, containerRef, id, foreground = false }: Props) {
   return (
     <aside
       aria-label={ariaLabel}
+      role={foreground ? "dialog" : undefined}
+      aria-modal={foreground || undefined}
       ref={containerRef}
       id={id}
       hidden={hidden}

@@ -12,7 +12,20 @@ const source = fs.readFileSync(new URL("./EduPiObjectNavigationRestore.tsx", imp
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
 const exports = {};
 vm.runInNewContext(compiled, { exports, require: () => ({}) });
-const { findObjectNavigationHeader, restoreObjectNavigationFocus } = exports;
+const { findObjectNavigationHeader, objectNavigationLayout, restoreObjectNavigationFocus } = exports;
+
+test("narrow detail links hide the list until explicitly restored and do not carry that overlay into another module", () => {
+  const state = { collapsed: false, narrow: true, modalOpen: true, revealedView: null, view: "students" };
+  const initial = objectNavigationLayout(state);
+  assert.equal(initial.collapsed, true);
+  assert.equal(initial.foreground, false);
+  const restored = objectNavigationLayout({ ...state, revealedView: "students" });
+  assert.equal(restored.collapsed, false);
+  assert.equal(restored.foreground, true);
+  const calendar = objectNavigationLayout({ ...state, revealedView: "students", view: "calendar" });
+  assert.equal(calendar.collapsed, true);
+  assert.equal(calendar.foreground, false);
+});
 
 function element({ hidden = false, visible = true } = {}) {
   return { closest: () => hidden ? {} : null, getClientRects: () => visible ? [{}] : [] };
@@ -24,6 +37,12 @@ test("recovery chooses the visible current heading and the student dialog headin
   assert.equal(findObjectNavigationHeader(root, false), heading);
   assert.equal(findObjectNavigationHeader(root, true), dialog);
   assert.equal(findObjectNavigationHeader({ querySelectorAll: () => [element({ visible: false })] }, true), null);
+});
+
+test("the narrow calendar dialog receives the recovery control above the background calendar heading", () => {
+  const main = element(), detail = element();
+  const root = { querySelectorAll: selector => selector === ".edupi-student-drawer > header" ? [] : selector === ".edupi-calendar-detail > header" ? [detail] : [main] };
+  assert.equal(findObjectNavigationHeader(root, true), detail);
 });
 
 function focusContext() {
@@ -72,6 +91,12 @@ test("the hidden list retains its content DOM and becomes unavailable to focus",
   assert.match(html, /inert=""/);
   assert.match(html, /value="query"/);
   assert.doesNotMatch(html, /width:248/);
+});
+
+test("the foreground list exposes the modal navigation scope", () => {
+  const html = renderToStaticMarkup(React.createElement(EduPiContentSider, { foreground: true, ariaLabel: "班级导航" }, "学生"));
+  assert.match(html, /role="dialog"/);
+  assert.match(html, /aria-modal="true"/);
 });
 
 test("the mounted recovery effect moves its toolbar marker and releases observers on cleanup", () => {

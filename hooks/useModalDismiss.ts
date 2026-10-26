@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 
 const FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -27,8 +27,10 @@ const modalStack: symbol[] = [];
 export function useModalDismiss<T extends HTMLElement = HTMLDivElement>(
   onDismiss: () => void,
   enabled = true,
+  externalContainerRef?: RefObject<T | null>,
 ) {
-  const containerRef = useRef<T | null>(null);
+  const internalContainerRef = useRef<T | null>(null);
+  const containerRef = externalContainerRef ?? internalContainerRef;
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
 
@@ -91,7 +93,7 @@ export function useModalDismiss<T extends HTMLElement = HTMLDivElement>(
       if (idx !== -1) modalStack.splice(idx, 1);
       previouslyFocused?.focus?.({ preventScroll: true });
     };
-  }, [enabled]);
+  }, [enabled, containerRef]);
 
   return containerRef;
 }

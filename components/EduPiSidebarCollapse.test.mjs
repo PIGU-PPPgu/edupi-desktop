@@ -24,7 +24,7 @@ test("primary and secondary EduPi sidebars collapse in place", async () => {
 
   assert.doesNotMatch(panel, /edupi-object-sider-strip/);
   assert.match(panel, /EduPiObjectNavigationRestore/);
-  assert.match(panel, /EduPiObjectSider hidden=\{!showObjectSider\}/);
+  assert.match(panel, /EduPiObjectSider\b[^>]*hidden=\{!showObjectSider\}/);
   assert.match(content, /hidden=\{hidden\}/);
   assert.match(content, /inert=\{hidden\}/);
   assert.match(restore, /aria-label="展开列表"/);

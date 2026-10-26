@@ -23,7 +23,7 @@ import { EduPiPersistentChatHost } from "./EduPiPersistentChatHost";
 import { EduPiInspector } from "./EduPiInspector";
 import { EduPiNavigationRail } from "./EduPiNavigationRail";
 import { EduPiObjectSider } from "./EduPiObjectSider";
-import { EduPiObjectNavigationRestore, restoreObjectNavigationFocus, type ObjectNavigationFocusRequest } from "./EduPiObjectNavigationRestore";
+import { EduPiObjectNavigationRestore, objectNavigationLayout, restoreObjectNavigationFocus, type ObjectNavigationFocusRequest } from "./EduPiObjectNavigationRestore";
 import { EduPiTaskDetailDrawer } from "./EduPiTaskDetailDrawer";
 import { EduPiTaskRunContext, type EduPiTaskRunInfo } from "./EduPiTaskRunContext";
 import { taskPreparedArtifacts } from "@/lib/edupi-task-artifacts";
@@ -214,26 +214,48 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const objectNavigationRestoreRef = useRef<HTMLButtonElement | null>(null);
   const objectNavigationScroll = useRef(new Map<WorkbenchView, number>());
   const objectNavigationFocus = useRef<ObjectNavigationFocusRequest | null>(null);
+  const [narrowObjectNavigation, setNarrowObjectNavigation] = useState(false);
+  const [revealedObjectNavigationView, setRevealedObjectNavigationView] = useState<WorkbenchView | null>(null);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 820px)");
+    const update = () => setNarrowObjectNavigation(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  const studentDetailSelected = (activeView === "homeroom" || activeView === "students") && Boolean(selectedStudentId)
+    && Boolean(education?.students.some((student, index) => studentRecordKey(student, index) === selectedStudentId));
+  const objectNavigationModalOpen = Boolean(education) && Boolean(drawer || taskDetailTask || calendarSelection || studentDetailSelected
+    || (activeView === "materials" && materialItemRoute(selectedObjectId)));
+  const objectNavigationState = objectNavigationLayout({ collapsed: objectSider.collapsed, narrow: narrowObjectNavigation,
+    modalOpen: objectNavigationModalOpen, revealedView: revealedObjectNavigationView, view: activeView });
+  const effectiveObjectNavigationCollapsed = objectNavigationState.collapsed;
+  const objectNavigationForeground = objectNavigationState.foreground
+    && activeView !== "dashboard" && activeView !== "chat" && activeView !== "workspace";
+
   const collapseObjectNavigation = useCallback(() => {
     const scroll = objectNavigationRef.current?.querySelector<HTMLElement>(".edupi-content-sider__scroll");
     objectNavigationScroll.current.set(activeView, scroll?.scrollTop ?? 0);
     objectNavigationFocus.current = { target: "restore", from: document.activeElement };
+    setRevealedObjectNavigationView(null);
     setObjectSiderCollapsed(true);
   }, [activeView, setObjectSiderCollapsed]);
+  useModalDismiss<HTMLElement>(collapseObjectNavigation, objectNavigationForeground, objectNavigationRef);
   const expandObjectNavigation = useCallback(() => {
     objectNavigationFocus.current = { target: "list", from: document.activeElement };
+    setRevealedObjectNavigationView(activeView);
     setObjectSiderCollapsed(false);
-  }, [setObjectSiderCollapsed]);
+  }, [activeView, setObjectSiderCollapsed]);
   const focusObjectNavigation = useCallback(() => {
     objectNavigationFocus.current = restoreObjectNavigationFocus(objectNavigationFocus.current, {
       document,
-      collapsed: objectSider.collapsed,
+      collapsed: effectiveObjectNavigationCollapsed,
       restoreButton: objectNavigationRestoreRef.current,
       collapseButton: objectNavigationCollapseRef.current,
       scroll: objectNavigationRef.current?.querySelector<HTMLElement>(".edupi-content-sider__scroll") ?? null,
       scrollTop: objectNavigationScroll.current.get(activeView) ?? 0,
     });
-  }, [activeView, objectSider.collapsed]);
+  }, [activeView, effectiveObjectNavigationCollapsed]);
   useEffect(() => {
     const frame = requestAnimationFrame(focusObjectNavigation);
     return () => cancelAnimationFrame(frame);
@@ -710,6 +732,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [education, requestedView, router, searchParams]);
 
   const selectView = useCallback((view: WorkbenchView, requestedObjectId?: string, requestedStudentId?: string | null, requestedCalendarSelection?: CalendarItemSelection | null) => {
+    if (objectNavigationForeground) collapseObjectNavigation();
     const stage = view === "tasks" ? activeStage : undefined;
     const nextObjectId = objectItemForView(view, requestedObjectId ?? selectedObjectId);
     const nextStudentId = requestedStudentId === undefined ? selectedStudentId : requestedStudentId;
@@ -728,7 +751,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     if (requestedStudentId !== undefined) setSelectedStudentId(requestedStudentId);
     if (stage) setActiveStage(stage);
     updateLocation(view, view === "tasks" ? activeTask : undefined, stage, inspectorOpen, nextStudentId, nextObjectId, nextCalendarSelection);
-  }, [activeStage, activeTask, calendarSelection, cancelActivation, inspectorOpen, selectedObjectId, selectedStudentId, updateLocation]);
+  }, [activeStage, activeTask, calendarSelection, cancelActivation, collapseObjectNavigation, inspectorOpen, objectNavigationForeground, selectedObjectId, selectedStudentId, updateLocation]);
 
   const selectCalendarItem = useCallback((selection: CalendarItemSelection | null) => {
     if (!selection) {
@@ -740,13 +763,14 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       router.replace(`/?${params.toString()}`, { scroll: false });
       return;
     }
+    if (window.matchMedia("(max-width: 820px)").matches && !objectSider.collapsed) collapseObjectNavigation();
     if (activeView !== "calendar") {
       selectView("calendar", undefined, undefined, selection);
       return;
     }
     setCalendarSelection(selection);
     updateLocation("calendar", undefined, undefined, inspectorOpen, selectedStudentId, selectedObjectId, selection);
-  }, [activeView, inspectorOpen, router, searchParams, selectView, selectedObjectId, selectedStudentId, updateLocation]);
+  }, [activeView, collapseObjectNavigation, inspectorOpen, objectSider.collapsed, router, searchParams, selectView, selectedObjectId, selectedStudentId, updateLocation]);
 
   const selectTask = useCallback((task: TeacherTask, stage: TaskStage = "brief") => {
     const view = stage === "review" && activeView === "review" ? "review" : "tasks";
@@ -1226,7 +1250,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const taskStage = activeStage;
   const inspectorAvailable = (activeView === "tasks" || activeView === "review") && Boolean(activeTask);
   const objectSiderAvailable = activeView !== "dashboard" && activeView !== "chat" && activeView !== "workspace";
-  const showObjectSider = objectSiderAvailable && !objectSider.collapsed;
+  const showObjectSider = objectSiderAvailable && !effectiveObjectNavigationCollapsed;
   const showingReminders = activeView === "chat" && searchParams.get("reminders") === "1";
   const taskDetail = taskDetailTask ? tasks.find((task) => taskKey(task) === taskKey(taskDetailTask)) || taskDetailTask : null;
   const currentAgentTask = agentTask ? tasks.find((task) => taskKey(task) === taskKey(agentTask)) || agentTask : null;
@@ -1247,7 +1271,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const detailReviewable = taskDetail && !loadError && isTaskReviewable(taskDetail, workCaseForTask(education, taskDetail.id))
     && (education.workCandidates.some(item => item.taskId === taskDetail.id) ? education.capabilities.workCandidateReview : education.capabilities.taskReview).enabled;
   const bodyControlCount = Number(Boolean(loadError)) + Number(inspectorAvailable);
-  const studentDetailOpen = (activeView === "homeroom" || activeView === "students") && Boolean(selectedStudentId) && education.students.some((student, index) => studentRecordKey(student, index) === selectedStudentId);
+  const studentDetailOpen = studentDetailSelected;
   const detailSurfaceOpen = Boolean(drawer || taskDetail || calendarSelection || studentDetailOpen || (activeView === "materials" && materialItemRoute(selectedObjectId)));
   const bodyControlsVisible = bodyControlCount > 0 && !detailSurfaceOpen;
   const bodyControlStyle = bodyControlsVisible ? { "--edupi-body-controls-width": `${bodyControlCount * 36}px` } as CSSProperties : undefined;
@@ -1265,11 +1289,11 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       {educationFileDragOver ? <div className="edupi-global-material-drop" role="status" aria-live="polite"><strong>放入 EduPi</strong><span>松开后识别材料、日程与课表</span></div> : null}
       <EduPiNavigationRail activeView={activeView} pendingReviewCount={pendingCount + c1PendingCount + factPendingCount + teacherContextPendingCount} runningAgentCount={runningAgentCount} memoryCount={education.continuity.memories.filter((memory) => memory.state === "active" && isUserFacingMemory(memory)).length} workspaceLabel={context?.school || context?.name || "教师工作区"} collapsed={navigationRail.collapsed} onSelect={selectView} onOpenAdmin={onOpenAdmin} onOpenSettings={onOpenSettings} onOpenProactive={onOpenProactive} onOpenGuide={onOpenGuide} onOpenPhoneControl={onOpenPhoneControl} onCollapse={navigationRail.toggle} />
       <div className="edupi-teacher-app">
-        <div className={`edupi-teacher-body${activeView === "chat" ? " is-chat" : ""}${showingReminders ? " is-reminders" : ""}${bodyControlsVisible ? " has-body-controls" : ""}${detailSurfaceOpen ? " has-detail-surface" : ""}${objectSiderAvailable ? " has-object-sider" : ""}${objectSiderAvailable && objectSider.collapsed ? " is-object-sider-collapsed" : ""}${inspectorAvailable && inspectorOpen ? " has-inspector" : ""}${hasTaskPane ? " has-task-pane" : ""}`} style={bodyControlStyle}>
+        <div className={`edupi-teacher-body${activeView === "chat" ? " is-chat" : ""}${showingReminders ? " is-reminders" : ""}${bodyControlsVisible ? " has-body-controls" : ""}${detailSurfaceOpen ? " has-detail-surface" : ""}${objectSiderAvailable ? " has-object-sider" : ""}${objectSiderAvailable && effectiveObjectNavigationCollapsed ? " is-object-sider-collapsed" : ""}${inspectorAvailable && inspectorOpen ? " has-inspector" : ""}${hasTaskPane ? " has-task-pane" : ""}`} style={bodyControlStyle}>
           {bodyControlsVisible ? <div className="edupi-teacher-body__controls">{loadError ? <button className="edupi-teacher-body__icon-button" type="button" onClick={retryLoadWorkspace} aria-label="重试读取工作区" title={`重试读取工作区：${loadError}`}><RetryWorkspaceIcon /></button> : null}{inspectorAvailable ? <button className={`edupi-teacher-body__icon-button${inspectorOpen ? " is-open" : ""}`} type="button" onClick={toggleInspector} aria-label={inspectorOpen ? "收起检查" : "打开检查"} title={inspectorOpen ? "收起检查" : "打开检查"} aria-pressed={inspectorOpen}><InspectorIcon /></button> : null}</div> : null}
-          {activeView === "chat" && !showingReminders ? <aside className="edupi-chat-session-sidebar" aria-label="对话与文件">{chatSidebar}</aside> : objectSiderAvailable ? <EduPiObjectSider hidden={!showObjectSider} containerRef={objectNavigationRef} collapseButtonRef={objectNavigationCollapseRef} view={activeView} data={education} context={context} memoryScopes={memoryScopes} teachingSkills={teachingSkills} query={query} onQuery={updateQuery} selectedStudentId={selectedStudentId} onStudent={selectStudent} selectedObjectId={selectedObjectId} onObject={selectObject} onNavigate={selectView} selectedTaskKey={activeTask ? taskKey(activeTask) : null} onTask={selectTask} onReviewTarget={focusC1Review} selectedCalendarSourceId={calendarSelection?.sourceId ?? null} onCalendarItem={selectCalendarItem} onUpload={openUpload} onCollapse={collapseObjectNavigation} /> : null}
-          <div ref={objectNavigationMainRef} className={`edupi-teacher-main${activeView === "chat" ? " is-chat" : ""}`}>
-            {objectSiderAvailable && objectSider.collapsed ? <EduPiObjectNavigationRestore rootRef={objectNavigationMainRef} buttonRef={objectNavigationRestoreRef} view={activeView} onExpand={expandObjectNavigation} onReady={focusObjectNavigation} /> : null}
+          {activeView === "chat" && !showingReminders ? <aside className="edupi-chat-session-sidebar" aria-label="对话与文件">{chatSidebar}</aside> : objectSiderAvailable ? <EduPiObjectSider foreground={objectNavigationForeground} hidden={!showObjectSider} containerRef={objectNavigationRef} collapseButtonRef={objectNavigationCollapseRef} view={activeView} data={education} context={context} memoryScopes={memoryScopes} teachingSkills={teachingSkills} query={query} onQuery={updateQuery} selectedStudentId={selectedStudentId} onStudent={selectStudent} selectedObjectId={selectedObjectId} onObject={selectObject} onNavigate={selectView} selectedTaskKey={activeTask ? taskKey(activeTask) : null} onTask={selectTask} onReviewTarget={focusC1Review} selectedCalendarSourceId={calendarSelection?.sourceId ?? null} onCalendarItem={selectCalendarItem} onUpload={openUpload} onCollapse={collapseObjectNavigation} /> : null}
+          <div ref={objectNavigationMainRef} inert={objectNavigationForeground} className={`edupi-teacher-main${activeView === "chat" ? " is-chat" : ""}`}>
+            {objectSiderAvailable && effectiveObjectNavigationCollapsed ? <EduPiObjectNavigationRestore rootRef={objectNavigationMainRef} buttonRef={objectNavigationRestoreRef} view={activeView} onExpand={expandObjectNavigation} onReady={focusObjectNavigation} /> : null}
             <EduPiTaskRunContext.Provider value={chatTaskInfo}>
               <EduPiPersistentChatHost mode={showingReminders ? "hidden" : drawer === "agent" ? "drawer" : activeView === "chat" ? "main" : "hidden"} task={drawer === "agent" ? currentAgentTask : null} onClose={closeDrawer} onPreparePrompt={onPrepareAgentPrompt}>{chatPanel}</EduPiPersistentChatHost>
             </EduPiTaskRunContext.Provider>
