@@ -91,8 +91,8 @@
 .app-settings-page .native-settings-card { margin: 0 !important; padding: 24px 0 !important; border: 0 !important; border-bottom: 1px solid var(--border) !important; border-radius: 0 !important; background: transparent !important; }
 .app-settings-page .app-settings-group > .native-settings-card:first-child { padding-top: 8px !important; }
 .app-settings-page .native-button { min-height: 34px; padding: 6px 12px; font-size: 12px; }
-.edupi-admin-panel .app-settings-page .app-settings-choices .native-button { min-height: 28px; padding: 4px 12px; border-color: transparent; background: transparent; }
-.edupi-admin-panel .app-settings-page .app-settings-choices .native-button[aria-pressed="true"] { background: var(--bg-selected); color: var(--text); }
+.edupi-admin-panel .app-settings-page .app-settings-choices .native-button { min-height: 28px; padding: 4px 12px; border-color: transparent !important; background: transparent !important; box-shadow: none; color: var(--text-muted) !important; }
+.edupi-admin-panel .app-settings-page .app-settings-choices .native-button[aria-pressed="true"] { border-color: var(--border) !important; background: var(--bg-selected) !important; color: var(--text) !important; font-weight: 600; }
 .app-settings-page .update-proxy-card > summary { font-size: 13px; font-weight: 500; }
 .app-settings-page .update-proxy-card > p { font-size: 12px; }
 .app-settings-page #mobile-bridge-settings > div:first-child { font-size: 13px !important; font-weight: 600 !important; }
