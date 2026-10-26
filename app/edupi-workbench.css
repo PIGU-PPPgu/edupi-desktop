@@ -648,7 +648,7 @@ html.dark .edupi-teacher-shell {
 .edupi-student-directory > header h2 { margin: 0; font-size: 13px; }
 .edupi-student-directory > header span { color: var(--ep-dim); font-size: 10px; }
 .edupi-student-directory__empty { display: block; margin: 28px auto; padding: 8px 11px; border: 1px solid var(--ep-text); border-radius: 6px; background: var(--ep-text); color: var(--ep-surface); cursor: pointer; }
-.edupi-student-drawer { position: absolute; z-index: 110; top: 0; right: 0; bottom: 0; display: grid; width: clamp(400px, 34vw, 560px); grid-template-rows: auto auto minmax(0, 1fr); border-left: 1px solid var(--ep-border); background: var(--ep-surface); box-shadow: -14px 0 34px rgba(18, 24, 32, .12); animation: edupiCalendarDetailIn .16s ease-out; }
+.edupi-student-drawer { position: absolute; z-index: 110; top: 0; right: 0; bottom: 0; display: grid; width: clamp(400px, 34vw, 560px); grid-template-rows: auto auto minmax(0, 1fr); overflow: hidden; border-left: 1px solid var(--ep-border); background: var(--ep-surface); box-shadow: -14px 0 34px rgba(18, 24, 32, .12); animation: edupiCalendarDetailIn .16s ease-out; }
 .edupi-student-drawer > header { display: flex; min-height: 92px; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px; border-bottom: 1px solid var(--ep-border); }
 .edupi-student-drawer > header span { color: var(--ep-blue); font-size: 9px; font-weight: 700; }
 .edupi-student-drawer > header h2 { margin: 5px 0 2px; font-size: 21px; }
@@ -939,7 +939,7 @@ html.dark .edupi-teacher-shell {
 @media (max-width: 700px) { .edupi-material-pairing label { grid-template-columns: 1fr; } }
 .edupi-material-message { margin: 10px 0 0; color: var(--ep-muted); font-size: 12px; line-height: 1.5; }
 .edupi-material-message.is-error { padding: 8px 10px; border-left: 2px solid var(--ep-orange); background: var(--ep-orange-soft); color: var(--ep-text); }
-.edupi-material-drawer { position: absolute; z-index: 110; top: 0; right: 0; bottom: 0; display: grid; width: min(400px, 94vw); grid-template-rows: auto minmax(0, 1fr) auto; border-left: 1px solid var(--ep-border); background: var(--ep-surface); box-shadow: -14px 0 34px rgba(18, 24, 32, .16); animation: edupiCalendarDetailIn .16s ease-out; }
+.edupi-material-drawer { position: absolute; z-index: 110; top: 0; right: 0; bottom: 0; display: grid; width: min(400px, 94vw); grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; border-left: 1px solid var(--ep-border); background: var(--ep-surface); box-shadow: -14px 0 34px rgba(18, 24, 32, .16); animation: edupiCalendarDetailIn .16s ease-out; }
 .edupi-material-drawer > header { display: flex; min-height: 88px; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px; border-bottom: 1px solid var(--ep-border); }
 .edupi-material-drawer > header span { color: var(--ep-blue); font-size: 9px; font-weight: 700; }
 .edupi-material-drawer > header h2 { margin: 6px 0 0; font-size: 19px; line-height: 1.35; }
