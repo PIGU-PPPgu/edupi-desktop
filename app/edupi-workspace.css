@@ -645,11 +645,11 @@
 .edupi-calendar-week-column__lessons { display: grid; min-height: 56px; align-content: start; gap: 4px; padding: 8px 6px; }
 .edupi-calendar-week-column__all-day { border-bottom: 1px dashed var(--ep-border); }
 .edupi-calendar-week-column__lessons { gap: 5px; }
-.edupi-calendar-week .edupi-calendar-entry { display: block; height: auto; padding: 8px 6px; }
+.edupi-calendar-week .edupi-calendar-entry { display: block; height: auto; padding: 8px 6px; appearance: none; line-height: 1.4; }
 .edupi-calendar-week .edupi-calendar-entry__source,
 .edupi-calendar-week .edupi-calendar-entry__body small { display: none; }
 .edupi-calendar-week .edupi-calendar-entry__body { display: block; margin-bottom: 4px; }
-.edupi-calendar-week .edupi-calendar-entry__body strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; white-space: normal; overflow-wrap: anywhere; line-height: 1.45; }
+.edupi-calendar-week .edupi-calendar-entry__body strong { display: block; white-space: normal; overflow-wrap: anywhere; line-height: 1.45; }
 .edupi-calendar-week .edupi-calendar-entry__source-label { margin-right: 5px; }
 .edupi-calendar-empty-cell { padding: 10px 8px; color: var(--ep-dim); font-size: 11px; }
 
