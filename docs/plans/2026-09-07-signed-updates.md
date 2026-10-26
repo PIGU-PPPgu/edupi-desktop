@@ -1,5 +1,11 @@
 # 自动下载安装
 
+## 2026-10-26 逐页组件本机安装待验
+
+- 当前唯一App为`2a10b3fc`本地0.3.77预览，Core03、33,709个非server文件、GitHub宿主和原公钥保持。Team`BY3XZG2839`、CDHash`bb72f8c8528a8f8bf4b4ed478c1afc709c5b8ee8`，安装/清理后strict签名通过；未公证、合并、发布或改feed/tag。
+- 标题、主次动作、名单/日期/空态/中等窗宽滚动及Board/Calendar路由、单击、快捷键已实现。2599通过、40环境跳过、0失败，类型/完整lint通过；安装后CUA读取EduPi/Finder/loginwindow均报cgWindowNotFound，重置仍失败，新包逐页原生验收受阻，已请求用户显示解锁主窗口。
+- 314保护文件无增删，业务与配置保持，提醒/桥接状态和3份日志追加单列。6生成目录清理约3.29GiB，观测空闲增3.36GiB；本轮caf回退`page-components-20261026/EduPi-before-pages.app`保留至原生验收通过即删，原.70保留。PID23469和投影51/160/24/6可读，既有Runtime/用量异常未修，无新OAuth、JEV或GitHub写入。[具体状态](../acceptance/2026-10-23-admin-settings-redesign.md#2026-10-26-逐页面组件与交互优化)。
+
 ## 2026-10-26 主导航与全应用折叠本机验收
 
 - 当前唯一`/Applications/EduPi.app`为`cafce3a4`本地0.3.77预览，替代下方`cd14396d`；保留自适应居中，统一97个原生details站点及聊天自定义披露，主导航移除蓝色粗条，二级栏收起完全隐藏并由标题栏恢复。

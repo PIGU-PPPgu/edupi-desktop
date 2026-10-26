@@ -1,8 +1,8 @@
 # 管理中心与设置重做验收
 
-当前继续 **2026-10-26 逐页面组件与交互优化**，源码已实现待本机安装验收；现装仍为下方`cafce3a4`。延续R18，检查今天、工作区、教学、班级、日程、记忆、洞察、成长、材料和待确认；设置保持自适应居中。当前新源码的静态结果不替代安装版验收。
+当前 **2026-10-26 逐页面组件与交互优化** 已由`2a10b3fc`安装到唯一`/Applications/EduPi.app`，仍为本地0.3.77/Core03。源码检查、签名、资料保护和生成目录清理完成；安装后CUA持续返回`cgWindowNotFound`，逐页操作和视觉验收受阻，已请求用户显示解锁后的EduPi主窗口。静态检查和HTTP200不计原生通过；下方`cafce3a4`为前轮证据。
 
-当前 **2026-10-26 主导航与全应用折叠重做** 已完成本机安装与交互验收。唯一 `/Applications/EduPi.app` 为 `cafce3a4` 的本地0.3.77预览，二级栏收起不留细线，主导航和共享折叠样式已更新；此前自适应居中保持。下方历轮版本是历史证据，用户观感仍由用户判断。既有 Runtime/用量记录校验异常单列，不称应用全功能健康。
+上一轮 **2026-10-26 主导航与全应用折叠重做** 已完成本机安装与交互验收，当时UI为`cafce3a4`。二级栏收起不留细线，主导航和共享折叠样式已更新，自适应居中保持。下方历轮版本是历史证据，用户观感仍由用户判断。既有Runtime/用量记录校验异常单列，不称应用全功能健康。
 
 ## 2026-10-24 官方目录与连接恢复验收通过
 
@@ -367,7 +367,7 @@ Windows/Linux原生、40项环境跳过、全部97个披露的数据分支、自
 
 ## 2026-10-26 逐页面组件与交互优化
 
-延续R18，基线源码`f7e9db6a`、本机UI`cafce3a4`，Core03保持。用户接受继续逐页优化组件和交互，沿用中性色、正常留白和自适应居中；本轮未新增OAuth、JEV测试、模型对话或外部写入。当前为已实现待本机验收，证据根`$CHECKPOINT/page-components-20261026/evidence/`。
+延续R18，基线源码`f7e9db6a`、本机UI`cafce3a4`，Core03保持。用户接受继续逐页优化组件和交互，沿用中性色、正常留白和自适应居中；本轮未新增OAuth、JEV测试、模型对话或外部写入。当前源码和本机安装完成，原生逐页验收受窗口读取阻塞；证据根`$CHECKPOINT/page-components-20261026/evidence/`。
 
 参考[Linear显示选项](https://linear.app/docs/display-options)、[看板](https://linear.app/docs/board-layout)与[Apple工具栏](https://developer.apple.com/design/human-interface-guidelines/toolbars)，对照真实应用调整显示层级、筛选与布局边界；不是安装其他产品的组件包。首次两个参考URL不可读取，改读官方搜索结果，未使用论坛或旧镜像；见`reference-sources.json`。
 
@@ -384,3 +384,13 @@ Windows/Linux原生、40项环境跳过、全部97个披露的数据分支、自
 | 待我确认 | 只展示有内容分组，修复标题落入24px列；空页一个状态，跟进历史仍可达；事实入口打开真实事实列表 | 待本机验收 |
 
 源码检查：最终全套2599通过、40环境跳过、0失败；44项页面针对组及学生17项、Board/Calendar44项互有重叠，不相加。初次全套4项旧文案/空组计数/回调形态断言失败保留；更新相应展示合同后通过，原Core审核产物门、陈旧简报不泄正文等约束保留。当前新增24项覆盖真实组件状态、请求/事件回调和SSR输出；CSS样式仍须实际窗口证明。额外只读复核两次遇到模型容量错误，不计通过，主代理继续源码与运行验证。
+
+### 安装与当前验收边界
+
+- 实现`2a10b3fc1f4f46bd50ad5bf7d4d3ef01875edee3`已装唯一App，见`prepare.log`、`assemble.log`和`pages-installed.json`。7个新server原生资源重签，Team`BY3XZG2839`、CDHash`bb72f8c8528a8f8bf4b4ed478c1afc709c5b8ee8`，主程序SHA256`52c71daf0ebcdfa8da866ee32723f430f70cb2426ff5771decdbd481f0a0ab6e`。Core03、33,709个非server文件、GitHub宿主及原更新公钥保持，安装/清理后strict签名通过；未发布、合并、公证或改feed/tag。
+- 进程PID23469，首页/status/workspace可读，投影ready且51学生/160任务/24校历/6课表保持，externalSend=false；既有`runtime_root_invalid`仍在。`installed-health.json`只证明读取与签名，不证明界面已显示。
+- 安装后CUA绑定EduPi、Finder和loginwindow均报`-10005: cgWindowNotFound`；重置会话后仍失败。未确认屏幕确实锁定，已请用户保持解锁并显示EduPi。`native-window-block.json`明确新版本原生实拍0张，上表各项仍待本机验收，不用旧版图片替代。
+- 全程与安装前后快照均314文件，无增删；教师业务、模型/认证/JEV/UI配置摘要保持。5个运行变化为提醒状态、桥接状态和3份日志追加，原日志前缀保持，无会话内容追加。见`data-protection.json`、`install-data-protection.json`，未回写用户文件消除差异。
+- 6个确认忽略、未跟踪且可重建的目录已删除，目录占用约3.29GiB、观测空闲增加约3.36GiB，安装App无已删路径依赖；见`build-cleanup.json`、`post-cleanup.json`。保留`$CHECKPOINT/page-components-20261026/EduPi-before-pages.app`作为待原生验收的cafce3a4回退，验收通过即删；原.70回退、源码、教师资料、认证、证据及原Core依赖保留。
+
+尚未验证：本轮安装版逐页视觉、宽窄窗、实际输入/焦点/列表往返、日期非空草稿和另一次冷重启，当前条件为窗口不可读取。Windows/Linux、40项环境跳过、正常用量分支和公开升级也未验证。恢复入口是已安装2a10b3fc，无需重建或重做OAuth。
