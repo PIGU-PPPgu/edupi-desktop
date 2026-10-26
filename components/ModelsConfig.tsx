@@ -35,7 +35,7 @@ import VercelIcon from "@lobehub/icons/es/Vercel/components/Mono";
 import GithubCopilotIcon from "@lobehub/icons/es/GithubCopilot/components/Mono";
 import AwsColorIcon from "@lobehub/icons/es/Aws/components/Color";
 import AzureColorIcon from "@lobehub/icons/es/Azure/components/Color";
-import KimiColorIcon from "@lobehub/icons/es/Kimi/components/Color";
+import KimiIcon from "@lobehub/icons/es/Kimi/components/Mono";
 import QwenColorIcon from "@lobehub/icons/es/Qwen/components/Color";
 import ZhipuColorIcon from "@lobehub/icons/es/Zhipu/components/Color";
 import CohereColorIcon from "@lobehub/icons/es/Cohere/components/Color";
@@ -78,7 +78,7 @@ const PROVIDER_ICONS: Record<string, { Icon: IconComponent; hasColor: boolean }>
   "github-copilot":         { Icon: GithubCopilotIcon,    hasColor: false },
   "amazon-bedrock":         { Icon: AwsColorIcon,         hasColor: true },
   "azure-openai-responses": { Icon: AzureColorIcon,       hasColor: true },
-  "kimi-coding":            { Icon: KimiColorIcon,        hasColor: true },
+  "kimi-coding":            { Icon: KimiIcon,             hasColor: false },
   "nvidia":                 { Icon: NvidiaColorIcon,      hasColor: true },
   "opencode":               { Icon: OpenCodeIcon,         hasColor: false },
   "opencode-go":            { Icon: OpenCodeIcon,         hasColor: false },
@@ -793,7 +793,9 @@ function ModelDetail({
   onChange,
   onDelete,
   onUse,
+  embedded = false,
 }: {
+  embedded?: boolean;
   providerName: string;
   provider: ProviderEntry;
   model: ModelEntry;
@@ -951,65 +953,7 @@ function ModelDetail({
       ? "#d97706"
       : "var(--text-dim)";
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-         <SectionTitle>{t("i18n.model")}</SectionTitle>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button className="native-button" disabled={!model.id.trim()} onClick={() => void onUse()}>保存并设为默认</button>
-          {testSummary && (
-            <span
-              title={testSummary}
-              style={{
-                maxWidth: 260,
-                height: 24,
-                padding: "0 8px",
-                border: `1px solid ${testState.phase === "error"
-                  ? "color-mix(in srgb, var(--danger) 40%, transparent)"
-                  : testState.phase === "success"
-                    ? "color-mix(in srgb, var(--success) 40%, transparent)"
-                    : "var(--border)"}`,
-                borderRadius: 4,
-                background: testState.phase === "error"
-                  ? "color-mix(in srgb, var(--danger) 12%, var(--bg-panel))"
-                  : testState.phase === "success"
-                    ? "color-mix(in srgb, var(--success) 12%, var(--bg-panel))"
-                    : "var(--bg-hover)",
-                color: "var(--text)",
-                fontSize: 11,
-                display: "inline-flex",
-                alignItems: "center",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                boxSizing: "border-box",
-              }}
-            >
-              {testSummary}
-            </span>
-          )}
-          <button
-            className={`native-button native-button-compact${testState.phase === "success" ? " is-success" : ""}`}
-            onClick={handleTest}
-            disabled={!model.id.trim() || testState.phase === "testing"}
-             title={t("i18n.testConnection")}
-          >
-            {testState.phase === "success" && (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-             {testState.phase === "testing" ? t("i18n.checking") : testState.phase === "success" ? t("common.ok") : t("i18n.test")}
-          </button>
-          <ConfirmDangerButton label={t("i18n.remove")} onConfirm={onDelete} />
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label={t("models.idLabel")}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
-        <Field label={t("models.nameLabel")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("models.nameLabel")} /></Field>
-      </div>
-
+  const advancedFields = <>
       <div style={{ padding: "10px 0", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <button
@@ -1097,7 +1041,7 @@ function ModelDetail({
         </>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <div className="model-detail__capacity" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <Field label={t("models.contextWindowLabel")}>
           <NumInput value={model.contextWindow !== undefined ? String(model.contextWindow) : ""}
             onChange={(v) => set("contextWindow", v ? parseInt(v) : undefined)} placeholder="128000" />
@@ -1110,7 +1054,7 @@ function ModelDetail({
 
       <div>
         <SectionTitle>{t("models.costLabel")}</SectionTitle>
-        <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
+        <div className="model-detail__cost" style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
           {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => (
             <Field key={k} label={t(`models.cost.${k}`)}>
               <NumInput value={costVal(k)} onChange={(v) => setCost(k, v)} placeholder="0" />
@@ -1118,6 +1062,68 @@ function ModelDetail({
           ))}
         </div>
       </div>
+  </>;
+
+  return (
+    <div className="model-detail" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="model-detail__header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+         <SectionTitle>{t("i18n.model")}</SectionTitle>
+        <div className="model-detail__actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button className={`native-button${embedded ? " native-button-primary" : ""}`} disabled={!model.id.trim()} onClick={() => void onUse()}>保存并设为默认</button>
+          {testSummary && (
+            <span
+              title={testSummary}
+              style={{
+                maxWidth: 260,
+                height: 24,
+                padding: "0 8px",
+                border: `1px solid ${testState.phase === "error"
+                  ? "color-mix(in srgb, var(--danger) 40%, transparent)"
+                  : testState.phase === "success"
+                    ? "color-mix(in srgb, var(--success) 40%, transparent)"
+                    : "var(--border)"}`,
+                borderRadius: 4,
+                background: testState.phase === "error"
+                  ? "color-mix(in srgb, var(--danger) 12%, var(--bg-panel))"
+                  : testState.phase === "success"
+                    ? "color-mix(in srgb, var(--success) 12%, var(--bg-panel))"
+                    : "var(--bg-hover)",
+                color: "var(--text)",
+                fontSize: 11,
+                display: "inline-flex",
+                alignItems: "center",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                boxSizing: "border-box",
+              }}
+            >
+              {testSummary}
+            </span>
+          )}
+          <button
+            className={`native-button native-button-compact${testState.phase === "success" ? " is-success" : ""}`}
+            onClick={handleTest}
+            disabled={!model.id.trim() || testState.phase === "testing"}
+             title={t("i18n.testConnection")}
+          >
+            {testState.phase === "success" && (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+             {testState.phase === "testing" ? t("i18n.checking") : testState.phase === "success" ? t("common.ok") : t("i18n.test")}
+          </button>
+          <ConfirmDangerButton label={t("i18n.remove")} onConfirm={onDelete} />
+        </div>
+      </div>
+
+      <div className="model-detail__identity" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <Field label={t("models.idLabel")}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
+        <Field label={t("models.nameLabel")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("models.nameLabel")} /></Field>
+      </div>
+
+      {embedded ? <details className="model-detail__advanced"><summary>高级参数</summary><div>{advancedFields}</div></details> : advancedFields}
     </div>
   );
 }
@@ -1407,7 +1413,9 @@ function ApiKeyDetail({
   onRemoveModel,
   onUseModel,
   onAddModel,
+  embedded = false,
 }: {
+  embedded?: boolean;
   provider: ApiKeyProvider;
   configProvider: ProviderEntry;
   models: ModelEntry[];
@@ -1516,18 +1524,7 @@ function ApiKeyDetail({
     }
   }, [provider.id, onRefresh]);
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-         <SectionTitle>API Key</SectionTitle>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "var(--success)" : "var(--border)", display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: provider.configured ? "var(--success)" : "var(--text-dim)" }}>
-             {provider.configured ? t("i18n.configured") : t("i18n.notConfigured")}
-          </span>
-        </div>
-      </div>
-
+  const keyFields = <>
       <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
         {provider.configured
           ? t("models.apiKeyStored")
@@ -1561,6 +1558,21 @@ function ApiKeyDetail({
           </button>
         </div>
       </Field>
+  </>;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+         <SectionTitle>API Key</SectionTitle>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "var(--success)" : "var(--border)", display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: provider.configured ? "var(--success)" : "var(--text-dim)" }}>
+             {provider.configured ? t("i18n.configured") : t("i18n.notConfigured")}
+          </span>
+        </div>
+      </div>
+
+      {embedded && provider.configured ? <details className="models-page__credentials"><summary>更新 API Key</summary><div>{keyFields}</div></details> : keyFields}
 
       {error && <p style={{ margin: 0, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
 
@@ -1593,6 +1605,7 @@ function ApiKeyDetail({
               {models[activeModelIndex] ? (
                 <div style={{ border: "1px solid var(--border)", borderRadius: 7, padding: 12 }}>
                   <ModelDetail
+                    embedded={embedded}
                     providerName={provider.id}
                     provider={configProvider}
                     model={models[activeModelIndex]}
@@ -2413,6 +2426,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd, onDirtyChange, on
       if (!p) return null;
       const configuredProvider = config.providers?.[p.id] ?? {};
       return <ApiKeyDetail
+        embedded={embedded}
         key={p.id}
         provider={p}
         configProvider={configuredProvider}
@@ -2445,6 +2459,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd, onDirtyChange, on
     if (!model) return null;
     return (
       <ModelDetail
+        embedded={embedded}
         key={`${selection.providerName}-${selection.index}`}
         providerName={selection.providerName}
         provider={provider}
@@ -2497,6 +2512,9 @@ export function ModelsConfig({ onClose, embedded = false, cwd, onDirtyChange, on
   const selectedProviderName = selection?.type === "model" ? selection.providerName : selection?.type === "provider" ? selection.name : null;
   const selectedProvider = selectedProviderName ? config.providers?.[selectedProviderName] : undefined;
   const modelDetailSelected = selection?.type === "model";
+  const selectedServiceId = selection?.type === "model" ? selection.providerName : selection?.type === "provider" ? selection.name : selection?.providerId;
+  const selectedService = serviceRows.find((row) => row.id === selectedServiceId);
+
 
   const embeddedPanel = <div className="models-page" data-setting-id="model-services">
     {confirmDiscard ? <div className="models-page__discard" role="alert" aria-label="未保存的模型更改">
@@ -2517,6 +2535,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd, onDirtyChange, on
           if (modelDetailSelected && selectedProviderName) setSelection({ type: "provider", name: selectedProviderName });
           else returnToServices();
         }}>← {modelDetailSelected ? "返回服务配置" : "返回模型服务"}</button>
+        {selectedServiceId ? <header className="models-page__service-heading"><span className="models-page__icon"><ProviderIcon id={selectedServiceId} size={24} /></span><div><h2>{selectedService?.name || selectedServiceId}</h2>{selectedService ? <span>{selectedService.kind}</span> : null}</div></header> : null}
         <div className="models-page__detail">{detailContent}</div>
         {selection.type === "provider" && selectedProvider ? <section className="models-page__models" aria-label="服务模型">
           <header><h3>模型</h3><button type="button" className="native-button" onClick={() => addModel(selection.name)}>添加模型</button></header>
