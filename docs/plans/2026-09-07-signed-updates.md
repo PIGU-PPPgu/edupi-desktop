@@ -1,10 +1,10 @@
 # 自动下载安装
 
-## 2026-10-26 逐页组件本机安装待验
+## 2026-10-26至27日 逐页UI本机验收
 
-- 当前唯一App为`2a10b3fc`本地0.3.77预览，Core03、33,709个非server文件、GitHub宿主和原公钥保持。Team`BY3XZG2839`、CDHash`bb72f8c8528a8f8bf4b4ed478c1afc709c5b8ee8`，安装/清理后strict签名通过；未公证、合并、发布或改feed/tag。
-- 标题、主次动作、名单/日期/空态/中等窗宽滚动及Board/Calendar路由、单击、快捷键已实现。2599通过、40环境跳过、0失败，类型/完整lint通过；安装后CUA读取EduPi/Finder/loginwindow均报cgWindowNotFound，重置仍失败，新包逐页原生验收受阻，已请求用户显示解锁主窗口。
-- 314保护文件无增删，业务与配置保持，提醒/桥接状态和3份日志追加单列。6生成目录清理约3.29GiB，观测空闲增3.36GiB；本轮caf回退`page-components-20261026/EduPi-before-pages.app`保留至原生验收通过即删，原.70保留。PID23469和投影51/160/24/6可读，既有Runtime/用量异常未修，无新OAuth、JEV或GitHub写入。[具体状态](../acceptance/2026-10-23-admin-settings-redesign.md#2026-10-26-逐页面组件与交互优化)。
+- 唯一App为`4e75ad52`本地0.3.77预览，Core03、33,709非server文件、GitHub宿主与原公钥保持。Team`BY3XZG2839`、CDHash`61b3d3f42a1f33e8ae86991f58068b6ef526b1c2`，最终清理后strict/deep与主程序摘要通过；未公证、合并、发布或改feed/tag。
+- macOS26.6 arm64宽窄窗完成名单/非空日期/任务单击和Enter/历史分类/日程切换与周文字/表格横滚/空态/抽屉实际滚动/列表Tab/Escape。54d9逻辑全套2602通过、40环境跳过、0失败；之后仅CSS，最终4e prepare/type通过。工具输入曾失效，代理经访达正常打开恢复；同版本正常Quit至0、冷启PID65907→93586，默认模型、偏好和51/160/24/6保持；日程已置前台。
+- 最终314保护文件无增删，业务/模型/认证/JEV/UI配置保持，运行态/3日志及10条会话custom追加单列。累计清理6类生成目录的两批产物与5临时App，占用11.16GiB；各批观测空闲增量之和11.42GiB，其他磁盘活动不计为本任务净释放。临时App0，原.70保留，安装版无已删路径依赖。既有Core/用量异常、Windows/Linux、40环境跳过与公开升级未验，没有新OAuth、JEV或GitHub写入。[逐项证据与剩余边界](../acceptance/2026-10-23-admin-settings-redesign.md#2026-10-26-逐页面组件与交互优化)。
 
 ## 2026-10-26 主导航与全应用折叠本机验收
 

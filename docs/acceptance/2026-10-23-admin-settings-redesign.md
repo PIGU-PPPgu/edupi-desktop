@@ -1,6 +1,6 @@
 # 管理中心与设置重做验收
 
-当前 **2026-10-26 逐页面组件与交互优化** 已恢复本机验收，窗口读取阻塞解除。安装版`2a10b3fc`初次工作区503经重试恢复读取，但工作页正文保持空白；设置页可见。正在移除工作页从透明首帧开始的入场动画并重新安装复测，业务JavaScript保持。下方窗口受阻记录保留为历史，不能据源码测试提前宣称逐页通过。
+当前 **2026-10-26 逐页面组件与交互优化** 已于10月27日凌晨完成本机UI子项验收，唯一App为`4e75ad52`。名单、非空日期草稿、任务单击与Enter、分类往返、日程视图、表格横滚、空态均已实际操作；末尾周文字排布和窄窗抽屉滚动修正也已复验。正常Quit至进程0后冷启动PID65907→93586，默认模型、偏好和投影51/160/24/6保持，日程已置前台。工具曾能读窗口但输入无响应，已由代理通过访达正常打开恢复，无需用户接手。源码、数据保护和清理以下方最新记录为准。
 
 上一轮 **2026-10-26 主导航与全应用折叠重做** 已完成本机安装与交互验收，当时UI为`cafce3a4`。二级栏收起不留细线，主导航和共享折叠样式已更新，自适应居中保持。下方历轮版本是历史证据，用户观感仍由用户判断。既有Runtime/用量记录校验异常单列，不称应用全功能健康。
 
@@ -367,36 +367,44 @@ Windows/Linux原生、40项环境跳过、全部97个披露的数据分支、自
 
 ## 2026-10-26 逐页面组件与交互优化
 
-延续R18，基线源码`f7e9db6a`、本机UI`cafce3a4`，Core03保持。用户接受继续逐页优化组件和交互，沿用中性色、正常留白和自适应居中；本轮未新增OAuth、JEV测试、模型对话或外部写入。当前源码和本机安装完成，原生逐页验收受窗口读取阻塞；证据根`$CHECKPOINT/page-components-20261026/evidence/`。
+延续R18，基线源码`f7e9db6a`、本机UI`cafce3a4`，Core03保持。当前源码与唯一安装App为`4e75ad52637bfe2247bf679647e6ce1b44920a13`，本地0.3.77预览；在macOS26.6（25G72）arm64完成**本轮UI子项验收**，执行跨越10月26日至27日。用户视觉认可、合并与公开发布单列，R23整体仍部分实现。证据根`$CHECKPOINT/page-components-20261026/evidence/`；未新增OAuth、JEV测试、模型提示词或GitHub写入。
 
-参考[Linear显示选项](https://linear.app/docs/display-options)、[看板](https://linear.app/docs/board-layout)与[Apple工具栏](https://developer.apple.com/design/human-interface-guidelines/toolbars)，对照真实应用调整显示层级、筛选与布局边界；不是安装其他产品的组件包。首次两个参考URL不可读取，改读官方搜索结果，未使用论坛或旧镜像；见`reference-sources.json`。
+参考[Linear显示选项](https://linear.app/docs/display-options)、[看板](https://linear.app/docs/board-layout)与[Apple工具栏](https://developer.apple.com/design/human-interface-guidelines/toolbars)，对照实际页面调整标题、动作、筛选与布局边界。首次两个URL不可读取，改读官方搜索结果；见`reference-sources.json`。保持中性色、正常留白、自适应居中，不恢复紧凑方向。
 
-| 页面 | 本轮实现 | 状态 |
+| 页面 | 已实现与实际操作 | 当前状态及证据 |
 | --- | --- | --- |
-| 今天 | 标题规格一致；空简报删除重复段落；只有一组事项时不再被固定三列挤窄，“查看更多”不套日期行网格 | 待本机验收 |
-| 工作区 | 历史与新建分主次；分类随对象路由；返回全部复位；卡片鼠标和键盘均单击打开，拖后误点仍抑制 | 待本机验收 |
-| 教学 | 采用统一标题轴线和正常留白，保留重点/课程/准备的真实操作 | 待本机验收 |
-| 班级 | 彩色头像卡片改普通名单；稳定身份、24人分页、真实摘要；修复所选学生不断拉回分页或筛选；导出范围明示 | 待本机验收 |
-| 学生记录 | 日期范围原生选择，只有自定日期显示输入，草稿和请求条件保留；移除选中学生时无效的全体记录开关；错误原文按需展开 | 待本机验收 |
-| 日程 | 五项工具列对齐；月单日任务只显示适合月格的摘要；列表/日历遵循显式路由；快捷键不截获修饰键、IME、输入或弹层 | 待本机验收 |
-| 记忆与洞察 | 中等窗宽可以横向滚动，表头和各行同宽；空表不留表头或无效分页，搜索和无数据/不可用区分 | 待本机验收 |
-| 成长与材料 | 删除重复说明，统一标题与主动作；无结果与未接入有不同状态，不保留空表框 | 待本机验收 |
-| 待我确认 | 只展示有内容分组，修复标题落入24px列；空页一个状态，跟进历史仍可达；事实入口打开真实事实列表 | 待本机验收 |
+| 今天 | 统一标题，删除空简报重复段落；只有一组时占满可用宽度，查看更多横排；决定按钮按内容宽度排列 | 54d9与4e首屏实际可见，`final-first-window`、`flow-start-visible` |
+| 工作区 | 鼠标真实单击和Tab后Enter打开同一课前任务；分类进入历史147项，返回仍为教学准备；普通任务表单输入明确UI草稿后取消，没有创建 | 原生通过，`final-board-mouse-single-click`、`final-board-keyboard-enter`、`final-workspace-history`、`final-workspace-category-return`、`after-task-unsaved-form`与`after-task-create-cancelled` |
+| 教学 | 统一标题轴线/主次动作；下一节准备打开对应任务目标；教学重点入口能往返 | 原生只读通过，`after-teaching-main`、`after-teaching-preparation`、`after-teaching-focus-empty`；未点生成或立即检查 |
+| 班级 | 普通名单行、真实摘要、范围明确的导出；选中学生翻页不被拉回，关闭后页码保持，陈字搜索与无结果可恢复 | 原生通过，`after-student-next-selected`、`after-student-page-preserved`、`after-student-search`、`after-student-search-empty`；未导入或改学生资料 |
+| 学生记录 | 只有自定日期显示输入；实填2026/10/1至10/26，切全部时间再返回值不丢；家校/列表/网络图分支，窄窗Tab/Escape保留同一学生ID；错误中文化 | 日期/筛选/焦点通过，`after-custom-dates-filled`、`after-custom-dates-restored`、`after-student-family`、`after-student-narrow-list-tab`与`after-student-narrow-list-escape`。正常学习记录受既有Core拒绝；4e展开成长记录后实际滚动且标题保持可达，`flow-student-real-body-scroll` |
+| 日程 | 五项工具列，月单日任务摘要；日/周/月/列表与来源切换；Cmd+1不误切，3键正常；课程详情与列表往返；抽屉已避开窗口栏 | 日/月/列表/快捷键与54d9宽窄抽屉通过，`after-calendar-*`、`final-calendar-drawer-wide`、`final-calendar-narrow-list-hidden`；4e有侧栏和窄窗的标题、来源、状态分行可读，`flow-active-week-with-list`、`flow-active-week-narrow` |
+| 记忆与洞察 | 中等窗宽表头与行同宽，拖动横向滚动条看累计/更新日期；空搜索与无数据/错误分开，无空表头或无效分页 | 记忆实测通过，`after-memory-scrollbar-dragged`、`after-memory-search-empty`；洞察读取错误实际展示，`after-insights-loaded`，正常记录分支未作本机通过 |
+| 成长与材料 | 标题与主动作一致，空结果不同于不可用；材料横向滚动看日期/状态，详情可关闭；成长教师/能力入口可切换 | 主要分支通过，`after-growth-*`、`after-materials-medium-right`、`after-materials-search-empty`、`final-material-drawer-wide`；4e窄窗首条状态可读，列表Tab/Escape回同一材料，`flow-active-material-narrow`、`flow-material-list-tab`与`flow-material-list-escape` |
+| 待我确认 | 只显示有内容分组，空页一个状态；事实独立列表无0项1/1分页；侧栏只保留可用入口，不重复空组 | 原生通过，`final-review-no-empty-groups`、`final-review-no-dead-pager`与`after-review-facts-back`；非空组由真实SSR覆盖 |
+| 设置与连接 | 常规偏好、默认DeepSeek及5个配置服务、JEV高级项；1553服务品牌目录搜飞书，同页详情后返回保留搜索 | 本轮只读通过，`resume-settings-visible-check`、`after-settings-models`、`after-settings-jev`、`after-connector-directory`、`after-connector-search-restored`；没有保存密钥、重新授权或写入 |
 
-源码检查：最终全套2599通过、40环境跳过、0失败；44项页面针对组及学生17项、Board/Calendar44项互有重叠，不相加。初次全套4项旧文案/空组计数/回调形态断言失败保留；更新相应展示合同后通过，原Core审核产物门、陈旧简报不泄正文等约束保留。当前新增24项覆盖真实组件状态、请求/事件回调和SSR输出；CSS样式仍须实际窗口证明。额外只读复核两次遇到模型容量错误，不计通过，主代理继续源码与运行验证。
+### 原生发现与修正版本
 
-### 安装与当前验收边界
+1. `2a10b3fc`首装后CUA报cgWindowNotFound；用户显示窗口后解除。初次工作区HTTP503点击重试恢复，但今天/班级正文仍为空，AX已有数据，设置可见。激活和改窗宽不解决；`9bfed2ae`移除工作页透明/transform首帧动画，真实截图恢复显示：`resume-workspace-retry`、`resume-class-blank-check`、`after-today-paint-fixed`、`after-class-list`。
+2. `54d9be47`补历史计数/返回分类、共享分页和审核侧栏；周标题换行，学生头部动作不换行。去掉旧动画后fixed课程/材料抽屉会进入窗口栏，因此改为正文定位祖先内的absolute；宽窗顶部已复验。`fe00260e`继续修周条目的高度；宽窗改善，但侧栏/窄窗仍见状态行越界，未记为通过。
+3. `b78240f2`去掉周条目的WebKit截行并显式普通按钮排版，完整文本流决定高度。`4e75ad52`给学生/材料grid抽屉`overflow:hidden`，正文仍独立`min-height:0; overflow-y:auto`；使sticky标题不跟随外层模块padding下移24px而遮住首条记录。`material-narrow-fresh-drawer`、`material-narrow-at-top`保留修前失败。b782单独构建但未装，4e合并两项后重签安装；真实窄窗首条状态、学生长内容滚动和恢复列表Tab/Escape均已通过。
 
-- 实现`2a10b3fc1f4f46bd50ad5bf7d4d3ef01875edee3`已装唯一App，见`prepare.log`、`assemble.log`和`pages-installed.json`。7个新server原生资源重签，Team`BY3XZG2839`、CDHash`bb72f8c8528a8f8bf4b4ed478c1afc709c5b8ee8`，主程序SHA256`52c71daf0ebcdfa8da866ee32723f430f70cb2426ff5771decdbd481f0a0ab6e`。Core03、33,709个非server文件、GitHub宿主及原更新公钥保持，安装/清理后strict签名通过；未发布、合并、公证或改feed/tag。
-- 进程PID23469，首页/status/workspace可读，投影ready且51学生/160任务/24校历/6课表保持，externalSend=false；既有`runtime_root_invalid`仍在。`installed-health.json`只证明读取与签名，不证明界面已显示。
-- 安装后CUA绑定EduPi、Finder和loginwindow均报`-10005: cgWindowNotFound`；重置会话后仍失败。未确认屏幕确实锁定，已请用户保持解锁并显示EduPi。`native-window-block.json`明确新版本原生实拍0张，上表各项仍待本机验收，不用旧版图片替代。
-- 全程与安装前后快照均314文件，无增删；教师业务、模型/认证/JEV/UI配置摘要保持。5个运行变化为提醒状态、桥接状态和3份日志追加，原日志前缀保持，无会话内容追加。见`data-protection.json`、`install-data-protection.json`，未回写用户文件消除差异。
-- 6个确认忽略、未跟踪且可重建的目录已删除，目录占用约3.29GiB、观测空闲增加约3.36GiB，安装App无已删路径依赖；见`build-cleanup.json`、`post-cleanup.json`。保留`$CHECKPOINT/page-components-20261026/EduPi-before-pages.app`作为待原生验收的cafce3a4回退，验收通过即删；原.70回退、源码、教师资料、认证、证据及原Core依赖保留。
+### 检查与安装
 
-尚未验证：本轮安装版逐页视觉、宽窄窗、实际输入/焦点/列表往返、日期非空草稿和另一次冷重启，当前条件为窗口不可读取。Windows/Linux、40项环境跳过、正常用量分支和公开升级也未验证。恢复入口是已安装2a10b3fc，无需重建或重做OAuth。
+- 逻辑最终版本54d9全套`npm test`为2642总数、2602通过、40环境跳过、0失败；46项针对性、typecheck、完整lint/branding与CSS解析通过。此前2a10新增24项，54d9再新增3项，实际SSR/状态/请求/回调覆盖；定向组相互重叠，不相加。初次4项旧展示断言和一次合成fixture缺studentIds失败原日志保留，修订后通过，审核产物门/历史简报正文约束仍在。
+- 54d9之后仅CSS变化，沿用同一JavaScript全套结果；19项页面/交互针对性与CSS解析通过，最终4e的`desktop:prepare`含TypeScript检查通过。构建已有session export动态依赖warning保留。`final-full-tests.log`、`final-polish-verified.log`、`final-types.log`、`final-lint.log`、`week-layout-targeted.log`、`prepare-drawer-flow.log`。早期两次额外review容量失败不计通过；后两次只读源码复核未发现必修项，未冒称其运行了测试。
+- `pages-flow-installed.json`确认唯一`/Applications/EduPi.app`为4e75，主程序SHA256`169e01b6f80437ea1a23590c17d74ed5924094ee5f5149b53b1214e0a7ba665a`，Team`BY3XZG2839`、CDHash`61b3d3f42a1f33e8ae86991f58068b6ef526b1c2`。7个server原生资源签名，Core03、33,709个非server文件、GitHub宿主和原公钥保持。正常Quit至App进程0后替换；4e启动PID65907，另一次正常Quit至0后同版本冷启PID93586，首页/班级/日程实际可交互，默认DeepSeek与5个服务、中文/浅色/3天/关闭退出关保持。未公证、合并、发布或改feed/tag。
+- `installed-flow-health.json`记录清理后strict/deep通过，二进制摘要匹配，首页/status/workspace200，投影ready且51学生/160任务/24校历/6课表，externalSend=false。此前输入无响应记录保留，最新冷启与UI以`cold-flow-health.json`、`cold-flow-settings-restored`、`cold-flow-models-restored`、`cold-flow-class-restored`、`cold-flow-calendar-restored`为准；`delivery-post-cleanup.json`再次确认清理后签名和摘要保持。
 
-### 窗口恢复后的显示修复
+### 数据与清理
 
-用户回复“窗口已显示”后，CUA已可操作。工作区初次HTTP503，点击重试后数据与控件可读；但今天/班级的正文截图仍为空，设置常规和JEV正常。点击标题激活、调整窗口尺寸后正文仍空。证据`resume-workspace-retry`、`resume-repaint-check`、`resume-class-blank-check`、`resume-settings-visible-check`，均有AX与实拍。
+- 初装全程及安装两组保护记录均314文件，无增删；教师业务与模型/认证/JEV/UI配置摘要保持，5个运行变化单列。窗口恢复后另存`protected-resume-before.json`，未覆盖原快照。最终`resume-data-protection.json`仍314文件，无增删；6项变化为提醒/桥接状态、3份日志和现有会话10条custom追加2655字节，原前缀保持，没有新用户/模型消息；未回写文件掩盖差异。
+- 初装后已清理6个生成目录约3.29GiB，观测空闲增3.36GiB；复验重建后再次删除`.next-desktop`、任务node_modules、server、Pi Agent Server.app、edupi-core、open-connector六目录，另删2a10/9bf/54三份已淘汰临时App，新增清理占用6.04GiB、观测空闲增6.18GiB。安装App无外部symlink依赖，清理后健康读取继续通过。`build-cleanup.json`、`final-build-cleanup.json`、`superseded-app-cleanup.json`。
+- 末项通过后精确删除caf/fe两份临时回退约1.83GiB，分批观测空闲增1.87GiB；本轮临时App副本0。加初批及重建清理，累计移除可重建占用11.16GiB，各批观测空闲增量之和11.42GiB；有其他磁盘活动，这不是整段时间的净空闲增量。`accepted-app-cleanup.json`、`delivery-post-cleanup.json`。保留原.70、源码、已安装App、证据、教师数据、密钥和原Core依赖，原工作区`mv/`保持。
 
-移除只作用于工作页的透明首帧入场动画，使正文显示不再依赖动画完成；保持业务代码与其他布局。CSS解析、针对性检查通过，尚待重签安装和真实页面复验。恢复时另存`protected-resume-before.json`，不覆盖此前保护快照。
+### 输入恢复与当前未验
+
+4e首页可见后，AX/坐标点击、标题栏激活与Tab一度不改变页面；重绑/重置无效，不能据此判断锁屏。系统菜单可以响应，代理在独立访达窗口选中唯一安装App执行“打开”后恢复页面输入；原访达窗口未动，新窗口用完已关闭。用户随后回复让代理自行打开，实际恢复已由代理完成，没有交给用户代验。之后完成4e有侧栏/窄窗周日程、材料首条状态、学生长内容滚动、列表Tab/Escape及真正冷启动；最终截图`delivery-week-foreground`确认日程在前台。历史输入阻塞已解除。
+
+既有`runtime_root_invalid`、学生记录Core admission拒绝、本地用量校验失败与对话文件索引不可用仍在；这些正常数据分支未计通过。Windows/Linux、40项环境跳过、公开升级链路及本轮新增写入均未复验；拖拽未移动真实教师任务，阈值/误点击抑制由真实回调测试覆盖。用户视觉认可仍待用户判断。
