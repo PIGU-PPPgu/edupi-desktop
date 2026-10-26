@@ -107,7 +107,7 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   assert.match(taskBoard, /await onMoveTask/);
   assert.doesNotMatch(workspaceViews, /EduPiRhythmImporter/);
   for (const label of ["日程", "待确认", "今天", "上一时段", "下一时段", "日", "周", "月", "新建日程", "添加课表", "上传文件", "日期待确认"]) assert.match(calendarWorkspace, new RegExp(label));
-  assert.match(calendarWorkspace, /compact=\{entry\.kind !== "task"\}/);
+  assert.match(calendarWorkspace, /compact=\{entry\.kind !== "task" \|\| entry\.rangeStart === entry\.rangeEnd\}/);
   assert.match(calendarWorkspace, /entry\.sourceLabel/);
   assert.match(calendarWorkspace, /entry\.statusLabel/);
   assert.match(objectSider, /isRecognizedTimetableNote\(slot\?\.notes\)/);
@@ -410,7 +410,8 @@ test("board and calendar task entries share a mounted task peek drawer", async (
   assert.match(board, /onTaskDetail/);
   assert.match(board, /taskPresentation\(task\)\.label/);
   assert.doesNotMatch(board, /if \(task\.boardStage === "done"\)/);
-  assert.match(board, /onOpen=\{\(\) => onTaskDetail\(task\)\}/);
+  assert.match(board, /onOpen=\{\(keyboard\) => \{/);
+  assert.match(board, /setSelectedCardId\(task\.id \?\? null\); onTaskDetail\(task\)/);
   assert.doesNotMatch(board, /onTask\(task, cardStage/);
   assert.match(calendar, /taskForCalendarEntry/);
   assert.match(calendar, /entry\.kind === "task" \? onTaskDetail\(entry\)/);

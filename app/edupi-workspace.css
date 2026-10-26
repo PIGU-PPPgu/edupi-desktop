@@ -334,7 +334,7 @@
 
 .edupi-calendar-heading {
   display: flex;
-  min-height: 76px;
+  min-height: var(--ep-page-heading-height, 84px);
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
@@ -349,11 +349,12 @@
 }
 
 .edupi-calendar-heading h1 {
-  margin: 5px 0 3px;
+  margin: 0 0 6px;
   color: var(--ep-text);
-  font-size: 28px;
-  letter-spacing: -.035em;
-  line-height: 1.15;
+  font-size: var(--ep-page-title-size, 24px);
+  font-weight: 600;
+  letter-spacing: -.025em;
+  line-height: 1.25;
 }
 
 .edupi-calendar-heading p {
@@ -409,7 +410,7 @@
 .edupi-calendar-toolbar {
   display: grid;
   min-height: 48px;
-  grid-template-columns: auto auto minmax(160px, 1fr) auto;
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   border-top: 1px solid var(--ep-border);

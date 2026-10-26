@@ -53,30 +53,29 @@ export function EduPiGrowthWorkspace({ data, teachingSkills, query, selectedObje
     setEditor({ methodId: method.skillId, mode });
   };
   const headingTitle = category === "teacher" ? "教师专业成长" : "EduPi 能力成长";
-  let headingDescription = "教学方法从试用到后续备课复用的记录";
-  if (category === "teacher") headingDescription = "真实教学实践、反馈与改进记录";
-  else if (teachingSkills.status === "unavailable") headingDescription = "教学方法暂不可用";
+  const teacherRecordCount = growth.length + documents.length + artifacts.length;
+  const recordCount = category === "teacher" ? teacherRecordCount : skills.length;
   let headingAction: ReactNode = null;
-  if (category === "teacher") headingAction = <button type="button" onClick={() => onStartAgent("教学复盘", "replace")}>记录复盘</button>;
-  else if (teachingSkills.mutationEnabled) headingAction = <button type="button" onClick={() => { setSavedMessage(""); setEditor((current) => current?.mode === "create" ? null : { methodId: null, mode: "create" }); }}>新增教学方法</button>;
+  if (category === "teacher") headingAction = <button type="button" className="is-primary" onClick={() => onStartAgent("教学复盘", "replace")}>记录复盘</button>;
+  else if (teachingSkills.mutationEnabled) headingAction = <button type="button" className="is-primary" onClick={() => { setSavedMessage(""); setEditor((current) => current?.mode === "create" ? null : { methodId: null, mode: "create" }); }}>新增教学方法</button>;
 
   return <main className="edupi-module-workspace edupi-database-workspace">
-    <header className="edupi-module-heading"><div><h1>{headingTitle}</h1><p>{headingDescription}</p></div>{headingAction}</header>
+    <header className="edupi-module-heading"><div><h1>{headingTitle}</h1><p>{recordCount} 条记录</p></div>{headingAction}</header>
     {category !== "teacher" && savedMessage ? <p className="edupi-method-status" role="status">{savedMessage}</p> : null}
     {category !== "teacher" && !teachingSkills.mutationEnabled ? <p className="edupi-method-status">旧方法仍可查看，当前版本不能修改。</p> : null}
     {category !== "teacher" && editor?.mode === "create" ? <EduPiTeachingMethodEditor key="create" mode="create" mutationEnabled={teachingSkills.mutationEnabled} onSaved={(next) => saved(next, "方法已保存为草稿")} onCancel={() => setEditor(null)} /> : null}
 
-    {category === "teacher" ? <section className="edupi-database">
-      <div className="edupi-database__head edupi-growth-db-grid"><span>类型</span><span>内容</span><span>来源</span><span>日期</span><span>动作</span></div>
+    {category === "teacher" ? <section className={`edupi-database${teacherRecordCount === 0 ? " is-empty" : ""}`} aria-label="教师成长记录" tabIndex={teacherRecordCount > 0 ? 0 : undefined}>
+      {teacherRecordCount > 0 ? <div className="edupi-database__head edupi-growth-db-grid"><span>类型</span><span>内容</span><span>来源</span><span>日期</span><span>动作</span></div> : null}
       {growth.map((item) => {
         const task = tasksById.get(item.taskId);
         return <div className="edupi-database-static-row edupi-growth-db-grid" key={item.growthId}><span>方法试用</span><strong>{item.feedback}</strong><span>{item.methodTitle} · {item.taskTitle} · {OUTCOME_LABELS[item.outcome]}</span><time>{shortDate(item.recordedAt)}</time>{task ? <button type="button" onClick={() => onTask(task)}>查看任务</button> : <span>任务已归档</span>}</div>;
       })}
       {documents.map((item) => <div className="edupi-database-static-row edupi-growth-db-grid" key={item.id}><span>周复盘</span><strong>{item.title}</strong><span>工作沉淀</span><time>{shortDate(item.date)}</time><button type="button" onClick={() => onOpenFile(workspaceFile(item.path))}>打开</button></div>)}
       {artifacts.map(({ task, artifact }) => <div className="edupi-database-static-row edupi-growth-db-grid" key={artifact.id}><span>确认成果</span><strong>{artifact.title}</strong><span>{taskDisplayTitle(task)}</span><time>{task.reviewedAt ? shortDate(task.reviewedAt) : "—"}</time><button type="button" onClick={() => onTask(task)}>查看</button></div>)}
-      {growth.length + documents.length + artifacts.length === 0 ? <div className="edupi-database__empty">{growthSource.present || teachingSkills.status !== "unavailable" ? "暂无成长记录" : "教师成长数据尚未接入"}</div> : null}
-    </section> : <section className="edupi-database">
-      <div className="edupi-database__head edupi-edupi-growth-db-grid"><span>教学方法</span><span>状态</span><span>试用</span><span>依据</span><span>最近更新</span></div>
+      {teacherRecordCount === 0 ? <div className="edupi-database__empty">{growthSource.present || teachingSkills.status !== "unavailable" ? query.trim() ? "未找到匹配记录" : "暂无成长记录" : "教师成长数据尚未接入"}</div> : null}
+    </section> : <section className={`edupi-database${skills.length === 0 ? " is-empty" : ""}`} aria-label="教学方法" tabIndex={skills.length > 0 ? 0 : undefined}>
+      {skills.length > 0 ? <div className="edupi-database__head edupi-edupi-growth-db-grid"><span>教学方法</span><span>状态</span><span>试用</span><span>依据</span><span>最近更新</span></div> : null}
       {skills.map((item) => <details className="edupi-database-row edupi-method-row" key={item.skillId}>
         <summary className="edupi-edupi-growth-db-grid"><strong>{item.title}</strong><span>{METHOD_STATE_LABELS[item.lifecycleState] || item.lifecycleState}</span><span>{item.trialCount}</span><span>{item.evidenceIds.length}</span><time>{shortDate(item.updatedAt)}</time></summary>
         <div className="edupi-method-detail">
@@ -94,7 +93,7 @@ export function EduPiGrowthWorkspace({ data, teachingSkills, query, selectedObje
           <details className="edupi-method-technical"><summary>技术信息</summary><p>方法 ID：{item.skillId}</p><p>对象版本：{item.revision ?? "旧记录"} · 正文版本：{item.contentRevision ?? "旧记录"}</p></details>
         </div>
       </details>)}
-      {skills.length === 0 ? <div className="edupi-database__empty">{teachingSkills.status === "unavailable" ? "教学方法暂不可用" : "暂无教学方法"}</div> : null}
+      {skills.length === 0 ? <div className="edupi-database__empty">{teachingSkills.status === "unavailable" ? "教学方法暂不可用" : query.trim() ? "未找到匹配方法" : "暂无教学方法"}</div> : null}
     </section>}
   </main>;
 }

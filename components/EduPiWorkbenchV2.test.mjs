@@ -62,7 +62,7 @@ test("class and student modules select one student and expose real import and ex
   assert.match(sider, /edupi-object-student/);
   assert.doesNotMatch(sider, /<details className="edupi-object-person"/);
   assert.match(views, /mode=\{props\.view\}/);
-  for (const label of ["导入名单", "导出档案", "导出成长记录", "学习问题", "成长记录", "家校记录", "相关任务"]) assert.match(student, new RegExp(label));
+  for (const label of ["导入名单", "导出全部档案", "导出当前档案", "导出成长记录", "学习问题", "成长记录", "家校记录", "相关任务"]) assert.match(student, new RegExp(label));
   assert.match(student, /\/api\/edupi\/students\/import/);
   assert.match(student, /\.xlsx/);
   assert.match(student, /new FormData\(\)/);

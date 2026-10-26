@@ -11,6 +11,7 @@ import { EduPiStudentGraph } from "./EduPiStudentGraph";
 type StudentEventKind = StudentEvent["kind"];
 type RecordKind = StudentEventKind | "family";
 type StudentEventView = "list" | "graph";
+type StudentEventDateRange = "all" | "semester" | "custom";
 
 type Props = {
   student: string | null;
@@ -46,6 +47,7 @@ export function EduPiStudentEvents({ student, studentId, studentClass, semesterR
   const [page, setPage] = useState(0);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [dateRange, setDateRange] = useState<StudentEventDateRange>("all");
   const [alias, setAlias] = useState("");
   const [canonical, setCanonical] = useState("");
   const [view, setView] = useState<StudentEventView>(student ? "graph" : "list");
@@ -61,9 +63,12 @@ export function EduPiStudentEvents({ student, studentId, studentClass, semesterR
   const [busy, setBusy] = useState(false);
   const generationRef = useRef(0);
   const loadMoreRef = useRef<AbortController | null>(null);
+  const activeDateRange = dateRange === "semester" && !semesterRange ? "all" : dateRange;
+  const activeFrom = activeDateRange === "semester" ? semesterRange?.from || "" : activeDateRange === "custom" ? from : "";
+  const activeTo = activeDateRange === "semester" ? semesterRange?.to || "" : activeDateRange === "custom" ? to : "";
 
   useEffect(() => setPage(0), [search]);
-  useEffect(() => setSelectedRecord(null), [from, kind, page, student, studentId, to, view]);
+  useEffect(() => setSelectedRecord(null), [activeFrom, activeTo, kind, page, student, studentId, view]);
   useEffect(() => {
     const changed = () => setRefresh((value) => value + 1);
     window.addEventListener(EDUPI_STUDENT_RECORDS_UPDATED_EVENT, changed);
@@ -83,7 +88,7 @@ export function EduPiStudentEvents({ student, studentId, studentClass, semesterR
     setTotal(0);
     if (kind === "family") { setLoading(false); return () => controller.abort(); }
     const offset = view === "graph" ? 0 : page * STUDENT_GRAPH_PAGE_SIZE;
-    const params = eventQuery({ kind, offset, search, student, studentId, from, to });
+    const params = eventQuery({ kind, offset, search, student, studentId, from: activeFrom, to: activeTo });
     void readEvents(params, controller.signal).then((result) => {
       if (controller.signal.aborted || generation !== generationRef.current) return;
       if (view === "list" && page > 0 && offset >= result.total) {
@@ -99,7 +104,7 @@ export function EduPiStudentEvents({ student, studentId, studentClass, semesterR
       if (!controller.signal.aborted && generation === generationRef.current) setLoading(false);
     });
     return () => controller.abort();
-  }, [from, kind, page, refresh, search, student, studentId, to, view]);
+  }, [activeFrom, activeTo, kind, page, refresh, search, student, studentId, view]);
 
   const loadMore = async () => {
     if (kind === "family" || view !== "graph" || loading || loadingMore || records.length >= total || records.length >= STUDENT_GRAPH_RECORD_LIMIT) return;
@@ -110,7 +115,7 @@ export function EduPiStudentEvents({ student, studentId, studentClass, semesterR
     setLoadingMore(true);
     setError(null);
     try {
-      const params = eventQuery({ kind, offset: records.length, search, student, studentId, from, to });
+      const params = eventQuery({ kind, offset: records.length, search, student, studentId, from: activeFrom, to: activeTo });
       const result = await readEvents(params, controller.signal);
       if (controller.signal.aborted || generation !== generationRef.current) return;
       setRecords((current) => {
@@ -152,20 +157,12 @@ export function EduPiStudentEvents({ student, studentId, studentClass, semesterR
     setTo(value);
     setPage(0);
   };
-  const useSemester = () => {
-    if (!semesterRange) return;
-    setFrom(semesterRange.from);
-    setTo(semesterRange.to);
+  const changeDateRange = (value: StudentEventDateRange) => {
+    setDateRange(value);
     setPage(0);
   };
-  const clearDates = () => {
-    setFrom("");
-    setTo("");
-    setPage(0);
-  };
-  const semesterActive = Boolean(semesterRange && from === semesterRange.from && to === semesterRange.to);
   const graphCanLoadMore = records.length < total && records.length < STUDENT_GRAPH_RECORD_LIMIT;
-  const scope = semesterActive ? "本学期" : from || to ? `${from || "起始日期不限"} 至 ${to || "结束日期不限"}` : "全部时间";
+  const scope = activeDateRange === "semester" ? "本学期" : activeFrom || activeTo ? `${activeFrom || "起始日期不限"} 至 ${activeTo || "结束日期不限"}` : "全部时间";
   const editRecord = (item: StudentEvent, button: HTMLButtonElement) => {
     const article = button.closest("article");
     setEditing(item);
@@ -190,17 +187,21 @@ export function EduPiStudentEvents({ student, studentId, studentClass, semesterR
   </article>;
   const selectedDetails = records.filter((record) => record.id === selectedRecord).map(renderRecord);
   const graphFooter = graphCanLoadMore || total > STUDENT_GRAPH_RECORD_LIMIT ? <footer>{graphCanLoadMore ? <button type="button" disabled={loadingMore || loading} onClick={() => void loadMore()}>{loadingMore ? "加载中…" : "加载更多"}</button> : <span>图谱上限 {STUDENT_GRAPH_RECORD_LIMIT} 条</span>}</footer> : null;
-  const recordAlert = error ? <p role="alert">{error}<button type="button" onClick={() => setRefresh((value) => value + 1)}>重试</button></p> : null;
+  const errorSummary = error && /[\u3400-\u9fff]/.test(error) ? error : "学生记录暂时无法读取";
+  const recordAlert = error ? <div className="edupi-student-events__error" role="alert"><p><span>{errorSummary}</span><button type="button" onClick={() => setRefresh((value) => value + 1)}>重试</button></p>{errorSummary !== error ? <details><summary>错误详情</summary><p>{error}</p></details> : null}</div> : null;
   const graphDetails = loading ? <p role="status">读取中…</p> : <>{selectedDetails.length ? selectedDetails : <p>选择记录查看来源</p>}</>;
   const title = kind === "family" ? "家校记录" : kind === "learning" ? "学习记录" : "同伴互动";
-  const header = <header><div role="group" aria-label="记录类型">{[["learning", "学习记录"], ["interaction", "同伴互动"], ...(familyRecords ? [["family", "家校人物"]] : [])].map(([value, label]) => <button key={value} type="button" aria-pressed={kind === value} onClick={() => { setKind(value as RecordKind); setPage(0); setEditing(null); }}>{label}</button>)}</div><button type="button" onClick={() => onAgent([`${student || "学生"} · ${title}`, studentId ? `学生 ID：${studentId}` : null, studentClass ? `班级：${studentClass}` : null].filter(Boolean).join("\n"), "replace")}>对话记录</button></header>;
+  const header = <header className="edupi-student-events__header"><div className="edupi-student-events__tabs" role="group" aria-label="记录类型">{[["learning", "学习记录"], ["interaction", "同伴互动"], ...(familyRecords ? [["family", "家校人物"]] : [])].map(([value, label]) => <button key={value} type="button" aria-pressed={kind === value} onClick={() => { setKind(value as RecordKind); setPage(0); setEditing(null); }}>{label}</button>)}</div><button type="button" onClick={() => onAgent([`${student || "学生"} · ${title}`, studentId ? `学生 ID：${studentId}` : null, studentClass ? `班级：${studentClass}` : null].filter(Boolean).join("\n"), "replace")}>对话记录</button></header>;
   if (kind === "family") return <section className="edupi-student-events" aria-label="学生家校人物">{header}{familyRecords}</section>;
 
   return <section className="edupi-student-events" aria-label="学生学习与互动记录">
     {header}
     {view === "list" ? recordAlert : null}
-    <div className="edupi-student-event-filters"><div role="group" aria-label="时间范围">{semesterRange ? <button type="button" aria-pressed={semesterActive} onClick={useSemester}>本学期</button> : null}<button type="button" aria-pressed={!from && !to} onClick={clearDates}>全部时间</button></div><label>从 <input type="date" value={from} onChange={(event) => setDateFrom(event.target.value)} /></label><label>到 <input type="date" value={to} min={from || undefined} onChange={(event) => setDateTo(event.target.value)} /></label></div>
-    <div className="edupi-student-graph-toggle" role="group" aria-label="记录视图">{[["list", "列表"], ["graph", "网络图"]].map(([value, label]) => <button key={value} type="button" aria-pressed={view === value} onClick={() => { setView(value as StudentEventView); setPage(0); setSelectedRecord(null); setEditing(null); }}>{label}</button>)}</div>
+    <div className="edupi-student-events__toolbar">
+      <label className="edupi-student-events__range"><span>时间</span><select aria-label="时间范围" value={activeDateRange} onChange={(event) => changeDateRange(event.target.value as StudentEventDateRange)}><option value="all">全部时间</option>{semesterRange ? <option value="semester">本学期</option> : null}<option value="custom">自定日期</option></select></label>
+      <div className="edupi-student-graph-toggle" role="group" aria-label="记录视图">{[["list", "列表"], ["graph", "网络图"]].map(([value, label]) => <button key={value} type="button" aria-pressed={view === value} onClick={() => { setView(value as StudentEventView); setPage(0); setSelectedRecord(null); setEditing(null); }}>{label}</button>)}</div>
+    </div>
+    {activeDateRange === "custom" ? <div className="edupi-student-event-filters"><label>从 <input type="date" value={from} onChange={(event) => setDateFrom(event.target.value)} /></label><label>到 <input type="date" value={to} min={from || undefined} onChange={(event) => setDateTo(event.target.value)} /></label></div> : null}
     {view === "graph" ? <EduPiStudentGraph records={records} total={total} kind={kind} selectedId={selectedRecord} onSelect={setSelectedRecord} student={student} scope={scope} loading={loading} details={graphDetails} footer={graphFooter} alert={recordAlert} /> : null}
     {view === "graph" && kind === "learning" ? <details><summary>合并知识点名称</summary><form onSubmit={async (event) => { event.preventDefault(); setBusy(true); try { const response = await fetch("/api/edupi/student-events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "set_topic_alias", alias, canonical }) }); const result = await response.json() as { error?: string }; if (!response.ok) throw new Error(result.error || "保存失败"); setAlias(""); setCanonical(""); window.dispatchEvent(new Event(EDUPI_STUDENT_RECORDS_UPDATED_EVENT)); } catch (reason) { setError(reason instanceof Error ? reason.message : "保存失败"); } finally { setBusy(false); } }}><label>原名称<input required maxLength={160} value={alias} onChange={(event) => setAlias(event.target.value)} /></label><label>统一名称<input required maxLength={160} value={canonical} onChange={(event) => setCanonical(event.target.value)} /></label><button disabled={busy} type="submit">保存</button></form></details> : null}
     {view === "graph" ? selectedDetails : loading ? <p role="status">读取中…</p> : records.length === 0 ? <p>暂无记录</p> : records.map(renderRecord)}

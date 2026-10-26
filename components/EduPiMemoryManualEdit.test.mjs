@@ -28,5 +28,5 @@ test("manual save stays in the memory database and reports bounded states", () =
   assert.match(source, /记忆已保存/);
   assert.match(source, /role=\{message\.tone === "error" \? "alert" : "status"\}/);
   assert.doesNotMatch(source, /onStartAgent\([^)]*draft/);
-  assert.ok(source.indexOf("edupi-memory-message") < source.indexOf('<section className="edupi-database"'));
+  assert.ok(source.indexOf("edupi-memory-message") < source.search(/<section[^>]+edupi-database/));
 });

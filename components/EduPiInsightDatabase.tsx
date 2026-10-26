@@ -112,14 +112,14 @@ export function EduPiInsightDatabase({ data, query, selectedObjectId, onReviewTa
     ? "观察与洞察数据尚未接入"
     : query || status !== "all"
       ? "当前筛选暂无记录"
-      : "数据已连接，当前没有该类记录";
+      : "暂无记录";
 
   return <main className="edupi-module-workspace edupi-database-workspace">
-    <header className="edupi-module-heading"><div><h1>{categoryLabel}</h1><p>{sourceAvailable ? "数据已连接" : "数据未接入"} · {statusLabel} · {total} 条记录</p></div></header>
-    {studentObservations.error ? <p role="alert">{studentObservations.error}</p> : null}
+    <header className="edupi-module-heading"><div><h1>{categoryLabel}</h1><p>{statusLabel} · {total} 条记录</p></div></header>
+    {studentObservations.error ? <p className="edupi-page-error" role="alert">{studentObservations.error}</p> : null}
     <EduPiDeletedFacts data={data} reviewer={reviewer} onEducation={onEducation} />
-    <section className="edupi-database" aria-label={`${categoryLabel}数据库`}>
-      <div className="edupi-database__head edupi-insight-db-grid"><span>类型</span><span>内容</span><span>状态</span><span>依据</span><span>最近时间</span></div>
+    <section className={`edupi-database${visible.length === 0 ? " is-empty" : ""}`} tabIndex={visible.length > 0 ? 0 : undefined} aria-label={`${categoryLabel}数据库`}>
+      {visible.length > 0 ? <div className="edupi-database__head edupi-insight-db-grid"><span>类型</span><span>内容</span><span>状态</span><span>依据</span><span>最近时间</span></div> : null}
       {visible.map((item) => <details className="edupi-database-row" key={item.id}>
         <summary className="edupi-insight-db-grid"><span>{item.type}</span><strong>{item.content}</strong><span>{item.status}</span><span>{item.evidence.length || item.related.length}</span><time>{shortDate(item.date)}</time></summary>
         <div className="edupi-database-row__detail">
@@ -139,6 +139,6 @@ export function EduPiInsightDatabase({ data, query, selectedObjectId, onReviewTa
       </details>)}
       {studentObservations.loading ? <div role="status">读取中…</div> : visible.length === 0 && !studentObservations.error ? <div className="edupi-database__empty">{emptyMessage}</div> : null}
     </section>
-    <EduPiPagination label="观察与洞察分页" page={currentPage} pages={pages} previousDisabled={currentPage === 0 || studentObservations.loading} nextDisabled={currentPage >= pages - 1 || studentObservations.loading} onPrevious={() => setPage(currentPage - 1)} onNext={() => setPage(currentPage + 1)}/>
+    {pages > 1 ? <EduPiPagination label="观察与洞察分页" page={currentPage} pages={pages} previousDisabled={currentPage === 0 || studentObservations.loading} nextDisabled={currentPage >= pages - 1 || studentObservations.loading} onPrevious={() => setPage(currentPage - 1)} onNext={() => setPage(currentPage + 1)}/> : null}
   </main>;
 }

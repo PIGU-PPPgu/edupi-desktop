@@ -140,7 +140,7 @@ export function DashboardView({ data, kernelState, onEducation, onTaskDetail, on
       <div className="edupi-today-main">
         <section className={`edupi-page-section edupi-daily-brief${briefIsFresh ? " is-fresh" : latestBriefRun?.status === "failed" ? " is-failed" : " is-stale"}`}>
           <SectionHeader title="简报" meta={briefStatus} action={latestBrief ? briefIsFresh ? "打开简报" : "简报历史" : undefined} onAction={latestBrief ? () => briefIsFresh ? onOpenFile(workspaceFile(data.workspace, latestBrief.path)) : onObject("today:briefs") : undefined} />
-          {briefIsFresh && latestBrief ? <p>{briefPreview(latestBrief.excerpt)}</p> : <div className="edupi-module-empty">{briefStatus === "正在生成" ? "正在生成今日简报" : briefStatus === "生成失败" ? "今日简报生成失败" : "今天还没有生成简报"}</div>}
+          {briefIsFresh && latestBrief ? <p>{briefPreview(latestBrief.excerpt)}</p> : null}
           <footer><span>自动运行</span><strong>{latestBriefRun ? ({ running: "正在生成", awaiting_delivery: "等待交付", failed: "生成失败", needs_review: "待确认", succeeded: "已生成", skipped: "已跳过" })[latestBriefRun.status] : kernelState.status === "unavailable" ? "状态不可用" : "尚无运行记录"}</strong></footer>
         </section>
         <EduPiTodayWork data={data} onEducation={onEducation} onTaskDetail={onTaskDetail} selectedObjectId={selectedObjectId} onObject={onObject} onCalendarSelection={onCalendarSelection} />

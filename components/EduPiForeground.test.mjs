@@ -52,7 +52,7 @@ test("stale briefs have only a historical entry and the today page has three wor
   data.continuity.documents = [{ id: "old", kind: "daily", title: "历史简报", date: "2026-09-27", path: ".edupi/output/daily/2026-09-27.md", excerpt: "不得显示的旧简报正文" }];
   const props = { data, context: null, kernelState: { status: "empty", running: 0, runs: [] }, runningAgentCount: 0, selectedObjectId: null, ...callbacks };
   const html = render(React.createElement(DashboardView, props));
-  assert.match(html, /今天还没有生成简报/);
+  assert.match(html, /上次生成 2026-09-27/);
   assert.match(html, /简报历史/);
   assert.doesNotMatch(html, /不得显示的旧简报正文|edupi-command-center|值得留意/);
   for (const title of ["简报", "接下来", "工作判断"]) assert.match(html, new RegExp(title));

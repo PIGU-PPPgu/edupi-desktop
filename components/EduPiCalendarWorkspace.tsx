@@ -141,7 +141,7 @@ function taskForCalendarEntry(tasks: TeacherTask[], entry: CalendarEntry | Calen
 function CalendarEntryLine({ entry, compact = false, continued = false, selected = false, onSelect, onTaskDetail }: { entry: CalendarEntry; compact?: boolean; continued?: boolean; selected?: boolean; onSelect: (selection: CalendarItemSelection) => void; onTaskDetail: (entry: CalendarEntry) => void }) {
   const title = entry.kind === "timetable" ? `第 ${entry.period ?? "-"} 节 · ${entry.title}` : entry.title;
   return (
-    <button type="button" className={`${entryClass(entry)}${compact ? " is-compact" : ""}${continued ? " is-continued" : ""}${selected ? " is-selected" : ""}`} title={`${title} · ${entry.sourceLabel} · ${entry.statusLabel}`} onClick={() => entry.kind === "task" ? onTaskDetail(entry) : onSelect({ kind: entry.kind, sourceId: entry.sourceId, date: entry.date, title: entry.title, detail: entry.detail, sourceLabel: entry.sourceLabel, statusLabel: entry.statusLabel })} aria-label={`查看${title}详情`} aria-pressed={selected}>
+    <button type="button" className={`${entryClass(entry)}${compact ? " is-compact" : ""}${continued ? " is-continued" : ""}${selected ? " is-selected" : ""}`} title={`${title} · ${entry.sourceLabel} · ${entry.statusLabel}`} onClick={() => entry.kind === "task" ? onTaskDetail(entry) : onSelect({ kind: entry.kind, sourceId: entry.sourceId, date: entry.date, title: entry.title, detail: entry.detail, sourceLabel: entry.sourceLabel, statusLabel: entry.statusLabel })} aria-label={compact ? `查看${title}详情 · ${entry.sourceLabel} · ${entry.statusLabel}` : `查看${title}详情`} aria-pressed={selected}>
       <span className="edupi-calendar-entry__source" aria-hidden="true">{entry.sourceIcon}</span>
       <span className="edupi-calendar-entry__body">
         <strong>{title}</strong>
@@ -170,7 +170,7 @@ function MonthView({ projection, anchorDate, selection, onSelectDate, onSelect, 
               {weekdayIndex(cell.date) === 0 && cell.weekNumber !== null ? <span className="edupi-calendar-month-cell__week">第{cell.weekNumber}周</span> : null}
               <button type="button" className="edupi-calendar-month-cell__date" onClick={() => onSelectDate(cell.date)} aria-label={`查看 ${readableDate(cell.date)}`} aria-current={cell.date === localIsoDate() ? "date" : undefined}>{cell.day}</button>
               <div className="edupi-calendar-month-cell__entries">
-                {visibleEntries.map((entry) => <CalendarEntryLine compact={entry.kind !== "task"} continued={entry.continuesBefore && weekdayIndex(cell.date) !== 0} key={entry.id} entry={entry} selected={entrySelected(entry, selection)} onSelect={onSelect} onTaskDetail={onTaskDetail} />)}
+                {visibleEntries.map((entry) => <CalendarEntryLine compact={entry.kind !== "task" || entry.rangeStart === entry.rangeEnd} continued={entry.continuesBefore && weekdayIndex(cell.date) !== 0} key={entry.id} entry={entry} selected={entrySelected(entry, selection)} onSelect={onSelect} onTaskDetail={onTaskDetail} />)}
                 {entries.length > visibleEntries.length ? <button type="button" className="edupi-calendar-more" onClick={() => onSelectDate(cell.date)}>+{entries.length - visibleEntries.length}</button> : null}
               </div>
             </div>
@@ -383,7 +383,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
   const sourceUpcoming = selectedObjectId === "calendar:list:upcoming";
   const sourceEvents = selectedObjectId === "calendar:list:events" || sourceUpcoming || sourceHistory;
   const sourceCourses = selectedObjectId === "calendar:list:courses";
-  const listOpen = Boolean(selectedObjectId?.startsWith("calendar:list") || sourceHistory || localList);
+  const listOpen = selectedObjectId === undefined ? localList : Boolean(selectedObjectId?.startsWith("calendar:list") || sourceHistory);
   const completeTransactions = listOpen && !sourceEvents && !sourceCourses;
   const openList = () => { setLocalList(true); onObject?.("calendar:list"); };
   const closeList = () => { setLocalList(false); onObject?.("calendar:calendar"); };
@@ -433,8 +433,10 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
-      if (target?.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
+      if (target?.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement
+        || target?.closest?.("[role='dialog'], [aria-modal='true']")) return;
       if (event.key.toLocaleLowerCase() === "t") {
         event.preventDefault();
         setAnchorDate(localIsoDate());
@@ -518,19 +520,19 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
     <main className="edupi-module-workspace edupi-calendar-workspace">
       <header className="edupi-calendar-heading">
         <div><h1>日程</h1><p>{itemCount} 项</p></div>
-        <div className="edupi-calendar-heading__actions"><button type="button" disabled={!calendarWriteReady} title={!calendarWriteReady ? data.capabilities.calendar.reason : undefined} onClick={() => { if (composer === "calendar" && !editingCalendarId) closeComposer(); else { setEditingCalendarId(null); setEditingTimetableId(null); setComposer("calendar"); } }}>新建日程</button><button type="button" disabled={!timetableWriteReady} title={!timetableWriteReady ? data.capabilities.timetable.reason : undefined} onClick={() => { if (composer === "timetable" && !editingTimetableId) closeComposer(); else { setEditingCalendarId(null); setEditingTimetableId(null); setComposer("timetable"); } }}>添加课表</button><button type="button" className="is-primary" onClick={onUpload}>上传文件</button></div>
+        <div className="edupi-calendar-heading__actions"><button type="button" className="is-primary" disabled={!calendarWriteReady} title={!calendarWriteReady ? data.capabilities.calendar.reason : undefined} onClick={() => { if (composer === "calendar" && !editingCalendarId) closeComposer(); else { setEditingCalendarId(null); setEditingTimetableId(null); setComposer("calendar"); } }}>新建日程</button><button type="button" disabled={!timetableWriteReady} title={!timetableWriteReady ? data.capabilities.timetable.reason : undefined} onClick={() => { if (composer === "timetable" && !editingTimetableId) closeComposer(); else { setEditingCalendarId(null); setEditingTimetableId(null); setComposer("timetable"); } }}>添加课表</button><button type="button" onClick={onUpload}>上传文件</button></div>
       </header>
       {writeReason ? <p className="edupi-calendar-capability-note" role="status">{writeReason}</p> : null}
       <EduPiScheduleConflictReview enabled={data.capabilities.calendar.enabled || data.capabilities.timetable.enabled} />
       {composer ? <IntakeComposer key={`${composer}:${editingCalendarId || editingTimetableId || "new"}`} mode={composer} anchorDate={anchorDate} calendarEvent={composer === "calendar" ? editingCalendarEvent : null} timetableSlot={composer === "timetable" ? editingTimetableSlot : null} busy={intakeBusy} onClose={closeComposer} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} /> : null}
-      <div className="edupi-calendar-content-segment" role="group" aria-label="切换日程内容">{CONTENT_LABELS.map((item) => <button type="button" key={item.mode} className={contentMode === item.mode ? "is-active" : ""} onClick={() => { setContentMode(item.mode); setEditingCalendarId(null); setEditingTimetableId(null); onSelect(null); if (sourceEvents || sourceCourses) onObject?.("calendar:calendar"); }} aria-pressed={contentMode === item.mode}>{item.label}</button>)}</div>
+      <div className="edupi-calendar-content-segment edupi-segmented-control" role="group" aria-label="切换日程内容">{CONTENT_LABELS.map((item) => <button type="button" key={item.mode} className={contentMode === item.mode ? "is-active" : ""} onClick={() => { setContentMode(item.mode); setEditingCalendarId(null); setEditingTimetableId(null); onSelect(null); if (sourceEvents || sourceCourses) onObject?.("calendar:calendar"); }} aria-pressed={contentMode === item.mode}>{item.label}</button>)}</div>
       {contentMode === "timetable" && !sourceEvents && !sourceCourses ? <EduPiTimetableGrid slots={filteredTimetable} onSelect={onSelect} /> : <>
       <div className="edupi-calendar-toolbar" role="toolbar" aria-label="日程工具栏">
         <button type="button" aria-pressed={listOpen} onClick={listOpen ? closeList : openList}>{listOpen ? "日历" : "列表"}</button>
         <button type="button" className="edupi-calendar-today" onClick={() => setAnchorDate(localIsoDate())}>今天</button>
         {!sourceEvents && !completeTransactions ? <><div className="edupi-calendar-period-nav"><button type="button" onClick={() => changePeriod(-1)} aria-label="上一时段">‹</button><button type="button" onClick={() => changePeriod(1)} aria-label="下一时段">›</button></div>
           <strong className="edupi-calendar-period-title" aria-live="polite">{periodTitle(view, anchorDate)}</strong>
-          <div className="edupi-calendar-view-segment" role="group" aria-label="切换日程视图">{VIEW_LABELS.map((item) => <button type="button" key={item.mode} className={view === item.mode ? "is-active" : ""} onClick={() => setView(item.mode)} aria-pressed={view === item.mode}>{item.label}<kbd>{item.shortcut}</kbd></button>)}</div></> : <strong>{sourceHistory ? "校历历史" : sourceUpcoming ? "接下来" : completeTransactions ? "日程列表" : "校历节点"}</strong>}
+          <div className="edupi-calendar-view-segment edupi-segmented-control" role="group" aria-label="切换日程视图">{VIEW_LABELS.map((item) => <button type="button" key={item.mode} className={view === item.mode ? "is-active" : ""} onClick={() => setView(item.mode)} aria-pressed={view === item.mode}>{item.label}<kbd>{item.shortcut}</kbd></button>)}</div></> : <strong>{sourceHistory ? "校历历史" : sourceUpcoming ? "接下来" : completeTransactions ? "日程列表" : "校历节点"}</strong>}
       </div>
       {sourceEvents ? <EduPiPagedRows rows={sourceFacts} memoryKey={`calendar:events:${sourceHistory}:${sourceUpcoming}:${query}`} renderRow={event => <div className="edupi-task-history-row" key={event.id || event.name}><button type="button" onClick={() => onSelect({ kind: "calendar", sourceId: event.id, date: event.date, title: event.name, detail: event.notes, sourceLabel: event.source === "teacher" ? "教师" : "校历", statusLabel: event.preparationStatus === "read_only" ? "已确认" : "待确认" })}><strong>{event.name}</strong><time>{event.date ? `${event.date}${event.endDate ? ` 至 ${event.endDate}` : ""}` : "日期待确认"}</time></button></div>} /> : listOpen ? <EduPiPagedRows rows={listRows} memoryKey={`calendar:list:${sourceCourses ? `courses:${view}:${projection.range.start}:${projection.range.end}` : contentMode}:${query}`} renderRow={entry => <div key={entry.id}><time>{entry.rangeStart === entry.rangeEnd ? entry.date : `${entry.rangeStart} 至 ${entry.rangeEnd}`}</time><CalendarEntryLine entry={entry} selected={entrySelected(entry, selection)} onSelect={onSelect} onTaskDetail={openTaskDetail} /></div>} /> : <>
         {view === "month" ? <MonthView projection={projection} anchorDate={anchorDate} selection={selection} onSelectDate={selectDate} onSelect={onSelect} onTaskDetail={openTaskDetail} /> : null}
