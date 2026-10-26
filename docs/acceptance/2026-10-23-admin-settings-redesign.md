@@ -1,6 +1,6 @@
 # 管理中心与设置重做验收
 
-当前正在执行 **2026-10-26 自适应居中与页内布局复核**，源码检查已通过，尚待本机安装验收。已安装界面仍为 `25f799bd`；该版本的紧凑方向已被用户明确纠正，不能当作用户认可。2026-10-25 的分区与 2026-10-24 的连接恢复继续作为基线。
+当前设置界面以 **2026-10-26 自适应居中与页内布局复核**为准，`cd14396d` 已安装到唯一 `/Applications/EduPi.app` 并完成本轮 macOS 布局操作。上轮紧凑方向已被用户纠正；本轮观感仍待用户判断。2026-10-25 的分区与 2026-10-24 的连接恢复继续作为基线。既有 Runtime/用量记录校验异常单列，不称应用全功能健康。
 
 ## 2026-10-24 官方目录与连接恢复验收通过
 
@@ -291,4 +291,30 @@ Windows/Linux 实机、本轮未运行的全套检查，以及末次前置显示
 | 数据与隐私 | 用量维护计数移入已有本地记录折叠；同意/撤销/擦除边界不变；未读取时显示读取中，不能称未收集 |
 | 关于、回收站、诊断 | 共用居中正文；继续保留更新、恢复、技术诊断的原边界 |
 
-源码和针对性检查完成，真实安装、宽窄窗、逐页与冷启动验收仍在执行。证据根 `$CHECKPOINT/settings-responsive-20261026/evidence/`，既有锁屏和旧紧凑截图只作历史，不计本版验收。没有新增授权、JEV调用或GitHub写入，R23整体继续部分实现。
+### 本机验收结果
+
+布局子项本机验收通过。首个居中预览为 `53aa89ad`；实机继续发现模型详情直接暴露工程字段及分段按钮的全局样式覆盖，分别由 `2520d0e1`、`cd14396d8685c8d0841664ee4b1a506846b9197b` 修正，最终均已安装。证据根 `$CHECKPOINT/settings-responsive-20261026/evidence/`，旧紧凑版与加载中的截图不计最终通过；首预览中未受后两次修改影响的资料、通知、设备、自动运行等页结果保留有效。
+
+| 操作与预期 | 实际结果与证据 |
+| --- | --- |
+| 工作台进入设置，分区和正文位置稳定 | 单设置入口及三组导航保持；宽窗2880×1800、窄窗1612×1612实际观察。`after-workbench.txt`、`final-general-narrow.jpg`、`final-general.jpg` |
+| 常规、通知及资料恢复正常行距与对齐 | 中文/浅色/3天/关闭退出关保持；资料读取完成后与通知页同轴。`after-profile-loaded.jpg`、`after-notifications.jpg` |
+| 键盘到达控件，浅深色选中状态可辨 | 搜索后12次Tab到语言，6次Tab到关闭开关；Shift+Tab/Enter切深色，再恢复浅色；最终选中背景和文字对比已修正。`keyboard-first-control.jpg`、`keyboard-switch.jpg`、`final-dark.jpg` |
+| 模型详情先呈现服务与常用操作，高级项可展开 | DeepSeek标题、Kimi Mono图标、更新密钥披露和高级参数均在真实最终App核对；宽窄窗表单及下部价格字段可读。`final-models-loaded.jpg`、`final-model-detail.jpg`、`final-model-detail-narrow.jpg`、`final-model-advanced-narrow.jpg`、`final-credential-closed-narrow.txt` |
+| 折叠与切页不丢草稿，放弃后保留原配置 | 仅在未保存的模型显示名称追加布局检查字样，收起高级项、切教师页再返回仍保留；放弃更改后重进模型恢复原值，models/auth文件摘要保持。`final-model-draft-retained.txt`、`final-model-draft-discarded.txt`、`data-protection.json` |
+| 连接目录随窗口分栏，中文可直接查找 | 最终窄窗两列、飞书搜索1个品牌入口；已有GitHub账号仍可见，首预览详情已核对用途列表。`final-directory-narrow.jpg`、`final-directory-search-narrow.jpg`、`after-connection-detail.jpg` |
+| JEV仍在AI页且可由设置搜索到达 | 搜索JEV实际进入浏览器决策，已配置状态与输入、按钮在窄窗可见。`final-jev-search-narrow.jpg`；未点击保存、测试或移除 |
+| 自动运行、设备、数据按内容分级 | 执行计数与配置状态分开；桌面权限在手机前；数据页加载/错误状态可辨。`after-automation.jpg`、`after-devices.jpg`、`after-data-settled.jpg` |
+| 关于、回收站和诊断读取后布局可用 | 最终关于读取到当前.77/公开.70；回收站显示既有10项及分页；诊断显示既有校验错误。`final-about-settled.jpg`、`final-recycle-settled.jpg`、`after-diagnostics.jpg`；未升级、恢复或修复真实资料 |
+
+- 静态：38项针对性通过、0失败/跳过；模型详情另跑14项通过，二者存在重叠，不相加冒称独立总数。类型、受影响组件lint、4份CSS解析和diff通过；日志见 `targeted-tests-final.log`、`models-detail-tests-final.log`、`types-final.log`、`types-details.log`、`lint-final.log`、`lint-details.log`、`css-final.json`。初次设备顺序旧断言失败保留，按本轮排序更新后通过。独立只读复核的第二节间距和长服务名换行两项均已修正。未重跑全套。
+- 构建：最终字体站点直连超时，精确停止本轮构建进程后，仅为构建使用已有127.0.0.1:7897系统代理；最终 `prepare-proxy.log` 成功，原失败保留。系统网络设置未改，安装包未加入代理环境或验收到期入口。
+- 安装：仍为本地0.3.77预览，Core03固定，7个server原生资源和整App重签，Team `BY3XZG2839`、CDHash `b77ff728017dfaa54d557d2fadc6cc3ce0d0123d`，主程序SHA256 `774c9668e76aa103eb5fd9ff46d4dc4cdbe4387cd5aef33a966349e1598cf43b`。33,709个非server文件、GitHub宿主和原更新公钥保持；安装及清理后strict/deep通过。见 `responsive-final-installed.json`、`post-cleanup.json`。未合并、公开发布、公证或改feed/tag。
+- 数据：314个保护文件无增删，教师业务记录与模型/认证/JEV/UI配置保持；3份桥接/Runtime日志追加、桥接运行状态和会话追加单列，其中会话仅4条custom/1062字节，原前缀保持。初次分类漏掉桥接错误日志与状态文件，依据既有写入源补正为运行态，未回写用户数据消除差异。见 `data-protection.json`。
+- 清理：6个确认忽略且可重建目录和2个本轮旧App已删除，目录占用约5.13GiB、观测空闲增加约5.09GiB；临时App副本0，安装App无外部符号链接依赖。保留源码、原.70回退、认证/资料/证据和原Core依赖。清理后首页/模型API为200、默认模型保持DeepSeek，见 `build-cleanup.json`、`cleanup-apps.json`、`post-cleanup.json`。
+
+### 既有异常与未验边界
+
+改版前 `before-status.json` 已报 `runtime_root_invalid`，投影仍ready且51学生/160任务/24校历/6课表可读；最终保持该异常，用量页实际显示“本地记录校验失败，收集已停止”。没有擅自擦除或修复运行库。最终一次并发冷读workspace为503，随后独立温读为200并核对同样计数，原503保留于 `final-workspace.json`，后者为 `final-workspace-warm.json`；不能用投影可读宣称Core Runtime正常。
+
+Windows/Linux实机、全套回归、用量正常分支的本机披露与新的公开升级链路未验；用量局部处理回归通过不替代该实机条件。本轮没有新增授权、JEV调用或GitHub写入，R23整体继续部分实现，用户观感不自动勾选通过。
