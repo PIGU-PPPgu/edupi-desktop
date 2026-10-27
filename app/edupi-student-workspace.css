@@ -251,6 +251,69 @@
   overflow-wrap: anywhere;
 }
 
+.edupi-student-profile-editor {
+  gap: 16px;
+  margin: 0;
+  padding: 18px;
+  border: 0;
+  border-bottom: 1px solid var(--ep-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.edupi-student-profile-editor h3 {
+  font-size: 13px;
+}
+
+.edupi-student-profile-editor label {
+  gap: 6px;
+  font-size: 12px;
+}
+
+.edupi-student-profile-editor input,
+.edupi-student-profile-editor textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--ep-border);
+  border-radius: 6px;
+  background: var(--ep-surface);
+  color: var(--ep-text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.edupi-student-profile-editor input {
+  min-height: 38px;
+}
+
+.edupi-student-profile-editor > button[type=submit] {
+  min-height: 36px;
+  height: auto;
+  font-size: 13px;
+}
+
+.edupi-student-drawer .edupi-student-graph.is-empty > .edupi-student-graph__expand,
+.edupi-student-drawer .edupi-student-graph.is-empty > .edupi-graph-controls,
+.edupi-student-drawer .edupi-student-graph.is-empty > .edupi-student-graph__legend {
+  display: none;
+}
+
+.edupi-student-drawer .edupi-student-graph.is-empty > .edupi-student-graph__viewport {
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+  touch-action: auto;
+}
+
+.edupi-student-drawer .edupi-student-graph.is-empty .edupi-student-graph__empty {
+  min-height: 0;
+  padding: 16px 0;
+  place-items: start;
+}
+
 @container (max-width: 520px) {
   .edupi-student-directory--list > .edupi-student-directory__columns,
   .edupi-student-directory__row {

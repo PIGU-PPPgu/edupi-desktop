@@ -397,7 +397,7 @@ test("confirmed review feedback names the result while the callback retains its 
       const after = { ...before, snapshotId: "snapshot-after", stateHash: "sha256:after", revision: before.revision + 1, status, teacherReview: { state: status } };
       return { ok: true, json: async () => ({ receipt: { receipt_id: receiptId, command_id: "command-synthetic", request_id: "request-synthetic", command_type: "review_teacher_context", target: { target_kind: "teacher_context", target_id: before.contextId, command_type: "review_teacher_context" }, decision, status, before_snapshot_id: before.snapshotId, after_snapshot_id: after.snapshotId, before_state_hash: before.stateHash, after_state_hash: after.stateHash, evidence_ids: before.evidenceIds, external_send: false }, data: { teacherContextCandidates: [after] } }) };
     } });
-    button(f, label).props.onClick(); f.render();
+    button(f, label).props.onClick({ currentTarget: null }); f.render();
     if (decision === "modify") {
       f.find(node => node.type === "input").props.onChange({ target: { value: "合成修改称呼" } }); f.render();
       button(f, "提交修改").props.onClick(); f.render();
@@ -484,10 +484,12 @@ test("a successful modification with no modify entry returns focus to a visible 
   f.props.onReviewed = async result => { f.reviewed.push(result); f.props.candidate = result.data.teacherContextCandidates[0]; f.render(); return result.data; };
   const focus = formFocusFixture(f); focus.open("修改");
   f.find(node => node.type === "input").props.onChange({ target: { value: "合成修改教师" } }); f.render();
+  focus.state.calls.length = 0;
   button(f, "提交修改").props.onClick(); f.render(); await f.settle();
   assert.equal(focus.entries["修改"].isConnected, false);
   assert.equal(focus.state.active, focus.entries["手动填写"]);
   assert.equal(focus.editor.contains(focus.state.active), true);
+  assert.deepEqual(focus.state.calls, ["manual entry"], "the form focus effect remains the only owner for a modification");
   assert.equal(f.reviewed.length, 1);
   assert.equal(text(f.find(node => node.props.className === "edupi-context-editor__feedback")), "已修改");
 });
@@ -507,4 +509,115 @@ test("a successful keyboard manual save returns focus to the current editor's ma
   assert.equal(focus.editor.contains(focus.state.active), true);
   assert.equal(f.reviewed.length, 1);
   assert.equal(text(f.find(node => node.props.className === "edupi-context-editor__feedback")), "已保存");
+});
+
+function reviewFocusFixture(f) {
+  const listeners = new Set(), state = { calls: [] };
+  const document = {
+    body: { name: "background HTML" }, documentElement: { name: "document element" }, activeElement: null,
+    addEventListener(name, callback) { assert.equal(name, "focusin"); listeners.add(callback); },
+    removeEventListener(name, callback) { assert.equal(name, "focusin"); listeners.delete(callback); },
+  };
+  document.activeElement = document.body;
+  const editor = { isConnected: true, contains: element => element?.scope === editor && element.isConnected };
+  const element = name => ({ name, scope: editor, ownerDocument: document, isConnected: false, disabled: false, focus(options) {
+    assert.equal(this.isConnected, true);
+    assert.equal(this.disabled, false);
+    assert.equal(options.preventScroll, ["接受", "暂缓", "拒绝"].includes(name));
+    document.activeElement = this; state.calls.push(name);
+    for (const callback of listeners) callback({ target: this });
+  } });
+  const entries = Object.fromEntries(["手动填写", "接受", "暂缓", "拒绝"].map(label => [label, element(label)]));
+  const heading = element("context heading"), summary = element("field history");
+  f.setCommit(tree => {
+    tree.props.ref.current = editor;
+    const nodes = descendants(tree);
+    for (const [label, entry] of Object.entries(entries)) {
+      const node = nodes.find(node => node.type === "button" && (text(node) === label || text(node) === `正在${label}…`));
+      entry.isConnected = editor.isConnected && Boolean(node);
+      entry.disabled = Boolean(node?.props.disabled);
+      if (node?.props.ref) node.props.ref.current = entry;
+    }
+    const headingNode = nodes.find(node => node.props.id === "edupi-context-editor-title");
+    heading.isConnected = editor.isConnected && Boolean(headingNode);
+    if (headingNode?.props.ref) headingNode.props.ref.current = heading;
+    summary.isConnected = editor.isConnected && nodes.some(node => node.type === "summary" && text(node).startsWith("字段历史"));
+    if (document.activeElement?.scope === editor && (!document.activeElement.isConnected || document.activeElement.disabled)) document.activeElement = document.body;
+  });
+  return { editor, entries, heading, summary, document, state, listeners, activate(label) {
+    entries[label].focus({ preventScroll: true }); state.calls.length = 0;
+    button(f, label).props.onClick({ currentTarget: entries[label] }); f.render();
+  } };
+}
+
+test("a successful held review returns focus to its original enabled button", async () => {
+  let finish;
+  const f = mount({ put: (_body, before) => new Promise(resolve => { finish = () => resolve({ ok: true, json: async () => formReviewPayload(before, "hold", "held", before.currentValues) }); }) });
+  f.props.onReviewed = async result => { f.reviewed.push(result); f.props.candidate = result.data.teacherContextCandidates[0]; f.render(); return result.data; };
+  const focus = reviewFocusFixture(f); focus.activate("暂缓");
+  assert.equal(focus.entries["暂缓"].disabled, true);
+  assert.equal(focus.document.activeElement, focus.document.body, "disabling the focused review button drops native focus");
+  finish(); await f.settle();
+  assert.equal(focus.entries["暂缓"].disabled, false);
+  assert.equal(focus.document.activeElement, focus.entries["暂缓"]);
+  assert.deepEqual(focus.state.calls, ["暂缓"]);
+  assert.deepEqual(JSON.parse(f.calls.find(call => call.method === "PUT").body), { targetId: "synthetic-context", expectedSnapshotId: "synthetic-snapshot", expectedRevision: 2, decision: "hold", patch: null, note: "教师在 EduPi 中执行：暂缓", reviewerId: "teacher" });
+  assert.equal(text(f.find(node => node.props.className === "edupi-context-editor__feedback")), "已暂缓");
+  assert.equal(focus.listeners.size, 0);
+});
+
+for (const [decision, label, status] of [["accept", "接受", "accepted"], ["reject", "拒绝", "rejected"]]) test(`a successful ${decision} review with a removed action focuses an entry in the current editor`, async () => {
+  const f = mount({ put: async (_body, before) => ({ ok: true, json: async () => formReviewPayload(before, decision, status, before.currentValues) }) });
+  f.props.onReviewed = async result => { f.reviewed.push(result); f.props.candidate = result.data.teacherContextCandidates[0]; f.render(); return result.data; };
+  const focus = reviewFocusFixture(f); focus.activate(label); await f.settle();
+  assert.equal(focus.entries[label].isConnected, false);
+  assert.equal(focus.document.activeElement, focus.entries["手动填写"]);
+  assert.equal(focus.editor.contains(focus.document.activeElement), true);
+  assert.deepEqual(focus.state.calls, ["手动填写"]);
+  assert.equal(f.reviewed.length, 1);
+  assert.equal(focus.listeners.size, 0);
+});
+
+test("failed direct reviews return focus to their original retry button without changing teacher data", async () => {
+  for (const label of ["接受", "暂缓", "拒绝"]) {
+    const f = mount({ put: async () => ({ ok: false, json: async () => ({ error: "合成提交失败" }) }) });
+    const before = JSON.stringify(f.props.candidate), focus = reviewFocusFixture(f);
+    focus.activate(label); await f.settle();
+    assert.equal(focus.document.activeElement, focus.entries[label], label);
+    assert.equal(focus.entries[label].disabled, false, label);
+    assert.equal(JSON.stringify(f.props.candidate), before);
+    assert.equal(f.reviewed.length, 0);
+    assert.equal(f.calls.filter(call => call.method === "PUT").length, 1);
+    assert.equal(text(f.find(node => node.props.role === "alert")), "提交失败，请重试。");
+    assert.equal(focus.listeners.size, 0);
+  }
+});
+
+test("a direct review respects deliberate focus movement while the request is pending", async () => {
+  for (const destination of ["summary", "outside editor"]) {
+    let finish;
+    const f = mount({ put: (_body, before) => new Promise(resolve => { finish = () => resolve({ ok: true, json: async () => formReviewPayload(before, "hold", "held", before.currentValues) }); }) });
+    f.props.onReviewed = async result => { f.reviewed.push(result); f.props.candidate = result.data.teacherContextCandidates[0]; f.render(); return result.data; };
+    const focus = reviewFocusFixture(f); focus.activate("暂缓");
+    const target = destination === "summary" ? focus.summary : { name: destination, isConnected: true };
+    focus.document.activeElement = target;
+    for (const callback of focus.listeners) callback({ target });
+    if (destination === "outside editor") focus.document.activeElement = focus.document.body;
+    const activeBeforeCompletion = focus.document.activeElement;
+    finish(); await f.settle();
+    assert.equal(focus.document.activeElement, activeBeforeCompletion, destination);
+    assert.deepEqual(focus.state.calls, [], destination);
+    assert.equal(focus.listeners.size, 0);
+  }
+});
+
+test("a completed direct review does not focus a disconnected context", async () => {
+  let finish;
+  const f = mount({ put: () => new Promise(resolve => { finish = () => resolve({ ok: false, json: async () => ({}) }); }) });
+  const focus = reviewFocusFixture(f); focus.activate("拒绝");
+  focus.editor.isConnected = false;
+  finish(); await f.settle();
+  assert.equal(focus.document.activeElement, focus.document.body);
+  assert.deepEqual(focus.state.calls, []);
+  assert.equal(focus.listeners.size, 0);
 });

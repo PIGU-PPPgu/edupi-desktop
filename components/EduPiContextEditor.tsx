@@ -102,6 +102,7 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
   const focusedFormRef = useRef<"manual" | "modify" | "draft" | null>(null);
   const fieldHistorySummaryRef = useRef<HTMLElement>(null);
   const restoreFocusTargetRef = useRef<HTMLButtonElement | null>(null);
+  const reviewFocusTargetRef = useRef<HTMLButtonElement | null>(null);
   const trustedAfterSnapshotRef = useRef<TrustedAfterSnapshot | null>(null);
   const currentValues = useMemo(() => currentContextValues(candidate, initial), [candidate, initial]);
   const proposalValues = useMemo(() => proposedContextValues(candidate), [candidate]);
@@ -118,6 +119,7 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
   const [fieldHistoryError, setFieldHistoryError] = useState<string | null>(null);
   const [restoringField, setRestoringField] = useState<string | null>(null);
   const [restoreFocusRequest, setRestoreFocusRequest] = useState(0);
+  const [reviewFocusRequest, setReviewFocusRequest] = useState(0);
 
   useEffect(() => {
     headingRef.current?.focus();
@@ -142,6 +144,27 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
   useEffect(() => {
     onBusyChange?.(busy);
   }, [busy, onBusyChange]);
+
+  useEffect(() => {
+    const trigger = reviewFocusTargetRef.current;
+    if (!trigger) return;
+    const document = trigger.ownerDocument;
+    if (busy) {
+      const preserveMovedFocus = (event: FocusEvent) => {
+        if (event.target !== trigger && event.target !== document.body && event.target !== document.documentElement) reviewFocusTargetRef.current = null;
+      };
+      document.addEventListener("focusin", preserveMovedFocus);
+      return () => document.removeEventListener("focusin", preserveMovedFocus);
+    }
+    reviewFocusTargetRef.current = null;
+    const editor = editorRef.current;
+    const active = document.activeElement;
+    if (!editor?.isConnected || (active && active !== trigger && active !== document.body && active !== document.documentElement)) return;
+    const manualEntry = manualEntryRef.current;
+    const target = [trigger.disabled ? null : trigger, manualEntry?.disabled ? null : manualEntry, headingRef.current]
+      .find((element) => element?.isConnected && editor.contains(element));
+    target?.focus({ preventScroll: target === trigger });
+  }, [busy, reviewFocusRequest]);
 
   useEffect(() => {
     if (busy) return;
@@ -219,8 +242,9 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
     }
   }
 
-  async function submit(decision: TeacherContextReviewDecision, patch: TeacherContextEditorValues | null) {
+  async function submit(decision: TeacherContextReviewDecision, patch: TeacherContextEditorValues | null, trigger?: HTMLButtonElement) {
     if (busy || !candidate || !capability?.enabled) return;
+    reviewFocusTargetRef.current = decision !== "modify" && trigger && trigger.ownerDocument.activeElement === trigger ? trigger : null;
     setBusy(true);
     setBusyDecision(decision);
     setFeedback(null);
@@ -288,6 +312,7 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
     } finally {
       setBusy(false);
       setBusyDecision(null);
+      if (decision !== "modify") setReviewFocusRequest((value) => value + 1);
     }
   }
 
@@ -458,10 +483,10 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
       {!manualOpen && !modifyOpen && !chatDraftOpen ? <div className="edupi-context-editor__actions" role="group" aria-label="教师资料操作">
         {!manualOpen && !modifyOpen && !chatDraftOpen ? <button ref={manualEntryRef} type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => { setDraft(currentValues); setManualOpen(true); setError(null); }}>手动填写</button> : null}
         {!manualOpen && canReview && !modifyOpen && !chatDraftOpen ? <>
-          <button type="button" className="edupi-entry-primary" disabled={busy} onClick={() => void submit("accept", null)}>{busy && busyDecision === "accept" ? BUSY_LABELS.accept : ACTION_LABELS.accept}</button>
+          <button type="button" className="edupi-entry-primary" disabled={busy} onClick={(event) => void submit("accept", null, event.currentTarget)}>{busy && busyDecision === "accept" ? BUSY_LABELS.accept : ACTION_LABELS.accept}</button>
           <button ref={modifyEntryRef} type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => { setChatDraftOpen(false); setDraft(proposalValues); setModifyOpen(true); }}>{ACTION_LABELS.modify}</button>
-          <button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => void submit("hold", null)}>{busy && busyDecision === "hold" ? BUSY_LABELS.hold : ACTION_LABELS.hold}</button>
-          <button type="button" className="edupi-entry-danger" disabled={busy} onClick={() => void submit("reject", null)}>{busy && busyDecision === "reject" ? BUSY_LABELS.reject : ACTION_LABELS.reject}</button>
+          <button type="button" className="edupi-entry-secondary" disabled={busy} onClick={(event) => void submit("hold", null, event.currentTarget)}>{busy && busyDecision === "hold" ? BUSY_LABELS.hold : ACTION_LABELS.hold}</button>
+          <button type="button" className="edupi-entry-danger" disabled={busy} onClick={(event) => void submit("reject", null, event.currentTarget)}>{busy && busyDecision === "reject" ? BUSY_LABELS.reject : ACTION_LABELS.reject}</button>
         </> : !manualOpen && !modifyOpen && !chatDraftOpen && onAgentRequest ? <button ref={draftEntryRef} type="button" className="edupi-entry-secondary" disabled={busy} onClick={startDraft}>起草更新</button> : null}
       </div> : null}
 

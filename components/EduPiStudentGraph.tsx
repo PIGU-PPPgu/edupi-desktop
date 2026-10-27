@@ -26,6 +26,7 @@ function nodeKindLabel(kind: typeof COLUMNS[number], graphKind: GraphKind): stri
 
 export function EduPiStudentGraph({ records = [], projection, total, kind, selectedId, onSelect, student, scope, details, loading = false, footer, alert }: { records?: StudentEvent[]; projection?: StudentGraphModel; total: number; kind: GraphKind; selectedId: string | null; onSelect: (id: string | null) => void; student?: string | null; scope?: string; details?: ReactNode; loading?: boolean; footer?: ReactNode; alert?: ReactNode }) {
   const graph = useMemo(() => projection || buildStudentGraph(records), [projection, records]);
+  const isSettledEmpty = !loading && !alert && graph.records.length === 0 && total === 0;
   const graphTitle = kind === "family" ? "家校人物图" : kind === "learning" ? "学习图谱" : "互动图谱";
   const keyboardHelpId = useId();
   const [focus, setFocus] = useState<string | null>(null);
@@ -101,6 +102,7 @@ export function EduPiStudentGraph({ records = [], projection, total, kind, selec
     requestAnimationFrame(() => viewport.scrollTo({ left: Math.max(0, center.x * next - viewport.clientWidth / 2), top: Math.max(0, center.y * next - viewport.clientHeight / 2) }));
   };
   const startPan = (event: PointerEvent<HTMLDivElement>) => {
+    if (isSettledEmpty && !expanded) return;
     if (event.button !== 0 || (event.target as Element).closest("button, [role=button], a, input")) return;
     const viewport = event.currentTarget;
     viewport.focus({ preventScroll: true });
@@ -153,7 +155,7 @@ export function EduPiStudentGraph({ records = [], projection, total, kind, selec
     <div className="edupi-student-graph__legend">{legend.map((label) => <span key={label}>{label}</span>)}</div>
     {alert}
     <span id={keyboardHelpId} className="edupi-student-graph__keyboard-help">方向键平移，+ 和 − 缩放，0 适应画布。{expanded ? "Escape 关闭图谱。" : ""}</span>
-    <div ref={viewportRef} className={`edupi-student-graph__viewport${panning ? " is-panning" : ""}`} tabIndex={0} role="region" aria-label="图谱画布" aria-describedby={keyboardHelpId} aria-busy={loading} title="拖动空白处或使用方向键平移；+ 和 − 缩放，0 适应画布" onPointerDown={startPan} onPointerMove={pan} onPointerUp={endPan} onPointerCancel={endPan} onLostPointerCapture={endPan} onKeyDown={keyboardPan}>
+    <div ref={viewportRef} className={`edupi-student-graph__viewport${panning ? " is-panning" : ""}`} tabIndex={isSettledEmpty && !expanded ? -1 : 0} role="region" aria-label="图谱画布" aria-describedby={isSettledEmpty && !expanded ? undefined : keyboardHelpId} aria-busy={loading} title={isSettledEmpty && !expanded ? undefined : "拖动空白处或使用方向键平移；+ 和 − 缩放，0 适应画布"} onPointerDown={startPan} onPointerMove={pan} onPointerUp={endPan} onPointerCancel={endPan} onLostPointerCapture={endPan} onKeyDown={keyboardPan}>
       {graph.records.length === 0 ? <p className="edupi-student-graph__empty" role="status">{loading ? "读取中…" : alert ? "记录读取失败" : "暂无关联记录"}</p> : <div className="edupi-student-graph__scaled" style={{ width: canvasWidth * zoom, height: height * zoom }}>
         <div className="edupi-student-graph__canvas" style={{ height, width: canvasWidth, minWidth: canvasWidth, transform: `scale(${zoom})`, transformOrigin: "top left" }}>
           <svg width={canvasWidth} height={height} aria-label="记录关联线">{graph.edges.map((edge) => {
@@ -180,7 +182,7 @@ export function EduPiStudentGraph({ records = [], projection, total, kind, selec
     {footer}
   </>;
 
-  return <div className="edupi-student-graph">
+  return <div className={`edupi-student-graph${isSettledEmpty ? " is-empty" : ""}`}>
     <button type="button" className="native-button edupi-student-graph__expand" onClick={() => { setPortalHost(viewportRef.current?.closest(".edupi-teacher-shell") || document.body); setFitting(true); setExpanded(true); }}>展开图谱</button>
     {!expanded ? content : null}
     {expanded ? createPortal(<div className="edupi-student-graph-backdrop">
