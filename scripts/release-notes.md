@@ -1,4 +1,4 @@
-EduPi Desktop 0.3.79 macOS Apple Silicon 技术候选，Release 保持 Draft。
+EduPi Desktop 0.3.80 macOS Apple Silicon 技术候选，Release 保持 Draft。
 
 配对当前 Core 的来源支持判别和大历史认证修补。明确数量单位保留数值与单位组合，当前来源没有完整答案时保持空返；取消查询会通知模型进程，后台工作实际完成后才释放容量。修复安装包中模型宿主的相对依赖遗漏和部分来源拒绝原因被整批误挡的问题。
 

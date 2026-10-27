@@ -2,6 +2,7 @@
 
 ## 2026-10-27 十一条召回空返与Mac交付
 
+- **当前状态取代下方.79准备快照**：qs追补已由Desktop PR391正常合为56de91121cab2d34161f34bfc28eba9104edce5b，与源head e1bc680c/CI实际Checkout a5ef7d83同tree53e66d3998f785b981f1cb365f0e79be50c5d26c；源CI40552172778三job全success，应用2589pass/48条件skip/0fail、type/lint、高危门、Rust审计零告警、Linux源检查均过。GitHub告警35实际state=fixed/fixed_at2026-10-27T17:43:52Z。唯一.79 Mac签名run40553664101/attempt1已失败，详见下方夹具追补；现准备.80，不改Core9a26或qs6.16.1，不重跑/改写旧tag与Draft，不将源通过记为签名或安装通过。
 - 10月28日状态：R04源码与Core及Desktop集成通过，R15新qs安全追补及Mac签名安装继续。用户只允许的一次追加数量修补已完成，未追加真实模型调用；通过技术门后继续Mac打包、隔离安装及精确生成产物清理。Windows延期，不自动公开Release/feed，不改真实资料、模型凭据、TCC、launchd、时钟或能源设置。原.78准备已按授权提交，两个原升级诊断脚本逐字节保留；新安全修补使用.79，不改写已推.78标签。
 - 原十一held逐项已核：8有答案、3应空。七busy源于前次15秒超时后未等真实completion回收，Core producer390只机械恢复原未发模型的七条，5正例/6来源正确，2无答案中一次raw误返由联系证据veto覆盖，原恢复失败和首分不改。数量题54克/20立方厘米被旧数学规范化当54*g/20*cm^3，本轮只加明确g/克、cm³/cm^3/立方厘米组合的当前正文核对，不缩放、不算答案、不借旧标签；异量/维度/日期/标识符/伪造/撤回删除和冷重启负例通过。另一个无候选问题没有本周书名库存来源，继续空返。
 - 原invalid输出把U+201D引号改为ASCII引号，答案非原文substring，继续拒绝；正确evidence不能替代错误answer。原第40次已fetch，15.025秒后deadline取消，HTTP status/output/usage均无，外部慢因未知，失败计一次不重试。原额度163/200的记录已冻结，本任务新增真实模型调用0，不把余量当自动许可。逐ID表在Core `docs/loop/2026-10-27-recall-held-diagnosis.md`，原11不从首测报表删除。
@@ -19,6 +20,13 @@
 - 10月28日推送80f42416时新增GitHub告警35；[官方公告GHSA-6pq8-jhm2-2vcw](https://github.com/advisories/GHSA-6pq8-jhm2-2vcw)在16:10UTC刚进入GitHub数据库，影响qs6.7.0至6.16.0，修复版6.16.1。依赖链实际为OpenConnector1.6.5→ali-oss6.23.0/urllib2.44.1→qs6.16.0，不是新增框架或已证实的桌面外部可利用路径；目录及外发deny-all保持。此前高危门通过和旧audit0不覆盖此新披露。
 - 锁仅更新qs一条目的version/resolved/integrity，使用官方npm6.16.1的SHA512；其dependencies/engines/license及其他全部锁记录深比较相同，Core9a26/Pi1.0.2/React保持。npm update最初选到较新的6.17.0，未采用该minor，随后只固定官方修复patch并实际安装6.16.1；原锁和旧包副本保留。原有emoji-mart的React peer警告不改为本次新风险或擅自升级框架。
 - 旧安装版三个新回归全部RED，含真实本机HTTP子进程被toString毒化输入终止；新6.16.1的来源解析/JSON/嵌套/null-prototype两comma路径、合法数组/可调用toString/默认序列化和后续健康请求均过，整个依赖安全23/23、0skip/0fail，npm audit各级0、type/lint、release:manifest/verify通过。所有用例仅本机合成输入，无真实模型或外发。证据为本轮目录qs-*，源码CI/正常PR合并及.79签名安装仍待；告警35后台关闭状态未提前宣称。
+
+### Mac身份夹具追补
+
+- .79唯一Mac run40553664101/attempt1，精确source56de9112；Apple notary-preflight、应用质量和配对Core runtime检查均成功，在后续Verify macOS Core host wiring失败。唯一失败是lib/edupi-reminder-notification-proof.test.mjs:191仍硬编码未合候选9a574c9f；190的严格compat比较已通过，实际Core身份9a26正确。此处是本轮pin迁移遗漏，不是Apple网络、产品运行时身份错配或签名失败；后续capability命令、包资源准备/编译/签名均未执行。Draft425795064保持原target56de和零资产，公开feed及实际App未动。
+- 修补只给该测试新增git读取，并以实际EDUPI_REMINDER_PROOF_CORE_TEST_ROOT的checkout HEAD作为独立第二身份比较，保留与严格activeBridgeIdentity的第一比较。原15秒期限、取消、业务字节、无Runtime/model启动断言和其他测试体均不改；非历史文档已无旧候选SHA残留。独立复核确认未降级门槛、无新增确定P0–P2。为保持tag/Release目标不可变，新版本使用.80，原.79失败不改记成功、不rerun。
+- Mac26.6/arm64、Node22.23.1，在所有五个Core测试环境变量均指向最终9a26时，按release.yml原三命令实际执行：memory-recall-access及teacher-usage首组3/3；process-client/reminder-proof/execution中组26pass、1缺独立种子数据的条件skip、0fail；capability canary --require-recipient-confirmation通过三域9产物、持久outbox、审核/合成反馈、取消/收窄/冷恢复及收件人拒绝与公开确认，3次本机合成聊天、capabilityModelCalls0、externalSend=false。type/lint/release:manifest/verify通过；原CI红日志和全部新结果保留在本轮目录mac080-*及.79/evidence/signed-*，不能把条件skip或未暂存SDK改记通过。
+- .80四份版本元数据和发布说明已准备；私有验签/安装/fixture/WebView/原数据保护助手复制到~/edupi-install-checkpoints/v0.3.80/evidence，尚未执行主体。实际唯一App仍属于另一UI任务的.77，未退出/替换、未创建新canary或清理。后续须精确源码CI/正常合并、同attempt Mac三资产及签名公证、实际隔离安装和数据保持，再精确清理生成产物；Windows延期，不公开Release/feed，不调用真实模型。
 
 ## 2026-10-27 召回与大历史认证追补
 
