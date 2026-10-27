@@ -6,7 +6,7 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "9a574c9f2c268848e8868be1f35121d82537c8f7",
+    "core_commit": "9a26adb825b4f6803d0e79a36576e074d431f59a",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
     "component_manifest_hash": "sha256:669fe05f9c6d7da1fd76276242012ca336ab83871c870ffd8264cc565d3a6d10",
     "runtime_component_manifest_hash": "sha256:7afc489e86dde97a6e4c6ae83cd868f68f132513b12bccf2c7ff225b49aa31a0",
