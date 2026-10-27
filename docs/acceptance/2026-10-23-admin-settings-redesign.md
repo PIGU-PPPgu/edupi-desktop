@@ -487,3 +487,17 @@ Windows/Linux原生、40项环境跳过、全部97个披露的数据分支、自
 原生工具再次对EduPi和访达都返回 `cgWindowNotFound`，重新绑定与重建会话仍失败；不推断一定锁屏。IAB只连接同一已安装包38471服务，在隔离根补充家校分页、取消、新增和审核／修订预检，`WEB-*`证据单列，不能冒充原生窗口验收。日期 `.fill` 只改DOM值而未提交React状态的工具问题已定位，键盘改动后再核对值；初次空日期不计日期保存通过。9份唯一合成Markdown材料已准备，尚未导入。
 
 当前隔离根仍为 `subfeature-audit-20261027/UI-Test-Data`，结束前必须正常切回原教师目录并回读；本条不宣布任务完成或后台继续运行。源码、模型认证、原.70回退、原Core依赖与验收数据保留，生成产物在新包使用结束后清理。
+
+### 家校补充预检与签名缓存修复
+
+`713fa705` 是集成源码检查点：65 项针对、完整类型/lint、2678通过/40跳过的全套检查后已prepare，未安装。签名前 strict/deep 守卫发现运行中的 a164 包新增两份 `server/.next-desktop/server/route-cache/.../manifest.webmanifest.{body,meta}`，因此在复制前停止；不能把该prepare记成新包交付。
+
+根因已由安装包资源封条与本地 Next16.4.3 实现追通：首次读取构建seed时 `FileSystemCache.promoteSeed` 写owner范围缓存，原manifest产物并未漏打包；favicon、mobile、not-found/global-error还有同类seed。当前源码仅对 `PI_WEB_DESKTOP_BUILD=1` 设置 `experimental.isrFlushToDisk=false`，保留seed与内存缓存、正常web默认策略和全部资源验证。实际Next类的可移植回归为8项，713配置红例4失败、修正后全过；不是用字符串断言证明不写磁盘。见 `manifest-cache-signature-readonly.json`、`desktop-runtime-cache-{red-713fa705-isolated,green-20261027}.log`。官方背景为[metadata路由默认缓存](https://github.com/vercel/next.js/blob/canary/docs/01-app/03-api-reference/03-file-conventions/01-metadata/manifest.mdx)，禁落盘的具体传递与生效范围以当前锁定Next源码及回归为证。
+
+隔离App无运行会话、Core队列0后，用受保护SIGTERM停止3个已核对的任务进程，不能记为正常Quit。原资源封条未改，只删除两份确认为未签名新增且与seed一致的缓存，共978字节/8192已分配字节及其空目录；a164主程序与CodeResources哈希保持，strict/deep恢复为0，未重签或改变规则。`codesign`详细资源列表在stdout，最初只读stderr的清理守卫失败且没有删除，修正读取后执行；证据 `stopped-for-cache-repair.json`、`installed-a164-cache-cleanup-signature-restored.json`。新包真实冷请求后仍须再次验证资源零新增与签名。
+
+家校 `WEB-*` 预检来自安装包自身38471服务的IAB，仍不能作为原生窗口通过：两页10+2往返、必填、全表单取消、新联系人A、暂缓/接受、四字段修订A2、删除取消/确认/产品内恢复、已有联系人B双击仅1条、独立来源正常审核、同一来源revision2的C替换B及另一候选拒绝，均已正式Owner回读。C的source revision2是受保护正式API准备的夹具，实际点击的是“替换旧记录”；不同source本来就独立，不按同名或相同联系人去重。原始12条外新增4个合成fact，共16；另一位同名学生2条/parents均未变。见 `WEB-FAM-final-owner-readback.json`、`FAM-source-C-owner-fixture-*` 与 `WEB-FAM-*`，尚缺原生写入及重启回读。
+
+另据真实状态补正两个家校显示问题：superseded旧行不再把当前已确认修订提示成“需要核对的旧记录”，保留来源/历史；deleted的pending_review/replace/blocked恢复冲突仍显示。新建已有联系人的来源文字改用canonical_name，身份ID、source键与旧记录不改。含这些新增与缓存配置的完整检查为2690通过/40环境跳过/0失败，类型/lint通过；日志 `postcache-{full-tests,types,lint}.log`。窗口会话仍待恢复，结束前仍必须切回原教师根并核对保护数据。
+
+清理补记：确认无打开句柄、路径与原安装proof主程序哈希一致后，删除被取代的 cb6/2f 两个任务回退App，已分配占用1,968,234,496字节，期间观测可用空间增加2,010,320,896字节；两者不等同。当前a164、原.70回退、全部资料/配置/证据、源码和原Core依赖保留。见 `cleanup-superseded-cb6-2f-apps.json`；重打包期间唯一staging与任务依赖仍在使用。

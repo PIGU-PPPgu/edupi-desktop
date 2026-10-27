@@ -57,7 +57,7 @@ function focusDom() {
   } };
 }
 
-function mount() {
+function mount({ records = [row] } = {}) {
   const slots = [], listeners = new Map(), requests = [], dom = focusDom();
   let cursor = 0, dirty = false, effects = [], tree;
   const props = { studentId: "synthetic-student", studentName: "合成学生", reviewer: "合成教师", onEducation() {} };
@@ -74,7 +74,7 @@ function mount() {
     requests.push({ url, ...options });
     if (options.method === "POST") return { ok: false, json: async () => ({ error: "合成保存失败" }) };
     const params = new URL(url, "http://localhost").searchParams;
-    return { ok: true, json: async () => ({ studentId: params.get("student_id"), studentEntity: { entity_id: studentEntityId }, parents: [{ entity_id: parentEntityId, canonical_name: "合成联系人", status: "active" }], records: [row], total: 1, offset: Number(params.get("offset")), limit: 10, nextOffset: null, sourceStatus: "current", externalSend: false }) };
+    return { ok: true, json: async () => ({ studentId: params.get("student_id"), studentEntity: { entity_id: studentEntityId }, parents: [{ entity_id: parentEntityId, canonical_name: "合成联系人", status: "active" }], records, total: records.length, offset: Number(params.get("offset")), limit: 10, nextOffset: null, sourceStatus: "current", externalSend: false }) };
   }, require(name) {
     if (name === "react") return react;
     if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
@@ -86,6 +86,7 @@ function mount() {
   const render = () => { let attempts = 0; do { assert.ok(attempts++ < 20); cursor = 0; dirty = false; effects = []; tree = exports.EduPiFamilyRecords(props); dom.commit(tree); effects.splice(0).forEach(effect => effect()); } while (dirty); };
   const f = { props, dom, requests, render, async settle() { for (let i = 0; i < 5; i++) { await tick(); if (dirty) render(); } },
     select() { nodes(tree).find(node => node.type === Graph).props.onSelect(row.fact_id); render(); },
+    list() { nodes(tree).find(node => node.type === "button" && text(node) === "记录").props.onClick(); render(); },
     open(scopeName, create = false, commit = true) { const scope = dom.scopes[scopeName], label = create ? "添加记录" : "修改", trigger = create ? scope.add : scope.modify; trigger.focus({ preventScroll: false }); dom.calls.length = 0; dom.sources[scopeName].find(node => node.type === "button" && text(node) === label).props.onClick({ currentTarget: trigger }); if (commit) render(); },
     change(scopeName, label, value) { const form = dom.sources[scopeName].find(node => node.type === "form"); const field = nodes(form).find(node => node.type === "label" && text(node.props.children[0]) === label); nodes(field).find(node => ["input", "select", "textarea"].includes(node.type)).props.onChange({ target: { value } }); render(); },
     cancel(scopeName) { const scope = dom.scopes[scopeName]; scope.form.cancel.focus({ preventScroll: false }); dom.sources[scopeName].find(node => node.type === "button" && text(node) === "取消").props.onClick({ currentTarget: scope.form.cancel }); render(); },
@@ -154,4 +155,64 @@ test("family modification keeps its original fact revision, actor and normalized
   assert.equal(body.expectedRevision, 4); assert.equal(body.reviewer, "合成原记录者"); assert.equal(body.action, "modify"); assert.equal(body.note, null);
   assert.deepEqual(JSON.parse(body.replacementValue), { ...row.record, recorded_relationship: "合成新称谓", note: "合成新记录" });
   assert.ok(f.dom.sources.portal.some(node => node.type === "textarea" && node.props.value === " 合成新记录 "), "a failed mutation retains the editing draft");
+});
+
+for (const surface of ["list", "portal"]) test(`${surface} family conflict comparisons appear only for pending review or non-direct deleted restore`, async () => {
+  const cases = [
+    { status: "superseded", restore_mode: "direct", show: false },
+    { status: "rejected", restore_mode: "direct", show: false },
+    { status: "accepted", restore_mode: "direct", show: false },
+    { status: "stale", restore_mode: "direct", show: false },
+    { status: "candidate", restore_mode: "direct", show: true },
+    { status: "pending_review", restore_mode: "direct", show: true },
+    { status: "held", restore_mode: "direct", show: true },
+    { status: "deleted", restore_mode: "pending_review", show: true },
+    { status: "deleted", restore_mode: "replace", show: true },
+    { status: "deleted", restore_mode: "blocked", show: true },
+    { status: "deleted", restore_mode: "direct", show: false },
+    { status: "pending_review", restore_mode: "direct", empty: true, show: false },
+    { status: "deleted", restore_mode: "replace", empty: true, show: false },
+  ];
+  for (const example of cases) {
+    const item = { ...row, status: example.status, restore_mode: example.restore_mode, review_mode: "replace", superseded_by: "synthetic-current-A2", history: [{ action: "accept", reviewed_at: "2026-10-21T01:00:00.000Z", reviewer: "合成教师", note: "合成审核历史" }],
+      review_conflicts: example.empty ? [] : [{ fact_id: "synthetic-current-A2", revision: 0, record: { ...row.record, note: "合成当前A2内容" } }] };
+    const f = mount({ records: [item] }); await f.settle();
+    if (surface === "list") f.list(); else f.select();
+    const source = f.dom.sources[surface === "list" ? "inline" : "portal"];
+    const disclosure = source.find(node => node.type === "details" && text(node.props.children[0]) === "需要核对的旧记录");
+    assert.equal(Boolean(disclosure), example.show, `${example.status}/${example.restore_mode}/${example.empty ? "empty" : "conflict"}`);
+    if (example.show) assert.equal(disclosure.props.open, true);
+    else assert.equal(text(source).includes("合成当前A2内容"), false, "current replacement is not repeated as an old pending record");
+    assert.ok(source.some(node => node.type === "details" && text(node.props.children[0]) === "来源"));
+    assert.ok(source.some(node => node.type === "details" && text(node.props.children[0]) === "修订记录"));
+    assert.ok(source.some(node => node.type === "p" && text(node) === row.record.note), "the historical record's own values remain visible");
+    assert.equal(f.requests.some(request => request.method === "POST"), false);
+  }
+});
+
+test("existing contact capture uses its canonical name in source text while keeping ID and retry identity", async () => {
+  const f = mount(); await f.settle(); f.open("inline", true);
+  f.change("inline", "联系人名称", "未选用的新联系人草稿");
+  f.change("inline", "联系人", parentEntityId); f.change("inline", "教师记录", "合成已有联系人记录");
+  const submit = () => f.dom.sources.inline.find(node => node.type === "form").props.onSubmit({ preventDefault() {} });
+  await submit(); f.render();
+  const first = JSON.parse(f.requests.find(request => request.method === "POST").body);
+  assert.equal(first.studentId, "synthetic-student"); assert.equal(first.parentEntityId, parentEntityId); assert.equal(first.parent, null);
+  assert.equal(first.source.raw_text, "联系人：合成联系人\n记录称谓：未记录\n沟通状态：未判断\n沟通日期：未记录\n合成已有联系人记录");
+  assert.equal(first.source.raw_text.includes(parentEntityId), false);
+  assert.equal(first.source.source_id, "desktop-family-synthetic-family-editor"); assert.equal(first.source.source_revision, "1");
+  assert.equal(first.source.actor_ref, "合成教师"); assert.ok(recordModel.parseFamilyCaptureInput(first));
+  await submit(); f.render();
+  assert.deepEqual(JSON.parse(f.requests.filter(request => request.method === "POST")[1].body), first, "retry keeps the original capture identity and observation time");
+  assert.equal(row.source.raw_text, "合成来源", "an existing record source is never rewritten");
+});
+
+test("new contact capture retains the entered source name and existing generated bindings", async () => {
+  const f = mount(); await f.settle(); f.open("inline", true); f.change("inline", "联系人名称", "合成新联系人"); f.change("inline", "教师记录", "合成新联系人记录");
+  await f.dom.sources.inline.find(node => node.type === "form").props.onSubmit({ preventDefault() {} }); f.render();
+  const body = JSON.parse(f.requests.find(request => request.method === "POST").body);
+  assert.equal(body.parentEntityId, null); assert.deepEqual(body.parent, { external_id: "family-synthetic-family-editor", label: "合成新联系人" });
+  assert.equal(body.source.raw_text.split("\n")[0], "联系人：合成新联系人");
+  assert.equal(body.source.source_id, "desktop-family-synthetic-family-editor"); assert.equal(body.source.source_revision, "1");
+  assert.ok(recordModel.parseFamilyCaptureInput(body));
 });

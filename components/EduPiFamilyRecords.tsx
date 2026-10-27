@@ -124,9 +124,10 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
     if (editor.row) { await mutate(editor.row, "modify", editor.details); return; }
     setBusy(true); setError(null);
     const details = normalizedDetails(editor.details);
+    const contactName = editor.contactId ? parents.get(editor.contactId)?.canonical_name || "联系人" : editor.name;
     const input: FamilyCaptureInput = { studentId, parentEntityId: editor.contactId || null,
       parent: editor.contactId ? null : { external_id: `family-${editor.id}`, label: editor.name.normalize("NFKC").trim() }, record: details,
-      source: { source_id: `desktop-family-${editor.id}`, source_revision: "1", raw_text: [`联系人：${editor.contactId || editor.name}`, `记录称谓：${editor.details.recorded_relationship || "未记录"}`,
+      source: { source_id: `desktop-family-${editor.id}`, source_revision: "1", raw_text: [`联系人：${contactName}`, `记录称谓：${editor.details.recorded_relationship || "未记录"}`,
         `沟通状态：${familyQualityLabel(editor.details.teacher_explicit_quality)}`, `沟通日期：${editor.details.observed_on || "未记录"}`, editor.details.note].join("\n"), observed_at: editor.at, actor_ref: reviewer.normalize("NFKC").trim() } };
     try {
       const response = await fetch("/api/edupi/family-records", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
@@ -147,12 +148,14 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
   function recordView(row: FamilyRecord) {
     const parent: FamilyPerson | undefined = parents.get(row.parent_entity_id);
     const blocked = busy || loading || Boolean(error) || editor !== null;
+    const showReviewConflicts = row.review_conflicts.length > 0 && (["candidate", "pending_review", "held"].includes(row.status)
+      || row.status === "deleted" && row.restore_mode !== "direct");
     return <article className={styles.record} key={row.fact_id}>
       <header><strong>{parent?.canonical_name || "联系人"}</strong><span>{statusLabels[row.status]}</span><time>{row.record.observed_on || "日期未记录"}</time></header>
       <div className={styles.identity}>{row.record.recorded_relationship ? `记录称谓：${row.record.recorded_relationship} · ` : ""}监护身份待核实</div>
       <p>{row.record.note}</p><span>{familyQualityLabel(row.display_quality)}</span>
       {!row.mutation_allowed ? <p role="status">来源已失效，保留历史记录</p> : null}
-      {row.review_conflicts.length ? <details open><summary>需要核对的旧记录</summary>{row.review_conflicts.map((conflict) => <div key={conflict.fact_id}><time>{conflict.record.observed_on || "日期未记录"}</time><p>{conflict.record.note}</p><span>旧记录：{familyQualityLabel(conflict.record.teacher_explicit_quality)}</span></div>)}</details> : null}
+      {showReviewConflicts ? <details open><summary>需要核对的旧记录</summary>{row.review_conflicts.map((conflict) => <div key={conflict.fact_id}><time>{conflict.record.observed_on || "日期未记录"}</time><p>{conflict.record.note}</p><span>旧记录：{familyQualityLabel(conflict.record.teacher_explicit_quality)}</span></div>)}</details> : null}
       <div className={styles.actions}>{row.mutation_allowed && ["candidate", "pending_review", "held"].includes(row.status) ? <>{row.review_mode !== "blocked" ? <button type="button" className="native-button" disabled={blocked} onClick={() => void mutate(row, "accept", undefined, row.review_mode === "replace")}>{row.review_mode === "replace" ? "替换旧记录" : "接受"}</button> : <span>旧记录存在多项冲突，暂不能采用</span>}{(["hold", "reject"] as const).map((action) => <button type="button" className="native-button" disabled={blocked} key={action} onClick={() => void mutate(row, action)}>{actionLabels[action]}</button>)}</> : null}
         {row.mutation_allowed && row.status === "accepted" ? <button type="button" className="native-button" disabled={blocked} onClick={(event) => openEditor(event.currentTarget, row, parent?.canonical_name || "")}>修改</button> : null}
         {row.mutation_allowed && row.status === "deleted" ? row.restore_mode === "blocked" ? <span>旧记录存在多项冲突，暂不能恢复</span> : <button type="button" className="native-button" disabled={blocked} onClick={() => void mutate(row, "restore", undefined, row.restore_mode === "replace")}>{row.restore_mode === "replace" ? "替换并恢复" : row.restore_mode === "pending_review" ? "恢复为待确认" : "恢复"}</button> : row.mutation_allowed && row.status !== "superseded" ? <button type="button" className="native-button" disabled={blocked} onClick={() => setDeleting(row.fact_id)}>删除</button> : null}
