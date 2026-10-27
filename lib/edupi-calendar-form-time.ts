@@ -12,6 +12,13 @@ function clock(value: string | null | undefined): string {
   return value?.match(/^\d{4}-\d{2}-\d{2}T(\d{2}:\d{2})/)?.[1] || "";
 }
 
+export function calendarTimeLabel(value: string | null | undefined, referenceDate: string | null | undefined): string | null {
+  if (!value) return null;
+  const localDate = value.match(/^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}(?:[+-]\d{2}:\d{2}|Z)$/)?.[1];
+  if (!localDate) return value;
+  return localDate === referenceDate ? clock(value) : `${localDate} ${clock(value)}`;
+}
+
 export function createCalendarTimeDraft(saved?: SavedTime | null, defaultTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone): CalendarTimeDraft {
   return { allDay: !saved?.startsAt && !saved?.endsAt, startTime: clock(saved?.startsAt), endTime: clock(saved?.endsAt), timeZone: saved?.timeZone || defaultTimeZone };
 }
@@ -19,6 +26,18 @@ export function createCalendarTimeDraft(saved?: SavedTime | null, defaultTimeZon
 export function calendarTimeZoneOptions(current: string): string[] {
   const zones = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : ["Asia/Shanghai", "Asia/Tokyo", "Asia/Singapore", "Asia/Kolkata", "Europe/London", "Europe/Paris", "America/New_York", "America/Los_Angeles", "Australia/Sydney"];
   return [...new Set([current, "UTC", ...zones])].filter(Boolean);
+}
+
+function validTimeZone(value: string): boolean {
+  if (!value || /^[+-]/.test(value)) return false;
+  try { new Intl.DateTimeFormat("zh-CN", { timeZone: value }); return true; } catch { return false; }
+}
+
+export function searchCalendarTimeZones(zones: readonly string[], current: string, query: string): { options: string[]; matched: boolean } {
+  const needle = query.trim(), normalized = needle.toLowerCase();
+  const matches = zones.filter(zone => zone.toLowerCase().includes(normalized));
+  if (needle && validTimeZone(needle) && !matches.some(zone => zone.toLowerCase() === normalized)) matches.unshift(needle);
+  return { options: [...new Set([current, ...matches])].filter(Boolean), matched: matches.length > 0 };
 }
 
 function validDate(value: string): boolean {
@@ -42,8 +61,7 @@ export function calendarFormTime(input: FormTime, saved?: SavedTime | null): Pic
   }
   if (endDate && endDate !== date) throw new CalendarFormTimeError("定时日程的开始和结束需在同一天");
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime)) throw new CalendarFormTimeError("请补全开始和结束时间");
-  try { new Intl.DateTimeFormat("zh-CN", { timeZone }); } catch { throw new CalendarFormTimeError("请选择有效时区"); }
-  if (!timeZone || /^[+-]/.test(timeZone)) throw new CalendarFormTimeError("请选择有效时区");
+  if (!validTimeZone(timeZone)) throw new CalendarFormTimeError("请选择有效时区");
   let start: Temporal.ZonedDateTime, end: Temporal.ZonedDateTime;
   try {
     start = Temporal.ZonedDateTime.from(`${date}T${startTime}[${timeZone}]`, { disambiguation: "reject" });

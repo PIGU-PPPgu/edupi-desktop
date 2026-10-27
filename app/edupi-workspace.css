@@ -414,6 +414,9 @@
 .edupi-calendar-intake__time-zone { display: grid; grid-column: 1 / -1; justify-items: start; gap: 8px; }
 .edupi-calendar-intake__time-zone > button { padding: 4px 0; border: 0; background: transparent; color: var(--ep-muted); cursor: pointer; font: inherit; font-size: 12px; }
 .edupi-calendar-intake__time-zone > button:hover { color: var(--ep-text); }
+.edupi-calendar-intake__time-zone-picker { display: grid; width: 100%; min-width: 0; gap: 8px; }
+.edupi-calendar-intake .edupi-calendar-intake__time-zone-list { height: auto; min-height: 0; max-height: 160px; padding: 4px; }
+.edupi-calendar-intake__time-zone-picker > span { color: var(--ep-muted); font-size: 12px; }
 
 .edupi-calendar-toolbar {
   display: grid;

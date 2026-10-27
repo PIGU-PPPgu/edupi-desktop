@@ -15,6 +15,7 @@ const actionLabels = { accept: "接受", reject: "拒绝", hold: "暂缓", modif
 const emptyDetails: FamilyRecordDetails = { recorded_relationship: null, teacher_explicit_quality: "unknown", observed_on: null, note: "" };
 type Editor = { id: string; at: string; contactId: string; name: string; details: FamilyRecordDetails; row: FamilyRecord | null };
 type EditorOrigin = { studentId: string; editorId: string; scope: HTMLElement; trigger: HTMLButtonElement };
+type RecordAction = keyof typeof actionLabels | "create";
 
 async function readPage(studentId: string, offset: number, signal: AbortSignal): Promise<FamilyRecordPage> {
   const response = await fetch(`/api/edupi/family-records?${new URLSearchParams({ student_id: studentId, offset: String(offset), limit: "10" })}`, { signal, cache: "no-store" });
@@ -41,7 +42,11 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
+  const [focusGeneration, setFocusGeneration] = useState(0);
   const requestRef = useRef<AbortController | null>(null);
+  const readGenerationRef = useRef(0);
+  const loadedGenerationRef = useRef(0);
+  const actionFocusRef = useRef<{ studentId: string; view: typeof view; offset: number; recordId: string | null; action: RecordAction; scope: HTMLElement; from: Element | null; generation: number; status: "saving" | "saved" | "failed" } | null>(null);
   const editorOriginRef = useRef<EditorOrigin | null>(null);
   const editorFocusRef = useRef<(EditorOrigin & { target: "form" | "trigger"; from: Element | null }) | null>(null);
   const deleteCancelFocusRef = useRef<{ studentId: string; article: HTMLElement; target: HTMLButtonElement; from: Element | null } | null>(null);
@@ -69,15 +74,40 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
     if (request.target.isConnected && !request.target.disabled && request.article.contains(request.target)) request.target.focus({ preventScroll: false });
   }, [deleting, studentId]);
   useEffect(() => {
+    const generation = ++readGenerationRef.current;
     const controller = new AbortController();
     requestRef.current?.abort(); requestRef.current = controller;
     setLoading(true); setError(null);
     void readPage(studentId, offset, controller.signal).then((result) => {
       if (!controller.signal.aborted) { setPage(result); setSelected((id) => result.records.some((row) => row.fact_id === id) ? id : null); }
     }).catch((reason) => { if (!controller.signal.aborted) { setPage(null); setError(reason instanceof Error ? reason.message : "读取失败"); } })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+      .finally(() => { if (!controller.signal.aborted) { loadedGenerationRef.current = generation; setLoading(false); } });
     return () => controller.abort();
   }, [studentId, offset, refresh]);
+  useEffect(() => {
+    const request = actionFocusRef.current;
+    if (!request) return;
+    if (request.studentId !== studentId || request.view !== view || request.offset !== offset || !request.scope.isConnected) { actionFocusRef.current = null; return; }
+    const document = request.scope.ownerDocument;
+    if (busy || loading || request.status === "saving" || loadedGenerationRef.current !== readGenerationRef.current
+      || request.status === "saved" && readGenerationRef.current <= request.generation) {
+      const preserveMovedFocus = (event: FocusEvent) => {
+        if (event.target !== request.from && event.target !== document.body && event.target !== document.documentElement) actionFocusRef.current = null;
+      };
+      document.addEventListener("focusin", preserveMovedFocus);
+      return () => document.removeEventListener("focusin", preserveMovedFocus);
+    }
+    actionFocusRef.current = null;
+    const active = document.activeElement;
+    if (active !== request.from && active !== document.body && active !== document.documentElement) return;
+    const article = Array.from(request.scope.querySelectorAll<HTMLElement>("[data-family-record-id]"))
+      .find((element) => element.getAttribute("data-family-record-id") === request.recordId);
+    const action = request.action === "hold" ? "hold" : request.action === "delete" ? "restore" : "modify";
+    const target = error ? request.scope.querySelector<HTMLElement>("[data-family-refresh]") || article?.querySelector<HTMLElement>("[data-family-source]")
+      : (request.action !== "reject" ? article?.querySelector<HTMLElement>(`[data-family-action="${action}"]`) : null) || article?.querySelector<HTMLElement>("[data-family-source]");
+    const fallback = target || request.scope.querySelector<HTMLElement>("[data-family-add], [data-autofocus]");
+    if (fallback?.isConnected && !fallback.matches(":disabled")) fallback.focus({ preventScroll: false });
+  }, [busy, loading, page, refresh, focusGeneration, studentId, offset, view, error]);
   useEffect(() => {
     const changed = () => setRefresh((value) => value + 1);
     window.addEventListener(EDUPI_STUDENT_RECORDS_UPDATED_EVENT, changed);
@@ -87,6 +117,14 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
   const parents = useMemo(() => new Map((visible?.parents || []).map((parent) => [parent.entity_id, parent])), [visible?.parents]);
   const graph = useMemo(() => buildFamilyGraph({ id: visible?.studentEntity?.entity_id || "", label: studentName }, visible?.parents || [], visible?.records || []), [studentName, visible]);
   const reload = () => { setRefresh((value) => value + 1); window.dispatchEvent(new Event("edupi-education-refresh")); };
+  const rememberActionFocus = (trigger: HTMLButtonElement | null | undefined, action: RecordAction, recordId: string | null): typeof actionFocusRef.current => {
+    const scope = trigger?.closest<HTMLElement>(`.${styles.panel}`) || trigger?.closest<HTMLElement>('[role="dialog"]');
+    const active = trigger?.ownerDocument.activeElement || null;
+    const request = scope && trigger
+      ? { studentId, view, offset, recordId, action, scope, from: active, generation: readGenerationRef.current, status: "saving" as const } : null;
+    actionFocusRef.current = request;
+    return request;
+  };
 
   const openEditor = (trigger: HTMLButtonElement, row: FamilyRecord | null, name = "") => {
     if (busy || loading || editor) return;
@@ -118,12 +156,13 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
     setDeleting(null);
   };
 
-  async function mutate(row: FamilyRecord, action: "accept" | "hold" | "reject" | "modify" | "delete" | "restore", details?: FamilyRecordDetails, replace = false) {
+  async function mutate(row: FamilyRecord, action: "accept" | "hold" | "reject" | "modify" | "delete" | "restore", details?: FamilyRecordDetails, replace = false, trigger?: HTMLButtonElement | null) {
     if (busy || loading || error || !row.mutation_allowed) return;
+    const focus = rememberActionFocus(trigger, action, row.fact_id);
     setBusy(true); setError(null);
     const base = { expectedRevision: row.revision, reviewer: row.source.actor_ref };
     const conflict = replace && row.review_conflict_count === 1 ? row.review_conflicts[0] : null;
-    if (replace && !conflict) { setBusy(false); setError("旧记录已变化，请刷新后核对"); return; }
+    if (replace && !conflict) { if (focus) focus.status = "failed"; setBusy(false); setError("旧记录已变化，请刷新后核对"); setFocusGeneration((value) => value + 1); return; }
     const body = action === "modify" ? { ...base, action, replacementValue: JSON.stringify({ ...row.record, ...normalizedDetails(details!) }), note: null }
       : action === "delete" ? { ...base, action }
         : action === "restore" ? { ...base, action, supersedesFactId: conflict?.fact_id || null, supersedesFactRevision: conflict?.revision ?? null }
@@ -133,15 +172,18 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "记录操作失败");
       onEducation(payload.data); setEditor(null); setDeleting(null);
+      if (focus) { focus.status = "saved"; focus.generation = readGenerationRef.current; focus.recordId = payload.result?.resultFactId || row.fact_id; if (action === "modify") focus.offset = 0; }
       if (action === "modify") { setOffset(0); setPreviousOffsets([]); }
       setSelected(action === "delete" ? null : payload.result?.resultFactId || null); reload();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "操作失败"); }
-    finally { setBusy(false); }
+    } catch (reason) { if (focus) focus.status = "failed"; setError(reason instanceof Error ? reason.message : "操作失败"); }
+    finally { setBusy(false); setFocusGeneration((value) => value + 1); }
   }
-  async function save(event: FormEvent) {
+  async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editor || busy) return;
-    if (editor.row) { await mutate(editor.row, "modify", editor.details); return; }
+    const trigger = event.currentTarget.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (editor.row) { await mutate(editor.row, "modify", editor.details, false, trigger); return; }
+    const focus = rememberActionFocus(trigger, "create", null);
     setBusy(true); setError(null);
     const details = normalizedDetails(editor.details);
     const contactName = editor.contactId ? parents.get(editor.contactId)?.canonical_name || "联系人" : editor.name;
@@ -153,9 +195,10 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
       const response = await fetch("/api/edupi/family-records", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "记录未写入");
+      if (focus) { focus.status = "saved"; focus.generation = readGenerationRef.current; focus.recordId = payload.record?.fact_id || null; focus.offset = 0; }
       setEditor(null); setOffset(0); setPreviousOffsets([]); reload();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "记录未写入"); }
-    finally { setBusy(false); }
+    } catch (reason) { if (focus) focus.status = "failed"; setError(reason instanceof Error ? reason.message : "记录未写入"); }
+    finally { setBusy(false); setFocusGeneration((value) => value + 1); }
   }
   const form = editor ? <form className={styles.editor} data-family-editor-id={editor.id} onSubmit={save} aria-label={editor.row ? "修改家校记录" : "添加家校记录"}><fieldset disabled={busy}>
     {!editor.row ? <><label>联系人<select value={editor.contactId} onChange={(event) => setEditor({ ...editor, contactId: event.target.value })}><option value="">新联系人</option>{[...parents.values()].filter((parent) => parent.status === "active").map((parent) => <option key={parent.entity_id} value={parent.entity_id}>{parent.canonical_name}</option>)}</select></label>{!editor.contactId ? <label>联系人名称<input required maxLength={240} value={editor.name} onChange={(event) => setEditor({ ...editor, name: event.target.value })} /></label> : null}</> : null}
@@ -170,26 +213,26 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
     const blocked = busy || loading || Boolean(error) || editor !== null;
     const showReviewConflicts = row.review_conflicts.length > 0 && (["candidate", "pending_review", "held"].includes(row.status)
       || row.status === "deleted" && row.restore_mode !== "direct");
-    return <article className={styles.record} key={row.fact_id}>
+    return <article className={styles.record} key={row.fact_id} data-family-record-id={row.fact_id}>
       <header><strong>{parent?.canonical_name || "联系人"}</strong><span>{statusLabels[row.status]}</span><time>{row.record.observed_on || "日期未记录"}</time></header>
       <div className={styles.identity}>{row.record.recorded_relationship ? `记录称谓：${row.record.recorded_relationship} · ` : ""}监护身份待核实</div>
       <p>{row.record.note}</p><span>{familyQualityLabel(row.display_quality)}</span>
       {!row.mutation_allowed ? <p role="status">来源已失效，保留历史记录</p> : null}
       {showReviewConflicts ? <details open><summary>需要核对的旧记录</summary>{row.review_conflicts.map((conflict) => <div key={conflict.fact_id}><time>{conflict.record.observed_on || "日期未记录"}</time><p>{conflict.record.note}</p><span>旧记录：{familyQualityLabel(conflict.record.teacher_explicit_quality)}</span></div>)}</details> : null}
-      <div className={styles.actions}>{row.mutation_allowed && ["candidate", "pending_review", "held"].includes(row.status) ? <>{row.review_mode !== "blocked" ? <button type="button" className="native-button" disabled={blocked} onClick={() => void mutate(row, "accept", undefined, row.review_mode === "replace")}>{row.review_mode === "replace" ? "替换旧记录" : "接受"}</button> : <span>旧记录存在多项冲突，暂不能采用</span>}{(["hold", "reject"] as const).map((action) => <button type="button" className="native-button" disabled={blocked} key={action} onClick={() => void mutate(row, action)}>{actionLabels[action]}</button>)}</> : null}
-        {row.mutation_allowed && row.status === "accepted" ? <button type="button" className="native-button" disabled={blocked} onClick={(event) => openEditor(event.currentTarget, row, parent?.canonical_name || "")}>修改</button> : null}
-        {row.mutation_allowed && row.status === "deleted" ? row.restore_mode === "blocked" ? <span>旧记录存在多项冲突，暂不能恢复</span> : <button type="button" className="native-button" disabled={blocked} onClick={() => void mutate(row, "restore", undefined, row.restore_mode === "replace")}>{row.restore_mode === "replace" ? "替换并恢复" : row.restore_mode === "pending_review" ? "恢复为待确认" : "恢复"}</button> : row.mutation_allowed && row.status !== "superseded" ? <button type="button" data-family-delete-trigger className="native-button" disabled={blocked} onClick={() => setDeleting(row.fact_id)}>删除</button> : null}
+      <div className={styles.actions}>{row.mutation_allowed && ["candidate", "pending_review", "held"].includes(row.status) ? <>{row.review_mode !== "blocked" ? <button type="button" className="native-button" disabled={blocked} data-family-action="accept" onClick={(event) => void mutate(row, "accept", undefined, row.review_mode === "replace", event.currentTarget)}>{row.review_mode === "replace" ? "替换旧记录" : "接受"}</button> : <span>旧记录存在多项冲突，暂不能采用</span>}{(["hold", "reject"] as const).map((action) => <button type="button" className="native-button" disabled={blocked} key={action} data-family-action={action} onClick={(event) => void mutate(row, action, undefined, false, event.currentTarget)}>{actionLabels[action]}</button>)}</> : null}
+        {row.mutation_allowed && row.status === "accepted" ? <button type="button" className="native-button" disabled={blocked} data-family-action="modify" onClick={(event) => openEditor(event.currentTarget, row, parent?.canonical_name || "")}>修改</button> : null}
+        {row.mutation_allowed && row.status === "deleted" ? row.restore_mode === "blocked" ? <span>旧记录存在多项冲突，暂不能恢复</span> : <button type="button" className="native-button" disabled={blocked} data-family-action="restore" onClick={(event) => void mutate(row, "restore", undefined, row.restore_mode === "replace", event.currentTarget)}>{row.restore_mode === "replace" ? "替换并恢复" : row.restore_mode === "pending_review" ? "恢复为待确认" : "恢复"}</button> : row.mutation_allowed && row.status !== "superseded" ? <button type="button" data-family-delete-trigger className="native-button" disabled={blocked} onClick={() => setDeleting(row.fact_id)}>删除</button> : null}
       </div>
-      {deleting === row.fact_id ? <div className={styles.actions}><span>删除这条记录？</span><button type="button" className="native-button" disabled={busy} onClick={() => void mutate(row, "delete")}>确认删除</button><button type="button" className="native-button" disabled={busy} onClick={(event) => cancelDelete(event.currentTarget)}>取消</button></div> : null}
+      {deleting === row.fact_id ? <div className={styles.actions}><span>删除这条记录？</span><button type="button" className="native-button" disabled={busy} data-family-action="delete" onClick={(event) => void mutate(row, "delete", undefined, false, event.currentTarget)}>确认删除</button><button type="button" className="native-button" disabled={busy} onClick={(event) => cancelDelete(event.currentTarget)}>取消</button></div> : null}
       {editor?.row?.fact_id === row.fact_id ? form : null}
-      <details><summary>来源</summary><p>{row.source.raw_text}</p><dl><dt>记录者</dt><dd>{row.source.actor_ref}</dd><dt>来源时间</dt><dd>{new Date(row.source.observed_at).toLocaleString("zh-CN")}</dd><dt>来源版本</dt><dd>{row.source.source_revision}</dd><dt>入库时间</dt><dd>{new Date(row.logged_at).toLocaleString("zh-CN")}</dd></dl></details>
+      <details><summary data-family-source>来源</summary><p>{row.source.raw_text}</p><dl><dt>记录者</dt><dd>{row.source.actor_ref}</dd><dt>来源时间</dt><dd>{new Date(row.source.observed_at).toLocaleString("zh-CN")}</dd><dt>来源版本</dt><dd>{row.source.source_revision}</dd><dt>入库时间</dt><dd>{new Date(row.logged_at).toLocaleString("zh-CN")}</dd></dl></details>
       {row.history.length ? <details><summary>修订记录</summary><ol className={styles.history}>{row.history.map((item, index) => <li key={index}>{actionLabels[item.action]} · {new Date(item.reviewed_at).toLocaleString("zh-CN")}{item.note ? <p>{item.note}</p> : null}</li>)}</ol></details> : null}
     </article>;
   }
   const selectedRow = visible?.records.find((row) => row.fact_id === selected);
-  const alert = error ? <p className={styles.error} role="alert">{error}<button type="button" className="native-button" onClick={reload}>刷新记录</button></p> : null;
+  const alert = error ? <p className={styles.error} role="alert">{error}<button type="button" className="native-button" data-family-refresh onClick={reload}>刷新记录</button></p> : null;
   return <section className={styles.panel} aria-label="家校人物与记录">
-    <div className={styles.toolbar}>{(["graph", "list"] as const).map((mode) => <button type="button" key={mode} disabled={busy || editor !== null} aria-pressed={view === mode} onClick={() => setView(mode)}>{mode === "graph" ? "人物图" : "记录"}</button>)}<button type="button" disabled={busy || loading || editor !== null || !visible || visible.sourceStatus !== "current"} onClick={(event) => openEditor(event.currentTarget, null)}>添加记录</button></div>
+    <div className={styles.toolbar}>{(["graph", "list"] as const).map((mode) => <button type="button" key={mode} disabled={busy || editor !== null} aria-pressed={view === mode} onClick={() => setView(mode)}>{mode === "graph" ? "人物图" : "记录"}</button>)}<button type="button" disabled={busy || loading || editor !== null || !visible || visible.sourceStatus !== "current"} data-family-add onClick={(event) => openEditor(event.currentTarget, null)}>添加记录</button></div>
     {view === "list" ? alert : null}{visible?.sourceStatus === "unavailable" ? <p role="status">学生来源不可用，保留历史记录</p> : null}{editor?.row === null ? form : null}
     {view === "graph" ? <EduPiStudentGraph projection={graph} total={graph.records.length} kind="family" selectedId={selected} onSelect={(id) => { if (!editor) setSelected(id); }} student={studentName} scope="本页记录" loading={loading} alert={alert} details={selectedRow ? recordView(selectedRow) : null} /> : loading ? <p role="status">读取中…</p> : visible?.records.length ? visible.records.map(recordView) : !error ? <p>暂无家校记录</p> : null}
     {view === "graph" && selectedRow ? recordView(selectedRow) : null}

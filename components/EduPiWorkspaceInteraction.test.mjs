@@ -14,7 +14,7 @@ const textOf = node => node == null || typeof node === "boolean" ? "" : Array.is
 const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : !node || typeof node !== "object" || !node.props ? [] : [node, ...nodes(node.props.children)];
 const sources = Object.fromEntries(["EduPiWorkspaceBoard", "EduPiCalendarWorkspace"].map(name => [name, ts.transpileModule(fs.readFileSync(new URL(`./${name}.tsx`, import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText]));
 
-function mount(name, initialProps = {}, controlled = true, componentName = name) {
+function mount(name, initialProps = {}, controlled = true, componentName = name, environment = {}) {
   const slots = [], effects = new Map(), listeners = new Map(), frames = new Map();
   const calls = { routes: [], opens: [], moves: [], uploads: 0 };
   let cursor = 0, dirty = false, tree, frameId = 0, dropStage = null, uuid = 0;
@@ -33,7 +33,7 @@ function mount(name, initialProps = {}, controlled = true, componentName = name)
     useMemo(factory, deps) { const index = cursor++; if (!slots[index] || !same(slots[index].deps, deps)) slots[index] = { deps, value: factory() }; return slots[index].value; },
     useEffect(callback, deps) { const index = cursor++; if (!slots[index] || !same(slots[index].deps, deps)) effects.set(index, { callback, deps }); },
   };
-  const jsx = (type, props) => ({ type, props: props || {} });
+  const jsx = (type, props, key) => ({ type, props: props || {}, key });
   const modules = {
     ...libraries, react: hooks, "react/jsx-runtime": { jsx, jsxs: jsx },
     "./EduPiForeground": { useEduPiForegroundPolicy: () => policy, EduPiPagedRows: "paged-rows", EduPiListPreview: "list-preview" },
@@ -47,13 +47,13 @@ function mount(name, initialProps = {}, controlled = true, componentName = name)
   class Textarea {}
   class Select {}
   const exports = {};
-  vm.runInNewContext(sources[name] + (name === "EduPiCalendarWorkspace" ? "\nexports.MonthView = MonthView; exports.WeekView = WeekView; exports.DayView = DayView; exports.IntakeComposer = IntakeComposer;" : ""), {
+  vm.runInNewContext(sources[name] + (name === "EduPiCalendarWorkspace" ? "\nexports.MonthView = MonthView; exports.WeekView = WeekView; exports.DayView = DayView; exports.IntakeComposer = IntakeComposer; exports.CalendarDetailDrawer = CalendarDetailDrawer;" : ""), {
     exports, URLSearchParams,
     crypto: { randomUUID: () => `synthetic-occurrence-${++uuid}` },
     FormData: class { constructor(form) { this.values = form.values; } get(key) { return this.values[key] ?? null; } },
     require: dependency => { assert.ok(modules[dependency], dependency); return modules[dependency]; },
     window: { location: { search: "" }, addEventListener: (event, listener) => listeners.set(event, listener), removeEventListener: (event, listener) => { if (listeners.get(event) === listener) listeners.delete(event); } },
-    document: { elementFromPoint: () => dropStage ? { closest: () => ({ dataset: { boardStage: dropStage } }) } : null },
+    document: environment.document || { elementFromPoint: () => dropStage ? { closest: () => ({ dataset: { boardStage: dropStage } }) } : null },
     HTMLInputElement: Input, HTMLTextAreaElement: Textarea, HTMLSelectElement: Select,
     requestAnimationFrame: callback => { const id = ++frameId; frames.set(id, callback); return id; }, cancelAnimationFrame: id => frames.delete(id),
   });
@@ -73,6 +73,7 @@ function mount(name, initialProps = {}, controlled = true, componentName = name)
     do {
       assert.ok(attempts++ < 25, "effects settle");
       cursor = 0; dirty = false; tree = exports[componentName](props);
+      environment.commit?.(tree);
       const pending = [...effects]; effects.clear();
       for (const [index, effect] of pending) { slots[index]?.cleanup?.(); slots[index] = { deps: effect.deps, cleanup: effect.callback() }; }
     } while (dirty);
@@ -281,7 +282,7 @@ test("page primary actions and segmented controls are explicit", () => {
   for (const app of [board, calendar]) assert.ok(nodes(app.render()).some(node => String(node.props.className || "").includes("edupi-segmented-control")));
 });
 
-function intake(initialProps = {}) {
+function intake(initialProps = {}, environment = {}) {
   const calls = { calendar: [], timetable: [], closes: 0 };
   const app = mount("EduPiCalendarWorkspace", {
     mode: "calendar", anchorDate: "2026-10-27", busy: false,
@@ -289,8 +290,8 @@ function intake(initialProps = {}) {
     onImportCalendar: async value => { calls.calendar.push(JSON.parse(JSON.stringify(value))); },
     onImportTimetable: async value => { calls.timetable.push(JSON.parse(JSON.stringify(value))); },
     ...initialProps,
-  }, true, "IntakeComposer");
-  const field = name => nodes(app.render()).find(node => ["input", "select", "textarea"].includes(node.type) && node.props.name === name);
+  }, true, "IntakeComposer", environment);
+  const field = name => nodes(app.render()).find(node => ["input", "select", "textarea"].includes(node.type) && (node.props.name === name || node.props["aria-label"] === name));
   return {
     ...app, calls, field,
     change(name, value) { const item = field(name); assert.ok(item, `field ${name}`); item.props.onChange({ target: item.props.type === "checkbox" ? { checked: value } : { value } }); app.render(); },
@@ -415,4 +416,195 @@ test("calendar cancel never submits and timetable intake retains its existing co
   await timetable.submit();
   assert.deepEqual(timetable.calls.timetable, [{ slotId: "synthetic-slot", dayOfWeek: 4, period: 2, subject: "数学", classId: "ui-a", className: "UI验收A班", startTime: "09:15", timeZone: "UTC", kind: "class", notes: "合成课表" }]);
   assert.equal(timetable.calls.closes, 1);
+});
+
+test("timezone search does not change the current value or display a different first option", async () => {
+  const app = intake(); app.change("allDay", false); app.change("startTime", "09:00"); app.change("endTime", "10:00");
+  app.button("时区").props.onClick(); app.render(); app.change("timeZone", "UTC");
+  assert.equal(app.field("timeZone").props.size, 6);
+  app.change("搜索时区", "tokyo");
+  assert.equal(app.field("timeZone").props.value, "UTC");
+  assert.deepEqual(Array.from(nodes(app.field("timeZone")).filter(node => node.type === "option"), node => node.props.value), ["UTC", "Asia/Tokyo"]);
+  app.change("搜索时区", "not-an-iana-zone");
+  assert.equal(textOf(nodes(app.render()).find(node => node.props.role === "status")), "无匹配时区");
+  assert.deepEqual(Array.from(nodes(app.field("timeZone")).filter(node => node.type === "option"), node => node.props.value), ["UTC"]);
+  assert.equal(app.field("timeZone").props.value, "UTC");
+  app.button("时区").props.onClick(); app.render(); assert.equal(app.field("搜索时区"), undefined);
+  app.change("allDay", true); app.change("allDay", false); app.button("时区").props.onClick(); app.render();
+  assert.equal(app.field("搜索时区").props.value, "not-an-iana-zone");
+  assert.equal(app.field("timeZone").props.value, "UTC");
+  app.change("搜索时区", "");
+  assert.ok(nodes(app.field("timeZone")).filter(node => node.type === "option").length > 100);
+  await app.submit();
+  assert.equal(app.calls.calendar[0].timeZone, "UTC");
+});
+
+test("timezone search offers valid aliases outside the catalog and keeps the selected alias across drafts", async () => {
+  const app = intake(); app.change("allDay", false); app.change("startTime", "09:00"); app.change("endTime", "10:00");
+  app.button("时区").props.onClick(); app.render();
+  app.change("搜索时区", " US/Pacific ");
+  assert.ok(nodes(app.field("timeZone")).some(node => node.type === "option" && node.props.value === "US/Pacific"));
+  app.change("timeZone", "US/Pacific"); app.change("搜索时区", "Europe");
+  assert.equal(app.field("timeZone").props.value, "US/Pacific");
+  assert.equal(nodes(app.field("timeZone")).filter(node => node.type === "option")[0].props.value, "US/Pacific");
+  app.change("allDay", true); app.change("allDay", false);
+  assert.equal(app.field("timeZone").props.value, "US/Pacific");
+  assert.equal(app.field("搜索时区").props.value, "Europe");
+  await app.submit();
+  assert.equal(app.calls.calendar[0].timeZone, "US/Pacific");
+  assert.equal(app.calls.calendar[0].startAt, "2026-10-27T09:00-07:00");
+});
+
+test("calendar detail uses saved wall clocks without repeating same-day dates or offsets", () => {
+  const event = savedCalendar({ startsAt: "2026-10-27T09:15+00:00", endsAt: "2026-10-27T10:30+00:00", timeZone: "UTC" });
+  const app = mount("EduPiCalendarWorkspace");
+  const detail = app.exports.CalendarDetailDrawer({ data: { ...app.props.data, calendar: [event] }, selection: { kind: "calendar", sourceId: event.id, date: event.date, title: event.name, sourceLabel: "教师", statusLabel: "已确认" }, onClose() {} });
+  const rows = nodes(detail).filter(node => node.type === "div" && node.props.children?.[0]?.type === "dt");
+  const values = Object.fromEntries(rows.map(node => [textOf(node.props.children[0]), textOf(node.props.children[1])]));
+  assert.equal(values["日期"], "2026-10-27"); assert.equal(values["开始时间"], "09:15"); assert.equal(values["结束时间"], "10:30"); assert.equal(values["时区"], "UTC");
+  assert.equal(event.startsAt, "2026-10-27T09:15+00:00"); assert.equal(event.endsAt, "2026-10-27T10:30+00:00");
+});
+
+function focusDom() {
+  const focused = [], focusListeners = new Set();
+  const document = { body: { name: "body" }, documentElement: { name: "html" }, activeElement: null,
+    addEventListener(name, callback) { assert.equal(name, "focusin"); focusListeners.add(callback); },
+    removeEventListener(name, callback) { assert.equal(name, "focusin"); focusListeners.delete(callback); },
+  };
+  const move = target => { document.activeElement = target; for (const callback of focusListeners) callback({ target }); return target; };
+  document.activeElement = document.body;
+  const element = (name, group = "form") => ({ name, group, ownerDocument: document, isConnected: true, disabled: false, focus() { assert.ok(this.isConnected && !this.disabled, `focusable ${name}`); focused.push(name); move(this); } });
+  const inputs = Object.fromEntries(["name", "subject", "save", "cancel"].map(name => [name, element(name)]));
+  const triggers = { calendar: element("new calendar", "trigger"), timetable: element("new timetable", "trigger"), edit: element("edit", "trigger") };
+  const root = { ownerDocument: document, isConnected: true, contains: target => Boolean(target?.ownerDocument === document && target?.isConnected), querySelector(selector) {
+    if (selector === "[data-calendar-edit-trigger]") return triggers.edit.isConnected ? triggers.edit : null;
+    if (selector === '[data-calendar-create="calendar"]') return triggers.calendar;
+    if (selector === '[data-calendar-create="timetable"]') return triggers.timetable;
+    if (selector.includes('input[name="name"]')) return inputs.name;
+    if (selector.includes('input[name="subject"]')) return inputs.subject;
+    throw new Error(`unexpected selector ${selector}`);
+  } };
+  const section = { ownerDocument: document, isConnected: true, contains: target => target?.ownerDocument === document && target?.group === "form" && target?.isConnected };
+  return { document, root, section, focused, focusListeners, inputs, triggers, move, outside: () => move({ name: "another control", isConnected: true }),
+    commit(tree) {
+      if (tree.props.ref) tree.props.ref.current = tree.type === "main" ? root : section;
+      if (tree.type !== "main") return;
+      const drawer = nodes(tree).find(node => node.type?.name === "CalendarDetailDrawer");
+      const editor = nodes(tree).find(node => node.type?.name === "IntakeComposer") || drawer?.props.editor;
+      for (const input of Object.values(inputs)) input.isConnected = Boolean(editor);
+      const editVisible = Boolean(drawer && !drawer.props.editor && drawer.props.onEdit);
+      if (editVisible && !triggers.edit.isConnected) triggers.edit = element("returned edit", "trigger");
+      triggers.edit.isConnected = editVisible;
+      if (document.activeElement?.ownerDocument === document && !document.activeElement.isConnected) move(document.body);
+    },
+  };
+}
+
+function calendarWithFocus(kind = "calendar") {
+  const dom = focusDom();
+  const data = buildEducationContract({ calendar: [{ id: "calendar-a", name: "合成日程A", date: "2026-10-27" }, { id: "calendar-b", name: "合成日程B", date: "2026-10-28" }], timetable: [{ slot_id: "slot-a", subject: "数学", day_of_week: 2, period: 1 }] });
+  data.capabilities.calendar.enabled = true; data.capabilities.timetable.enabled = true;
+  const selection = { kind, sourceId: kind === "calendar" ? "calendar-a" : "slot-a", date: "2026-10-27", title: "合成事项", sourceLabel: "教师", statusLabel: "已确认" };
+  const app = mount("EduPiCalendarWorkspace", { data, selection }, true, "EduPiCalendarWorkspace", dom);
+  const drawer = () => nodes(app.render()).find(node => node.type?.name === "CalendarDetailDrawer");
+  const editor = () => nodes(app.render()).find(node => node.type?.name === "IntakeComposer") || drawer()?.props.editor;
+  app.render();
+  return { app, dom, drawer, editor,
+    openNew(mode = "calendar") { dom.triggers[mode].focus(); app.button(mode === "calendar" ? "新建日程" : "添加课表").props.onClick(); app.render(); return editor(); },
+    openEdit() { dom.triggers.edit.focus(); drawer().props.onEdit(); app.render(); return editor(); },
+    close() { dom.inputs.cancel.focus(); editor().props.onClose({ from: dom.inputs.cancel, document: dom.document }); app.render(); },
+  };
+}
+
+test("cancelled calendar and timetable detail editors return to the newly committed edit button", () => {
+  for (const kind of ["calendar", "timetable"]) {
+    const f = calendarWithFocus(kind), oldTrigger = f.dom.triggers.edit;
+    f.openEdit(); assert.ok(f.editor());
+    f.close();
+    assert.equal(f.editor(), null);
+    assert.notEqual(f.dom.triggers.edit, oldTrigger);
+    assert.equal(f.dom.document.activeElement, f.dom.triggers.edit);
+    assert.equal(f.app.button("新建日程").props.className, "is-primary");
+  }
+});
+
+test("inline close returns to its own entry and the header is secondary while a draft is present", () => {
+  for (const mode of ["calendar", "timetable"]) {
+    const f = calendarWithFocus(); f.app.setProps({ selection: null });
+    const first = f.openNew(mode);
+    assert.ok(first); assert.notEqual(f.app.button("新建日程").props.className, "is-primary");
+    f.app.button(mode === "calendar" ? "新建日程" : "添加课表").props.onClick(); f.app.render();
+    assert.equal(f.editor().key, first.key, "repeat opening keeps the mounted draft identity");
+    assert.equal(f.dom.document.activeElement, f.dom.inputs[mode === "calendar" ? "name" : "subject"]);
+    f.close();
+    assert.equal(f.dom.document.activeElement, f.dom.triggers[mode]);
+    assert.equal(f.app.button("新建日程").props.className, "is-primary");
+  }
+});
+
+test("calendar return focus waits for a pending parent refresh and respects later focus or object changes", () => {
+  const pending = calendarWithFocus(); pending.openEdit(); pending.app.setProps({ intakeBusy: true }); pending.close();
+  assert.equal(pending.dom.document.activeElement, pending.dom.document.body);
+  assert.equal(pending.dom.focusListeners.size, 1);
+  pending.app.setProps({ data: { ...pending.app.props.data } });
+  assert.equal(pending.dom.focusListeners.size, 1);
+  pending.app.setProps({ intakeBusy: false });
+  assert.equal(pending.dom.document.activeElement, pending.dom.triggers.edit);
+  assert.equal(pending.dom.focusListeners.size, 0);
+
+  const moved = calendarWithFocus(); moved.openNew(); moved.app.setProps({ intakeBusy: true }); moved.close();
+  moved.dom.outside(); moved.dom.move(moved.dom.document.body); moved.dom.focused.length = 0;
+  moved.app.setProps({ intakeBusy: false });
+  assert.deepEqual(moved.dom.focused, []);
+  assert.equal(moved.dom.focusListeners.size, 0);
+
+  const switched = calendarWithFocus(); switched.openEdit(); switched.app.setProps({ intakeBusy: true }); switched.close(); switched.dom.focused.length = 0;
+  switched.app.setProps({ selection: { ...switched.app.props.selection, sourceId: "calendar-b", title: "合成日程B" }, intakeBusy: false });
+  assert.deepEqual(switched.dom.focused, []);
+  assert.equal(switched.dom.focusListeners.size, 0);
+});
+
+test("old calendar editor callbacks and newer focus cannot close or refocus a different object", () => {
+  const f = calendarWithFocus(); const oldEditor = f.openEdit();
+  f.app.setProps({ selection: { ...f.app.props.selection, sourceId: "calendar-b", title: "合成日程B" } });
+  assert.equal(f.editor(), null);
+  f.openEdit(); const secondEditor = f.editor();
+  const outside = f.dom.outside(); f.dom.focused.length = 0;
+  oldEditor.props.onClose({ from: f.dom.inputs.save, document: f.dom.document }); f.app.render();
+  assert.equal(f.editor().key, secondEditor.key);
+  assert.equal(f.dom.document.activeElement, outside);
+  assert.deepEqual(f.dom.focused, []);
+  f.editor().props.onClose(null); f.app.render();
+  assert.equal(f.dom.document.activeElement, outside);
+});
+
+test("an unchanged inline editor can finish after list navigation without pulling focus back", () => {
+  const f = calendarWithFocus(); f.app.setProps({ selection: null });
+  const editor = f.openNew();
+  f.app.setProps({ selectedObjectId: "calendar:list" });
+  const outside = f.dom.outside(); f.dom.focused.length = 0;
+  editor.props.onClose({ from: f.dom.inputs.save, document: f.dom.document }); f.app.render();
+  assert.equal(f.editor(), undefined);
+  assert.equal(f.dom.document.activeElement, outside);
+  assert.deepEqual(f.dom.focused, []);
+});
+
+test("intake async completion only returns eligible focus and ignores unmounted or failed saves", async () => {
+  for (const scenario of ["success", "moved", "unmounted", "failed"]) {
+    const dom = focusDom(), closes = [];
+    let finish, submissions = 0;
+    const app = intake({ onClose: focus => closes.push(focus), onImportCalendar: () => new Promise((resolve, reject) => { submissions += 1; finish = scenario === "failed" ? () => reject(new Error("synthetic offline")) : resolve; }) }, dom);
+    app.render(); dom.inputs.save.focus();
+    await app.submit({ name: "合成异步验收" });
+    await app.submit({ name: "合成重复点击" }); assert.equal(submissions, 1);
+    assert.equal(dom.focusListeners.size, 1);
+    if (scenario === "moved") { dom.outside(); dom.move(dom.document.body); }
+    if (scenario === "unmounted") { app.unmount(); assert.equal(dom.focusListeners.size, 0); }
+    finish(); await new Promise(resolve => setImmediate(resolve)); app.render();
+    assert.equal(dom.focusListeners.size, 0);
+    if (scenario === "success") { assert.equal(closes.length, 1); assert.equal(closes[0].from, dom.inputs.save); }
+    else if (scenario === "moved") assert.deepEqual(closes, [null]);
+    else assert.equal(closes.length, 0);
+    if (scenario === "failed") assert.match(app.error(), /接入失败/);
+  }
 });

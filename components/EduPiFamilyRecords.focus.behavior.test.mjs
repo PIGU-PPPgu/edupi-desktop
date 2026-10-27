@@ -22,10 +22,16 @@ const row = { fact_id: "synthetic-family-fact", event_id: "synthetic-event", stu
   history: [], review_conflicts: [], review_conflict_count: 0, review_mode: "direct", restore_mode: "direct", logged_at: "2026-10-21T00:00:00.000Z", external_send: false };
 
 function focusDom() {
-  const calls = [], document = { body: { name: "HTML body" }, documentElement: {}, activeElement: null };
+  const focusListeners = new Set(), calls = [], document = { body: { name: "HTML body" }, documentElement: {}, activeElement: null,
+    addEventListener(name, callback) { assert.equal(name, "focusin"); focusListeners.add(callback); },
+    removeEventListener(name, callback) { assert.equal(name, "focusin"); focusListeners.delete(callback); },
+  };
   document.activeElement = document.body;
-  const scopes = Object.fromEntries(["inline", "portal"].map(name => [name, { name, isConnected: true, ownerDocument: document, contains: element => element?.scope === scopes[name] && element.isConnected, querySelectorAll(selector) { assert.equal(selector, "[data-family-editor-id]"); return this.form ? [this.form] : []; } }]));
-  const element = (scope, name) => ({ name, scope, ownerDocument: document, isConnected: true, disabled: false, matches(selector) { assert.equal(selector, ":disabled"); return this.disabled; }, focus(options) { assert.ok(this.isConnected && !this.disabled); document.activeElement = this; calls.push({ scope: scope.name, name, options }); } });
+  const scopes = Object.fromEntries(["inline", "portal"].map(name => [name, { name, records: new Map(), isConnected: true, ownerDocument: document, contains: element => element?.scope === scopes[name] && element.isConnected,
+    querySelectorAll(selector) { if (selector === "[data-family-record-id]") return [...this.records.values()]; assert.equal(selector, "[data-family-editor-id]"); return this.form ? [this.form] : []; },
+    querySelector(selector) { if (selector === "[data-family-refresh]") return this.refresh.isConnected ? this.refresh : null; assert.equal(selector, "[data-family-add], [data-autofocus]"); return this.add?.isConnected ? this.add : this.close; },
+  }]));
+  const element = (scope, name) => ({ name, scope, ownerDocument: document, isConnected: true, disabled: false, matches(selector) { assert.equal(selector, ":disabled"); return this.disabled; }, focus(options) { assert.ok(this.isConnected && !this.disabled); document.activeElement = this; calls.push({ scope: scope.name, name, options }); for (const callback of focusListeners) callback({ target: this }); } });
   const button = (scope, name) => ({ ...element(scope, name), closest(selector) {
     if (selector === ".edupi-family-panel") return scope === scopes.inline ? scope : null;
     assert.equal(selector, '[role="dialog"]'); return scope === scopes.portal ? scope : null;
@@ -33,16 +39,35 @@ function focusDom() {
   scopes.inline.add = button(scopes.inline, "add trigger");
   for (const scope of Object.values(scopes)) {
     scope.modify = button(scope, "modify trigger");
+    scope.refresh = button(scope, "refresh records");
+    scope.close = button(scope, "close graph");
     scope.article = { ...element(scope, "record article"), contains: target => target?.isConnected && target.article === scope.article, querySelector(selector) { assert.equal(selector, "[data-family-delete-trigger]"); return scope.deleteMarked ? scope.delete : null; } };
     scope.delete = { ...element(scope, "delete trigger"), article: scope.article };
     scope.deleteCancel = { ...element(scope, "delete cancel"), article: scope.article, closest(selector) { assert.equal(selector, "article"); return scope.article; } };
   }
   const sources = {};
-  return { scopes, sources, document, calls, move() { const target = { name: "another control", isConnected: true }; document.activeElement = target; return target; }, commit(tree) {
+  const disconnect = target => { target.isConnected = false; if (document.activeElement === target || target.contains?.(document.activeElement)) document.activeElement = document.body; };
+  return { scopes, sources, document, calls, focusListeners, move() { const target = { name: "another control", isConnected: true }; document.activeElement = target; for (const callback of focusListeners) callback({ target }); return target; }, commit(tree) {
     const graph = nodes(tree).find(node => typeof node.type === "function");
-    sources.inline = nodes(tree); sources.portal = nodes(graph?.props.details);
+    sources.inline = [...nodes(tree), ...nodes(graph?.props.alert)]; sources.portal = nodes(graph?.props.details);
     for (const scope of Object.values(scopes)) {
       const source = sources[scope.name], formNode = source.find(node => node.type === "form");
+      const cards = source.filter(node => node.type === "article"), ids = new Set(cards.map(node => node.key));
+      for (const [id, article] of scope.records) if (!ids.has(id)) { disconnect(article); for (const control of article.actions.values()) disconnect(control); disconnect(article.source); scope.records.delete(id); }
+      for (const card of cards) {
+        let article = scope.records.get(card.key);
+        if (!article) { article = { ...element(scope, `article:${card.key}`), actions: new Map(), getAttribute: name => card.props[name], contains: target => target?.isConnected && target.article === article,
+          querySelector(selector) { if (selector === "[data-family-source]") return this.source; const action = selector.match(/^\[data-family-action="(.+)"\]$/)?.[1]; assert.ok(action); return this.actions.get(action) || null; } };
+          article.source = { ...element(scope, `source:${card.key}`), article }; scope.records.set(card.key, article); }
+        const actionNodes = nodes(card).filter(node => node.type === "button" && (node.props["data-family-action"] || ["接受", "暂缓", "拒绝", "修改", "恢复", "确认删除"].includes(text(node))));
+        const seen = new Set();
+        for (const node of actionNodes) { const action = node.props["data-family-action"] || ({ 接受: "accept", 暂缓: "hold", 拒绝: "reject", 修改: "modify", 恢复: "restore", 确认删除: "delete" })[text(node)]; seen.add(action);
+          if (!article.actions.has(action)) article.actions.set(action, { ...button(scope, `${action}:${card.key}`), article });
+          const control = article.actions.get(action); control.disabled = Boolean(node.props.disabled); if (document.activeElement === control && control.disabled) document.activeElement = document.body; }
+        for (const [action, control] of article.actions) if (!seen.has(action)) { disconnect(control); article.actions.delete(action); }
+      }
+      scope.refresh.isConnected = scope.isConnected && source.some(node => node.type === "button" && text(node) === "刷新记录");
+      if (!scope.refresh.isConnected) disconnect(scope.refresh);
       scope.modify.disabled = Boolean(source.find(node => node.type === "button" && text(node) === "修改")?.props.disabled);
       if (scope.add) scope.add.disabled = Boolean(source.find(node => node.type === "button" && text(node) === "添加记录")?.props.disabled);
       const deleteNode = source.find(node => node.type === "button" && text(node) === "删除");
@@ -54,14 +79,16 @@ function focusDom() {
       if (document.activeElement === scope.deleteCancel && !scope.deleteCancel.isConnected) document.activeElement = document.body;
       if (formNode) {
         if (!scope.form) {
-          const form = { ...element(scope, "form"), contains: target => target?.isConnected && target.form === form, getAttribute: name => form.node.props[name], querySelector(selector) { assert.equal(selector, "select, input, textarea"); return this.first; } };
+          const form = { ...element(scope, "form"), contains: target => target?.isConnected && target.form === form, getAttribute: name => form.node.props[name], querySelector(selector) { if (selector === 'button[type="submit"]') return this.save; assert.equal(selector, "select, input, textarea"); return this.first; } };
           form.first = { ...element(scope, formNode.props["aria-label"] === "添加家校记录" ? "contact select" : "relationship input"), form };
           form.cancel = { ...element(scope, "cancel"), form, closest(selector) { assert.equal(selector, "form"); return form; } };
+          form.save = { ...button(scope, "save form"), form };
           scope.form = form;
         }
         scope.form.node = formNode;
+        scope.form.save.disabled = Boolean(nodes(formNode).find(node => node.type === "button" && node.props.type === "submit")?.props.disabled);
       } else if (scope.form) {
-        for (const target of [scope.form, scope.form.first, scope.form.cancel]) { target.isConnected = false; if (document.activeElement === target) document.activeElement = document.body; }
+        for (const target of [scope.form, scope.form.first, scope.form.cancel, scope.form.save]) { target.isConnected = false; if (document.activeElement === target) document.activeElement = document.body; }
         scope.form = null;
       }
       if (document.activeElement?.scope === scope && document.activeElement.disabled) document.activeElement = document.body;
@@ -69,9 +96,9 @@ function focusDom() {
   } };
 }
 
-function mount({ records = [row], post } = {}) {
+function mount({ records = [row], post, read } = {}) {
   const slots = [], listeners = new Map(), requests = [], dom = focusDom();
-  let cursor = 0, dirty = false, effects = [], tree;
+  let cursor = 0, dirty = false, effects = [], tree, mounted = true;
   const props = { studentId: "synthetic-student", studentName: "合成学生", reviewer: "合成教师", onEducation() {} };
   const react = {
     useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial; return [slots[index], value => { const next = typeof value === "function" ? value(slots[index]) : value; if (!Object.is(next, slots[index])) { slots[index] = next; dirty = true; } }]; },
@@ -87,7 +114,8 @@ function mount({ records = [row], post } = {}) {
     if (options.method === "POST") return post ? await post(url, JSON.parse(options.body)) : { ok: false, json: async () => ({ error: "合成保存失败" }) };
     const params = new URL(url, "http://localhost").searchParams;
     const offset = Number(params.get("offset"));
-    return { ok: true, json: async () => ({ studentId: params.get("student_id"), studentEntity: { entity_id: studentEntityId }, parents: [{ entity_id: parentEntityId, canonical_name: "合成联系人", status: "active" }], records: records.slice(offset, offset + 10), total: records.length, offset, limit: 10, nextOffset: offset + 10 < records.length ? offset + 10 : null, sourceStatus: "current", externalSend: false }) };
+    const response = { ok: true, json: async () => ({ studentId: params.get("student_id"), studentEntity: { entity_id: studentEntityId }, parents: [{ entity_id: parentEntityId, canonical_name: "合成联系人", status: "active" }], records: records.slice(offset, offset + 10), total: records.length, offset, limit: 10, nextOffset: offset + 10 < records.length ? offset + 10 : null, sourceStatus: "current", externalSend: false }) };
+    return read ? read({ params, signal: options.signal, response }) : response;
   }, require(name) {
     if (name === "react") return react;
     if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
@@ -96,7 +124,7 @@ function mount({ records = [row], post } = {}) {
     if (name === "@/lib/edupi-ui-events") return { EDUPI_STUDENT_RECORDS_UPDATED_EVENT: "records-updated" };
     assert.equal(name, "./EduPiStudentGraph"); return { EduPiStudentGraph: Graph };
   } });
-  const render = () => { let attempts = 0; do { assert.ok(attempts++ < 20); cursor = 0; dirty = false; effects = []; tree = exports.EduPiFamilyRecords(props); dom.commit(tree); effects.splice(0).forEach(effect => effect()); } while (dirty); };
+  const render = () => { if (!mounted) return; let attempts = 0; do { assert.ok(attempts++ < 20); cursor = 0; dirty = false; effects = []; tree = exports.EduPiFamilyRecords(props); dom.commit(tree); effects.splice(0).forEach(effect => effect()); } while (dirty); };
   const f = { props, dom, requests, render, async settle() { for (let i = 0; i < 5; i++) { await tick(); if (dirty) render(); } },
     select() { nodes(tree).find(node => node.type === Graph).props.onSelect(row.fact_id); render(); },
     list() { nodes(tree).find(node => node.type === "button" && text(node) === "记录").props.onClick(); render(); },
@@ -107,7 +135,12 @@ function mount({ records = [row], post } = {}) {
     cancel(scopeName) { const scope = dom.scopes[scopeName]; scope.form.cancel.focus({ preventScroll: false }); dom.sources[scopeName].find(node => node.type === "button" && text(node) === "取消").props.onClick({ currentTarget: scope.form.cancel }); render(); },
     beginDelete(scopeName) { const scope = dom.scopes[scopeName]; scope.delete.focus({ preventScroll: false }); dom.sources[scopeName].find(node => node.type === "button" && text(node) === "删除").props.onClick(); render(); },
     cancelDelete(scopeName, commit = true) { const scope = dom.scopes[scopeName]; scope.deleteCancel.focus({ preventScroll: false }); dom.calls.length = 0; dom.sources[scopeName].find(node => node.type === "button" && text(node) === "取消").props.onClick({ currentTarget: scope.deleteCancel }); if (commit) render(); },
-    refresh() { listeners.get("records-updated")(); render(); },
+    refresh(commit = true) { listeners.get("records-updated")(); if (commit) render(); },
+    act(action, factId = row.fact_id, scopeName = "inline", commit = true) { const scope = dom.scopes[scopeName], card = scopeName === "portal" ? dom.sources.portal.find(node => node.type === "article" && node.key === factId) : nodes(tree).find(node => node.type === "article" && node.key === factId);
+      const node = nodes(card).find(node => node.type === "button" && (node.props["data-family-action"] === action || text(node) === ({ accept: "接受", hold: "暂缓", reject: "拒绝", restore: "恢复", delete: "确认删除" })[action]));
+      const trigger = scope.records.get(factId).actions.get(action); trigger.focus({ preventScroll: false }); dom.calls.length = 0; node.props.onClick({ currentTarget: trigger }); if (commit) render(); },
+    submit(scopeName = "inline", commit = true) { const scope = dom.scopes[scopeName]; scope.form.save.focus({ preventScroll: false }); dom.calls.length = 0; const pending = dom.sources[scopeName].find(node => node.type === "form").props.onSubmit({ preventDefault() {}, currentTarget: scope.form }); if (commit) render(); return pending; },
+    unmount() { mounted = false; for (const slot of slots) slot?.cleanup?.(); for (const scope of Object.values(dom.scopes)) scope.isConnected = false; },
   };
   render(); return f;
 }
@@ -165,7 +198,7 @@ test("a family form focus request cannot follow another student or a disconnecte
 test("family modification keeps its original fact revision, actor and normalized replacement request", async () => {
   const f = mount(); await f.settle(); f.select(); f.open("portal"); f.change("portal", "记录称谓", " 合成新称谓 "); f.change("portal", "教师记录", " 合成新记录 ");
   const form = f.dom.sources.portal.find(node => node.type === "form");
-  await form.props.onSubmit({ preventDefault() {} }); f.render();
+  await form.props.onSubmit({ preventDefault() {}, currentTarget: f.dom.scopes.portal.form }); f.render();
   const request = f.requests.find(request => request.method === "POST");
   assert.equal(request.url, "/api/edupi/facts/synthetic-family-fact");
   const body = JSON.parse(request.body);
@@ -211,7 +244,7 @@ test("existing contact capture uses its canonical name in source text while keep
   const f = mount(); await f.settle(); f.open("inline", true);
   f.change("inline", "联系人名称", "未选用的新联系人草稿");
   f.change("inline", "联系人", parentEntityId); f.change("inline", "教师记录", "合成已有联系人记录");
-  const submit = () => f.dom.sources.inline.find(node => node.type === "form").props.onSubmit({ preventDefault() {} });
+  const submit = () => f.dom.sources.inline.find(node => node.type === "form").props.onSubmit({ preventDefault() {}, currentTarget: f.dom.scopes.inline.form });
   await submit(); f.render();
   const first = JSON.parse(f.requests.find(request => request.method === "POST").body);
   assert.equal(first.studentId, "synthetic-student"); assert.equal(first.parentEntityId, parentEntityId); assert.equal(first.parent, null);
@@ -226,7 +259,7 @@ test("existing contact capture uses its canonical name in source text while keep
 
 test("new contact capture retains the entered source name and existing generated bindings", async () => {
   const f = mount(); await f.settle(); f.open("inline", true); f.change("inline", "联系人名称", "合成新联系人"); f.change("inline", "教师记录", "合成新联系人记录");
-  await f.dom.sources.inline.find(node => node.type === "form").props.onSubmit({ preventDefault() {} }); f.render();
+  await f.dom.sources.inline.find(node => node.type === "form").props.onSubmit({ preventDefault() {}, currentTarget: f.dom.scopes.inline.form }); f.render();
   const body = JSON.parse(f.requests.find(request => request.method === "POST").body);
   assert.equal(body.parentEntityId, null); assert.deepEqual(body.parent, { external_id: "family-synthetic-family-editor", label: "合成新联系人" });
   assert.equal(body.source.raw_text.split("\n")[0], "联系人：合成新联系人");
@@ -258,8 +291,8 @@ for (const [action, label, beforeStatus, afterStatus, afterLabel] of [
   await f.settle(); f.list(); f.next(); await f.settle();
   assert.equal(lastReadOffset(f), "10"); assert.equal(visibleCards(f).length, 6);
   const card = visibleCards(f).find(node => node.key === targetId);
-  nodes(card).find(node => node.type === "button" && text(node) === label).props.onClick(); f.render();
-  if (action === "delete") { nodes(visibleCards(f).find(node => node.key === targetId)).find(node => node.type === "button" && text(node) === "确认删除").props.onClick(); f.render(); }
+  if (action === "delete") { nodes(card).find(node => node.type === "button" && text(node) === label).props.onClick(); f.render(); }
+  f.act(action, targetId);
   await f.settle();
   assert.equal(lastReadOffset(f), "10", "an in-place decision must reread the current page");
   assert.equal(visibleCards(f).length, 6);
@@ -281,7 +314,7 @@ test("a family modification that creates a new fact still returns to page one", 
     return { ok: true, json: async () => ({ data: {}, result: { resultFactId: newId } }) };
   } });
   await f.settle(); f.list(); f.next(); await f.settle(); f.open("inline"); f.change("inline", "教师记录", "合成新的修订记录");
-  await f.dom.sources.inline.find(node => node.type === "form").props.onSubmit({ preventDefault() {} }); await f.settle();
+  await f.dom.sources.inline.find(node => node.type === "form").props.onSubmit({ preventDefault() {}, currentTarget: f.dom.scopes.inline.form }); await f.settle();
   assert.equal(lastReadOffset(f), "0"); assert.equal(visibleCards(f)[0].key, newId);
   assert.equal(pagerButton(f, "上一页").props.disabled, true);
 });
@@ -294,7 +327,7 @@ test("adding a new family record from page two still returns to page one", async
     return { ok: true, json: async () => ({ data: {}, record: { fact_id: newId } }) };
   } });
   await f.settle(); f.list(); f.next(); await f.settle(); f.open("inline", true); f.change("inline", "联系人名称", "合成追加联系人"); f.change("inline", "教师记录", "合成新增分页记录");
-  await f.dom.sources.inline.find(node => node.type === "form").props.onSubmit({ preventDefault() {} }); await f.settle();
+  await f.dom.sources.inline.find(node => node.type === "form").props.onSubmit({ preventDefault() {}, currentTarget: f.dom.scopes.inline.form }); await f.settle();
   assert.equal(lastReadOffset(f), "0"); assert.equal(visibleCards(f)[0].key, newId);
   assert.equal(pagerButton(f, "上一页").props.disabled, true);
 });
@@ -322,4 +355,148 @@ test("delete cancellation does not return focus after moving focus, disconnectin
     assert.deepEqual(f.dom.calls, [], change);
     assert.equal(f.requests.some(request => request.method === "POST"), false);
   }
+});
+
+const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+const success = resultFactId => ({ ok: true, json: async () => ({ data: {}, result: { resultFactId } }) });
+
+for (const [action, beforeStatus, afterStatus, focusAction] of [
+  ["hold", "pending_review", "held", "hold"], ["accept", "pending_review", "accepted", "modify"],
+  ["reject", "pending_review", "rejected", "source"], ["delete", "accepted", "deleted", "restore"], ["restore", "deleted", "accepted", "modify"],
+]) test(`family ${action} waits for the real page reload before focusing its safe action on page two`, async () => {
+  const records = pagedRows(beforeStatus), targetId = records[14].fact_id, write = deferred(), read = deferred(); let reads = 0;
+  const f = mount({ records, post: async () => { await write.promise; records[14] = { ...records[14], status: afterStatus, revision: 5 }; return success(targetId); },
+    read: ({ response }) => ++reads > 2 ? read.promise.then(() => response) : response });
+  await f.settle(); f.list(); f.next(); await f.settle();
+  if (action === "delete") { nodes(visibleCards(f).find(node => node.key === targetId)).find(node => node.type === "button" && text(node) === "删除").props.onClick(); f.render(); }
+  f.act(action, targetId); assert.equal(f.dom.document.activeElement, f.dom.document.body); assert.equal(f.dom.focusListeners.size, 1);
+  write.resolve(); await f.settle(); assert.equal(reads, 3); assert.equal(visibleCards(f).length, 0); assert.deepEqual(f.dom.calls, [], "the old row must never receive focus before its loading replacement");
+  read.resolve(); await f.settle();
+  assert.equal(f.dom.document.activeElement.name, `${focusAction}:${targetId}`); assert.equal(lastReadOffset(f), "10");
+  assert.equal(f.dom.calls.length, 1); assert.equal(f.dom.focusListeners.size, 0);
+});
+
+test("fast family mutation and read completions still restore focus after the final DOM commit", async () => {
+  const records = [{ ...row, status: "pending_review" }];
+  const f = mount({ records, post: async () => { records[0] = { ...records[0], status: "accepted", revision: 5 }; return success(row.fact_id); } });
+  await f.settle(); f.list(); f.act("accept", row.fact_id, "inline", false); f.dom.document.activeElement = f.dom.document.body;
+  await f.settle(); assert.equal(f.dom.document.activeElement.name, `modify:${row.fact_id}`); assert.equal(f.dom.calls.length, 1); assert.equal(f.dom.focusListeners.size, 0);
+});
+
+test("a family button activation that leaves the prior Mac focus in place still follows the invoked action", async () => {
+  const records = [{ ...row, status: "pending_review" }];
+  const f = mount({ records, post: async () => { records[0] = { ...records[0], status: "accepted" }; return success(row.fact_id); } });
+  await f.settle(); f.list(); f.dom.move(); f.dom.calls.length = 0;
+  nodes(visibleCards(f)[0]).find(node => node.type === "button" && text(node) === "接受").props.onClick({ currentTarget: f.dom.scopes.inline.records.get(row.fact_id).actions.get("accept") });
+  f.render(); await f.settle();
+  assert.equal(f.dom.document.activeElement.name, `modify:${row.fact_id}`); assert.equal(f.dom.calls.length, 1);
+});
+
+test("failed family writes keep the current page and focus the existing refresh retry", async () => {
+  const f = mount({ records: [{ ...row, status: "pending_review" }] }); await f.settle(); f.list(); f.act("accept"); await f.settle();
+  assert.equal(f.dom.document.activeElement, f.dom.scopes.inline.refresh); assert.equal(f.requests.filter(request => !request.method).length, 1);
+  assert.ok(text(f.dom.sources.inline).includes("合成保存失败")); assert.equal(f.dom.focusListeners.size, 0);
+});
+
+test("a successful family write followed by a failed reload focuses read retry instead of the stale row", async () => {
+  let reads = 0;
+  const f = mount({ records: [{ ...row, status: "pending_review" }], post: async () => success(row.fact_id),
+    read: ({ response }) => ++reads === 1 ? response : { ok: false, json: async () => ({ error: "合成重读失败" }) } });
+  await f.settle(); f.list(); f.act("accept"); await f.settle();
+  assert.equal(f.dom.document.activeElement, f.dom.scopes.inline.refresh); assert.equal(f.dom.scopes.inline.records.size, 0); assert.equal(f.dom.focusListeners.size, 0);
+});
+
+for (const phase of ["write", "read"]) test(`moving focus during family ${phase} cancels return even after focus reaches body again`, async () => {
+  const records = [{ ...row, status: "pending_review" }], write = deferred(), read = deferred(); let reads = 0;
+  const f = mount({ records, post: async () => { await write.promise; records[0] = { ...records[0], status: "accepted" }; return success(row.fact_id); }, read: ({ response }) => ++reads === 1 ? response : read.promise.then(() => response) });
+  await f.settle(); f.list(); f.act("accept");
+  if (phase === "read") { write.resolve(); await f.settle(); }
+  f.dom.move(); f.dom.document.activeElement = f.dom.document.body;
+  write.resolve(); read.resolve(); await f.settle();
+  assert.equal(f.dom.document.activeElement, f.dom.document.body); assert.deepEqual(f.dom.calls, []); assert.equal(f.dom.focusListeners.size, 0);
+});
+
+for (const change of ["page", "student"]) test(`a late family page response cannot return focus after changing ${change}`, async () => {
+  const records = pagedRows("pending_review"), targetId = records[14].fact_id, read = deferred(); let reads = 0;
+  const f = mount({ records, post: async () => { records[14] = { ...records[14], status: "held" }; return success(targetId); },
+    read: ({ params, response }) => {
+      if (params.get("student_id") === "another-student") return { ok: true, json: async () => ({ ...await response.json(), records: [{ ...row, fact_id: "synthetic-other-student-fact" }], total: 11, nextOffset: null }) };
+      return ++reads === 3 ? read.promise.then(() => response) : response;
+    } });
+  await f.settle(); f.list(); f.next(); await f.settle(); f.act("hold", targetId); await f.settle(); assert.equal(reads, 3);
+  if (change === "page") f.previous(); else { f.props.studentId = "another-student"; f.render(); }
+  await f.settle(); const currentRead = f.requests.filter(request => !request.method).at(-1).url;
+  read.resolve(); await f.settle();
+  assert.equal(f.requests.filter(request => !request.method).at(-1).url, currentRead); assert.deepEqual(f.dom.calls, []); assert.equal(f.dom.focusListeners.size, 0);
+  if (change === "page") { assert.equal(lastReadOffset(f), "0"); assert.equal(visibleCards(f).length, 10); }
+  else { assert.equal(new URL(currentRead, "http://localhost").searchParams.get("student_id"), "another-student"); assert.deepEqual(visibleCards(f).map(card => card.key), ["synthetic-other-student-fact"]); }
+});
+
+test("family mutation focus remains inside the originating expanded graph copy", async () => {
+  const records = [{ ...row, status: "pending_review" }];
+  const f = mount({ records, post: async () => { records[0] = { ...records[0], status: "accepted" }; return success(row.fact_id); } });
+  await f.settle(); f.select(); f.act("accept", row.fact_id, "portal"); await f.settle();
+  assert.equal(f.dom.document.activeElement, f.dom.scopes.portal.records.get(row.fact_id).actions.get("modify"));
+  assert.deepEqual(f.dom.calls.map(call => call.scope), ["portal"]);
+});
+
+test("family focus listeners are released on disconnect and unmount", async () => {
+  for (const change of ["disconnect", "unmount"]) {
+    const write = deferred(), f = mount({ records: [{ ...row, status: "pending_review" }], post: async () => { await write.promise; return success(row.fact_id); } });
+    await f.settle(); f.list(); f.act("accept"); assert.equal(f.dom.focusListeners.size, 1);
+    if (change === "unmount") f.unmount(); else { f.dom.scopes.inline.isConnected = false; f.render(); }
+    write.resolve(); await f.settle(); assert.deepEqual(f.dom.calls, []); assert.equal(f.dom.focusListeners.size, 0);
+  }
+});
+
+test("a family revision focuses the replacement fact after its page-one read", async () => {
+  const records = [row], id = "synthetic-family-replacement";
+  const f = mount({ records, post: async () => { records.unshift({ ...row, fact_id: id }); return success(id); } });
+  await f.settle(); f.select(); f.open("portal"); const pending = f.submit("portal"); await pending; await f.settle();
+  assert.equal(f.dom.document.activeElement, f.dom.scopes.portal.records.get(id).actions.get("modify")); assert.equal(lastReadOffset(f), "0"); assert.equal(f.dom.calls.length, 1);
+});
+
+for (const view of ["list", "graph"]) test(`new family capture returns to a safe ${view} entry without rewriting graph selection`, async () => {
+  const records = [row], id = "synthetic-family-new-capture";
+  const f = mount({ records, post: async () => { records.unshift({ ...row, fact_id: id, status: "pending_review" }); return { ok: true, json: async () => ({ record: { fact_id: id } }) }; } });
+  await f.settle(); if (view === "list") f.list(); f.open("inline", true); f.change("inline", "教师记录", "合成新增内容");
+  await f.submit(); await f.settle();
+  assert.equal(f.dom.document.activeElement, view === "list" ? f.dom.scopes.inline.records.get(id).source : f.dom.scopes.inline.add);
+  assert.equal(lastReadOffset(f), "0"); assert.equal(f.dom.calls.length, 1);
+});
+
+for (const outcome of ["success", "failure"]) test(`a failed write batched with records-updated waits for the ${outcome} read commit`, async () => {
+  const read = deferred(); let reads = 0;
+  const f = mount({ records: [{ ...row, status: "pending_review" }],
+    post: async () => ({ ok: false, json: async () => { f.refresh(false); return { error: "合成写入失败" }; } }),
+    read: ({ response }) => ++reads === 1 ? response : read.promise.then(() => outcome === "success" ? response : { ok: false, json: async () => ({ error: "合成刷新失败" }) }) });
+  await f.settle(); f.list(); f.act("accept"); await f.settle();
+  assert.equal(reads, 2); assert.equal(f.dom.scopes.inline.refresh.isConnected, false); assert.equal(f.dom.document.activeElement, f.dom.document.body);
+  assert.deepEqual(f.dom.calls, [], "the retry from the stale render must not consume failure focus before reload");
+  assert.equal(f.dom.focusListeners.size, 1);
+  read.resolve(); await f.settle();
+  const target = outcome === "failure" ? f.dom.scopes.inline.refresh : f.dom.scopes.inline.records.get(row.fact_id).source;
+  assert.equal(target.isConnected, true); assert.equal(f.dom.document.activeElement, target); assert.equal(f.dom.calls.length, 1); assert.equal(f.dom.focusListeners.size, 0);
+});
+
+test("moving focus during the read batched with a failed write cancels its final retry focus", async () => {
+  const read = deferred(); let reads = 0;
+  const f = mount({ records: [{ ...row, status: "pending_review" }],
+    post: async () => ({ ok: false, json: async () => { f.refresh(false); return { error: "合成写入失败" }; } }),
+    read: ({ response }) => ++reads === 1 ? response : read.promise.then(() => ({ ok: false, json: async () => ({ error: "合成刷新失败" }) })) });
+  await f.settle(); f.list(); f.act("accept"); await f.settle(); f.dom.calls.length = 0;
+  f.dom.move(); f.dom.document.activeElement = f.dom.document.body; read.resolve(); await f.settle();
+  assert.equal(f.dom.scopes.inline.refresh.isConnected, true); assert.equal(f.dom.document.activeElement, f.dom.document.body); assert.deepEqual(f.dom.calls, []); assert.equal(f.dom.focusListeners.size, 0);
+});
+
+test("an old aborted read finishing during a newer family mutation does not clear its focus request", async () => {
+  const records = [{ ...row, status: "pending_review" }], oldRead = deferred(), nextWrite = deferred(); let reads = 0, writes = 0;
+  const f = mount({ records,
+    post: async () => { if (++writes > 1) await nextWrite.promise; records[0] = { ...records[0], status: "held", revision: 4 + writes }; return success(row.fact_id); },
+    read: ({ response }) => ++reads === 2 ? oldRead.promise.then(() => response) : response });
+  await f.settle(); f.list(); f.act("hold"); await f.settle(); f.refresh(); await f.settle();
+  assert.equal(reads, 3); f.act("hold"); assert.equal(f.dom.focusListeners.size, 1);
+  oldRead.resolve(); await f.settle(); assert.deepEqual(f.dom.calls, []); assert.equal(f.dom.focusListeners.size, 1);
+  nextWrite.resolve(); await f.settle();
+  assert.equal(f.dom.document.activeElement.name, `hold:${row.fact_id}`); assert.equal(f.dom.calls.length, 1); assert.equal(f.dom.focusListeners.size, 0);
 });
