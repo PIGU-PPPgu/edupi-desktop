@@ -31,7 +31,12 @@ function focusDom() {
     assert.equal(selector, '[role="dialog"]'); return scope === scopes.portal ? scope : null;
   } });
   scopes.inline.add = button(scopes.inline, "add trigger");
-  for (const scope of Object.values(scopes)) scope.modify = button(scope, "modify trigger");
+  for (const scope of Object.values(scopes)) {
+    scope.modify = button(scope, "modify trigger");
+    scope.article = { ...element(scope, "record article"), contains: target => target?.isConnected && target.article === scope.article, querySelector(selector) { assert.equal(selector, "[data-family-delete-trigger]"); return scope.deleteMarked ? scope.delete : null; } };
+    scope.delete = { ...element(scope, "delete trigger"), article: scope.article };
+    scope.deleteCancel = { ...element(scope, "delete cancel"), article: scope.article, closest(selector) { assert.equal(selector, "article"); return scope.article; } };
+  }
   const sources = {};
   return { scopes, sources, document, calls, move() { const target = { name: "another control", isConnected: true }; document.activeElement = target; return target; }, commit(tree) {
     const graph = nodes(tree).find(node => typeof node.type === "function");
@@ -40,6 +45,13 @@ function focusDom() {
       const source = sources[scope.name], formNode = source.find(node => node.type === "form");
       scope.modify.disabled = Boolean(source.find(node => node.type === "button" && text(node) === "修改")?.props.disabled);
       if (scope.add) scope.add.disabled = Boolean(source.find(node => node.type === "button" && text(node) === "添加记录")?.props.disabled);
+      const deleteNode = source.find(node => node.type === "button" && text(node) === "删除");
+      scope.article.isConnected = scope.isConnected && source.some(node => node.type === "article");
+      scope.delete.isConnected = scope.article.isConnected && Boolean(deleteNode);
+      scope.delete.disabled = Boolean(deleteNode?.props.disabled);
+      scope.deleteMarked = Boolean(deleteNode?.props["data-family-delete-trigger"]);
+      scope.deleteCancel.isConnected = scope.article.isConnected && source.some(node => node.type === "button" && text(node) === "确认删除");
+      if (document.activeElement === scope.deleteCancel && !scope.deleteCancel.isConnected) document.activeElement = document.body;
       if (formNode) {
         if (!scope.form) {
           const form = { ...element(scope, "form"), contains: target => target?.isConnected && target.form === form, getAttribute: name => form.node.props[name], querySelector(selector) { assert.equal(selector, "select, input, textarea"); return this.first; } };
@@ -57,7 +69,7 @@ function focusDom() {
   } };
 }
 
-function mount({ records = [row] } = {}) {
+function mount({ records = [row], post } = {}) {
   const slots = [], listeners = new Map(), requests = [], dom = focusDom();
   let cursor = 0, dirty = false, effects = [], tree;
   const props = { studentId: "synthetic-student", studentName: "合成学生", reviewer: "合成教师", onEducation() {} };
@@ -72,9 +84,10 @@ function mount({ records = [row] } = {}) {
     addEventListener(name, callback) { listeners.set(name, callback); }, removeEventListener(name) { listeners.delete(name); }, dispatchEvent(event) { listeners.get(event.type)?.(); },
   }, fetch: async (url, options = {}) => {
     requests.push({ url, ...options });
-    if (options.method === "POST") return { ok: false, json: async () => ({ error: "合成保存失败" }) };
+    if (options.method === "POST") return post ? await post(url, JSON.parse(options.body)) : { ok: false, json: async () => ({ error: "合成保存失败" }) };
     const params = new URL(url, "http://localhost").searchParams;
-    return { ok: true, json: async () => ({ studentId: params.get("student_id"), studentEntity: { entity_id: studentEntityId }, parents: [{ entity_id: parentEntityId, canonical_name: "合成联系人", status: "active" }], records, total: records.length, offset: Number(params.get("offset")), limit: 10, nextOffset: null, sourceStatus: "current", externalSend: false }) };
+    const offset = Number(params.get("offset"));
+    return { ok: true, json: async () => ({ studentId: params.get("student_id"), studentEntity: { entity_id: studentEntityId }, parents: [{ entity_id: parentEntityId, canonical_name: "合成联系人", status: "active" }], records: records.slice(offset, offset + 10), total: records.length, offset, limit: 10, nextOffset: offset + 10 < records.length ? offset + 10 : null, sourceStatus: "current", externalSend: false }) };
   }, require(name) {
     if (name === "react") return react;
     if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
@@ -87,9 +100,13 @@ function mount({ records = [row] } = {}) {
   const f = { props, dom, requests, render, async settle() { for (let i = 0; i < 5; i++) { await tick(); if (dirty) render(); } },
     select() { nodes(tree).find(node => node.type === Graph).props.onSelect(row.fact_id); render(); },
     list() { nodes(tree).find(node => node.type === "button" && text(node) === "记录").props.onClick(); render(); },
+    next() { nodes(tree).find(node => node.type === "button" && text(node) === "下一页").props.onClick(); render(); },
+    previous() { nodes(tree).find(node => node.type === "button" && text(node) === "上一页").props.onClick(); render(); },
     open(scopeName, create = false, commit = true) { const scope = dom.scopes[scopeName], label = create ? "添加记录" : "修改", trigger = create ? scope.add : scope.modify; trigger.focus({ preventScroll: false }); dom.calls.length = 0; dom.sources[scopeName].find(node => node.type === "button" && text(node) === label).props.onClick({ currentTarget: trigger }); if (commit) render(); },
     change(scopeName, label, value) { const form = dom.sources[scopeName].find(node => node.type === "form"); const field = nodes(form).find(node => node.type === "label" && text(node.props.children[0]) === label); nodes(field).find(node => ["input", "select", "textarea"].includes(node.type)).props.onChange({ target: { value } }); render(); },
     cancel(scopeName) { const scope = dom.scopes[scopeName]; scope.form.cancel.focus({ preventScroll: false }); dom.sources[scopeName].find(node => node.type === "button" && text(node) === "取消").props.onClick({ currentTarget: scope.form.cancel }); render(); },
+    beginDelete(scopeName) { const scope = dom.scopes[scopeName]; scope.delete.focus({ preventScroll: false }); dom.sources[scopeName].find(node => node.type === "button" && text(node) === "删除").props.onClick(); render(); },
+    cancelDelete(scopeName, commit = true) { const scope = dom.scopes[scopeName]; scope.deleteCancel.focus({ preventScroll: false }); dom.calls.length = 0; dom.sources[scopeName].find(node => node.type === "button" && text(node) === "取消").props.onClick({ currentTarget: scope.deleteCancel }); if (commit) render(); },
     refresh() { listeners.get("records-updated")(); render(); },
   };
   render(); return f;
@@ -215,4 +232,94 @@ test("new contact capture retains the entered source name and existing generated
   assert.equal(body.source.raw_text.split("\n")[0], "联系人：合成新联系人");
   assert.equal(body.source.source_id, "desktop-family-synthetic-family-editor"); assert.equal(body.source.source_revision, "1");
   assert.ok(recordModel.parseFamilyCaptureInput(body));
+});
+
+const pagedRows = status => Array.from({ length: 16 }, (_, index) => ({ ...row, fact_id: `synthetic-family-${index + 1}`, status, record: { ...row.record, note: `合成分页记录${index + 1}` } }));
+const lastReadOffset = f => new URL(f.requests.filter(request => !request.method).at(-1).url, "http://localhost").searchParams.get("offset");
+const visibleCards = f => f.dom.sources.inline.filter(node => node.type === "article" && node.props.className === "edupi-family-record");
+const pagerButton = (f, label) => f.dom.sources.inline.find(node => node.type === "button" && text(node) === label);
+
+for (const [action, label, beforeStatus, afterStatus, afterLabel] of [
+  ["accept", "接受", "pending_review", "accepted", "已确认"],
+  ["hold", "暂缓", "pending_review", "held", "已暂缓"],
+  ["reject", "拒绝", "pending_review", "rejected", "已拒绝"],
+  ["delete", "删除", "accepted", "deleted", "已删除"],
+  ["restore", "恢复", "deleted", "accepted", "已确认"],
+]) test(`an in-place family ${action} on page two keeps its offset and back-page trail`, async () => {
+  const records = pagedRows(beforeStatus), targetId = records[14].fact_id;
+  const f = mount({ records, post: async (url, body) => {
+    assert.equal(url, `/api/edupi/facts/${targetId}`);
+    assert.equal(body.expectedRevision, 4); assert.equal(body.reviewer, "合成原记录者");
+    assert.equal(body.action, ["accept", "hold", "reject"].includes(action) ? "review" : action);
+    if (body.action === "review") assert.equal(body.decision, action);
+    records[14] = { ...records[14], status: afterStatus, revision: 5 };
+    return { ok: true, json: async () => ({ data: {}, result: { resultFactId: targetId } }) };
+  } });
+  await f.settle(); f.list(); f.next(); await f.settle();
+  assert.equal(lastReadOffset(f), "10"); assert.equal(visibleCards(f).length, 6);
+  const card = visibleCards(f).find(node => node.key === targetId);
+  nodes(card).find(node => node.type === "button" && text(node) === label).props.onClick(); f.render();
+  if (action === "delete") { nodes(visibleCards(f).find(node => node.key === targetId)).find(node => node.type === "button" && text(node) === "确认删除").props.onClick(); f.render(); }
+  await f.settle();
+  assert.equal(lastReadOffset(f), "10", "an in-place decision must reread the current page");
+  assert.equal(visibleCards(f).length, 6);
+  assert.ok(text(visibleCards(f).find(node => node.key === targetId)).includes(afterLabel));
+  assert.equal(pagerButton(f, "上一页").props.disabled, false);
+  f.previous(); await f.settle();
+  assert.equal(lastReadOffset(f), "0"); assert.equal(visibleCards(f).length, 10);
+  assert.equal(pagerButton(f, "上一页").props.disabled, true);
+  assert.equal(pagerButton(f, "下一页").props.disabled, false);
+  assert.equal(f.requests.filter(request => request.method === "POST").length, 1);
+});
+
+test("a family modification that creates a new fact still returns to page one", async () => {
+  const records = pagedRows("accepted"), newId = "synthetic-family-modified-new";
+  const f = mount({ records, post: async (url, body) => {
+    assert.equal(url, "/api/edupi/facts/synthetic-family-11"); assert.equal(body.action, "modify"); assert.equal(body.expectedRevision, 4);
+    records[10] = { ...records[10], status: "superseded" };
+    records.unshift({ ...row, fact_id: newId, record: JSON.parse(body.replacementValue) });
+    return { ok: true, json: async () => ({ data: {}, result: { resultFactId: newId } }) };
+  } });
+  await f.settle(); f.list(); f.next(); await f.settle(); f.open("inline"); f.change("inline", "教师记录", "合成新的修订记录");
+  await f.dom.sources.inline.find(node => node.type === "form").props.onSubmit({ preventDefault() {} }); await f.settle();
+  assert.equal(lastReadOffset(f), "0"); assert.equal(visibleCards(f)[0].key, newId);
+  assert.equal(pagerButton(f, "上一页").props.disabled, true);
+});
+
+test("adding a new family record from page two still returns to page one", async () => {
+  const records = pagedRows("accepted"), newId = "synthetic-family-captured-new";
+  const f = mount({ records, post: async (url, body) => {
+    assert.equal(url, "/api/edupi/family-records"); assert.equal(body.studentId, "synthetic-student");
+    records.unshift({ ...row, fact_id: newId, status: "pending_review", record: { ...row.record, ...body.record } });
+    return { ok: true, json: async () => ({ data: {}, record: { fact_id: newId } }) };
+  } });
+  await f.settle(); f.list(); f.next(); await f.settle(); f.open("inline", true); f.change("inline", "联系人名称", "合成追加联系人"); f.change("inline", "教师记录", "合成新增分页记录");
+  await f.dom.sources.inline.find(node => node.type === "form").props.onSubmit({ preventDefault() {} }); await f.settle();
+  assert.equal(lastReadOffset(f), "0"); assert.equal(visibleCards(f)[0].key, newId);
+  assert.equal(pagerButton(f, "上一页").props.disabled, true);
+});
+
+for (const surface of ["inline", "portal"]) test(`keyboard delete cancellation in ${surface} returns only to that record's delete trigger`, async () => {
+  const f = mount(); await f.settle(); f.select(); f.beginDelete(surface);
+  assert.ok(f.dom.scopes.inline.deleteCancel.isConnected && f.dom.scopes.portal.deleteCancel.isConnected);
+  f.cancelDelete(surface);
+  assert.equal(f.dom.document.activeElement, f.dom.scopes[surface].delete);
+  assert.deepEqual(f.dom.calls.map(call => [call.scope, call.name]), [[surface, "delete trigger"]]);
+  assert.equal(f.dom.scopes.inline.deleteCancel.isConnected, false); assert.equal(f.dom.scopes.portal.deleteCancel.isConnected, false);
+  assert.equal(f.requests.some(request => request.method === "POST"), false);
+  assert.equal(row.status, "accepted"); assert.equal(row.revision, 4);
+});
+
+test("delete cancellation does not return focus after moving focus, disconnecting its dialog, or changing student", async () => {
+  for (const change of ["focus", "dialog", "student"]) {
+    const f = mount(); await f.settle(); f.select(); f.beginDelete("portal"); f.cancelDelete("portal", false);
+    let expected = f.dom.document.body;
+    if (change === "focus") expected = f.dom.move();
+    else if (change === "dialog") f.dom.scopes.portal.isConnected = false;
+    else f.props.studentId = "another-student";
+    f.render(); await f.settle();
+    assert.equal(f.dom.document.activeElement, expected, change);
+    assert.deepEqual(f.dom.calls, [], change);
+    assert.equal(f.requests.some(request => request.method === "POST"), false);
+  }
 });

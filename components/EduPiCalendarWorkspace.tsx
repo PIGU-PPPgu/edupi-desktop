@@ -24,6 +24,7 @@ import { EduPiOperationHistory } from "./EduPiOperationHistory";
 import { EduPiIconButton } from "./EduPiActionIcon";
 import { EduPiScheduleConflictReview } from "./EduPiScheduleConflictReview";
 import type { CalendarIntakeInput } from "@/lib/edupi-education-intake";
+import { CalendarFormTimeError, calendarFormTime, calendarTimeZoneOptions, createCalendarTimeDraft } from "@/lib/edupi-calendar-form-time";
 import { calendarReferenceDate, calendarSortDate, compareForegroundDates, isForegroundDate, shanghaiDate } from "@/lib/edupi-foreground";
 import { EduPiListPreview, EduPiPagedRows, useEduPiForegroundPolicy } from "./EduPiForeground";
 
@@ -305,6 +306,11 @@ function IntakeComposer({ mode, anchorDate, calendarEvent, timetableSlot, busy, 
 }) {
   const [error, setError] = useState<string | null>(null);
   const [newOccurrenceRef] = useState(() => `manual-${globalThis.crypto.randomUUID()}`);
+  const [timeDraft, setTimeDraft] = useState(() => createCalendarTimeDraft(calendarEvent));
+  const [showTimeZone, setShowTimeZone] = useState(false);
+  const timeZones = useMemo(() => calendarTimeZoneOptions(timeDraft.timeZone), [timeDraft.timeZone]);
+  const occurrenceFields = mode === "calendar" && Boolean(!calendarEvent || calendarEvent.occurrenceRef);
+  const existingTimed = Boolean(calendarEvent?.startsAt || calendarEvent?.endsAt);
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (busy) return;
@@ -313,25 +319,18 @@ function IntakeComposer({ mode, anchorDate, calendarEvent, timetableSlot, busy, 
     try {
       if (mode === "calendar") {
         const sourceOccurrenceRef = calendarEvent ? calendarEvent.occurrenceRef : newOccurrenceRef;
-        const startAt = String(form.get("startAt") || "") || null;
-        const endAt = String(form.get("endAt") || "") || null;
-        const hasClock = Boolean(startAt || endAt);
-        const timeZone = hasClock ? String(form.get("timeZone") || "") || null : null;
-        if (sourceOccurrenceRef && hasClock && ![startAt, endAt, timeZone].every(Boolean)) {
-          setError("请补全开始、结束和时区");
-          return;
-        }
+        const date = String(form.get("date") || "");
+        const endDate = String(form.get("endDate") || "") || null;
+        const interval = calendarFormTime({ ...timeDraft, allDay: !occurrenceFields || timeDraft.allDay, date, endDate }, calendarEvent);
         await onImportCalendar({
           eventId: calendarEvent?.id || null,
-          date: String(form.get("date") || ""),
-          endDate: String(form.get("endDate") || "") || null,
+          date,
+          endDate,
           name: String(form.get("name") || ""),
           type: String(form.get("type") || "custom"),
           notes: String(form.get("notes") || "") || null,
           sourceOccurrenceRef,
-          startAt,
-          endAt,
-          timeZone,
+          ...interval,
           location: String(form.get("location") || "") || null,
         });
       } else {
@@ -350,19 +349,26 @@ function IntakeComposer({ mode, anchorDate, calendarEvent, timetableSlot, busy, 
         });
       }
       onClose();
-    } catch {
-      setError("接入失败，请检查后重试");
+    } catch (cause) {
+      setError(cause instanceof CalendarFormTimeError ? cause.message : "接入失败，请检查后重试");
     }
   };
   const editingCalendar = mode === "calendar" && Boolean(calendarEvent?.id);
   const editingTimetable = mode === "timetable" && Boolean(rawText(timetableSlot?.slot_id ?? timetableSlot?.id));
   const title = mode === "calendar" ? editingCalendar ? "编辑日程" : "新建日程" : editingTimetable ? "编辑课表" : "添加课表";
-  const occurrenceFields = mode === "calendar" && Boolean(!calendarEvent || calendarEvent.occurrenceRef);
-  return <section className={`edupi-calendar-intake${embedded ? " is-embedded" : ""}`} aria-label={title}>{!embedded ? <header><strong>{title}</strong><button type="button" onClick={onClose} aria-label="关闭">×</button></header> : null}<form onSubmit={(event) => void submit(event)}>{mode === "calendar" ? <>
-    <label><span>名称</span><input name="name" required maxLength={240} autoFocus placeholder="如：期中考试" defaultValue={calendarEvent?.name || ""} /></label>
+  return <section className={`edupi-calendar-intake${mode === "calendar" ? " is-calendar" : ""}${embedded ? " is-embedded" : ""}`} aria-label={title}>{!embedded ? <header><strong>{title}</strong><button type="button" onClick={onClose} aria-label="关闭">×</button></header> : null}<form onSubmit={(event) => void submit(event)}>{mode === "calendar" ? <>
+    <label className="is-wide"><span>名称</span><input name="name" required maxLength={240} autoFocus placeholder="如：期中考试" defaultValue={calendarEvent?.name || ""} /></label>
     <label><span>开始</span><input name="date" type="date" required defaultValue={calendarEvent?.date || anchorDate} /></label>
     <label><span>结束</span><input name="endDate" type="date" defaultValue={calendarEvent?.endDate || ""} /></label>
-    {occurrenceFields ? <><label><span>开始时间</span><input name="startAt" maxLength={22} placeholder="2026-10-01T09:00+08:00" defaultValue={calendarEvent?.startsAt || ""} /></label><label><span>结束时间</span><input name="endAt" maxLength={22} placeholder="2026-10-01T10:00+08:00" defaultValue={calendarEvent?.endsAt || ""} /></label><label><span>时区</span><input name="timeZone" maxLength={100} placeholder="Asia/Shanghai" defaultValue={calendarEvent?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone} /></label><label><span>地点</span><input name="location" maxLength={240} placeholder="可不填" defaultValue={calendarEvent?.location || ""} /></label></> : null}
+    {occurrenceFields ? <>
+      {!existingTimed ? <label className="edupi-calendar-intake__all-day"><input name="allDay" type="checkbox" checked={timeDraft.allDay} onChange={(event) => setTimeDraft((draft) => ({ ...draft, allDay: event.target.checked }))} /><span>全天</span></label> : null}
+      {!timeDraft.allDay ? <>
+        <label><span>开始时间</span><input name="startTime" type="time" step={60} required value={timeDraft.startTime} onChange={(event) => setTimeDraft((draft) => ({ ...draft, startTime: event.target.value }))} /></label>
+        <label><span>结束时间</span><input name="endTime" type="time" step={60} required value={timeDraft.endTime} onChange={(event) => setTimeDraft((draft) => ({ ...draft, endTime: event.target.value }))} /></label>
+        <div className="edupi-calendar-intake__time-zone"><button type="button" aria-expanded={showTimeZone} aria-controls={`${newOccurrenceRef}-time-zone`} onClick={() => setShowTimeZone((open) => !open)}>时区</button>{showTimeZone ? <select id={`${newOccurrenceRef}-time-zone`} name="timeZone" aria-label="时区" value={timeDraft.timeZone} onChange={(event) => setTimeDraft((draft) => ({ ...draft, timeZone: event.target.value }))}>{timeZones.map((zone) => <option key={zone} value={zone}>{zone}</option>)}</select> : null}</div>
+      </> : null}
+      <label><span>地点</span><input name="location" maxLength={240} placeholder="可不填" defaultValue={calendarEvent?.location || ""} /></label>
+    </> : null}
     <label><span>类型</span><select name="type" defaultValue={calendarEvent?.type || "custom"}><option value="custom">日程</option><option value="teaching">教学节点</option><option value="exam">考试</option><option value="meeting">会议</option><option value="activity">活动</option><option value="holiday">假期</option><option value="festival">节日</option></select></label>
   </> : <>
     <label><span>星期</span><select name="dayOfWeek" defaultValue={rawText(timetableSlot?.day_of_week ?? timetableSlot?.dayOfWeek) || weekdayIndex(anchorDate) + 1}>{WEEKDAY_LABELS.map((label, index) => <option key={label} value={index + 1}>周{label}</option>)}</select></label>

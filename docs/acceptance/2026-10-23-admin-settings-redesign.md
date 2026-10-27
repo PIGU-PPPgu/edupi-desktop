@@ -1,8 +1,10 @@
 # 管理中心与设置重做验收
 
-2026-10-27 当前已安装 `2f599f21` 本地预览，教师三类表单键盘打开、取消／Esc 回入口及原生恢复确认取消回原按钮已实机验证；暂缓、拒绝后焦点丢失另已补源码。学生详情表单顺序、输入样式和空态修正已实现，合并后 70 项针对检查、类型、完整 lint 均通过，待下一安装版实测。原生窗口随后再次不可读，已请求可访问桌面；完整子功能范围仍**部分完成**，不把源码或种子计作通过。
+2026-10-27 R18 当前状态：唯一安装版仍为 `9eab8a9b` 本地 .77 预览，Core03 保持；本轮原生材料已完成七份受控PDF接入、五种类型、双击防重、信息历史前后恢复、正文确认撤回、9→8分页和回收站恢复。10份材料含1份DOCX、1份ICS仍暂存；完整子功能范围仍**部分完成**。家校分页、材料异步焦点、列表提案/类型、日程时间控件及文件预览中文入口的源码修正正在合并安装，尚不能计作安装版通过。隔离资料结束前必须切回原教师目录，临时防休眠也须退出。
 
-2026-10-27 当前安装为本地预览 `cb6aa7be`，Core03 保持。原生已验证新布局、完整 Tab 往返、恢复确认取消与保存、暂缓、双击仅一次写入及两种表单取消清错；名单 28 人及历史在正常 Quit 后冷启保留。完整子功能验收仍为**部分完成**。实机新发现的恢复确认／表单焦点丢失已补源码，33 项针对检查通过，待下一本机包验收。当前仍在隔离资料，结束前恢复原教师目录。
+历史安装记录：2026-10-27 曾安装 `2f599f21` 本地预览，教师三类表单键盘打开、取消／Esc 回入口及原生恢复确认取消回原按钮已实机验证；暂缓、拒绝后焦点丢失另已补源码。学生详情表单顺序、输入样式和空态修正已实现，合并后 70 项针对检查、类型、完整 lint 均通过，待下一安装版实测。原生窗口随后再次不可读，已请求可访问桌面；完整子功能范围仍**部分完成**，不把源码或种子计作通过。
+
+历史安装记录：2026-10-27 曾安装本地预览 `cb6aa7be`，Core03 保持。原生已验证新布局、完整 Tab 往返、恢复确认取消与保存、暂缓、双击仅一次写入及两种表单取消清错；名单 28 人及历史在正常 Quit 后冷启保留。完整子功能验收仍为**部分完成**。实机新发现的恢复确认／表单焦点丢失已补源码，33 项针对检查通过，待下一本机包验收。当前仍在隔离资料，结束前恢复原教师目录。
 
 当前范围更正：用户于2026-10-27明确“逐页”包括每页全部子页与子功能。下方上轮记录只证明主要页面和列出的代表性分支，不能作为完整子功能验收。R18本轮恢复为**部分完成，完整子功能逐项验收中**。正在沿同一任务盘点入口、准备隔离测试资料并在唯一安装版操作；新增结果按实际动作记录，不用源码清单或旧测试总数代替。私有动作清单与证据根为`$CHECKPOINT/subfeature-audit-20261027/`，原教师数据目录在验收结束前必须通过应用切回并回读。
 
@@ -501,3 +503,44 @@ Windows/Linux原生、40项环境跳过、全部97个披露的数据分支、自
 另据真实状态补正两个家校显示问题：superseded旧行不再把当前已确认修订提示成“需要核对的旧记录”，保留来源/历史；deleted的pending_review/replace/blocked恢复冲突仍显示。新建已有联系人的来源文字改用canonical_name，身份ID、source键与旧记录不改。含这些新增与缓存配置的完整检查为2690通过/40环境跳过/0失败，类型/lint通过；日志 `postcache-{full-tests,types,lint}.log`。窗口会话仍待恢复，结束前仍必须切回原教师根并核对保护数据。
 
 清理补记：确认无打开句柄、路径与原安装proof主程序哈希一致后，删除被取代的 cb6/2f 两个任务回退App，已分配占用1,968,234,496字节，期间观测可用空间增加2,010,320,896字节；两者不等同。当前a164、原.70回退、全部资料/配置/证据、源码和原Core依赖保留。见 `cleanup-superseded-cb6-2f-apps.json`；重打包期间唯一staging与任务依赖仍在使用。
+
+### 9eab 安装后原生复验
+
+当前唯一安装为 `9eab8a9b56e0d2444311c6f55e3f1039a4fb6b87` .77预览，主程序SHA256 `1e480387c91c536334015535a0d0d791e3223a9de6ec160a7cf10851464a590c`，Team `BY3XZG2839`、CDHash `8ea23ed87bb8737eb39cec9ae9193ea725d6e511`；Core03/33,709非server文件/宿主/更新公钥保持。`cache-installed.json`与`prepared-9eab-cache-config.json`单列实际安装、序列化禁落盘和5份seed闭包。
+
+安装冷启后实际请求manifest、favicon、mobile、预期404、mobile RSC与manifest暖请求，均为预期状态；53,599文件前后集合一致、0新增0移除，strict/deep为0。此为运行签名证据，不是把HTTP成功当UI通过，见`cache-installed-cold-route-signature-proof.json`。
+
+用户解锁后原生恢复；后台WebView最初白屏，窗口Raise恢复渲染，没有因此修改App。一次modal关闭后旧绑定失效，重新getApp恢复；焦点行缺失时先Raise再判断，家校编辑原生首字段因此有明确成功证据，不能把inactive状态误记App失焦。已操作：
+
+- 学习记录真正Tab到Save再Return，revision5保存后回同一记录Modify，恢复原值到revision6；三种闭合/展开/无来源历史ShiftTab分别回摘要/恢复按钮/加载更多，Escape回Expand。`CACHE-STU-*`。
+- v3档案修改后/前恢复为profile7/8、三班/一班，原生图谱标签随同页刷新；Owner两页20+1共21条当前/历史班级均核对，旧前20的opaque ID有前后对照，最后1条ID此前未单独保存不补称已对照。另一同名学生2条未变。`CACHE-STU-both-pages-21-class-proof.json`。
+- 家校原生两页、添加首Contact/Cancel返回Add、修改首Relation/四字段Cancel返回Modify；D新增→暂缓→接受→四字段修订D2→删除取消/删除/产品内恢复，已有联系人E双击只1条、来源显示人名、再拒绝；联系人节点/关联记录/关联线及展开图谱内部Edit/Cancel只回portal原入口，关闭图谱回原学生。原始12外新增7fact共19条，原生所写均为UI TEST。`CACHE-FAM-native-*`。
+
+新发现的两项原生问题仍不能勾选通过：第二页联系人05暂缓成功held/rev1后跳第一页；inline删除确认用Tab到Cancel/Return后掉HTML，数据未删。当前2文件小修已保留原地页码/前翻路径、局部取消回实际article删除按钮，27项针对/类型/lint和独立审查通过但尚未装。见`family-in-place-paging-*`、`family-delete-cancel-focus-*`和`family-paging-delete-focus-independent.json`。
+
+材料入口及原生选择取消已操作。MD按既有支持格式被过滤，未改支持格式；随后生成9份来自已渲染2页PDF的合法拷贝，唯一注释使raw hash各异，pdfinfo九份均2页。原生选择器单击首行+Shift点末行选9个唯一行ID（AX重复列出selection，不能按18计），Open后9份暂存，0份正式材料。接入按钮尝试发生在取AX之前即锁屏失败，不能计打开表单或接入。`MAT-native-*`、`material-pagination-pdf-fixtures-prepared.json`。
+
+另据只读审计，四条工作判断重新待判断并非9eab重启丢决定：原ID、三份回执、history/idempotency仍在；fixture漏了正常heartbeat的calendar_version enrichment，Owner按唯一增加的证据重开，四对指纹离线复算吻合。未据此改App/Core，见`work-candidate-restart-readonly.json`。
+
+系统随后确认IOConsoleLocked=true；新的解锁请求待答。任务临时`caffeinate -d -i -t 3600`进程仅维持显示/系统唤醒，未修改锁屏配置或声明用户活动，不能解锁现有会话，须在本轮退出；任务状态记录其session95495。隔离根、原.70及a164临时回退保留，当前staging/依赖仍使用；完整R18及新修复原生验收仍部分完成。
+
+
+## 2026-10-27 材料子功能原生验收续记
+
+本段取代此前“9份PDF仅暂存、尚未接入”的当前状态。运行代码为安装版 `9eab8a9b`，环境为独立 `UI-Test-Data`，证据位于同一 `subfeature-audit-20261027/evidence/`，不涉及真实教师资料。
+
+| 操作 | 实际结果 | 证据 |
+| --- | --- | --- |
+| 信息编辑与历史 | 重复打开保留四字段；取消回入口；名称先保存至1，其余三字段保存至2，恢复修改前、后及原始值至5，Owner一致 | `MAT-native-metadata-save-owner.json`、`MAT-native-original-metadata-restored-owner.json` |
+| 文件实际使用 | PDF两页可预览；WPS打开同一文件；访达选中同一路径；下载取消和保存完成，79,731字节与源相同 | `MAT-native-PDF-two-page-preview`、`MAT-native-default-PDF-app.txt`、`MAT-native-reveal-in-Finder.txt`、`MAT-native-download-byte-proof.json` |
+| 备课正文 | 未保存草稿不写Owner；刷新保留；确认1、撤回2；17,600字节被16KB上限拦截 | `MAT-native-excerpt-*-owner.json`、`MAT-native-excerpt-byte-limit.txt` |
+| 七份受控接入 | 保留已有07/05，另七份实际操作接收；五种kind均持久化；09双击只生成一条材料与回执；共九份字节匹配 | `MAT-native-nine-received-owner.json` |
+| 分页与恢复 | 末页删除07后八条、分页隐藏；回收站恢复后九行完全相等，正文撤回版本2保留；再次取消删除未增加删除/恢复历史 | `MAT-native-nine-to-eight-pagination-clamped`、`MAT-native-recycle-restored-owner.json`、`MAT-native-delete-cancel-owner-unchanged.json` |
+| 安排读取错误恢复 | 首次教师身份暂不可用；从日程“核对安排”正常初始化后显示PDF待核对、不可采用；没有伪造采用结果 | `CAL-native-conflict-bootstrap-empty`、`MAT-native-schedule-after-owner-bootstrap` |
+| Word长文接入 | 已接入教案类型，预览含段落01至48及表格；原文选择因页脚、自动编号等显示待核对，保留为负例 | `MAT-native-docx-received-owner.json`、`MAT-native-docx-source-held-owner.json` |
+
+材料历史恢复、正文异步操作和删除取消仍有原生焦点缺陷；源码针对修复待下包。普通PDF上传后七块不可采用提案挤压列表、类型列重复状态也已确认，正在修正。此前07/05两次接收来源无法重建，不能计作代理受控接收。统一动作账本已追加8组实际操作，整体仍部分完成；日程新时间控件、原文正向选取和其他子功能继续。
+
+本批源码合并检查：142项针对测试通过，包含日程时区/DST、家校原地分页、材料焦点及9→8/17→16边界；完整typecheck/lint结果以本批日志为准。静态检查不替代下包原生复测，没有公开发布、合并、公证或修改更新feed。
+
+独立审查新增 MAT-REVIEW-1：历史恢复结果早于父级材料投影更新时过早消费焦点请求。已以延迟投影复现后修复；28项材料检查和5个多次更新探针通过，等待投影/历史读取期间不抢用户焦点。原始问题与关闭证据保留于 `material-final-independent-review*.json`，仍待安装原生复验。

@@ -351,7 +351,8 @@ test("calendar entries and sidebar nodes open a right-side raw detail drawer wit
   assert.match(panel, /sourceOccurrenceRef: event\.sourceOccurrenceRef/);
   assert.match(panel, /timeInterval/);
   assert.match(calendarWorkspace, /sourceOccurrenceRef/);
-  assert.match(calendarWorkspace, /startAt/);
+  assert.match(calendarWorkspace, /calendarFormTime\(/);
+  assert.match(await read("../lib/edupi-calendar-form-time.ts"), /startAt/);
   assert.match(calendarWorkspace, /location/);
   assert.match(calendarWorkspace, /enabled=\{data\.capabilities\.calendar\.enabled \|\| data\.capabilities\.timetable\.enabled\}/);
   assert.doesNotMatch(calendarWorkspace, /enabled=\{Boolean\(data\.l4Preparation\)\}/);

@@ -44,6 +44,7 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
   const requestRef = useRef<AbortController | null>(null);
   const editorOriginRef = useRef<EditorOrigin | null>(null);
   const editorFocusRef = useRef<(EditorOrigin & { target: "form" | "trigger"; from: Element | null }) | null>(null);
+  const deleteCancelFocusRef = useRef<{ studentId: string; article: HTMLElement; target: HTMLButtonElement; from: Element | null } | null>(null);
   const editorId = editor?.id;
   useEffect(() => {
     if (!editorId || editorOriginRef.current?.studentId !== studentId) editorOriginRef.current = null;
@@ -58,6 +59,15 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
     const target = request.target === "form" ? form?.querySelector<HTMLElement>("select, input, textarea") : request.trigger;
     if (target?.isConnected && request.scope.contains(target) && !target.matches(":disabled")) target.focus({ preventScroll: false });
   }, [editorId, studentId]);
+  useEffect(() => {
+    const request = deleteCancelFocusRef.current;
+    deleteCancelFocusRef.current = null;
+    if (!request || deleting !== null || request.studentId !== studentId || !request.article.isConnected) return;
+    const document = request.article.ownerDocument;
+    const active = document.activeElement;
+    if (active !== request.from && active !== document.body && active !== document.documentElement) return;
+    if (request.target.isConnected && !request.target.disabled && request.article.contains(request.target)) request.target.focus({ preventScroll: false });
+  }, [deleting, studentId]);
   useEffect(() => {
     const controller = new AbortController();
     requestRef.current?.abort(); requestRef.current = controller;
@@ -98,6 +108,15 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
       ? { ...origin, target: "trigger", from: active } : null;
     setEditor(null);
   };
+  const cancelDelete = (button: HTMLButtonElement) => {
+    if (busy) return;
+    const article = button.closest("article");
+    const target = article?.querySelector<HTMLButtonElement>("[data-family-delete-trigger]");
+    const active = button.ownerDocument.activeElement;
+    deleteCancelFocusRef.current = article && target && (article.contains(active) || active === button.ownerDocument.body)
+      ? { studentId, article, target, from: active } : null;
+    setDeleting(null);
+  };
 
   async function mutate(row: FamilyRecord, action: "accept" | "hold" | "reject" | "modify" | "delete" | "restore", details?: FamilyRecordDetails, replace = false) {
     if (busy || loading || error || !row.mutation_allowed) return;
@@ -113,7 +132,8 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
       const response = await fetch(`/api/edupi/facts/${encodeURIComponent(row.fact_id)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "记录操作失败");
-      onEducation(payload.data); setEditor(null); setDeleting(null); setOffset(0); setPreviousOffsets([]);
+      onEducation(payload.data); setEditor(null); setDeleting(null);
+      if (action === "modify") { setOffset(0); setPreviousOffsets([]); }
       setSelected(action === "delete" ? null : payload.result?.resultFactId || null); reload();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "操作失败"); }
     finally { setBusy(false); }
@@ -158,9 +178,9 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
       {showReviewConflicts ? <details open><summary>需要核对的旧记录</summary>{row.review_conflicts.map((conflict) => <div key={conflict.fact_id}><time>{conflict.record.observed_on || "日期未记录"}</time><p>{conflict.record.note}</p><span>旧记录：{familyQualityLabel(conflict.record.teacher_explicit_quality)}</span></div>)}</details> : null}
       <div className={styles.actions}>{row.mutation_allowed && ["candidate", "pending_review", "held"].includes(row.status) ? <>{row.review_mode !== "blocked" ? <button type="button" className="native-button" disabled={blocked} onClick={() => void mutate(row, "accept", undefined, row.review_mode === "replace")}>{row.review_mode === "replace" ? "替换旧记录" : "接受"}</button> : <span>旧记录存在多项冲突，暂不能采用</span>}{(["hold", "reject"] as const).map((action) => <button type="button" className="native-button" disabled={blocked} key={action} onClick={() => void mutate(row, action)}>{actionLabels[action]}</button>)}</> : null}
         {row.mutation_allowed && row.status === "accepted" ? <button type="button" className="native-button" disabled={blocked} onClick={(event) => openEditor(event.currentTarget, row, parent?.canonical_name || "")}>修改</button> : null}
-        {row.mutation_allowed && row.status === "deleted" ? row.restore_mode === "blocked" ? <span>旧记录存在多项冲突，暂不能恢复</span> : <button type="button" className="native-button" disabled={blocked} onClick={() => void mutate(row, "restore", undefined, row.restore_mode === "replace")}>{row.restore_mode === "replace" ? "替换并恢复" : row.restore_mode === "pending_review" ? "恢复为待确认" : "恢复"}</button> : row.mutation_allowed && row.status !== "superseded" ? <button type="button" className="native-button" disabled={blocked} onClick={() => setDeleting(row.fact_id)}>删除</button> : null}
+        {row.mutation_allowed && row.status === "deleted" ? row.restore_mode === "blocked" ? <span>旧记录存在多项冲突，暂不能恢复</span> : <button type="button" className="native-button" disabled={blocked} onClick={() => void mutate(row, "restore", undefined, row.restore_mode === "replace")}>{row.restore_mode === "replace" ? "替换并恢复" : row.restore_mode === "pending_review" ? "恢复为待确认" : "恢复"}</button> : row.mutation_allowed && row.status !== "superseded" ? <button type="button" data-family-delete-trigger className="native-button" disabled={blocked} onClick={() => setDeleting(row.fact_id)}>删除</button> : null}
       </div>
-      {deleting === row.fact_id ? <div className={styles.actions}><span>删除这条记录？</span><button type="button" className="native-button" disabled={busy} onClick={() => void mutate(row, "delete")}>确认删除</button><button type="button" className="native-button" disabled={busy} onClick={() => setDeleting(null)}>取消</button></div> : null}
+      {deleting === row.fact_id ? <div className={styles.actions}><span>删除这条记录？</span><button type="button" className="native-button" disabled={busy} onClick={() => void mutate(row, "delete")}>确认删除</button><button type="button" className="native-button" disabled={busy} onClick={(event) => cancelDelete(event.currentTarget)}>取消</button></div> : null}
       {editor?.row?.fact_id === row.fact_id ? form : null}
       <details><summary>来源</summary><p>{row.source.raw_text}</p><dl><dt>记录者</dt><dd>{row.source.actor_ref}</dd><dt>来源时间</dt><dd>{new Date(row.source.observed_at).toLocaleString("zh-CN")}</dd><dt>来源版本</dt><dd>{row.source.source_revision}</dd><dt>入库时间</dt><dd>{new Date(row.logged_at).toLocaleString("zh-CN")}</dd></dl></details>
       {row.history.length ? <details><summary>修订记录</summary><ol className={styles.history}>{row.history.map((item, index) => <li key={index}>{actionLabels[item.action]} · {new Date(item.reviewed_at).toLocaleString("zh-CN")}{item.note ? <p>{item.note}</p> : null}</li>)}</ol></details> : null}

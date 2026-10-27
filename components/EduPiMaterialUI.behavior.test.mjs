@@ -112,7 +112,7 @@ function metadataDom() {
   const element = name => ({ name, root, ownerDocument: document, isConnected: true, disabled: false, focus(options) { assert.ok(this.isConnected && !this.disabled); document.activeElement = this; calls.push({ name, options }); for (const callback of listeners) callback({ target: this }); } });
   const trigger = element("edit trigger"), form = { ...element("form"), contains: element => Boolean(element?.isConnected && element.form === form) };
   const inputs = Object.fromEntries(["name", "subject", "save", "cancel"].map(name => [name, { ...element(name), form }]));
-  return { root, document, calls, trigger, form, inputs, listeners, move() { const target = { name: "another control", isConnected: true }; document.activeElement = target; for (const callback of listeners) callback({ target }); return target; }, commit(tree) {
+  return { root, document, calls, trigger, form, inputs, listeners, element, move() { const target = { name: "another control", isConnected: true }; document.activeElement = target; for (const callback of listeners) callback({ target }); return target; }, commit(tree) {
     if (tree.props.ref) tree.props.ref.current = root;
     const nodes = descendants(tree), formNode = nodes.find(node => node.type === "form"), nameNode = nodes.find(node => node.type === "input" && node.props.maxLength === 240);
     form.isConnected = Boolean(formNode);
@@ -227,5 +227,194 @@ test("switching material identity aborts a pending metadata save and ignores its
   const target = f.dom.move(); f.finish(); await pending; await f.settle();
   assert.equal(f.education.length, 0); assert.equal(f.find(node => node.type === "form"), undefined);
   assert.equal(f.dom.document.activeElement, target); assert.deepEqual(f.dom.calls, []);
+  assert.equal(f.dom.listeners.size, 0);
+});
+
+function metadataRestore({ deferProjection = false } = {}) {
+  const dom = metadataDom(), requests = [], education = [], buttons = new Map();
+  const historyRoot = dom.element("history"), summary = dom.element("history summary");
+  const version = { versionId: "synthetic-v2:with'quote\"", materialId: material(1).material_id, revision: 2,
+    beforeValues: { title: "旧合成材料", kind: "other", subject: "科学", classId: null },
+    afterValues: metadataModel.materialMetadataValues(material(1)), changedFields: ["title", "kind", "subject", "class_id"], changedAt: "2026-10-27T00:00:00.000Z", sourceKind: "teacher_edit" };
+  let history = { materialId: version.materialId, revision: 2, historyCount: 1, versions: [version] }, finish, pendingProjection;
+  let currentMaterial = { ...material(1), metadata_history_count: 1 };
+  const props = { material: currentMaterial, classes: ["703"], onStartAgent() {}, onEducation(data) { education.push(data); if (deferProjection) pendingProjection = data.teacherMaterials[0]; else props.material = data.teacherMaterials[0]; } };
+  const f = mount(metadataCode, "EduPiMaterialMetadataEditor", props, { "@/lib/edupi-material-metadata-model": metadataModel, "./EduPiActionIcon": placeholder("EduPiIconButton") }, {
+    window: { setTimeout() { return 1; }, clearTimeout() {} }, fetch: async (url, options) => {
+      requests.push({ url, ...options });
+      if (!options.method) return { ok: true, json: async () => ({ data: { teacherMaterials: [currentMaterial] }, history }) };
+      return new Promise(resolve => { finish = (success = true, omitOriginalVersion = false) => {
+        const body = JSON.parse(options.body), desired = body.versionSide === "before" ? version.beforeValues : version.afterValues;
+        const next = { ...currentMaterial, title: desired.title, kind: desired.kind, subject: desired.subject, class_id: desired.classId, metadata_revision: currentMaterial.metadata_revision + 1, metadata_history_count: history.historyCount + 1 };
+        const restored = { ...version, versionId: "synthetic-restore", revision: next.metadata_revision, beforeValues: metadataModel.materialMetadataValues(currentMaterial), afterValues: desired, sourceKind: "restore" };
+        if (success) { currentMaterial = next; history = { ...history, revision: next.metadata_revision, historyCount: next.metadata_history_count, versions: [...(omitOriginalVersion ? [] : history.versions), restored] }; }
+        resolve({ ok: success, json: async () => success ? { data: { teacherMaterials: [next] }, history } : { error: "合成恢复失败" } });
+      }; });
+    },
+  }, tree => {
+    dom.commit(tree);
+    const historyNode = descendants(tree).find(node => node.type.name === "History");
+    const rendered = historyNode.type(historyNode.props), nodes = descendants(rendered);
+    rendered.props.ref.current = historyRoot;
+    nodes.find(node => node.type === "summary").props.ref.current = summary;
+    for (const button of buttons.values()) button.isConnected = false;
+    const entries = nodes.filter(node => node.type === "li" && node.props["data-material-metadata-version"]).map(node => {
+      const versionId = node.props["data-material-metadata-version"], entry = dom.element("version row");
+      entry.dataset = { materialMetadataVersion: versionId };
+      const actions = descendants(node).filter(node => node.type === "button" && node.props["data-material-metadata-side"]).map(node => {
+        const side = node.props["data-material-metadata-side"], key = `${versionId}:${side}`;
+        if (!buttons.has(key)) buttons.set(key, dom.element(`${versionId} ${side}`));
+        const button = buttons.get(key); button.isConnected = true; button.disabled = Boolean(node.props.disabled); return button;
+      });
+      entry.querySelectorAll = selector => { assert.equal(selector, "[data-material-metadata-side]"); return actions; };
+      return entry;
+    });
+    historyRoot.querySelectorAll = selector => { assert.equal(selector, "[data-material-metadata-version]"); return entries; };
+    if (dom.document.activeElement?.root === dom.root && (!dom.document.activeElement.isConnected || dom.document.activeElement.disabled)) dom.document.activeElement = dom.document.body;
+  });
+  const historyNode = () => f.find(node => node.type.name === "History");
+  return { ...f, dom, requests, education, summary, version, buttons,
+    button(side) { return buttons.get(`${version.versionId}:${side}`); },
+    async openHistory() { historyNode().props.onToggle(true); f.render(); await f.settle(); education.length = 0; },
+    restore(side, { focus = true, render = true } = {}) { const trigger = this.button(side); assert.ok(trigger?.isConnected && !trigger.disabled); if (focus) trigger.focus({ preventScroll: false }); dom.calls.length = 0; historyNode().props.onRestore(version, side, trigger); if (render) f.render(); },
+    closeHistory() { historyNode().props.onToggle(false); f.render(); },
+    historyOpen() { return historyNode().props.open; },
+    commitProjection() { assert.ok(pendingProjection); props.material = pendingProjection; pendingProjection = null; f.render(); },
+    finish(success = true, omitOriginalVersion = false) { assert.ok(finish); finish(success, omitOriginalVersion); },
+  };
+}
+
+test("material restoration replaces the current side and focuses the other side of that exact version", async () => {
+  const f = metadataRestore(); await f.openHistory(); f.restore("before");
+  assert.equal(f.dom.document.activeElement, f.dom.document.body, "disabling the pressed button reproduces native focus loss");
+  const request = f.requests.find(request => request.method === "POST");
+  assert.equal(request.url, "/api/edupi/materials/synthetic-material-1/metadata/versions");
+  assert.deepEqual(JSON.parse(request.body), { versionId: f.version.versionId, versionSide: "before", expectedRevision: 2 });
+  f.finish(); await f.settle();
+  assert.equal(f.button("before").isConnected, false);
+  assert.equal(f.dom.document.activeElement, f.button("after"));
+  assert.deepEqual(f.dom.calls.map(call => call.name), [`${f.version.versionId} after`]);
+  assert.equal(f.education.length, 1);
+  assert.equal(f.props.material.class_id, null);
+  assert.equal(f.props.material.metadata_revision, 3);
+  assert.equal(f.dom.listeners.size, 0);
+});
+
+test("failed material restoration keeps the version list and returns to the enabled retry button", async () => {
+  const f = metadataRestore(); await f.openHistory(); const before = { ...f.props.material }; f.restore("before");
+  f.finish(false); await f.settle();
+  assert.equal(f.dom.document.activeElement, f.button("before"));
+  assert.equal(f.button("before").disabled, false);
+  assert.equal(f.historyOpen(), true);
+  assert.deepEqual(f.props.material, before);
+  assert.equal(text(f.find(node => node.props.role === "alert")), "合成恢复失败");
+  assert.equal(f.education.length, 0);
+  assert.equal(f.dom.listeners.size, 0);
+});
+
+test("a restore click which leaves focus on history still returns to the same version", async () => {
+  const f = metadataRestore(); await f.openHistory(); f.summary.focus({ preventScroll: false });
+  f.restore("before", { focus: false }); assert.equal(f.dom.document.activeElement, f.summary);
+  f.finish(); await f.settle();
+  assert.equal(f.dom.document.activeElement, f.button("after"));
+  assert.equal(f.dom.listeners.size, 0);
+});
+
+test("restoration focus also commits when a fast response batches away the busy render", async () => {
+  const f = metadataRestore(); await f.openHistory(); f.restore("before", { render: false });
+  f.finish(); await f.settle();
+  assert.equal(f.dom.document.activeElement, f.button("after"));
+  assert.equal(f.props.material.metadata_revision, 3);
+  assert.equal(f.dom.listeners.size, 0);
+});
+
+test("material restoration waits through the parent's stale selected projection before returning to its version", async () => {
+  const f = metadataRestore({ deferProjection: true }); await f.openHistory(); f.restore("before"); f.finish(); await f.settle();
+  assert.equal(f.props.material.metadata_revision, 2, "the first parent commit still supplies the old selected material");
+  assert.equal(Boolean(f.button("after")?.isConnected), false, "new history and old material intentionally hide version actions");
+  assert.deepEqual(f.dom.calls, [], "the intermediate empty history is not a missing-version fallback");
+  assert.equal(f.dom.listeners.size, 1, "focus changes remain observed while waiting for the parent effect");
+  f.commitProjection(); await f.settle();
+  assert.equal(f.props.material.metadata_revision, 3);
+  assert.equal(f.button("after").isConnected, true);
+  assert.equal(f.dom.document.activeElement, f.button("after"));
+  assert.deepEqual(f.dom.calls.map(call => call.name), [`${f.version.versionId} after`]);
+  assert.equal(f.dom.listeners.size, 0);
+});
+
+test("a truly missing version falls back to history only after the delayed parent projection commits", async () => {
+  const f = metadataRestore({ deferProjection: true }); await f.openHistory(); f.restore("before"); f.finish(true, true); await f.settle();
+  assert.equal(f.props.material.metadata_revision, 2);
+  assert.deepEqual(f.dom.calls, []);
+  f.commitProjection(); await f.settle();
+  assert.equal(f.props.material.metadata_revision, 3);
+  assert.equal(f.dom.document.activeElement, f.summary);
+  assert.deepEqual(f.dom.calls.map(call => call.name), ["history summary"]);
+  assert.equal(f.dom.listeners.size, 0);
+});
+
+test("focus moved during the delayed material projection is not recaptured after that projection commits", async () => {
+  const f = metadataRestore({ deferProjection: true }); await f.openHistory(); f.restore("before"); f.finish(); await f.settle();
+  f.dom.move(); f.dom.document.activeElement = f.dom.document.body; f.dom.calls.length = 0;
+  f.commitProjection(); await f.settle();
+  assert.equal(f.props.material.metadata_revision, 3);
+  assert.equal(f.button("after").isConnected, true);
+  assert.equal(f.dom.document.activeElement, f.dom.document.body);
+  assert.deepEqual(f.dom.calls, []);
+  assert.equal(f.dom.listeners.size, 0);
+});
+
+test("closing history while the parent projection catches up cancels the outstanding focus return", async () => {
+  const f = metadataRestore({ deferProjection: true }); await f.openHistory(); f.restore("before"); f.finish(); await f.settle();
+  f.closeHistory(); f.dom.calls.length = 0;
+  f.commitProjection(); await f.settle();
+  assert.equal(f.historyOpen(), false);
+  assert.equal(f.dom.document.activeElement, f.dom.document.body);
+  assert.deepEqual(f.dom.calls, []);
+  assert.equal(f.dom.listeners.size, 0);
+});
+
+test("material restoration uses history summary when the refreshed version window omits the original row", async () => {
+  const f = metadataRestore(); await f.openHistory(); f.restore("before"); f.finish(true, true); await f.settle();
+  assert.equal(f.button("before").isConnected, false);
+  assert.equal(f.dom.document.activeElement, f.summary);
+  assert.deepEqual(f.dom.calls.map(call => call.name), ["history summary"]);
+});
+
+test("closing material history during restoration keeps it closed without moving the user's focus", async () => {
+  const f = metadataRestore(); await f.openHistory(); f.restore("before"); f.closeHistory();
+  const target = f.dom.document.activeElement; f.finish(); await f.settle();
+  assert.equal(f.historyOpen(), false);
+  assert.equal(f.dom.document.activeElement, target);
+  assert.deepEqual(f.dom.calls, []);
+  assert.equal(f.dom.listeners.size, 0);
+});
+
+test("material restoration does not recapture focus moved elsewhere even if it later returns to HTML", async () => {
+  for (const success of [true, false]) {
+    const f = metadataRestore(); await f.openHistory(); f.restore("before"); f.dom.move(); f.dom.document.activeElement = f.dom.document.body;
+    f.finish(success); await f.settle();
+    assert.equal(f.dom.document.activeElement, f.dom.document.body);
+    assert.deepEqual(f.dom.calls, []);
+    assert.equal(f.dom.listeners.size, 0);
+  }
+});
+
+test("changing material identity aborts restoration and ignores the response and focus request", async () => {
+  const f = metadataRestore(); await f.openHistory(); f.restore("before");
+  const request = f.requests.find(request => request.method === "POST");
+  f.props.material = material(2); f.render(); assert.equal(request.signal.aborted, true);
+  const target = f.dom.move(); f.finish(); await f.settle();
+  assert.equal(f.education.length, 0);
+  assert.equal(f.props.material.material_id, "synthetic-material-2");
+  assert.equal(f.dom.document.activeElement, target);
+  assert.deepEqual(f.dom.calls, []);
+  assert.equal(f.dom.listeners.size, 0);
+});
+
+test("a disconnected material editor never restores focus into its detached history", async () => {
+  const f = metadataRestore(); await f.openHistory(); f.restore("before"); f.dom.root.isConnected = false;
+  f.finish(); await f.settle();
+  assert.deepEqual(f.dom.calls, []);
   assert.equal(f.dom.listeners.size, 0);
 });

@@ -6,7 +6,7 @@ import ts from "typescript";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
-const names = ["edupi-work-case", "edupi-task-board", "edupi-task-category", "edupi-workbench", "edupi-teacher-task-form", "edupi-foreground", "edupi-recognition-markers", "edupi-calendar-model", "edupi-operation-history"];
+const names = ["edupi-work-case", "edupi-task-board", "edupi-task-category", "edupi-workbench", "edupi-teacher-task-form", "edupi-foreground", "edupi-recognition-markers", "edupi-calendar-model", "edupi-calendar-form-time", "edupi-operation-history"];
 const libraries = Object.fromEntries(await Promise.all(names.map(async name => [`@/lib/${name}`, await jiti.import(`../lib/${name}.ts`)])));
 const { buildEducationContract } = await jiti.import("../lib/edupi-education-contract.ts");
 const policy = { today: "2026-10-26", graceDays: 3, pinnedTaskIds: [] };
@@ -14,10 +14,10 @@ const textOf = node => node == null || typeof node === "boolean" ? "" : Array.is
 const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : !node || typeof node !== "object" || !node.props ? [] : [node, ...nodes(node.props.children)];
 const sources = Object.fromEntries(["EduPiWorkspaceBoard", "EduPiCalendarWorkspace"].map(name => [name, ts.transpileModule(fs.readFileSync(new URL(`./${name}.tsx`, import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText]));
 
-function mount(name, initialProps = {}, controlled = true) {
+function mount(name, initialProps = {}, controlled = true, componentName = name) {
   const slots = [], effects = new Map(), listeners = new Map(), frames = new Map();
   const calls = { routes: [], opens: [], moves: [], uploads: 0 };
-  let cursor = 0, dirty = false, tree, frameId = 0, dropStage = null;
+  let cursor = 0, dirty = false, tree, frameId = 0, dropStage = null, uuid = 0;
   const same = (a, b) => a && b && a.length === b.length && a.every((value, index) => Object.is(value, b[index]));
   const hooks = {
     useState(initial) {
@@ -47,8 +47,10 @@ function mount(name, initialProps = {}, controlled = true) {
   class Textarea {}
   class Select {}
   const exports = {};
-  vm.runInNewContext(sources[name] + (name === "EduPiCalendarWorkspace" ? "\nexports.MonthView = MonthView; exports.WeekView = WeekView; exports.DayView = DayView;" : ""), {
+  vm.runInNewContext(sources[name] + (name === "EduPiCalendarWorkspace" ? "\nexports.MonthView = MonthView; exports.WeekView = WeekView; exports.DayView = DayView; exports.IntakeComposer = IntakeComposer;" : ""), {
     exports, URLSearchParams,
+    crypto: { randomUUID: () => `synthetic-occurrence-${++uuid}` },
+    FormData: class { constructor(form) { this.values = form.values; } get(key) { return this.values[key] ?? null; } },
     require: dependency => { assert.ok(modules[dependency], dependency); return modules[dependency]; },
     window: { location: { search: "" }, addEventListener: (event, listener) => listeners.set(event, listener), removeEventListener: (event, listener) => { if (listeners.get(event) === listener) listeners.delete(event); } },
     document: { elementFromPoint: () => dropStage ? { closest: () => ({ dataset: { boardStage: dropStage } }) } : null },
@@ -70,7 +72,7 @@ function mount(name, initialProps = {}, controlled = true) {
     let attempts = 0;
     do {
       assert.ok(attempts++ < 25, "effects settle");
-      cursor = 0; dirty = false; tree = exports[name](props);
+      cursor = 0; dirty = false; tree = exports[componentName](props);
       const pending = [...effects]; effects.clear();
       for (const [index, effect] of pending) { slots[index]?.cleanup?.(); slots[index] = { deps: effect.deps, cleanup: effect.callback() }; }
     } while (dirty);
@@ -277,4 +279,140 @@ test("page primary actions and segmented controls are explicit", () => {
   assert.notEqual(calendar.button("上传文件").props.className, "is-primary");
   assert.notEqual(calendar.button("添加课表").props.className, "is-primary");
   for (const app of [board, calendar]) assert.ok(nodes(app.render()).some(node => String(node.props.className || "").includes("edupi-segmented-control")));
+});
+
+function intake(initialProps = {}) {
+  const calls = { calendar: [], timetable: [], closes: 0 };
+  const app = mount("EduPiCalendarWorkspace", {
+    mode: "calendar", anchorDate: "2026-10-27", busy: false,
+    onClose: () => { calls.closes += 1; },
+    onImportCalendar: async value => { calls.calendar.push(JSON.parse(JSON.stringify(value))); },
+    onImportTimetable: async value => { calls.timetable.push(JSON.parse(JSON.stringify(value))); },
+    ...initialProps,
+  }, true, "IntakeComposer");
+  const field = name => nodes(app.render()).find(node => ["input", "select", "textarea"].includes(node.type) && node.props.name === name);
+  return {
+    ...app, calls, field,
+    change(name, value) { const item = field(name); assert.ok(item, `field ${name}`); item.props.onChange({ target: item.props.type === "checkbox" ? { checked: value } : { value } }); app.render(); },
+    async submit(overrides = {}) {
+      const values = Object.fromEntries(nodes(app.render()).filter(node => ["input", "select", "textarea"].includes(node.type) && node.props.name).map(node => [node.props.name, node.props.value ?? node.props.defaultValue ?? ""]));
+      nodes(app.render()).find(node => node.type === "form").props.onSubmit({ preventDefault() {}, currentTarget: { values: { ...values, ...overrides } } });
+      await new Promise(resolve => setImmediate(resolve));
+      app.render();
+    },
+    error: () => textOf(nodes(app.render()).find(node => node.props.role === "alert")),
+  };
+}
+
+const savedCalendar = overrides => ({ id: "synthetic-event", name: "合成教研", date: "2026-10-27", endDate: null, type: "meeting", notes: "合成备注", occurrenceRef: "synthetic-stable-occurrence", startsAt: "2026-10-27T09:00-04:00", endsAt: "2026-10-27T10:00-04:00", timeZone: "US/Eastern", location: "合成会议室", ...overrides });
+
+test("calendar intake starts all-day and saves inclusive dates without an interval", async () => {
+  const app = intake();
+  assert.equal(app.field("allDay").props.checked, true);
+  assert.equal(app.field("startTime"), undefined);
+  assert.equal(app.field("timeZone"), undefined);
+  await app.submit({ name: "合成多日活动", endDate: "2026-10-30", notes: "仅供验收", location: "合成教室" });
+  assert.deepEqual(app.calls.calendar, [{ eventId: null, date: "2026-10-27", endDate: "2026-10-30", name: "合成多日活动", type: "custom", notes: "仅供验收", sourceOccurrenceRef: "manual-synthetic-occurrence-1", startAt: null, endAt: null, timeZone: null, location: "合成教室" }]);
+  assert.equal(app.calls.closes, 1);
+});
+
+test("calendar clock and timezone drafts survive disclosure and all-day toggles", async () => {
+  const app = intake();
+  app.change("allDay", false);
+  for (const name of ["startTime", "endTime"]) {
+    assert.equal(app.field(name).props.type, "time");
+    assert.equal(app.field(name).props.step, 60);
+  }
+  app.change("startTime", "09:15"); app.change("endTime", "10:45");
+  app.button("时区").props.onClick(); app.render();
+  app.change("timeZone", "Asia/Kathmandu");
+  app.button("时区").props.onClick(); app.render();
+  assert.equal(app.field("timeZone"), undefined);
+  app.change("allDay", true);
+  assert.equal(app.field("startTime"), undefined);
+  app.change("allDay", false);
+  assert.equal(app.field("startTime").props.value, "09:15");
+  assert.equal(app.field("endTime").props.value, "10:45");
+  app.button("时区").props.onClick(); app.render();
+  assert.equal(app.field("timeZone").props.value, "Asia/Kathmandu");
+  await app.submit({ name: "合成定时日程", date: "2026-10-29" });
+  assert.equal(app.calls.calendar[0].startAt, "2026-10-29T09:15+05:45");
+  assert.equal(app.calls.calendar[0].endAt, "2026-10-29T10:45+05:45");
+  assert.equal(app.calls.calendar[0].timeZone, "Asia/Kathmandu");
+});
+
+test("editing a timed event preserves its original identity, offset, zone alias and null end date", async () => {
+  const event = savedCalendar();
+  const app = intake({ calendarEvent: event });
+  assert.equal(app.field("allDay"), undefined, "the current owner cannot clear an existing interval");
+  assert.equal(app.field("startTime").props.value, "09:00");
+  app.button("时区").props.onClick(); app.render();
+  assert.equal(app.field("timeZone").props.value, "US/Eastern");
+  assert.ok(nodes(app.field("timeZone")).some(node => node.type === "option" && node.props.value === "US/Eastern"));
+  app.button("时区").props.onClick(); app.render();
+  await app.submit({ name: "合成更名", notes: "合成新备注" });
+  assert.deepEqual(app.calls.calendar[0], { eventId: event.id, date: event.date, endDate: null, name: "合成更名", type: "meeting", notes: "合成新备注", sourceOccurrenceRef: event.occurrenceRef, startAt: event.startsAt, endAt: event.endsAt, timeZone: event.timeZone, location: event.location });
+});
+
+test("legacy and date-only occurrence edits retain their original identity and date semantics", async () => {
+  const legacy = intake({ calendarEvent: savedCalendar({ occurrenceRef: null, startsAt: null, endsAt: null, timeZone: null, endDate: "2026-10-29" }) });
+  assert.equal(legacy.field("allDay"), undefined);
+  assert.equal(legacy.field("startTime"), undefined);
+  await legacy.submit({ name: "合成旧记录修改" });
+  assert.equal(legacy.calls.calendar[0].eventId, "synthetic-event");
+  assert.equal(legacy.calls.calendar[0].sourceOccurrenceRef, null);
+  assert.equal(legacy.calls.calendar[0].endDate, "2026-10-29");
+  assert.equal(legacy.calls.calendar[0].startAt, null);
+  const occurrence = intake({ calendarEvent: savedCalendar({ startsAt: null, endsAt: null, timeZone: null }) });
+  assert.equal(occurrence.field("allDay").props.checked, true);
+  await occurrence.submit();
+  assert.equal(occurrence.calls.calendar[0].sourceOccurrenceRef, "synthetic-stable-occurrence");
+  assert.equal(occurrence.calls.calendar[0].endDate, null);
+});
+
+test("calendar invalid intervals keep the draft and do not submit or close", async () => {
+  const app = intake(); app.change("allDay", false);
+  app.change("startTime", "09:15"); app.change("endTime", "10:45");
+  await app.submit({ endDate: "2026-10-28" });
+  assert.match(app.error(), /同一天/);
+  assert.equal(app.field("startTime").props.value, "09:15");
+  assert.equal(app.calls.calendar.length, 0);
+  app.button("时区").props.onClick(); app.render(); app.change("timeZone", "America/New_York");
+  app.change("startTime", "01:30"); app.change("endTime", "02:30");
+  await app.submit({ date: "2026-11-01" });
+  assert.match(app.error(), /不存在或不唯一/);
+  assert.equal(app.field("startTime").props.value, "01:30");
+  assert.equal(app.calls.calendar.length, 0);
+  assert.equal(app.calls.closes, 0);
+});
+
+test("calendar save retry retains its occurrence identity and time draft after an async error", async () => {
+  let attempts = 0;
+  const submitted = [];
+  const app = intake({ onImportCalendar: async value => { submitted.push(JSON.parse(JSON.stringify(value))); if (++attempts === 1) throw new Error("synthetic offline"); } });
+  app.change("allDay", false); app.change("startTime", "09:00"); app.change("endTime", "10:00");
+  app.button("时区").props.onClick(); app.render(); app.change("timeZone", "UTC");
+  await app.submit({ name: "合成重试日程" });
+  assert.match(app.error(), /接入失败/);
+  assert.equal(app.calls.closes, 0);
+  assert.equal(app.field("startTime").props.value, "09:00");
+  app.setProps({ busy: true }); await app.submit(); assert.equal(attempts, 1);
+  app.setProps({ busy: false }); await app.submit({ name: "合成重试日程" });
+  assert.equal(attempts, 2);
+  assert.deepEqual(submitted[0], submitted[1]);
+  assert.equal(app.calls.closes, 1);
+  assert.equal(app.error(), "");
+});
+
+test("calendar cancel never submits and timetable intake retains its existing contract", async () => {
+  const calendar = intake(); calendar.change("allDay", false); calendar.change("startTime", "08:00");
+  calendar.button("取消").props.onClick();
+  assert.equal(calendar.calls.closes, 1);
+  assert.equal(calendar.calls.calendar.length, 0);
+  const timetable = intake({ mode: "timetable", timetableSlot: { slot_id: "synthetic-slot", day_of_week: 4, period: 2, subject: "数学", class_id: "ui-a", class_name: "UI验收A班", start_time: "09:15", time_zone: "UTC", kind: "class", notes: "合成课表" } });
+  assert.equal(timetable.field("allDay"), undefined);
+  assert.equal(timetable.field("startTime").props.type, "time");
+  await timetable.submit();
+  assert.deepEqual(timetable.calls.timetable, [{ slotId: "synthetic-slot", dayOfWeek: 4, period: 2, subject: "数学", classId: "ui-a", className: "UI验收A班", startTime: "09:15", timeZone: "UTC", kind: "class", notes: "合成课表" }]);
+  assert.equal(timetable.calls.closes, 1);
 });

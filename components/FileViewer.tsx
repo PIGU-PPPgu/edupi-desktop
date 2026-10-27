@@ -251,6 +251,7 @@ function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceS
 }
 
 function DesktopPathActions({ filePath }: { filePath: string }) {
+  const { t } = useI18n();
   const [desktop, setDesktop] = useState(false);
   useEffect(() => {
     void import("@/lib/desktop-native").then(({ isTauriDesktop }) => {
@@ -263,8 +264,8 @@ function DesktopPathActions({ filePath }: { filePath: string }) {
     <>
       <button
         type="button"
-        title="Open with default app"
-        aria-label="Open with default app"
+        title={t("i18n.openWithDefaultApp")}
+        aria-label={t("i18n.openWithDefaultApp")}
         className="file-viewer-icon-button"
         onClick={() => {
           void import("@/lib/desktop-native").then(({ openPathNative }) => openPathNative(filePath));
@@ -278,8 +279,8 @@ function DesktopPathActions({ filePath }: { filePath: string }) {
       </button>
       <button
         type="button"
-        title="Reveal in Finder"
-        aria-label="Reveal in Finder"
+        title={t("i18n.revealFile")}
+        aria-label={t("i18n.revealFile")}
         className="file-viewer-icon-button"
         onClick={() => {
           void import("@/lib/desktop-native").then(({ revealItemInDirNative }) => revealItemInDirNative(filePath));
@@ -308,6 +309,7 @@ function FileViewerToolbar({
   sourceSessionId?: string | null;
   children?: ReactNode;
 }) {
+  const { t } = useI18n();
   const relativePath = getRelativeFilePath(filePath, cwd);
   return (
     <div className="file-viewer-toolbar">
@@ -319,12 +321,12 @@ function FileViewerToolbar({
         {metadata && <span className="file-viewer-meta" title={metadata}>{metadata}</span>}
       </div>
       <span
-        title={watching ? "Live sync active" : "Live sync unavailable"}
-        aria-label={watching ? "Live sync active" : "Live sync unavailable"}
+        title={t(watching ? "i18n.liveSync" : "i18n.notWatching")}
+        aria-label={t(watching ? "i18n.liveSync" : "i18n.notWatching")}
         className={`file-viewer-live-status${watching ? " is-live" : ""}`}
       >
         <span className="file-viewer-live-indicator" />
-        <span>{watching ? "Live" : "Static"}</span>
+        <span>{t(watching ? "i18n.live" : "i18n.static")}</span>
       </span>
       <div className="file-viewer-controls">
         {children}
@@ -828,7 +830,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
   }, [filePath, isPdf, sourceSessionId]);
 
   const metadata = [
-    ext === "docx" ? "DOCX preview" : "PDF",
+    ext === "docx" ? t("i18n.docxPreview") : "PDF",
     size != null ? formatSize(size) : null,
   ].filter(Boolean).join(" · ");
 
