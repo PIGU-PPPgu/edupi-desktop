@@ -4,7 +4,7 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("context editor is a compact five-field comparison sheet", async () => {
+test("context editor keeps the five-field comparison sheet", async () => {
   const source = await read("./EduPiContextEditor.tsx");
   const css = await read("../app/edupi-context.css");
   assert.match(source, /TEACHER_CONTEXT_FIELDS\.map/);
