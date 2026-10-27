@@ -31,6 +31,7 @@ const modalStack: symbol[] = [];
  * - Escape calls `onDismiss` (topmost modal only)
  * - Tab is trapped inside the returned container
  * - focus moves into the dialog on mount and back to the opener on unmount
+ *   unless the caller owns return focus with `restoreFocus = false`
  *
  * Attach the returned ref to the dialog panel element (not the backdrop).
  */
@@ -38,6 +39,7 @@ export function useModalDismiss<T extends HTMLElement = HTMLDivElement>(
   onDismiss: () => void,
   enabled = true,
   externalContainerRef?: RefObject<T | null>,
+  restoreFocus = true,
 ) {
   const internalContainerRef = useRef<T | null>(null);
   const containerRef = externalContainerRef ?? internalContainerRef;
@@ -101,9 +103,9 @@ export function useModalDismiss<T extends HTMLElement = HTMLDivElement>(
       document.removeEventListener("keydown", handleKeyDown);
       const idx = modalStack.indexOf(id);
       if (idx !== -1) modalStack.splice(idx, 1);
-      previouslyFocused?.focus?.({ preventScroll: true });
+      if (restoreFocus) previouslyFocused?.focus?.({ preventScroll: true });
     };
-  }, [enabled, containerRef]);
+  }, [enabled, containerRef, restoreFocus]);
 
   return containerRef;
 }

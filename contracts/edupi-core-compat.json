@@ -3,11 +3,11 @@
   "core_repository": "edupi",
   "core_sdk": { "pi": "1.0.2", "pi_durable": "1.0.2" },
   "core_runtime": {
-    "core_commit": "03bbb893bb609eb68513a65cf4fd808ab8aa30ed",
+    "core_commit": "af19ac0457cf41dcda88566d9479b0e9405a66d3",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:126ead4015f5f5bc9745170e694511f1efc680325212953bad934cff598601dc",
-    "runtime_component_manifest_hash": "sha256:c0c044164fbefcdec1b641dbb7a7ab2be2e41657890396c5c4a6641c0d84aa5a",
-    "runtime_schema_hash": "sha256:09752f53de531086201264bfc8c392a43435c799d1b65a87ba223a86b7715c1d"
+    "component_manifest_hash": "sha256:9cbb5912bf322110770947cb1b585d7d49916aa2e86f7d109587931e973086b1",
+    "runtime_component_manifest_hash": "sha256:1475fbf65b8ed8956d86aa8de83e2db99ff94bd3895c3532cff432218d6cbeef",
+    "runtime_schema_hash": "sha256:cc13c2871366620b42edacbff67802e06e7d99bce85950bc87627b8656363eaa"
   },
   "contract_identities": [
     {
@@ -231,5 +231,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/310",
     "https://github.com/PIGU-PPPgu/edupi/pull/311"
   ],
-  "change_note": "Fixed pairing to merged Core #311 03bbb893 and feedback #310 c8066d3d. Full Mac CI 39504481691 tested b322a526; its tree equals the merged tree 8fc34936. Runtime schema adds reviewed DOCX chapter suggestions; Desktop rereads current source and metadata and confirms exact UTF-16 spans without automatic preparation. Generic file calendar/timetable writes fail closed; new ICS/DOCX adoption uses current owner read and explicit native confirmation, while PDF/image/OCR/.doc and legacy file update/cancel/pairing/timetable lack adoption authority. Bridge v1.1, occurrence v1.2, fixtures and 12 public Bridge commands remain unchanged. Trusted recall, exact-domain grants, durable captured prompts, explicit recipients, current feedback lineage and consent-bound local usage remain wired. No cloud receiver or approved policy documents are supplied, so collection stays off. Live capabilities require explicit isolated-canary enabling. No external sends or automatic material/DOCX approval. Unmerged Feishu/floor/vision/capsule work and unsupported public commands are not claimed complete."
+  "change_note": "Local installed-app acceptance pairs Core af19ac04 on top of merged Core #311 03bbb893 and feedback #310 c8066d3d. The owner-controlled calendar_notes_update runtime operation preserves canonical identity, issuer, date, time and location; snapshot/intake CAS, reviewed-basis conflict review and durable replay remain enforced. New notes audit state requires a matching data rollback when downgrading to Core03. Runtime schema and component closures are updated locally; Bridge v1.1, schedule occurrence v1.2, fixtures and 12 public Bridge commands remain unchanged. Existing DOCX chapter and uploaded-schedule adoption still reread current source and require teacher confirmation. No external sends, automatic material approval or owner bootstrap is added. No cloud receiver or approved policy documents are supplied, so collection remains off. Live capabilities require explicit isolated-canary enabling. This pairing is not a public release."
 }

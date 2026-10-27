@@ -22,7 +22,7 @@ function fixture({ narrow, collapsed = false, activeView = "calendar" }) {
   vm.runInNewContext(compile("selectCalendarItem"), {
     exports, URLSearchParams, activeView, calendarSelectionRef,
     inspectorOpen: false, selectedStudentId: null, selectedObjectId: null,
-    window: { matchMedia: () => ({ matches: narrow }) }, objectSider: { collapsed },
+    window: { matchMedia: () => ({ matches: narrow }) }, effectiveObjectNavigationCollapsed: collapsed,
     collapseObjectNavigation: () => events.push("collapse"),
     setCalendarSelection: value => events.push(value ? "select" : "clear"),
     updateLocation: () => events.push("route"), selectView: () => events.push("calendar view"),

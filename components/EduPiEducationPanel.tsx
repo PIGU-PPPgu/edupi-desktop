@@ -216,21 +216,44 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const objectNavigationRestoreRef = useRef<HTMLButtonElement | null>(null);
   const objectNavigationScroll = useRef(new Map<WorkbenchView, number>());
   const objectNavigationFocus = useRef<ObjectNavigationFocusRequest | null>(null);
-  const [narrowObjectNavigation, setNarrowObjectNavigation] = useState(false);
-  const [revealedObjectNavigationView, setRevealedObjectNavigationView] = useState<WorkbenchView | null>(null);
+  const [narrowObjectNavigation, setNarrowObjectNavigation] = useState(() => typeof window === "undefined" || window.matchMedia("(max-width: 820px)").matches);
+  const studentDetailSelected = (activeView === "homeroom" || activeView === "students") && Boolean(selectedStudentId)
+    && Boolean(education?.students.some((student, index) => studentRecordKey(student, index) === selectedStudentId));
+  const objectNavigationModalScope = !education ? null
+    : drawer === "file" ? JSON.stringify(["file", previewPath, previewArtifactId])
+    : drawer === "agent" ? JSON.stringify(["agent", agentTask ? taskKey(agentTask) : null])
+    : taskDetailTask ? `task:${taskKey(taskDetailTask)}`
+    : calendarSelection ? `calendar:${calendarSelection.kind}:${calendarSelection.sourceId}`
+    : studentDetailSelected ? `student:${selectedStudentId}`
+    : activeView === "materials" && materialItemRoute(selectedObjectId) ? selectedObjectId : null;
+  const objectNavigationContext = useMemo(() => ({ view: activeView, modalOpen: Boolean(objectNavigationModalScope) }), [activeView, objectNavigationModalScope]);
+  const objectNavigationContextRef = useRef(objectNavigationContext);
+  objectNavigationContextRef.current = objectNavigationContext;
+  const objectNavigationDesktopCollapsedRef = useRef(objectSider.collapsed);
+  objectNavigationDesktopCollapsedRef.current = objectSider.collapsed;
+  const [revealedObjectNavigationContext, setRevealedObjectNavigationContext] = useState<typeof objectNavigationContext | null>(null);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 820px)");
-    const update = () => setNarrowObjectNavigation(media.matches);
+    const update = () => {
+      const context = objectNavigationContextRef.current;
+      const navigation = objectNavigationRef.current;
+      const from = document.activeElement;
+      const navigationFocused = Boolean(navigation?.contains(from));
+      const scroll = navigation?.querySelector<HTMLElement>(".edupi-content-sider__scroll");
+      objectNavigationScroll.current.set(context.view, scroll?.scrollTop ?? 0);
+      if (navigationFocused && (media.matches ? context.modalOpen : objectNavigationDesktopCollapsedRef.current)) {
+        objectNavigationFocus.current = { target: "restore", from };
+      }
+      // A desktop column becomes an overlay only while its own controls are in use.
+      setRevealedObjectNavigationContext(media.matches && navigationFocused && !context.modalOpen ? context : null);
+      setNarrowObjectNavigation(media.matches);
+    };
     update();
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
-  const studentDetailSelected = (activeView === "homeroom" || activeView === "students") && Boolean(selectedStudentId)
-    && Boolean(education?.students.some((student, index) => studentRecordKey(student, index) === selectedStudentId));
-  const objectNavigationModalOpen = Boolean(education) && Boolean(drawer || taskDetailTask || calendarSelection || studentDetailSelected
-    || (activeView === "materials" && materialItemRoute(selectedObjectId)));
   const objectNavigationState = objectNavigationLayout({ collapsed: objectSider.collapsed, narrow: narrowObjectNavigation,
-    modalOpen: objectNavigationModalOpen, revealedView: revealedObjectNavigationView, view: activeView });
+    revealedView: revealedObjectNavigationContext === objectNavigationContext ? activeView : null, view: activeView });
   const effectiveObjectNavigationCollapsed = objectNavigationState.collapsed;
   const objectNavigationForeground = objectNavigationState.foreground
     && activeView !== "dashboard" && activeView !== "chat" && activeView !== "workspace";
@@ -239,15 +262,15 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     const scroll = objectNavigationRef.current?.querySelector<HTMLElement>(".edupi-content-sider__scroll");
     objectNavigationScroll.current.set(activeView, scroll?.scrollTop ?? 0);
     objectNavigationFocus.current = { target: "restore", from: document.activeElement };
-    setRevealedObjectNavigationView(null);
-    setObjectSiderCollapsed(true);
+    setRevealedObjectNavigationContext(null);
+    if (!window.matchMedia("(max-width: 820px)").matches) setObjectSiderCollapsed(true);
   }, [activeView, setObjectSiderCollapsed]);
-  useModalDismiss<HTMLElement>(collapseObjectNavigation, objectNavigationForeground, objectNavigationRef);
+  useModalDismiss<HTMLElement>(collapseObjectNavigation, objectNavigationForeground, objectNavigationRef, false);
   const expandObjectNavigation = useCallback(() => {
     objectNavigationFocus.current = { target: "list", from: document.activeElement };
-    setRevealedObjectNavigationView(activeView);
-    setObjectSiderCollapsed(false);
-  }, [activeView, setObjectSiderCollapsed]);
+    setRevealedObjectNavigationContext(objectNavigationContext);
+    if (!window.matchMedia("(max-width: 820px)").matches) setObjectSiderCollapsed(false);
+  }, [objectNavigationContext, setObjectSiderCollapsed]);
   const focusObjectNavigation = useCallback(() => {
     objectNavigationFocus.current = restoreObjectNavigationFocus(objectNavigationFocus.current, {
       document,
@@ -780,16 +803,17 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       router.replace(`/?${params.toString()}`, { scroll: false });
       return;
     }
-    if (window.matchMedia("(max-width: 820px)").matches && !objectSider.collapsed) collapseObjectNavigation();
+    if (window.matchMedia("(max-width: 820px)").matches && !effectiveObjectNavigationCollapsed) collapseObjectNavigation();
     if (activeView !== "calendar") {
       selectView("calendar", undefined, undefined, selection);
       return;
     }
     setCalendarSelection(selection);
     updateLocation("calendar", undefined, undefined, inspectorOpen, selectedStudentId, selectedObjectId, selection);
-  }, [activeView, collapseObjectNavigation, inspectorOpen, objectSider.collapsed, router, searchParams, selectView, selectedObjectId, selectedStudentId, updateLocation]);
+  }, [activeView, collapseObjectNavigation, effectiveObjectNavigationCollapsed, inspectorOpen, router, searchParams, selectView, selectedObjectId, selectedStudentId, updateLocation]);
 
   const selectTask = useCallback((task: TeacherTask, stage: TaskStage = "brief") => {
+    if (objectNavigationForeground) collapseObjectNavigation();
     const view = stage === "review" && activeView === "review" ? "review" : "tasks";
     cancelActivation();
     setSelectedTaskKey(taskKey(task));
@@ -805,7 +829,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     if (view === "review") setReviewMode("task");
     updateLocation(view, task, stage);
     if (stage === "review") void loadWorkspace().catch(() => {});
-  }, [activeView, cancelActivation, loadWorkspace, updateLocation]);
+  }, [activeView, cancelActivation, collapseObjectNavigation, loadWorkspace, objectNavigationForeground, updateLocation]);
 
   const selectStage = useCallback((stage: TaskStage) => {
     cancelActivation();
@@ -821,6 +845,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [activeStage, activeTask, activeView, calendarSelection, inspectorOpen, reviewMode, selectedC1Target, selectedObjectId, selectedStudentId, updateLocation]);
 
   const focusC1Review = useCallback((target: ReviewTargetRoute) => {
+    if (objectNavigationForeground) collapseObjectNavigation();
     cancelActivation();
     setActiveView("review");
     setSelectedTaskKey(null);
@@ -835,7 +860,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     requestAnimationFrame(() => {
       document.getElementById(`edupi-c1-review-${target.kind}-${target.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
-  }, [cancelActivation, inspectorOpen, updateLocation]);
+  }, [cancelActivation, collapseObjectNavigation, inspectorOpen, objectNavigationForeground, updateLocation]);
 
   const selectStudent = useCallback((student: Record<string, unknown> | null) => {
     if (!student) {
@@ -847,15 +872,15 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     const id = studentRecordKey(student, Math.max(0, index));
     setSelectedStudentId(id);
     updateLocation(activeView, undefined, undefined, inspectorOpen, id);
-    if (window.matchMedia("(max-width: 820px)").matches && !objectSider.collapsed) collapseObjectNavigation();
-  }, [activeView, collapseObjectNavigation, education?.students, inspectorOpen, objectSider, updateLocation]);
+    if (window.matchMedia("(max-width: 820px)").matches && !effectiveObjectNavigationCollapsed) collapseObjectNavigation();
+  }, [activeView, collapseObjectNavigation, education?.students, effectiveObjectNavigationCollapsed, inspectorOpen, updateLocation]);
 
   const selectObject = useCallback((id: string) => {
     if (id === "review:board" || id.startsWith("review:list:")) setReviewMode("board");
     setSelectedObjectId(id);
     updateLocation(activeView, undefined, undefined, inspectorOpen, selectedStudentId, id);
-    if (window.matchMedia("(max-width: 820px)").matches && !objectSider.collapsed) collapseObjectNavigation();
-  }, [activeView, collapseObjectNavigation, inspectorOpen, objectSider, selectedStudentId, updateLocation]);
+    if (window.matchMedia("(max-width: 820px)").matches && !effectiveObjectNavigationCollapsed) collapseObjectNavigation();
+  }, [activeView, collapseObjectNavigation, effectiveObjectNavigationCollapsed, inspectorOpen, selectedStudentId, updateLocation]);
 
   const reviewTask = useCallback(async (action: TaskReviewAction, payload: ReviewPayload) => {
     if (!activeTask?.id || !education) return;

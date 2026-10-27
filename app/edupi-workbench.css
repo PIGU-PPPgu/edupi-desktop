@@ -1058,24 +1058,23 @@ html.dark .edupi-teacher-shell {
 .edupi-database-row__detail strong { overflow: hidden; color: var(--ep-muted); font-size: 10px; font-weight: 520; text-overflow: ellipsis; white-space: nowrap; }
 .edupi-database-row__detail button { height: 30px; padding: 0 10px; border: 1px solid var(--ep-border-strong); border-radius: 6px; background: var(--ep-surface); color: var(--ep-text); cursor: pointer; font-size: 10px; }
 .edupi-method-status { margin: 0 0 10px; padding: 9px 12px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface-soft); color: var(--ep-muted); font-size: 10px; }
-.edupi-method-editor { display: grid; gap: 10px; margin: 0 0 12px; padding: 13px 14px; border: 1px solid var(--ep-border); border-radius: 7px; background: var(--ep-surface-soft); }
-.edupi-method-editor.is-compact { margin: 0; }
-.edupi-method-editor > label { display: grid; gap: 5px; color: var(--ep-muted); font-size: 10px; }
+.edupi-method-editor { width: min(100%, 680px); min-width: 0; margin: 0 auto 20px; padding: 20px; border: 1px solid var(--ep-border); border-radius: 7px; background: var(--ep-surface-soft); }
+.edupi-method-editor > fieldset { display: grid; min-width: 0; gap: 16px; margin: 0; padding: 0; border: 0; }
+.edupi-method-editor > fieldset > label { display: grid; gap: 8px; color: var(--ep-muted); font-size: 12px; }
 .edupi-method-editor input,
 .edupi-method-editor select,
 .edupi-method-editor textarea { width: 100%; min-width: 0; border: 1px solid var(--ep-border-strong); border-radius: 6px; background: var(--ep-surface); color: var(--ep-text); font: inherit; }
 .edupi-method-editor input,
 .edupi-method-editor select { height: 34px; padding: 0 9px; }
 .edupi-method-editor textarea { min-height: 78px; padding: 8px 9px; line-height: 1.55; resize: vertical; }
-.edupi-method-editor > p { margin: 0; color: var(--ep-muted); font-size: 10px; }
-.edupi-method-editor > p[role="alert"] { color: var(--ep-red); }
+.edupi-method-editor > fieldset > p { margin: 0; color: var(--ep-muted); font-size: 12px; }
+.edupi-method-editor > fieldset > p[role="alert"] { color: var(--ep-red); }
 .edupi-method-editor__actions,
 .edupi-method-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 .edupi-method-editor__actions button,
 .edupi-method-actions button,
 .edupi-method-detail section button { min-height: 30px; padding: 0 10px; border: 1px solid var(--ep-border-strong); border-radius: 6px; background: var(--ep-surface); color: var(--ep-text); cursor: pointer; font-size: 10px; }
-.edupi-method-editor__actions button.is-primary,
-.edupi-method-actions button.is-primary { border-color: var(--ep-blue); background: var(--ep-blue); color: white; }
+.edupi-method-editor__actions button.is-primary { border-color: var(--ep-blue); background: var(--ep-blue); color: white; }
 .edupi-method-editor__actions button:disabled { cursor: default; opacity: .5; }
 .edupi-method-detail { display: grid; gap: 10px; padding: 13px 14px; border-top: 1px solid var(--ep-border); background: var(--ep-surface-soft); }
 .edupi-method-detail > section { display: grid; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--ep-border); }
@@ -1513,7 +1512,7 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-today-work__editor-actions button.is-danger { border-color: color-mix(in srgb, var(--ep-red) 50%, var(--ep-border)); color: var(--ep-red); }
 .edupi-today-work__actions button:disabled,
 .edupi-today-work__editor-actions button:disabled { cursor: not-allowed; opacity: .45; }
-.edupi-today-work__editor { display: grid; gap: 8px; margin-top: 11px; padding: 10px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface-soft); }
+.edupi-today-work__editor { display: grid; gap: 8px; margin-top: 11px; padding: 10px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface-soft); scroll-margin-block: 12px; }
 .edupi-today-work__field { display: grid; gap: 4px; min-width: 0; }
 .edupi-today-work__editor label { display: grid; gap: 4px; color: var(--ep-muted); font-size: 10px; }
 .edupi-today-work__editor input,
@@ -1523,7 +1522,9 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-today-work__editor input:focus,
 .edupi-today-work__editor textarea:focus,
 .edupi-today-work__editor select:focus { border-color: var(--ep-blue); box-shadow: 0 0 0 2px var(--ep-blue-soft); }
-.edupi-today-work__editor-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.edupi-today-work__editor-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 3px; }
+.edupi-today-work__editor-actions button { min-height: 32px; }
+.edupi-today-work__editor-actions button.is-primary.is-danger { border-color: var(--ep-red); background: var(--ep-red); color: white; }
 .edupi-today-work__empty { margin: 0; padding: 14px 12px; color: var(--ep-muted); font-size: 11px; }
 
 .edupi-workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .82fr); gap: 14px; margin-top: 14px; align-items: start; }

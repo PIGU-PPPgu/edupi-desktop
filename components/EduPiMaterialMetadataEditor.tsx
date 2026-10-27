@@ -14,6 +14,7 @@ import {
   type MaterialMetadataVersionSide,
 } from "@/lib/edupi-material-metadata-model";
 import { EduPiIconButton } from "./EduPiActionIcon";
+import { materialClassLabel, type MaterialClassOption } from "@/lib/edupi-material-class-options";
 
 const KIND_LABELS: Record<MaterialMetadataKind, string> = {
   worksheet: "学案 / 练习",
@@ -30,15 +31,16 @@ function normalizedDraftValues(values: MaterialMetadataValues): MaterialMetadata
   return { title: values.title.trim(), kind: values.kind, subject: values.subject?.trim() || null, classId: values.classId?.trim() || null };
 }
 
-function valueLabel(field: keyof typeof FIELD_LABELS, values: MaterialMetadataValues): string {
+function valueLabel(field: keyof typeof FIELD_LABELS, values: MaterialMetadataValues, classLabels: readonly MaterialClassOption[]): string {
   if (field === "kind") return KIND_LABELS[values.kind];
-  if (field === "class_id") return values.classId || "未设置";
+  if (field === "class_id") return materialClassLabel(values.classId, classLabels) || "未设置";
   if (field === "subject") return values.subject || "未设置";
   return values.title;
 }
 
-function History({ material, history, loading, error, open, busy, restoring, detailsRef, summaryRef, onToggle, onRetry, onRestore }: {
+function History({ material, classLabels, history, loading, error, open, busy, restoring, detailsRef, summaryRef, onToggle, onRetry, onRestore }: {
   material: EducationTeacherMaterial;
+  classLabels: readonly MaterialClassOption[];
   history: MaterialMetadataVersionHistory | null;
   loading: boolean;
   error: string | null;
@@ -65,16 +67,17 @@ function History({ material, history, loading, error, open, busy, restoring, det
           const label = side === "before" ? "修改前" : "修改后";
           const currentSide = sameMaterialMetadataValues(current, sideValues);
           const key = `${version.versionId}:${side}`;
-          return <section key={side}><header><strong>{label}</strong>{currentSide ? <span>当前信息</span> : <button type="button" data-material-metadata-side={side} disabled={busy} onClick={(event) => onRestore(version, side, event.currentTarget)}>{restoring === key ? "恢复中…" : `恢复${label}`}</button>}</header><dl>{MATERIAL_METADATA_FIELDS.map((field) => <div key={field}><dt>{FIELD_LABELS[field]}</dt><dd title={valueLabel(field, sideValues)}>{valueLabel(field, sideValues)}</dd></div>)}</dl></section>;
+          return <section key={side}><header><strong>{label}</strong>{currentSide ? <span>当前信息</span> : <button type="button" data-material-metadata-side={side} disabled={busy} onClick={(event) => onRestore(version, side, event.currentTarget)}>{restoring === key ? "恢复中…" : `恢复${label}`}</button>}</header><dl>{MATERIAL_METADATA_FIELDS.map((field) => <div key={field}><dt>{FIELD_LABELS[field]}</dt><dd title={valueLabel(field, sideValues, classLabels)}>{valueLabel(field, sideValues, classLabels)}</dd></div>)}</dl></section>;
         })}</div>
       </li>)}</ol>
     </> : <p>暂无信息历史</p>}</div>
   </details>;
 }
 
-export function EduPiMaterialMetadataEditor({ material, classes, onEducation, onStartAgent }: {
+export function EduPiMaterialMetadataEditor({ material, classes, classLabels = [], onEducation, onStartAgent }: {
   material: EducationTeacherMaterial;
   classes: string[];
+  classLabels?: readonly MaterialClassOption[];
   onEducation: (data: EducationContract) => void;
   onStartAgent: (prompt: string, mode?: "insert" | "replace") => void;
 }) {
@@ -281,14 +284,14 @@ export function EduPiMaterialMetadataEditor({ material, classes, onEducation, on
       `材料：${material.title}`,
       `当前类型：${KIND_LABELS[material.kind]}`,
       `当前学科：${material.subject || "未设置"}`,
-      `当前班级：${material.class_id || "未设置"}`,
+      `当前班级：${materialClassLabel(material.class_id, classLabels) || "未设置"}`,
     ].join("\n"), "replace");
   };
 
   return <section ref={editorRootRef} className="edupi-material-metadata-editor">
     <header><h3>材料信息</h3><div><EduPiIconButton type="button" icon="edit" label="修改材料信息" className="is-primary" onClick={openEditor} disabled={busy}/><EduPiIconButton type="button" icon="agent" label="AI 协作" onClick={collaborate} disabled={busy}/></div></header>
     {message ? <p className={`edupi-material-metadata-message is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p> : null}
-    {editor ? <form ref={editorFormRef} onSubmit={save}><label><span>名称</span><input ref={nameInputRef} required maxLength={240} value={editor.values.title} onChange={(event) => setEditor({ ...editor, values: { ...editor.values, title: event.target.value } })} /></label><label><span>类型</span><select value={editor.values.kind} onChange={(event) => setEditor({ ...editor, values: { ...editor.values, kind: event.target.value as MaterialMetadataKind } })}>{Object.entries(KIND_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label><span>学科</span><input maxLength={120} value={editor.values.subject || ""} placeholder="可留空" onChange={(event) => setEditor({ ...editor, values: { ...editor.values, subject: event.target.value } })} /></label><label><span>班级</span>{classOptions.length > 0 ? <select value={editor.values.classId || ""} onChange={(event) => setEditor({ ...editor, values: { ...editor.values, classId: event.target.value } })}><option value="">未设置</option>{classOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select> : <input maxLength={160} value={editor.values.classId || ""} placeholder="可留空" onChange={(event) => setEditor({ ...editor, values: { ...editor.values, classId: event.target.value } })} />}</label><div><button type="button" onClick={closeEditor} disabled={busy}>取消</button><button type="submit" className="is-primary" disabled={busy || !normalizedEditor?.title || Object.keys(editorPatch).length === 0}>{busy ? "保存中…" : "保存"}</button></div></form> : null}
-    <History material={material} history={history} loading={historyLoading} error={historyError} open={historyOpen} busy={busy} restoring={restoring} detailsRef={historyDetailsRef} summaryRef={historySummaryRef} onToggle={setHistoryOpen} onRetry={() => void loadHistory()} onRestore={(version, side, trigger) => void restore(version, side, trigger)} />
+    {editor ? <form ref={editorFormRef} onSubmit={save}><label><span>名称</span><input ref={nameInputRef} required maxLength={240} value={editor.values.title} onChange={(event) => setEditor({ ...editor, values: { ...editor.values, title: event.target.value } })} /></label><label><span>类型</span><select value={editor.values.kind} onChange={(event) => setEditor({ ...editor, values: { ...editor.values, kind: event.target.value as MaterialMetadataKind } })}>{Object.entries(KIND_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label><span>学科</span><input maxLength={120} value={editor.values.subject || ""} placeholder="可留空" onChange={(event) => setEditor({ ...editor, values: { ...editor.values, subject: event.target.value } })} /></label><label><span>班级</span>{classOptions.length > 0 ? <select value={editor.values.classId || ""} onChange={(event) => setEditor({ ...editor, values: { ...editor.values, classId: event.target.value } })}><option value="">未设置</option>{classOptions.map((value) => <option key={value} value={value}>{materialClassLabel(value, classLabels)}</option>)}</select> : <input maxLength={160} value={editor.values.classId || ""} placeholder="可留空" onChange={(event) => setEditor({ ...editor, values: { ...editor.values, classId: event.target.value } })} />}</label><div><button type="button" onClick={closeEditor} disabled={busy}>取消</button><button type="submit" className="is-primary" disabled={busy || !normalizedEditor?.title || Object.keys(editorPatch).length === 0}>{busy ? "保存中…" : "保存"}</button></div></form> : null}
+    <History material={material} classLabels={classLabels} history={history} loading={historyLoading} error={historyError} open={historyOpen} busy={busy} restoring={restoring} detailsRef={historyDetailsRef} summaryRef={historySummaryRef} onToggle={setHistoryOpen} onRetry={() => void loadHistory()} onRestore={(version, side, trigger) => void restore(version, side, trigger)} />
   </section>;
 }

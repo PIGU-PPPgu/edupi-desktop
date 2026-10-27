@@ -319,7 +319,6 @@ test("routes education uploads through Desktop staging without Core paths or aut
   assert.match(materials, /EduPiMaterialScheduleProposal/);
   assert.match(panel, /materialReceivedOnly/);
   assert.doesNotMatch(materials, /resolveScheduleSourceSelection|documentPairingSubmission|calendar-preview|document-pairings|确认导入|确认更新/);
-  assert.match(materials, /旧安排更新、撤回和课表导入暂不可用/);
   assert.match(materials, /onIntakeMaterial\(item, \{ title:/);
   assert.match(workspaceViews, /stagedMaterials/);
   assert.match(materials, /接入 EduPi/);

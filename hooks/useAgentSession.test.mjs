@@ -216,7 +216,7 @@ test("sizes the message tail from the rendered bottom composer", () => {
   assert.match(chatWindowSource, /bottomComposerScrollFrameRef = useRef<number \| null>\(null\)/);
   assert.match(chatWindowSource, /distanceFromBottom <= Math\.abs\(nextHeight - previousHeight\) \+ 1/);
   assert.match(chatWindowSource, /scrollToBottom\("auto"\)/);
-  assert.match(chatWindowSource, /<div ref=\{bottomComposerRef\} className="absolute inset-x-0 bottom-0 z-20">/);
+  assert.match(chatWindowSource, /<div ref=\{bottomComposerRef\} className=\{isEmptyNew \? "flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-4 py-8" : "absolute inset-x-0 bottom-0 z-20"\}>/);
   assert.match(chatWindowSource, /height: bottomComposerHeight/);
 });
 

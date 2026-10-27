@@ -4,13 +4,13 @@ import { useEffect, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { EduPiSidebarIcon } from "./EduPiSidebarIcon";
 
-export function objectNavigationLayout({ collapsed, narrow, modalOpen, revealedView, view }: {
-  collapsed: boolean; narrow: boolean; modalOpen: boolean; revealedView: string | null; view: string;
+export function objectNavigationLayout({ collapsed, narrow, revealedView, view }: {
+  collapsed: boolean; narrow: boolean; revealedView: string | null; view: string;
 }) {
   const revealed = revealedView === view;
   return {
-    collapsed: collapsed || (narrow && modalOpen && !revealed),
-    foreground: narrow && modalOpen && !collapsed && revealed,
+    collapsed: narrow ? !revealed : collapsed,
+    foreground: narrow && revealed,
   };
 }
 

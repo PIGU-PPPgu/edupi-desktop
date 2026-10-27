@@ -4,7 +4,7 @@ import path from "node:path";
 import type { CalendarFact } from "./edupi-education-contract";
 import type { CalendarImportEvent } from "./edupi-education-intake";
 import type { PlanOverlapAction, PlanOverlapState, PlanOverlapSuggestion } from "./edupi-plan-overlap-types";
-import { issueEducationIntake, contentHash } from "./edupi-education-intake";
+import { issueCalendarNotes } from "./edupi-calendar-notes";
 import { issueEntityDelete } from "./edupi-entity-delete";
 import type { readEduPiEducationSnapshot } from "./edupi-core-snapshot";
 
@@ -25,10 +25,11 @@ type EducationSnapshot = Awaited<ReturnType<typeof readEduPiEducationSnapshot>>;
 export function createSnapshotBoundPlanCalendar(deps: {
   readSnapshot: typeof readEduPiEducationSnapshot;
   project: (snapshot: EducationSnapshot) => Promise<{ calendar: CalendarFact[] }>;
-  intake?: typeof issueEducationIntake;
+  updateNotes?: typeof issueCalendarNotes;
   deleteEntity?: typeof issueEntityDelete;
 }): Pick<PlanOverlapDependencies, "readCalendar" | "update" | "remove"> {
   let checkedSnapshot: EducationSnapshot | undefined;
+  let checkedCalendar: CalendarFact[] = [];
   const captured = () => {
     if (!checkedSnapshot) throw new Error("请先读取计划。");
     return { ...checkedSnapshot, roots: { runtime: checkedSnapshot.runtime, dataRoot: checkedSnapshot.dataRoot } };
@@ -38,12 +39,15 @@ export function createSnapshotBoundPlanCalendar(deps: {
       const snapshot = await deps.readSnapshot({ scheduleOccurrenceVersion: "1.2" });
       const result = await deps.project(snapshot);
       checkedSnapshot = snapshot;
+      checkedCalendar = result.calendar;
       return result.calendar;
     },
     update: async event => {
       const snapshot = captured();
-      const sourceHash = contentHash(event);
-      await (deps.intake || issueEducationIntake)({ command_type: "import_calendar", source: { source_id: `plan-merge-${sourceHash.slice(7, 31)}`, source_kind: "teacher_message", source_hash: sourceHash, evidence_ids: [`plan-merge-${event.event_id}`] }, events: [event] }, { readSnapshot: async () => snapshot });
+      const original = checkedCalendar.find(item => item.id === event.event_id);
+      if (!original) throw new Error("计划已变化，合并已暂停。");
+      await (deps.updateNotes || issueCalendarNotes)({ canonicalId: event.event_id, expectedNotes: original.notes,
+        notes: event.notes, evidenceIds: [`plan-merge-${event.event_id}`] }, { snapshot });
     },
     remove: async id => {
       const snapshot = captured();

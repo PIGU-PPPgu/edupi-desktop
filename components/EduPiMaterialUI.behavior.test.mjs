@@ -130,7 +130,7 @@ function metadata() {
   const dom = metadataDom(), requests = [], education = [];
   let finish;
   const props = { material: material(1), classes: ["703", "704"], onStartAgent() {}, onEducation(data) { education.push(data); props.material = data.teacherMaterials[0]; } };
-  const f = mount(metadataCode, "EduPiMaterialMetadataEditor", props, { "@/lib/edupi-material-metadata-model": metadataModel, "./EduPiActionIcon": placeholder("EduPiIconButton") }, {
+  const f = mount(metadataCode, "EduPiMaterialMetadataEditor", props, { "@/lib/edupi-material-metadata-model": metadataModel, "@/lib/edupi-material-class-options": classOptions, "./EduPiActionIcon": placeholder("EduPiIconButton") }, {
     window: { setTimeout() { return 1; }, clearTimeout() {} }, fetch: async (url, options) => { requests.push({ url, ...options }); return new Promise(resolve => { finish = success => {
       const patch = JSON.parse(options.body).patch;
       const next = { ...props.material, title: patch.title ?? props.material.title, kind: patch.kind ?? props.material.kind, subject: patch.subject ?? props.material.subject, class_id: patch.classId ?? props.material.class_id, metadata_revision: props.material.metadata_revision + 1 };
@@ -146,6 +146,23 @@ function metadata() {
     finish(success = true) { assert.ok(finish); finish(success); },
   };
 }
+
+test("metadata class labels remain separate from canonical values and the existing CAS payload", async () => {
+  const f = metadata();
+  f.props.material = { ...f.props.material, class_id: "class-one" };
+  f.props.classes = ["class-one", "class-two", "class-unknown"];
+  f.props.classLabels = classOptions.materialClassOptions([
+    { class_id: "class-one", class_name: "测试一班" }, { class_id: "class-two", class_name: "测试二班" },
+  ], []);
+  f.render(); f.open();
+  const field = descendants(f.find(node => node.type === "form")).find(node => node.type === "label" && text(node.props.children[0]) === "班级");
+  const options = descendants(field).filter(node => node.type === "option").map(node => ({ value: node.props.value, label: text(node) }));
+  assert.deepEqual(options, [{ value: "", label: "未设置" }, { value: "class-one", label: "测试一班" }, { value: "class-two", label: "测试二班" }, { value: "class-unknown", label: "class-unknown" }]);
+  f.field("班级", "class-two"); const pending = f.submit();
+  assert.deepEqual(JSON.parse(f.requests[0].body), { expectedRevision: 2, patch: { classId: "class-two" } });
+  f.finish(); await pending; await f.settle();
+  assert.equal(f.props.material.class_id, "class-two");
+});
 
 test("metadata reopening preserves every draft field without refocusing while typing", () => {
   const f = metadata(); f.open();
@@ -239,7 +256,7 @@ function metadataRestore({ deferProjection = false } = {}) {
   let history = { materialId: version.materialId, revision: 2, historyCount: 1, versions: [version] }, finish, pendingProjection;
   let currentMaterial = { ...material(1), metadata_history_count: 1 };
   const props = { material: currentMaterial, classes: ["703"], onStartAgent() {}, onEducation(data) { education.push(data); if (deferProjection) pendingProjection = data.teacherMaterials[0]; else props.material = data.teacherMaterials[0]; } };
-  const f = mount(metadataCode, "EduPiMaterialMetadataEditor", props, { "@/lib/edupi-material-metadata-model": metadataModel, "./EduPiActionIcon": placeholder("EduPiIconButton") }, {
+  const f = mount(metadataCode, "EduPiMaterialMetadataEditor", props, { "@/lib/edupi-material-metadata-model": metadataModel, "@/lib/edupi-material-class-options": classOptions, "./EduPiActionIcon": placeholder("EduPiIconButton") }, {
     window: { setTimeout() { return 1; }, clearTimeout() {} }, fetch: async (url, options) => {
       requests.push({ url, ...options });
       if (!options.method) return { ok: true, json: async () => ({ data: { teacherMaterials: [currentMaterial] }, history }) };
@@ -298,6 +315,19 @@ test("material restoration replaces the current side and focuses the other side 
   assert.equal(f.props.material.class_id, null);
   assert.equal(f.props.material.metadata_revision, 3);
   assert.equal(f.dom.listeners.size, 0);
+});
+
+test("metadata history displays known class labels while keeping both restore identities intact", async () => {
+  const f = metadataRestore();
+  f.props.classLabels = [{ value: "class-one", label: "测试一班" }, { value: "class-two", label: "测试二班" }];
+  f.version.beforeValues.classId = "class-one"; f.version.afterValues.classId = "class-two";
+  await f.openHistory();
+  const history = f.find(node => node.type.name === "History");
+  const labels = descendants(history.type(history.props)).filter(node => node.type === "dd").map(text);
+  assert.ok(labels.includes("测试一班")); assert.ok(labels.includes("测试二班"));
+  assert.equal(labels.includes("class-one") || labels.includes("class-two"), false);
+  assert.equal(f.version.beforeValues.classId, "class-one"); assert.equal(f.version.afterValues.classId, "class-two");
+  assert.ok(f.requests.every(request => !request.method), "displaying names does not perform a restore");
 });
 
 test("failed material restoration keeps the version list and returns to the enabled retry button", async () => {

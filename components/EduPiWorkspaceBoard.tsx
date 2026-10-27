@@ -172,8 +172,8 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   const activeSlotId = timetableSlotId || slotId(usableSlots[0] || {});
   const activeSlot = usableSlots.find((slot) => slotId(slot) === activeSlotId) || null;
   const activeSubject = rawText(activeSlot?.subject);
-  const activeClass = rawText(activeSlot?.class_name);
-  const compatibleMaterials = useMemo(() => (data.teacherMaterials || []).filter((material) => material.available !== false
+  const activeClass = rawText(activeSlot?.class_id) || rawText(activeSlot?.class_name);
+  const compatibleMaterials = useMemo(() => (data.teacherMaterials || []).filter((material) => material.available === true
     && material.subject === activeSubject && material.class_id === activeClass), [activeClass, activeSubject, data.teacherMaterials]);
   const compatibleMaterialIds = useMemo(() => new Set(compatibleMaterials.map((material) => material.material_id)), [compatibleMaterials]);
   useEffect(() => setMaterialIds((current) => {

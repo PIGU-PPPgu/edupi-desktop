@@ -91,6 +91,24 @@ test("a disabled external navigation scope registers no trap or focus change", (
   assert.equal(f.document.activeElement, before);
 });
 
+test("a navigation scope can own its guarded return focus while retaining modal keyboard handling", () => {
+  const f = fixture(), opener = f.control("restore list"), first = f.control("list collapse"), last = f.control("last row"), outside = f.control("new focus");
+  let dismissals = 0;
+  f.document.activeElement = opener;
+  const ref = { current: f.panel([first, last]) };
+  f.useModalDismiss(() => { dismissals += 1; }, true, ref, false);
+  const cleanup = f.effects.shift()();
+  assert.equal(f.document.activeElement, first);
+  assert.equal(f.key("Tab", true).defaultPrevented, true);
+  assert.equal(f.document.activeElement, last);
+  assert.equal(f.key("Escape").defaultPrevented, true);
+  assert.equal(dismissals, 1);
+  f.document.activeElement = outside;
+  cleanup();
+  assert.equal(f.document.activeElement, outside);
+  assert.equal(f.listeners.size, 0);
+});
+
 test("reverse Tab skips closed history content even when it has an offset parent", () => {
   const f = fixture(), opener = f.control("expand graph"), close = f.control("close graph");
   const history = f.element("DETAILS");

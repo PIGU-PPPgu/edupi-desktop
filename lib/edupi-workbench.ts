@@ -223,7 +223,7 @@ export function groupEducationInsights(insights: EducationInsight[]): Array<{ to
 }
 
 export function taskSourceLabel(task: TeacherTask): string {
-  return task.sourceEventName || task.topic || task.student || "来源待核对";
+  return task.sourceEventName || task.topic || task.student || (task.trigger === "teacher_created" ? "教师创建" : "来源待核对");
 }
 
 function evidenceText(task: TeacherTask, key: string): string | null {

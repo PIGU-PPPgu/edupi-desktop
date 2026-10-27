@@ -15,7 +15,7 @@ vm.runInNewContext(compiled, { exports, require: () => ({}) });
 const { findObjectNavigationHeader, objectNavigationLayout, restoreObjectNavigationFocus } = exports;
 
 test("narrow detail links hide the list until explicitly restored and do not carry that overlay into another module", () => {
-  const state = { collapsed: false, narrow: true, modalOpen: true, revealedView: null, view: "students" };
+  const state = { collapsed: false, narrow: true, revealedView: null, view: "students" };
   const initial = objectNavigationLayout(state);
   assert.equal(initial.collapsed, true);
   assert.equal(initial.foreground, false);
@@ -25,6 +25,19 @@ test("narrow detail links hide the list until explicitly restored and do not car
   const calendar = objectNavigationLayout({ ...state, revealedView: "students", view: "calendar" });
   assert.equal(calendar.collapsed, true);
   assert.equal(calendar.foreground, false);
+});
+
+test("narrow list visibility is temporary while the wide list follows its saved preference", () => {
+  for (const collapsed of [false, true]) {
+    const state = { collapsed, narrow: true, revealedView: null, view: "insights" };
+    assert.equal(objectNavigationLayout(state).collapsed, true);
+    const revealed = objectNavigationLayout({ ...state, revealedView: "insights" });
+    assert.equal(revealed.collapsed, false);
+    assert.equal(revealed.foreground, true);
+    const wide = objectNavigationLayout({ ...state, narrow: false, revealedView: "insights" });
+    assert.equal(wide.collapsed, collapsed);
+    assert.equal(wide.foreground, false);
+  }
 });
 
 function element({ hidden = false, visible = true } = {}) {
