@@ -21,9 +21,9 @@ const text = node => typeof node === "string" ? node : Array.isArray(node) ? nod
 const current = { name: "合成教师", role: "班主任", subject: "数学", grade: "七年级", class_name: "合成班级" };
 const version = { versionId: "synthetic-v1", contextId: "synthetic-context", revision: 1, beforeValues: { ...current, name: "旧称呼" }, afterValues: { ...current, subject: "科学" }, changedFields: ["name", "subject"], reviewedAt: "2026-10-26T00:00:00Z", reviewerId: "teacher", note: null, receiptId: "receipt-version", externalSend: false };
 
-function mount({ status = "pending_review", versions = [version], enabled = true, post, confirm = true } = {}) {
+function mount({ status = "pending_review", versions = [version], enabled = true, post, put, confirm = true } = {}) {
   const slots = [], listeners = new Set(), calls = [], reviewed = [], confirmations = [], agentRequests = [];
-  let cursor = 0, dirty = false, effects = [], tree, closed = 0;
+  let cursor = 0, dirty = false, effects = [], tree, closed = 0, commit = null;
   const sameDeps = (left, right) => left && left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
   const hooks = {
     useState(initial) {
@@ -46,7 +46,7 @@ function mount({ status = "pending_review", versions = [version], enabled = true
   const exports = {};
   vm.runInNewContext(compiled, { exports, AbortController, Date, Error, Event, window: { addEventListener(name, callback, capture) { assert.equal(name, "keydown"); assert.equal(capture, true); listeners.add(callback); }, removeEventListener(_name, callback) { listeners.delete(callback); }, dispatchEvent() {} }, fetch: async (url, options = {}) => {
     calls.push({ url, method: options.method || "GET", body: options.body, signal: options.signal });
-    return options.method === "POST" ? await post?.(url, options) || { ok: true, json: async () => ({ data: { teacherContextCandidates: [candidate] }, receipt: {} }) } : { ok: true, json: async () => ({ versions }) };
+    return options.method === "POST" ? await post?.(url, options) || { ok: true, json: async () => ({ data: { teacherContextCandidates: [candidate] }, receipt: {} }) } : options.method === "PUT" ? await put?.(JSON.parse(options.body), candidate) || { ok: false, json: async () => ({ error: "Unexpected review write" }) } : { ok: true, json: async () => ({ versions }) };
   }, require(name) {
     if (name === "react") return hooks;
     if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
@@ -60,12 +60,13 @@ function mount({ status = "pending_review", versions = [version], enabled = true
       assert.ok(count++ < 20, "context state should settle");
       cursor = 0; dirty = false; effects = [];
       tree = exports.EduPiContextEditor(props);
+      commit?.(tree);
       effects.splice(0).forEach(callback => callback());
     } while (dirty);
     return tree;
   };
   render();
-  return { props, calls, reviewed, confirmations, agentRequests, render, nodes: () => descendants(tree), find: predicate => descendants(tree).find(predicate), get tree() { return tree; }, get closed() { return closed; }, async settle() { for (let i = 0; i < 4; i++) { await tick(); if (dirty) render(); } }, async openHistory() { descendants(tree).find(node => node.type === "details" && node.props.onToggle).props.onToggle({ currentTarget: { open: true } }); render(); await this.settle(); }, escape() { const event = { key: "Escape", defaultPrevented: false, stopped: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } }; for (const callback of listeners) callback(event); if (!event.stopped) tree.props.onKeyDown(event); render(); return event; } };
+  return { props, calls, reviewed, confirmations, agentRequests, render, setCommit(callback) { commit = callback; render(); }, nodes: () => descendants(tree), find: predicate => descendants(tree).find(predicate), get tree() { return tree; }, get closed() { return closed; }, async settle() { for (let i = 0; i < 4; i++) { await tick(); if (dirty) render(); } }, async openHistory() { descendants(tree).find(node => node.type === "details" && node.props.onToggle).props.onToggle({ currentTarget: { open: true } }); render(); await this.settle(); }, escape() { const event = { key: "Escape", defaultPrevented: false, stopped: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } }; for (const callback of listeners) callback(event); if (!event.stopped) tree.props.onKeyDown(event); render(); return event; } };
 }
 
 const button = (f, label) => f.find(node => node.type === "button" && text(node) === label);
@@ -109,7 +110,7 @@ test("current history values are plain text and restore buttons retain exact sna
   const restore = f.find(node => node.props["aria-label"] === "恢复称呼为旧称呼");
   assert.equal(restore.type, "button");
   assert.equal(restore.props.disabled, false);
-  restore.props.onClick(); f.render();
+  restore.props.onClick({ currentTarget: { isConnected: false, disabled: false } }); f.render();
   const call = f.calls.find(call => call.method === "POST");
   assert.equal(f.confirmations.length, 0, "accepted history restores do not prompt for replacement");
   assert.equal(call.url, "/api/edupi/onboarding/versions");
@@ -153,7 +154,7 @@ test("cancelling history restoration leaves pending or held proposals untouched 
   for (const status of ["pending_review", "held"]) {
     const f = mount({ status, confirm: false }); await f.openHistory();
     const before = JSON.stringify(f.props.candidate);
-    f.find(node => node.props["aria-label"] === "恢复称呼为旧称呼").props.onClick(); f.render(); await f.settle();
+    f.find(node => node.props["aria-label"] === "恢复称呼为旧称呼").props.onClick({ currentTarget: { isConnected: false, disabled: false } }); f.render(); await f.settle();
     assert.equal(f.confirmations.length, 1, status);
     assert.equal(f.calls.some(call => call.method === "POST"), false, status);
     assert.equal(f.reviewed.length, 0, status);
@@ -165,7 +166,7 @@ test("cancelling history restoration leaves pending or held proposals untouched 
 
 test("confirming replacement preserves the original field restoration request and callback", async () => {
   const f = mount({ confirm: true }); await f.openHistory();
-  f.find(node => node.props["aria-label"] === "恢复称呼为旧称呼").props.onClick(); f.render(); await f.settle();
+  f.find(node => node.props["aria-label"] === "恢复称呼为旧称呼").props.onClick({ currentTarget: { isConnected: false, disabled: false } }); f.render(); await f.settle();
   assert.equal(f.confirmations.length, 1);
   const writes = f.calls.filter(call => call.method === "POST");
   assert.equal(writes.length, 1);
@@ -202,7 +203,7 @@ for (const form of [
 
 test("cancelling a form preserves earlier confirmed feedback and sends no extra write", async () => {
   const f = mount({ status: "accepted" }); await f.openHistory();
-  f.find(node => node.props["aria-label"] === "恢复称呼为旧称呼").props.onClick(); f.render(); await f.settle();
+  f.find(node => node.props["aria-label"] === "恢复称呼为旧称呼").props.onClick({ currentTarget: { isConnected: false, disabled: false } }); f.render(); await f.settle();
   const success = text(f.find(node => node.props.className === "edupi-context-editor__feedback"));
   assert.equal(success, "已恢复称呼");
   const writes = f.calls.filter(call => call.method === "POST").length;
@@ -324,4 +325,186 @@ test("rejected context proposals remain readable under an explicit rejected head
   table = contextTable(f);
   assert.deepEqual(tableHeadings(table), ["字段", "当前生效"]);
   assert.equal(text(descendants(table).find(node => node.type === "caption")), "教师上下文当前生效值");
+});
+
+
+function restoreFocusFixture(f) {
+  const background = { name: "background HTML" }, state = { active: null, calls: [] };
+  const editor = { isConnected: true, contains: element => element?.scope === editor && element.isConnected };
+  const element = name => ({ name, scope: editor, isConnected: true, disabled: false, focus(options) { assert.equal(this.isConnected, true, "disconnected elements must never receive focus"); assert.equal(options.preventScroll, name === "restore trigger", "only the original trigger preserves the current scroll position"); state.active = this; state.calls.push(name); } });
+  const trigger = element("restore trigger"), summary = element("field history"), heading = element("context heading");
+  f.setCommit(tree => {
+    if (tree.props.ref) tree.props.ref.current = editor;
+    const nodes = descendants(tree);
+    const summaryNode = nodes.find(node => node.type === "summary" && text(node).startsWith("字段历史"));
+    const headingNode = nodes.find(node => node.props.id === "edupi-context-editor-title");
+    if (summaryNode?.props.ref) summaryNode.props.ref.current = summary;
+    if (headingNode?.props.ref) headingNode.props.ref.current = heading;
+    const triggerNode = nodes.find(node => node.props["aria-label"] === "恢复称呼为旧称呼");
+    trigger.isConnected = editor.isConnected && Boolean(triggerNode);
+    trigger.disabled = Boolean(triggerNode?.props.disabled);
+    summary.isConnected = editor.isConnected && Boolean(summaryNode);
+    heading.isConnected = editor.isConnected && Boolean(headingNode);
+    if (state.active === trigger && (trigger.disabled || !trigger.isConnected)) state.active = background;
+  });
+  trigger.focus({ preventScroll: true }); state.calls.length = 0;
+  return { editor, trigger, summary, heading, background, state, activate() { f.find(node => node.props["aria-label"] === "恢复称呼为旧称呼").props.onClick({ currentTarget: trigger }); f.render(); } };
+}
+
+test("cancelling a native restore confirmation returns focus after the trigger is enabled", async () => {
+  const f = mount({ confirm: false }); await f.openHistory();
+  const focus = restoreFocusFixture(f); focus.activate();
+  assert.equal(focus.state.active, focus.background, "disabling the active native button loses browser focus");
+  await f.settle();
+  assert.equal(focus.trigger.disabled, false);
+  assert.equal(focus.state.active, focus.trigger);
+  assert.equal(f.calls.some(call => call.method === "POST"), false);
+});
+
+test("restore failures retain version rows and return focus to the original retry button", async () => {
+  const f = mount({ status: "accepted", post: async () => ({ ok: false, json: async () => ({ error: "合成恢复失败" }) }) }); await f.openHistory();
+  const focus = restoreFocusFixture(f); focus.activate(); await f.settle();
+  assert.ok(f.find(node => node.props["aria-label"] === "恢复称呼为旧称呼"), "a restore error must not remove its retry target");
+  assert.ok(f.nodes().some(node => node.props.role === "alert" && text(node) === "合成恢复失败"));
+  assert.equal(focus.state.active, focus.trigger);
+  assert.equal(focus.trigger.disabled, false);
+});
+
+test("a successful restore with a replaced trigger returns focus to field history", async () => {
+  const f = mount({ status: "accepted" }); await f.openHistory();
+  const focus = restoreFocusFixture(f); focus.activate(); await f.settle();
+  assert.equal(focus.trigger.isConnected, false);
+  assert.equal(focus.state.active, focus.summary);
+  assert.equal(f.reviewed.length, 1);
+});
+
+test("a disconnected context never sends completed restore focus into the background", async () => {
+  const f = mount({ confirm: false }); await f.openHistory();
+  const focus = restoreFocusFixture(f); focus.activate();
+  focus.editor.isConnected = false;
+  await f.settle();
+  assert.equal(focus.state.calls.length, 0);
+  assert.equal(focus.state.active, focus.background);
+  assert.equal(f.calls.some(call => call.method === "POST"), false);
+});
+
+test("confirmed review feedback names the result while the callback retains its full receipt", async () => {
+  const cases = [["accept", "接受", "accepted", "已接受"], ["modify", "修改", "modified", "已修改"], ["hold", "暂缓", "held", "已暂缓"], ["reject", "拒绝", "rejected", "已拒绝"]];
+  for (const [decision, label, status, feedback] of cases) {
+    const receiptId = "receipt_synthetic_7fc8e9c0-4a50-4f39-bb55-c963f158e3c8";
+    const f = mount({ put: async (body, before) => {
+      assert.equal(body.decision, decision);
+      const after = { ...before, snapshotId: "snapshot-after", stateHash: "sha256:after", revision: before.revision + 1, status, teacherReview: { state: status } };
+      return { ok: true, json: async () => ({ receipt: { receipt_id: receiptId, command_id: "command-synthetic", request_id: "request-synthetic", command_type: "review_teacher_context", target: { target_kind: "teacher_context", target_id: before.contextId, command_type: "review_teacher_context" }, decision, status, before_snapshot_id: before.snapshotId, after_snapshot_id: after.snapshotId, before_state_hash: before.stateHash, after_state_hash: after.stateHash, evidence_ids: before.evidenceIds, external_send: false }, data: { teacherContextCandidates: [after] } }) };
+    } });
+    button(f, label).props.onClick(); f.render();
+    if (decision === "modify") {
+      f.find(node => node.type === "input").props.onChange({ target: { value: "合成修改称呼" } }); f.render();
+      button(f, "提交修改").props.onClick(); f.render();
+    }
+    await f.settle();
+    assert.equal(text(f.find(node => node.props.className === "edupi-context-editor__feedback")), feedback);
+    assert.equal(f.reviewed.length, 1);
+    assert.equal(f.reviewed[0].receipt.receipt_id, receiptId);
+    assert.equal(f.calls.filter(call => call.method === "PUT").length, 1);
+  }
+});
+
+test("closing field history during a deferred restore returns focus to its summary", async () => {
+  let resolvePost;
+  const pending = new Promise(resolve => { resolvePost = resolve; });
+  const f = mount({ status: "accepted", post: () => pending }); await f.openHistory();
+  const focus = restoreFocusFixture(f); focus.activate();
+  assert.equal(f.calls.filter(call => call.method === "POST").length, 1);
+  f.find(node => node.type === "details" && node.props.onToggle).props.onToggle({ currentTarget: { open: false } }); f.render();
+  assert.equal(focus.trigger.isConnected, true, "closed details retains its existing button DOM");
+  resolvePost({ ok: false, json: async () => ({ error: "合成延迟恢复失败" }) });
+  await f.settle();
+  assert.equal(focus.trigger.isConnected, true);
+  assert.equal(focus.trigger.disabled, false);
+  assert.equal(focus.state.active, focus.summary, "a connected button inside closed details cannot receive focus");
+});
+
+function formFocusFixture(f) {
+  const background = { name: "background HTML" }, state = { active: background, calls: [] };
+  const editor = { isConnected: true, contains: element => element?.scope === editor && element.isConnected };
+  const element = name => ({ name, scope: editor, isConnected: false, disabled: false, focus(options) { assert.equal(this.isConnected, true); assert.equal(options.preventScroll, false); state.active = this; state.calls.push(name); } });
+  const entries = { "手动填写": element("manual entry"), "修改": element("modify entry"), "起草更新": element("draft entry") };
+  const input = element("first input"), heading = element("context heading");
+  const form = { querySelector(selector) { assert.equal(selector, "input:not([disabled])"); return input.isConnected && !input.disabled ? input : null; } };
+  f.setCommit(tree => {
+    if (tree.props.ref) tree.props.ref.current = editor;
+    const nodes = descendants(tree), headingNode = nodes.find(node => node.props.id === "edupi-context-editor-title");
+    heading.isConnected = editor.isConnected && Boolean(headingNode);
+    if (headingNode?.props.ref) headingNode.props.ref.current = heading;
+    for (const [label, entry] of Object.entries(entries)) {
+      const node = nodes.find(node => node.type === "button" && text(node) === label);
+      entry.isConnected = editor.isConnected && Boolean(node);
+      entry.disabled = Boolean(node?.props.disabled);
+      if (node?.props.ref) node.props.ref.current = entry;
+    }
+    const formNode = nodes.find(node => node.props.className === "edupi-context-editor__modify");
+    const firstInput = nodes.find(node => node.type === "input");
+    input.isConnected = editor.isConnected && Boolean(formNode && firstInput);
+    input.disabled = Boolean(firstInput?.props.disabled);
+    if (formNode?.props.ref) formNode.props.ref.current = form;
+    if (state.active?.scope === editor && (!state.active.isConnected || state.active.disabled)) state.active = background;
+  });
+  return { editor, entries, input, heading, background, state, open(label) { entries[label].focus({ preventScroll: false }); button(f, label).props.onClick(); f.render(); } };
+}
+
+for (const mode of [
+  { label: "手动填写", status: "accepted" },
+  { label: "修改", status: "pending_review" },
+  { label: "起草更新", status: "accepted" },
+]) test(`${mode.label} keyboard activation focuses its first input and cancel or Escape returns to its entry`, () => {
+  const f = mount({ status: mode.status }), focus = formFocusFixture(f);
+  const before = JSON.stringify(f.props.candidate);
+  focus.open(mode.label);
+  assert.equal(focus.state.active, focus.input);
+  button(f, "取消").props.onClick(); f.render();
+  assert.equal(focus.state.active, focus.entries[mode.label]);
+  assert.equal(f.closed, 0);
+  focus.open(mode.label);
+  assert.equal(focus.state.active, focus.input);
+  f.escape();
+  assert.equal(focus.state.active, focus.entries[mode.label]);
+  assert.equal(f.closed, 0);
+  assert.equal(f.calls.some(call => call.method === "POST" || call.method === "PUT"), false);
+  assert.equal(JSON.stringify(f.props.candidate), before);
+});
+
+function formReviewPayload(before, decision, status, values) {
+  const after = { ...before, snapshotId: "snapshot-form-after", stateHash: "sha256:form-after", revision: before.revision + 1, status, teacherReview: { state: status }, currentValues: values, proposedValues: values };
+  return { candidate: before, receipt: { receipt_id: "receipt_synthetic-form", command_id: "command-synthetic-form", request_id: "request-synthetic-form", command_type: "review_teacher_context", target: { target_kind: "teacher_context", target_id: before.contextId, command_type: "review_teacher_context" }, decision, status, before_snapshot_id: before.snapshotId, after_snapshot_id: after.snapshotId, before_state_hash: before.stateHash, after_state_hash: after.stateHash, evidence_ids: before.evidenceIds, external_send: false }, data: { teacherContextCandidates: [after] } };
+}
+
+test("a successful modification with no modify entry returns focus to a visible manual entry", async () => {
+  const f = mount({ put: async (body, before) => ({ ok: true, json: async () => formReviewPayload(before, "modify", "modified", { ...before.proposedValues, ...body.patch }) }) });
+  f.props.onReviewed = async result => { f.reviewed.push(result); f.props.candidate = result.data.teacherContextCandidates[0]; f.render(); return result.data; };
+  const focus = formFocusFixture(f); focus.open("修改");
+  f.find(node => node.type === "input").props.onChange({ target: { value: "合成修改教师" } }); f.render();
+  button(f, "提交修改").props.onClick(); f.render(); await f.settle();
+  assert.equal(focus.entries["修改"].isConnected, false);
+  assert.equal(focus.state.active, focus.entries["手动填写"]);
+  assert.equal(focus.editor.contains(focus.state.active), true);
+  assert.equal(f.reviewed.length, 1);
+  assert.equal(text(f.find(node => node.props.className === "edupi-context-editor__feedback")), "已修改");
+});
+
+test("a successful keyboard manual save returns focus to the current editor's manual entry", async () => {
+  const f = mount({ status: "accepted", post: async (_url, options) => {
+    const values = JSON.parse(options.body);
+    return { ok: true, json: async () => formReviewPayload(f.props.candidate, "accept", "accepted", values) };
+  } });
+  f.props.onReviewed = async result => { f.reviewed.push(result); f.props.candidate = result.data.teacherContextCandidates[0]; f.render(); return result.data; };
+  const focus = formFocusFixture(f); focus.open("手动填写");
+  f.find(node => node.type === "input").props.onChange({ target: { value: "合成保存教师" } }); f.render();
+  const event = { key: "Enter", ctrlKey: true, metaKey: false, prevented: false, preventDefault() { this.prevented = true; } };
+  f.tree.props.onKeyDown(event); f.render(); await f.settle();
+  assert.equal(event.prevented, true);
+  assert.equal(focus.state.active, focus.entries["手动填写"]);
+  assert.equal(focus.editor.contains(focus.state.active), true);
+  assert.equal(f.reviewed.length, 1);
+  assert.equal(text(f.find(node => node.props.className === "edupi-context-editor__feedback")), "已保存");
 });

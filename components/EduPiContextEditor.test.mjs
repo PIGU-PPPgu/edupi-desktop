@@ -41,8 +41,7 @@ test("context actions are receipt-bound, strict, and keep Chat as a draft handof
   assert.match(manualSave, /marker\.awaiting = false/);
   assert.match(source, /已收到回执，刷新失败。/);
   assert.match(source, /candidate \? <div className="edupi-context-editor__meta">教师资料/);
-  assert.match(source, /setFeedback\(`✓ /);
-  assert.match(source, /回执 \$\{String\(verified\.receipt\.receipt_id\)\}/);
+  assert.doesNotMatch(source, /setFeedback\([^;]*receipt_id/);
   assert.match(source, /chatDraftOpen/);
   assert.match(source, /buildTeacherContextPrompt\(draft\)/);
   assert.match(source, /放入对话/);
