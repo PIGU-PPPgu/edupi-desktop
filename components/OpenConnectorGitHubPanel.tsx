@@ -138,7 +138,7 @@ export function OpenConnectorGitHubPanel({ onConnectionChange }: { onConnectionC
   async function verifyReplay() {
     const original = status?.receipt; if (!original || original.status !== "succeeded") return;
     const next = await run({ op: "createTestIssue", draftId: original.draftId });
-    if (next?.receipt) { if (isSameGitHubWriteReceipt(original, next.receipt)) setNotice("回执一致，未新增写入。即使重复提交，仍使用这一份回执。"); else setError("回执已变化，请重新读取结果。"); }
+    if (next?.receipt) { if (isSameGitHubWriteReceipt(original, next.receipt)) setNotice("回执一致，未新增写入。"); else setError("回执已变化，请重新读取结果。"); }
   }
 
   const connection = status?.connection, authorization = status?.authorization, receipt = status?.receipt;

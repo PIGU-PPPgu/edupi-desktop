@@ -152,6 +152,58 @@ function ComputerUseSettingsCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const flowRef = useRef<ComputerUsePermissionFlow | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const primaryButtonRef = useRef<HTMLButtonElement>(null);
+  const mountedRef = useRef(true);
+  const busyRef = useRef(false);
+  const statusRequestRef = useRef(0);
+  const focusReturnRef = useRef<{ target: HTMLButtonElement; moved: boolean; cancel: () => void } | null>(null);
+  const [completedAction, setCompletedAction] = useState(0);
+
+  const beginAction = useCallback((trigger?: HTMLButtonElement) => {
+    if (busyRef.current) return false;
+    busyRef.current = true;
+    ++statusRequestRef.current;
+    focusReturnRef.current?.cancel();
+    focusReturnRef.current = null;
+    if (trigger) {
+      const doc = trigger.ownerDocument;
+      const active = doc.activeElement;
+      if (active === trigger || active === doc.body || active === doc.documentElement) {
+        const pending = { target: trigger, moved: false, cancel: () => doc.removeEventListener("focusin", trackFocus) };
+        const trackFocus = (event: FocusEvent) => {
+          if (event.target !== trigger && event.target !== doc.body && event.target !== doc.documentElement) pending.moved = true;
+        };
+        doc.addEventListener("focusin", trackFocus);
+        focusReturnRef.current = pending;
+      }
+    }
+    setBusy(true);
+    setError(null);
+    return true;
+  }, []);
+
+  const finishAction = useCallback(() => {
+    busyRef.current = false;
+    if (!mountedRef.current) return;
+    setBusy(false);
+    setCompletedAction((current) => current + 1);
+  }, []);
+
+  useEffect(() => {
+    if (busy) return;
+    const pending = focusReturnRef.current;
+    if (!pending) return;
+    focusReturnRef.current = null;
+    pending.cancel();
+    const root = rootRef.current;
+    if (pending.moved || !root?.isConnected || root.closest("[hidden]")) return;
+    const doc = pending.target.ownerDocument;
+    const active = doc.activeElement;
+    if (active && active !== pending.target && active !== doc.body && active !== doc.documentElement) return;
+    const target = pending.target.isConnected ? pending.target : primaryButtonRef.current;
+    if (target?.isConnected && !target.disabled && root.contains(target)) target.focus({ preventScroll: true });
+  }, [busy, completedAction]);
 
   const setPermissionFlow = useCallback((next: ComputerUsePermissionFlow | null) => {
     flowRef.current = next;
@@ -159,6 +211,9 @@ function ComputerUseSettingsCard() {
   }, []);
 
   const requestPermission = useCallback(async (permission: "accessibility" | "screen_recording") => {
+    busyRef.current = true;
+    const requestId = ++statusRequestRef.current;
+    const isCurrent = () => mountedRef.current && requestId === statusRequestRef.current;
     setBusy(true);
     setError(null);
     try {
@@ -167,6 +222,7 @@ function ComputerUseSettingsCard() {
         : { permission, screenRecordingRequested: true };
       setPermissionFlow(pendingFlow);
       let next = await requestComputerUsePermissionNative(permission);
+      if (!isCurrent()) return;
 
       if (
         permission === "accessibility"
@@ -179,108 +235,124 @@ function ComputerUseSettingsCard() {
         };
         setPermissionFlow(screenFlow);
         next = await requestComputerUsePermissionNative("screen_recording");
+        if (!isCurrent()) return;
         setPermissionFlow(computerUsePermissionFlowAfterStatus(next, screenFlow));
       } else {
         setPermissionFlow(computerUsePermissionFlowAfterStatus(next, pendingFlow));
       }
       setStatus(next);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (isCurrent()) setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setBusy(false);
+      finishAction();
     }
-  }, [setPermissionFlow]);
+  }, [finishAction, setPermissionFlow]);
 
-  const readStatus = useCallback(async (currentFlow: ComputerUsePermissionFlow | null) => {
-    const next = await getComputerUseStatusNative();
-    const resolvedFlow = computerUsePermissionFlowAfterStatus(next, currentFlow);
-    setStatus(next);
-    setPermissionFlow(resolvedFlow);
-    if (currentFlow?.permission === "accessibility" && resolvedFlow?.permission === "screen_recording") {
-      await requestPermission("screen_recording");
+  const readStatus = useCallback(async (currentFlow: ComputerUsePermissionFlow | null, enabledFromEvent?: boolean) => {
+    const requestId = ++statusRequestRef.current;
+    const isCurrent = () => mountedRef.current && requestId === statusRequestRef.current;
+    try {
+      const next = await getComputerUseStatusNative();
+      if (!isCurrent()) return;
+      const resolvedFlow = computerUsePermissionFlowAfterStatus(next, currentFlow);
+      setStatus(enabledFromEvent === undefined ? next : { ...next, enabled: enabledFromEvent });
+      setError(null);
+      setPermissionFlow(resolvedFlow);
+      if (currentFlow?.permission === "accessibility" && resolvedFlow?.permission === "screen_recording") {
+        await requestPermission("screen_recording");
+      }
+    } catch (cause) {
+      if (isCurrent()) setError(cause instanceof Error ? cause.message : String(cause));
     }
   }, [requestPermission, setPermissionFlow]);
 
-  const refreshStatus = useCallback(async () => {
-    setBusy(true);
-    setError(null);
+  const refreshStatus = useCallback(async (trigger?: HTMLButtonElement) => {
+    if (!beginAction(trigger)) return;
     try {
       await readStatus(flowRef.current);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setBusy(false);
+      finishAction();
     }
-  }, [readStatus]);
+  }, [beginAction, finishAction, readStatus]);
 
   useEffect(() => {
-    let active = true;
+    mountedRef.current = true;
+    const requestId = ++statusRequestRef.current;
+    const isCurrent = () => mountedRef.current && requestId === statusRequestRef.current;
     void getComputerUseStatusNative()
-      .then((value) => { if (active) setStatus(value); })
-      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : String(cause)); });
-    return () => { active = false; };
+      .then((value) => { if (isCurrent()) setStatus(value); })
+      .catch((cause) => { if (isCurrent()) setError(cause instanceof Error ? cause.message : String(cause)); });
+    return () => {
+      mountedRef.current = false;
+      focusReturnRef.current?.cancel();
+      focusReturnRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
     const update = (event: Event) => {
+      ++statusRequestRef.current;
       const enabled = (event as CustomEvent<boolean>).detail === true;
       setStatus((current) => current ? { ...current, enabled } : current);
+      if (!status) void readStatus(flowRef.current, enabled);
     };
     window.addEventListener(COMPUTER_USE_CHANGED_EVENT, update);
     return () => window.removeEventListener(COMPUTER_USE_CHANGED_EVENT, update);
-  }, []);
+  }, [readStatus, status]);
 
   useEffect(() => {
-    const refreshAfterSystemSettings = () => { void refreshStatus(); };
+    const refreshAfterSystemSettings = () => { if (!busyRef.current) void readStatus(flowRef.current); };
     window.addEventListener("focus", refreshAfterSystemSettings);
     return () => window.removeEventListener("focus", refreshAfterSystemSettings);
-  }, [refreshStatus]);
+  }, [readStatus]);
 
   useEffect(() => {
     if (flow?.permission !== "accessibility" || busy) return;
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void readStatus(flowRef.current);
+      if (document.visibilityState === "visible" && !busyRef.current) void readStatus(flowRef.current);
     }, 2000);
     return () => window.clearInterval(timer);
   }, [busy, flow?.permission, readStatus]);
 
-  const updateEnabled = async (enabled: boolean) => {
-    setBusy(true);
-    setError(null);
+  const updateEnabled = async (enabled: boolean, trigger?: HTMLButtonElement) => {
+    if (!beginAction(trigger)) return;
+    const requestId = statusRequestRef.current;
+    const isCurrent = () => mountedRef.current && requestId === statusRequestRef.current;
     try {
       const next = enabled ? await setComputerUseEnabledNative(true) : await emergencyStopComputerUseNative();
-      setStatus(next);
+      if (requestId !== statusRequestRef.current) return;
+      if (mountedRef.current) setStatus(next);
       setPrefBool(APP_PREF_KEYS.computerUseEnabled, next.enabled);
       announceComputerUseChanged(next.enabled);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (isCurrent()) setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setBusy(false);
+      finishAction();
     }
   };
 
   const restartForPermission = async () => {
-    setBusy(true);
-    setError(null);
+    if (!beginAction()) return;
     try {
       setPrefBool(APP_PREF_KEYS.computerUseEnabled, true);
       await relaunchAppNative();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (mountedRef.current) setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setBusy(false);
+      finishAction();
     }
   };
 
   const primaryAction = computerUsePrimaryAction({ status, flow });
-  const runPrimaryAction = async () => {
-    if (primaryAction.kind === "detect") return refreshStatus();
+  const runPrimaryAction = async (trigger: HTMLButtonElement) => {
+    if (busyRef.current) return;
+    if (primaryAction.kind === "detect") return refreshStatus(trigger);
     if (primaryAction.kind === "request") return requestPermission(primaryAction.permission);
     if (primaryAction.kind === "restart") return restartForPermission();
-    return updateEnabled(primaryAction.kind === "enable");
+    return updateEnabled(primaryAction.kind === "enable", trigger);
   };
   const activePermission = flow?.permission;
-  return <div className="native-settings-card app-settings-device" data-setting-id="computer-use" tabIndex={-1} style={sectionCardStyle}>
+  return <div ref={rootRef} className="native-settings-card app-settings-device" data-setting-id="computer-use" tabIndex={-1} style={sectionCardStyle}>
     <div style={sectionTitleStyle}>桌面控制</div>
     <details className="settings-permission-identity"><summary>{computerUseHostLabel(status?.host)}</summary><dl>
       <div><dt>安装路径</dt><dd>{status?.host?.bundlePath || status?.host?.executablePath || "未检测"}</dd></div>
@@ -293,9 +365,9 @@ function ComputerUseSettingsCard() {
       <div className={activePermission === "accessibility" ? "computer-use-status-row is-active" : "computer-use-status-row"}><strong>辅助功能</strong><span className={status?.accessibility ? "is-ready" : "is-off"}>{computerUsePermissionLabel(status?.accessibility)}</span></div>
       <div className={activePermission === "screen_recording" ? "computer-use-status-row is-active" : "computer-use-status-row"}><strong>屏幕录制</strong><span className={status?.screenRecording ? "is-ready" : "is-off"}>{computerUsePermissionLabel(status?.screenRecording, flow?.screenRecordingRequested)}</span></div>
       <div className="computer-use-actions">
-        <button type="button" className="native-button native-button-primary computer-use-primary-action" disabled={busy} onClick={() => void runPrimaryAction()}>{computerUsePrimaryActionLabel(primaryAction)}</button>
-        <button type="button" className="native-button native-button-compact" disabled={busy} onClick={() => void refreshStatus()} aria-label="重新检测权限" title="重新检测权限">↻</button>
-        {status?.enabled && primaryAction.kind !== "stop" ? <button type="button" className="native-button native-button-compact" disabled={busy} onClick={() => void updateEnabled(false)} aria-label="停止控制" title="停止控制">×</button> : null}
+        <button ref={primaryButtonRef} type="button" className="native-button native-button-primary computer-use-primary-action" disabled={busy} onClick={(event) => void runPrimaryAction(event.currentTarget)}>{computerUsePrimaryActionLabel(primaryAction)}</button>
+        <button type="button" className="native-button native-button-compact" disabled={busy} onClick={(event) => void refreshStatus(event.currentTarget)} aria-label="重新检测权限" title="重新检测权限">↻</button>
+        {status?.enabled && primaryAction.kind !== "stop" ? <button type="button" className="native-button native-button-compact" disabled={busy} onClick={(event) => void updateEnabled(false, event.currentTarget)} aria-label="停止控制" title="停止控制">×</button> : null}
       </div>
       <details><summary>权限用途</summary><p style={sectionHintStyle}>辅助功能用于键盘与鼠标操作，屏幕录制用于读取屏幕；每次操作仍需你确认。请核对上方正式应用路径，不要授权旧 Canary。系统开关已开启但检测未更新时，退出并重启此应用后再检测。</p></details>
       {flow?.permission === "accessibility" ? <div style={sectionHintStyle} role="status">请在系统设置授权上方应用后返回。{status?.accessibility === false ? <button type="button" className="native-button" onClick={() => void restartForPermission()} disabled={busy}>已授权，重启核对</button> : null}</div> : null}

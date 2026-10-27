@@ -106,10 +106,19 @@ test("missing, ambiguous or newer candidate evidence leaves the original list fo
   }
 });
 
-test("automatic read does not refocus or select after the user moves focus", async () => {
+test("automatic read can display its matching comparison without refocusing after the user moves focus", async () => {
   const f = mount({ request: { id: 1, target: target("a") } });
   const outside = f.outside(); f.reads[0].resolve(page([conflict("a")])); await f.flush();
-  assert.equal(f.selected, undefined); assert.equal(f.document.activeElement, outside); assert.equal(f.focusListeners.size, 0);
+  assert.equal(f.selected.props["data-schedule-conflict"], conflict("a").conflictId); assert.equal(f.document.activeElement, outside); assert.equal(f.focusListeners.size, 0);
+});
+
+test("an explicit no-focus held request opens and locates review without moving the current focus", async () => {
+  const f = mount(), outside = f.outside();
+  f.setProps({ request: { id: 1, target: target("a"), focus: false } });
+  assert.equal(f.reads.length, 1); f.reads[0].resolve(page([conflict("a")])); await f.flush();
+  assert.equal(f.selected.props["data-schedule-conflict"], conflict("a").conflictId);
+  assert.equal(f.document.activeElement, outside); assert.deepEqual(f.focused, []); assert.equal(f.focusListeners.size, 0);
+  assert.equal(f.resolutions.length, 0); assert.equal(f.button("确认处理").props.disabled, true);
 });
 
 test("new scope and newer held requests cancel stale reads and cannot reopen over a new draft", async () => {
@@ -278,4 +287,74 @@ test("parent refresh updates only the matching held message and preserves newer 
   refresh({ type: "edupi-education-refresh", detail: { scheduleResolution: { kind: "calendar", canonicalId: "calendar-a", occurrenceRef: "occurrence-a", evidenceIds: ["evidence-a"] } } });
   assert.equal(f.message.scheduleReviewTarget.canonicalId, "calendar-b"); assert.equal(f.message.sticky, true);
   await tick(); assert.equal(f.refreshes, 4); f.cleanup();
+});
+
+test("a parent load snapshot does not reopen a locally closed calendar before URL acknowledgement", async () => {
+  const calendarModel = await jiti.import("../lib/edupi-calendar-model.ts");
+  const oldEducation = { calendar: [{ id: "calendar-a", name: "合成日程a", date: "2026-10-30", endDate: null, source: "teacher", preparationStatus: "read_only" }], tasks: [], timetable: [] };
+  const nextEducation = { ...oldEducation, calendar: oldEducation.calendar.map(event => ({ ...event, preparationStatus: "hold" })) };
+  const oldParams = new URLSearchParams({ edupi: "1", module: "calendar", calendarKind: "calendar", calendarItem: "calendar-a", date: "2026-10-30" });
+  const context = { exports: {}, education: nextEducation, routeView: "calendar", searchParams: oldParams,
+    appliedCalendarLink: { current: { key: JSON.stringify(["calendar", "calendar-a", "2026-10-30"]), education: oldEducation } }, calendarSelectionRef: { current: null },
+    calendarSelectionFromLink: calendarModel.calendarSelectionFromLink, URLSearchParams, router: { replace() {} }, selection: null,
+    setCalendarSelection(selection) { context.selection = selection; },
+  };
+  const syncLink = expression(node => ts.isArrowFunction(node) && node.parent && ts.isCallExpression(node.parent) && node.parent.expression.getText(panelSource) === "useEffect" && node.getText(panelSource).includes("const clearCalendarLink"));
+  vm.runInNewContext(transpile(`exports.sync = ${syncLink};`), context);
+  const request = { id: 1, target: target("a") }, f = mount({ request });
+  assert.equal(f.reads.length, 1);
+  // loadWorkspace queued new education while router.replace still exposes the old calendar URL.
+  context.exports.sync(); assert.equal(context.selection, null);
+  const newerFocus = f.outside();
+  // The same parent's URL effect later observes the acknowledged detail close.
+  context.searchParams = new URLSearchParams({ edupi: "1", module: "calendar" });
+  context.exports.sync(); assert.equal(context.selection, null);
+  f.setProps({ request, scopeKey: "calendar-home" });
+  assert.equal(f.reads.length, 1, "a local close must not be interrupted by the old URL during refresh");
+  f.reads[0].resolve(page([conflict("a")])); await f.flush();
+  assert.equal(f.selected.props["data-schedule-conflict"], conflict("a").conflictId);
+  assert.equal(f.document.activeElement, newerFocus);
+  assert.equal(f.resolutions.length, 0);
+  // After the close has been acknowledged, an authoritative deep link can open the same item again.
+  context.searchParams = oldParams; context.exports.sync(); assert.equal(context.selection.sourceId, "calendar-a");
+  context.calendarSelectionRef.current = context.selection;
+  context.education = { ...nextEducation, calendar: nextEducation.calendar.map(event => ({ ...event, name: "合成新名称" })) };
+  context.exports.sync(); assert.equal(context.selection.title, "合成新名称");
+});
+
+test("an interrupted held read can resume its same request without adopting a newer opener", async () => {
+  const request = { id: 1, target: target("a") }, f = mount({ request });
+  f.setProps({ request: null, scopeKey: "temporary-detail" }); const outside = f.outside();
+  f.setProps({ request, scopeKey: "calendar-home" });
+  assert.equal(f.reads.length, 2);
+  f.reads[0].resolve(page([conflict("b")])); await f.flush(); assert.equal(f.selected, undefined);
+  f.reads[1].resolve(page([conflict("a")])); await f.flush();
+  assert.equal(f.selected.props["data-schedule-conflict"], conflict("a").conflictId);
+  assert.equal(f.document.activeElement, outside); assert.equal(f.resolutions.length, 0);
+});
+
+test("the real parent delete handler closes only its still-selected calendar target", async () => {
+  const callback = expression(node => ts.isCallExpression(node) && node.parent && ts.isVariableDeclaration(node.parent) && node.parent.name.getText(panelSource) === "deleteEntity");
+  for (const scenario of ["current", "other", "cancel"]) {
+    const api = deferred(), writes = [], closes = [], context = { exports: {}, useCallback: fn => fn, deleteBusy: null,
+      education: { capabilities: { entityDelete: { enabled: true, targetKinds: ["calendar"] } }, workspaceResourcesUnavailable: false },
+      calendarSelectionRef: { current: { kind: "calendar", sourceId: "calendar-a" } }, deleteResolver: { current: null },
+      setDeleteLabel() {}, setDeleteBusy(value) { context.deleteBusy = value; }, setMaterialStagingMessage() {},
+      deleteEducationEntity: async (kind, id) => { writes.push({ kind, id }); return api.promise; }, commitEducationSnapshot() {},
+      stopTaskTracking() {}, closeTaskDetail() {}, setSelectedTaskKey() {}, setSelectedStudentId() {},
+      selectCalendarItem(value) { closes.push(value); context.calendarSelectionRef.current = value; },
+    };
+    vm.runInNewContext(transpile(`exports.delete = ${callback};`), context);
+    const pending = context.exports.delete("calendar", "calendar-a", "合成日程a");
+    if (scenario === "cancel") { context.deleteResolver.current(false); assert.equal(await pending, false); assert.equal(writes.length, 0); }
+    else {
+      context.deleteResolver.current(true); await tick();
+      if (scenario === "other") context.calendarSelectionRef.current = { kind: "calendar", sourceId: "calendar-b" };
+      api.resolve({ data: { workspaceResourcesUnavailable: false }, target: { id: "calendar-a" } });
+      assert.equal(await pending, true);
+      assert.deepEqual(writes, [{ kind: "calendar", id: "calendar-a" }]);
+    }
+    assert.equal(closes.length, scenario === "current" ? 1 : 0, scenario);
+    if (scenario === "other") assert.equal(context.calendarSelectionRef.current.sourceId, "calendar-b");
+  }
 });

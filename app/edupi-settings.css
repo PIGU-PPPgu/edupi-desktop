@@ -17,7 +17,7 @@
 .app-settings-row__label code { overflow-wrap: anywhere; color: var(--text-muted); font-size: 12px; }
 .app-settings-row__control { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .app-settings-choices { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 3px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-panel); }
-.app-settings-choices .native-button { min-height: 28px; padding: 4px 12px; border-color: transparent; border-radius: 4px; background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 500; box-shadow: none; }
+.app-settings-choices .native-button { min-height: 28px; padding: 4px 12px; -webkit-appearance: none; appearance: none; border-color: transparent; border-radius: 4px; background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 500; box-shadow: none; }
 .app-settings-choices .native-button[aria-pressed="true"] { background: var(--bg-selected); color: var(--text); }
 .app-settings-toggle { cursor: pointer; }
 .app-settings-toggle > input { position: relative; width: 34px; height: 20px; flex: 0 0 34px; margin: 0; appearance: none; -webkit-appearance: none; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-hover); cursor: pointer; transition: background .15s ease; }

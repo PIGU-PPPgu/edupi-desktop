@@ -183,6 +183,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const [educationIntakeBusy, setEducationIntakeBusy] = useState(false);
   const [materialStagingMessage, setMaterialStagingMessage] = useState<{ tone: "success" | "error"; text: string; sticky?: boolean; scheduleReviewTarget?: ScheduleConflictTarget } | null>(null);
   const [calendarSelection, setCalendarSelection] = useState<CalendarItemSelection | null>(null);
+  const calendarSelectionRef = useRef(calendarSelection); calendarSelectionRef.current = activeView === "calendar" ? calendarSelection : null;
   const appliedCalendarLink = useRef<{ key: string; education: EducationContract } | null>(null);
   const [taskDetailTask, setTaskDetailTask] = useState<TeacherTask | null>(null);
   const [agentTask, setAgentTask] = useState<TeacherTask | null>(null);
@@ -575,6 +576,10 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     if (!education) return;
     const applied = appliedCalendarLink.current;
     if (applied?.key === key && applied.education === education) return;
+    const currentSelection = calendarSelectionRef.current;
+    // A snapshot can arrive before the URL acknowledges a local close or selection change.
+    if (applied?.key === key && applied.education !== education
+      && (currentSelection?.kind !== kind || currentSelection?.sourceId !== id || currentSelection?.date !== date)) return;
     const selection = calendarSelectionFromLink(education, { kind, id, date });
     if (selection) { setCalendarSelection(selection); appliedCalendarLink.current = { key, education }; }
     else clearCalendarLink();
@@ -753,6 +758,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     setTaskDetailTask(null);
     setAgentTask(null);
     setPendingTaskBinding(null);
+    calendarSelectionRef.current = view === "calendar" ? nextCalendarSelection : null;
     setCalendarSelection(nextCalendarSelection);
     if (view === "review") setReviewMode("board");
     setSelectedC1Target(null);
@@ -764,6 +770,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [activeStage, activeTask, calendarSelection, cancelActivation, collapseObjectNavigation, inspectorOpen, objectNavigationForeground, selectedObjectId, selectedStudentId, updateLocation]);
 
   const selectCalendarItem = useCallback((selection: CalendarItemSelection | null) => {
+    calendarSelectionRef.current = selection;
     if (!selection) {
       setCalendarSelection(null);
       const params = new URLSearchParams(searchParams.toString());
@@ -1107,7 +1114,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       commitEducationSnapshot(education && result.data.workspaceResourcesUnavailable
         ? preserveUnavailableWorkspaceResources(education, result.data, { removedMaterialId: kind === "material" ? result.target.id : null })
         : result.data);
-      if (kind === "calendar" || kind === "timetable") selectCalendarItem(null);
+      if ((kind === "calendar" || kind === "timetable") && calendarSelectionRef.current?.kind === kind && calendarSelectionRef.current.sourceId === id) selectCalendarItem(null);
       if (kind === "student") setSelectedStudentId(null);
       setMaterialStagingMessage({ tone: "success", text: `已删除：${label}` });
       return true;

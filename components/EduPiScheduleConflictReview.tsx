@@ -59,7 +59,7 @@ function ScheduleDetails({ conflict, item, title }: { conflict: ScheduleConflict
   </div>;
 }
 
-export type ScheduleConflictReviewRequest = { id: number; target: ScheduleConflictTarget };
+export type ScheduleConflictReviewRequest = { id: number; target: ScheduleConflictTarget; focus?: boolean };
 
 function resolutionNotice(conflict: ScheduleConflict): ScheduleResolutionNotice {
   return { kind: conflict.kind, canonicalId: conflict.canonicalId, occurrenceRef: typeof conflict.candidate.source_occurrence_ref === "string" ? conflict.candidate.source_occurrence_ref : null, evidenceIds: conflict.candidate.evidence_ids as string[] };
@@ -83,9 +83,10 @@ export function EduPiScheduleConflictReview({ enabled, request, scopeKey = "" }:
   const [focusTick, setFocusTick] = useState(0);
   const rootRef = useRef<HTMLElement>(null);
   const mounted = useRef(true);
-  const operation = useRef<{ kind: "read" | "resolve"; controller: AbortController | null } | null>(null);
+  const operation = useRef<{ kind: "read" | "resolve"; controller: AbortController | null; requestId?: number } | null>(null);
   const pendingRef = useRef(pending); pendingRef.current = pending;
   const handledRequest = useRef<number | null>(null);
+  const interruptedRequest = useRef<number | null>(null);
   const focusRequest = useRef<{ from: Element | null; document: Document; target: "decision" | "list" | "trigger" | "refresh" | "more"; stop: () => void } | null>(null);
   const stopFocus = useCallback(() => { focusRequest.current?.stop(); focusRequest.current = null; }, []);
   const startFocus = useCallback((target: NonNullable<typeof focusRequest.current>["target"], allowOutside = false) => {
@@ -109,6 +110,7 @@ export function EduPiScheduleConflictReview({ enabled, request, scopeKey = "" }:
   useEffect(() => {
     stopFocus();
     if (operation.current?.kind === "read" || !enabled) {
+      if (operation.current?.requestId !== undefined && operation.current.requestId === handledRequest.current) { interruptedRequest.current = operation.current.requestId; handledRequest.current = null; }
       operation.current?.controller?.abort(); operation.current = null;
       setBusy(false); setOpen(false);
     }
@@ -125,12 +127,12 @@ export function EduPiScheduleConflictReview({ enabled, request, scopeKey = "" }:
     if (target?.isConnected && !target.disabled && root.contains(target)) target.focus({ preventScroll: false });
   }, [busy, open, selectedId, items, error, pending, focusTick, stopFocus]);
 
-  const openReview = useCallback(async (target?: ScheduleConflictTarget, automatic = false) => {
+  const openReview = useCallback(async (target?: ScheduleConflictTarget, automatic?: ScheduleConflictReviewRequest) => {
     if (!mounted.current || operation.current) return;
     setOpen(true); setMessage(null);
-    startFocus("list", automatic);
+    if (automatic?.focus === false) stopFocus(); else startFocus("list", Boolean(automatic));
     if (pendingRef.current) { if (focusRequest.current) focusRequest.current.target = "trigger"; setFocusTick(value => value + 1); return; }
-    const active = { kind: "read" as const, controller: new AbortController() };
+    const active = { kind: "read" as const, controller: new AbortController(), requestId: automatic?.id };
     operation.current = active;
     setBusy(true); setError(null);
     try {
@@ -143,7 +145,7 @@ export function EduPiScheduleConflictReview({ enabled, request, scopeKey = "" }:
       }
       if (!mounted.current || operation.current !== active) return;
       const matches = target ? result.conflicts.filter(item => scheduleResolutionMatchesTarget(target, resolutionNotice(item))) : [];
-      const selected = matches.length === 1 && (!automatic || focusRequest.current) ? matches[0].conflictId : null;
+      const selected = matches.length === 1 ? matches[0].conflictId : null;
       setItems(result.conflicts); setCursor(result.nextCursor); setSelectedId(selected); setDecision("");
       if (selected && focusRequest.current) focusRequest.current.target = "decision";
     } catch (cause) {
@@ -154,11 +156,11 @@ export function EduPiScheduleConflictReview({ enabled, request, scopeKey = "" }:
     } finally {
       if (mounted.current && operation.current === active) { operation.current = null; setBusy(false); setFocusTick(value => value + 1); }
     }
-  }, [startFocus]);
+  }, [startFocus, stopFocus]);
   useEffect(() => {
     if (!native || !enabled || busy || pending || !request || handledRequest.current === request.id) return;
     handledRequest.current = request.id;
-    void openReview(request.target, true);
+    void openReview(request.target, interruptedRequest.current === request.id ? { ...request, focus: false } : request);
   }, [native, enabled, busy, pending, request, openReview]);
 
   const decide = async (resolution: NonNullable<typeof pending>) => {

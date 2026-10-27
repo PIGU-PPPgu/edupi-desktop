@@ -593,7 +593,7 @@ export const enLocale: LocalePlugin = {
     "appSettings.desktopSection": "Desktop",
     "appSettings.desktopHint": "Window, tray, and notification behavior for the desktop app.",
     "appSettings.closeQuits": "Quit when closing the window",
-    "appSettings.closeQuitsHint": "When off, closing the window hides Pi Agent to the menu bar / system tray.",
+    "appSettings.closeQuitsHint": "When off, closing the window hides EduPi to the menu bar / system tray.",
     "appSettings.notifyOnComplete": "Notify when a background agent finishes",
     "appSettings.notifyOnCompleteHint": "Shows a system notification if the window is unfocused.",
     "appSettings.quitApp": "Quit EduPi",

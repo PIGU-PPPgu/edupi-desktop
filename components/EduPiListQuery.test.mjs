@@ -23,7 +23,7 @@ function harness() {
     ...workbench, ...navigation, calendarSelectionLink, URLSearchParams, useCallback: callback => callback,
     searchParams: new URLSearchParams("edupi=1&module=tasks&view=workspace&item=workspace:list:todo&task=original&taskDetail=original&calendarKind=calendar&calendarItem=source-original&date=2026-09-27&q=原筛选"),
     activeView: "workspace", activeStage: "brief", activeTask: undefined, inspectorOpen: false, selectedStudentId: null, selectedObjectId: "workspace:list:todo", calendarSelection: null,
-    query: "原筛选", queryRef: { current: "原筛选" },
+    query: "原筛选", queryRef: { current: "原筛选" }, calendarSelectionRef: { current: null },
     objectNavigationForeground: false, collapseObjectNavigation() { assert.fail("ordinary query navigation must not alter the foreground list"); },
     router: { replace: url => urls.push(new URL(url, "http://localhost")) },
     setQuery: value => { context.query = value; },
