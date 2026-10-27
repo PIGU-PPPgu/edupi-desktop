@@ -22,8 +22,9 @@ import { useModalDismiss } from "@/hooks/useModalDismiss";
 import { intakeOperationHistory } from "@/lib/edupi-operation-history";
 import { EduPiOperationHistory } from "./EduPiOperationHistory";
 import { EduPiIconButton } from "./EduPiActionIcon";
-import { EduPiScheduleConflictReview } from "./EduPiScheduleConflictReview";
-import type { CalendarIntakeInput } from "@/lib/edupi-education-intake";
+import { EduPiScheduleConflictReview, type ScheduleConflictReviewRequest } from "./EduPiScheduleConflictReview";
+import type { CalendarIntakeInput, CalendarIntakeOutcome } from "@/lib/edupi-education-intake";
+import type { ScheduleConflictTarget } from "@/lib/edupi-schedule-conflicts";
 import { CalendarFormTimeError, calendarFormTime, calendarTimeLabel, calendarTimeZoneOptions, createCalendarTimeDraft, searchCalendarTimeZones } from "@/lib/edupi-calendar-form-time";
 import { calendarReferenceDate, calendarSortDate, compareForegroundDates, isForegroundDate, shanghaiDate } from "@/lib/edupi-foreground";
 import { EduPiListPreview, EduPiPagedRows, useEduPiForegroundPolicy } from "./EduPiForeground";
@@ -36,7 +37,7 @@ type Props = {
   selection: CalendarItemSelection | null;
   onSelect: (selection: CalendarItemSelection | null) => void;
   onTaskDetail: (task: TeacherTask) => void;
-  onImportCalendar: (event: CalendarIntakeInput) => Promise<void>;
+  onImportCalendar: (event: CalendarIntakeInput) => Promise<CalendarIntakeOutcome | void>;
   onImportTimetable: (slot: { slotId: string | null; dayOfWeek: number; period: number; subject: string; classId: string | null; className: string | null; startTime: string | null; timeZone: string | null; kind: "class" | "routine"; notes: string | null }) => Promise<void>;
   onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<boolean>;
   selectedObjectId?: string | null;
@@ -301,11 +302,12 @@ function IntakeComposer({ mode, anchorDate, calendarEvent, timetableSlot, busy, 
   timetableSlot?: Record<string, unknown> | null;
   busy: boolean;
   embedded?: boolean;
-  onClose: (focus: IntakeFocusReturn) => void;
+  onClose: (focus: IntakeFocusReturn, reviewTarget?: ScheduleConflictTarget) => void;
   onImportCalendar: Props["onImportCalendar"];
   onImportTimetable: Props["onImportTimetable"];
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [newOccurrenceRef] = useState(() => `manual-${globalThis.crypto.randomUUID()}`);
   const [timeDraft, setTimeDraft] = useState(() => createCalendarTimeDraft(calendarEvent));
   const [showTimeZone, setShowTimeZone] = useState(false);
@@ -332,9 +334,9 @@ function IntakeComposer({ mode, anchorDate, calendarEvent, timetableSlot, busy, 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (busy || submitting.current) return;
-    submitting.current = true;
-    setError(null);
     const form = new FormData(event.currentTarget);
+    submitting.current = true;
+    setSaving(true); setError(null);
     let focus = returnFocus();
     const focusDocument = focus?.document;
     const preserveMovedFocus = (event: FocusEvent) => {
@@ -343,13 +345,15 @@ function IntakeComposer({ mode, anchorDate, calendarEvent, timetableSlot, busy, 
     focusDocument?.addEventListener("focusin", preserveMovedFocus);
     const stop = () => focusDocument?.removeEventListener("focusin", preserveMovedFocus);
     stopFocusTracking.current = stop;
+    let reviewTarget: ScheduleConflictTarget | undefined;
+    let saved = false;
     try {
       if (mode === "calendar") {
         const sourceOccurrenceRef = calendarEvent ? calendarEvent.occurrenceRef : newOccurrenceRef;
         const date = String(form.get("date") || "");
         const endDate = String(form.get("endDate") || "") || null;
         const interval = calendarFormTime({ ...timeDraft, allDay: !occurrenceFields || timeDraft.allDay, date, endDate }, calendarEvent);
-        await onImportCalendar({
+        const outcome = await onImportCalendar({
           eventId: calendarEvent?.id || null,
           date,
           endDate,
@@ -360,6 +364,7 @@ function IntakeComposer({ mode, anchorDate, calendarEvent, timetableSlot, busy, 
           ...interval,
           location: String(form.get("location") || "") || null,
         });
+        if (outcome?.status === "held") reviewTarget = { canonicalId: calendarEvent?.id || null, occurrenceRef: sourceOccurrenceRef, evidenceIds: outcome.evidenceIds };
       } else {
         const startTime = String(form.get("startTime") || "") || null;
         await onImportTimetable({
@@ -375,11 +380,12 @@ function IntakeComposer({ mode, anchorDate, calendarEvent, timetableSlot, busy, 
           notes: String(form.get("notes") || "") || null,
         });
       }
-      if (mounted.current) onClose(focus);
+      saved = true;
+      if (mounted.current) onClose(focus, reviewTarget);
     } catch (cause) {
       if (mounted.current) setError(cause instanceof CalendarFormTimeError ? cause.message : "接入失败，请检查后重试");
     } finally {
-      submitting.current = false;
+      if (!saved) { submitting.current = false; if (mounted.current) setSaving(false); }
       stop();
       if (stopFocusTracking.current === stop) stopFocusTracking.current = null;
     }
@@ -387,7 +393,8 @@ function IntakeComposer({ mode, anchorDate, calendarEvent, timetableSlot, busy, 
   const editingCalendar = mode === "calendar" && Boolean(calendarEvent?.id);
   const editingTimetable = mode === "timetable" && Boolean(rawText(timetableSlot?.slot_id ?? timetableSlot?.id));
   const title = mode === "calendar" ? editingCalendar ? "编辑日程" : "新建日程" : editingTimetable ? "编辑课表" : "添加课表";
-  return <section ref={composerRootRef} className={`edupi-calendar-intake${mode === "calendar" ? " is-calendar" : ""}${embedded ? " is-embedded" : ""}`} aria-label={title}>{!embedded ? <header><strong>{title}</strong><button type="button" onClick={close} aria-label="关闭">×</button></header> : null}<form onSubmit={(event) => void submit(event)}>{mode === "calendar" ? <>
+  const locked = busy || saving;
+  return <section ref={composerRootRef} className={`edupi-calendar-intake${mode === "calendar" ? " is-calendar" : ""}${embedded ? " is-embedded" : ""}`} aria-label={title}>{!embedded ? <header><strong>{title}</strong><button type="button" onClick={close} aria-label="关闭">×</button></header> : null}<form onSubmit={(event) => void submit(event)}><fieldset className="edupi-calendar-intake__fields" disabled={locked}>{mode === "calendar" ? <>
     <label className="is-wide"><span>名称</span><input name="name" required maxLength={240} autoFocus placeholder="如：期中考试" defaultValue={calendarEvent?.name || ""} /></label>
     <label><span>开始</span><input name="date" type="date" required defaultValue={calendarEvent?.date || anchorDate} /></label>
     <label><span>结束</span><input name="endDate" type="date" defaultValue={calendarEvent?.endDate || ""} /></label>
@@ -410,10 +417,10 @@ function IntakeComposer({ mode, anchorDate, calendarEvent, timetableSlot, busy, 
     <label><span>上课时间</span><input name="startTime" type="time" defaultValue={rawText(timetableSlot?.start_time) || ""} /></label>
     <label><span>时区</span><input name="timeZone" maxLength={100} defaultValue={rawText(timetableSlot?.time_zone) || Intl.DateTimeFormat().resolvedOptions().timeZone} /></label>
     <label><span>类型</span><select name="kind" defaultValue={timetableSlot?.kind === "routine" ? "routine" : "class"}><option value="class">课程</option><option value="routine">固定事务</option></select></label>
-  </>}<label className="is-wide"><span>备注</span><textarea name="notes" rows={3} maxLength={1000} placeholder="可不填" defaultValue={mode === "calendar" ? calendarEvent?.notes || "" : visibleTimetableNote(timetableSlot?.notes) || ""} /></label><footer>{error ? <span role="alert">{error}</span> : <span /> }<button type="button" onClick={close}>取消</button><button type="submit" className="is-primary" disabled={busy}>{busy ? "保存中…" : editingCalendar || editingTimetable ? "保存更改" : "写入 EduPi"}</button></footer></form></section>;
+  </>}<label className="is-wide"><span>备注</span><textarea name="notes" rows={3} maxLength={1000} placeholder="可不填" defaultValue={mode === "calendar" ? calendarEvent?.notes || "" : visibleTimetableNote(timetableSlot?.notes) || ""} /></label></fieldset><footer>{error ? <span role="alert">{error}</span> : <span /> }<button type="button" onClick={close}>取消</button><button type="submit" className="is-primary" disabled={locked}>{locked ? "保存中…" : editingCalendar || editingTimetable ? "保存更改" : "写入 EduPi"}</button></footer></form></section>;
 }
 
-export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, selection, onSelect, onTaskDetail, onImportCalendar, onImportTimetable, onDeleteEntity, selectedObjectId, onObject }: Props) {
+export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, selection, onSelect: onSelectItem, onTaskDetail, onImportCalendar, onImportTimetable, onDeleteEntity, selectedObjectId, onObject }: Props) {
   const policy = useEduPiForegroundPolicy();
   const [localList, setLocalList] = useState(false);
   const sourceHistory = Boolean(selectedObjectId?.startsWith("calendar:history"));
@@ -430,6 +437,9 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
   const [composer, setComposer] = useState<"calendar" | "timetable" | null>(null);
   const [editingCalendarId, setEditingCalendarId] = useState<string | null>(null);
   const [editingTimetableId, setEditingTimetableId] = useState<string | null>(null);
+  const [reviewRequest, setReviewRequest] = useState<(ScheduleConflictReviewRequest & { originSelectionKey: string | null; objectId: string | null | undefined }) | null>(null);
+  const reviewSequence = useRef(0);
+  const onSelect = (next: CalendarItemSelection | null) => { setReviewRequest(null); onSelectItem(next); };
   const [deleteBusy, setDeleteBusy] = useState(false);
   const workspaceRef = useRef<HTMLElement>(null);
   const selectionKey = selection ? `${selection.kind}:${selection.sourceId || `${selection.date}:${selection.title}`}` : null;
@@ -437,6 +447,9 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
   const closeContext = useRef({ editorKey, selectionKey, selectedObjectId });
   closeContext.current = { editorKey, selectionKey, selectedObjectId };
   const closeFocus = useRef<(NonNullable<IntakeFocusReturn> & { editorKey: string; selectionKey: string | null; selectedObjectId: string | null | undefined; target: "calendar" | "timetable" | "edit" }) | null>(null);
+  useEffect(() => {
+    if (reviewRequest && (reviewRequest.objectId !== selectedObjectId || selectionKey && selectionKey !== reviewRequest.originSelectionKey)) setReviewRequest(null);
+  }, [reviewRequest, selectedObjectId, selectionKey]);
   useEffect(() => () => { closeFocus.current = null; }, []);
   useEffect(() => {
     const request = closeFocus.current;
@@ -530,13 +543,24 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
       ? { ...focus, ...current, editorKey: key, target } : null;
     return true;
   };
-  const closeComposer = (focus: IntakeFocusReturn) => {
+  const followHeldReview = (target?: ScheduleConflictTarget) => {
+    const request = closeFocus.current;
+    if (!target || !request) return;
+    const active = request.document.activeElement;
+    if (active !== request.from && active !== request.document.body && active !== request.document.documentElement) return;
+    closeFocus.current = null;
+    setReviewRequest({ id: ++reviewSequence.current, target, originSelectionKey: selectionKey, objectId: selectedObjectId });
+    onSelectItem(null);
+  };
+  const closeComposer = (focus: IntakeFocusReturn, reviewTarget?: ScheduleConflictTarget) => {
     if (!composer || !queueCloseFocus(`new:${composer}`, composer, focus)) return;
+    followHeldReview(reviewTarget);
     setComposer(null);
     setEditingCalendarId(null);
     setEditingTimetableId(null);
   };
   const openComposer = (mode: "calendar" | "timetable") => {
+    setReviewRequest(null);
     closeFocus.current = null;
     if (composer === mode && !editingCalendarId && !editingTimetableId) {
       workspaceRef.current?.querySelector<HTMLInputElement>(`.edupi-calendar-intake:not(.is-embedded) input[name="${mode === "calendar" ? "name" : "subject"}"]`)?.focus({ preventScroll: false });
@@ -544,9 +568,10 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
     }
     setEditingCalendarId(null); setEditingTimetableId(null); setComposer(mode);
   };
-  const closeEditor = (mode: "calendar" | "timetable", focus: IntakeFocusReturn) => {
+  const closeEditor = (mode: "calendar" | "timetable", focus: IntakeFocusReturn, reviewTarget?: ScheduleConflictTarget) => {
     const id = mode === "calendar" ? editingCalendarId : editingTimetableId;
     if (!id || !queueCloseFocus(`${mode}:${id}`, "edit", focus)) return;
+    followHeldReview(reviewTarget);
     if (mode === "calendar") setEditingCalendarId(null);
     else setEditingTimetableId(null);
   };
@@ -554,6 +579,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
     if (!selection || selection.kind !== "calendar" || !selection.sourceId) return;
     const event = data.calendar.find((item) => item.id === selection.sourceId);
     if (!event) return;
+    setReviewRequest(null);
     setEditingCalendarId(event.id || null);
     setEditingTimetableId(null);
     if (event.date) setAnchorDate(event.date);
@@ -563,6 +589,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
     if (!selection || selection.kind !== "timetable" || !selection.sourceId) return;
     const slot = data.timetable.map(rawRecord).find((item) => rawText(item.slot_id ?? item.id) === selection.sourceId);
     if (!slot) return;
+    setReviewRequest(null);
     setEditingTimetableId(selection.sourceId);
     setEditingCalendarId(null);
     setComposer(null);
@@ -602,7 +629,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
     ? [!calendarWriteReady ? data.capabilities.calendar.reason : null, !timetableWriteReady ? data.capabilities.timetable.reason : null].filter(Boolean).join("；")
     : null;
   const drawerEditor = editingCalendarId && selection?.kind === "calendar" && selection.sourceId === editingCalendarId && editingCalendarEvent && calendarWriteReady
-    ? <IntakeComposer key={`calendar:${editingCalendarId}`} embedded mode="calendar" anchorDate={anchorDate} calendarEvent={editingCalendarEvent} busy={intakeBusy} onClose={(focus) => closeEditor("calendar", focus)} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} />
+    ? <IntakeComposer key={`calendar:${editingCalendarId}`} embedded mode="calendar" anchorDate={anchorDate} calendarEvent={editingCalendarEvent} busy={intakeBusy} onClose={(focus, target) => closeEditor("calendar", focus, target)} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} />
     : editingTimetableId && selection?.kind === "timetable" && selection.sourceId === editingTimetableId && editingTimetableSlot && timetableWriteReady
       ? <IntakeComposer key={`timetable:${editingTimetableId}`} embedded mode="timetable" anchorDate={anchorDate} timetableSlot={editingTimetableSlot} busy={intakeBusy} onClose={(focus) => closeEditor("timetable", focus)} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} />
       : null;
@@ -614,7 +641,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
         <div className="edupi-calendar-heading__actions"><button type="button" data-calendar-create="calendar" className={composer || drawerEditor ? undefined : "is-primary"} disabled={!calendarWriteReady} title={!calendarWriteReady ? data.capabilities.calendar.reason : undefined} onClick={() => openComposer("calendar")}>新建日程</button><button type="button" data-calendar-create="timetable" disabled={!timetableWriteReady} title={!timetableWriteReady ? data.capabilities.timetable.reason : undefined} onClick={() => openComposer("timetable")}>添加课表</button><button type="button" onClick={onUpload}>上传文件</button></div>
       </header>
       {writeReason ? <p className="edupi-calendar-capability-note" role="status">{writeReason}</p> : null}
-      <EduPiScheduleConflictReview enabled={data.capabilities.calendar.enabled || data.capabilities.timetable.enabled} />
+      <EduPiScheduleConflictReview enabled={data.capabilities.calendar.enabled || data.capabilities.timetable.enabled} request={!selection && !editorKey ? reviewRequest : null} scopeKey={`${selectedObjectId || ""}|${selectionKey || ""}|${editorKey || ""}`} />
       {composer ? <IntakeComposer key={`${composer}:${editingCalendarId || editingTimetableId || "new"}`} mode={composer} anchorDate={anchorDate} calendarEvent={composer === "calendar" ? editingCalendarEvent : null} timetableSlot={composer === "timetable" ? editingTimetableSlot : null} busy={intakeBusy} onClose={closeComposer} onImportCalendar={onImportCalendar} onImportTimetable={onImportTimetable} /> : null}
       <div className="edupi-calendar-content-segment edupi-segmented-control" role="group" aria-label="切换日程内容">{CONTENT_LABELS.map((item) => <button type="button" key={item.mode} className={contentMode === item.mode ? "is-active" : ""} onClick={() => { setContentMode(item.mode); setEditingCalendarId(null); setEditingTimetableId(null); onSelect(null); if (sourceEvents || sourceCourses) onObject?.("calendar:calendar"); }} aria-pressed={contentMode === item.mode}>{item.label}</button>)}</div>
       {contentMode === "timetable" && !sourceEvents && !sourceCourses ? <EduPiTimetableGrid slots={filteredTimetable} onSelect={onSelect} /> : <>

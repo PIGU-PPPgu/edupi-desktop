@@ -38,6 +38,7 @@ test("reopened material has no cached current claim and rereads on disclosure", 
 async function behaviorFixture() {
   const require = createRequire(import.meta.url);
   const model = await createJiti(import.meta.url, { tsconfigPaths: true }).import("../lib/edupi-material-schedule.ts");
+  const timeModel = await createJiti(import.meta.url, { tsconfigPaths: true }).import("../lib/edupi-calendar-form-time.ts");
   const source = await fs.readFile(new URL("./EduPiMaterialScheduleProposal.tsx", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const slots = [], effects = [], reads = [], applies = [], nativeCalls = [];
@@ -65,7 +66,7 @@ async function behaviorFixture() {
       if (holdApply) return new Promise((resolve, reject) => pending.push({ resolve, reject }));
       return { status: "accepted", applied_ids: ["synthetic-event"], rejected_ids: [], automatic_import: false, external_send: false }; },
   };
-  const dependencies = { react, "@/lib/edupi-material-schedule": client,
+  const dependencies = { react, "@/lib/edupi-material-schedule": client, "@/lib/edupi-calendar-form-time": timeModel,
     "@/lib/desktop-native": { confirmMaterialScheduleNative: async count => {
       nativeCalls.push(count);
       return holdConfirmation ? new Promise(resolve => pendingConfirmations.push(resolve)) : confirms;

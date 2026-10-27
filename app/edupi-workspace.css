@@ -392,6 +392,7 @@
 .edupi-calendar-intake > header strong { font-size: 12px; }
 .edupi-calendar-intake > header button { width: 26px; height: 26px; border: 0; border-radius: 5px; background: transparent; color: var(--ep-muted); cursor: pointer; font-size: 17px; }
 .edupi-calendar-intake form { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; padding: 12px; }
+.edupi-calendar-intake__fields { display: grid; grid-column: 1 / -1; grid-template-columns: inherit; gap: inherit; min-width: 0; margin: 0; padding: 0; border: 0; }
 .edupi-calendar-intake label { display: grid; gap: 5px; }
 .edupi-calendar-intake label.is-wide { grid-column: 1 / -1; }
 .edupi-calendar-intake label > span { color: var(--ep-muted); font-size: 10px; font-weight: 650; }

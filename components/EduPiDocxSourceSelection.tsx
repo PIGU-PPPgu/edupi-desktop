@@ -13,9 +13,11 @@ export function selectedDocxSpans(preview: DocxSourcePreview, selected: Readonly
 }
 
 type View = { key: string; version: number; preview: DocxSourcePreview; suggestion?: { spans: DocxSourceSpan[]; parts: string[]; content: string } };
-export function EduPiDocxSourceSelection({ materialId, expectedRevision, metadataRevision, available = true, chapterProposal, onSettled }: {
+export function EduPiDocxSourceSelection({ materialId, expectedRevision, metadataRevision, available = true, active = true, chapterProposal, onActionStart, onSettled }: {
   materialId: string; expectedRevision: number; metadataRevision?: number; available?: boolean;
-  chapterProposal?: EduPiMaterialLessonProposal; onSettled: (confirmed: boolean) => void;
+  active?: boolean; chapterProposal?: EduPiMaterialLessonProposal;
+  onActionStart?: (action: "read" | "confirm", trigger?: HTMLButtonElement) => void;
+  onSettled: (confirmed: boolean, error?: string) => void;
 }) {
   const key = JSON.stringify([materialId, expectedRevision, metadataRevision, available, chapterProposal]);
   const scope = useRef({ key, alive: true, version: 0, controller: null as AbortController | null });
@@ -24,8 +26,14 @@ export function EduPiDocxSourceSelection({ materialId, expectedRevision, metadat
     scope.current = { key, alive: true, version: 0, controller: null };
   }
   const renderScope = scope.current;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const readRef = useRef<HTMLButtonElement>(null);
+  const suggestionRef = useRef<HTMLButtonElement>(null);
+  const focusRequest = useRef<{ scope: typeof renderScope; action: "read" | "more" | "confirm"; from: Element | null; trigger: HTMLButtonElement; index: number } | null>(null);
   useEffect(() => { const current = scope.current; current.alive = true;
-    return () => { current.alive = false; current.controller?.abort(); current.controller = null; current.version++; }; }, [key]);
+    return () => { current.alive = false; current.controller?.abort(); current.controller = null; current.version++;
+      if (focusRequest.current?.scope === current) focusRequest.current = null; }; }, [key]);
   const [view, setView] = useState<View | null>(null);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [visibleCount, setVisibleCount] = useState(40);
@@ -39,12 +47,41 @@ export function EduPiDocxSourceSelection({ materialId, expectedRevision, metadat
   const tooLarge = spans.length > 20 || new TextEncoder().encode(selectedText).length > 16_384;
   const busy = busyKey === key, message = error?.key === key ? error.message : "";
   const chapterReady = currentDocxChapter(chapterProposal, materialId, metadataRevision, available);
-  const read = async (suggested = false) => {
+  useEffect(() => {
+    const request = focusRequest.current;
+    if (!request) return;
+    const root = rootRef.current;
+    if (!active || !root?.isConnected || scope.current !== request.scope || !request.scope.alive || root.closest("details")?.open === false) { focusRequest.current = null; return; }
+    const document = root.ownerDocument;
+    if (busy) {
+      const preserveMovedFocus = (event: FocusEvent) => {
+        if (event.target !== request.from && event.target !== document.body && event.target !== document.documentElement) focusRequest.current = null;
+      };
+      document.addEventListener("focusin", preserveMovedFocus);
+      return () => document.removeEventListener("focusin", preserveMovedFocus);
+    }
+    focusRequest.current = null;
+    const focused = document.activeElement;
+    if (focused !== request.from && focused !== document.body && focused !== document.documentElement) return;
+    const piece = request.action === "more" ? listRef.current?.querySelectorAll<HTMLElement>("[data-docx-source-piece]")[request.index]
+      : request.action === "read" && preview?.status === "ready" ? listRef.current?.querySelector<HTMLElement>("[data-docx-source-piece]") : null;
+    const targets = [piece, request.trigger, readRef.current, suggestionRef.current];
+    const target = targets.find(element => element?.isConnected && root.contains(element) && !("disabled" in element && element.disabled));
+    target?.focus({ preventScroll: false });
+  }, [active, busy, currentView, key, message, preview?.status, visibleCount]);
+  const rememberFocus = (action: "read" | "more" | "confirm", trigger?: HTMLButtonElement, index = 0) => {
+    const document = trigger?.ownerDocument;
+    const focused = document?.activeElement || null;
+    focusRequest.current = trigger && document && (rootRef.current?.contains(focused) || focused === document.body || focused === document.documentElement)
+      ? { scope: renderScope, action, from: focused, trigger, index } : null;
+  };
+  const read = async (suggested = false, trigger?: HTMLButtonElement) => {
     const current = renderScope;
     if (scope.current !== current || !current.alive || current.controller || !available || suggested && !chapterReady) return;
     const version = ++current.version;
     const controller = new AbortController(); current.controller = controller;
     const isCurrent = () => scope.current === current && current.alive && !controller.signal.aborted;
+    rememberFocus("read", trigger); onActionStart?.("read", trigger);
     setBusyKey(key); setError(null); setView(null); setSelected(new Set()); setVisibleCount(40);
     try {
       const response = await fetch(`/api/edupi/material-excerpt/source?materialId=${encodeURIComponent(materialId)}`, { cache: "no-store", signal: controller.signal });
@@ -67,14 +104,17 @@ export function EduPiDocxSourceSelection({ materialId, expectedRevision, metadat
     } catch (reason) { if (isCurrent()) setError({ key, message: reason instanceof Error ? reason.message : "原文读取失败" }); }
     finally { if (isCurrent()) { current.controller = null; setBusyKey(null); } }
   };
-  const confirm = async () => {
+  const confirm = async (trigger?: HTMLButtonElement) => {
     const current = renderScope;
     if (scope.current !== current || !current.alive || current.controller || !available || !preview
       || currentView?.version !== current.version || preview.status !== "ready" || !spans.length || tooLarge) return;
     const controller = new AbortController(); current.controller = controller;
     const isCurrent = () => scope.current === current && current.alive && !controller.signal.aborted;
+    if (onActionStart) { focusRequest.current = null; onActionStart("confirm", trigger); }
+    else rememberFocus("confirm", trigger);
     setBusyKey(key); setError(null);
     let confirmed = false;
+    let failure: string | undefined;
     try {
       const response = await fetch("/api/edupi/material-excerpt/source", { method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ materialId, expectedRevision, expectedBasisHash: preview.basis_hash, sourceSpans: spans }) });
@@ -82,25 +122,25 @@ export function EduPiDocxSourceSelection({ materialId, expectedRevision, metadat
       if (!isCurrent()) return;
       if (!response.ok) throw new Error(result.error || "确认未完成");
       confirmed = true;
-    } catch (reason) { if (isCurrent()) setError({ key, message: reason instanceof Error ? reason.message : "确认未完成" }); }
-    finally { if (isCurrent()) { current.controller = null; current.version++; setView(null); setSelected(new Set()); setBusyKey(null); onSettled(confirmed); } }
+    } catch (reason) { if (isCurrent()) { failure = reason instanceof Error ? reason.message : "确认未完成"; setError({ key, message: failure }); } }
+    finally { if (isCurrent()) { current.controller = null; current.version++; setView(null); setSelected(new Set()); setBusyKey(null); onSettled(confirmed, failure); } }
   };
-  return <div className="edupi-docx-source">
-    {chapterReady ? <button type="button" className="native-button" disabled={busy} onClick={() => read(true)}>查看建议</button> : null}
-    {!chapterReady || message ? <button type="button" className="native-button" disabled={busy || !available} onClick={() => read()}>{busy ? "处理中…" : "从 DOCX 原文选取"}</button> : null}
+  return <div ref={rootRef} className="edupi-docx-source">
+    {chapterReady ? <button ref={suggestionRef} type="button" className="native-button" disabled={busy} onClick={event => read(true, event?.currentTarget)}>查看建议</button> : null}
+    {!chapterReady || message ? <button ref={readRef} type="button" className="native-button" disabled={busy || !available} onClick={event => read(false, event?.currentTarget)}>{busy ? "处理中…" : "从 DOCX 原文选取"}</button> : null}
     {message ? <p role="alert">{message}</p> : null}
     {preview?.status === "held" ? <p role="status">原文包含待核对内容，请使用手动核对正文。</p> : null}
     {preview?.status === "ready" ? <>
-      <div role="group" aria-label="选择原文片段" className="edupi-docx-source__list">{currentView?.suggestion
-        ? currentView.suggestion.parts.map((text, index) => <p key={index} title={spans[index].path}>{text}</p>)
+      <div ref={listRef} role="group" aria-label="选择原文片段" className="edupi-docx-source__list">{currentView?.suggestion
+        ? currentView.suggestion.parts.map((text, index) => <p key={index} title={spans[index].path} data-docx-source-piece={spans[index].path} tabIndex={-1}>{text}</p>)
         : candidates.slice(0, visibleCount).map(item => <label key={item.path}>
-        <input type="checkbox" checked={selected.has(item.path)} disabled={busy} onChange={event => setSelected(current => {
+        <input type="checkbox" data-docx-source-piece={item.path} checked={selected.has(item.path)} disabled={busy} onChange={event => setSelected(current => {
           const next = new Set(current); if (event.target.checked) next.add(item.path); else next.delete(item.path); return next;
         })} /><span>{item.text}</span>
       </label>)}</div>
-      {!currentView?.suggestion && candidates.length > visibleCount ? <button type="button" className="native-button" onClick={() => setVisibleCount(value => value + 40)}>查看更多</button> : null}
+      {!currentView?.suggestion && candidates.length > visibleCount ? <button type="button" className="native-button" disabled={busy} onClick={event => { rememberFocus("more", event?.currentTarget, visibleCount); setVisibleCount(value => value + 40); }}>查看更多</button> : null}
       {tooLarge ? <p role="alert">最多选20处，合计不超过16 KB</p> : null}
-      <button type="button" className="native-button" disabled={busy || !spans.length || tooLarge} onClick={() => confirm()}>确认选中内容</button>
+      <button type="button" className="native-button" disabled={busy || !spans.length || tooLarge} onClick={event => confirm(event?.currentTarget)}>确认选中内容</button>
     </> : null}
   </div>;
 }

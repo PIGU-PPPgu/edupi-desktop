@@ -31,7 +31,8 @@ import { useDockedPanel } from "@/hooks/useDockedPanel";
 import { EduPiTaskWorkspace } from "./EduPiTaskWorkspace";
 import { EduPiDeleteConfirmation } from "./EduPiDeleteConfirmation";
 import type { ReviewPayload } from "./EduPiTaskStage";
-import type { CalendarIntakeInput } from "@/lib/edupi-education-intake";
+import type { CalendarIntakeInput, CalendarIntakeOutcome } from "@/lib/edupi-education-intake";
+import { scheduleResolutionMatchesTarget, type ScheduleConflictTarget, type ScheduleResolutionNotice } from "@/lib/edupi-schedule-conflicts";
 import { submitTodayWorkReview, TodayWorkReviewError } from "@/lib/edupi-today-work";
 import { EduPiWorkspaceDrawer } from "./EduPiWorkspaceDrawer";
 import { EduPiWorkspaceViews } from "./EduPiWorkspaceViews";
@@ -106,7 +107,7 @@ type AgentPromptMode = "insert" | "replace" | "teacher";
 type EducationIntakeApiResult = {
   error?: string;
   staged?: MaterialStagingDescriptor[];
-  receipt?: { status?: string };
+  receipt?: { status?: string; evidence_ids?: string[] };
   materialReceivedOnly?: boolean;
   materialScheduleProposal?: EduPiMaterialScheduleProposal;
   materialLessonProposal?: EduPiMaterialLessonProposal;
@@ -180,7 +181,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const [stagedMaterials, setStagedMaterials] = useState<MaterialStagingDescriptor[]>([]);
   const [materialStagingBusy, setMaterialStagingBusy] = useState(false);
   const [educationIntakeBusy, setEducationIntakeBusy] = useState(false);
-  const [materialStagingMessage, setMaterialStagingMessage] = useState<{ tone: "success" | "error"; text: string; sticky?: boolean } | null>(null);
+  const [materialStagingMessage, setMaterialStagingMessage] = useState<{ tone: "success" | "error"; text: string; sticky?: boolean; scheduleReviewTarget?: ScheduleConflictTarget } | null>(null);
   const [calendarSelection, setCalendarSelection] = useState<CalendarItemSelection | null>(null);
   const appliedCalendarLink = useRef<{ key: string; education: EducationContract } | null>(null);
   const [taskDetailTask, setTaskDetailTask] = useState<TeacherTask | null>(null);
@@ -379,7 +380,14 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
 
   useEffect(() => {
     const refresh = (event: Event) => {
-      if (event.type === "edupi-education-refresh") setReviewMessage(null);
+      if (event.type === "edupi-education-refresh") {
+        setReviewMessage(null);
+        const notice = (event as CustomEvent<{ scheduleResolution?: ScheduleResolutionNotice }>).detail?.scheduleResolution;
+        if (notice?.kind === "calendar" && Array.isArray(notice.evidenceIds)) {
+          setMaterialStagingMessage(current => current?.scheduleReviewTarget && scheduleResolutionMatchesTarget(current.scheduleReviewTarget, notice)
+            ? { tone: "success", text: "日程已核对。" } : current);
+        }
+      }
       void loadWorkspace().catch(() => {
         if (event.type === "edupi-education-refresh") setReviewMessage("任务读取失败，请重试。");
       });
@@ -428,15 +436,17 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     return result;
   }, [submitEducationIntake]);
 
-  const importCalendarEvent = useCallback(async (event: CalendarIntakeInput) => {
+  const importCalendarEvent = useCallback(async (event: CalendarIntakeInput): Promise<CalendarIntakeOutcome> => {
     const timeInterval = event.startAt && event.endAt && event.timeZone
       ? { start: event.startAt, end: event.endAt, timeZone: event.timeZone } : undefined;
     const result = await submitEducationIntake({ kind: "calendar", events: [{ eventId: event.eventId, date: event.date,
       endDate: event.endDate, name: event.name, type: event.type, notes: event.notes, confidence: "teacher_confirmed",
       sourceOccurrenceRef: event.sourceOccurrenceRef, timeInterval, location: event.location }] });
+    const evidenceIds = Array.isArray(result.receipt?.evidence_ids) ? result.receipt.evidence_ids.filter(id => typeof id === "string") : [];
     setMaterialStagingMessage(result.receipt?.status === "held"
-      ? { tone: "error", sticky: true, text: "日程更改待核对。" }
+      ? { tone: "error", sticky: true, text: "日程更改待核对。", scheduleReviewTarget: { canonicalId: event.eventId, occurrenceRef: event.sourceOccurrenceRef, evidenceIds } }
       : { tone: "success", text: event.eventId ? "日程更改已保存。" : "日程已写入 EduPi 行事历。" });
+    return { status: result.receipt?.status, evidenceIds };
   }, [submitEducationIntake]);
 
   const importTimetableSlot = useCallback(async (slot: { slotId: string | null; dayOfWeek: number; period: number; subject: string; classId: string | null; className: string | null; startTime: string | null; timeZone: string | null; kind: "class" | "routine"; notes: string | null }) => {

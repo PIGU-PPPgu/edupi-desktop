@@ -24,7 +24,7 @@ function mount(name, initialProps = {}, controlled = true, componentName = name,
       const index = cursor++;
       if (!slots[index]) {
         const slot = { value: typeof initial === "function" ? initial() : initial };
-        slot.set = value => { const next = typeof value === "function" ? value(slot.value) : value; if (!Object.is(next, slot.value)) { slot.value = next; dirty = true; } };
+        slot.set = value => { const next = typeof value === "function" ? value(slot.value) : value; if (!Object.is(next, slot.value)) { slot.value = next; dirty = true; environment.onStateChange?.(next); } };
         slots[index] = slot;
       }
       return [slots[index].value, slots[index].set];
@@ -50,7 +50,7 @@ function mount(name, initialProps = {}, controlled = true, componentName = name,
   vm.runInNewContext(sources[name] + (name === "EduPiCalendarWorkspace" ? "\nexports.MonthView = MonthView; exports.WeekView = WeekView; exports.DayView = DayView; exports.IntakeComposer = IntakeComposer; exports.CalendarDetailDrawer = CalendarDetailDrawer;" : ""), {
     exports, URLSearchParams,
     crypto: { randomUUID: () => `synthetic-occurrence-${++uuid}` },
-    FormData: class { constructor(form) { this.values = form.values; } get(key) { return this.values[key] ?? null; } },
+    FormData: environment.FormData || class { constructor(form) { this.values = { ...form.values }; } get(key) { return this.values[key] ?? null; } },
     require: dependency => { assert.ok(modules[dependency], dependency); return modules[dependency]; },
     window: { location: { search: "" }, addEventListener: (event, listener) => listeners.set(event, listener), removeEventListener: (event, listener) => { if (listeners.get(event) === listener) listeners.delete(event); } },
     document: environment.document || { elementFromPoint: () => dropStage ? { closest: () => ({ dataset: { boardStage: dropStage } }) } : null },
@@ -284,6 +284,7 @@ test("page primary actions and segmented controls are explicit", () => {
 
 function intake(initialProps = {}, environment = {}) {
   const calls = { calendar: [], timetable: [], closes: 0 };
+  const draft = {};
   const app = mount("EduPiCalendarWorkspace", {
     mode: "calendar", anchorDate: "2026-10-27", busy: false,
     onClose: () => { calls.closes += 1; },
@@ -292,12 +293,20 @@ function intake(initialProps = {}, environment = {}) {
     ...initialProps,
   }, true, "IntakeComposer", environment);
   const field = name => nodes(app.render()).find(node => ["input", "select", "textarea"].includes(node.type) && (node.props.name === name || node.props["aria-label"] === name));
+  const fieldset = () => nodes(app.render()).find(node => node.type === "fieldset");
+  const values = () => Object.fromEntries(nodes(app.render()).filter(node => ["input", "select", "textarea"].includes(node.type) && node.props.name).map(node => {
+    const name = node.props.name;
+    if (node.props.value !== undefined) draft[name] = node.props.value;
+    else if (!(name in draft)) draft[name] = node.props.defaultValue ?? "";
+    return [name, draft[name]];
+  }));
   return {
-    ...app, calls, field,
-    change(name, value) { const item = field(name); assert.ok(item, `field ${name}`); item.props.onChange({ target: item.props.type === "checkbox" ? { checked: value } : { value } }); app.render(); },
+    ...app, calls, field, fieldset, values,
+    change(name, value) { const item = field(name); assert.ok(item, `field ${name}`); assert.ok(!fieldset()?.props.disabled, `disabled field ${name}`); item.props.onChange({ target: item.props.type === "checkbox" ? { checked: value } : { value } }); app.render(); },
     async submit(overrides = {}) {
-      const values = Object.fromEntries(nodes(app.render()).filter(node => ["input", "select", "textarea"].includes(node.type) && node.props.name).map(node => [node.props.name, node.props.value ?? node.props.defaultValue ?? ""]));
-      nodes(app.render()).find(node => node.type === "form").props.onSubmit({ preventDefault() {}, currentTarget: { values: { ...values, ...overrides } } });
+      const snapshot = values();
+      if (!fieldset()?.props.disabled) Object.assign(draft, overrides);
+      nodes(app.render()).find(node => node.type === "form").props.onSubmit({ preventDefault() {}, currentTarget: { values: { ...snapshot, ...draft } } });
       await new Promise(resolve => setImmediate(resolve));
       app.render();
     },
@@ -380,7 +389,7 @@ test("calendar invalid intervals keep the draft and do not submit or close", asy
   assert.equal(app.calls.calendar.length, 0);
   app.button("时区").props.onClick(); app.render(); app.change("timeZone", "America/New_York");
   app.change("startTime", "01:30"); app.change("endTime", "02:30");
-  await app.submit({ date: "2026-11-01" });
+  await app.submit({ date: "2026-11-01", endDate: "" });
   assert.match(app.error(), /不存在或不唯一/);
   assert.equal(app.field("startTime").props.value, "01:30");
   assert.equal(app.calls.calendar.length, 0);
@@ -488,7 +497,13 @@ function focusDom() {
   return { document, root, section, focused, focusListeners, inputs, triggers, move, outside: () => move({ name: "another control", isConnected: true }),
     commit(tree) {
       if (tree.props.ref) tree.props.ref.current = tree.type === "main" ? root : section;
-      if (tree.type !== "main") return;
+      if (tree.type !== "main") {
+        const locked = nodes(tree).find(node => node.type === "fieldset")?.props.disabled;
+        inputs.name.disabled = Boolean(locked); inputs.subject.disabled = Boolean(locked);
+        inputs.save.disabled = Boolean(nodes(tree).find(node => node.type === "button" && node.props.type === "submit")?.props.disabled);
+        if (document.activeElement?.ownerDocument === document && document.activeElement.disabled) move(document.body);
+        return;
+      }
       const drawer = nodes(tree).find(node => node.type?.name === "CalendarDetailDrawer");
       const editor = nodes(tree).find(node => node.type?.name === "IntakeComposer") || drawer?.props.editor;
       for (const input of Object.values(inputs)) input.isConnected = Boolean(editor);
@@ -606,5 +621,102 @@ test("intake async completion only returns eligible focus and ignores unmounted 
     else if (scenario === "moved") assert.deepEqual(closes, [null]);
     else assert.equal(closes.length, 0);
     if (scenario === "failed") assert.match(app.error(), /接入失败/);
+  }
+});
+
+test("calendar intake forwards only an explicit held receipt with the submitted stable identity", async () => {
+  for (const status of ["held", "accepted", undefined]) {
+    const closes = [], app = intake({ calendarEvent: savedCalendar(), onImportCalendar: async () => status ? { status, evidenceIds: ["calendar-evidence-current"] } : undefined, onClose: (focus, target) => closes.push({ focus, target }) });
+    await app.submit();
+    assert.equal(closes.length, 1);
+    if (status === "held") assert.deepEqual(JSON.parse(JSON.stringify(closes[0].target)), { canonicalId: "synthetic-event", occurrenceRef: "synthetic-stable-occurrence", evidenceIds: ["calendar-evidence-current"] });
+    else assert.equal(closes[0].target, undefined);
+  }
+});
+
+test("held calendar edits close their detail and request the existing review panel in the same scope", () => {
+  const f = calendarWithFocus(); f.app.setProps({ onSelect: selection => { f.app.props.selection = selection; } });
+  const editor = f.openEdit(); f.dom.inputs.save.focus();
+  const target = { canonicalId: "calendar-a", occurrenceRef: "occurrence-a", evidenceIds: ["candidate-a"] };
+  f.dom.focused.length = 0;
+  editor.props.onClose({ from: f.dom.inputs.save, document: f.dom.document }, target); f.app.render();
+  assert.equal(f.app.props.selection, null);
+  assert.equal(f.editor(), undefined);
+  const review = nodes(f.app.render()).find(node => node.type === "conflict-review");
+  assert.equal(review.props.request.target, target);
+  assert.equal(review.props.request.id, 1);
+  assert.deepEqual(f.dom.focused, [], "the old edit button must not compete with the review panel");
+  f.openNew();
+  assert.equal(nodes(f.app.render()).find(node => node.type === "conflict-review").props.request, null);
+});
+
+test("held calendar responses do not redirect after route, object or focus changes", () => {
+  const target = { canonicalId: "calendar-a", occurrenceRef: "occurrence-a" };
+  for (const change of ["route", "object", "focus"]) {
+    const f = calendarWithFocus(); f.app.setProps({ onSelect: selection => { f.app.props.selection = selection; } });
+    const editor = f.openEdit(); f.dom.inputs.save.focus();
+    if (change === "route") f.app.setProps({ selectedObjectId: "calendar:list" });
+    if (change === "object") f.app.setProps({ selection: { ...f.app.props.selection, sourceId: "calendar-b" } });
+    if (change === "focus") f.dom.outside();
+    editor.props.onClose(change === "focus" ? null : { from: f.dom.inputs.save, document: f.dom.document }, target); f.app.render();
+    assert.equal(nodes(f.app.render()).find(node => node.type === "conflict-review").props.request, null, change);
+  }
+});
+
+test("pending timetable saves lock every business field and a failed save restores the unchanged draft", async () => {
+  const submitted = []; let finish, fail;
+  const app = intake({ mode: "timetable", onImportTimetable: input => { submitted.push(JSON.parse(JSON.stringify(input))); return new Promise((resolve, reject) => { finish = resolve; fail = reject; }); } });
+  assert.equal(app.field("period").props.min, 0); assert.equal(app.field("period").props.max, 64);
+  await app.submit({ dayOfWeek: "3", period: "0", subject: "数学", className: "UI验收一班", classId: "ui-class-one", startTime: "09:00", timeZone: "Asia/Shanghai", notes: "合成完整草稿" });
+  assert.equal(submitted[0].period, 0, "period zero remains a valid submitted value");
+  assert.equal(app.fieldset().props.disabled, true, "the local request locks fields before parent busy changes");
+  const tree = app.render(), fields = nodes(nodes(tree).find(node => node.type === "fieldset"));
+  for (const field of nodes(tree).filter(node => ["input", "select", "textarea"].includes(node.type))) assert.ok(fields.includes(field), field.props.name);
+  assert.equal(app.button("保存中…").props.disabled, true);
+  assert.equal(fields.includes(nodes(tree).find(node => node.type === "button" && textOf(node) === "取消")), false); assert.notEqual(app.button("取消").props.disabled, true);
+  app.setProps({ busy: true }); app.setProps({ busy: false });
+  assert.equal(app.fieldset().props.disabled, true);
+  await app.submit({ period: "1", subject: "不会被输入的草稿" });
+  assert.equal(submitted.length, 1); assert.equal(app.values().period, "0");
+  fail(new Error("synthetic offline")); await new Promise(resolve => setImmediate(resolve)); app.render();
+  assert.equal(app.fieldset().props.disabled, false); assert.match(app.error(), /接入失败/);
+  assert.deepEqual(app.values(), { dayOfWeek: "3", period: "0", subject: "数学", className: "UI验收一班", classId: "ui-class-one", startTime: "09:00", timeZone: "Asia/Shanghai", kind: "class", notes: "合成完整草稿" });
+  await app.submit({ period: "1" }); assert.equal(submitted.length, 2); assert.equal(submitted[1].period, 1);
+  finish(); await new Promise(resolve => setImmediate(resolve)); app.render(); assert.equal(app.calls.closes, 1);
+});
+
+test("fast held saves snapshot before locking and stay locked across delayed parent close commits", async () => {
+  const order = [], submitted = [], closes = [];
+  const app = intake({ onImportCalendar: async input => { order.push("owner"); submitted.push(input); return { status: "held", evidenceIds: ["held-evidence"] }; }, onClose: (focus, reviewTarget) => { order.push("close"); closes.push({ focus, reviewTarget }); } }, {
+    onStateChange(value) { if (value === true) order.push("lock"); },
+    FormData: class { constructor(form) { order.push("snapshot"); this.values = { ...form.values }; } get(name) { return this.values[name] ?? null; } },
+  });
+  app.change("allDay", false); app.change("startTime", "09:15"); app.change("endTime", "10:30");
+  app.button("时区").props.onClick(); app.render(); app.change("timeZone", "UTC"); order.length = 0;
+  await app.submit({ name: "合成快速提交", date: "2026-10-30", type: "meeting", location: "合成会议室", notes: "合成备注" });
+  assert.deepEqual(order, ["snapshot", "lock", "owner", "close"]);
+  assert.equal(submitted[0].name, "合成快速提交"); assert.equal(submitted[0].startAt, "2026-10-30T09:15+00:00");
+  assert.equal(app.fieldset().props.disabled, true);
+  assert.equal(app.field("name").props.autoFocus, true);
+  const tree = app.render(), fields = nodes(nodes(tree).find(node => node.type === "fieldset"));
+  for (const field of nodes(tree).filter(node => ["input", "select", "textarea"].includes(node.type))) assert.ok(fields.includes(field), field.props.name || field.props["aria-label"]);
+  assert.throws(() => app.change("startTime", "11:15"), /disabled field/);
+  app.setProps({ busy: true }); app.setProps({ busy: false });
+  assert.equal(app.fieldset().props.disabled, true, "a resolved request must not unlock an editor still waiting to unmount");
+  await app.submit({ name: "不会覆盖已提交内容" });
+  assert.equal(submitted.length, 1); assert.equal(app.values().name, "合成快速提交");
+  assert.equal(closes.length, 1); assert.equal(closes[0].reviewTarget.evidenceIds[0], "held-evidence");
+});
+
+test("parent busy locks calendar and timetable fields without blocking cancellation or later editing", async () => {
+  for (const mode of ["calendar", "timetable"]) {
+    const app = intake({ mode, busy: true });
+    assert.equal(app.fieldset().props.disabled, true);
+    await app.submit(); assert.equal(app.calls.calendar.length + app.calls.timetable.length, 0);
+    assert.notEqual(app.button("取消").props.disabled, true);
+    app.setProps({ busy: false }); assert.equal(app.fieldset().props.disabled, false);
+    if (mode === "calendar") { app.change("allDay", false); app.change("startTime", "09:15"); assert.equal(app.field("startTime").props.value, "09:15"); }
+    app.button("取消").props.onClick(); assert.equal(app.calls.closes, 1);
+    assert.equal(app.calls.calendar.length + app.calls.timetable.length, 0);
   }
 });
