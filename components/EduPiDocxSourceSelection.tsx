@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { EduPiMaterialLessonProposal } from "@/lib/edupi-core-process-client";
-import { currentDocxChapter, resolveDocxChapterSelection, type DocxSourcePreview, type DocxSourceSpan } from "@/lib/edupi-docx-chapter-suggestion";
+import { currentDocxChapter, currentMaterialSourcePreview, materialSourceIssueMessage, resolveDocxChapterSelection, type DocxSourcePreview, type DocxSourceSpan } from "@/lib/edupi-docx-chapter-suggestion";
 export type { DocxSourcePreview } from "@/lib/edupi-docx-chapter-suggestion";
 
 export function selectableDocxSource(preview: DocxSourcePreview) {
@@ -29,6 +29,7 @@ export function EduPiDocxSourceSelection({ materialId, expectedRevision, metadat
   const [view, setView] = useState<View | null>(null);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [visibleCount, setVisibleCount] = useState(40);
+  const [imageTextConfirmed, setImageTextConfirmed] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<{ key: string; message: string } | null>(null);
   const currentView = view?.key === key ? view : null;
@@ -39,18 +40,20 @@ export function EduPiDocxSourceSelection({ materialId, expectedRevision, metadat
   const tooLarge = spans.length > 20 || new TextEncoder().encode(selectedText).length > 16_384;
   const busy = busyKey === key, message = error?.key === key ? error.message : "";
   const chapterReady = currentDocxChapter(chapterProposal, materialId, metadataRevision, available);
+  const sourceReviewRequired = preview?.source_review_required === "image_text";
   const read = async (suggested = false) => {
     const current = renderScope;
     if (scope.current !== current || !current.alive || current.controller || !available || suggested && !chapterReady) return;
     const version = ++current.version;
     const controller = new AbortController(); current.controller = controller;
     const isCurrent = () => scope.current === current && current.alive && !controller.signal.aborted;
-    setBusyKey(key); setError(null); setView(null); setSelected(new Set()); setVisibleCount(40);
+    setBusyKey(key); setError(null); setView(null); setSelected(new Set()); setVisibleCount(40); setImageTextConfirmed(false);
     try {
       const response = await fetch(`/api/edupi/material-excerpt/source?materialId=${encodeURIComponent(materialId)}`, { cache: "no-store", signal: controller.signal });
       const result = await response.json();
       if (!isCurrent()) return;
       if (!response.ok) throw new Error(result.error || "原文读取失败");
+      if (!currentMaterialSourcePreview(result.preview, materialId)) throw new Error("原文读取未核实，请重试");
       const suggestion = suggested ? await resolveDocxChapterSelection(result.preview, chapterProposal, materialId, metadataRevision, available) : undefined;
       if (suggested && isCurrent()) {
         // The parent projection may predate a server-side metadata edit. The
@@ -70,37 +73,45 @@ export function EduPiDocxSourceSelection({ materialId, expectedRevision, metadat
   const confirm = async () => {
     const current = renderScope;
     if (scope.current !== current || !current.alive || current.controller || !available || !preview
-      || currentView?.version !== current.version || preview.status !== "ready" || !spans.length || tooLarge) return;
+      || currentView?.version !== current.version || preview.status !== "ready" || !spans.length || tooLarge
+      || sourceReviewRequired && !imageTextConfirmed) return;
     const controller = new AbortController(); current.controller = controller;
     const isCurrent = () => scope.current === current && current.alive && !controller.signal.aborted;
     setBusyKey(key); setError(null);
     let confirmed = false;
     try {
       const response = await fetch("/api/edupi/material-excerpt/source", { method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ materialId, expectedRevision, expectedBasisHash: preview.basis_hash, sourceSpans: spans }) });
+        body: JSON.stringify({ materialId, expectedRevision, expectedBasisHash: preview.basis_hash, sourceSpans: spans,
+          ...(sourceReviewRequired && imageTextConfirmed ? { confirmSourceText: true } : {}) }) });
       const result = await response.json();
       if (!isCurrent()) return;
       if (!response.ok) throw new Error(result.error || "确认未完成");
       confirmed = true;
     } catch (reason) { if (isCurrent()) setError({ key, message: reason instanceof Error ? reason.message : "确认未完成" }); }
-    finally { if (isCurrent()) { current.controller = null; current.version++; setView(null); setSelected(new Set()); setBusyKey(null); onSettled(confirmed); } }
+    finally { if (isCurrent()) { current.controller = null; current.version++; setView(null); setSelected(new Set()); setImageTextConfirmed(false); setBusyKey(null); onSettled(confirmed); } }
+  };
+  const location = (path: string) => {
+    const block = preview?.blocks.find(block => block.path === path), region = block?.region;
+    return block?.page && region ? `第${block.page}页 · 像素区域 ${region.left},${region.top} ${region.width}×${region.height}` : path;
   };
   return <div className="edupi-docx-source">
     {chapterReady ? <button type="button" className="native-button" disabled={busy} onClick={() => read(true)}>查看建议</button> : null}
-    {!chapterReady || message ? <button type="button" className="native-button" disabled={busy || !available} onClick={() => read()}>{busy ? "处理中…" : "从 DOCX 原文选取"}</button> : null}
+    {!chapterReady || message ? <button type="button" className="native-button" disabled={busy || !available} onClick={() => read()}>{busy ? "处理中…" : "从原文选取"}</button> : null}
     {message ? <p role="alert">{message}</p> : null}
-    {preview?.status === "held" ? <p role="status">原文包含待核对内容，请使用手动核对正文。</p> : null}
+    {preview?.status === "held" ? <p role="status">{preview.issues.map(materialSourceIssueMessage).join("；")}</p> : null}
     {preview?.status === "ready" ? <>
       <div role="group" aria-label="选择原文片段" className="edupi-docx-source__list">{currentView?.suggestion
-        ? currentView.suggestion.parts.map((text, index) => <p key={index} title={spans[index].path}>{text}</p>)
+        ? currentView.suggestion.parts.map((text, index) => <p key={index} title={location(spans[index].path)}>{text}</p>)
         : candidates.slice(0, visibleCount).map(item => <label key={item.path}>
         <input type="checkbox" checked={selected.has(item.path)} disabled={busy} onChange={event => setSelected(current => {
           const next = new Set(current); if (event.target.checked) next.add(item.path); else next.delete(item.path); return next;
-        })} /><span>{item.text}</span>
+        })} /><span title={location(item.path)}>{item.text}</span>
       </label>)}</div>
       {!currentView?.suggestion && candidates.length > visibleCount ? <button type="button" className="native-button" onClick={() => setVisibleCount(value => value + 40)}>查看更多</button> : null}
       {tooLarge ? <p role="alert">最多选20处，合计不超过16 KB</p> : null}
-      <button type="button" className="native-button" disabled={busy || !spans.length || tooLarge} onClick={() => confirm()}>确认选中内容</button>
+      {sourceReviewRequired ? <label><input type="checkbox" checked={imageTextConfirmed} disabled={busy}
+        onChange={event => setImageTextConfirmed(event.target.checked)} />已核对图片正文</label> : null}
+      <button type="button" className="native-button" disabled={busy || !spans.length || tooLarge || sourceReviewRequired && !imageTextConfirmed} onClick={() => confirm()}>确认选中内容</button>
     </> : null}
   </div>;
 }

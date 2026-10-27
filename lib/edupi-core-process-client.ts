@@ -28,7 +28,7 @@ export type EduPiMaterialScheduleReadResult = {
     source_occurrence_ref?: string; location: string | null; time_interval?: { start: string; end: string; time_zone: string } }>;
   issues: Array<{ code: string; path: string; message: string; source_occurrence_ref?: string }>;
   evidence: Array<{ path: string; property: string; value: string; event_ids: string[] }>;
-  parse_fingerprint: string; read_only: true; automatic_import: false; external_send: false;
+  parse_fingerprint: string; source_review_required?: "image_text"; read_only: true; automatic_import: false; external_send: false;
 };
 export type EduPiMaterialScheduleProposal = { material_id: string; read_only: true; automatic_import: false; external_send: false } & (
   | { status: "proposed"; read_result: EduPiMaterialScheduleReadResult & { status: "ready" }; reason_code: null }
@@ -45,7 +45,8 @@ export type EduPiMaterialChapterSuggestion =
 export type EduPiMaterialLessonProposal = { material_id: string; read_only: true; automatic_prepare: false; external_send: false } & (
   | { status: "proposed"; source_hash: string; metadata_revision: number; lesson_date: string; lesson_date_path: string;
     lesson: { slot_id: string; task_id: string; source_event_date: string; starts_at: string; time_zone: string };
-    basis_hash: string; reason_code: null; chapter_suggestion?: Exclude<EduPiMaterialChapterSuggestion, { status: "unavailable" }> }
+    basis_hash: string; reason_code: null; source_review_required?: "image_text";
+    chapter_suggestion?: Exclude<EduPiMaterialChapterSuggestion, { status: "unavailable" }> }
   | { status: "held"; lesson: null; reason_code: string; chapter_suggestion?: Extract<EduPiMaterialChapterSuggestion, { status: "held" }> }
   | { status: "unavailable"; lesson: null; reason_code: string; chapter_suggestion?: Extract<EduPiMaterialChapterSuggestion, { status: "unavailable" }> }
 );

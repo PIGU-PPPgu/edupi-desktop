@@ -9,6 +9,7 @@ export type MaterialScheduleApplyCapture = {
   expectedParseFingerprint: string;
   commandId: string;
   confirm: true;
+  confirmSourceText?: true;
 };
 export type MaterialScheduleApplyResult = {
   version: 1;
@@ -49,6 +50,7 @@ export function materialScheduleRead(value: unknown, materialId?: string): Mater
     || !HASH.test(String(source.source_hash)) || !Number.isSafeInteger(source.metadata_revision) || Number(source.metadata_revision) < 0
     || typeof source.relative_path !== "string" || !source.relative_path
     || !HASH.test(String(raw.parse_fingerprint)) || !["ready", "partial", "unresolved"].includes(String(raw.status))
+    || raw.source_review_required !== undefined && raw.source_review_required !== "image_text"
     || !options || options.max_occurrences !== 200
     || !Array.isArray(raw.events) || raw.events.length > 200 || raw.events.some(value => {
       const event = record(value);
@@ -62,8 +64,7 @@ export function materialScheduleRead(value: unknown, materialId?: string): Mater
 }
 
 export function materialScheduleCanApply(read: MaterialScheduleRead): boolean {
-  return read.status === "ready" && read.issues.length === 0 && read.events.length > 0
-    && !read.source.relative_path.toLowerCase().endsWith(".pdf");
+  return read.status === "ready" && read.issues.length === 0 && read.events.length > 0;
 }
 
 export function materialScheduleUploadProposal(value: unknown): EduPiMaterialScheduleProposal {
@@ -80,12 +81,15 @@ export function materialScheduleUploadProposal(value: unknown): EduPiMaterialSch
   return value as EduPiMaterialScheduleProposal;
 }
 
-export function captureMaterialScheduleApply(value: MaterialScheduleRead, commandId = `desktop-material-schedule-${globalThis.crypto.randomUUID()}`): MaterialScheduleApplyCapture {
+export function captureMaterialScheduleApply(value: MaterialScheduleRead, commandId = `desktop-material-schedule-${globalThis.crypto.randomUUID()}`,
+  confirmSourceText?: true): MaterialScheduleApplyCapture {
   const read = materialScheduleRead(value);
   if (!ID.test(commandId)) fail("material_schedule_invalid");
   if (!materialScheduleCanApply(read)) fail("material_schedule_unresolved");
+  if (read.source_review_required === "image_text" && confirmSourceText !== true) fail("material_schedule_unresolved");
   return { materialId: read.source.material_id, expectedSourceHash: read.source.source_hash,
-    expectedMetadataRevision: read.source.metadata_revision, expectedParseFingerprint: read.parse_fingerprint, commandId, confirm: true };
+    expectedMetadataRevision: read.source.metadata_revision, expectedParseFingerprint: read.parse_fingerprint, commandId, confirm: true,
+    ...(read.source_review_required === "image_text" ? { confirmSourceText: true } : {}) };
 }
 
 async function responseBody(response: Response): Promise<RawRecord> {
@@ -117,7 +121,8 @@ export async function readMaterialSchedule(materialId: string, fetcher: Fetcher 
 export async function applyMaterialSchedule(capture: MaterialScheduleApplyCapture, fetcher: Fetcher = fetch, headersProvider: typeof desktopApiHeaders = desktopApiHeaders): Promise<MaterialScheduleApplyResult> {
   if (!ID.test(capture.materialId) || !ID.test(capture.commandId) || !HASH.test(capture.expectedSourceHash)
     || !HASH.test(capture.expectedParseFingerprint) || !Number.isSafeInteger(capture.expectedMetadataRevision)
-    || capture.expectedMetadataRevision < 0 || capture.confirm !== true) fail("material_schedule_invalid");
+    || capture.expectedMetadataRevision < 0 || capture.confirm !== true
+    || capture.confirmSourceText !== undefined && capture.confirmSourceText !== true) fail("material_schedule_invalid");
   const response = await fetcher(URL_PATH, { method: "POST", headers: await requestHeaders(headersProvider, { "content-type": "application/json" }),
     body: JSON.stringify({ action: "apply", ...capture }) });
   const body = await responseBody(response);

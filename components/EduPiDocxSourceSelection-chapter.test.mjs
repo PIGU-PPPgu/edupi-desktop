@@ -26,6 +26,16 @@ function data(materialId = "material-A") {
   spans[1].end = 5;
   return { proposal, preview, spans, content };
 }
+function visualData(format) {
+  const sample = data(), text = "章节：一元一次方程", path = format === "pdf" ? "pdf/page[1]/line[0]" : "image/line[0]";
+  sample.spans = [{ path, start: 3, end: text.length }]; sample.content = "一元一次方程";
+  sample.proposal.chapter_suggestion.source_spans = sample.spans;
+  sample.proposal.chapter_suggestion.content_hash = hash(sample.content);
+  sample.preview.format = format;
+  sample.preview.blocks = [{ path, text, page: 1, region: { left: 10, top: 20, width: 500, height: 48 } }];
+  if (format === "image") { sample.preview.source_review_required = "image_text"; sample.proposal.source_review_required = "image_text"; }
+  return sample;
+}
 async function mount(initial = {}) {
   const slots = [], effects = [], calls = [], settled = [], metadataReads = [];
   let serverMaterials = null;
@@ -99,7 +109,7 @@ test("actual chapter callbacks fetch a fresh preview and preserve nonzero UTF-16
 test("old-Core manual selection still reads and confirms only the teacher's checked block", async () => {
   const f = await mount({ chapterProposal: undefined });
   try {
-    const read = button(f.render(), "从 DOCX 原文选取").props.onClick();
+    const read = button(f.render(), "从原文选取").props.onClick();
     f.respond(0, { preview: data().preview }); await read;
     const input = nodes(f.render()).find(node => node.type === "input");
     input.props.onChange({ target: { checked: true } });
@@ -108,6 +118,42 @@ test("old-Core manual selection still reads and confirms only the teacher's chec
     assert.equal(f.metadataReads.length, 0);
     f.respond(1, { error: "stale source" }, 409); await confirm;
     assert.deepEqual(f.settled, [false]); assert.ok(cannotConfirm(f.render()));
+  } finally { f.unmount(); }
+});
+
+test("PDF and image chapters use real paths and require a separate image text check before source confirmation", async () => {
+  for (const format of ["pdf", "image"]) {
+    const sample = visualData(format), f = await mount({ chapterProposal: sample.proposal });
+    try {
+      let tree = f.render(), read = button(tree, "查看建议").props.onClick();
+      f.respond(0, { preview: sample.preview }); await read; tree = f.render();
+      assert.match(text(tree), /一元一次方程/);
+      assert.match(nodes(tree).find(node => node.type === "p" && node.props.title)?.props.title || "", /第1页.*10,20.*500×48/);
+      if (format === "image") {
+        assert.equal(cannotConfirm(tree), true); await button(tree, "确认选中内容").props.onClick();
+        assert.equal(f.calls.length, 1, "image preview and suggested selection do not confirm its text");
+        nodes(tree).find(node => node.type === "input").props.onChange({ target: { checked: true } }); tree = f.render();
+      }
+      assert.equal(cannotConfirm(tree), false);
+      const confirm = button(tree, "确认选中内容").props.onClick();
+      const body = JSON.parse(f.calls[1].init.body);
+      assert.deepEqual(body.sourceSpans, sample.spans);
+      assert.equal(body.confirmSourceText, format === "image" ? true : undefined);
+      f.respond(1, { excerpt: { status: "confirmed", revision: 6 } }); await confirm;
+      assert.deepEqual(f.settled, [true]);
+      read = button(f.render(), "查看建议").props.onClick(); f.respond(2, { preview: sample.preview }); await read; tree = f.render();
+      if (format === "image") assert.equal(cannotConfirm(tree), true, "rereading clears the earlier image text review");
+    } finally { f.unmount(); }
+  }
+});
+
+test("held native source reports the Core issue without a source confirmation control", async () => {
+  const f = await mount({ chapterProposal: undefined }), sample = visualData("pdf");
+  sample.preview.status = "held"; sample.preview.blocks = []; sample.preview.issues = [{ code: "pdf_native_text_mismatch", message: "可见文字与解析内容不一致" }];
+  try {
+    const read = button(f.render(), "从原文选取").props.onClick(); f.respond(0, { preview: sample.preview }); await read;
+    const tree = f.render(); assert.match(text(tree), /PDF 文字与可见内容不一致/); assert.ok(cannotConfirm(tree));
+    assert.equal(f.calls.length, 1);
   } finally { f.unmount(); }
 });
 

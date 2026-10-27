@@ -86,9 +86,10 @@ async function intakeWorkspaceFixture(kind) {
     } },
   };
   react.useCallback = (fn, deps) => react.useMemo(() => fn, deps);
-  const hash = `sha256:${"a".repeat(64)}`, materialId = "material-current";
+  const hash = `sha256:${"a".repeat(64)}`, materialId = `material-${"1".repeat(32)}`;
+  const extension = { calendar: "ics", word: "docx", pdf: "pdf", image: "jpeg" }[kind];
   const read = { version: 1, root_ref: hash, owner_id: "owner-current", source: { material_id: materialId, source_hash: hash,
-    metadata_revision: 0, relative_path: `material.${kind === "calendar" ? "ics" : "docx"}` },
+    metadata_revision: 0, relative_path: `material.${extension}` },
   options: { max_occurrences: 200 }, status: "ready", events: [{ event_id: "candidate", date: "2026-10-22", name: "合成安排" }],
   issues: [], evidence: [], parse_fingerprint: hash, read_only: true, automatic_import: false, external_send: false };
   const upload = { status: "proposed", material_id: materialId, read_result: read, reason_code: null,
@@ -111,17 +112,18 @@ async function intakeWorkspaceFixture(kind) {
   const props = { data: { timetable: [], teacherMaterials: [], capabilities: { materialIntake: { enabled: true }, calendar: { enabled: true },
     timetable: { enabled: true }, entityDelete: { enabled: true, targetKinds: [] } }, dataSources: { materials: { present: true } } },
   context: null, query: "", selectedObjectId: null, stagedMaterials: [descriptor], stagingBusy: false,
-  onObject() {}, onIntakeMaterial: async (...args) => { calls.push(args); return { materialReceivedOnly: true, materialScheduleProposal: upload }; } };
+  onObject() {}, onIntakeMaterial: async (...args) => { calls.push(args); return { materialReceivedOnly: true, materialScheduleProposal: upload,
+    materialLessonProposal: { ...proposal, material_id: materialId, source_hash: hash, metadata_revision: 0 } }; } };
   const render = () => { let tree, attempts = 0; do { cursor = 0; dirty = false; tree = componentModule.exports.EduPiMaterialsWorkspace(props);
     effects.splice(0).forEach(run => run()); assert.ok(++attempts < 12); } while (dirty); return tree; };
   const nodes = item => Array.isArray(item) ? item.flatMap(nodes) : item && typeof item === "object" ? [item, ...nodes(item.props?.children)] : [];
   const text = item => Array.isArray(item) ? item.map(text).join("") : item && typeof item === "object" ? text(item.props?.children) : String(item ?? "");
-  return { render, nodes, text, calls, network, Proposal, materialId, flush: () => new Promise(resolve => setImmediate(resolve)),
+  return { render, nodes, text, calls, network, Proposal, LessonProposal: componentModule.exports.EduPiReceivedLessonProposal, materialId, flush: () => new Promise(resolve => setImmediate(resolve)),
     cleanup: () => slots.forEach(slot => slot?.cleanup?.()) };
 }
 
-test("new ICS and DOCX receipt surfaces the owner proposal without old source, pairing or import actions", async () => {
-  for (const kind of ["calendar", "word"]) {
+test("ICS, DOCX, PDF and image receipt surface owner proposals without old source, pairing or import actions", async () => {
+  for (const kind of ["calendar", "word", "pdf", "image"]) {
     const fixture = await intakeWorkspaceFixture(kind);
     try {
       let tree = fixture.render();
@@ -132,6 +134,7 @@ test("new ICS and DOCX receipt surfaces the owner proposal without old source, p
       assert.equal(fixture.calls.length, 1);
       assert.equal(fixture.calls[0].length, 2, "file receipt does not carry a legacy source or pairing intent");
       assert.ok(fixture.nodes(tree).some(node => node.type === fixture.Proposal && node.props.materialId === fixture.materialId), kind);
+      assert.equal(fixture.nodes(tree).some(node => node.type === fixture.LessonProposal && node.props.proposal.material_id === fixture.materialId), kind !== "calendar");
       assert.deepEqual(fixture.network, [], "Workspace does not parse a staging preview or load old update bindings");
       assert.doesNotMatch(fixture.text(tree), /确认导入|确认更新|逐项配对/);
     } finally { fixture.cleanup(); }

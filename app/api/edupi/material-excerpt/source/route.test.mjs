@@ -9,22 +9,27 @@ const require = createRequire(import.meta.url);
 const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
 const security = await jiti.import("../../../../../lib/request-security.ts");
 const bounded = await jiti.import("../../../../../lib/bounded-form-data.ts");
+const sourceModel = await jiti.import("../../../../../lib/edupi-docx-chapter-suggestion.ts");
 const compiled = ts.transpileModule(fs.readFileSync(new URL("./route.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
 const hash = value => `sha256:${value.repeat(64)}`;
 const path = "word/document.xml/w:document[0]/w:body[0]/w:p[0]";
 
-function fixture() {
+function fixture(format = "docx") {
   const calls = [];
   const material = { material_id: "material", subject: "数学", class_id: "703", available: true };
-  const preview = { version: 1, format: "docx", status: "ready", material_id: "material", source_hash: hash("a"), record_hash: hash("b"), basis_hash: hash("c"),
-    blocks: [{ path, text: "核对原文" }], issues: [], read_only: true, external_send: false };
+  const sourcePath = format === "docx" ? path : format === "pdf" ? "pdf/page[1]/line[0]" : "image/line[0]";
+  const preview = { version: 1, format, status: "ready", material_id: "material", source_hash: hash("a"), record_hash: hash("b"), basis_hash: hash("c"),
+    blocks: [{ path: sourcePath, text: "核对原文", ...(format === "docx" ? {} : { page: 1, region: { left: 12, top: 24, width: 360, height: 40 } }) }],
+    ...(format === "image" ? { source_review_required: "image_text" } : {}), issues: [], read_only: true, external_send: false };
   let excerpt = null, reviewError = null, readbackError = null, sourceChangeAfterReview = false, managedRuntimeReady = false;
+  let mutateReadback = () => {};
   const dependencies = {
     "@/lib/edupi-education-server": { readEducationContract: async () => ({ teacherMaterials: [material] }) },
     "@/lib/edupi-core-snapshot": { resolveEduPiBridgeRoots: () => ({}) },
     "@/lib/edupi-runtime-supervisor": { ensureEduPiRuntime: async () => { managedRuntimeReady = true; return {}; } },
     "@/lib/request-security": security,
     "@/lib/bounded-form-data": bounded,
+    "@/lib/edupi-docx-chapter-suggestion": sourceModel,
     "@/lib/edupi-core-process-client": { runCoreProcess: async ({ request, timeoutMs }) => {
       assert.equal(managedRuntimeReady, true, "DOCX proof requires the managed Core owner");
       calls.push(request);
@@ -33,10 +38,17 @@ function fixture() {
       if (request.action === "source_preview") return { ok: true, excerpt: preview };
       if (request.action === "review_source") {
         if (reviewError) return { ok: false, code: reviewError };
+        if (format === "image" && request.input.confirmSourceText !== true) return { ok: false, code: "invalid_review" };
         assert.equal(request.input.reviewer, "teacher");
-        excerpt = { material_id: "material", revision: request.input.expectedRevision + 1, status: "confirmed", content: "核对原文",
-          source_kind: "docx_parsed_fragment", basis_hash: request.input.expectedBasisHash,
-          source_hash: preview.source_hash, record_hash: preview.record_hash, source_spans: request.input.sourceSpans };
+        const leaves = preview.blocks.flatMap(block => block.cells === undefined ? [block] : block.cells);
+        const blocks = request.input.sourceSpans.map(span => leaves.find(block => block.path === span.path));
+        excerpt = { material_id: "material", revision: request.input.expectedRevision + 1, status: "confirmed",
+          content: blocks.map((block, index) => block.text.slice(request.input.sourceSpans[index].start, request.input.sourceSpans[index].end)).join("\n"),
+          source_kind: { docx: "docx_parsed_fragment", pdf: "pdf_visible_fragment", image: "image_reviewed_fragment" }[format], basis_hash: request.input.expectedBasisHash,
+          source_hash: preview.source_hash, record_hash: preview.record_hash,
+          source_spans: request.input.sourceSpans.map((span, index) => ({ ...span,
+            ...(format === "docx" ? {} : { page: blocks[index].page, region: structuredClone(blocks[index].region) }) })) };
+        mutateReadback(excerpt);
         if (sourceChangeAfterReview) preview.basis_hash = hash("d");
       }
       if (request.action === "read" && excerpt && readbackError) return { ok: false, code: readbackError };
@@ -47,8 +59,9 @@ function fixture() {
   new Function("require", "module", "exports", compiled)(name => dependencies[name] || require(name), route, route.exports);
   const post = body => route.exports.POST(new Request("http://localhost/api/edupi/material-excerpt/source", { method: "POST", headers: { "Content-Type": "application/json", host: "localhost" }, body: JSON.stringify(body) }));
   const get = () => route.exports.GET(new Request("http://localhost/api/edupi/material-excerpt/source?materialId=material", { headers: { host: "localhost" } }));
-  return { ...route.exports, post, get, calls, material, preview,
+  return { ...route.exports, post, get, calls, material, preview, sourcePath,
     setReviewError: value => { reviewError = value; }, setReadbackError: value => { readbackError = value; },
+    setMutateReadback: value => { mutateReadback = value; },
     setSourceChangeAfterReview: value => { sourceChangeAfterReview = value; } };
 }
 
@@ -62,6 +75,38 @@ test("DOCX preview is read-only and selected UTF-16 spans are confirmed only aft
   assert.deepEqual(calls.map(call => call.action), ["source_preview", "read", "review_source", "read", "source_preview"]);
   assert.deepEqual(calls[2].input.sourceSpans, selected);
   assert.equal(calls[0].input.external_send, undefined);
+});
+
+test("PDF and image source readback keeps Core pages and regions and images require explicit text review", async () => {
+  for (const format of ["pdf", "image"]) {
+    const f = fixture(format);
+    const current = await (await f.get()).json();
+    assert.equal(current.preview.format, format);
+    const body = { materialId: "material", expectedRevision: 0, expectedBasisHash: f.preview.basis_hash,
+      sourceSpans: [{ path: f.sourcePath, start: 0, end: 4 }] };
+    if (format === "image") {
+      assert.equal((await f.post(body)).status, 400);
+      assert.equal((await f.post({ ...body, confirmSourceText: false })).status, 400);
+      body.confirmSourceText = true;
+    }
+    const response = await f.post(body);
+    assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+    const excerpt = (await response.json()).excerpt;
+    assert.equal(excerpt.source_kind, format === "pdf" ? "pdf_visible_fragment" : "image_reviewed_fragment");
+    assert.deepEqual(excerpt.source_spans[0], { ...body.sourceSpans[0], page: 1, region: f.preview.blocks[0].region });
+    if (format === "image") assert.equal(f.calls.filter(call => call.action === "review_source").at(-1).input.confirmSourceText, true);
+  }
+});
+
+test("a changed visual region, page, source kind or content is an unconfirmed readback", async () => {
+  for (const change of [value => { value.source_spans[0].region.left++; }, value => { value.source_spans[0].page = 2; },
+    value => { value.source_kind = "docx_parsed_fragment"; }, value => { value.content = "伪造内容"; },
+    value => { value.source_spans[0].verified = true; }]) {
+    const f = fixture("pdf"); f.setMutateReadback(change);
+    const response = await f.post({ materialId: "material", expectedRevision: 0, expectedBasisHash: f.preview.basis_hash,
+      sourceSpans: [{ path: f.sourcePath, start: 0, end: 4 }] });
+    assert.equal(response.status, 503); assert.match((await response.json()).error, /未核实/);
+  }
 });
 
 test("post-write source drift and uncertain readback never report confirmation", async () => {

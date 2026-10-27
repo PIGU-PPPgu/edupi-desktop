@@ -17,12 +17,13 @@ const headers = { host: "localhost:30373", origin: "http://localhost:30373", "x-
 
 function fixture() {
   const calls = [];
-  const state = { metadataRevision: 2, sourceHash: hash("c"), fingerprint: hash("d"), readStatus: "ready", owner: `owner_${"b".repeat(32)}`, deleted: false, relativePath: "synthetic.ics" };
+  const state = { metadataRevision: 2, sourceHash: hash("c"), fingerprint: hash("d"), readStatus: "ready", owner: `owner_${"b".repeat(32)}`, deleted: false, relativePath: "synthetic.ics", sourceReview: undefined };
   const roots = {};
   const read = () => ({ version: 1, root_ref: hash("a"), owner_id: state.owner,
     source: { material_id: "synthetic-material", source_hash: state.sourceHash, metadata_revision: state.metadataRevision, relative_path: state.relativePath },
     options: { default_time_zone: null, window_start: null, window_end: null, max_occurrences: 200 }, status: state.readStatus,
     events: [{ event_id: "synthetic-event", date: "2026-10-15", name: "合成教研" }], issues: [], evidence: [], parse_fingerprint: state.fingerprint,
+    ...(state.sourceReview === undefined ? {} : { source_review_required: state.sourceReview }),
     read_only: true, automatic_import: false, external_send: false });
   const host = {
     call: async operation => { calls.push([operation]); assert.equal(operation, "health"); return { ok: true, result: { data_root_fingerprint: hash("a") } }; },
@@ -94,14 +95,29 @@ test("explicit confirmation is required and changed parse proof never reaches ap
   state.fingerprint = hash("d"); state.readStatus = "unresolved";
   assert.equal((await POST(postRequest(applyBody()))).status, 409);
   state.readStatus = "ready";
-  state.relativePath = "synthetic.pdf";
-  assert.equal((await POST(postRequest(applyBody()))).status, 409, "PDF still requires independent visible-content verification");
-  assert.equal(calls.some(item => item[0] === "material_schedule_apply"), false);
-  state.relativePath = "synthetic.ics";
   const applied = await POST(postRequest(applyBody())); assert.equal(applied.status, 200);
   assert.equal((await applied.json()).result.status, "accepted");
   assert.equal(calls.filter(item => item[0] === "material_schedule_apply").length, 1);
   state.deleted = true;
   assert.equal((await POST(postRequest(applyBody()))).status, 409);
   assert.equal(calls.filter(item => item[0] === "material_schedule_apply").length, 1, "deleted source cannot be replay-adopted");
+}));
+
+test("Core-ready PDF reaches owner apply and image text confirmation is explicit and forwarded", async () => withToken(async () => {
+  const { POST, calls, state } = fixture();
+  state.relativePath = "synthetic.pdf";
+  assert.equal((await POST(postRequest(applyBody()))).status, 200);
+  state.relativePath = "synthetic.png"; state.sourceReview = "image_text";
+  const before = calls.filter(item => item[0] === "material_schedule_apply").length;
+  assert.equal((await POST(postRequest(applyBody()))).status, 409);
+  assert.equal((await POST(postRequest({ ...applyBody(), confirmSourceText: false }))).status, 400);
+  assert.equal((await POST(postRequest({ ...applyBody(), verified: true }))).status, 400);
+  assert.equal(calls.filter(item => item[0] === "material_schedule_apply").length, before);
+  assert.equal((await POST(postRequest({ ...applyBody(), confirmSourceText: true }))).status, 200);
+  const applied = calls.filter(item => item[0] === "material_schedule_apply").at(-1)[1];
+  assert.equal(applied.confirm_source_text, true);
+  assert.equal(applied.confirm, true);
+  assert.equal(applied.expected_source_hash, hash("c")); assert.equal(applied.expected_metadata_revision, 2);
+  state.sourceReview = "caller_verified";
+  assert.equal((await POST(postRequest({ ...applyBody(), confirmSourceText: true }))).status, 409);
 }));

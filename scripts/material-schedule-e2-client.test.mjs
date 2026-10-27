@@ -43,6 +43,20 @@ test("cancel and missing confirmation never submit a schedule mutation", async (
   }
 });
 
+test("image source text review is a separate checkpoint before final adoption confirmation", async () => {
+  for (const sourceConfirm of [undefined, async () => false, async () => true]) {
+    const current = { ...ready(), source_review_required: "image_text" }, api = transport(current), order = [];
+    const confirm = sourceConfirm ? async value => { order.push("text"); return sourceConfirm(value); } : undefined;
+    const outcome = await createMaterialScheduleTestClient(api.call).adopt("material-fixture", "image-confirmation", async () => { order.push("adopt"); return true; }, confirm);
+    if (sourceConfirm && await sourceConfirm(current)) {
+      assert.equal(outcome.status, "accepted"); assert.deepEqual(order, ["text", "adopt"]);
+      assert.equal(api.calls[1].body.confirmSourceText, true);
+    } else {
+      assert.equal(outcome.status, "cancelled"); assert.equal(api.calls.length, 1); assert.equal(order.includes("adopt"), false);
+    }
+  }
+});
+
 test("proof is captured before confirmation and cannot be silently replaced by a changed read", async () => {
   const current = ready();
   const api = transport(current);

@@ -86,7 +86,9 @@ export async function POST(request: Request) {
   if (!hasJsonContentType(request)) return errorResponse("material_schedule_invalid", 415);
   try {
     const body = record(await parseJsonWithinLimit(request, 4 * 1024));
-    if (!body || Object.keys(body).length !== APPLY_KEYS.length || !APPLY_KEYS.every(key => Object.hasOwn(body, key))
+    if (!body || Object.keys(body).some(key => ![...APPLY_KEYS, "confirmSourceText"].includes(key))
+      || !APPLY_KEYS.every(key => Object.hasOwn(body, key))
+      || Object.hasOwn(body, "confirmSourceText") && body.confirmSourceText !== true
       || body.action !== "apply" || body.confirm !== true || typeof body.materialId !== "string" || !ID.test(body.materialId)
       || typeof body.commandId !== "string" || !ID.test(body.commandId)
       || typeof body.expectedSourceHash !== "string" || !HASH.test(body.expectedSourceHash)
@@ -97,11 +99,13 @@ export async function POST(request: Request) {
     const observed = record(await read(context, body.materialId, proof, request.signal));
     if (!observed || observed.status !== "ready" || !Array.isArray(observed.issues) || observed.issues.length
       || !Array.isArray(observed.events) || !observed.events.length
-      || String(record(observed.source)?.relative_path || "").toLowerCase().endsWith(".pdf")) fail("material_schedule_unresolved");
+      || observed.source_review_required !== undefined && observed.source_review_required !== "image_text"
+      || observed.source_review_required === "image_text" && body.confirmSourceText !== true) fail("material_schedule_unresolved");
     if (observed.parse_fingerprint !== body.expectedParseFingerprint) fail("material_schedule_stale");
     const response = await context.host.callOwnerControl("material_schedule_apply", {
       root_ref: context.rootRef, expected_owner_id: context.ownerId, material_id: body.materialId, ...proof,
       command_id: body.commandId, expected_parse_fingerprint: body.expectedParseFingerprint, confirm: true,
+      ...(body.confirmSourceText === true ? { confirm_source_text: true } : {}),
     }, request.signal);
     if (response.ok !== true) fail(String(response.error_code || "material_schedule_unavailable"));
     return NextResponse.json({ ok: true, result: response.result, externalSend: false });

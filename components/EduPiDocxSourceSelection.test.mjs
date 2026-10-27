@@ -15,5 +15,5 @@ test("DOCX selection keeps document order, cell granularity and UTF-16 offsets",
   assert.deepEqual(selectedDocxSpans(preview, new Set(["row/cell-2", "row", "p-1"])), [
     { path: "p-1", start: 0, end: 3 }, { path: "row/cell-2", start: 0, end: 1 },
   ]);
-  assert.match(renderToStaticMarkup(React.createElement(EduPiDocxSourceSelection, { materialId: "material", expectedRevision: 0, onSettled() {} })), /从 DOCX 原文选取/);
+  assert.match(renderToStaticMarkup(React.createElement(EduPiDocxSourceSelection, { materialId: "material", expectedRevision: 0, onSettled() {} })), /从原文选取/);
 });
