@@ -47,7 +47,8 @@ function response(value: unknown, identity: Record<string, unknown>, queried: bo
     || Object.keys(support).sort().join(",") !== "policy,reason_code,status" || support.policy !== "source-support-v1"
     || !["assessed", "held"].includes(String(support.status))
     || support.reason_code !== null && (typeof support.reason_code !== "string" || support.reason_code.length > 80)
-    || support.status === "assessed" && (result.model_execute !== true || support.reason_code !== null)
+    || support.status === "assessed" && (result.model_execute !== true
+      || support.reason_code !== null && support.reason_code !== "requested_contact_evidence_missing")
     || support.status === "held" && (result.status !== "held" || result.entries.length !== 0))
     || result.model_execute && (!queried || !support)
     || queried && result.entries.length > 0 && (support?.status !== "assessed" || result.model_execute !== true)) {
@@ -61,7 +62,8 @@ function response(value: unknown, identity: Record<string, unknown>, queried: bo
   if (!valid || new Set(result.entries.map((entry: Entry) => entry.id)).size !== result.entries.length) {
     return { status: "held", reason_code: "recall_unavailable", entries: [] };
   }
-  return { status: result.status as Recall["status"], reason_code: typeof result.reason_code === "string" ? result.reason_code : null,
+  return { status: result.status as Recall["status"], reason_code: typeof result.reason_code === "string" ? result.reason_code
+    : typeof support?.reason_code === "string" ? support.reason_code : null,
     entries: result.status === "current" ? result.entries as Entry[] : [] };
 }
 
@@ -161,7 +163,9 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
         const result = await recall(ctx.sessionManager, params, signal);
         return { content: [{ type: "text", text: result.entries.length
           ? result.entries.map(entry => `${entry.student ? `${entry.student}：` : ""}${entry.content}`).join("\n")
-          : result.status === "held" ? "当前会话未绑定可用记忆范围。" : "没有找到当前范围的相关记忆。" }], details: result };
+          : result.status === "held" ? result.reason_code === "recall_unavailable" || result.reason_code?.startsWith("source_support_")
+            ? "记忆来源尚未完成核验。" : "当前会话未绑定可用记忆范围。"
+            : result.reason_code === "requested_contact_evidence_missing" ? "当前来源没有完整答案。" : "没有找到当前范围的相关记忆。" }], details: result };
       },
   });
   function scopeKey(manager: unknown): string | null {

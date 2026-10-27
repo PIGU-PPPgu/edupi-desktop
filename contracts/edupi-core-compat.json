@@ -1,12 +1,15 @@
 {
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
-  "core_sdk": { "pi": "1.0.2", "pi_durable": "1.0.2" },
+  "core_sdk": {
+    "pi": "1.0.2",
+    "pi_durable": "1.0.2"
+  },
   "core_runtime": {
-    "core_commit": "155275d1155d0cb5003574c2ee8fa35f0f353add",
+    "core_commit": "9a26adb825b4f6803d0e79a36576e074d431f59a",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:a3f2fe3c6f421817d955441c50cc182dfdb0674aa9300dee9023ad97d175717b",
-    "runtime_component_manifest_hash": "sha256:4bec8386f956e572c7d9858b94739e144abefbe56dc5776c93709818382cb505",
+    "component_manifest_hash": "sha256:669fe05f9c6d7da1fd76276242012ca336ab83871c870ffd8264cc565d3a6d10",
+    "runtime_component_manifest_hash": "sha256:7afc489e86dde97a6e4c6ae83cd868f68f132513b12bccf2c7ff225b49aa31a0",
     "runtime_schema_hash": "sha256:1d7ea8b9090dd4b13f093ae91db0b0e16fe061b814a3df7477c0d605fabc393f"
   },
   "contract_identities": [
@@ -240,7 +243,9 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/386",
     "https://github.com/PIGU-PPPgu/edupi/pull/387",
     "https://github.com/PIGU-PPPgu/edupi/pull/388",
-    "https://github.com/PIGU-PPPgu/edupi/pull/389"
+    "https://github.com/PIGU-PPPgu/edupi/pull/389",
+    "https://github.com/PIGU-PPPgu/edupi/pull/391",
+    "https://github.com/PIGU-PPPgu/edupi/pull/390"
   ],
-  "change_note": "Paired to merged Core #389 main 155275d1, tree-identical to the fully verified 9b760fa4 candidate. Full local Core tests, 58 research cases, typecheck, environment, contracts, closure and zero-vulnerability audit passed. GitHub self-hosted Core Quality 40479526735 passed; tested checkout 46680e4 and final main share the same tree. Source-support recall uses the fixed zero-temperature isolated worker, strict current-source screening and bounded model attempts; normal-v3 authenticated history retains prewrite durability and all historical corruption checks. Runtime schema and both component manifests come from this same frozen commit. Bridge v1.1, occurrence v1.2, fixtures, Pi/PiDurable 1.0.2 and the 12 public Bridge commands remain unchanged. Ordinary Runtime preserves Main1 and uses normal-v3 for already activated, owner-authenticated Main3 without implicit migration or a Desktop scheduler. Streaming owner history accepts null capacity limits without changing Goal or model budgets. Current-source recall retains scope and deletion fences. macOS native visible PDF/PNG/JPEG sources use Core-owned bounded helpers; image text requires a separate explicit confirmation before schedule adoption or G1 source review. DOCX/ICS remain supported; file updates/cancel/pairing/timetable and unsupported Bridge capabilities remain held. Upload is read-only proposal delivery, never automatic adoption or preparation. Grants, captured-prompt receipts, recipient confirmation, feedback lineage and consent-bound local usage remain enforced. No real data migration, external sends, collection activation or claim of signed/installed validation."
+  "change_note": "Candidate pairing to Core #391 combined source 9a574c9f, including #390 recovery evidence, explicit quantity equivalence and owner recall transport cancellation. Final main identity and successful exact-source checks are required before the Mac signed Draft build. Runtime schema, Bridge and occurrence identities remain unchanged; both component manifests are regenerated from the same candidate. Desktop strictly accepts the documented partial-contact support reason, keeps unsupported sources empty, distinguishes temporary backend holds, and includes all relative model-host modules in the copied server. No Windows build, real teacher-data migration, public Release or feed change."
 }

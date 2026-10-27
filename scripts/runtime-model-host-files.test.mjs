@@ -13,6 +13,23 @@ import { piPackageDirNames } from "./pi-packages.mjs";
 
 const desktopRoot = path.resolve(import.meta.dirname, "..");
 const stagedServer = path.join(process.env.EDUPI_STAGED_RESOURCES || path.join(desktopRoot, "src-tauri/resources"), "server");
+test("copied current Core model adapter imports without an original Core tree", { skip: !process.env.EDUPI_CORE_ROOT }, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "edupi-host-adapter-import-"));
+  try {
+    await copyRuntimeModelHostFiles(process.env.EDUPI_CORE_ROOT, root);
+    // This check exercises copied relative modules with the existing SDK.
+    // The staged-server test below separately exercises a full real SDK copy.
+    const sdk = path.join(root, "node_modules/@earendil-works/pi-coding-agent");
+    fs.mkdirSync(path.dirname(sdk), { recursive: true });
+    fs.symlinkSync(fs.realpathSync(path.join(desktopRoot, "node_modules/@earendil-works/pi-coding-agent")), sdk, "dir");
+    const { buildG1LiveRequest, createIsolatedRecallSupportAssessor } = await import(pathToFileURL(path.join(root, "scripts/core_runtime_model_adapter.mjs")).href);
+    assert.equal(typeof buildG1LiveRequest, "function");
+    assert.equal(typeof createIsolatedRecallSupportAssessor, "function");
+    for (const name of ["recall_source_support.mjs", "model_json.mjs"]) {
+      assert.deepEqual(fs.readFileSync(path.join(root, "scripts", name)), fs.readFileSync(path.join(process.env.EDUPI_CORE_ROOT, "scripts", name)));
+    }
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
 test("model host files copy as regular files and reject symlinked sources", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "edupi-host-files-"));
   try {
