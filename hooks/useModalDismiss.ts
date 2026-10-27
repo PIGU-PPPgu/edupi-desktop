@@ -11,6 +11,16 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(", ");
 
+function isHiddenByClosedDetails(element: Element): boolean {
+  // WebKit can retain offsetParent for content hidden by a closed details.
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    if (parent.tagName !== "DETAILS" || parent.hasAttribute("open")) continue;
+    const summary = Array.from(parent.children).find((child) => child.tagName === "SUMMARY");
+    if (!summary?.contains(element)) return true;
+  }
+  return false;
+}
+
 // Stack of mounted modals — only the topmost one reacts to Escape/Tab so
 // nested dialogs (e.g. provider picker above the models settings) close
 // one layer at a time.
@@ -66,7 +76,7 @@ export function useModalDismiss<T extends HTMLElement = HTMLDivElement>(
       const panel = containerRef.current;
       if (!panel) return;
       const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-        .filter((el) => el.offsetParent !== null || el === document.activeElement);
+        .filter((el) => !isHiddenByClosedDetails(el) && (el.offsetParent !== null || el === document.activeElement));
       if (focusables.length === 0) {
         event.preventDefault();
         return;

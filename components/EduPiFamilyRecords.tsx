@@ -14,6 +14,7 @@ const statusLabels: Record<FamilyRecord["status"], string> = { candidate: "待�
 const actionLabels = { accept: "接受", reject: "拒绝", hold: "暂缓", modify: "修改", delete: "删除", restore: "恢复" };
 const emptyDetails: FamilyRecordDetails = { recorded_relationship: null, teacher_explicit_quality: "unknown", observed_on: null, note: "" };
 type Editor = { id: string; at: string; contactId: string; name: string; details: FamilyRecordDetails; row: FamilyRecord | null };
+type EditorOrigin = { studentId: string; editorId: string; scope: HTMLElement; trigger: HTMLButtonElement };
 
 async function readPage(studentId: string, offset: number, signal: AbortSignal): Promise<FamilyRecordPage> {
   const response = await fetch(`/api/edupi/family-records?${new URLSearchParams({ student_id: studentId, offset: String(offset), limit: "10" })}`, { signal, cache: "no-store" });
@@ -41,6 +42,22 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
   const requestRef = useRef<AbortController | null>(null);
+  const editorOriginRef = useRef<EditorOrigin | null>(null);
+  const editorFocusRef = useRef<(EditorOrigin & { target: "form" | "trigger"; from: Element | null }) | null>(null);
+  const editorId = editor?.id;
+  useEffect(() => {
+    if (!editorId || editorOriginRef.current?.studentId !== studentId) editorOriginRef.current = null;
+    const request = editorFocusRef.current;
+    editorFocusRef.current = null;
+    if (!request || request.studentId !== studentId || !request.scope.isConnected || (request.target === "form" && request.editorId !== editorId)) return;
+    const document = request.scope.ownerDocument;
+    const active = document.activeElement;
+    if (active !== request.from && active !== document.body && active !== document.documentElement) return;
+    const form = request.target === "form" ? Array.from(request.scope.querySelectorAll<HTMLFormElement>("[data-family-editor-id]"))
+      .find((element) => element.getAttribute("data-family-editor-id") === request.editorId) : null;
+    const target = request.target === "form" ? form?.querySelector<HTMLElement>("select, input, textarea") : request.trigger;
+    if (target?.isConnected && request.scope.contains(target) && !target.matches(":disabled")) target.focus({ preventScroll: false });
+  }, [editorId, studentId]);
   useEffect(() => {
     const controller = new AbortController();
     requestRef.current?.abort(); requestRef.current = controller;
@@ -60,6 +77,27 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
   const parents = useMemo(() => new Map((visible?.parents || []).map((parent) => [parent.entity_id, parent])), [visible?.parents]);
   const graph = useMemo(() => buildFamilyGraph({ id: visible?.studentEntity?.entity_id || "", label: studentName }, visible?.parents || [], visible?.records || []), [studentName, visible]);
   const reload = () => { setRefresh((value) => value + 1); window.dispatchEvent(new Event("edupi-education-refresh")); };
+
+  const openEditor = (trigger: HTMLButtonElement, row: FamilyRecord | null, name = "") => {
+    if (busy || loading || editor) return;
+    const next: Editor = { id: crypto.randomUUID(), at: new Date().toISOString(), contactId: row?.parent_entity_id || "", name,
+      details: row ? { ...row.record } : { ...emptyDetails }, row };
+    const scope = trigger.closest<HTMLElement>(`.${styles.panel}`) || trigger.closest<HTMLElement>('[role="dialog"]');
+    const origin = scope ? { studentId, editorId: next.id, scope, trigger } : null;
+    editorOriginRef.current = origin;
+    editorFocusRef.current = origin ? { ...origin, target: "form", from: trigger.ownerDocument.activeElement } : null;
+    setEditor(next);
+  };
+  const cancelEditor = (button: HTMLButtonElement) => {
+    if (busy || !editor) return;
+    const origin = editorOriginRef.current;
+    const form = button.closest("form");
+    const active = button.ownerDocument.activeElement;
+    editorFocusRef.current = origin && origin.studentId === studentId && origin.editorId === editor.id && origin.scope.contains(button)
+      && (form?.contains(active) || active === button.ownerDocument.body)
+      ? { ...origin, target: "trigger", from: active } : null;
+    setEditor(null);
+  };
 
   async function mutate(row: FamilyRecord, action: "accept" | "hold" | "reject" | "modify" | "delete" | "restore", details?: FamilyRecordDetails, replace = false) {
     if (busy || loading || error || !row.mutation_allowed) return;
@@ -98,13 +136,13 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
     } catch (reason) { setError(reason instanceof Error ? reason.message : "记录未写入"); }
     finally { setBusy(false); }
   }
-  const form = editor ? <form className={styles.editor} onSubmit={save} aria-label={editor.row ? "修改家校记录" : "添加家校记录"}><fieldset disabled={busy}>
+  const form = editor ? <form className={styles.editor} data-family-editor-id={editor.id} onSubmit={save} aria-label={editor.row ? "修改家校记录" : "添加家校记录"}><fieldset disabled={busy}>
     {!editor.row ? <><label>联系人<select value={editor.contactId} onChange={(event) => setEditor({ ...editor, contactId: event.target.value })}><option value="">新联系人</option>{[...parents.values()].filter((parent) => parent.status === "active").map((parent) => <option key={parent.entity_id} value={parent.entity_id}>{parent.canonical_name}</option>)}</select></label>{!editor.contactId ? <label>联系人名称<input required maxLength={240} value={editor.name} onChange={(event) => setEditor({ ...editor, name: event.target.value })} /></label> : null}</> : null}
     <label>记录称谓<input maxLength={120} value={editor.details.recorded_relationship || ""} onChange={(event) => setEditor({ ...editor, details: { ...editor.details, recorded_relationship: event.target.value || null } })} /></label>
     <label>沟通状态<select value={editor.details.teacher_explicit_quality} onChange={(event) => setEditor({ ...editor, details: { ...editor.details, teacher_explicit_quality: event.target.value as FamilyQuality } })}><option value="unknown">未判断</option><option value="supportive">配合</option><option value="tense">紧张</option></select></label>
     <label>沟通日期<input type="date" value={editor.details.observed_on || ""} onChange={(event) => setEditor({ ...editor, details: { ...editor.details, observed_on: event.target.value || null } })} /></label>
     <label>教师记录<textarea required maxLength={2000} rows={4} value={editor.details.note} onChange={(event) => setEditor({ ...editor, details: { ...editor.details, note: event.target.value } })} /></label>
-    <div className={styles.actions}><button type="submit" className="native-button" disabled={busy || loading || !visible || visible.sourceStatus !== "current" || !editor.details.note.trim()}>{busy ? "保存中…" : "保存"}</button><button type="button" className="native-button" disabled={busy} onClick={() => setEditor(null)}>取消</button></div>
+    <div className={styles.actions}><button type="submit" className="native-button" disabled={busy || loading || !visible || visible.sourceStatus !== "current" || !editor.details.note.trim()}>{busy ? "保存中…" : "保存"}</button><button type="button" className="native-button" disabled={busy} onClick={(event) => cancelEditor(event.currentTarget)}>取消</button></div>
   </fieldset></form> : null;
   function recordView(row: FamilyRecord) {
     const parent: FamilyPerson | undefined = parents.get(row.parent_entity_id);
@@ -116,7 +154,7 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
       {!row.mutation_allowed ? <p role="status">来源已失效，保留历史记录</p> : null}
       {row.review_conflicts.length ? <details open><summary>需要核对的旧记录</summary>{row.review_conflicts.map((conflict) => <div key={conflict.fact_id}><time>{conflict.record.observed_on || "日期未记录"}</time><p>{conflict.record.note}</p><span>旧记录：{familyQualityLabel(conflict.record.teacher_explicit_quality)}</span></div>)}</details> : null}
       <div className={styles.actions}>{row.mutation_allowed && ["candidate", "pending_review", "held"].includes(row.status) ? <>{row.review_mode !== "blocked" ? <button type="button" className="native-button" disabled={blocked} onClick={() => void mutate(row, "accept", undefined, row.review_mode === "replace")}>{row.review_mode === "replace" ? "替换旧记录" : "接受"}</button> : <span>旧记录存在多项冲突，暂不能采用</span>}{(["hold", "reject"] as const).map((action) => <button type="button" className="native-button" disabled={blocked} key={action} onClick={() => void mutate(row, action)}>{actionLabels[action]}</button>)}</> : null}
-        {row.mutation_allowed && row.status === "accepted" ? <button type="button" className="native-button" disabled={blocked} onClick={() => setEditor({ id: crypto.randomUUID(), at: new Date().toISOString(), contactId: row.parent_entity_id, name: parent?.canonical_name || "", details: { ...row.record }, row })}>修改</button> : null}
+        {row.mutation_allowed && row.status === "accepted" ? <button type="button" className="native-button" disabled={blocked} onClick={(event) => openEditor(event.currentTarget, row, parent?.canonical_name || "")}>修改</button> : null}
         {row.mutation_allowed && row.status === "deleted" ? row.restore_mode === "blocked" ? <span>旧记录存在多项冲突，暂不能恢复</span> : <button type="button" className="native-button" disabled={blocked} onClick={() => void mutate(row, "restore", undefined, row.restore_mode === "replace")}>{row.restore_mode === "replace" ? "替换并恢复" : row.restore_mode === "pending_review" ? "恢复为待确认" : "恢复"}</button> : row.mutation_allowed && row.status !== "superseded" ? <button type="button" className="native-button" disabled={blocked} onClick={() => setDeleting(row.fact_id)}>删除</button> : null}
       </div>
       {deleting === row.fact_id ? <div className={styles.actions}><span>删除这条记录？</span><button type="button" className="native-button" disabled={busy} onClick={() => void mutate(row, "delete")}>确认删除</button><button type="button" className="native-button" disabled={busy} onClick={() => setDeleting(null)}>取消</button></div> : null}
@@ -128,7 +166,7 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
   const selectedRow = visible?.records.find((row) => row.fact_id === selected);
   const alert = error ? <p className={styles.error} role="alert">{error}<button type="button" className="native-button" onClick={reload}>刷新记录</button></p> : null;
   return <section className={styles.panel} aria-label="家校人物与记录">
-    <div className={styles.toolbar}>{(["graph", "list"] as const).map((mode) => <button type="button" key={mode} disabled={busy || editor !== null} aria-pressed={view === mode} onClick={() => setView(mode)}>{mode === "graph" ? "人物图" : "记录"}</button>)}<button type="button" disabled={busy || loading || editor !== null || !visible || visible.sourceStatus !== "current"} onClick={() => setEditor({ id: crypto.randomUUID(), at: new Date().toISOString(), name: "", contactId: "", details: { ...emptyDetails }, row: null })}>添加记录</button></div>
+    <div className={styles.toolbar}>{(["graph", "list"] as const).map((mode) => <button type="button" key={mode} disabled={busy || editor !== null} aria-pressed={view === mode} onClick={() => setView(mode)}>{mode === "graph" ? "人物图" : "记录"}</button>)}<button type="button" disabled={busy || loading || editor !== null || !visible || visible.sourceStatus !== "current"} onClick={(event) => openEditor(event.currentTarget, null)}>添加记录</button></div>
     {view === "list" ? alert : null}{visible?.sourceStatus === "unavailable" ? <p role="status">学生来源不可用，保留历史记录</p> : null}{editor?.row === null ? form : null}
     {view === "graph" ? <EduPiStudentGraph projection={graph} total={graph.records.length} kind="family" selectedId={selected} onSelect={(id) => { if (!editor) setSelected(id); }} student={studentName} scope="本页记录" loading={loading} alert={alert} details={selectedRow ? recordView(selectedRow) : null} /> : loading ? <p role="status">读取中…</p> : visible?.records.length ? visible.records.map(recordView) : !error ? <p>暂无家校记录</p> : null}
     {view === "graph" && selectedRow ? recordView(selectedRow) : null}
