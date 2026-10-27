@@ -2,6 +2,22 @@
 
 ## 2026-10-27 十一条召回空返与Mac交付
 
+- **最新.80交付状态，取代下方准备及运行中快照**：Desktop PR392已正常合为9039d7e4b35ecab3c2bc2b7927e2c0dafd9ea223，与source83e1a83e/实际CI Checkout7a38c210同tree0bfe71fb8978854a4c100bc2c95c4bee741f49b7；源码CI40557788634三job全success，Core9a26/qs6.16.1保持。唯一[Mac .80签名run40559942024](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/40559942024)/attempt1整轮success，Release425835563仍Draft/tag v0.3.80/target9039。macOnlyFingerprint为`sha256:7a7f815d405f75c0e92278c54634abfda9406b5eff3381b67c820b331e970d5b`；该值不构成七平台publish proof，不公开Release/feed。
+- Mac应用套2590pass/47条件skip/0fail，types/lint/高危门过；配对Core运行、修正后的host wiring及全部暂存运行/OCR/DOCX/OpenConnector/macOS集成过。完整非symlink SDK实际复制/隔离localhost执行组3pass、0skip，原未暂存SDK条件已补；签名后node JIT、Runtime/OCR/DOCX/catalog再次过。App Apple Accepted `ef1dd365-851c-404f-8df1-341acf26cf93`，DMG Apple Accepted `59b6599a-7caf-4e58-bde9-88830e6292e8`；同轮App/DMG装订、签名与Gatekeeper CI证据均保存，不与.79或更早attempt混用。
+- 三项最终资产已按同一run的ID、大小和官方digest逐项下载回读，全部匹配：
+
+| 资产 | ID | 字节 | SHA256 |
+| --- | --- | --- | --- |
+| EduPi_0.3.80_aarch64.dmg | 682634950 | 234492992 | b0de93c146e4d8c6d3eb39dd5553ac85fa1d4f63b5a3f3e8f924a12aed4c1210 |
+| EduPi_aarch64.app.tar.gz | 682613531 | 235814487 | 20ce49bcfe58d85c053fa6407f7462b14409fe4a296e68342d124496cc2d271d |
+| EduPi_aarch64.app.tar.gz.sig | 682613892 | 404 | e373eefa3918bba01641e09d3c46827294e7763e9d0f4616e5a18376776a3d2a |
+
+- 本机只读挂载后，App版本0.3.80、Bundle ID/arm64/Team BY3XZG2839、strict deep codesign、已有App staple及Gatekeeper均通过；DMG本体也实际执行stapler validate与spctl type=open/primary-signature，退出0，并把绝对路径、asset ID/size/SHA、run/attempt/source、精确命令、原日志摘要绑定到dmg-security-verification.json。永久公钥以旧已验证Release的SHA256 1e4dfd5ed31ca46ee167654232980397ffbd9f0ba5ddaf03d57201e3af859de6为锚，候选内嵌key一致；真实Minisign验证与篡改拒绝通过，不依赖另一UI任务正在改写的旧App来建立信任。updater与DMG内二进制/签名资源/版本/兼容清单/两漏包模块/双清单/schema共11文件逐字节一致。
+- 包内Core双清单与固定source逐字节一致、官方generator(write:false)完整重算相等：Desktop145 modules/200 assets/109 runtime dependencies，Runtime219/203/110；component669fe/7afc和schema1d7保持。App二进制SHA256 f60a8386d7e7fe7e0264a68f8c34ab104af3ff6eba00eb0cc5f53a158c180979，CDHash3b5f1f9b1bbb277d41d6e7c30947f62d03de40bf。实际脚本输出macDraftEligible=true/fullMacDraftProof=true/publishProof=false，证据保存在~/edupi-install-checkpoints/v0.3.80/evidence。
+- 原host wiring的1项条件skip已另行补验：在全新/tmp/edupi-mac080-one-shot-bfbp6fp4隔离根经官方create_task及重新读取，再运行Core health/snapshot/native task-review handler，实际1pass/0skip，模型0、真实资料0。原26pass/1skip日志仍保留，独立绿色不改写原结果。seed助手现严格绑定该唯一canonical根/Core/元数据且原报告存在即拒重跑；WebView助手固定backup origin manifest并保留新增origin；DMG证据缺失不得置通过。三处保护修补纯离线guard6/6过，未操作实际App/Library数据库。
+- **安装尚未执行，不能记为安装版通过**。19:30UTC只读核实另一任务“重做设置与管理中心”仍active且正在准备重装同一/Applications/EduPi.app，已通过异步问题请求明确跨聊天交接授权；未获直接人类授权不发送消息、不抢占App或覆盖其UI构建。新包源、安装脚本、DataRoot/UI偏好保护方案已具体可验，后续待交接后执行。真实模型调用仍0，当前App/原资料/模型配置/TCC/launchd/时钟能源未改；公开feed未写。
+- 为待安装保留本轮下载目录~/edupi-install-checkpoints/v0.3.80/macos-assets约448.5MiB及只读mount，下一步技术安装/回退结束后按白名单清理；不能为了清理删掉尚在使用的候选。三个已结束自有Core391 runner的指定二进制/externals/工具/npm及重复node_modules缓存已完成清理：11个明确目录原占2.086GiB，4个目标原不存在；33个内部链接只unlink未跟随，30份control/诊断元数据已归档，根路径/预期repo-run-head/无注册凭据/无在用进程均核实。源码/checkouts/.git、retained fixtures、别人的Core390目录、原树依赖/target、App/Library/下载包/mount/Trash均未动。df可用净增约2.241GiB含并发活动，不将它全部归因本轮；实际删除归属以各路径du及本轮目录core391-own-ci-cleanup-20261028/summary.json为准。原树target和其余候选产物清理待安装交接后继续，未记整轮清理完成。
+
 - **当前状态取代下方.79准备快照**：qs追补已由Desktop PR391正常合为56de91121cab2d34161f34bfc28eba9104edce5b，与源head e1bc680c/CI实际Checkout a5ef7d83同tree53e66d3998f785b981f1cb365f0e79be50c5d26c；源CI40552172778三job全success，应用2589pass/48条件skip/0fail、type/lint、高危门、Rust审计零告警、Linux源检查均过。GitHub告警35实际state=fixed/fixed_at2026-10-27T17:43:52Z。唯一.79 Mac签名run40553664101/attempt1已失败，详见下方夹具追补；现准备.80，不改Core9a26或qs6.16.1，不重跑/改写旧tag与Draft，不将源通过记为签名或安装通过。
 - 10月28日状态：R04源码与Core及Desktop集成通过，R15新qs安全追补及Mac签名安装继续。用户只允许的一次追加数量修补已完成，未追加真实模型调用；通过技术门后继续Mac打包、隔离安装及精确生成产物清理。Windows延期，不自动公开Release/feed，不改真实资料、模型凭据、TCC、launchd、时钟或能源设置。原.78准备已按授权提交，两个原升级诊断脚本逐字节保留；新安全修补使用.79，不改写已推.78标签。
 - 原十一held逐项已核：8有答案、3应空。七busy源于前次15秒超时后未等真实completion回收，Core producer390只机械恢复原未发模型的七条，5正例/6来源正确，2无答案中一次raw误返由联系证据veto覆盖，原恢复失败和首分不改。数量题54克/20立方厘米被旧数学规范化当54*g/20*cm^3，本轮只加明确g/克、cm³/cm^3/立方厘米组合的当前正文核对，不缩放、不算答案、不借旧标签；异量/维度/日期/标识符/伪造/撤回删除和冷重启负例通过。另一个无候选问题没有本周书名库存来源，继续空返。
