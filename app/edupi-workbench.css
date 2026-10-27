@@ -696,14 +696,14 @@ html.dark .edupi-teacher-shell {
 .edupi-student-core-facts article details > summary { cursor: pointer; color: var(--ep-blue); font-size: 9px; }
 .edupi-student-core-facts article details > div { padding: 7px 0 0 10px; }
 .edupi-student-core-facts article code { display: block; overflow: hidden; padding-top: 5px; color: var(--ep-dim); font-size: 8px; text-overflow: ellipsis; }
-.edupi-fact-actions { display: grid; margin-top: 8px; gap: 6px; }
+.edupi-fact-actions { display: grid; grid-column: 1 / -1; margin-top: 8px; gap: 6px; }
 .edupi-fact-actions__buttons,
 .edupi-fact-actions__editor > div { display: flex; flex-wrap: wrap; gap: 6px; }
 .edupi-fact-actions button { min-height: 27px; padding: 0 8px; border: 1px solid var(--ep-border); border-radius: 5px; background: var(--ep-surface); color: var(--ep-text); cursor: pointer; font-size: 9px; }
 .edupi-fact-actions button.is-primary { border-color: var(--ep-text); background: var(--ep-text); color: var(--ep-surface); }
 .edupi-fact-actions button.is-danger { color: var(--ep-red); }
 .edupi-fact-actions button:disabled { cursor: wait; opacity: .5; }
-.edupi-fact-actions__editor { display: grid; gap: 6px; }
+.edupi-fact-actions__editor { display: grid; width: min(100%, 680px); gap: 6px; }
 .edupi-fact-actions__editor textarea { width: 100%; resize: vertical; padding: 7px 8px; border: 1px solid var(--ep-border-strong); border-radius: 6px; background: var(--ep-surface); color: var(--ep-text); font: inherit; line-height: 1.5; }
 .edupi-fact-actions > small { color: var(--ep-muted); font-size: 8px; }
 .edupi-fact-actions > p { margin: 0; color: var(--ep-red); font-size: 9px; }

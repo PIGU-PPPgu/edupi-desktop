@@ -257,7 +257,8 @@ function isNonTaskSelection(selection: CalendarItemSelection): selection is NonT
   return selection.kind === "calendar" || selection.kind === "timetable";
 }
 
-function CalendarDetailDrawer({ data, selection, onClose, onEdit, onDelete, deleteBusy = false, editor }: { data: EducationContract; selection: NonTaskCalendarSelection; onClose: () => void; onEdit?: () => void; onDelete?: () => void; deleteBusy?: boolean; editor?: ReactNode }) {
+function CalendarDetailDrawer({ data, selection, onClose, onEdit, onDelete, deleteBusy = false, editor, openerRef }: { data: EducationContract; selection: NonTaskCalendarSelection; onClose: () => void; onEdit?: () => void; onDelete?: () => void; deleteBusy?: boolean; editor?: ReactNode; openerRef?: { current: Element | null } }) {
+  useEffect(() => { if (openerRef) openerRef.current = document.activeElement; }, [openerRef]);
   const drawerRef = useModalDismiss<HTMLElement>(onClose);
   const rows: Array<{ label: string; value: string }> = [];
   let title = selection.title;
@@ -439,20 +440,42 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
   const [editingTimetableId, setEditingTimetableId] = useState<string | null>(null);
   const [reviewRequest, setReviewRequest] = useState<(ScheduleConflictReviewRequest & { originSelectionKey: string | null; objectId: string | null | undefined }) | null>(null);
   const reviewSequence = useRef(0);
-  const onSelect = (next: CalendarItemSelection | null) => { setReviewRequest(null); onSelectItem(next); };
+  const onSelect = (next: CalendarItemSelection | null) => { clearDeleteReturn(); setReviewRequest(null); onSelectItem(next); };
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteFocusTick, setDeleteFocusTick] = useState(0);
   const workspaceRef = useRef<HTMLElement>(null);
+  const detailOpener = useRef<Element | null>(null);
   const selectionKey = selection ? `${selection.kind}:${selection.sourceId || `${selection.date}:${selection.title}`}` : null;
   const editorKey = composer ? `new:${composer}` : editingCalendarId && selection?.kind === "calendar" && selection.sourceId === editingCalendarId ? `calendar:${editingCalendarId}` : editingTimetableId && selection?.kind === "timetable" && selection.sourceId === editingTimetableId ? `timetable:${editingTimetableId}` : null;
   const closeContext = useRef({ editorKey, selectionKey, selectedObjectId });
   closeContext.current = { editorKey, selectionKey, selectedObjectId };
   const closeFocus = useRef<(NonNullable<IntakeFocusReturn> & { editorKey: string; selectionKey: string | null; selectedObjectId: string | null | undefined; target: "calendar" | "timetable" | "edit" | "delete" }) | null>(null);
+  const deleteReturn = useRef<(NonNullable<IntakeFocusReturn> & { selectionKey: string | null; selectedObjectId: string | null | undefined; kind: "calendar" | "timetable"; opener: Element | null; completed: boolean; moved: boolean; outside: HTMLElement | null; stop: () => void }) | null>(null);
+  const clearDeleteReturn = () => { deleteReturn.current?.stop(); deleteReturn.current = null; };
   const heldFocusToKeep = useRef<{ target: HTMLElement; document: Document; stop: () => void } | null>(null);
   useEffect(() => {
     if (reviewRequest && (reviewRequest.objectId !== selectedObjectId || selectionKey && selectionKey !== reviewRequest.originSelectionKey)) setReviewRequest(null);
   }, [reviewRequest, selectedObjectId, selectionKey]);
-  useEffect(() => () => { closeFocus.current = null; heldFocusToKeep.current?.stop(); heldFocusToKeep.current = null; }, []);
+  useEffect(() => () => { closeFocus.current = null; deleteReturn.current?.stop(); deleteReturn.current = null; heldFocusToKeep.current?.stop(); heldFocusToKeep.current = null; }, []);
+  useEffect(() => {
+    const request = deleteReturn.current, root = workspaceRef.current;
+    if (!request) return;
+    if (!root?.isConnected || root.ownerDocument !== request.document || request.selectedObjectId !== selectedObjectId || editorKey
+      || selectionKey && selectionKey !== request.selectionKey) { clearDeleteReturn(); return; }
+    // The parent may commit its snapshot and close the detail before resolving deletion.
+    if (!request.completed || deleteBusy || selectionKey) return;
+    clearDeleteReturn();
+    const { document } = request, active = document.activeElement;
+    if (active?.closest?.("[role='dialog'], [aria-modal='true']")) return;
+    if (request.outside?.isConnected && (active === request.opener || active === document.body || active === document.documentElement || root.contains(active))) {
+      if (active !== request.outside) request.outside.focus({ preventScroll: true });
+      return;
+    }
+    if (request.moved || active !== request.from && active !== document.body && active !== document.documentElement) return;
+    const create = root.querySelector<HTMLButtonElement>(`[data-calendar-create="${request.kind}"]`);
+    const target = create?.isConnected && !create.disabled ? create : root.querySelector<HTMLElement>("[data-calendar-heading]");
+    if (target?.isConnected && root.contains(target)) target.focus({ preventScroll: false });
+  }, [deleteBusy, deleteFocusTick, selectionKey, selectedObjectId, editorKey]);
   useEffect(() => {
     const keep = heldFocusToKeep.current;
     if (!keep) return;
@@ -580,6 +603,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
     setEditingTimetableId(null);
   };
   const openComposer = (mode: "calendar" | "timetable") => {
+    clearDeleteReturn();
     setReviewRequest(null);
     closeFocus.current = null;
     if (composer === mode && !editingCalendarId && !editingTimetableId) {
@@ -615,6 +639,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
     setComposer(null);
   };
   const closeDetail = () => {
+    clearDeleteReturn();
     setEditingCalendarId(null);
     setEditingTimetableId(null);
     onSelect(null);
@@ -625,16 +650,41 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
     const document = root?.ownerDocument, from = document?.activeElement || null;
     closeFocus.current = root && trigger && document && (root.contains(from) || from === document.body || from === document.documentElement)
       ? { from, document, editorKey: "", selectionKey, selectedObjectId, target: "delete" } : null;
+    clearDeleteReturn();
+    const returnFocus = closeFocus.current && root && document ? {
+      from, document, selectionKey, selectedObjectId, kind: selection.kind, opener: detailOpener.current, completed: false, moved: false, outside: null as HTMLElement | null, stop: () => {},
+    } : null;
+    if (returnFocus && root && document) {
+      const preserveMovedFocus = (event: FocusEvent) => {
+        const target = event.target as HTMLElement | null;
+        if (target === from || target === returnFocus.opener || target === document.body || target === document.documentElement || target?.closest?.(".edupi-delete-confirmation")) return;
+        returnFocus.moved = true;
+        returnFocus.outside = target && !root.contains(target) && !target.closest?.("[role='dialog'], [aria-modal='true']") && typeof target.focus === "function" ? target : null;
+      };
+      const preserveInput = (event: Event) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest?.(".edupi-delete-confirmation")) return;
+        returnFocus.moved = true;
+        returnFocus.outside = target && !root.contains(target) && typeof target.focus === "function" ? target : null;
+      };
+      returnFocus.stop = () => { document.removeEventListener("focusin", preserveMovedFocus); document.removeEventListener("pointerdown", preserveInput); document.removeEventListener("keydown", preserveInput); };
+      deleteReturn.current = returnFocus;
+      document.addEventListener("focusin", preserveMovedFocus); document.addEventListener("pointerdown", preserveInput); document.addEventListener("keydown", preserveInput);
+    }
     setDeleteBusy(true);
     try {
       const deleted = await onDeleteEntity(selection.kind, selection.sourceId, selection.title);
       if (deleted) {
         closeFocus.current = null;
-        if (root?.isConnected && closeContext.current.selectionKey === selectionKey && closeContext.current.selectedObjectId === selectedObjectId) closeDetail();
+        if (returnFocus && deleteReturn.current === returnFocus) returnFocus.completed = true;
+        if (root?.isConnected && closeContext.current.selectionKey === selectionKey && closeContext.current.selectedObjectId === selectedObjectId) {
+          setEditingCalendarId(null); setEditingTimetableId(null); onSelectItem(null);
+        }
       }
     } catch {
       // The parent workspace owns the visible error message.
     } finally {
+      if (returnFocus && !returnFocus.completed && deleteReturn.current === returnFocus) clearDeleteReturn();
       if (root?.isConnected) { setDeleteBusy(false); setDeleteFocusTick(value => value + 1); }
     }
   };
@@ -664,7 +714,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
   return (
     <main ref={workspaceRef} className="edupi-module-workspace edupi-calendar-workspace">
       <header className="edupi-calendar-heading">
-        <div><h1>日程</h1><p>{itemCount} 项</p></div>
+        <div><h1 tabIndex={-1} data-calendar-heading>日程</h1><p>{itemCount} 项</p></div>
         <div className="edupi-calendar-heading__actions"><button type="button" data-calendar-create="calendar" className={composer || drawerEditor ? undefined : "is-primary"} disabled={!calendarWriteReady} title={!calendarWriteReady ? data.capabilities.calendar.reason : undefined} onClick={() => openComposer("calendar")}>新建日程</button><button type="button" data-calendar-create="timetable" disabled={!timetableWriteReady} title={!timetableWriteReady ? data.capabilities.timetable.reason : undefined} onClick={() => openComposer("timetable")}>添加课表</button><button type="button" onClick={onUpload}>上传文件</button></div>
       </header>
       {writeReason ? <p className="edupi-calendar-capability-note" role="status">{writeReason}</p> : null}
@@ -687,7 +737,7 @@ export function EduPiCalendarWorkspace({ data, query, onUpload, intakeBusy, sele
       {!sourceEvents ? <PendingInbox projection={projection} selection={selection} onSelect={onSelect} onTaskDetail={openTaskDetail} /> : null}
       </>}
       {query ? <p className="edupi-calendar-query-note" role="status">正在筛选：{query}{itemCount === 0 ? " · 没有匹配项" : ""}</p> : null}
-      {selection && isNonTaskSelection(selection) ? <CalendarDetailDrawer data={data} selection={selection} onClose={closeDetail} editor={drawerEditor} onEdit={selection.kind === "calendar" && calendarWriteReady && data.calendar.some((event) => event.id === selection.sourceId) ? editSelectedCalendar : selection.kind === "timetable" && timetableWriteReady && data.timetable.map(rawRecord).some((slot) => rawText(slot.slot_id ?? slot.id) === selection.sourceId) ? editSelectedTimetable : undefined} onDelete={canDeleteSelection ? () => void deleteSelected() : undefined} deleteBusy={deleteBusy} /> : null}
+      {selection && isNonTaskSelection(selection) ? <CalendarDetailDrawer data={data} selection={selection} onClose={closeDetail} editor={drawerEditor} openerRef={detailOpener} onEdit={selection.kind === "calendar" && calendarWriteReady && data.calendar.some((event) => event.id === selection.sourceId) ? editSelectedCalendar : selection.kind === "timetable" && timetableWriteReady && data.timetable.map(rawRecord).some((slot) => rawText(slot.slot_id ?? slot.id) === selection.sourceId) ? editSelectedTimetable : undefined} onDelete={canDeleteSelection ? () => void deleteSelected() : undefined} deleteBusy={deleteBusy} /> : null}
     </main>
   );
 }

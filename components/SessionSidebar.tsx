@@ -110,6 +110,7 @@ interface Props {
   onSessionDeleted?: (sessionId: string) => void;
   selectedCwd?: string | null;
   onCwdChange?: (cwd: string | null, projectRoot?: string | null) => void;
+  onCwdSelect?: (cwd: string) => void;
   onOpenFile?: (filePath: string, fileName: string, options?: { sourceSessionId?: string | null; modeHint?: "diff" }) => void;
   selectedFilePath?: string | null;
   explorerRefreshKey?: number;
@@ -247,7 +248,7 @@ function groupSessionTreeByAge(nodes: SessionTreeNode[]): SessionAgeGroup[] {
   ].flatMap(([key, label]) => groups.has(key) ? [{ key, label, nodes: groups.get(key)! }] : []);
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, selectedFilePath, explorerRefreshKey, onAtMention, onAtMentions, headerControls, onOpenEduPiAdmin, onMaterialInboxRequest, materialInboxPath: materialInboxPathProp, onOpenContext, presentation = "default", resourceActions = [] }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onCwdSelect, onOpenFile, selectedFilePath, explorerRefreshKey, onAtMention, onAtMentions, headerControls, onOpenEduPiAdmin, onMaterialInboxRequest, materialInboxPath: materialInboxPathProp, onOpenContext, presentation = "default", resourceActions = [] }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -467,6 +468,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   }, []);
 
   const restoredRef = useRef(false);
+  const handleSelectCwd = useCallback((cwd: string) => {
+    // Invalidate startup restores before a delayed response can beat the cwd effect.
+    restoredRef.current = true;
+    onCwdSelect?.(cwd);
+    setSelectedCwd(cwd);
+  }, [onCwdSelect]);
 
   /** Resolve the project root for a cwd from the freshest data available */
   const projectRootFor = useCallback((cwd: string | null): string | null => {
@@ -705,7 +712,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     ? {
         label: t("sidebar.openRepoRoot"),
         title: t("sidebar.openRepoRootTitle"),
-        onClick: () => setSelectedCwd(worktreeState.projectRoot),
+        onClick: () => handleSelectCwd(worktreeState.projectRoot),
       }
     : null;
   const worktreeLoading = Boolean(selectedCwd && worktreeLoadingCwd === selectedCwd);
@@ -795,7 +802,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               selectedCwd={selectedCwd}
               selectedProject={selectedProject}
               homeDir={homeDir}
-              onSelectCwd={setSelectedCwd}
+              onSelectCwd={handleSelectCwd}
               variant="block"
             />
           </div>
@@ -935,7 +942,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                         >
                           <button
                             onClick={() => {
-                              setSelectedCwd(wt.path);
+                              handleSelectCwd(wt.path);
                               setWtDropdownOpen(false);
                               setWtError(null);
                               setWtFilter("");

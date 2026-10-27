@@ -485,17 +485,19 @@ function focusDom() {
   const element = (name, group = "form") => ({ name, group, ownerDocument: document, isConnected: true, disabled: false, focus() { if (!this.isConnected || this.disabled) return; focused.push(name); move(this); } });
   const inputs = Object.fromEntries(["name", "subject", "save", "cancel"].map(name => [name, element(name)]));
   const triggers = { calendar: element("new calendar", "trigger"), timetable: element("new timetable", "trigger"), edit: element("edit", "trigger"), delete: element("delete", "trigger") };
+  const heading = element("calendar heading", "trigger");
   const root = { ownerDocument: document, isConnected: true, contains: target => Boolean(target?.ownerDocument === document && target?.isConnected && target?.group !== "outside"), querySelector(selector) {
     if (selector === "[data-calendar-edit-trigger]") return triggers.edit.isConnected ? triggers.edit : null;
     if (selector === "[data-calendar-delete-trigger]") return triggers.delete.isConnected ? triggers.delete : null;
     if (selector === '[data-calendar-create="calendar"]') return triggers.calendar;
     if (selector === '[data-calendar-create="timetable"]') return triggers.timetable;
+    if (selector === "[data-calendar-heading]") return heading;
     if (selector.includes('input[name="name"]')) return inputs.name;
     if (selector.includes('input[name="subject"]')) return inputs.subject;
     throw new Error(`unexpected selector ${selector}`);
   } };
   const section = { ownerDocument: document, isConnected: true, contains: target => target?.ownerDocument === document && target?.group === "form" && target?.isConnected };
-  return { document, root, section, focused, focusListeners, inputs, triggers, move, outside: () => move({ name: "another control", isConnected: true }), fire(name, event) { for (const listener of otherListeners.get(name) || []) listener(event); }, get otherListenerCount() { return [...otherListeners.values()].reduce((sum, listeners) => sum + listeners.size, 0); },
+  return { document, root, section, focused, focusListeners, inputs, triggers, heading, move, outside: () => move({ name: "another control", isConnected: true }), fire(name, event) { for (const listener of otherListeners.get(name) || []) listener(event); }, get otherListenerCount() { return [...otherListeners.values()].reduce((sum, listeners) => sum + listeners.size, 0); },
     commit(tree) {
       if (tree.props.ref) tree.props.ref.current = tree.type === "main" ? root : section;
       if (tree.type !== "main") {
@@ -506,6 +508,8 @@ function focusDom() {
         return;
       }
       const drawer = nodes(tree).find(node => node.type?.name === "CalendarDetailDrawer");
+      for (const mode of ["calendar", "timetable"]) triggers[mode].disabled = Boolean(nodes(tree).find(node => node.props["data-calendar-create"] === mode)?.props.disabled);
+      heading.isConnected = Boolean(nodes(tree).find(node => node.props["data-calendar-heading"] !== undefined && node.props.tabIndex === -1));
       const editor = nodes(tree).find(node => node.type?.name === "IntakeComposer") || drawer?.props.editor;
       for (const input of Object.values(inputs)) input.isConnected = Boolean(editor);
       const editVisible = Boolean(drawer && !drawer.props.editor && drawer.props.onEdit);
@@ -813,9 +817,9 @@ test("outside-focus preservation yields to newer input, another object, a new mo
   }
 });
 
-function calendarDeletion(reply) {
-  const f = calendarWithFocus();
-  f.app.setProps({ data: { ...f.app.props.data, capabilities: { ...f.app.props.data.capabilities, entityDelete: { enabled: true, targetKinds: ["calendar"], reason: "synthetic test" } } }, onSelect: selection => { f.app.props.selection = selection; }, onDeleteEntity: reply });
+function calendarDeletion(reply, kind = "calendar") {
+  const f = calendarWithFocus(kind);
+  f.app.setProps({ data: { ...f.app.props.data, capabilities: { ...f.app.props.data.capabilities, entityDelete: { enabled: true, targetKinds: [kind], reason: "synthetic test" } } }, onSelect: selection => { f.app.props.selection = selection; }, onDeleteEntity: reply });
   return f;
 }
 
@@ -833,7 +837,7 @@ test("calendar delete cancellation returns to its enabled trigger after nested m
   assert.equal(f.app.props.selection.sourceId, "calendar-a");
 });
 
-test("calendar delete cancellation respects a newer object or focus and success closes the selected detail", async () => {
+test("calendar delete cancellation respects newer context and success returns to the page entry", async () => {
   for (const scenario of ["object", "focus", "success"]) {
     let finish;
     const f = calendarDeletion(() => new Promise(resolve => { finish = resolve; }));
@@ -841,7 +845,7 @@ test("calendar delete cancellation respects a newer object or focus and success 
     if (scenario === "object") f.app.setProps({ selection: { ...f.app.props.selection, sourceId: "calendar-b" } });
     if (scenario === "focus") { f.dom.outside(); f.dom.move(f.dom.document.body); }
     f.dom.focused.length = 0; finish(scenario === "success"); await new Promise(resolve => setImmediate(resolve)); f.app.render();
-    assert.deepEqual(f.dom.focused, [], scenario);
+    assert.deepEqual(f.dom.focused, scenario === "success" ? ["new calendar"] : [], scenario);
     assert.equal(f.app.props.selection?.sourceId || null, scenario === "object" ? "calendar-b" : scenario === "success" ? null : "calendar-a");
   }
 });
@@ -860,4 +864,178 @@ test("a failed calendar delete keeps the current detail and restores its retry e
   assert.equal(f.app.props.selection.sourceId, "calendar-a");
   assert.equal(f.dom.document.activeElement, f.dom.triggers.delete);
   assert.equal(f.dom.triggers.delete.disabled, false);
+});
+
+function parentCalendarDeletion({ keepOpener = false, externalOpener = false, afterClose } = {}) {
+  const f = calendarDeletion(() => { throw new Error("unbound parent"); });
+  const source = ts.createSourceFile("EduPiEducationPanel.tsx", fs.readFileSync(new URL("./EduPiEducationPanel.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let callback;
+  const find = node => { if (ts.isVariableDeclaration(node) && node.name.getText(source) === "deleteEntity") callback = node.initializer.getText(source); else ts.forEachChild(node, find); };
+  find(source); assert.ok(callback, "actual parent delete callback");
+  let resolve, reject;
+  const response = new Promise((yes, no) => { resolve = yes; reject = no; });
+  const writes = [], commits = [], closes = [];
+  const context = { exports: {}, useCallback: fn => fn, deleteBusy: null, education: f.app.props.data, deleteResolver: { current: null }, calendarSelectionRef: { current: f.app.props.selection },
+    setDeleteLabel() {}, setDeleteBusy(value) { context.deleteBusy = value; }, setMaterialStagingMessage() {}, stopTaskTracking() {}, closeTaskDetail() {}, setSelectedTaskKey() {}, setSelectedStudentId() {},
+    deleteEducationEntity: async (kind, id) => { writes.push({ kind, id }); return response; },
+    commitEducationSnapshot(data) { commits.push("snapshot"); f.app.setProps({ data }); },
+    selectCalendarItem(selection) { closes.push(selection); context.calendarSelectionRef.current = selection; f.app.setProps({ selection }); commits.push("selection"); afterClose?.(f); },
+  };
+  vm.runInNewContext(ts.transpileModule(`exports.delete = ${callback};`, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, context);
+  f.app.setProps({ onDeleteEntity: context.exports.delete });
+  const document = f.dom.document;
+  const opener = { ownerDocument: document, group: externalOpener ? "outside" : "row", isConnected: true, focus() { if (this.isConnected) f.dom.move(this); } };
+  const close = { ownerDocument: document, group: "detail", isConnected: true, focus() { if (this.isConnected) f.dom.move(this); } };
+  opener.focus();
+  if (f.drawer().props.openerRef) f.drawer().props.openerRef.current = opener;
+  let cleanup = actualModal(f.dom, { contains: element => element === close || element === f.dom.triggers.delete || element === f.dom.triggers.edit, querySelector: () => close });
+  const commit = f.dom.commit;
+  f.dom.commit = tree => {
+    if (!keepOpener && !f.app.props.data.calendar.some(event => event.id === "calendar-a")) opener.isConnected = false;
+    commit(tree);
+    if (!nodes(tree).some(node => node.type?.name === "CalendarDetailDrawer") && cleanup) { close.isConnected = false; cleanup(); cleanup = null; }
+  };
+  return { ...f, context, commits, closes, writes,
+    start() { f.dom.triggers.delete.focus(); f.drawer().props.onDelete(); f.app.render();
+      const confirm = { ownerDocument: document, group: "confirmation", isConnected: true, closest: selector => selector === ".edupi-delete-confirmation" ? {} : null, focus() { if (this.isConnected) f.dom.move(this); } };
+      const cleanupConfirmation = actualModal(f.dom, { contains: element => element === confirm, querySelector: () => confirm });
+      return confirmed => { context.deleteResolver.current(confirmed); confirm.isConnected = false; cleanupConfirmation(); if (document.activeElement === confirm) f.dom.move(document.body); };
+    },
+    succeed() { resolve({ data: { ...f.app.props.data, calendar: f.app.props.data.calendar.filter(event => event.id !== "calendar-a") }, target: { id: "calendar-a" } }); },
+    fail() { reject(new Error("synthetic offline")); },
+    async settle() { await new Promise(done => setImmediate(done)); f.app.render(); },
+    select(selection) { context.calendarSelectionRef.current = selection; f.app.setProps({ selection }); },
+    dispose() { cleanup?.(); cleanup = null; f.app.unmount(); },
+  };
+}
+
+test("successful calendar deletion follows the real parent's early detail close and actual modal cleanup", async () => {
+  const f = parentCalendarDeletion(); const confirm = f.start(); confirm(true); await f.settle();
+  assert.equal(f.dom.triggers.delete.disabled, true); assert.equal(f.writes.length, 1);
+  f.succeed(); await f.settle();
+  assert.deepEqual(f.commits, ["snapshot", "selection"]); assert.equal(f.closes.length, 1); assert.equal(f.app.props.selection, null);
+  assert.equal(f.dom.document.activeElement, f.dom.triggers.calendar);
+  assert.equal(f.dom.focusListeners.size, 0); assert.equal(f.dom.otherListenerCount, 0);
+  f.dispose();
+});
+
+test("successful calendar deletion uses the page heading when its creation entry is unavailable", async () => {
+  const f = parentCalendarDeletion(); f.app.setProps({ data: { ...f.app.props.data, capabilities: { ...f.app.props.data.capabilities, calendar: { enabled: false, reason: "synthetic readonly" } } } });
+  const confirm = f.start(); confirm(true); await f.settle(); f.succeed(); await f.settle();
+  assert.equal(f.dom.triggers.calendar.disabled, true); assert.equal(f.app.props.selection, null);
+  assert.equal(f.dom.document.activeElement, f.dom.heading);
+  f.dispose();
+});
+
+test("real parent calendar cancellation and deletion failure return only to the original retry action", async () => {
+  for (const outcome of ["cancel", "failure"]) {
+    const f = parentCalendarDeletion(); const confirm = f.start(); confirm(outcome === "failure"); await f.settle();
+    if (outcome === "failure") { f.fail(); await f.settle(); }
+    assert.equal(f.writes.length, outcome === "failure" ? 1 : 0, outcome);
+    assert.deepEqual(f.commits, []); assert.deepEqual(f.closes, []);
+    assert.equal(f.app.props.selection.sourceId, "calendar-a"); assert.equal(f.dom.document.activeElement, f.dom.triggers.delete);
+    assert.equal(f.dom.triggers.delete.disabled, false); assert.equal(f.dom.focusListeners.size, 0);
+    f.dispose(); assert.equal(f.dom.otherListenerCount, 0);
+  }
+});
+
+test("successful calendar deletion preserves newer external focus across actual drawer cleanup", async () => {
+  for (const externalOpener of [false, true]) {
+    const f = parentCalendarDeletion({ keepOpener: true, externalOpener }); const confirm = f.start(); confirm(true); await f.settle();
+    const outside = { ownerDocument: f.dom.document, group: "outside", isConnected: true, focus() { f.dom.move(this); } };
+    f.dom.fire("pointerdown", { target: outside }); outside.focus(); f.dom.focused.length = 0;
+    f.succeed(); await f.settle();
+    assert.equal(f.app.props.selection, null); assert.equal(f.dom.document.activeElement, outside);
+    assert.deepEqual(f.dom.focused, []); assert.equal(f.dom.focusListeners.size, 0); assert.equal(f.dom.otherListenerCount, 0);
+    f.dispose();
+  }
+});
+
+test("a newer external focus after parent close supersedes the one held before modal cleanup", async () => {
+  let latest;
+  const f = parentCalendarDeletion({ keepOpener: true, externalOpener: true, afterClose(current) {
+    latest = { ownerDocument: current.dom.document, group: "outside", isConnected: true, focus() { current.dom.move(this); } }; latest.focus();
+  } });
+  const confirm = f.start(); confirm(true); await f.settle();
+  const previous = { ownerDocument: f.dom.document, group: "outside", isConnected: true, focus() { f.dom.move(this); } }; previous.focus();
+  f.succeed(); await f.settle();
+  assert.equal(f.dom.document.activeElement, latest); assert.notEqual(latest, previous);
+  assert.equal(f.dom.focusListeners.size, 0); assert.equal(f.dom.otherListenerCount, 0); f.dispose();
+});
+
+test("newer page focus after parent close clears an older outside focus before delete success settles", async () => {
+  for (const externalOpener of [false, true]) {
+    const f = parentCalendarDeletion({ keepOpener: true, externalOpener, afterClose(current) { current.dom.triggers.timetable.focus(); } });
+    const confirm = f.start(); confirm(true); await f.settle();
+    const previous = { ownerDocument: f.dom.document, group: "outside", isConnected: true, focus() { f.dom.move(this); } }; previous.focus();
+    f.succeed(); await f.settle();
+    assert.deepEqual(f.commits, ["snapshot", "selection"]);
+    assert.equal(f.dom.document.activeElement, f.dom.triggers.timetable, "the newer connected page control wins over the old outside input");
+    assert.equal(f.dom.focusListeners.size, 0); assert.equal(f.dom.otherListenerCount, 0); f.dispose();
+  }
+});
+
+test("calendar deletion cannot close another selected object or reclaim its newer focus", async () => {
+  const f = parentCalendarDeletion(); const confirm = f.start(); confirm(true); await f.settle();
+  f.select({ ...f.app.props.selection, sourceId: "calendar-b" }); f.dom.triggers.edit.focus(); f.dom.focused.length = 0;
+  f.succeed(); await f.settle();
+  assert.equal(f.app.props.selection.sourceId, "calendar-b"); assert.deepEqual(f.closes, []);
+  assert.equal(f.dom.document.activeElement, f.dom.triggers.edit); assert.deepEqual(f.dom.focused, []);
+  assert.equal(f.dom.focusListeners.size, 0); f.dispose(); assert.equal(f.dom.otherListenerCount, 0);
+});
+
+test("calendar delete success yields to a new draft or modal opened before the child promise resumes", async () => {
+  for (const mode of ["draft", "modal"]) {
+    let newer;
+    const f = parentCalendarDeletion({ afterClose(current) {
+      if (mode === "draft") { current.openNew(); newer = current.dom.inputs.name; newer.focus(); }
+      else { newer = { isConnected: true, closest: selector => selector.includes("[role='dialog']") ? {} : null }; current.dom.move(newer); }
+    } });
+    const confirm = f.start(); confirm(true); await f.settle(); f.succeed(); await f.settle();
+    assert.equal(f.closes.length, 1); assert.equal(f.dom.document.activeElement, newer, mode);
+    if (mode === "draft") assert.ok(f.editor(), "the newer composer stays open");
+    assert.equal(f.dom.focusListeners.size, 0); assert.equal(f.dom.otherListenerCount, 0); f.dispose();
+  }
+});
+
+test("calendar delete completion respects changed page scope and removed outside targets", async () => {
+  for (const scenario of ["scope", "removed outside", "new input"]) {
+    const f = parentCalendarDeletion(); const confirm = f.start(); confirm(true); await f.settle();
+    if (scenario === "scope") f.app.setProps({ selectedObjectId: "calendar:list:events" });
+    if (scenario === "removed outside") {
+      const outside = { ownerDocument: f.dom.document, group: "outside", isConnected: true, focus() { f.dom.move(this); } };
+      outside.focus(); outside.isConnected = false; f.dom.move(f.dom.document.body);
+    }
+    if (scenario === "new input") { f.dom.fire("keydown", { target: f.dom.triggers.timetable }); f.dom.triggers.timetable.focus(); }
+    f.dom.focused.length = 0; f.succeed(); await f.settle();
+    assert.deepEqual(f.dom.focused, [], scenario); assert.equal(f.dom.focusListeners.size, 0); assert.equal(f.dom.otherListenerCount, 0); f.dispose();
+  }
+});
+
+test("fast successful calendar and timetable deletions return to their own available creation entry", async () => {
+  for (const kind of ["calendar", "timetable"]) {
+    const f = calendarDeletion(async () => true, kind);
+    f.dom.triggers.delete.focus(); f.drawer().props.onDelete(); f.dom.move(f.dom.document.body);
+    await new Promise(resolve => setImmediate(resolve)); f.app.render();
+    assert.equal(f.app.props.selection, null); assert.equal(f.dom.document.activeElement, f.dom.triggers[kind]);
+    assert.equal(f.dom.focusListeners.size, 0); assert.equal(f.dom.otherListenerCount, 0); f.app.unmount();
+  }
+});
+
+test("calendar detail records its original opener without replacing it during later renders", () => {
+  const dom = focusDom(), opener = { ownerDocument: dom.document, isConnected: true }, openerRef = { current: null };
+  dom.move(opener);
+  const f = mount("EduPiCalendarWorkspace", { selection: { kind: "calendar", sourceId: "calendar-a", date: "2026-10-27", title: "合成日程" }, onClose() {}, openerRef }, true, "CalendarDetailDrawer", dom);
+  f.render(); assert.equal(openerRef.current, opener);
+  dom.outside(); f.render(); assert.equal(openerRef.current, opener); f.unmount();
+});
+
+test("leaving the calendar during deletion releases all focus tracking and ignores late success", async () => {
+  let finish;
+  const f = calendarDeletion(() => new Promise(resolve => { finish = resolve; }));
+  f.dom.triggers.delete.focus(); f.drawer().props.onDelete(); f.app.render();
+  f.dom.root.isConnected = false; f.app.unmount(); f.dom.move(f.dom.document.body); f.dom.focused.length = 0;
+  finish(true); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.app.props.selection.sourceId, "calendar-a"); assert.deepEqual(f.dom.focused, []);
+  assert.equal(f.dom.focusListeners.size, 0); assert.equal(f.dom.otherListenerCount, 0);
 });

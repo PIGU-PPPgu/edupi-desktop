@@ -14,21 +14,22 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 const job = (id = "job-one", status = "queued") => ({ job_id: id, title: `[UI验收 TEST] ${id}`, status });
 
 function mount(initialJobs = [], { data = { workspace: "/test/one" } } = {}) {
-  const slots = [], effects = [], requests = [], focused = [], listeners = new Set(), elements = new Map(), timers = new Map();
+  const slots = [], effects = [], requests = [], focused = [], revealed = [], interactions = [], listeners = new Set(), visibilityListeners = new Set(), elements = new Map(), timers = new Map();
   let cursor = 0, dirty = false, tree, mounted = true, writesAfterUnmount = 0, hidden = false, timerId = 0, previousRefs = [];
   const document = { body: {}, documentElement: {}, activeElement: null, hidden: false,
-    addEventListener(name, fn) { assert.equal(name, "focusin"); listeners.add(fn); },
-    removeEventListener(name, fn) { assert.equal(name, "focusin"); listeners.delete(fn); },
+    addEventListener(name, fn) { assert.ok(["focusin", "visibilitychange"].includes(name)); (name === "focusin" ? listeners : visibilityListeners).add(fn); },
+    removeEventListener(name, fn) { assert.ok(["focusin", "visibilitychange"].includes(name)); (name === "focusin" ? listeners : visibilityListeners).delete(fn); },
   };
   document.activeElement = document.body;
   const move = target => { document.activeElement = target; for (const fn of [...listeners]) fn({ target }); return target; };
   const root = { ownerDocument: document, isConnected: true,
     contains: target => target?.isConnected && target.root === root,
-    querySelectorAll(selector) { assert.equal(selector, "[data-background-job-action]"); return [...elements.values()].filter(item => item.isConnected && item.dataset.backgroundJobAction); },
+    querySelectorAll(selector) { const key = { "[data-background-job-action]": "backgroundJobAction", "[data-background-job-artifact]": "backgroundJobArtifact", "[data-background-job-title]": "backgroundJobTitle" }[selector]; assert.ok(key, selector); return [...elements.values()].filter(item => item.isConnected && item.dataset[key]); },
   };
   const element = key => ({ key, root, ownerDocument: document, isConnected: true, disabled: false, dataset: {},
     closest(selector) { assert.equal(selector, "details:not([open]), [hidden], [inert]"); return hidden ? root : null; },
-    focus(options) { assert.ok(this.isConnected && !this.disabled, `${key} must be available`); assert.equal(options?.preventScroll, false); focused.push(key); move(this); },
+    scrollIntoView(options) { assert.ok(this.isConnected, `${key} must be connected`); const item = { key, block: options.block, inline: options.inline, behavior: options.behavior }; revealed.push(item); interactions.push({ type: "scroll", ...item }); },
+    focus(options) { assert.ok(this.isConnected && !this.disabled, `${key} must be available`); assert.equal(typeof options?.preventScroll, "boolean"); focused.push(key); interactions.push({ type: "focus", key, preventScroll: options.preventScroll }); move(this); },
   });
   const same = (a, b) => a?.length === b?.length && a.every((value, i) => Object.is(value, b[i]));
   const react = {
@@ -57,32 +58,34 @@ function mount(initialJobs = [], { data = { workspace: "/test/one" } } = {}) {
     for (const ref of previousRefs) ref.current = null;
     previousRefs = [];
     const seen = new Set();
-    const walk = (node, disabled = false, label = "") => {
-      if (Array.isArray(node)) { node.forEach(child => walk(child, disabled, label)); return; }
+    const walk = (node, disabled = false, label = "", rowId = null) => {
+      if (Array.isArray(node)) { node.forEach(child => walk(child, disabled, label, rowId)); return; }
       if (!node?.props) return;
       const p = node.props;
       disabled ||= node.type === "fieldset" && Boolean(p.disabled);
+      if (node.type === "div" && p.className === "edupi-background-job-row") rowId = node.key;
       if (node.type === "label") label = text(node).replace(/TEST教材.*$/, "");
-      const key = node.type === "section" ? "root" : node.type === "h2" ? "heading" : ["input", "textarea", "select"].includes(node.type) ? `field:${label.split(/整理文档|不指定材料/)[0]}`
-        : node.type === "button" ? p["data-background-job-action"] ? `job:${p["data-background-job-action"]}` : text(node) === "新建任务" ? "create" : p.type === "submit" ? "submit" : text(node) === "取消" ? "cancel" : `button:${text(node)}` : null;
+      const key = node.type === "section" ? "root" : node.type === "h2" ? "heading" : node.type === "strong" && rowId ? `title:${rowId}` : ["input", "textarea", "select"].includes(node.type) ? `field:${label.split(/整理文档|不指定材料/)[0]}`
+        : node.type === "button" ? p["data-background-job-action"] ? `job:${p["data-background-job-action"]}` : p["data-background-job-artifact"] ? `artifact:${p["data-background-job-artifact"]}:${node.key}` : text(node) === "新建任务" ? "create" : p.type === "submit" ? "submit" : text(node) === "取消" ? "cancel" : `button:${text(node)}` : null;
       if (key) {
         seen.add(key);
         if (!elements.get(key)?.isConnected) elements.set(key, key === "root" ? root : element(key));
         const target = elements.get(key);
         target.isConnected = root.isConnected; target.disabled = disabled || Boolean(p.disabled); target.node = node;
-        target.dataset = { backgroundJobAction: p["data-background-job-action"] };
+        target.dataset = { backgroundJobAction: p["data-background-job-action"], backgroundJobArtifact: p["data-background-job-artifact"], backgroundJobTitle: p["data-background-job-title"] };
         if (p.ref) { p.ref.current = target; previousRefs.push(p.ref); }
       }
-      walk(p.children, disabled, label);
+      walk(p.children, disabled, label, rowId);
     };
     walk(tree);
     for (const [key, target] of elements) if (!seen.has(key)) target.isConnected = false;
     const active = document.activeElement;
     if (active?.root === root && (!active.isConnected || active.disabled)) document.activeElement = document.body;
   };
-  const f = { props, document, root, elements, requests, focused, listeners,
+  const f = { props, document, root, elements, requests, focused, revealed, interactions, listeners, visibilityListeners,
     render() { let attempts = 0; do { assert.ok(attempts++ < 30); cursor = 0; dirty = false; tree = exported.EduPiBackgroundJobs(props); commit(); effects.splice(0).forEach(fn => fn()); } while (dirty); },
     text() { return text(tree); },
+    elementForText(label) { return [...elements.values()].find(item => item.isConnected && text(item.node) === label); },
     form() { const form = nodes(tree).find(node => node.type === "form"); assert.ok(form, "form exists"); return form; },
     click(key, { focus = true, render = true } = {}) { const target = elements.get(key); assert.ok(target?.isConnected && !target.disabled, `${key} enabled`); if (focus) move(target); focused.length = 0; target.node.props.onClick(); if (render) f.render(); },
     change(label, value) { const target = elements.get(`field:${label}`); assert.ok(target?.isConnected && !target.disabled, `${label} enabled`); move(target); target.node.props.onChange({ target: { value } }); f.render(); },
@@ -97,6 +100,7 @@ function mount(initialJobs = [], { data = { workspace: "/test/one" } } = {}) {
     poll() { [...timers.values()].forEach(fn => fn()); },
     move(target = { key: "other setting", isConnected: true }) { return move(target); },
     hide() { hidden = true; },
+    visibility(hidden, dispatch = true) { document.hidden = hidden; if (dispatch) for (const listener of [...visibilityListeners]) listener(); },
     scope(workspace = "/test/two") { props.data = { workspace }; f.render(); },
     unmount() { mounted = false; root.isConnected = false; for (const slot of slots) slot?.cleanup?.(); },
     get writesAfterUnmount() { return writesAfterUnmount; },
@@ -108,7 +112,133 @@ test("new task focuses its name and exposes one primary action plus explicit can
   const f = mount(); await f.ready(); f.click("create", { focus: false });
   assert.equal(f.document.activeElement, f.elements.get("field:任务名称"));
   assert.equal(f.elements.get("create").isConnected, false); assert.ok(f.elements.get("cancel").isConnected);
-  assert.equal(nodes(f.form()).filter(node => node.type === "button" && node.props.className?.includes("is-primary")).length, 1);
+  assert.equal(nodes(f.form()).filter(node => node.type === "button" && node.props.className?.includes("native-button-primary")).length, 1);
+});
+
+test("opening reveals the form heading before focusing the name without another browser scroll", async () => {
+  const f = mount(); await f.ready(); f.click("create", { focus: false });
+  assert.deepEqual(f.revealed, [{ key: "heading", block: "start", inline: "nearest", behavior: "auto" }]);
+  assert.deepEqual(f.interactions, [
+    { type: "scroll", key: "heading", block: "start", inline: "nearest", behavior: "auto" },
+    { type: "focus", key: "field:任务名称", preventScroll: true },
+  ]);
+  assert.doesNotMatch(f.text(), /暂无后台任务/);
+  f.change("任务名称", "[UI验收 TEST] 保留位置"); f.poll(); f.finish("GET", []); await f.settle();
+  assert.equal(f.revealed.length, 1);
+});
+
+for (const interrupted of ["move", "hidden", "directory", "unmount"]) test(`opening after ${interrupted} does not force a form scroll`, async () => {
+  const f = mount(); await f.ready(); f.click("create", { render: false });
+  if (interrupted === "move") { f.move(); f.render(); }
+  else if (interrupted === "hidden") { f.hide(); f.render(); }
+  else if (interrupted === "directory") f.scope("/test/two");
+  else f.unmount();
+  assert.deepEqual(f.revealed, []); assert.deepEqual(f.focused, []);
+});
+
+test("a submit failure returns to the name without replaying the opening reveal", async () => {
+  const f = mount(); await f.ready(); f.fill(); const openingReveals = f.revealed.length; assert.equal(openingReveals, 1);
+  f.submit(); f.finish("POST", { error: "合成提交失败" }, { status: 503 }); await f.settle();
+  assert.equal(f.revealed.length, openingReveals);
+  assert.deepEqual(f.interactions.at(-1), { type: "focus", key: "field:任务名称", preventScroll: false });
+});
+
+test("a hidden document before the opening commit cancels reveal and focus without a later replay", async () => {
+  const f = mount(); await f.ready(); f.click("create", { render: false }); f.visibility(true, false); f.render();
+  assert.deepEqual(f.revealed, []); assert.deepEqual(f.focused, []); assert.equal(f.listeners.size + f.visibilityListeners.size, 0);
+  f.visibility(false, false); f.poll(); f.finish("GET", []); await f.settle();
+  assert.deepEqual(f.revealed, []); assert.deepEqual(f.focused, []);
+});
+
+for (const completion of ["failure", "accepted"]) test(`a hidden document cancels the late ${completion} submit focus instead of implicitly scrolling`, async () => {
+  const f = mount(); await f.ready(); f.fill(); f.submit(); f.revealed.length = 0; f.interactions.length = 0; f.visibility(true, false);
+  if (completion === "failure") f.finish("POST", { error: "合成提交失败" }, { status: 503 });
+  else { f.finish("POST"); await f.settle(); f.finish("GET", [job()]); }
+  await f.settle(); assert.deepEqual(f.revealed, []); assert.deepEqual(f.interactions, []); assert.equal(f.listeners.size + f.visibilityListeners.size, 0);
+  f.visibility(false, false); f.poll(); f.finish("GET", [job()]); await f.settle(); assert.deepEqual(f.interactions, []);
+});
+
+test("a visibility change during a request cancels it even when visible again before completion", async () => {
+  const f = mount(); await f.ready(); f.fill(); f.submit(); f.interactions.length = 0;
+  f.visibility(true); assert.equal(f.listeners.size + f.visibilityListeners.size, 0); f.visibility(false);
+  f.finish("POST", { error: "合成提交失败" }, { status: 503 }); await f.settle(); assert.deepEqual(f.interactions, []);
+});
+
+test("opening while already hidden never leaves a pending focus or visibility listener", async () => {
+  const f = mount(); await f.ready(); f.visibility(true); f.click("create", { focus: false });
+  assert.deepEqual(f.revealed, []); assert.deepEqual(f.focused, []); assert.equal(f.listeners.size + f.visibilityListeners.size, 0);
+  f.visibility(false); f.poll(); f.finish("GET", []); await f.settle(); assert.deepEqual(f.interactions, []);
+});
+
+const completedJob = () => ({ ...job("job-one", "completed"), artifacts: [{ relative_path: "outputs/result.md" }] });
+
+test("poll completion transfers an active removed job action to that job's artifact without scrolling", async () => {
+  const f = mount([job()]); await f.ready(); const previous = f.elements.get("job:job-one"); f.move(previous); f.poll();
+  assert.deepEqual(f.interactions, []); f.finish("GET", [completedJob()]); await f.settle();
+  const artifact = f.elementForText("result.md"); assert.ok(artifact); assert.equal(previous.isConnected, false); assert.equal(f.document.activeElement, artifact);
+  assert.deepEqual(f.interactions, [{ type: "focus", key: artifact.key, preventScroll: true }]);
+  assert.deepEqual(f.revealed, []); assert.equal(f.listeners.size + f.visibilityListeners.size, 0);
+  f.poll(); f.finish("GET", [completedJob()]); await f.settle(); assert.equal(f.interactions.length, 1);
+});
+
+test("poll completion without artifacts focuses the same job title instead of another task", async () => {
+  const f = mount([job(), job("job-two")]); await f.ready(); f.move(f.elements.get("job:job-one")); f.poll();
+  f.finish("GET", [job("job-one", "completed"), job("job-two")]); await f.settle();
+  assert.equal(f.document.activeElement, f.elements.get("title:job-one")); assert.equal(f.elements.get("title:job-one").node.props.tabIndex, -1);
+  assert.deepEqual(f.interactions, [{ type: "focus", key: "title:job-one", preventScroll: true }]);
+});
+
+for (const state of ["same action", "removed task"]) test(`poll with ${state} does not invent a focus transfer`, async () => {
+  const f = mount([job()]); await f.ready(); const previous = f.elements.get("job:job-one"); f.move(previous); f.poll();
+  f.finish("GET", state === "same action" ? [job("job-one", "running")] : []); await f.settle();
+  assert.deepEqual(f.interactions, []); assert.equal(f.listeners.size + f.visibilityListeners.size, 0);
+  assert.equal(f.document.activeElement, state === "same action" ? previous : f.document.body);
+});
+
+for (const current of ["body", "draft"]) test(`ordinary completion polling preserves active ${current} focus`, async () => {
+  const f = mount([job()]); await f.ready(); if (current === "draft") f.fill();
+  const active = f.document.activeElement; f.interactions.length = 0; f.poll(); f.finish("GET", [completedJob()]); await f.settle();
+  assert.equal(f.document.activeElement, active); assert.deepEqual(f.interactions, []);
+});
+
+test("moving focus away during the poll cancels replacement even after focus returns to body", async () => {
+  const f = mount([job()]); await f.ready(); f.move(f.elements.get("job:job-one")); f.poll(); f.move(); f.move(f.document.body);
+  f.finish("GET", [completedJob()]); await f.settle(); assert.deepEqual(f.interactions, []); assert.equal(f.document.activeElement, f.document.body);
+});
+
+test("a late older poll cannot undo the newest completion or replay its replacement request", async () => {
+  const f = mount([job()]); await f.ready(); f.move(f.elements.get("job:job-one")); f.poll(); f.poll();
+  f.finish("GET", [completedJob()], { index: 1 }); await f.settle(); const artifact = f.elementForText("result.md"); assert.equal(f.document.activeElement, artifact);
+  f.finish("GET", [job()]); await f.settle(); assert.equal(f.document.activeElement, artifact); assert.equal(f.interactions.length, 1); assert.match(f.text(), /result.md/);
+});
+
+test("a stale poll cannot clear a newer explicit row action focus request", async () => {
+  const f = mount([job()]); await f.ready(); f.move(f.elements.get("job:job-one")); f.poll(); f.click("job:job-one");
+  f.finish("GET", [completedJob()]); await f.settle(); assert.deepEqual(f.interactions, []);
+  f.finish("POST"); await f.settle(); f.finish("GET", [job("job-one", "canceled")]); await f.settle();
+  assert.equal(f.document.activeElement, f.elements.get("job:job-one")); assert.equal(f.interactions.length, 1); assert.match(f.text(), /重新开始/);
+});
+
+for (const interrupted of ["document", "ancestor", "directory", "unmount"]) test(`poll completion after ${interrupted} cannot steal focus`, async () => {
+  const f = mount([job()]); await f.ready(); f.move(f.elements.get("job:job-one")); f.poll();
+  if (interrupted === "document") { f.visibility(true); f.visibility(false); }
+  else if (interrupted === "ancestor") f.hide();
+  else if (interrupted === "directory") f.scope("/test/two");
+  else f.unmount();
+  f.finish("GET", [completedJob()]); await f.settle(); assert.deepEqual(f.interactions, []); assert.equal(f.listeners.size + f.visibilityListeners.size, 0);
+});
+
+test("a failed poll retains the existing action and removes its replacement listeners", async () => {
+  const f = mount([job()]); await f.ready(); const previous = f.elements.get("job:job-one"); f.move(previous); f.poll();
+  f.finish("GET", [], { status: 503 }); await f.settle(); assert.equal(f.document.activeElement, previous); assert.deepEqual(f.interactions, []); assert.equal(f.listeners.size + f.visibilityListeners.size, 0);
+});
+
+test("a retry already completed in its first follow-up read focuses that same job's artifact", async () => {
+  const f = mount([job("job-one", "canceled")]); await f.ready(); f.click("job:job-one");
+  assert.deepEqual(f.pending("POST")[0].body, { action: "retry", jobId: "job-one" });
+  f.finish("POST"); await f.settle(); f.finish("GET", [completedJob()]); await f.settle();
+  const artifact = f.elementForText("result.md"); assert.equal(f.document.activeElement, artifact);
+  assert.deepEqual(f.interactions, [{ type: "focus", key: artifact.key, preventScroll: false }]);
 });
 
 test("initial delayed education loading disables creation until its workspace is known", async () => {

@@ -462,6 +462,17 @@
 .edupi-admin-recycle__history span,
 .edupi-admin-recycle__history time { color: var(--text-muted); font-size: 9px; }
 .edupi-admin-recycle__history p { grid-column: 1 / -1; margin: 0; font-size: 9px; }
+.edupi-background-jobs { margin-top: 24px; }
+.edupi-background-job-header { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.edupi-background-job-header h2 { margin: 0; scroll-margin-block-start: 24px; font-size: 14px; font-weight: 600; line-height: 1.4; }
+.edupi-background-job-form { min-width: 0; }
+.edupi-background-job-fields { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 20px 16px; margin: 0; padding: 0; border: 0; }
+.edupi-background-job-field-wide,
+.edupi-background-job-form-actions { grid-column: 1 / -1; }
+.edupi-background-job-fields .native-input,
+.edupi-background-job-fields .native-select { min-width: 0; box-sizing: border-box; }
+.edupi-background-job-fields textarea.native-input { min-height: 120px; line-height: 1.6; resize: vertical; }
+.edupi-background-job-form-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .edupi-background-job-row { flex-wrap: wrap; }
 .edupi-background-job-actions { display: flex; max-width: 56%; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
 .edupi-background-job-details { color: var(--text-muted); font-size: 10px; text-align: right; }
@@ -641,6 +652,7 @@
 }
 
 @container (max-width: 680px) {
+  .edupi-background-job-fields { grid-template-columns: minmax(0, 1fr); }
   .edupi-admin-section { padding: 32px 24px 48px; }
   .edupi-admin-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .edupi-admin-metrics > div { min-height: 80px; padding: 12px; border-right: 1px solid var(--border); border-bottom: 0; }

@@ -540,12 +540,24 @@ export function AppShell() {
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !initialSessionId);
   // Suppresses sessionKey bump in handleCwdChange during the initial URL restore
   const suppressCwdBumpRef = useRef(false);
+  const initialCwdSupersededRef = useRef(false);
+  const handleCwdSelect = useCallback((cwd: string) => {
+    initialCwdSupersededRef.current = true;
+    suppressCwdBumpRef.current = false;
+    // Discard a different startup cwd already queued before this selection.
+    setNewSessionCwd((prev) => prev === cwd ? prev : null);
+    setInitialSessionRestored(true);
+    setInitialCwdStatus("ready");
+    setInitialCwdError(null);
+  }, []);
 
   useEffect(() => {
     const requestedCwd = initialNavigation.requestedCwd;
     if (!requestedCwd) return;
 
     const controller = new AbortController();
+    // A chosen chat or directory wins over delayed startup validation.
+    const canRestore = () => !controller.signal.aborted && !initialCwdSupersededRef.current && !activeCwdRef.current && !activeSessionIdRef.current;
     setInitialCwdStatus("validating");
     setInitialCwdError(null);
 
@@ -557,6 +569,7 @@ export function AppShell() {
     })
       .then(async (response) => {
         const data = await response.json().catch(() => ({})) as { cwd?: string; error?: string };
+        if (!canRestore()) return;
         if (!response.ok || !data.cwd) {
           throw new Error(data.error ?? `HTTP ${response.status}`);
         }
@@ -568,7 +581,7 @@ export function AppShell() {
         setInitialCwdStatus("ready");
       })
       .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
+        if (!canRestore()) return;
         setInitialCwdError(error instanceof Error ? error.message : String(error));
         setInitialCwdStatus("error");
       });
@@ -583,6 +596,9 @@ export function AppShell() {
     if (previousCwd && cwd && previousCwd !== cwd) { setPendingEduPiContext(null); setPendingTeacherDraft(null); }
     // Skip if cwd is null (initial mount).
     if (!cwd) return;
+    setInitialSessionRestored(true);
+    setInitialCwdStatus("ready");
+    setInitialCwdError(null);
     const newProject = projectRoot ?? cwd;
     const currentProject = activeProjectRootRef.current
       ?? (selectedSession ? (selectedSession.projectRoot ?? selectedSession.cwd) : null);
@@ -603,7 +619,7 @@ export function AppShell() {
     if (currentProject) { setPendingEduPiContext(null); setPendingTeacherDraft(null); }
     // Close any session that belongs to a different project — it no longer
     // matches the selected project directory.
-    setSelectedSession(null);
+    if (!selectedSession || (selectedSession.projectRoot ?? selectedSession.cwd) !== newProject) setSelectedSession(null);
     setNewSessionCwd((prev) => {
       if (prev && prev !== cwd) return null;
       return prev;
@@ -691,6 +707,7 @@ export function AppShell() {
     }
     setSelectedSession(null);
     setNewSessionCwd(cwd);
+    setInitialSessionRestored(true);
     setEduPiEducationModule(null);
     // A second click in the same cwd must still create a clean composer. The
     // cwd-derived session identity alone cannot distinguish those blank tasks.
@@ -716,6 +733,7 @@ export function AppShell() {
     }
     setSelectedSession(null);
     setNewSessionCwd(cwd);
+    setInitialSessionRestored(true);
     setSessionKey((key) => key + 1);
     setBranchTree([]);
     setBranchActiveLeafId(null);
@@ -1193,15 +1211,17 @@ export function AppShell() {
   // Show chat area if a session is selected, or if we have a cwd to start a new session in
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
   useEffect(() => {
-    if (!edupiChatActive || selectedSession || effectiveNewSessionCwd || !initialSessionRestored) return;
+    if (!edupiChatActive || selectedSession || effectiveNewSessionCwd || !initialSessionRestored || initialNavigation.requestedCwd) return;
     const controller = new AbortController();
+    const canRestore = () => !controller.signal.aborted && !initialCwdSupersededRef.current && !activeCwdRef.current && !activeSessionIdRef.current;
     void readEduPiWorkspace({ signal: controller.signal }).then(async bundle => {
+      if (!canRestore()) return;
       const response = await fetch("/api/cwd/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd: bundle.data.workspace }), signal: controller.signal });
       if (!response.ok) throw new Error("教育工作区无法打开");
-      if (!controller.signal.aborted) setNewSessionCwd(bundle.data.workspace);
+      if (canRestore()) setNewSessionCwd(bundle.data.workspace);
     }).catch(() => { /* Education panel exposes workspace errors and retry. */ });
     return () => controller.abort();
-  }, [edupiChatActive, selectedSession, effectiveNewSessionCwd, initialSessionRestored]);
+  }, [edupiChatActive, selectedSession, effectiveNewSessionCwd, initialSessionRestored, initialNavigation.requestedCwd]);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
   const projectTrustCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
   const showPlaceholder = initialSessionRestored && !showChat;
@@ -1390,18 +1410,20 @@ export function AppShell() {
     { id: "settings", label: "教师设置", onClick: () => edupiEducationModule ? openEduPiAdmin("settings") : setAppSettingsOpen(true), disabled: false, iconOnly: true, icon: <span aria-hidden="true">⚙</span> },
   ];
 
+  // Both sidebars remount across education views; only the first may restore startup state.
   const renderSessionSidebar = (presentation: "default" | "embedded-chat" = "default") => (
       <SessionSidebar
         selectedSessionId={selectedSession?.id ?? null}
         onSelectSession={presentation === "embedded-chat" ? handleEducationSelectSession : handleSelectSession}
         onNewSession={presentation === "embedded-chat" ? handleEducationNewSession : handleNewSession}
-        initialSessionId={initialSessionId}
-        skipInitialProjectSelection={initialNavigation.requestedCwd !== null}
+        initialSessionId={initialSessionRestored ? null : initialSessionId}
+        skipInitialProjectSelection={initialNavigation.requestedCwd !== null || Boolean(selectedSession || effectiveNewSessionCwd)}
         onInitialRestoreDone={handleInitialRestoreDone}
         refreshKey={refreshKey}
         onSessionDeleted={handleSessionDeleted}
-        selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
+        selectedCwd={selectedSession?.cwd ?? effectiveNewSessionCwd}
         onCwdChange={handleCwdChange}
+        onCwdSelect={handleCwdSelect}
         onOpenFile={handleOpenFile}
         selectedFilePath={activeFileTab?.filePath ?? null}
         explorerRefreshKey={explorerRefreshKey}
