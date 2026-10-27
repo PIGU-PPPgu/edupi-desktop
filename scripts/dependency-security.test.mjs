@@ -83,6 +83,66 @@ test("Zod rejects oversized bounded collections before validating their elements
   }
 });
 
+test("OpenConnector query consumers resolve the patched shared qs package", async () => {
+  const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
+  const manifest = require.resolve("qs/package.json");
+  const consumers = Object.entries(lock.packages).filter(([, entry]) => entry.dependencies?.qs);
+  assert.ok(consumers.some(([location]) => location === "node_modules/ali-oss"));
+  assert.ok(consumers.some(([location]) => location === "node_modules/urllib"));
+  for (const [location] of consumers) {
+    assert.equal(createRequire(new URL(`../${location}/package.json`, import.meta.url)).resolve("qs/package.json"), manifest);
+  }
+  const installed = JSON.parse(await readFile(manifest, "utf8"));
+  assert.ok(semver.gte(installed.version, "6.16.1"), installed.version);
+  assert.equal(installed.version, lock.packages["node_modules/qs"].version);
+});
+
+test("qs comma serialization safely coerces hostile JSON and parsed array elements", () => {
+  const qs = require("qs");
+  // GHSA-6pq8-jhm2-2vcw: both comma paths used to throw before a caller could reply.
+  for (const encodeValuesOnly of [false, true]) {
+    for (const input of [JSON.parse('{"a":[{"toString":"x"}]}'),
+      JSON.parse('{"a":[[{"toString":"x"}]]}'),
+      qs.parse("a[0][toString]=x", { allowPrototypes: true }),
+      qs.parse("a[][b]=c", { plainObjects: true })]) {
+      const output = qs.stringify(input, { arrayFormat: "comma", encodeValuesOnly });
+      assert.equal(qs.parse(output).a, "[object Object]");
+    }
+  }
+  assert.equal(qs.stringify({ a: ["x", "y"] }, { arrayFormat: "comma" }), "a=x%2Cy");
+  assert.equal(qs.stringify({ a: [{ toString() { return "z"; } }] }, { arrayFormat: "comma" }), "a=z");
+  assert.equal(qs.stringify(JSON.parse('{"a":[{"toString":"x"}]}')), "a%5B0%5D%5BtoString%5D=x");
+});
+
+test("qs malformed comma input leaves a bare local HTTP worker available for its next request", t => {
+  const output = execFileSync(process.execPath, ["-e", String.raw`
+    const assert = require("node:assert/strict");
+    const http = require("node:http");
+    const { once } = require("node:events");
+    const qs = require(process.argv[1]);
+    (async () => {
+      const server = http.createServer(async (request, response) => {
+        if (request.url === "/health") { response.end("healthy"); return; }
+        let raw = ""; for await (const part of request) raw += part;
+        response.end(qs.stringify(JSON.parse(raw), { arrayFormat: "comma" }));
+      });
+      server.listen(0, "127.0.0.1"); await once(server, "listening");
+      const origin = "http://127.0.0.1:" + server.address().port;
+      try {
+        const bad = await fetch(origin, { method: "POST", body: '{"a":[{"toString":"x"}]}', signal: AbortSignal.timeout(2000) });
+        assert.equal(bad.status, 200); assert.equal(qs.parse(await bad.text()).a, "[object Object]");
+        const next = await fetch(origin + "/health", { signal: AbortSignal.timeout(2000) });
+        assert.equal(await next.text(), "healthy");
+        console.log("malformed comma input and the next request both completed");
+      } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    })().catch(error => { console.error(error); process.exitCode = 1; });
+  `, require.resolve("qs")], {
+    env: { PATH: process.env.PATH }, timeout: 6000, killSignal: "SIGKILL",
+    maxBuffer: 128 * 1024, stdio: "pipe", encoding: "utf8",
+  });
+  t.diagnostic(output.trim());
+});
+
 test("Undici verifies uppercase and mixed-case integrity algorithm tokens", async () => {
   const { MockAgent, fetch } = require("undici");
   const { createHash } = require("node:crypto");
