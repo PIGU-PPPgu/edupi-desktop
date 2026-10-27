@@ -1,5 +1,17 @@
 # 自动下载安装
 
+## 2026-10-27 召回与大历史认证追补
+
+- 本轮源码实现与Mac本机补验通过。Core PR389已正常合为固定155275d1155d0cb5003574c2ee8fa35f0f353add，Desktop PR388交付本轮消费者；本段覆盖下方849e及本轮中间候选状态。原任务仍为R03/R04，不替换旧失败或另立验收账本。不打包、不安装/操作正式App、不清理、不做Windows，不碰真实教师资料/模型凭据/TCC/launchd/时钟能源/Release/feed。
+- Core性能只从独立实验中提取最终历史修补到官方562f3123基线的PR389，未混入三轮未过的启发式召回代码。非Windows完整ACK正常写复用已认证事务，逐次全历史认证、同inode/权限/Root/lease/authority检查及prewrite fsync保留；pending ACK独立修补，Windows沿旧两事务路径。codec仅省去JSON.parse产物的等价重排，公共strict检查/HMAC/AEAD/AAD不变。故障注入覆盖旧record/action/anchor篡改、同端口和其他已有端口的postcommit fsync失败围栏，并由实际新Node进程恢复未刷ACK且不重复动作。canonical record/action各168组等价、31组拒绝输入通过。
+- Mac26.6/arm64、Node22.23.1同根交替7组最终登记→捕获→精读，历史实际524/531增至538/559：组合p50 1470.24→740.81ms、p95 1625.47→981.55ms；固定538/559同锚15组精读p50 79.99→69.84ms、HTTP health 92.31→78.78ms。仍O(history)，早期省掉prewrite fsync的中间数字无效且保留，不外推普遍SLA。
+- Desktop实际513压力已通过：`desktop-core-history-2026-10-27T08-33-48-323Z-51051a79.json`，261.546秒；513新增登记/捕获后records515/gate516，17页共515唯一认证正文、撤回正文null及最后来源精确读回。实际host冷重启generation3→5、nonce变化而owner/root/登记保持，stale settle拒绝、重放计数不变；全轮modelRequests0、所有host关闭。登记最大455ms、捕获最大462ms、health最大102ms，只代表本根实测。初次补跑在约64条时发生617秒系统睡眠，原failed和pmset日志保留；唤醒后才用新根补跑，未改原15秒请求/20分钟总时限，也不把该次睡眠叫作跨到期业务验收。
+- JPEG完整链通过：5份干扰后显式第6图片→当前可见来源及正文确认→严格source grant→公开选定task→真实registered owner自然Goal/队列→默认Desktop isolated Durable plan/draft共2调用/4产物→实际API读取/审核及synthetic反馈→真实host冷重启；产物、反馈和预算保持，无重复生成。根`edupi-visible-preparation-jpeg-rmyuVf`保留，证据副本`desktop-jpeg-evidence-copy.json`。只有本机合成provider，无真实模型外发或安装版操作。
+- 新召回消费者同时校验query的`model_execute`与`source_support`中的`source-support-v1`，无当前assessed支持不能让非空结果通过；Core先核对captured turn/owner/班级/学期/当前来源，返回后Desktop再次核对当前turn。模型只在实际query时读取父端现有安全配置，通过私有IPC/隔离worker执行；parent跨host/重载按工作区/model累计64次，单次4096tokens/12秒、取消后等待实际完成才释放槽和退出。真实SDK工具/变造结果拒绝、真实Core host/IPC/worker本机4调用、cold restart和共享预算均通过；明确为接口和隔离证据，语义新未见分数另核验。旧候选bc1142b7不转发temperature0，新增wire断言已RED；Core388正常合为6e11f120后，性能树正常merge并官方重生双清单/matrix，组合9b760fa4的真实SDK上游请求temperature0/maxTokens4096已GREEN。新的JPEG同链在组合版本再次通过，根edupi-visible-preparation-jpeg-PHAGDV与两个默认Durable调用均保留。
+- Core独立新未见v11首测由另一个Core任务在当次200次固定GLM套餐总额度授权内完成；本任务只读核验、零新增真实模型调用。60查询/45正例，queryhit37/45=0.822、来源recall41/50=0.82、precision1、禁例/无答案误返/跨班/跨期均0，预设工程门通过；51次实际请求与不可变首预测数组摘要绑定。原11held包括7个busy未调用、1超时、1无效输出及2个无候选，保持原分，不把后续补核对记为第二次盲测，也不称全召回或正式L4。首summary摘要52508767、预测摘要756c7dd4，13份冻结源码摘要与组合Core全同；私有core-v11-source-evidence-binding.json及原三文件副本保留。三轮自有启发式失败仍封存，消费官方共享来源判别不等于将它们改记通过。
+- 组合本机完整Core测试首次被visible-source资产守卫正确拒绝node_modules symlink。保留原symlink及共享目标，将同锁文件复制为真实348MiB依赖目录后，原完整命令重跑及最终tracked无变化检查通过；未放宽symlink/Root守卫、未npm ci删除现有依赖，原失败日志和复制布局记录保留。没有清理任何用户资料或生成产物。
+- 应用完整2588pass/45条件skip/0fail、typecheck/lint通过；组合实际Core配对105pass/1条件skip，源码运行的scope、删除、续聊、cold和失败围栏继续成立。独立只读审查其余新接线无新增P0–P2，参数版本依赖已由真实请求补绿；正式Core pin155275d1与受测9b760fa4整树396e8eca相同。Core完整本机npm test、58条research(0fail/0skip)、typecheck、CI环境、contract、双closure与226依赖审计各级0均通过；本机无lint脚本，未记为lint通过。GitHub组合CI40479526735仍在自托管队列，未记通过，普通merge不使用admin/auto或规则豁免。全部证据归档`~/edupi-install-checkpoints/v0.3.77/evidence/core-recall-history-20261027/`，原7项工作文件逐一SHA全同；测试包、缓存、历史失败根和新手工fixture保留。
+
 ## 2026-10-27 当前Core消费者源码配对
 
 - 状态：R03/R04/P1-N02/P1-N03的本次消费者实现与源码验证通过；GitHub集成为[PR387](https://github.com/PIGU-PPPgu/edupi-desktop/pull/387)，提交依次为`5a9c8d31`、`fa90ab28`、`c323dfc3`、`b30b1fc8`。安装、签名包、Windows及真实数据迁移未执行，发布/feed未改。此次不清理，原7项改动逐文件SHA保持；不触旧封存升级根、真实模型凭据、TCC、launchd、时钟或能源设置。
