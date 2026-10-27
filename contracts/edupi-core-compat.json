@@ -1,12 +1,15 @@
 {
   "compat_manifest_version": "1.0",
   "core_repository": "edupi",
-  "core_sdk": { "pi": "1.0.2", "pi_durable": "1.0.2" },
+  "core_sdk": {
+    "pi": "1.0.2",
+    "pi_durable": "1.0.2"
+  },
   "core_runtime": {
-    "core_commit": "292222740305772faba43f4d8e8400ad0a98ae50",
+    "core_commit": "9a574c9f2c268848e8868be1f35121d82537c8f7",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:0c6fc8e35673b6b4eec4ea8fab81a0696d7d2fb807a57232bc586fe70190ebf1",
-    "runtime_component_manifest_hash": "sha256:e3719f0ba34ef986e4042cc2ad01534c1f3b282437ae4031b158d60dd80a3fcc",
+    "component_manifest_hash": "sha256:669fe05f9c6d7da1fd76276242012ca336ab83871c870ffd8264cc565d3a6d10",
+    "runtime_component_manifest_hash": "sha256:7afc489e86dde97a6e4c6ae83cd868f68f132513b12bccf2c7ff225b49aa31a0",
     "runtime_schema_hash": "sha256:1d7ea8b9090dd4b13f093ae91db0b0e16fe061b814a3df7477c0d605fabc393f"
   },
   "contract_identities": [
@@ -244,5 +247,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/391",
     "https://github.com/PIGU-PPPgu/edupi/pull/390"
   ],
-  "change_note": "Candidate pairing to Core #391 combined source 29222274, including #390 recovery evidence, explicit quantity equivalence and owner recall transport cancellation. Final main identity and successful exact-source checks are required before the Mac signed Draft build. Runtime schema, Bridge and occurrence identities remain unchanged; both component manifests are regenerated from the same candidate. Desktop strictly accepts the documented partial-contact support reason, keeps unsupported sources empty, distinguishes temporary backend holds, and includes all relative model-host modules in the copied server. No Windows build, real teacher-data migration, public Release or feed change."
+  "change_note": "Candidate pairing to Core #391 combined source 9a574c9f, including #390 recovery evidence, explicit quantity equivalence and owner recall transport cancellation. Final main identity and successful exact-source checks are required before the Mac signed Draft build. Runtime schema, Bridge and occurrence identities remain unchanged; both component manifests are regenerated from the same candidate. Desktop strictly accepts the documented partial-contact support reason, keeps unsupported sources empty, distinguishes temporary backend holds, and includes all relative model-host modules in the copied server. No Windows build, real teacher-data migration, public Release or feed change."
 }
