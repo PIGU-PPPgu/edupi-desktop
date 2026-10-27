@@ -1,6 +1,9 @@
 export const MAX_PRIVATE_MODEL_CONFIG_BYTES = 32_768;
 export const G1_MODEL_MAX_CALLS = 12;
 export const G1_MODEL_TIMEOUT_MS = 300_000;
+export const RECALL_MODEL_MAX_CALLS = 64;
+// Leave time for authenticated source revalidation inside the 15-second owner request.
+export const RECALL_MODEL_TIMEOUT_MS = 12_000;
 export const ISOLATED_MODEL_APIS = Object.freeze(["openai-completions", "openai-responses", "anthropic-messages", "google-generative-ai"]);
 
 export const modelConfigurationError = () => Object.assign(new Error("Model configuration unavailable."), { code: "model_unavailable" });

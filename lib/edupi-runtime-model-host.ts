@@ -4,7 +4,12 @@ import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { getAgentDir, ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { readRuntimeModelConfiguration, type PrivateRuntimeModelConfiguration } from "./edupi-runtime-model-config";
-import { boundedPrivateData, privateDataKeys, validatePrivateModelConfiguration } from "../desktop/core-runtime-model-config.mjs";
+import { boundedPrivateData, privateDataKeys, validatePrivateModelConfiguration, RECALL_MODEL_MAX_CALLS, RECALL_MODEL_TIMEOUT_MS } from "../desktop/core-runtime-model-config.mjs";
+
+// Keep attempts and unfinished work across child restarts and server reloads.
+// Only counters/model identity live here; no prompt bodies or judgments are cached.
+const recallGlobals = globalThis as typeof globalThis & { __edupiRecallModelBudgets?: Map<string, { calls: number; active: boolean }> };
+const recallBudgets = recallGlobals.__edupiRecallModelBudgets ||= new Map<string, { calls: number; active: boolean }>();
 
 type LiveRequest = Record<string, unknown>;
 type LiveResult = Record<string, unknown>;
@@ -37,13 +42,14 @@ export function createRuntimeModelHost({ coreRoot, projectRoot, agentDir = getAg
       if (closed || signal.aborted) controller.abort();
       const operation = (async () => {
         const g2 = value.model_kind === "student_followup";
-        if (Object.hasOwn(value, "model_kind") && !g2) throw Object.assign(new Error("Invalid model request."), { code: "invalid_model_request" });
+        const recall = value.model_kind === "memory_recall";
+        if (Object.hasOwn(value, "model_kind") && !g2 && !recall) throw Object.assign(new Error("Invalid model request."), { code: "invalid_model_request" });
         let request: LiveRequest;
-        if (g2) {
+        if (g2 || recall) {
           const deadline = typeof value.deadline_at === "string" ? Date.parse(value.deadline_at) : NaN;
           if (Object.keys(value).sort().join(",") !== "deadline_at,model_kind,prompt"
             || typeof value.prompt !== "string" || !value.prompt.trim() || Buffer.byteLength(value.prompt) > 70000
-            || !Number.isFinite(deadline) || deadline <= Date.now() || deadline > Date.now() + 125000) {
+            || !Number.isFinite(deadline) || deadline <= Date.now() || deadline > Date.now() + (recall ? RECALL_MODEL_TIMEOUT_MS + 1000 : 125000)) {
             throw Object.assign(new Error("Invalid model request."), { code: "invalid_model_request" });
           }
           request = value;
@@ -56,11 +62,31 @@ export function createRuntimeModelHost({ coreRoot, projectRoot, agentDir = getAg
         delete binding.input;
         delete binding.materials;
         const failure = (error_code: string): LiveResult => {
-          if (g2) throw Object.assign(new Error("Model host unavailable."), { code: error_code });
+          if (g2 || recall) throw Object.assign(new Error("Model host unavailable."), { code: error_code });
           return { ...binding, ok: false, error_code, retryable: error_code === "model_unavailable", output: null, external_send: false };
         };
         if (controller.signal.aborted) return failure("cancelled");
         try {
+          if (recall) {
+            const configuration = await readRuntimeModelConfiguration({ projectRoot, agentDir, signal: controller.signal, allowLoopback });
+            const remaining = Date.parse(String(request.deadline_at)) - Date.now();
+            if (controller.signal.aborted || remaining <= 0) return failure("cancelled");
+            const key = JSON.stringify([path.resolve(projectRoot), configuration.model.provider, configuration.model.id]);
+            let budget = recallBudgets.get(key);
+            if (!budget) { budget = { calls: 0, active: false }; recallBudgets.set(key, budget); }
+            if (budget.active || budget.calls >= RECALL_MODEL_MAX_CALLS) return failure("model_unavailable");
+            const { createIsolatedG1ModelRunner } = await import(/* webpackIgnore: true */ pathToFileURL(path.join(path.dirname(adapterFile), "core_runtime_isolated_model.mjs")).href);
+            if (controller.signal.aborted) return failure("cancelled");
+            // Reserve synchronously after the last await; another host cannot
+            // consume the same workspace/model budget concurrently.
+            if (budget.active || budget.calls >= RECALL_MODEL_MAX_CALLS) return failure("model_unavailable");
+            const runner = createIsolatedG1ModelRunner({ ...configuration, maxCalls: 1, temperature: 0,
+              maxTokens: Math.min(configuration.maxTokens, 4096),
+              timeoutMs: Math.max(1, Math.min(RECALL_MODEL_TIMEOUT_MS, Date.parse(String(request.deadline_at)) - Date.now())) });
+            budget.calls++; budget.active = true;
+            try { const result = await runner({ prompt: request.prompt, signal: controller.signal }); return { output: result.output }; }
+            finally { try { await runner.waitForIdle(); } finally { budget.active = false; } }
+          }
           const settings = SettingsManager.create(projectRoot, agentDir);
           const runtime = await ModelRuntime.create({ authPath: path.join(agentDir, "auth.json"), modelsPath: path.join(agentDir, "models.json"), signal: controller.signal });
           const provider = settings.getDefaultProvider();

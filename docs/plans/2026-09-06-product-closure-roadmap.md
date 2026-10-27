@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-10-27 R03/R04追补进行中，覆盖下方“513/JPEG未补验”的旧状态：Desktop实际生产supervisor/host已完成513次新增登记捕获，515条正文经17页完整认证读回，真实冷重启/重放及旧binding拒绝通过；完整脚本261.546秒、modelRequests0。JPEG第6图片自然捕获到默认Durable两调用/四稿、审核/合成反馈/冷重启保持通过。首轮617秒真实睡眠造成的64条附近请求超时保留，不放宽原15秒请求和20分钟整体时限。Core大历史修补在PR389独立验证，最终组合CI及正式pin尚待；新召回query模型标记/支持结果、懒调用与跨host预算已补，旧Core runner忽略temperature的真实wire反例保持，已正常消费Core388并在组合9b760fa4的真实wire断言补绿，105项配对通过、1条件跳过。应用2588pass45skip0fail/type/lint通过；另复核Core独立v11首测60查询的冻结摘要/预测绑定和13源码hash，queryhit37/45、source41/50、precision100%、禁例/跨班/跨期0，原11held及旧失败不改，本任务新增真实模型调用0。原7文件SHA保持，不打包、不安装、不清理、不做Windows。[本轮证据](2026-09-07-signed-updates.md#2026-10-27-召回与大历史认证追补)。
+
 2026-10-27 R03/R04/P1-N02/P1-N03的Desktop消费者源码已配对当前Core `849e4a08`，覆盖下方仍固定9f、v3/可见材料仅诊断的旧状态。[PR387](https://github.com/PIGU-PPPgu/edupi-desktop/pull/387)交付源码`5a9c8d31`、`fa90ab28`、`c323dfc3`和测试`b30b1fc8`：同一Core的四项身份、双组件逐文件闭包、PDF/PNG/JPEG read/apply及G1来源确认、图片独立正文核对、已激活Main3常驻兼容和取消后退出收尾。Main1保持原路径，不自动迁移真实数据，不新增Desktop调度或外发。
 
 本机Mac26.6/arm64、Node22.23.1：三格式真实Core/API与超限held通过；PDF/PNG各经5干扰后第6份真实来源→自然登记/捕获→自动Goal/队列→默认Durable两调用/四产物→审核/合成反馈→冷重启不重复。Main3同owner/root冷恢复459条来源及15页认证正文读回通过。应用2587pass/44条件skip/0fail、type/lint、材料51项、Core配对55pass/2缺种子数据根skip及单独原生提醒只读证明1项通过；退出围栏四项旧红后绿，最终含负例7项通过。原457次压力总时限失败、后续停止态reader误断言及字体/合成provider失败保留，不能改记第513次通过；Core R04 v9原工程失败与父项L4状态不被覆盖。[精确证据、边界及集成记录](2026-09-07-signed-updates.md#2026-10-27-当前core消费者源码配对)。签名包、安装、Windows、真实资料迁移本轮均未执行，清理保持禁止；GitHub集成由PR387记录，不把源码通过记为安装通过。

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { boundedPrivateData, privateDataKeys, validatePrivateModelConfiguration, MAX_PRIVATE_MODEL_CONFIG_BYTES,
-  G1_MODEL_MAX_CALLS, G1_MODEL_TIMEOUT_MS } from "./core-runtime-model-config.mjs";
+  G1_MODEL_MAX_CALLS, G1_MODEL_TIMEOUT_MS, RECALL_MODEL_MAX_CALLS, RECALL_MODEL_TIMEOUT_MS } from "./core-runtime-model-config.mjs";
 
 const STARTUP_ERROR_CODES = Object.freeze({
   database_unavailable: "runtime_database_unavailable",
@@ -138,11 +138,20 @@ export async function startCoreRuntimeHost({ coreRoot, options }, channel = proc
     || options.g1Scope !== undefined && !validScope(options.g1Scope)
     || options.g2Scope !== undefined && (!validScope(options.g2Scope) || options.g2Scope.subject !== "数学")) throw new Error("Invalid runtime bootstrap.");
   const g3Bindings = options.g3Bindings === undefined ? null : snapshotG3Bindings(options.g3Bindings);
-  const hostExecutor = hasModelScope ? createParentModelExecutor(channel) : null;
+  const hostExecutor = hasModelScope || options.ownerMessageRegistration ? createParentModelExecutor(channel) : null;
   try {
     const { createCoreRuntimeDaemon } = await import(pathToFileURL(path.join(coreRoot, "scripts/core_runtime_daemon.mjs")).href);
     const { g1Scope, g2Scope, ...daemonOptions } = options;
     delete daemonOptions.g3Bindings;
+    let recallSupport;
+    if (options.ownerMessageRegistration) {
+      const { createRecallSupportAssessor } = await import(pathToFileURL(path.join(coreRoot, "scripts/recall_source_support.mjs")).href);
+      // Core filters the exact captured turn before invoking this assessor.
+      // No configuration or model is read until a query actually needs it.
+      recallSupport = createRecallSupportAssessor({ maxCalls: RECALL_MODEL_MAX_CALLS, timeoutMs: RECALL_MODEL_TIMEOUT_MS,
+        runModel: ({ prompt, signal }) => hostExecutor.run({ model_kind: "memory_recall", prompt,
+          deadline_at: new Date(Date.now() + RECALL_MODEL_TIMEOUT_MS).toISOString() }, { signal }) });
+    }
     let g1Runner;
     if (g1Scope) {
       try {
@@ -173,6 +182,7 @@ export async function startCoreRuntimeHost({ coreRoot, options }, channel = proc
       if (!channel.connected) throw Object.assign(new Error("Model host unavailable."), { code: "model_unavailable" });
     }
     const daemon = await createCoreRuntimeDaemon({ ...daemonOptions,
+      ...(recallSupport ? { recallSupport } : {}),
       ...(g1Runner || g2Live || g3Bindings ? { ownerMessageContinuation: true } : {}),
       ...(g3Bindings ? { g3Live: Object.freeze({ allowedBindings: g3Bindings, durableCalendarAdministration: false }) } : {}),
       ...(g2Live ? { g2Live } : {}),
@@ -181,6 +191,7 @@ export async function startCoreRuntimeHost({ coreRoot, options }, channel = proc
     return { daemon, async close() { hostExecutor?.close(); try { await daemon.close(); } finally {
       await g1Runner?.waitForIdle();
       await g2Live?.modelAdapter.waitForIdle();
+      await recallSupport?.waitForIdle();
     } } };
   } catch (error) { hostExecutor?.close(); throw error; }
 }

@@ -33,13 +33,24 @@ type Dependencies = {
   core?: () => Promise<{ rootRef: string; call: (request: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown> }>;
 };
 
-function response(value: unknown, identity: Record<string, unknown>): Recall {
+function response(value: unknown, identity: Record<string, unknown>, queried: boolean): Recall {
   const envelope = value as { ok?: unknown; result?: Record<string, unknown> } | null;
   const result = envelope?.ok === true ? envelope.result : null;
   if (!result || result.version !== 1 || !["current", "held"].includes(String(result.status))
-    || result.external_send !== false || result.model_execute !== false
+    || result.external_send !== false || typeof result.model_execute !== "boolean"
     || Object.keys(identity).some(key => result[key] !== identity[key])
     || !Array.isArray(result.entries) || result.entries.length > 50 || JSON.stringify(result).length > 70000) {
+    return { status: "held", reason_code: "recall_unavailable", entries: [] };
+  }
+  const support = result.source_support as Record<string, unknown> | undefined;
+  if (support !== undefined && (!queried || !support || typeof support !== "object" || Array.isArray(support)
+    || Object.keys(support).sort().join(",") !== "policy,reason_code,status" || support.policy !== "source-support-v1"
+    || !["assessed", "held"].includes(String(support.status))
+    || support.reason_code !== null && (typeof support.reason_code !== "string" || support.reason_code.length > 80)
+    || support.status === "assessed" && (result.model_execute !== true || support.reason_code !== null)
+    || support.status === "held" && (result.status !== "held" || result.entries.length !== 0))
+    || result.model_execute && (!queried || !support)
+    || queried && result.entries.length > 0 && (support?.status !== "assessed" || result.model_execute !== true)) {
     return { status: "held", reason_code: "recall_unavailable", entries: [] };
   }
   const valid = result.entries.every((entry: Entry) => entry && typeof entry.id === "string"
@@ -139,7 +150,7 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
         ...(params.student_id ? { student_id: params.student_id } : {}), ...(memoryIds?.length ? { memory_ids: memoryIds } : {}),
         limit: params.limit ?? 30 }, signal);
       if (!current(turn, manager)) return denied();
-      return response(value, identity);
+      return response(value, identity, Boolean(params.query));
     } catch { return denied("recall_unavailable"); }
   }
 

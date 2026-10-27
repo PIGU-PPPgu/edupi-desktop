@@ -9,13 +9,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createJiti } from "jiti";
 import { classifyCoreRuntimeStartupError, createParentModelExecutor, startCoreRuntimeHost } from "./core-runtime-host.mjs";
 
-test("G3 forwards a frozen exact grant snapshot without a model host and rejects broad or executable configuration", { skip: process.platform !== "darwin" }, async t => {
+test("G3 forwards a frozen exact grant snapshot without reading model configuration and rejects broad or executable configuration", { skip: process.platform !== "darwin" }, async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "edupi-runtime-host-g3-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const previous = process.env.EDUPI_DESKTOP_ISOLATED_CANARY; process.env.EDUPI_DESKTOP_ISOLATED_CANARY = "1";
   t.after(() => { if (previous === undefined) delete process.env.EDUPI_DESKTOP_ISOLATED_CANARY; else process.env.EDUPI_DESKTOP_ISOLATED_CANARY = previous; });
   fs.mkdirSync(path.join(root, "scripts"));
   fs.writeFileSync(path.join(root, "scripts/core_runtime_daemon.mjs"), "export let received; export async function createCoreRuntimeDaemon(options) { received = options; return { async close() {} }; }");
+  fs.writeFileSync(path.join(root, "scripts/recall_source_support.mjs"), "export function createRecallSupportAssessor({runModel}) { return {assess:runModel,waitForIdle:async()=>{}}; }");
   const channel = new EventEmitter(); channel.connected = true; const sent = []; channel.send = value => sent.push(value);
   const options = { dataRoot: root, token: "token", supervisorSessionId: "g3", coreCommit: "a".repeat(40), componentManifestHash: `sha256:${"b".repeat(64)}`,
     port: 0, ambientPlanning: true, ownerControlToken: "control", ownerMessageRegistration: true };
@@ -112,6 +113,12 @@ test("runtime host leaves G1 Live off without an exact scoped grant and forwards
     }
     export const isIsolatedG1ModelRunner = value => runners.has(value);
   `);
+  fs.writeFileSync(path.join(root, "scripts/recall_source_support.mjs"), `
+    export function createRecallSupportAssessor(options) {
+      if (options.maxCalls !== 64 || options.timeoutMs !== 12000) throw new Error('unbounded recall');
+      return { assess: options.runModel, waitForIdle: async () => {} };
+    }
+  `);
   const channel = new EventEmitter();
   channel.connected = true;
   const messages = [];
@@ -139,6 +146,7 @@ test("runtime host leaves G1 Live off without an exact scoped grant and forwards
   const { isIsolatedG1ModelRunner } = await import(path.join(root, "scripts/core_runtime_isolated_model.mjs"));
   assert.equal(isIsolatedG1ModelRunner(lastOptions().g1Live.modelRunner), true);
   assert.equal(lastOptions().g1Live.hostExecutor, undefined);
+  assert.equal(typeof lastOptions().recallSupport.assess, "function");
   assert.equal(messages.length, 1);
   assert.equal(messages[0].type, "model-config-request");
   assert.equal(lastOptions().g3Live, undefined);
