@@ -229,6 +229,9 @@ async function start(runtime: ResolvedEduPiCore, dataRoot: ResolvedEduPiDataRoot
     if (!protocol.validateRuntimeRequest(request).ok) throw Object.assign(new Error("Invalid runtime request."), { code: "invalid_request" });
     const bytes = JSON.stringify(request);
     if (Buffer.byteLength(bytes) > protocol.CORE_RUNTIME_OUTER_REQUEST_MAX_BYTES) throw Object.assign(new Error("Runtime request too large."), { code: "invalid_request" });
+    if (ownerControl && ["material_schedule_read", "material_schedule_apply"].includes(operation) && !signal?.aborted) {
+      hasMaterialCompletion = true;
+    }
     const controller = new AbortController(); requests.add(controller);
     const cancel = () => controller.abort(); signal?.addEventListener("abort", cancel, { once: true });
     if (signal?.aborted) controller.abort();
@@ -252,7 +255,9 @@ async function start(runtime: ResolvedEduPiCore, dataRoot: ResolvedEduPiDataRoot
       const kind = protocol.classifyCoreRuntimeBridgeRequest(request);
       if (kind !== "read" && kind !== "call") throw Object.assign(new Error("Invalid runtime bridge request."), { code: "invalid_request" });
       const budget = eduPiBridgeRequestBudget(request);
-      if (budget.processingMs === 37_000 && !signal?.aborted) hasMaterialCompletion = true;
+      const frame = request as { operation?: string; action?: string };
+      const sourceRead = frame.operation === "g1-excerpt" && ["source_preview", "review_source"].includes(frame.action || "");
+      if ((budget.processingMs === 37_000 || sourceRead) && !signal?.aborted) hasMaterialCompletion = true;
       return callRuntime(kind === "read" ? "bridge_read" : "bridge_call", { bridge_frame: JSON.stringify(request) }, signal, false, budget.transportMs);
     },
     call: (operation, payload, signal) => callRuntime(operation, payload, signal, false),
