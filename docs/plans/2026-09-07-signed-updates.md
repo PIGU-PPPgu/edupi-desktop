@@ -1,5 +1,15 @@
 # 自动下载安装
 
+## 2026-10-27 十一条召回空返与Mac交付
+
+- 当前状态为执行中。用户新授权先完成R04空返追查与最新Core的macOS接线，再打包、隔离安装、清理确认可重建的生成产物；Windows延期，不自动公开Release/feed。旧“不打包/安装/清理”属于上一轮，不再当作本轮整体禁令；真实教师资料/模型凭据/TCC/launchd/时钟能源仍不改。原七项准备修改保留，原release-notes另备份后据当前真实功能更新，不丢弃升级诊断脚本。
+- 原十一held逐项已核：8有答案、3应空。七busy源于前次15秒超时后未等真实completion回收，Core producer390只机械恢复原未发模型的七条，5正例/6来源正确，2无答案中一次raw误返由联系证据veto覆盖，原恢复失败和首分不改。数量题54克/20立方厘米被旧数学规范化当54*g/20*cm^3，本轮只加明确g/克、cm³/cm^3/立方厘米组合的当前正文核对，不缩放、不算答案、不借旧标签；异量/维度/日期/标识符/伪造/撤回删除和冷重启负例通过。另一个无候选问题没有本周书名库存来源，继续空返。
+- 原invalid输出把U+201D引号改为ASCII引号，答案非原文substring，继续拒绝；正确evidence不能替代错误answer。原第40次已fetch，15.025秒后deadline取消，HTTP status/output/usage均无，外部慢因未知，失败计一次不重试。原额度163/200的记录已冻结，本任务新增真实模型调用0，不把余量当自动许可。逐ID表在Core `docs/loop/2026-10-27-recall-held-diagnosis.md`，原11不从首测报表删除。
+- 额外发现并修复生产取消：HTTP响应提前断开才将私有signal传到Core召回controller；完整响应不误取消，忽略abort的backend仍占槽至真实完成。实际HTTP旧RED/新GREEN，随后查询、source bytes/mtime保持、drain围栏及Desktop真host→私有IPC→隔离worker连接回收通过。没有新增wire授权字段或放宽调用预算。
+- Desktop补齐Core新`assessed/requested_contact_evidence_missing`白名单，保留其他独立支持结果，未知原因仍held；临时超时/busy/坏输出不再误报成缺会话范围。打包server脚本漏掉`recall_source_support.mjs`及`model_json.mjs`已补，原实际复制后import RED→GREEN；完整实际SDK复制运行仍须随包暂存门。两处静态审查无新增确定P0–P2。Core迁移quiescence不接受通用IPC模型runner品牌，但当前Desktop无该迁移入口；继续验证Main1/已激活Main3，不借测试primitive自动迁移真实资料。
+- Core新独立树当前候选292222740305772faba43f4d8e8400ad0a98ae50，PR391/CI40500391059；producer390的ccab3189/CI40498649279尚在核对，不提前称已合main。组合scoped/type/contract/双manifest/writer通过，包含57成功raw离线回放和原invalid held；完整Core suite/CI继续。Desktop组合配对107pass/2条件skip、全套2588pass/46条件skip/0fail/type/lint通过；2项为缺真实种子根及未暂存完整SDK，不能计pass。精确新pin/签名包及安装结果仍待。
+- 新鲜本机检查：唯一 `/Applications/EduPi.app` 当前实际0.3.77/Core03bbb893，正常签名可验证但Gatekeeper为Unnotarized Developer ID，现有App仍运行。新安装前须基于此实际版本保护回退与最新数据，不沿用旧公开70快照，不绕过系统拒绝；尚未退出/替换它。已有签名秘密只核对名称不读值，本机无updater私钥/公证环境，计划检查全通过后用既有仅Mac签名Draft工作流。v0.3.78尚无本轮tag/run/资产，所有新旧证据保留在`~/edupi-install-checkpoints/v0.3.77/evidence/core-recall-gap-install-20261027/`。
+
 ## 2026-10-27 召回与大历史认证追补
 
 - 最终Core155真实Desktop host另补默认16完整链、18正文/3页认证、冷重启身份保持及幂等通过，modelRequests0、所有host关闭；最终配对28/28、type/lint通过。该轻量最终身份补验与原513压力分开记录，未把16条改记513。
