@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { EduPiDocxSourceSelection } from "./EduPiDocxSourceSelection";
 import type { EduPiMaterialLessonProposal } from "@/lib/edupi-core-process-client";
 
-type Excerpt = { revision: number; status: "confirmed" | "withdrawn"; content: string; source_kind?: "docx_parsed_fragment" | "teacher_curated" };
+type Excerpt = { revision: number; status: "confirmed" | "withdrawn"; content: string;
+  source_kind?: "docx_parsed_fragment" | "pdf_visible_fragment" | "image_reviewed_fragment" | "teacher_curated" };
 export function EduPiMaterialExcerpt({ materialId, onPreview, canSelectDocx = false, chapterProposal, metadataRevision, available = true }: {
   materialId: string; onPreview?: () => void; canSelectDocx?: boolean; chapterProposal?: EduPiMaterialLessonProposal;
   metadataRevision?: number; available?: boolean;
@@ -45,7 +46,7 @@ export function EduPiMaterialExcerpt({ materialId, onPreview, canSelectDocx = fa
   return <details className="edupi-material-excerpt" onToggle={event => setOpen(event.currentTarget.open)}><summary>用于备课</summary><div className="edupi-material-excerpt__body">
     {onPreview ? <button type="button" onClick={onPreview}>预览原材料</button> : null}
     <label>核对正文<textarea aria-label="备课材料正文" rows={8} value={content} disabled={busy || !loaded} onChange={event => setContent(event.target.value)} /></label>
-    {excerpt ? <p role="status">{excerpt.status === "confirmed" ? "已确认" : "已撤回"}{excerpt.source_kind === "docx_parsed_fragment" ? " · 原文片段" : ""} · 版本 {excerpt.revision}</p> : null}
+    {excerpt ? <p role="status">{excerpt.status === "confirmed" ? "已确认" : "已撤回"}{excerpt.source_kind && excerpt.source_kind !== "teacher_curated" ? " · 原文片段" : ""} · 版本 {excerpt.revision}</p> : null}
     {loaded && content !== (excerpt?.content || "") ? <p role="status">当前输入未保存</p> : null}
     {canSelectDocx && loaded && available ? <EduPiDocxSourceSelection materialId={materialId} expectedRevision={excerpt?.revision || 0}
       chapterProposal={chapterProposal} metadataRevision={metadataRevision} available={available} onSettled={confirmed => {

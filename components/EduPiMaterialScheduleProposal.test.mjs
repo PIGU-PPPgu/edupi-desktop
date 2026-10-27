@@ -38,6 +38,7 @@ test("reopened material has no cached current claim and rereads on disclosure", 
 async function behaviorFixture() {
   const require = createRequire(import.meta.url);
   const model = await createJiti(import.meta.url, { tsconfigPaths: true }).import("../lib/edupi-material-schedule.ts");
+  const sourceModel = await createJiti(import.meta.url, { tsconfigPaths: true }).import("../lib/edupi-docx-chapter-suggestion.ts");
   const source = await fs.readFile(new URL("./EduPiMaterialScheduleProposal.tsx", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const slots = [], effects = [], reads = [], applies = [], nativeCalls = [];
@@ -66,6 +67,7 @@ async function behaviorFixture() {
       return { status: "accepted", applied_ids: ["synthetic-event"], rejected_ids: [], automatic_import: false, external_send: false }; },
   };
   const dependencies = { react, "@/lib/edupi-material-schedule": client,
+    "@/lib/edupi-docx-chapter-suggestion": sourceModel,
     "@/lib/desktop-native": { confirmMaterialScheduleNative: async count => {
       nativeCalls.push(count);
       return holdConfirmation ? new Promise(resolve => pendingConfirmations.push(resolve)) : confirms;
@@ -80,7 +82,10 @@ async function behaviorFixture() {
     if (!tree || typeof tree !== "object") return null;
     if (tree.type === "button" && text(tree) === label) return tree;
     return button(tree.props?.children, label); };
-  return { render, button, reads, applies, nativeCalls, text, confirm: value => { confirms = value; },
+  const checkbox = tree => { if (Array.isArray(tree)) return tree.map(checkbox).find(Boolean);
+    if (!tree || typeof tree !== "object") return null;
+    return tree.type === "input" && tree.props.type === "checkbox" ? tree : checkbox(tree.props?.children); };
+  return { render, button, checkbox, reads, applies, nativeCalls, text, confirm: value => { confirms = value; },
     holdConfirmation: () => { holdConfirmation = true; }, finishConfirmation: value => pendingConfirmations.shift()(value),
     holdApply: () => { holdApply = true; }, finishApply: error => error ? pending.shift().reject(error)
       : pending.shift().resolve({ status: "accepted", applied_ids: ["synthetic-event"], rejected_ids: [], automatic_import: false, external_send: false }),
@@ -115,6 +120,28 @@ test("disclosure reads current proof, cancel performs no apply and reopening can
     assert.equal(fixture.applies[1].expectedSourceHash, `sha256:${"e".repeat(64)}`);
     assert.equal(fixture.applies[1].expectedParseFingerprint, `sha256:${"f".repeat(64)}`);
   } finally { fixture.cleanup(); }
+});
+
+test("image text check precedes native confirmation and is cleared by every new current read", async () => {
+  const f = await behaviorFixture();
+  try {
+    f.update({ source_review_required: "image_text" });
+    let tree = f.render(); tree.props.onToggle({ currentTarget: { open: true } }); await f.flush(); tree = f.render();
+    assert.equal(f.button(tree, "确认采用").props.disabled, true);
+    await f.button(tree, "确认采用").props.onClick();
+    assert.equal(f.nativeCalls.length, 0); assert.equal(f.applies.length, 0);
+    f.checkbox(tree).props.onChange({ target: { checked: true } }); tree = f.render();
+    assert.equal(f.button(tree, "确认采用").props.disabled, false);
+    await f.button(tree, "确认采用").props.onClick(); await f.flush(); tree = f.render();
+    assert.equal(f.nativeCalls.length, 1); assert.equal(f.applies.length, 0, "the independent text check never implies native adoption confirmation");
+    f.confirm(true); await f.button(tree, "确认采用").props.onClick(); await f.flush();
+    assert.equal(f.applies.length, 1); assert.equal(f.applies[0].confirmSourceText, true);
+    f.button(f.render(), "重新读取").props.onClick(); await f.flush(); tree = f.render();
+    assert.equal(f.checkbox(tree).props.checked, false); assert.equal(f.button(tree, "确认采用").props.disabled, true);
+    f.checkbox(tree).props.onChange({ target: { checked: true } }); tree = f.render();
+    tree.props.onToggle({ currentTarget: { open: false } }); tree.props.onToggle({ currentTarget: { open: true } });
+    await f.flush(); tree = f.render(); assert.equal(f.checkbox(tree).props.checked, false);
+  } finally { f.cleanup(); }
 });
 
 test("native confirmation is single-flight and a late answer cannot adopt a closed, replaced or reread proof", async () => {

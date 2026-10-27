@@ -42,6 +42,7 @@ function checkedRead(value, materialId) {
   assert.equal(value.read_only, true);
   assert.equal(value.automatic_import, false);
   assert.equal(value.external_send, false);
+  assert.ok(value.source_review_required === undefined || value.source_review_required === "image_text");
   return value;
 }
 
@@ -74,7 +75,7 @@ export function createMaterialScheduleTestClient(call) {
   };
   return {
     read,
-    async adopt(materialId, commandId, confirm) {
+    async adopt(materialId, commandId, confirm, confirmSourceText) {
       assert.match(commandId, ID);
       const current = await read(materialId);
       assert.equal(current.status, "ready", "unresolved files cannot be adopted");
@@ -82,6 +83,10 @@ export function createMaterialScheduleTestClient(call) {
       assert.ok(Array.isArray(current.events) && current.events.length > 0);
       const proof = { action: "apply", materialId, expectedSourceHash: current.source.source_hash,
         expectedMetadataRevision: current.source.metadata_revision, expectedParseFingerprint: current.parse_fingerprint };
+      if (current.source_review_required === "image_text") {
+        if (typeof confirmSourceText !== "function" || await confirmSourceText(structuredClone(current)) !== true) return { status: "cancelled" };
+        proof.confirmSourceText = true;
+      }
       if (typeof confirm !== "function" || await confirm(structuredClone(current)) !== true) return { status: "cancelled" };
       // Do not refresh proof after confirmation and do not retry a write: the
       // real endpoint must reject a source changed while confirmation was open.

@@ -3,11 +3,11 @@
   "core_repository": "edupi",
   "core_sdk": { "pi": "1.0.2", "pi_durable": "1.0.2" },
   "core_runtime": {
-    "core_commit": "9f1292b4ff3a1ccafab201a090e4264061c54dab",
+    "core_commit": "849e4a08a0f6bdb3e41e5e28ac72c51f104fb96d",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:fcb838319f21f93a6e6c225b3a14c28cd0d344f22a831ddad7728cb14625f0e0",
-    "runtime_component_manifest_hash": "sha256:d9813e4e0a6ab69786c19827cde6f02c031db279c5f1ded84d218f004ba09419",
-    "runtime_schema_hash": "sha256:09752f53de531086201264bfc8c392a43435c799d1b65a87ba223a86b7715c1d"
+    "component_manifest_hash": "sha256:345f9e3378db01c2bde9b003a178280000792b5c5de3a19878f61dc4a5829885",
+    "runtime_component_manifest_hash": "sha256:c6063959c59c9efb6d0a1a5066131ba492a107b830abdc14a588219fc5bc1629",
+    "runtime_schema_hash": "sha256:9a833c339c40e65d6f71d74bccd050cfb0a78630f5f519887d02b97f06bf2ae5"
   },
   "contract_identities": [
     {
@@ -233,7 +233,11 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/314",
     "https://github.com/PIGU-PPPgu/edupi/pull/324",
     "https://github.com/PIGU-PPPgu/edupi/pull/321",
-    "https://github.com/PIGU-PPPgu/edupi/pull/351"
+    "https://github.com/PIGU-PPPgu/edupi/pull/351",
+    "https://github.com/PIGU-PPPgu/edupi/pull/374",
+    "https://github.com/PIGU-PPPgu/edupi/pull/378",
+    "https://github.com/PIGU-PPPgu/edupi/pull/384",
+    "https://github.com/PIGU-PPPgu/edupi/pull/386"
   ],
-  "change_note": "Paired to merged Core #351 9f1292b4. Mac CI 39934743106 checked out merge 02965f0; PR head 92608b21 has the identical tree eba0c94a. Final main also includes reviewed R03 #350/#352 probes outside both production component closures; its full-tree CI and Desktop runtime evidence are recorded separately. Rhythm merges now refresh class, subject and slot fingerprint with current source semantics, retain stable task IDs and discard prior approval. Runtime schema, Bridge v1.1, occurrence v1.2, fixtures, Pi/PiDurable 1.0.2 and the 12 public Bridge commands remain unchanged. Same-name recall keeps surviving student B while deleted-name legacy history stays held. Old preparation, artifact and feedback bindings must fail closed before current automatic preparation can resume. Existing scoped recall, grants, captured-prompt receipts, recipient confirmation, feedback lineage and consent-bound local usage remain in place. ICS/DOCX adoption requires current owner read and explicit confirmation; chapter review does not automatically prepare tasks. PDF/image/OCR/.doc adoption, legacy file update/cancel/pairing/timetable and unsupported commands/projections are not enabled. R03 v3 capsules, SQLite probes, typed claims and native PDF/image diagnostics have no production Runtime entry. Collection stays off without an approved receiver and policy; live capabilities require explicit isolated-canary activation. No external sends, automatic material approval or claim of signed/installed validation."
+  "change_note": "Paired to merged Core #386 main 849e4a08; exact main Core Quality 40438813363 succeeded. Runtime schema and both component manifests come from this same frozen commit. Bridge v1.1, occurrence v1.2, fixtures, Pi/PiDurable 1.0.2 and the 12 public Bridge commands remain unchanged. Ordinary Runtime preserves Main1 and uses normal-v3 for already activated, owner-authenticated Main3 without implicit migration or a Desktop scheduler. Streaming owner history accepts null capacity limits without changing Goal or model budgets. Current-source recall retains scope and deletion fences. macOS native visible PDF/PNG/JPEG sources use Core-owned bounded helpers; image text requires a separate explicit confirmation before schedule adoption or G1 source review. DOCX/ICS remain supported; file updates/cancel/pairing/timetable and unsupported Bridge capabilities remain held. Upload is read-only proposal delivery, never automatic adoption or preparation. Grants, captured-prompt receipts, recipient confirmation, feedback lineage and consent-bound local usage remain enforced. No real data migration, external sends, collection activation or claim of signed/installed validation."
 }
