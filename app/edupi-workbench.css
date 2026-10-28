@@ -35,7 +35,6 @@
 }
 
 .edupi-teacher-shell.is-navigation-collapsed { grid-template-columns: 58px minmax(0, 1fr); }
-.edupi-teacher-shell { transition: grid-template-columns var(--motion-surface) var(--ease-native); }
 .edupi-teacher-shell.has-desktop-drag-region { grid-template-rows: 28px minmax(0, 1fr); }
 .edupi-window-drag-region {
   display: flex;
