@@ -102,6 +102,7 @@ export interface ChatInputHandle {
   offerContext: (context: EduPiComposerContext) => void;
   offerTeacherDraft: (text: string) => void;
   preserveContextForSession: (sessionId: string) => void;
+  promoteDraftToSession: (originKey: string, sessionId: string) => void;
   insertText: (text: string) => void;
   insertIfEmpty: (text: string) => void;
   replaceText: (text: string) => void;
@@ -634,6 +635,26 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         ...(pendingFailedMessagesRef.current.length ? { pendingFailedMessages: pendingFailedMessagesRef.current } : {}),
       });
     },
+    promoteDraftToSession(originKey: string, sessionId: string) {
+      if (draftKeyRef.current !== originKey || originKey === sessionId) return;
+      // The accepted first send changes only the draft's owner. Keep edits,
+      // attachments and recovery choices made while its receipt was pending.
+      setDraft(sessionId, {
+        value: valueRef.current,
+        images: attachedImagesRef.current.map(imageToDraftImage),
+        ...(contextRef.current ? { context: contextRef.current } : {}),
+        ...(offeredContextRef.current ? { offeredContext: offeredContextRef.current } : {}),
+        ...(pendingTeacherTextRef.current ? { pendingTeacherText: pendingTeacherTextRef.current } : {}),
+        ...(pendingQueueMessagesRef.current.length ? { pendingQueueMessages: pendingQueueMessagesRef.current } : {}),
+        ...(queueRecoveryIdRef.current ? { pendingQueueRecoveryId: queueRecoveryIdRef.current, pendingQueuePrevious: queueRecoveryPreviousRef.current } : {}),
+        ...(queueRecoveryIdRef.current && queueReadyToAckRef.current ? { pendingQueueReadyToAck: true } : {}),
+        ...(queueUncertainRef.current ? { pendingQueueUncertain: true } : {}),
+        ...(pendingFailedMessagesRef.current.length ? { pendingFailedMessages: pendingFailedMessagesRef.current } : {}),
+      });
+      clearDraft(originKey);
+      draftKeyRef.current = sessionId;
+      if (submittedDraftRef.current?.draftKey === originKey) submittedDraftRef.current.draftKey = sessionId;
+    },
     insertIfEmpty(text: string) {
       const ta = textareaRef.current;
       const current = ta ? ta.value : value;
@@ -947,12 +968,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     abortDictation();
     setValue("");
     if (!keepContext) setContext(null);
-    setOfferedContext(null);
-    setPendingTeacherText("");
+    // Offers are awaiting a teacher choice and were never part of the payload.
+    // A successful send owns only the composed text, active context and images.
     setAtQuery(null);
     setHistoryMenuOpen(false);
-    if (!keepContext && !pendingQueueMessagesRef.current.length && !pendingFailedMessagesRef.current.length && !queueRecoveryIdRef.current && draftKey) clearDraft(draftKey);
-    if (!keepContext && !pendingQueueMessagesRef.current.length && !pendingFailedMessagesRef.current.length && !queueRecoveryIdRef.current && draftKeyRef.current && draftKeyRef.current !== draftKey) clearDraft(draftKeyRef.current);
+    const canClearDraft = !keepContext && !offeredContextRef.current && !pendingTeacherTextRef.current
+      && !pendingQueueMessagesRef.current.length && !pendingFailedMessagesRef.current.length && !queueRecoveryIdRef.current;
+    if (canClearDraft && draftKey) clearDraft(draftKey);
+    if (canClearDraft && draftKeyRef.current && draftKeyRef.current !== draftKey) clearDraft(draftKeyRef.current);
     clearImages();
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -1097,7 +1120,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       // A retry may only confirm an earlier delivery. Its request-aware ACK
       // owns cleanup; this send's fresh revision cannot authorize it again.
       if (previous.pendingPrompt) return;
-      if (draftKeyRef.current === originKey && valueRef.current.trim() === msg && attachedImagesRef.current === sentImages
+      if ((draftKeyRef.current === originKey || submittedDraftRef.current === submittedDraft && draftKeyRef.current === submittedDraft.draftKey)
+        && valueRef.current.trim() === msg && attachedImagesRef.current === sentImages
         && editRevisionRef.current === submittedDraft.revision) {
         clearInput((msg.startsWith("!") || msg.startsWith("/")) && attachedImages.length === 0);
       } else if (draftKeyRef.current !== originKey) {

@@ -91,10 +91,9 @@
 
 .edupi-context-editor__modify {
   margin-top: 14px;
-  padding: 12px;
-  border: 1px solid var(--ep-border, var(--separator, #d9dde5));
-  border-radius: 7px;
-  background: var(--ep-surface-soft, var(--bg, #f7f8fa));
+  padding: 16px 0;
+  border-top: 1px solid var(--ep-border, var(--separator, #d9dde5));
+  background: transparent;
 }
 
 .edupi-context-editor__modify-heading {
@@ -114,9 +113,9 @@
 .edupi-context-editor__modify-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .edupi-context-editor__modify-actions button,
 .edupi-context-editor__actions button { min-height: 36px; padding-inline: 12px; }
-.edupi-context-editor .edupi-entry-primary { border-color: var(--ep-blue, #315fcf); background: var(--ep-blue, #315fcf); color: #fff; }
+.edupi-context-editor .edupi-entry-primary { border-color: var(--ep-text, var(--text, #20242c)); background: var(--ep-text, var(--text, #20242c)); color: var(--ep-surface, var(--surface, #fff)); }
 .edupi-context-editor .edupi-entry-secondary { border-color: var(--ep-border-strong, var(--separator, #c4cad4)); background: var(--ep-surface, var(--surface, #fff)); color: var(--ep-text, var(--text, #20242c)); }
-.edupi-context-editor .edupi-entry-primary:hover { background: var(--ep-blue, #315fcf); filter: brightness(.94); }
+.edupi-context-editor .edupi-entry-primary:hover { filter: brightness(.94); }
 
 .edupi-context-editor__feedback,
 .edupi-context-editor__error {
@@ -129,10 +128,41 @@
 
 .edupi-context-editor__feedback { background: var(--ep-green-soft, #e9f7ef); color: var(--ep-green, #27815a); }
 .edupi-context-editor__error { background: var(--ep-red-soft, #ffeded); color: var(--ep-red, #b84747); }
-.edupi-context-editor__actions { display: grid; grid-template-columns: repeat(4, minmax(0, max-content)); justify-content: end; gap: 8px; margin-top: 14px; }
+.edupi-context-editor__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .edupi-context-editor__actions .edupi-entry-danger { border: 1px solid var(--ep-red, #b84747); border-radius: 7px; background: transparent; color: var(--ep-red, #b84747); cursor: pointer; font: inherit; font-size: 12px; font-weight: 650; }
 .edupi-context-editor__actions button:disabled,
 .edupi-context-editor__modify-actions button:disabled { cursor: not-allowed; opacity: .55; }
+
+.edupi-context-editor__history { margin-top: 20px; }
+.edupi-context-editor__history > summary > span { margin-left: auto; color: var(--ep-muted, var(--text-muted, #687181)); }
+.edupi-context-editor__history ol { margin: 0; padding: 0 12px; list-style: none; }
+.edupi-context-editor__history li { padding: 20px 0; border-bottom: 1px solid var(--ep-border, var(--separator, #d9dde5)); }
+.edupi-context-editor__history li:last-child { border-bottom: 0; }
+.edupi-context-editor__version-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+.edupi-context-editor__version-heading strong { font-size: 13px; font-weight: 550; }
+.edupi-context-editor__version-heading span,
+.edupi-context-editor__version-heading time { color: var(--ep-muted, var(--text-muted, #687181)); font-size: 12px; }
+.edupi-context-editor__version-heading time { margin-left: auto; }
+.edupi-context-editor__history li > p { margin: 12px 0 0; color: var(--ep-muted, var(--text-muted, #687181)); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.edupi-context-editor__version-fields { width: 100%; margin-top: 12px; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+.edupi-context-editor__version-fields th,
+.edupi-context-editor__version-fields td { padding: 10px 12px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.edupi-context-editor__version-fields tr > :first-child { width: 64px; padding-left: 0; }
+.edupi-context-editor__version-fields tr > :last-child { padding-right: 0; }
+.edupi-context-editor__version-fields thead th { color: var(--ep-muted, var(--text-muted, #687181)); font-size: 12px; font-weight: 400; }
+.edupi-context-editor__version-fields tbody th { color: var(--ep-muted, var(--text-muted, #687181)); font-size: 12px; font-weight: 500; }
+.edupi-context-editor__restore-value,
+.edupi-context-editor__current-value { display: inline-flex; max-width: 100%; align-items: baseline; gap: 10px; line-height: 1.6; }
+.edupi-context-editor__restore-value { min-height: 32px; padding: 0; border: 0; border-radius: 3px; background: transparent; color: var(--ep-text, var(--text, #20242c)); font: inherit; text-align: left; cursor: pointer; }
+.edupi-context-editor__restore-value > span { text-decoration: underline; text-decoration-color: var(--ep-border-strong, var(--separator, #c4cad4)); text-underline-offset: 3px; }
+.edupi-context-editor__restore-value > small,
+.edupi-context-editor__current-value > small { flex: 0 0 auto; color: var(--ep-muted, var(--text-muted, #687181)); font-size: 12px; font-weight: 400; }
+.edupi-context-editor__restore-value:hover:not(:disabled) > span { text-decoration-color: currentColor; }
+.edupi-context-editor__restore-value:focus-visible { outline: 2px solid var(--ep-blue, #315fcf); outline-offset: 3px; }
+.edupi-context-editor__restore-value:disabled { cursor: not-allowed; opacity: .5; }
+.edupi-context-editor__history-state,
+.edupi-context-editor__history-error { margin: 0; padding: 12px; color: var(--ep-muted, var(--text-muted, #687181)); font-size: 12px; }
+.edupi-context-editor__history-error { color: var(--ep-red, #b84747); }
 
 @media (max-width: 560px) {
   .edupi-context-editor { padding: 16px; }
@@ -146,9 +176,16 @@
   .edupi-context-editor__fields input,
   .edupi-context-editor__actions button,
   .edupi-context-editor__modify-actions button { min-height: 44px; }
-  .edupi-context-editor__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; }
+  .edupi-context-editor__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; }
   .edupi-context-editor__actions > :only-child { grid-column: 1 / -1; }
   .edupi-context-editor__actions button { width: 100%; }
   .edupi-context-editor__modify-actions { flex-wrap: wrap; }
   .edupi-context-editor__modify-actions button { flex: 1 1 120px; }
+  .edupi-context-editor__history ol { padding: 0; }
+  .edupi-context-editor__version-fields th,
+  .edupi-context-editor__version-fields td { padding-inline: 6px; }
+  .edupi-context-editor__version-fields tr > :first-child { width: 44px; }
+  .edupi-context-editor__restore-value,
+  .edupi-context-editor__current-value { flex-wrap: wrap; gap: 4px 8px; }
+  .edupi-context-editor__restore-value { min-height: 44px; }
 }

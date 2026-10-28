@@ -32,6 +32,8 @@ const nextConfig: NextConfig = {
     "temporal-polyfill",
   ],
   experimental: {
+    // Keep runtime route caches out of the signed desktop bundle.
+    ...(isDesktopBuild ? { isrFlushToDisk: false } : {}),
     optimizePackageImports: ["@lobehub/icons", "react-syntax-highlighter"],
   },
   allowedDevOrigins: ["192.168.*.*"],

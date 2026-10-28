@@ -17,6 +17,11 @@ function shortDate(value: string | null): string {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
+function rowTime(value: string | null): number {
+  const time = value ? Date.parse(value) : NaN;
+  return Number.isFinite(time) ? time : Number.NEGATIVE_INFINITY;
+}
+
 type ReviewTarget = { kind: "observation" | "memory_candidate"; id: string };
 type InsightRow = {
   id: string;
@@ -94,13 +99,17 @@ export function EduPiInsightDatabase({ data, query, selectedObjectId, onReviewTa
     const facts = [...(factSpine?.acceptedFacts || []), ...(factSpine?.factCandidates || [])].filter((item) => factInsightCategory(item) === category).map((item) => {
       const sources = item.observationIds.flatMap((id) => factObservations.get(id) || []);
       const observedSourceIds = new Set(sources.map((source) => source.sourceId));
-      return { id: `fact:${item.id}`, type: "事实", content: item.value, status: factStatusLabel(item.status), statusId: factInsightStatus(item), evidence: [...item.sourceIds, ...item.observationIds], metric: `${Math.round(item.confidence.score * 100)}%`, date: factSpine?.generatedAt || null, related: [factEntities.get(item.entityId), item.subjectRef, item.topicRef].filter((value): value is string => Boolean(value)), sources: uniqueSources([...sources.map((source) => `${source.sourceKind} · ${source.text}`), ...item.sourceIds.filter((sourceId) => !observedSourceIds.has(sourceId)).map((sourceId) => `来源 · ${sourceId}`)]), fact: item };
+      // Snapshot generation is not the time of an individual fact.
+      return { id: `fact:${item.id}`, type: "事实", content: item.value, status: factStatusLabel(item.status), statusId: factInsightStatus(item), evidence: [...item.sourceIds, ...item.observationIds], metric: `${Math.round(item.confidence.score * 100)}%`, date: sources.map(source => source.observedAt).sort((left, right) => Date.parse(left) - Date.parse(right)).at(-1) || null, related: [factEntities.get(item.entityId), item.subjectRef, item.topicRef].filter((value): value is string => Boolean(value)), sources: uniqueSources([...sources.map((source) => `${source.sourceKind} · ${source.text}`), ...item.sourceIds.filter((sourceId) => !observedSourceIds.has(sourceId)).map((sourceId) => `来源 · ${sourceId}`)]), fact: item };
     });
     const studentRows = studentObservations.records.map(item => ({ id: `student-event:${item.id}`, type: item.kind === "learning" ? "学习记录" : "互动记录", content: [item.canonical_topic || item.topic, item.summary].filter(Boolean).join(" · "), status: "教师记录", statusId: "observation", evidence: [item.source?.message_id].filter(Boolean), metric: `版本 ${item.revision}`, date: item.recorded_at, related: item.student_labels || item.students, sourceText: item.source?.text || "", sourceSessionId: item.source?.session_id || null }));
     return [...observations, ...facts, ...insights, ...signals, ...studentRows]
       .filter((item) => status === "all" || item.statusId === status)
       .filter((item) => !query || `${item.content} ${item.status} ${item.evidence.join(" ")} ${item.related.join(" ")}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-      .sort((left, right) => String(right.date || "").localeCompare(String(left.date || "")));
+      .sort((left, right) => {
+        const leftTime = rowTime(left.date), rightTime = rowTime(right.date);
+        return leftTime === rightTime ? 0 : leftTime < rightTime ? 1 : -1;
+      });
   }, [category, data.continuity.insights, data.continuity.signals, data.factSpine, data.observations, query, status, studentObservations.records]);
   useEffect(() => setPage(0), [category, query, status]);
   const total = rows.filter(item => !item.id.startsWith("student-event:")).length + studentObservations.total;
@@ -112,16 +121,16 @@ export function EduPiInsightDatabase({ data, query, selectedObjectId, onReviewTa
     ? "观察与洞察数据尚未接入"
     : query || status !== "all"
       ? "当前筛选暂无记录"
-      : "数据已连接，当前没有该类记录";
+      : "暂无记录";
 
   return <main className="edupi-module-workspace edupi-database-workspace">
-    <header className="edupi-module-heading"><div><h1>{categoryLabel}</h1><p>{sourceAvailable ? "数据已连接" : "数据未接入"} · {statusLabel} · {total} 条记录</p></div></header>
-    {studentObservations.error ? <p role="alert">{studentObservations.error}</p> : null}
+    <header className="edupi-module-heading"><div><h1>{categoryLabel}</h1><p>{statusLabel} · {total} 条记录</p></div></header>
+    {studentObservations.error ? <p className="edupi-page-error" role="alert">{studentObservations.error}</p> : null}
     <EduPiDeletedFacts data={data} reviewer={reviewer} onEducation={onEducation} />
-    <section className="edupi-database" aria-label={`${categoryLabel}数据库`}>
-      <div className="edupi-database__head edupi-insight-db-grid"><span>类型</span><span>内容</span><span>状态</span><span>依据</span><span>最近时间</span></div>
+    <section className={`edupi-database${visible.length === 0 ? " is-empty" : ""}`} tabIndex={visible.length > 0 ? 0 : undefined} aria-label={`${categoryLabel}数据库`}>
+      {visible.length > 0 ? <div className="edupi-database__head edupi-insight-db-grid"><span>类型</span><span>内容</span><span>状态</span><span>依据</span><span>时间</span></div> : null}
       {visible.map((item) => <details className="edupi-database-row" key={item.id}>
-        <summary className="edupi-insight-db-grid"><span>{item.type}</span><strong>{item.content}</strong><span>{item.status}</span><span>{item.evidence.length || item.related.length}</span><time>{shortDate(item.date)}</time></summary>
+        <summary className="edupi-insight-db-grid"><span>{item.type}</span><strong>{item.content}</strong><span>{item.status}</span><span>{item.evidence.length || item.related.length}</span><time dateTime={item.date && Number.isFinite(Date.parse(item.date)) ? new Date(item.date).toISOString() : undefined} title={item.fact ? "来源观察时间" : undefined}>{shortDate(item.date)}</time></summary>
         <div className="edupi-database-row__detail">
           <div><span>强度 / 置信度</span><strong>{item.metric}</strong></div>
           <div><span>关联</span><strong>{item.related.join("、") || "—"}</strong></div>
@@ -139,6 +148,6 @@ export function EduPiInsightDatabase({ data, query, selectedObjectId, onReviewTa
       </details>)}
       {studentObservations.loading ? <div role="status">读取中…</div> : visible.length === 0 && !studentObservations.error ? <div className="edupi-database__empty">{emptyMessage}</div> : null}
     </section>
-    <EduPiPagination label="观察与洞察分页" page={currentPage} pages={pages} previousDisabled={currentPage === 0 || studentObservations.loading} nextDisabled={currentPage >= pages - 1 || studentObservations.loading} onPrevious={() => setPage(currentPage - 1)} onNext={() => setPage(currentPage + 1)}/>
+    {pages > 1 ? <EduPiPagination label="观察与洞察分页" page={currentPage} pages={pages} previousDisabled={currentPage === 0 || studentObservations.loading} nextDisabled={currentPage >= pages - 1 || studentObservations.loading} onPrevious={() => setPage(currentPage - 1)} onNext={() => setPage(currentPage + 1)}/> : null}
   </main>;
 }

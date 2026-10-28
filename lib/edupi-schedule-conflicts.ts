@@ -1,6 +1,14 @@
 import { desktopApiHeaders } from "./desktop-native";
 
 export type ScheduleConflictDecision = "keep_existing" | "replace_with_candidate" | "keep_both_distinct";
+export type ScheduleConflictTarget = { canonicalId: string | null; occurrenceRef: string | null; evidenceIds?: readonly string[] };
+export type ScheduleResolutionNotice = { kind: "calendar" | "timetable"; canonicalId: string; occurrenceRef: string | null; evidenceIds: readonly string[] };
+export function scheduleResolutionMatchesTarget(target: ScheduleConflictTarget, notice: ScheduleResolutionNotice): boolean {
+  return notice.kind === "calendar" && Boolean(target.canonicalId || target.occurrenceRef || target.evidenceIds?.length)
+    && (!target.canonicalId || target.canonicalId === notice.canonicalId)
+    && (!target.occurrenceRef || target.occurrenceRef === notice.occurrenceRef)
+    && (!target.evidenceIds?.length || target.evidenceIds.every(id => notice.evidenceIds.includes(id)));
+}
 type RawRecord = Record<string, unknown>;
 export type ScheduleConflict = {
   conflictId: string;

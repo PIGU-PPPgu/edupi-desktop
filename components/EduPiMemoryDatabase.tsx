@@ -102,17 +102,17 @@ export function EduPiMemoryDatabase({ data, memoryScopes, query, selectedObjectI
   };
 
   return <main className="edupi-module-workspace edupi-database-workspace">
-    <header className="edupi-module-heading"><div><span>教育记忆 / {semester?.label || "当前学期"}</span><h1>{categoryLabel}</h1><p>{rows.length} 条当前记忆</p></div></header>
+    <header className="edupi-module-heading"><div><h1>{categoryLabel}</h1><p>{semester?.label || "当前学期"} · {rows.length} 条记忆</p></div></header>
     {message ? <p className={`edupi-memory-message is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p> : null}
-    <section className="edupi-database" aria-label={`${categoryLabel}记忆数据库`}>
-      <div className="edupi-database__head edupi-memory-db-grid"><span>记忆</span><span>关联对象</span><span>标签</span><span>累计</span><span>更新时间</span></div>
+    <section className={`edupi-database${visible.length === 0 ? " is-empty" : ""}`} tabIndex={visible.length > 0 ? 0 : undefined} aria-label={`${categoryLabel}记忆数据库`}>
+      {visible.length > 0 ? <div className="edupi-database__head edupi-memory-db-grid"><span>记忆</span><span>关联对象</span><span>标签</span><span>累计</span><span>更新时间</span></div> : null}
       {visible.map((memory) => <details id={memoryRowId(memory.id)} tabIndex={-1} open={memory.id === focusedMemoryId || undefined} className="edupi-database-row" key={`${memory.id}:${memory.id === focusedMemoryId ? "focused" : "row"}`}>
         <summary className="edupi-memory-db-grid"><strong>{memory.content}</strong><span>{memory.student || categoryLabel}</span><span>{memory.tags.slice(0, 3).join(" · ") || "—"}</span><span>{memory.count} 次</span><time>{shortDate(memory.updatedAt || memory.createdAt)}</time></summary>
         <div className="edupi-database-row__detail"><div><span>创建</span><strong>{shortDate(memory.createdAt)}</strong></div><div><span>状态</span><strong>当前事实 · 版本 {memory.revision}</strong></div><div><span>完整标签</span><strong>{memory.tags.join("、") || "无"}</strong></div>{editor?.memoryId === memory.id ? <form className="edupi-memory-editor" onSubmit={(event) => { event.preventDefault(); void saveMemory(memory); }}><textarea value={editor.draft} rows={3} maxLength={4000} autoFocus aria-label="修改记忆内容" onChange={(event) => setEditor({ ...editor, draft: event.target.value })} /><footer><button type="button" disabled={saving} onClick={() => setEditor(null)}>取消</button><button type="submit" className="is-primary" disabled={saving || !editor.draft.trim() || editor.draft.trim() === editor.originalContent}>{saving ? "保存中…" : "保存"}</button></footer></form> : <footer className="edupi-memory-actions"><button type="button" aria-disabled={!data.capabilities.memoryUpdate.enabled} aria-describedby={!data.capabilities.memoryUpdate.enabled ? memoryUpdateReasonId(memory.id) : undefined} onClick={() => { if (!data.capabilities.memoryUpdate.enabled) return; setMessage(null); setEditor({ memoryId: memory.id, draft: memory.content, originalContent: memory.content, revision: memory.revision }); }}>手动修改</button>{!data.capabilities.memoryUpdate.enabled ? <span id={memoryUpdateReasonId(memory.id)} className="edupi-visually-hidden">{data.capabilities.memoryUpdate.reason}</span> : null}<button type="button" onClick={() => openMemoryAgent(memory)}>AI 协作</button>{data.capabilities.entityDelete.enabled && data.capabilities.entityDelete.targetKinds.includes("memory") ? <button type="button" className="is-delete" disabled={Boolean(deletingId)} onClick={() => void deleteMemory(memory)}>{deletingId === memory.id ? "删除中…" : "删除"}</button> : null}</footer>}</div>
         <EduPiMemoryHistory id={memory.id} revision={memory.revision} onRestore={data.capabilities.memoryUpdate.enabled ? content => saveMemory(memory, content) : undefined} />
       </details>)}
-      {visible.length === 0 ? <div className="edupi-database__empty">此分类暂无记忆</div> : null}
+      {visible.length === 0 ? <div className="edupi-database__empty" role="status">{query.trim() ? "未找到匹配记忆" : "此分类暂无记忆"}</div> : null}
     </section>
-    <EduPiPagination label="记忆分页" page={page} pages={pages} previousDisabled={page === 0} nextDisabled={page >= pages - 1} onPrevious={() => setPage((value) => value - 1)} onNext={() => setPage((value) => value + 1)}/>
+    {pages > 1 ? <EduPiPagination label="记忆分页" page={page} pages={pages} previousDisabled={page === 0} nextDisabled={page >= pages - 1} onPrevious={() => setPage((value) => value - 1)} onNext={() => setPage((value) => value + 1)}/> : null}
   </main>;
 }

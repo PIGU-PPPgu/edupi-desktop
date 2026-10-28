@@ -91,11 +91,11 @@ export function EduPiPagedRows<T>({ rows, memoryKey, renderRow, empty = "暂无�
       {projection.rows.map((row, index) => renderRow(row, projection.page * FOREGROUND_PAGE_SIZE + index))}
       {rows.length === 0 ? <p className="edupi-module-empty">{empty}</p> : null}
     </div>
-    <nav className="edupi-paged-list__pager" aria-label="列表分页">
+    {projection.pages > 1 ? <nav className="edupi-paged-list__pager" aria-label="列表分页">
       <span>{rows.length} 项 · {projection.page + 1} / {projection.pages} 页</span>
       <button type="button" disabled={projection.page === 0} onClick={() => changePage(projection.page - 1)}>上一页</button>
       <button type="button" disabled={projection.page + 1 >= projection.pages} onClick={() => changePage(projection.page + 1)}>下一页</button>
-    </nav>
+    </nav> : null}
   </section>;
 }
 

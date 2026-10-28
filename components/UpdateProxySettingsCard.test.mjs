@@ -23,7 +23,7 @@ test("desktop settings expose a small optional update proxy control", async () =
   assert.match(html, /http:\/\/127\.0\.0\.1:7897/);
   assert.match(html, /留空使用系统网络/);
   assert.match(html, /disabled=""[^>]*>保存<\/button>/);
-  assert.match(settings, /\{desktop && <UpdateProxySettingsCard onSaved=\{\(\) => void checkForUpdates\(\)\} \/>\}/);
+  assert.match(settings, /showsPage\("about"\)[\s\S]*aria-label="关于与更新"[\s\S]*data-setting-id="update-proxy"[\s\S]*<UpdateProxySettingsCard onSaved=\{\(\) => void checkForUpdates\(\)\} \/>/);
   assert.match(source, /async function retryRead\(/);
   assert.match(source, /setUpdateProxyNative\(""\)/);
   assert.match(source, /aria-invalid=\{!valid && Boolean\(draft\.trim\(\)\)\}/);

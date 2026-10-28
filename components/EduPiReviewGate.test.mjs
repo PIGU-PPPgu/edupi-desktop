@@ -148,9 +148,9 @@ test("an uncertain post-write result offers reread without claiming the decision
 test("review board excludes a task whose Core work case has no artifacts", () => {
   const html = renderBoard(workCase([]));
   assert.equal(isTaskReviewable(task, workCase([])), false);
-  assert.match(html, />0<\/em>/);
+  assert.match(html, /<p>0 项<\/p>/);
   assert.doesNotMatch(html, /审核门禁测试任务/);
-  assert.match(html, /暂无任务/);
+  assert.match(html, /暂无待确认事项/);
 });
 
 test("review board includes a task with Core and projected artifacts", () => {

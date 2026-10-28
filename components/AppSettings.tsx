@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { AppComponentReleaseInfo, AppUpdatesResponse } from "@/lib/app-update-types";
 import {
   APP_DISTRIBUTION_NAME,
@@ -67,14 +67,14 @@ const sectionCardStyle: CSSProperties = {
 };
 
 const sectionTitleStyle: CSSProperties = {
-  fontSize: 12,
-  fontWeight: 700,
+  fontSize: 13,
+  fontWeight: 600,
 };
 
 const sectionHintStyle: CSSProperties = {
   marginTop: 3,
   color: "var(--text-muted)",
-  fontSize: 11,
+  fontSize: 12,
   lineHeight: 1.5,
 };
 
@@ -89,10 +89,44 @@ function notificationStatusLabel(status: NotificationPermissionStatus | null): s
   return "已开启";
 }
 
-function TeacherContextSettingsCard() {
+export type AppSettingsPage = "general" | "profile" | "notifications" | "devices" | "data" | "about";
+
+const PAGE_TITLES: Record<AppSettingsPage, string> = {
+  general: "常规", profile: "教师信息", notifications: "通知", devices: "设备与权限", data: "数据与隐私", about: "关于与更新",
+};
+
+function SettingsRow({ id, label, description, children }: { id: string; label: string; description?: string; children: ReactNode }) {
+  return <div className="app-settings-row" data-setting-id={id} tabIndex={-1}>
+    <div className="app-settings-row__label"><span>{label}</span>{description ? <small>{description}</small> : null}</div>
+    <div className="app-settings-row__control">{children}</div>
+  </div>;
+}
+
+function SettingsToggleRow({ id, label, hint, checked, onChange, disabled = false }: { id: string; label: string; hint?: string; checked: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
+  return <label className="app-settings-row app-settings-toggle" data-setting-id={id} tabIndex={-1}>
+    <span className="app-settings-row__label"><span>{label}</span>{hint ? <small id={`${id}-hint`}>{hint}</small> : null}</span>
+    <input type="checkbox" role="switch" checked={checked} aria-checked={checked} aria-describedby={hint ? `${id}-hint` : undefined} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
+  </label>;
+}
+
+function TeacherContextSettingsCard({ disabled = false }: { disabled?: boolean }) {
   const [context, setContext] = useState<TeacherContextSnapshot | null>(null);
-  useEffect(() => { fetch("/api/edupi/onboarding", { cache: "no-store" }).then((response) => response.json()).then(setContext).catch(() => undefined); }, []);
-  return <div className="native-settings-card app-settings-context" style={sectionCardStyle}><div><div style={sectionTitleStyle}>教师信息</div><div className="settings-context-summary"><strong>{context?.name || "尚未设置称呼"}</strong><span>{context?.school || "学校待设置"} · {context?.subject || "学科待设置"} · {context?.grade || "年级待设置"}</span></div></div><button type="button" className="native-button" onClick={() => window.dispatchEvent(new CustomEvent("edupi-open-context"))}>编辑</button></div>;
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/edupi/onboarding", { cache: "no-store", signal: controller.signal }).then((response) => {
+      if (!response.ok) throw new Error("context_unavailable");
+      return response.json();
+    }).then((value: TeacherContextSnapshot) => { if (!controller.signal.aborted) setContext(value); }).catch(() => { if (!controller.signal.aborted) setError(true); });
+    return () => controller.abort();
+  }, []);
+  const rows = [
+    ["称呼", context?.name], ["学校", context?.school], ["学科", context?.subject], ["年级", context?.grade], ["班级", context?.classes?.join("、")],
+  ];
+  return <div className="app-settings-context" data-setting-id="teacher-profile" tabIndex={-1}>
+    {error ? <p className="app-settings-error" role="alert">教师信息暂不可用</p> : <dl className="app-settings-profile">{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{context ? value || "未设置" : "正在读取"}</dd></div>)}</dl>}
+    <div className="app-settings-actions"><button type="button" className="native-button" disabled={disabled} onClick={() => window.dispatchEvent(new CustomEvent("edupi-open-context"))}>编辑资料</button></div>
+  </div>;
 }
 
 function ForegroundSettingsCard() {
@@ -106,13 +140,13 @@ function ForegroundSettingsCard() {
     window.addEventListener("edupi-foreground-save-failed", failed);
     return () => { window.removeEventListener("edupi-foreground-settings-changed", refresh); window.removeEventListener("storage", refresh); window.removeEventListener("edupi-foreground-save-failed", failed); };
   }, []);
-  return <div className="native-settings-card" style={sectionCardStyle}><label className="settings-foreground-days"><span>过期事务收起</span><input type="number" min={0} max={365} step={1} value={settings.graceDays} aria-label="过期事务收起天数" onChange={event => {
+  return <div data-setting-id="foreground" tabIndex={-1}><label className="app-settings-row settings-foreground-days"><span>过期事务收起</span><span className="app-settings-row__control"><input type="number" min={0} max={365} step={1} value={settings.graceDays} aria-label="过期事务收起天数" onChange={event => {
     const days = event.currentTarget.valueAsNumber;
     if (!Number.isInteger(days) || days < 0 || days > 365) return;
     const next = { ...readForegroundSettings(), graceDays: days };
     void writeForegroundSettings(next).then(() => setError(null), () => setError("当前窗口已生效，重启设置未保存"));
     setSettings(next);
-  }} /><span>天后</span></label>{error ? <div role="alert">{error}</div> : null}<details><summary>历史记录</summary><p style={sectionHintStyle}>只收起前台，不删除记录；可在历史中找回。课前工作按上课日期判断。</p></details></div>;
+  }} /><span>天后</span></span></label>{error ? <div className="app-settings-error" role="alert">{error}</div> : null}<details className="app-settings-help"><summary>收起规则</summary><p>只收起前台，不删除记录；可在历史中找回。课前工作按上课日期判断。</p></details></div>;
 }
 
 const computerUsePermissionSession = createComputerUsePermissionFlowSession();
@@ -127,10 +161,66 @@ function ComputerUseSettingsCard() {
   const [error, setError] = useState<string | null>(null);
   const flowRef = useRef<ComputerUsePermissionFlow | null>(null);
   const statusRef = useRef<ComputerUseStatus | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const primaryButtonRef = useRef<HTMLButtonElement>(null);
   const mountedRef = useRef(false);
   const permissionRequestInMountRef = useRef(false);
   const actionSequenceRef = useRef(0);
-  const actionKindRef = useRef<"permission" | "control" | "restart" | null>(null);
+  const actionKindRef = useRef<"permission" | "control" | "restart" | "refresh" | null>(null);
+  const busyRef = useRef(false);
+  const focusReturnRef = useRef<{ target: HTMLButtonElement; moved: boolean; cancel: () => void } | null>(null);
+  const [completedAction, setCompletedAction] = useState(0);
+
+  const beginAction = useCallback((kind: "permission" | "control" | "restart" | "refresh", trigger?: HTMLButtonElement) => {
+    if (busyRef.current) return null;
+    busyRef.current = true;
+    ++computerUseStatusSequence;
+    const actionId = ++actionSequenceRef.current;
+    actionKindRef.current = kind;
+    focusReturnRef.current?.cancel();
+    focusReturnRef.current = null;
+    if (trigger) {
+      const doc = trigger.ownerDocument;
+      const active = doc.activeElement;
+      if (active === trigger || active === doc.body || active === doc.documentElement) {
+        const pending = { target: trigger, moved: false, cancel: () => doc.removeEventListener("focusin", trackFocus) };
+        const trackFocus = (event: FocusEvent) => {
+          if (event.target !== trigger && event.target !== doc.body && event.target !== doc.documentElement) pending.moved = true;
+        };
+        doc.addEventListener("focusin", trackFocus);
+        focusReturnRef.current = pending;
+      }
+    }
+    setActionBusy(kind !== "refresh");
+    setReadingStatus(kind === "refresh");
+    setError(null);
+    return actionId;
+  }, []);
+
+  const finishAction = useCallback((actionId: number) => {
+    if (!busyRef.current || actionId !== actionSequenceRef.current) return;
+    busyRef.current = false;
+    actionKindRef.current = null;
+    if (!mountedRef.current) return;
+    setActionBusy(false);
+    setReadingStatus(false);
+    setCompletedAction((current) => current + 1);
+  }, []);
+
+  useEffect(() => {
+    if (busy) return;
+    const pending = focusReturnRef.current;
+    if (!pending) return;
+    focusReturnRef.current = null;
+    pending.cancel();
+    const root = rootRef.current;
+    if (pending.moved || !root?.isConnected || root.closest("[hidden]")) return;
+    const doc = pending.target.ownerDocument;
+    const active = doc.activeElement;
+    if (active && active !== pending.target && active !== doc.body && active !== doc.documentElement) return;
+    const target = pending.target.isConnected ? pending.target : primaryButtonRef.current;
+    if (target?.isConnected && !target.disabled && root.contains(target)) target.focus({ preventScroll: true });
+  }, [busy, completedAction]);
 
   const setPermissionFlow = useCallback((next: ComputerUsePermissionFlow | null) => {
     flowRef.current = next;
@@ -153,14 +243,16 @@ function ComputerUseSettingsCard() {
     setError(cause instanceof Error ? cause.message : String(cause));
   }, [setPermissionFlow]);
 
-  const requestPermission = useCallback(async (permission: "accessibility" | "screen_recording") => {
+  const requestPermission = useCallback(async (permission: "accessibility" | "screen_recording", trigger?: HTMLButtonElement, continuingActionId?: number) => {
     const current = statusRef.current;
     const hostKey = computerUseHostSessionKey(current?.host);
     if (!current || !hostKey) return;
+    if (continuingActionId !== undefined && (!busyRef.current || continuingActionId !== actionSequenceRef.current)) return;
+    const actionId = continuingActionId ?? beginAction("permission", trigger);
+    if (actionId === null) return;
     permissionRequestInMountRef.current = true;
     const requestId = ++computerUseStatusSequence;
     const isCurrent = () => mountedRef.current && requestId === computerUseStatusSequence;
-    const actionId = ++actionSequenceRef.current;
     actionKindRef.current = "permission";
     let requestedStatus = current;
     let requestedFlow: ComputerUsePermissionFlow | null = null;
@@ -182,6 +274,7 @@ function ComputerUseSettingsCard() {
         && computerUseHostSessionKey(next.host) === hostKey
         && next.accessibility === true
         && next.screenRecording === false
+        && !rootRef.current?.closest("[hidden]")
       ) {
         const screenFlow: ComputerUsePermissionFlow = {
           permission: "screen_recording",
@@ -197,40 +290,47 @@ function ComputerUseSettingsCard() {
       computerUsePermissionSession.cancel(requestedStatus, requestedFlow);
       if (isCurrent()) statusFailed(cause);
     } finally {
-      if (mountedRef.current && actionId === actionSequenceRef.current) {
-        setActionBusy(false);
-        actionKindRef.current = null;
-      }
+      finishAction(actionId);
     }
-  }, [applyStatus, setPermissionFlow, statusFailed]);
+  }, [applyStatus, beginAction, finishAction, setPermissionFlow, statusFailed]);
 
-  const readStatus = useCallback(async (advancePermission = true) => {
+  const readStatus = useCallback(async (advancePermission = true, enabledFromEvent?: boolean, actionId?: number) => {
     const requestId = ++computerUseStatusSequence;
     const isCurrent = () => mountedRef.current && requestId === computerUseStatusSequence;
     const currentFlow = flowRef.current;
     const hostKey = computerUseHostSessionKey(statusRef.current?.host);
-    setReadingStatus(true);
-    setError(null);
     try {
       const next = await getComputerUseStatusNative();
       if (!isCurrent()) return;
-      const resolvedFlow = applyStatus(next);
-      if (advancePermission && permissionRequestInMountRef.current && hostKey && computerUseHostSessionKey(next.host) === hostKey
+      const resolvedFlow = applyStatus(enabledFromEvent === undefined ? next : { ...next, enabled: enabledFromEvent });
+      setError(null);
+      if (advancePermission && !rootRef.current?.closest("[hidden]") && permissionRequestInMountRef.current && hostKey && computerUseHostSessionKey(next.host) === hostKey
         && currentFlow?.permission === "accessibility" && resolvedFlow?.permission === "screen_recording"
-        && !resolvedFlow.screenRecordingRequested) await requestPermission("screen_recording");
+        && !resolvedFlow.screenRecordingRequested) await requestPermission("screen_recording", undefined, actionId);
     } catch (cause) {
       if (isCurrent()) statusFailed(cause);
-    } finally {
-      if (isCurrent()) setReadingStatus(false);
     }
   }, [applyStatus, requestPermission, statusFailed]);
 
-  const refreshStatus = useCallback(() => readStatus(), [readStatus]);
+  const refreshStatus = useCallback(async (trigger?: HTMLButtonElement) => {
+    const actionId = beginAction("refresh", trigger);
+    if (actionId === null) return;
+    try {
+      await readStatus(true, undefined, actionId);
+    } finally {
+      finishAction(actionId);
+    }
+  }, [beginAction, finishAction, readStatus]);
 
   useEffect(() => {
     mountedRef.current = true;
     void readStatus(false);
-    return () => { mountedRef.current = false; permissionRequestInMountRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+      permissionRequestInMountRef.current = false;
+      focusReturnRef.current?.cancel();
+      focusReturnRef.current = null;
+    };
   }, [readStatus]);
 
   useEffect(() => computerUsePermissionSession.subscribeToCancellation(() => {
@@ -244,45 +344,42 @@ function ComputerUseSettingsCard() {
       const change = computerUseControlSession.acceptChange(enabled);
       if (!change.accepted) return;
       computerUseStatusSequence++;
-      setReadingStatus(false);
-      if (actionKindRef.current === "control" && !change.controlPending) {
-        setActionBusy(false);
-        actionKindRef.current = null;
-      }
-      setStatus((current) => {
-        const next = current ? { ...current, enabled } : current;
+      if (actionKindRef.current === "control" && !change.controlPending) finishAction(actionSequenceRef.current);
+      const current = statusRef.current;
+      if (current) {
+        const next = { ...current, enabled };
         statusRef.current = next;
-        return next;
-      });
+        setStatus(next);
+      } else {
+        void readStatus(false, enabled);
+      }
     };
     window.addEventListener(COMPUTER_USE_CHANGED_EVENT, update);
     return () => window.removeEventListener(COMPUTER_USE_CHANGED_EVENT, update);
-  }, []);
+  }, [finishAction, readStatus]);
 
   useEffect(() => {
-    const refreshAfterSystemSettings = () => { void refreshStatus(); };
+    const refreshAfterSystemSettings = () => { if (!busyRef.current) void readStatus(); };
     window.addEventListener("focus", refreshAfterSystemSettings);
     return () => window.removeEventListener("focus", refreshAfterSystemSettings);
-  }, [refreshStatus]);
+  }, [readStatus]);
 
   useEffect(() => {
     if (flow?.permission !== "accessibility" || busy) return;
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void readStatus();
+      if (document.visibilityState === "visible" && !busyRef.current) void readStatus();
     }, 2000);
     return () => window.clearInterval(timer);
   }, [busy, flow?.permission, readStatus]);
 
-  const updateEnabled = async (enabled: boolean) => {
+  const updateEnabled = async (enabled: boolean, trigger?: HTMLButtonElement) => {
+    if (busyRef.current) return;
     const ticket = computerUseControlSession.begin(statusRef.current, enabled);
     if (!ticket) return;
-    const requestId = ++computerUseStatusSequence;
+    const actionId = beginAction("control", trigger);
+    if (actionId === null) { computerUseControlSession.finish(ticket); return; }
+    const requestId = computerUseStatusSequence;
     const isCurrent = () => mountedRef.current && requestId === computerUseStatusSequence;
-    const actionId = ++actionSequenceRef.current;
-    actionKindRef.current = "control";
-    setActionBusy(true);
-    setReadingStatus(false);
-    setError(null);
     const observePendingChange = (event: Event) => {
       computerUseControlSession.acceptChange((event as CustomEvent<boolean>).detail === true);
     };
@@ -299,30 +396,21 @@ function ComputerUseSettingsCard() {
     } finally {
       window.removeEventListener(COMPUTER_USE_CHANGED_EVENT, observePendingChange);
       computerUseControlSession.finish(ticket);
-      if (mountedRef.current && actionId === actionSequenceRef.current) {
-        setActionBusy(false);
-        actionKindRef.current = null;
-      }
+      finishAction(actionId);
     }
   };
 
-  const restartForPermission = async () => {
-    const requestId = ++computerUseStatusSequence;
+  const restartForPermission = async (trigger?: HTMLButtonElement) => {
+    const actionId = beginAction("restart", trigger);
+    if (actionId === null) return;
+    const requestId = computerUseStatusSequence;
     const isCurrent = () => mountedRef.current && requestId === computerUseStatusSequence;
-    const actionId = ++actionSequenceRef.current;
-    actionKindRef.current = "restart";
-    setActionBusy(true);
-    setReadingStatus(false);
-    setError(null);
     try {
       await relaunchAppNative();
     } catch (cause) {
       if (isCurrent()) setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      if (mountedRef.current && actionId === actionSequenceRef.current) {
-        setActionBusy(false);
-        actionKindRef.current = null;
-      }
+      finishAction(actionId);
     }
   };
 
@@ -330,14 +418,15 @@ function ComputerUseSettingsCard() {
     || (status?.host?.platform === "macos" && (typeof status.accessibility !== "boolean" || typeof status.screenRecording !== "boolean"))
     ? { kind: "detect" as const }
     : computerUsePrimaryAction({ status, flow });
-  const runPrimaryAction = async () => {
-    if (primaryAction.kind === "detect") return refreshStatus();
-    if (primaryAction.kind === "request") return requestPermission(primaryAction.permission);
-    if (primaryAction.kind === "restart") return restartForPermission();
-    return updateEnabled(primaryAction.kind === "enable");
+  const runPrimaryAction = async (trigger: HTMLButtonElement) => {
+    if (busyRef.current) return;
+    if (primaryAction.kind === "detect") return refreshStatus(trigger);
+    if (primaryAction.kind === "request") return requestPermission(primaryAction.permission, trigger);
+    if (primaryAction.kind === "restart") return restartForPermission(trigger);
+    return updateEnabled(primaryAction.kind === "enable", trigger);
   };
   const activePermission = flow?.permission;
-  return <div className="native-settings-card" style={sectionCardStyle}>
+  return <div ref={rootRef} className="native-settings-card app-settings-device" data-setting-id="computer-use" tabIndex={-1} style={sectionCardStyle}>
     <div style={sectionTitleStyle}>桌面控制</div>
     <details className="settings-permission-identity"><summary>{computerUseHostLabel(status?.host)}</summary><dl>
       <div><dt>安装路径</dt><dd>{status?.host?.bundlePath || status?.host?.executablePath || "未检测"}</dd></div>
@@ -350,12 +439,12 @@ function ComputerUseSettingsCard() {
       <div className={activePermission === "accessibility" ? "computer-use-status-row is-active" : "computer-use-status-row"}><strong>辅助功能</strong><span className={status?.accessibility ? "is-ready" : "is-off"}>{computerUsePermissionLabel(status?.accessibility)}</span></div>
       <div className={activePermission === "screen_recording" ? "computer-use-status-row is-active" : "computer-use-status-row"}><strong>屏幕录制</strong><span className={status?.screenRecording ? "is-ready" : "is-off"}>{computerUsePermissionLabel(status?.screenRecording, flow?.screenRecordingRequested)}</span></div>
       <div className="computer-use-actions">
-        <button type="button" className="native-button native-button-primary computer-use-primary-action" disabled={busy} onClick={() => void runPrimaryAction()}>{computerUsePrimaryActionLabel(primaryAction)}</button>
-        <button type="button" className="native-button native-button-compact" disabled={busy} onClick={() => void refreshStatus()} aria-label="重新检测权限" title="重新检测权限">↻</button>
-        {status?.enabled && primaryAction.kind !== "stop" ? <button type="button" className="native-button native-button-compact" disabled={busy} onClick={() => void updateEnabled(false)} aria-label="停止控制" title="停止控制">×</button> : null}
+        <button ref={primaryButtonRef} type="button" className="native-button native-button-primary computer-use-primary-action" disabled={busy} onClick={(event) => void runPrimaryAction(event.currentTarget)}>{computerUsePrimaryActionLabel(primaryAction)}</button>
+        <button type="button" className="native-button native-button-compact" disabled={busy} onClick={(event) => void refreshStatus(event.currentTarget)} aria-label="重新检测权限" title="重新检测权限">↻</button>
+        {status?.enabled && primaryAction.kind !== "stop" ? <button type="button" className="native-button native-button-compact" disabled={busy} onClick={(event) => void updateEnabled(false, event.currentTarget)} aria-label="停止控制" title="停止控制">×</button> : null}
       </div>
       <details><summary>权限用途</summary><p style={sectionHintStyle}>辅助功能用于键盘与鼠标操作，屏幕录制用于读取屏幕；每次操作仍需你确认。请核对上方正式应用路径，不要授权旧 Canary。系统开关已开启但检测未更新时，退出并重启此应用后再检测。</p></details>
-      {flow?.permission === "accessibility" ? <div style={sectionHintStyle} role="status">请在系统设置授权上方应用后返回。{status?.accessibility === false ? <button type="button" className="native-button" onClick={() => void restartForPermission()} disabled={busy}>已授权，重启核对</button> : null}</div> : null}
+      {flow?.permission === "accessibility" ? <div style={sectionHintStyle} role="status">请在系统设置授权上方应用后返回。{status?.accessibility === false ? <button type="button" className="native-button" onClick={(event) => void restartForPermission(event.currentTarget)} disabled={busy}>已授权，重启核对</button> : null}</div> : null}
       {flow?.permission === "screen_recording" && flow.screenRecordingRequested ? <div style={sectionHintStyle} role="status">在系统设置允许 EduPi，重启后开启控制。</div> : null}
       {error ? <div className="computer-use-error" role="alert">{error}</div> : null}
     </div>
@@ -406,25 +495,21 @@ function EduPiDataSettingsCard() {
     }
   };
 
-  return <div className="native-settings-card" style={sectionCardStyle}>
-    <div style={sectionTitleStyle}>{t("appSettings.dataSection")}</div>
-    <div style={{ marginTop: 8, display: "grid", gap: 5, fontSize: 11 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-        <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{t("appSettings.dataDirectory")}</span>
-        <code style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={status?.dataRoot}>{status?.dataRoot || "…"}</code>
-      </div>
-      <div style={{ color: "var(--text-muted)" }}>
+  return <div className="native-settings-card app-settings-data" data-setting-id="data-root" tabIndex={-1} style={sectionCardStyle}>
+    <div className="app-settings-row">
+      <div className="app-settings-row__label"><span>数据目录</span><code title={status?.dataRoot}>{status?.dataRoot || "正在读取"}</code></div>
+      <button type="button" className="native-button" disabled={!status?.canChangeDataRoot || busy} onClick={() => void changeRoot()}>{t("appSettings.dataChoose")}</button>
+    </div>
+    <details className="app-settings-help"><summary>目录选项</summary>
+      <div className="app-settings-data__source">
         {t("appSettings.dataSource", { source: status ? t(`appSettings.dataSource.${status.dataSource}`) : "…" })}
         <span style={{ marginLeft: 10 }}>{t("appSettings.coreSource", { source: status ? t(`appSettings.coreSource.${status.coreSource}`) : "…" })}</span>
       </div>
+      <button type="button" className="native-button" disabled={!status?.canChangeDataRoot || busy} onClick={() => void resetRoot()}>{t("appSettings.dataReset")}</button>
+    </details>
       {status?.fallbackReason ? <div className="native-inline-alert is-error" role="status">{t("appSettings.dataFallback", { reason: status.fallbackReason })}</div> : null}
       {status && !status.canChangeDataRoot ? <div style={sectionHintStyle}>{t("appSettings.dataEnvironmentLocked")}</div> : null}
       {error ? <div className="native-inline-alert is-error" role="alert">{error}</div> : null}
-      <div style={{ display: "flex", gap: 8, marginTop: 5 }}>
-        <button type="button" className="native-button native-button-primary" disabled={!status?.canChangeDataRoot || busy} onClick={() => void changeRoot}>{t("appSettings.dataChoose")}</button>
-        <button type="button" className="native-button" disabled={!status?.canChangeDataRoot || busy} onClick={() => void resetRoot}>{t("appSettings.dataReset")}</button>
-      </div>
-    </div>
   </div>;
 }
 function ChoiceButton({
@@ -442,12 +527,6 @@ function ChoiceButton({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      style={{
-        minWidth: 88,
-        borderColor: active ? "var(--accent)" : "var(--border)",
-        color: active ? "var(--accent)" : "var(--text-muted)",
-        fontWeight: active ? 700 : 500,
-      }}
     >
       {children}
     </button>
@@ -544,11 +623,16 @@ function VersionChip({
   );
 }
 
-export function AppSettings({ onClose, initialSection = null, onOpenConnectionDetails }: { onClose: () => void; initialSection?: "mobile" | null; onOpenConnectionDetails?: () => void }) {
+export function AppSettings({ onClose, initialSection = null, embedded = false, page, onUpgradeInProgressChange, onOpenConnectionDetails }: { onClose: () => void; initialSection?: "mobile" | null; embedded?: boolean; page?: AppSettingsPage; onUpgradeInProgressChange?: (busy: boolean) => void; onOpenConnectionDetails?: () => void }) {
   const { t, locale, setLocale, supportedLocales } = useI18n();
   const { theme, setTheme } = useTheme();
   const desktop = isTauriDesktop();
   const nativeIdentity = useDesktopHostIdentity(desktop);
+  const currentPage = page ?? (initialSection === "mobile" ? "devices" : "general");
+  const [visitedPages, setVisitedPages] = useState<AppSettingsPage[]>(() => [currentPage]);
+  const showsPage = (target: AppSettingsPage) => !embedded || currentPage === target || visitedPages.includes(target);
+  const showNotifications = !embedded || currentPage === "notifications";
+  const showUpdates = !embedded || currentPage === "about";
   const [components, setComponents] = useState<AppComponentReleaseInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -563,6 +647,13 @@ export function AppSettings({ onClose, initialSection = null, onOpenConnectionDe
   const [notificationStatus, setNotificationStatus] = useState<NotificationPermissionStatus | null>(null);
   const updateCheckSequenceRef = useRef(0);
 
+  useEffect(() => {
+    setVisitedPages((current) => current.includes(currentPage) ? current : [...current, currentPage]);
+  }, [currentPage]);
+
+  useEffect(() => { onUpgradeInProgressChange?.(Boolean(upgradeProgress)); }, [onUpgradeInProgressChange, upgradeProgress]);
+  useEffect(() => () => onUpgradeInProgressChange?.(false), [onUpgradeInProgressChange]);
+
   const refreshNotificationStatus = useCallback(async () => {
     if (!desktop) return;
     try {
@@ -573,8 +664,9 @@ export function AppSettings({ onClose, initialSection = null, onOpenConnectionDe
   }, [desktop]);
 
   useEffect(() => {
+    if (!showNotifications) return;
     void refreshNotificationStatus();
-  }, [refreshNotificationStatus]);
+  }, [refreshNotificationStatus, showNotifications]);
 
   const checkForUpdates = useCallback(async (signal?: AbortSignal) => {
     const requestId = ++updateCheckSequenceRef.current;
@@ -597,21 +689,23 @@ export function AppSettings({ onClose, initialSection = null, onOpenConnectionDe
   }, []);
 
   useEffect(() => {
+    if (!showUpdates) return;
     const controller = new AbortController();
     void checkForUpdates(controller.signal);
     return () => controller.abort();
-  }, [checkForUpdates]);
+  }, [checkForUpdates, showUpdates]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !upgradeProgress) onClose();
+      if (event.key === "Escape" && !upgradeProgress && !embedded) onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, upgradeProgress]);
+  }, [embedded, onClose, upgradeProgress]);
 
   useEffect(() => {
     if (initialSection !== "mobile") return;
+    if (embedded && currentPage !== "devices") return;
     let innerFrame = 0;
     const outerFrame = requestAnimationFrame(() => {
       innerFrame = requestAnimationFrame(() => {
@@ -622,7 +716,7 @@ export function AppSettings({ onClose, initialSection = null, onOpenConnectionDe
       cancelAnimationFrame(outerFrame);
       if (innerFrame) cancelAnimationFrame(innerFrame);
     };
-  }, [initialSection]);
+  }, [currentPage, embedded, initialSection]);
 
   const appRelease = useMemo(
     () => components.find((component) => component.project === "edupi-desktop"),
@@ -712,222 +806,113 @@ export function AppSettings({ onClose, initialSection = null, onOpenConnectionDe
     }
   };
 
-  return (
-    <div
-      className="native-modal-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !upgradeProgress) onClose();
-      }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1200,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 18,
-        background: "rgba(0,0,0,0.4)",
-      }}
-    >
-      <section
-        className="native-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="app-settings-title"
-        style={{
-          width: "min(620px, 100%)",
-          height: "auto",
-          maxHeight: "min(720px, calc(100vh - 36px))",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          border: "1px solid var(--border)",
-          borderRadius: 12,
-          background: "var(--bg-panel)",
-          color: "var(--text)",
-          boxShadow: "0 22px 70px rgba(0,0,0,0.32)",
-        }}
-      >
-        <header className="native-modal-header" style={{ display: "flex", flexShrink: 0, alignItems: "flex-start", gap: 14, padding: "20px 22px 17px", borderBottom: "1px solid var(--border)" }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <h2 className="native-modal-title" id="app-settings-title" style={{ margin: 0, fontSize: 18, lineHeight: 1.25 }}>
-              设置
-            </h2>
-            <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
-              <VersionChip
-                currentValue={currentVersionText}
-                latestValue={latestReleaseText}
-                versionsMatch={versionsMatch}
-                updateAvailable={updateAvailable}
-                href={appRelease?.releaseUrl ?? APP_RELEASES_URL}
-                title={statusText}
-                ariaLabel={versionAriaLabel}
-                versionLabel={desktop ? t("appSettings.version") : currentVersionLabel}
-                currentLabel={currentVersionLabel}
-                latestLabel={t("appSettings.latestRelease")}
-                upgradeAvailableLabel={t("appSettings.upgradeAvailable")}
-              />
-              <button
-                className="native-button"
-                type="button"
-                disabled={loading || Boolean(upgradeProgress)}
-                onClick={() => { void nativeIdentity.refresh(); void checkForUpdates(); }}
-              >
-                {loading ? t("appSettings.checking") : t("appSettings.checkUpdates")}
-              </button>
-              {desktop && (updateAvailable || upgradeProgress) && (
-                <button
-                  className="native-button native-button-primary"
-                  type="button"
-                  disabled={!canUpgrade}
-                  onClick={() => void handleUpgrade()}
-                  title={t("appSettings.updateNote", { name: APP_DISTRIBUTION_NAME })}
-                  style={{ minWidth: 112 }}
-                >
-                  {upgradeLabel}
-                </button>
-              )}
-            </div>
-            {upgradePreflightOpen ? <div className="settings-update-preflight" role="group" aria-label="安装前确认"><p>更新需要替换当前应用并重启，请先保存正在进行的工作。macOS 可能要求“App 管理”授权；该权限由系统核对，EduPi 不会自动打开开关。</p><div><button type="button" className="native-button" onClick={() => setUpgradePreflightOpen(false)}>取消</button><button type="button" className="native-button native-button-primary" onClick={() => void handleUpgrade(true)}>继续更新</button></div></div> : null}
-            {upgradeError && (
-              <div className="native-inline-alert is-error" role="alert" style={{ marginTop: 9 }}>
-                <div>{upgradeError}</div>
-                {upgradeErrorDetails ? (
-                  <details style={{ marginTop: 5, fontSize: 11 }}>
-                    <summary style={{ cursor: "pointer" }}>{t("appSettings.updateDiagnostics")}</summary>
-                    <div style={{ marginTop: 5, display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px", color: "var(--text-muted)" }}>
-                      <span>{t("appSettings.updateStage")}</span><span>{t(`appSettings.updateStage.${upgradeErrorDetails.stage}`)}</span>
-                      <span>{t("appSettings.updateHost")}</span><span>{upgradeErrorDetails.host}</span>
-                      <span>{t("appSettings.updateRetries")}</span><span>{upgradeErrorDetails.retryCount}</span>
-                      <span>{t("appSettings.updateErrorCode")}</span><span>{upgradeErrorDetails.errorCode}</span>
-                    </div>
-                  </details>
-                ) : null}
-              </div>
-            )}
-          </div>
-          <button
-            className="native-modal-close"
-            type="button"
-            onClick={onClose}
-            disabled={Boolean(upgradeProgress)}
-            aria-label={t("appSettings.close")}
-            title={t("appSettings.close")}
-            style={{ padding: "1px 5px", border: 0, background: "transparent", color: "var(--text-muted)", cursor: upgradeProgress ? "default" : "pointer", fontSize: 21, lineHeight: 1, opacity: upgradeProgress ? 0.35 : 1 }}
-          >
-            ×
-          </button>
-        </header>
+  const content = <>
+    <header className="app-settings-header">
+      <div className="app-settings-header__main">
+        {embedded ? <h1 id="app-settings-title">{PAGE_TITLES[currentPage]}</h1> : <h2 className="native-modal-title" id="app-settings-title">设置</h2>}
+      </div>
+      {!embedded ? <button className="native-modal-close" type="button" onClick={onClose} disabled={Boolean(upgradeProgress)} aria-label={t("appSettings.close")} title={t("appSettings.close")}>×</button> : null}
+    </header>
 
-        <div style={{ minHeight: 0, flex: 1, overflowY: "auto", padding: "18px 22px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div className="app-settings-quick">
-            <div className="native-settings-card" style={sectionCardStyle}>
-              <div style={sectionTitleStyle}>{t("appSettings.languageSection")}</div>
-              <div className="app-settings-quick__choices">
-                {supportedLocales.map((plugin) => <ChoiceButton key={plugin.id} active={locale === plugin.id} onClick={() => setLocale(plugin.id as typeof locale)}>{plugin.label}</ChoiceButton>)}
-              </div>
-            </div>
-            <div className="native-settings-card" style={sectionCardStyle}>
-              <div style={sectionTitleStyle}>{t("appSettings.appearanceSection")}</div>
-              <div className="app-settings-quick__choices">
-                <ChoiceButton active={theme === "light"} onClick={() => setTheme("light")}>{t("appSettings.themeLight")}</ChoiceButton>
-                <ChoiceButton active={theme === "dark"} onClick={() => setTheme("dark")}>{t("appSettings.themeDark")}</ChoiceButton>
-              </div>
+    <div className="app-settings-body">
+      {showsPage("general") ? <section className="app-settings-group" aria-label="常规" hidden={embedded && currentPage !== "general"}>
+        {!embedded ? <h2>常规</h2> : null}
+        <SettingsRow id="language" label={t("appSettings.languageSection")}>
+          <div className="app-settings-choices" role="group" aria-label={t("appSettings.languageSection")}>
+            {supportedLocales.map((plugin) => <ChoiceButton key={plugin.id} active={locale === plugin.id} onClick={() => setLocale(plugin.id as typeof locale)}>{plugin.label}</ChoiceButton>)}
+          </div>
+        </SettingsRow>
+        <SettingsRow id="appearance" label={t("appSettings.appearanceSection")}>
+          <div className="app-settings-choices" role="group" aria-label={t("appSettings.appearanceSection")}>
+            <ChoiceButton active={theme === "light"} onClick={() => setTheme("light")}>{t("appSettings.themeLight")}</ChoiceButton>
+            <ChoiceButton active={theme === "dark"} onClick={() => setTheme("dark")}>{t("appSettings.themeDark")}</ChoiceButton>
+          </div>
+        </SettingsRow>
+        <ForegroundSettingsCard />
+        {desktop ? <SettingsToggleRow id="window-close" label={t("appSettings.closeQuits")} hint={t("appSettings.closeQuitsHint")} checked={closeQuits} onChange={(next) => {
+          setCloseQuits(next);
+          setPrefBool(APP_PREF_KEYS.closeQuits, next);
+          void setCloseQuitsNative(next);
+        }} /> : null}
+      </section> : null}
+
+      {showsPage("profile") ? <section className="app-settings-group" aria-label="教师信息" hidden={embedded && currentPage !== "profile"}>
+        {!embedded ? <h2>教师信息</h2> : null}
+        <TeacherContextSettingsCard disabled={Boolean(upgradeProgress)} />
+      </section> : null}
+
+      {desktop && showsPage("notifications") ? <section className="app-settings-group" aria-label="通知" hidden={embedded && currentPage !== "notifications"}>
+        {!embedded ? <h2>通知</h2> : null}
+        <SettingsToggleRow id="completion-notifications" label={t("appSettings.notifyOnComplete")} hint="窗口在后台时发送。" checked={notifyOnComplete} onChange={(next) => {
+          setNotifyOnComplete(next);
+          setPrefBool(APP_PREF_KEYS.notifyOnComplete, next);
+        }} />
+        <SettingsRow id="notification-permission" label="系统通知">
+          <span className={notificationAuthorized ? "app-settings-state is-ready" : "app-settings-state"} aria-live="polite">{notificationStatusLabel(notificationStatus)}</span>
+          <button type="button" className="native-button" disabled={testingNotification || !notifyOnComplete} onClick={async () => {
+            setTestingNotification(true);
+            setNotificationTest("");
+            try {
+              await testDesktopNotification();
+              await refreshNotificationStatus();
+              setNotificationTest("系统已接受通知；点击通知应打开提醒");
+            } catch (error) {
+              await refreshNotificationStatus();
+              setNotificationTest(error instanceof Error ? error.message : "通知测试失败");
+            } finally { setTestingNotification(false); }
+          }}>{testingNotification ? "发送中…" : "测试通知跳转"}</button>
+        </SettingsRow>
+        {notificationTest ? <p className="app-settings-feedback" role="status">{notificationTest}</p> : null}
+      </section> : null}
+
+      {desktop && showsPage("devices") ? <section className="app-settings-group" aria-label="设备与权限" hidden={embedded && currentPage !== "devices"}>
+        {!embedded ? <h2>设备与权限</h2> : null}
+        <ComputerUseSettingsCard />
+        <div data-setting-id="mobile" tabIndex={-1}><MobileBridgeSettingsCard /></div>
+      </section> : null}
+
+      {desktop && showsPage("data") ? <section className="app-settings-group" aria-label="数据与隐私" hidden={embedded && currentPage !== "data"}>
+        {!embedded ? <h2>数据与隐私</h2> : null}
+        <EduPiDataSettingsCard />
+        <div data-setting-id="usage" tabIndex={-1}><EduPiUsageSettingsCard /></div>
+      </section> : null}
+
+      {showsPage("about") ? <section className="app-settings-group" aria-label="关于与更新" hidden={embedded && currentPage !== "about"}>
+        {!embedded ? <h2>关于与更新</h2> : null}
+        <div className="app-settings-update" data-setting-id="updates" tabIndex={-1}>
+          <div className="app-settings-row">
+            <div className="app-settings-row__label"><strong>EduPi</strong><small aria-live="polite">{statusText}</small></div>
+            <div className="app-settings-row__control">
+              <button className="native-button" type="button" disabled={loading || Boolean(upgradeProgress)} onClick={() => { void nativeIdentity.refresh(); void checkForUpdates(); }}>{loading ? t("appSettings.checking") : t("appSettings.checkUpdates")}</button>
+              {desktop && (updateAvailable || upgradeProgress) ? <button className="native-button native-button-primary" type="button" disabled={!canUpgrade} onClick={() => void handleUpgrade()} title={t("appSettings.updateNote", { name: APP_DISTRIBUTION_NAME })}>{upgradeLabel}</button> : null}
             </div>
           </div>
-          <TeacherContextSettingsCard />
-          <ForegroundSettingsCard />
-          {desktop && <EduPiUsageSettingsCard />}
-          {desktop && <UpdateProxySettingsCard onSaved={() => void checkForUpdates()} />}
-
-          {desktop && (
-            <EduPiDataSettingsCard />
-          )}
-
-          {desktop && <MobileBridgeSettingsCard />}
-
-          {desktop && (
-            <ComputerUseSettingsCard />
-          )}
-
-          {desktop && (
-            <div className="native-settings-card" style={sectionCardStyle}>
-              <div style={sectionTitleStyle}>{t("appSettings.desktopSection")}</div>
-              <div style={sectionHintStyle}>{t("appSettings.desktopHint")}</div>
-              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-                {onOpenConnectionDetails && <button type="button" className="native-button" onClick={onOpenConnectionDetails}>连接详情</button>}
-                <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={closeQuits}
-                    onChange={(event) => {
-                      const next = event.target.checked;
-                      setCloseQuits(next);
-                      setPrefBool(APP_PREF_KEYS.closeQuits, next);
-                      void setCloseQuitsNative(next);
-                    }}
-                    style={{ marginTop: 2 }}
-                  />
-                  <span>
-                    <div style={{ fontSize: 12, fontWeight: 600 }}>{t("appSettings.closeQuits")}</div>
-                    <div style={{ marginTop: 2, color: "var(--text-dim)", fontSize: 11, lineHeight: 1.45 }}>
-                      {t("appSettings.closeQuitsHint")}
-                    </div>
-                  </span>
-                </label>
-                <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={notifyOnComplete}
-                    onChange={(event) => {
-                      const next = event.target.checked;
-                      setNotifyOnComplete(next);
-                      setPrefBool(APP_PREF_KEYS.notifyOnComplete, next);
-                    }}
-                    style={{ marginTop: 2 }}
-                  />
-                  <span>
-                    <div style={{ fontSize: 12, fontWeight: 600 }}>{t("appSettings.notifyOnComplete")}</div>
-                    <div style={{ marginTop: 2, color: "var(--text-dim)", fontSize: 11, lineHeight: 1.45 }}>
-                      {t("appSettings.notifyOnCompleteHint")}
-                    </div>
-                  </span>
-                </label>
-                <button
-                  type="button"
-                  className="native-button"
-                  disabled={testingNotification || !notifyOnComplete}
-                  onClick={async () => {
-                    setTestingNotification(true);
-                    setNotificationTest("");
-                    try {
-                      await testDesktopNotification();
-                      await refreshNotificationStatus();
-                      setNotificationTest("系统已接受通知；点击通知应打开提醒");
-                    } catch (error) {
-                      await refreshNotificationStatus();
-                      setNotificationTest(error instanceof Error ? error.message : "通知测试失败");
-                    } finally { setTestingNotification(false); }
-                  }}
-                >
-                  {testingNotification ? "发送中…" : "测试通知跳转"}
-                </button>
-                <div className="computer-use-status-row"><strong>系统通知</strong><span className={notificationAuthorized ? "is-ready" : "is-off"}>{notificationStatusLabel(notificationStatus)}</span></div>
-                {notificationTest ? <p role="status">{notificationTest}</p> : null}
-                <button
-                  type="button"
-                  className="native-button"
-                  onClick={() => void quitAppNative()}
-                  style={{ alignSelf: "flex-start", marginTop: 2 }}
-                >
-                  {t("appSettings.quitApp")}
-                </button>
-              </div>
-            </div>
-          )}
+          <VersionChip currentValue={currentVersionText} latestValue={latestReleaseText} versionsMatch={versionsMatch} updateAvailable={updateAvailable} href={appRelease?.releaseUrl ?? APP_RELEASES_URL} title={statusText} ariaLabel={versionAriaLabel} versionLabel={desktop ? t("appSettings.version") : currentVersionLabel} currentLabel={currentVersionLabel} latestLabel={t("appSettings.latestRelease")} upgradeAvailableLabel={t("appSettings.upgradeAvailable")} />
+          {upgradePreflightOpen ? <div className="settings-update-preflight" role="group" aria-label="安装前确认"><p>更新需要替换当前应用并重启，请先保存正在进行的工作。macOS 可能要求“App 管理”授权；该权限由系统核对，EduPi 不会自动打开开关。</p><div><button type="button" className="native-button" onClick={() => setUpgradePreflightOpen(false)}>取消</button><button type="button" className="native-button native-button-primary" onClick={() => void handleUpgrade(true)}>继续更新</button></div></div> : null}
+          {upgradeError ? <div className="native-inline-alert is-error app-settings-feedback" role="alert">
+            <div>{upgradeError}</div>
+            {upgradeErrorDetails ? <details className="app-settings-update__diagnostics">
+              <summary>{t("appSettings.updateDiagnostics")}</summary>
+              <dl>
+                <div><dt>{t("appSettings.updateStage")}</dt><dd>{t(`appSettings.updateStage.${upgradeErrorDetails.stage}`)}</dd></div>
+                <div><dt>{t("appSettings.updateHost")}</dt><dd>{upgradeErrorDetails.host}</dd></div>
+                <div><dt>{t("appSettings.updateRetries")}</dt><dd>{upgradeErrorDetails.retryCount}</dd></div>
+                <div><dt>{t("appSettings.updateErrorCode")}</dt><dd>{upgradeErrorDetails.errorCode}</dd></div>
+              </dl>
+            </details> : null}
+          </div> : null}
         </div>
-      </section>
+        {desktop ? <>
+          <div data-setting-id="update-proxy" tabIndex={-1}><UpdateProxySettingsCard onSaved={() => void checkForUpdates()} /></div>
+          {onOpenConnectionDetails ? <details className="app-settings-help"><summary>诊断</summary><div className="app-settings-actions"><button type="button" className="native-button" disabled={Boolean(upgradeProgress)} onClick={() => { if (!upgradeProgress) onOpenConnectionDetails(); }}>连接详情</button></div></details> : null}
+          <div className="app-settings-actions app-settings-quit"><button type="button" className="native-button" onClick={() => void quitAppNative()}>{t("appSettings.quitApp")}</button></div>
+        </> : null}
+      </section> : null}
     </div>
-  );
+  </>;
+
+  if (embedded) return <div className="app-settings-page" data-page={currentPage} aria-labelledby="app-settings-title">{content}</div>;
+  return <div className="native-modal-backdrop app-settings-backdrop" role="presentation" onMouseDown={(event) => {
+    if (event.target === event.currentTarget && !upgradeProgress) onClose();
+  }}><section className="native-modal app-settings-modal" role="dialog" aria-modal="true" aria-labelledby="app-settings-title">{content}</section></div>;
 }

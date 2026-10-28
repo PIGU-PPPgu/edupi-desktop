@@ -502,7 +502,7 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function wrapDocxPreviewHtml(bodyHtml: string, fileName: string): string {
+function wrapDocxPreviewHtml(bodyHtml: string, fileName: string, embedded = false): string {
   return `<!doctype html>
 <html>
 <head>
@@ -544,7 +544,7 @@ function wrapDocxPreviewHtml(bodyHtml: string, fileName: string): string {
 </head>
 <body>
 <main>
-<div class="file-title">${escapeHtml(fileName)}</div>
+${embedded ? "" : `<div class="file-title">${escapeHtml(fileName)}</div>`}
 ${bodyHtml}
 </main>
 </body>
@@ -655,7 +655,7 @@ export async function GET(
           convertImage: mammoth.images.dataUri,
         }
       );
-      const html = wrapDocxPreviewHtml(result.value, path.basename(filePath));
+      const html = wrapDocxPreviewHtml(result.value, path.basename(filePath), request.nextUrl.searchParams.get("embedded") === "1");
       return new Response(html, {
         headers: {
           "Content-Type": "text/html; charset=utf-8",

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState, useCallback, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useRef, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { SessionInfo } from "@/lib/types";
 import type { EducationModule } from "@/lib/edupi-education-ui";
 import { useI18n } from "@/hooks/useI18n";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { ProjectPicker } from "./ProjectPicker";
+import { DisclosureChevron } from "./DisclosureChevron";
 import { AnimatedDropdown, PathLabel, displayCwd, getRecentProjects } from "./path-ui";
 import { APP_PREF_KEYS, getPrefJson, removePref, setPrefJson } from "@/lib/app-prefs";
 import { notifyDesktop } from "@/lib/desktop-notify";
@@ -109,6 +110,7 @@ interface Props {
   onSessionDeleted?: (sessionId: string) => void;
   selectedCwd?: string | null;
   onCwdChange?: (cwd: string | null, projectRoot?: string | null) => void;
+  onCwdSelect?: (cwd: string) => void;
   onOpenFile?: (filePath: string, fileName: string, options?: { sourceSessionId?: string | null; modeHint?: "diff" }) => void;
   selectedFilePath?: string | null;
   explorerRefreshKey?: number;
@@ -246,7 +248,7 @@ function groupSessionTreeByAge(nodes: SessionTreeNode[]): SessionAgeGroup[] {
   ].flatMap(([key, label]) => groups.has(key) ? [{ key, label, nodes: groups.get(key)! }] : []);
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, selectedFilePath, explorerRefreshKey, onAtMention, onAtMentions, headerControls, onOpenEduPiAdmin, onMaterialInboxRequest, materialInboxPath: materialInboxPathProp, onOpenContext, presentation = "default", resourceActions = [] }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onCwdSelect, onOpenFile, selectedFilePath, explorerRefreshKey, onAtMention, onAtMentions, headerControls, onOpenEduPiAdmin, onMaterialInboxRequest, materialInboxPath: materialInboxPathProp, onOpenContext, presentation = "default", resourceActions = [] }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -466,6 +468,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   }, []);
 
   const restoredRef = useRef(false);
+  const handleSelectCwd = useCallback((cwd: string) => {
+    // Invalidate startup restores before a delayed response can beat the cwd effect.
+    restoredRef.current = true;
+    onCwdSelect?.(cwd);
+    setSelectedCwd(cwd);
+  }, [onCwdSelect]);
 
   /** Resolve the project root for a cwd from the freshest data available */
   const projectRootFor = useCallback((cwd: string | null): string | null => {
@@ -704,7 +712,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     ? {
         label: t("sidebar.openRepoRoot"),
         title: t("sidebar.openRepoRootTitle"),
-        onClick: () => setSelectedCwd(worktreeState.projectRoot),
+        onClick: () => handleSelectCwd(worktreeState.projectRoot),
       }
     : null;
   const worktreeLoading = Boolean(selectedCwd && worktreeLoadingCwd === selectedCwd);
@@ -794,7 +802,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               selectedCwd={selectedCwd}
               selectedProject={selectedProject}
               homeDir={homeDir}
-              onSelectCwd={setSelectedCwd}
+              onSelectCwd={handleSelectCwd}
               variant="block"
             />
           </div>
@@ -934,7 +942,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                         >
                           <button
                             onClick={() => {
-                              setSelectedCwd(wt.path);
+                              handleSelectCwd(wt.path);
                               setWtDropdownOpen(false);
                               setWtError(null);
                               setWtFilter("");
@@ -1299,12 +1307,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           const collapsed = collapsedTimeGroups.has(group.key);
           return (
             <section className="session-time-group" key={group.key}>
-              <button type="button" className="session-time-group__header" aria-expanded={!collapsed} onClick={() => setCollapsedTimeGroups((previous) => {
+              <button type="button" className="session-time-group__header disclosure-trigger is-row" aria-expanded={!collapsed} onClick={() => setCollapsedTimeGroups((previous) => {
                 const next = new Set(previous);
                 if (next.has(group.key)) next.delete(group.key); else next.add(group.key);
                 return next;
               })}>
-                <span>{collapsed ? "▸" : "▾"}</span><span>{group.label}</span><small>{group.nodes.length}</small>
+                <span>{group.label}</span><small>{group.nodes.length}</small><DisclosureChevron open={!collapsed} />
               </button>
               {!collapsed && group.nodes.map((node) => (
                 <SessionTreeItem key={node.session.id} node={node} selectedSessionId={selectedSessionId} runningSessionIds={runningSessionIds} unreadSessionIds={unreadSessionIds} onSelectSession={handleSelectSessionFromList} onRenamed={loadSessions} onSessionDeleted={(id) => { onSessionDeleted?.(id); loadSessions(); }} depth={0} />
@@ -1568,6 +1576,7 @@ function SessionItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
 
   const title = session.name || visibleTeacherMessageText(session.firstMessage).slice(0, 50) || session.id.slice(0, 12);
 
@@ -1618,6 +1627,15 @@ function SessionItem({
     setMenuOpen(true);
   }, [menuOpen]);
 
+  useLayoutEffect(() => {
+    if (!menuOpen) return;
+    const owner = menuButtonRef.current?.closest("[data-session-popup-owner]");
+    if (!owner) return;
+    const invalidate = () => setMenuOpen(false);
+    owner.addEventListener("edupi-chat-sidebar-invalidated", invalidate);
+    return () => owner.removeEventListener("edupi-chat-sidebar-invalidated", invalidate);
+  }, [menuOpen]);
+
   useEffect(() => {
     if (!menuOpen) return;
     const onPointerDown = (ev: MouseEvent) => {
@@ -1626,7 +1644,15 @@ function SessionItem({
       if (menuButtonRef.current?.contains(target)) return;
       setMenuOpen(false);
     };
-    const onKeyDown = (ev: KeyboardEvent) => { if (ev.key === "Escape") setMenuOpen(false); };
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape" || ev.defaultPrevented) return;
+      const ownership = new window.CustomEvent("edupi-modal-keyboard-owner", { cancelable: true, detail: menuButtonRef.current });
+      if (!document.dispatchEvent(ownership)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      setMenuOpen(false);
+      menuButtonRef.current?.focus({ preventScroll: true });
+    };
     const onScrollOrResize = () => setMenuOpen(false);
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -1795,6 +1821,9 @@ function SessionItem({
           {/* Collapse toggle — always visible when has children */}
           {hasChildren && (
             <button
+              type="button"
+              className="session-tree-disclosure"
+              aria-expanded={!collapsed}
               onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
               title={collapsed ? "Expand forks" : "Collapse forks"}
               style={{
@@ -1802,13 +1831,9 @@ function SessionItem({
                 width: 20, height: 20, padding: 0, flexShrink: 0,
                 background: "none", border: "none",
                 color: "var(--text-dim)", cursor: "pointer",
-                transform: collapsed ? "rotate(-90deg)" : "none",
-                transition: "transform 0.15s",
               }}
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="2 3.5 5 6.5 8 3.5" />
-              </svg>
+              <DisclosureChevron open={!collapsed} />
             </button>
           )}
 
@@ -1821,6 +1846,7 @@ function SessionItem({
               aria-label={t("sidebar.moreActions")}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
+              aria-controls={menuOpen ? menuId : undefined}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 24, height: 24, padding: 0, flexShrink: 0,
@@ -1843,6 +1869,7 @@ function SessionItem({
           {menuOpen && menuPos && createPortal(
             <div
               ref={menuRef}
+              id={menuId}
               className="native-popover session-item-menu"
               role="menu"
               onClick={(e) => e.stopPropagation()}

@@ -28,6 +28,7 @@ export function EduPiStudentFacts({ factSpine, studentId, reviewer, onEducation 
   const view = factSpine.studentViews.find(item => item.studentId === entityId);
   const facts = new Map([...factSpine.acceptedFacts, ...factSpine.factCandidates].map(item => [item.id, item]));
   const rows = [...(view?.acceptedFactIds || []), ...(view?.pendingFactIds || [])].flatMap(id => facts.get(id) || []).filter(fact => fact.entityId === entityId && !fact.predicate.startsWith("family_interaction_v1."));
+  if (rows.length === 0) return null;
   const observations = new Map(factSpine.observations.map(item => [item.id, item]));
   return <details className="edupi-student-core-facts" open>
     <summary>学习事实 <span>{rows.length}</span></summary>
@@ -42,6 +43,6 @@ export function EduPiStudentFacts({ factSpine, studentId, reviewer, onEducation 
         <details><summary>来源 {sources.length + unresolvedSourceIds.length}</summary>{sources.map(source => <div key={source.id}><strong>{sourceLabels[source.sourceKind] || source.sourceKind}</strong><p>{source.text}</p><time>{new Date(source.observedAt).toLocaleString("zh-CN")}</time></div>)}{unresolvedSourceIds.map(sourceId => <code key={sourceId}>{sourceId}</code>)}</details>
         <EduPiFactActions fact={fact} spine={factSpine} reviewer={reviewer} onEducation={onEducation} />
       </article>;
-    })}{rows.length === 0 ? <em>暂无已关联事实</em> : null}</div>
+    })}</div>
   </details>;
 }

@@ -34,6 +34,8 @@ test("learning graph exposes zoom, reset, keyboard edge targets and source recor
 test("an empty graph shows the empty state without a zero record counter", () => {
   const html = renderToStaticMarkup(React.createElement(EduPiStudentGraph, { records: [], total: 0, kind: "learning", selectedId: null, onSelect() {} }));
   assert.match(html, /暂无关联记录/);
+  assert.match(html, /class="edupi-student-graph is-empty"/);
+  assert.match(html, /tabindex="-1" role="region"/);
   assert.doesNotMatch(html, /已加载 0|学习记录 0|学习模式|成长节点/);
 });
 
@@ -41,10 +43,17 @@ test("loading and read failure are distinguished from an empty graph", () => {
   const props = { records: [], total: 0, kind: "learning", selectedId: null, onSelect() {} };
   const loading = renderToStaticMarkup(React.createElement(EduPiStudentGraph, { ...props, loading: true }));
   assert.match(loading, /读取中…/);
+  assert.doesNotMatch(loading, /class="edupi-student-graph is-empty"/);
   assert.doesNotMatch(loading, /暂无关联记录/);
   const failed = renderToStaticMarkup(React.createElement(EduPiStudentGraph, { ...props, alert: React.createElement("p", { role: "alert" }, "合成读取失败") }));
   assert.match(failed, /role="alert"/);
   assert.equal((failed.match(/合成读取失败/g) || []).length, 1);
   assert.doesNotMatch(failed, /记录读取失败|图谱画布|展开图谱/);
   assert.doesNotMatch(failed, /暂无关联记录/);
+});
+
+test("an unloaded nonzero graph total is not presented as a settled empty graph", () => {
+  const html = renderToStaticMarkup(React.createElement(EduPiStudentGraph, { records: [], total: 21, kind: "learning", selectedId: null, onSelect() {} }));
+  assert.doesNotMatch(html, /class="edupi-student-graph is-empty"/);
+  assert.match(html, /tabindex="0"/);
 });

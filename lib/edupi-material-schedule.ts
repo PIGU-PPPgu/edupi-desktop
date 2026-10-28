@@ -1,7 +1,23 @@
 import { desktopApiHeaders, isTauriDesktop } from "./desktop-native";
 import type { EduPiMaterialScheduleProposal, EduPiMaterialScheduleReadResult } from "./edupi-core-process-client";
 
-export type MaterialScheduleRead = EduPiMaterialScheduleReadResult;
+export type MaterialScheduleAdoptionReceipt = {
+  receiptId: string;
+  ownerCommandId: string;
+  rootRef: string;
+  ownerId: string;
+  materialId: string;
+  sourceHash: string;
+  metadataRevision: number;
+  parseFingerprint: string;
+  status: "accepted" | "modified";
+  appliedIds: string[];
+  createdAt: string;
+  calendarState: "matching" | "needs_review";
+};
+export type MaterialScheduleRead = EduPiMaterialScheduleReadResult & {
+  adoptionReceipt?: MaterialScheduleAdoptionReceipt | null;
+};
 export type MaterialScheduleApplyCapture = {
   materialId: string;
   expectedSourceHash: string;
@@ -53,18 +69,39 @@ export function materialScheduleRead(value: unknown, materialId?: string): Mater
     || raw.source_review_required !== undefined && raw.source_review_required !== "image_text"
     || !options || options.max_occurrences !== 200
     || !Array.isArray(raw.events) || raw.events.length > 200 || raw.events.some(value => {
-      const event = record(value);
+      const event = record(value), interval = record(event?.time_interval);
       return !event || typeof event.event_id !== "string" || !ID.test(event.event_id)
         || typeof event.name !== "string" || !event.name || event.name.length > 240
-        || typeof event.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(event.date);
-    }) || !Array.isArray(raw.issues) || raw.issues.length > 200 || raw.issues.some(value => {
+        || typeof event.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(event.date)
+        || event.time_interval !== undefined && (!interval || typeof interval.start !== "string" || typeof interval.end !== "string"
+          || typeof interval.time_zone !== "string" || !interval.time_zone || interval.time_zone.length > 100);
+    }) || new Set(raw.events.map(value => record(value)?.event_id)).size !== raw.events.length
+    || !Array.isArray(raw.issues) || raw.issues.length > 200 || raw.issues.some(value => {
       const issue = record(value); return !issue || typeof issue.code !== "string" || typeof issue.message !== "string" || !issue.message;
     }) || !Array.isArray(raw.evidence) || raw.evidence.length > 1000) fail();
-  return value as MaterialScheduleRead;
+  const read = value as MaterialScheduleRead;
+  if (Object.hasOwn(raw, "adoptionReceipt")) materialScheduleAdoptionReceipt(raw.adoptionReceipt, read);
+  return read;
+}
+
+export function materialScheduleAdoptionReceipt(value: unknown, read: MaterialScheduleRead): MaterialScheduleAdoptionReceipt | null {
+  if (value === null) return null;
+  const item = record(value), ids = new Set(read.events.map(event => event.event_id));
+  if (!item || typeof item.receiptId !== "string" || !ID.test(item.receiptId)
+    || typeof item.ownerCommandId !== "string" || !ID.test(item.ownerCommandId)
+    || item.rootRef !== read.root_ref || item.ownerId !== read.owner_id || item.materialId !== read.source.material_id
+    || item.sourceHash !== read.source.source_hash || item.metadataRevision !== read.source.metadata_revision
+    || item.parseFingerprint !== read.parse_fingerprint || !["accepted", "modified"].includes(String(item.status))
+    || !["matching", "needs_review"].includes(String(item.calendarState))
+    || typeof item.createdAt !== "string" || item.createdAt.length > 40 || !Number.isFinite(Date.parse(item.createdAt))
+    || ids.size !== read.events.length || ids.size === 0 || !Array.isArray(item.appliedIds)
+    || item.appliedIds.length !== ids.size || new Set(item.appliedIds).size !== ids.size
+    || item.appliedIds.some(id => typeof id !== "string" || !ids.has(id))) fail();
+  return value as MaterialScheduleAdoptionReceipt;
 }
 
 export function materialScheduleCanApply(read: MaterialScheduleRead): boolean {
-  return read.status === "ready" && read.issues.length === 0 && read.events.length > 0;
+  return !read.adoptionReceipt && read.status === "ready" && read.issues.length === 0 && read.events.length > 0;
 }
 
 export function materialScheduleUploadProposal(value: unknown): EduPiMaterialScheduleProposal {
@@ -115,7 +152,10 @@ export async function readMaterialSchedule(materialId: string, fetcher: Fetcher 
   });
   const body = await responseBody(response);
   if (!response.ok || body.ok !== true || body.externalSend !== false) responseError(body);
-  return materialScheduleRead(body.result, materialId);
+  const observed = materialScheduleRead(body.result, materialId);
+  return Object.hasOwn(body, "adoptionReceipt")
+    ? { ...observed, adoptionReceipt: materialScheduleAdoptionReceipt(body.adoptionReceipt, observed) }
+    : observed;
 }
 
 export async function applyMaterialSchedule(capture: MaterialScheduleApplyCapture, fetcher: Fetcher = fetch, headersProvider: typeof desktopApiHeaders = desktopApiHeaders): Promise<MaterialScheduleApplyResult> {

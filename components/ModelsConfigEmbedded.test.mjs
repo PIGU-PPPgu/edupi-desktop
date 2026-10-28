@@ -8,9 +8,9 @@ test("models settings can render inline without modal chrome", async () => {
   const source = await read("./ModelsConfig.tsx");
 
   assert.match(source, /interface ModelsConfigProps[\s\S]+?embedded\?: boolean[\s\S]+?onDirtyChange\?: \(dirty: boolean\) => void[\s\S]+?onSaved\?: \(\) => void/);
-  assert.match(source, /export function ModelsConfig\(\{ onClose, embedded = false, onDirtyChange, onSaved \}: ModelsConfigProps\)/);
+  assert.match(source, /export function ModelsConfig\(\{ onClose, embedded = false, cwd, onDirtyChange, onSaved \}: ModelsConfigProps\)/);
   assert.match(source, /useModalDismiss<HTMLDivElement>\(requestClose, !embedded\)/);
-  assert.match(source, /embedded \? panel : \(/);
+  assert.ok(/embedded \? embeddedPanel : \(/.test(source), "embedded mode renders the settings page instead of the modal body");
   assert.match(source, /role=\{embedded \? undefined : "dialog"\}/);
   assert.match(source, /aria-modal=\{embedded \? undefined : true\}/);
   assert.match(source, /\{!embedded && \(\s*<div className="native-modal-header"/);

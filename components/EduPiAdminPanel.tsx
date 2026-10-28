@@ -8,7 +8,9 @@ import type { EduPiWorkspaceBundle } from "@/lib/edupi-education-client";
 import { APP_VERSION_DISPLAY } from "@/lib/branding";
 import { useDesktopHostIdentity } from "@/hooks/useDesktopHostIdentity";
 import { useDesktopChrome, WindowControls } from "./desktop";
-import { CONNECTOR_SETUP_IDS, EduPiConnectorSetup } from "./EduPiConnectorSetup";
+import type { AppSettingsPage } from "./AppSettings";
+import { SETTINGS_GROUPS, isPreferenceSection, searchSettings, type SettingsSectionId, type SettingSearchResult } from "@/lib/edupi-settings-navigation";
+import { EduPiSettingsIcon } from "./EduPiSettingsIcon";
 import { EduPiBackgroundJobs } from "./EduPiBackgroundJobs";
 import { startWindowDragging } from "@/lib/desktop-window";
 import { formatCoreSchedulerStatus } from "@/lib/edupi-schedule-display";
@@ -21,7 +23,7 @@ import { readEducationEntityDeletions, restoreEducationEntity } from "@/lib/edup
 import { EduPiProactivityCanary } from "./EduPiProactivityCanary";
 import { EduPiPromptOutboxRecovery } from "./EduPiPromptOutboxRecovery";
 import { JevSettingsCard } from "./JevSettingsCard";
-import { OpenConnectorConsolePanel } from "./OpenConnectorConsolePanel";
+import { OpenConnectorAdminPanel } from "./OpenConnectorAdminPanel";
 
 type AdminSnapshot = {
   context: TeacherContextSnapshot | null;
@@ -54,33 +56,31 @@ type AdminSnapshot = {
   } | null;
 };
 
-export type AdminSectionId = "readiness" | "automation" | "workspace" | "teachingSkills" | "connections" | "openconnector" | "platform" | "models" | "people" | "calendar" | "materials" | "tasks" | "deleted" | "system";
+export type AdminSectionId = SettingsSectionId | "automation" | "workspace" | "teachingSkills" | "openconnector" | "platform" | "people" | "calendar" | "materials" | "tasks" | "settings";
 
 type Props = {
   onClose: () => void;
   onOpenContext: () => void;
   onAskStudentUpdate: () => void;
   onNavigate: (view: WorkbenchView) => void;
-  onOpenSettings: () => void;
   modelSettingsDirty: boolean;
-  modelsPanel: ReactNode;
+  settingsBusy?: boolean;
+  modelsPanel: (cwd?: string) => ReactNode;
+  settingsPanel: (page: AppSettingsPage) => ReactNode;
   initialSection?: AdminSectionId;
   refreshToken?: number;
 };
 
-export const ADMIN_SECTIONS: Array<{ id: AdminSectionId; label: string }> = [
-  { id: "readiness", label: "概览" },
-  { id: "automation", label: "自动运行" },
-  { id: "workspace", label: "工作与资源" },
-  { id: "connections", label: "连接" },
-  { id: "openconnector", label: "OpenConnector" },
-  { id: "models", label: "AI 与模型" },
-  { id: "system", label: "系统" },
-  { id: "deleted", label: "回收站" },
-];
+export const ADMIN_SECTIONS = SETTINGS_GROUPS.flatMap((group) => [...group.sections]);
 
-function visibleSection(section: AdminSectionId): AdminSectionId {
-  return (["teachingSkills", "platform", "people", "calendar", "materials", "tasks"] as AdminSectionId[]).includes(section) ? "workspace" : section;
+function visibleSection(section: AdminSectionId): SettingsSectionId {
+  if (section === "settings") return "general";
+  if (section === "automation") return "readiness";
+  if (section === "openconnector") return "connections";
+  if (section === "people") return "profile";
+  if (section === "calendar" || section === "materials" || section === "tasks") return "data";
+  if (section === "teachingSkills" || section === "platform" || section === "workspace") return "system";
+  return section;
 }
 
 const FALLBACK_CHECKLIST: OnboardingChecklistItem[] = [
@@ -90,14 +90,6 @@ const FALLBACK_CHECKLIST: OnboardingChecklistItem[] = [
   { id: "roster", label: "导入班级名单（可选）", status: "optional", description: "先有名字即可" },
   { id: "material", label: "放入第一份真实材料", status: "optional", description: "作业、错题或课堂记录" },
 ];
-const connectorSetupIds = new Set<string>(CONNECTOR_SETUP_IDS);
-function connectorStatusLabel(status: string | undefined): string {
-  if (status === "connected" || status === "conversation_verified") return "已连接";
-  if (status === "configured") return "已配置";
-  if (status === "credentials_verified") return "凭据已验证";
-  return "未接入";
-}
-
 function systemStatusLabel(status: string | undefined): string {
   if (status === "ready") return "已就绪";
   if (status === "starting") return "启动中";
@@ -106,6 +98,10 @@ function systemStatusLabel(status: string | undefined): string {
   if (status === "failed") return "启动失败";
   if (status === "stopped") return "已停止";
   return "不可用";
+}
+
+function readableRuntimeReason(reason: string | null | undefined): string | null {
+  return reason?.replace(/\s*[（(][a-z][a-z0-9_]*[）)]/gu, "").trim() || null;
 }
 
 async function readJson<T>(url: string, signal: AbortSignal): Promise<T | null> {
@@ -129,26 +125,51 @@ function AdminMetric({ value, label }: { value: string | number; label: string }
   return <div><strong>{value}</strong><span>{label}</span></div>;
 }
 
-export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, onNavigate, onOpenSettings, modelSettingsDirty, modelsPanel, initialSection = "readiness", refreshToken = 0 }: Props) {
+export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, onNavigate, modelSettingsDirty, settingsBusy = false, modelsPanel, settingsPanel, initialSection = "general", refreshToken = 0 }: Props) {
   const desktopChrome = useDesktopChrome();
   const nativeIdentity = useDesktopHostIdentity(desktopChrome.isDesktop);
-  const [activeSection, setActiveSection] = useState<AdminSectionId>(() => visibleSection(initialSection));
-  const [modelsMounted, setModelsMounted] = useState(false);
+  const [activeSection, setActiveSection] = useState<SettingsSectionId>(() => visibleSection(initialSection));
+  const [modelsMounted, setModelsMounted] = useState(() => visibleSection(initialSection) === "models");
+  const [modelPane, setModelPane] = useState<"chat" | "browser">("chat");
+  const [connectionsMounted, setConnectionsMounted] = useState(() => visibleSection(initialSection) === "connections");
+  const [settingsMounted, setSettingsMounted] = useState(() => isPreferenceSection(visibleSection(initialSection)));
+  const [settingsPage, setSettingsPage] = useState<AppSettingsPage>(() => {
+    const section = visibleSection(initialSection);
+    return isPreferenceSection(section) ? section : "general";
+  });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchTarget, setSearchTarget] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<AdminSnapshot>({ context: null, education: null, status: null, compatibility: null, models: null, platform: null });
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [coreReconnecting, setCoreReconnecting] = useState(false);
   const [coreReconnectMessage, setCoreReconnectMessage] = useState<string | null>(null);
   const [coreRepairing, setCoreRepairing] = useState(false);
-  const [selectedConnector, setSelectedConnector] = useState<string | null>(null);
-  const firstNavRef = useRef<HTMLButtonElement>(null);
-  const connectionsNavRef = useRef<HTMLButtonElement>(null);
+  const activeNavRef = useRef<HTMLButtonElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const workspaceRef = useRef<HTMLElement>(null);
+  const navigationBusyRef = useRef(settingsBusy);
+  navigationBusyRef.current = settingsBusy;
+  const openSection = useCallback((section: AdminSectionId) => {
+    if (navigationBusyRef.current) return;
+    const visible = visibleSection(section);
+    if (visible === "models") setModelsMounted(true);
+    if (visible === "connections") setConnectionsMounted(true);
+    if (isPreferenceSection(visible)) { setSettingsMounted(true); setSettingsPage(visible); }
+    setSearchQuery("");
+    setSearchTarget(null);
+    setActiveSection(visible);
+  }, []);
+  const leaveAdmin = useCallback((action: () => void) => {
+    if (settingsBusy) return;
+    if (modelSettingsDirty && !window.confirm("AI 模型设置尚未保存，仍要离开设置吗？")) return;
+    action();
+  }, [settingsBusy, modelSettingsDirty]);
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    firstNavRef.current?.focus();
+    activeNavRef.current?.focus();
     return () => {
       const previous = previousFocusRef.current;
       if (previous && document.contains(previous)) previous.focus();
@@ -156,13 +177,60 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
   }, []);
 
   useEffect(() => {
-    if (activeSection === "models") setModelsMounted(true);
     workspaceRef.current?.scrollTo({ top: 0 });
   }, [activeSection]);
 
   useEffect(() => {
-    setActiveSection(visibleSection(initialSection));
-  }, [initialSection]);
+    if (!searchTarget || searchQuery) return;
+    let target: HTMLElement | null = null;
+    let previousTabIndex: string | null = null;
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
+    let disposed = false;
+    const locate = () => {
+      if (disposed || target) return;
+      target = workspaceRef.current?.querySelector<HTMLElement>(`[data-setting-id="${searchTarget}"]`) ?? null;
+      if (!target) return;
+      if (target.closest("[hidden]")) { target = null; return; }
+      observer.disconnect();
+      clearTimeout(deadline);
+      for (let details = target.closest("details"); details; details = details.parentElement?.closest("details") ?? null) details.open = true;
+      if (searchTarget === "update-proxy") target.querySelector("details")?.setAttribute("open", "");
+      previousTabIndex = target.getAttribute("tabindex");
+      target.setAttribute("tabindex", "-1");
+      target.classList.add("is-setting-target");
+      target.scrollIntoView({ block: "center" });
+      target.focus({ preventScroll: true });
+    };
+    // AppSettings is a dynamic chunk. Observe its arrival rather than assuming
+    // the target exists in the first animation frame after page navigation.
+    const observer = new MutationObserver(locate);
+    observer.observe(workspace, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });
+    const deadline = setTimeout(() => observer.disconnect(), 10_000);
+    const frame = requestAnimationFrame(locate);
+    return () => {
+      disposed = true;
+      observer.disconnect();
+      clearTimeout(deadline);
+      cancelAnimationFrame(frame);
+      target?.classList.remove("is-setting-target");
+      if (target) {
+        if (previousTabIndex === null) target.removeAttribute("tabindex");
+        else target.setAttribute("tabindex", previousTabIndex);
+      }
+    };
+  }, [searchTarget, searchQuery, activeSection, modelPane]);
+
+  const searchResults = useMemo(() => searchSettings(searchQuery), [searchQuery]);
+  const openSearchResult = (result: SettingSearchResult) => {
+    openSection(result.section);
+    if (result.modelPane) setModelPane(result.modelPane);
+    setSearchTarget(result.id);
+  };
+
+  useEffect(() => {
+    openSection(initialSection);
+  }, [initialSection, openSection]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -189,24 +257,28 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
   const modelReady = Boolean(snapshot.models?.defaultModel && (snapshot.models.modelList?.length || 0) > 0);
   const allSourcesLoaded = Boolean(snapshot.context && snapshot.education && snapshot.status);
   const readiness = useMemo(() => [
-    { id: "core", label: "Core 与教育投影", complete: coreReady, action: () => setActiveSection("system") },
-    { id: "model", label: "默认模型", complete: modelReady, action: () => setActiveSection("models") },
+    { id: "core", label: "Core 与教育投影", complete: coreReady, action: () => openSection("system") },
+    { id: "model", label: "默认模型", complete: modelReady, action: () => openSection("models") },
     ...checklist.map((item) => ({
       id: item.id,
       label: item.label,
       complete: item.status === "complete",
-      action: () => setActiveSection("workspace"),
+      action: () => {
+        if (item.id === "identity") openSection("profile");
+        else if (item.id === "calendar" || item.id === "timetable") leaveAdmin(() => onNavigate("calendar"));
+        else if (item.id === "roster") leaveAdmin(() => onNavigate("students"));
+        else leaveAdmin(() => onNavigate("materials"));
+      },
     })),
-  ], [checklist, coreReady, modelReady]);
+  ], [checklist, coreReady, modelReady, openSection, onNavigate, leaveAdmin]);
   const completeCount = readiness.filter((item) => item.complete).length;
   const education = snapshot.education;
   const kernel = snapshot.status?.kernel;
   const kernelSummary = kernel?.summary;
   const kernelRuns = kernel?.runs ?? [];
-  const automationStatus = kernel?.reason
-    || (!coreConnected ? snapshot.status?.core?.reason || systemStatusLabel(snapshot.status?.core?.status) : null)
+  const automationStatus = readableRuntimeReason(kernel?.reason)
+    || (!coreConnected ? readableRuntimeReason(snapshot.status?.core?.reason) || systemStatusLabel(snapshot.status?.core?.status) : null)
     || (kernel?.status === "ready" ? coreExecutionReadinessLabel(snapshot.status?.core?.capabilities) : systemStatusLabel(kernel?.status));
-  const defaultModel = snapshot.models?.defaultModel;
   const refresh = () => { setRefreshKey((value) => value + 1); void nativeIdentity.refresh(); };
   const restoreDeletedEntity = useCallback(async (kind: EducationEntityDeleteKind, id: string, restoreRequestId: string): Promise<void> => {
     const result = await restoreEducationEntity(kind, id, restoreRequestId);
@@ -241,63 +313,100 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
       setCoreRepairing(false);
     }
   };
-  const leaveAdmin = (action: () => void) => {
-    if (modelSettingsDirty && !window.confirm("AI 模型设置尚未保存，仍要离开后台吗？")) return;
-    action();
-  };
-
-  return <section className={`edupi-admin-panel${desktopChrome.isDesktop ? " has-desktop-drag-region" : ""}${activeSection === "openconnector" ? " is-console" : ""}`} aria-label="EduPi 管理中心">
+  return <section className={`edupi-admin-panel${desktopChrome.isDesktop ? " has-desktop-drag-region" : ""}`} aria-label="EduPi 设置">
     {desktopChrome.isDesktop ? <div className="edupi-window-drag-region" {...desktopChrome.dragRegionProps} onMouseDown={(event) => { if (event.button === 0 && event.target === event.currentTarget) void startWindowDragging(); }}><WindowControls /></div> : null}
     <aside className="edupi-admin-sidebar">
-      <header><span className="edupi-admin-sidebar__mark" aria-hidden="true">π</span><strong>EduPi</strong></header>
-      <nav aria-label="后台管理">
-        {ADMIN_SECTIONS.map((section) => <button
+      <header><button className="edupi-admin-sidebar__back" type="button" disabled={settingsBusy} onClick={() => leaveAdmin(onClose)}><EduPiSettingsIcon name="arrow" />返回工作台</button><strong>设置</strong></header>
+      <label className="edupi-settings-search"><EduPiSettingsIcon name="search" /><input ref={searchRef} type="search" aria-label="搜索设置" aria-controls={searchQuery.trim() ? "edupi-settings-search-results" : undefined} placeholder="搜索设置" autoComplete="off" maxLength={100} value={searchQuery} disabled={settingsBusy} onChange={(event) => { setSearchQuery(event.target.value); setSearchTarget(null); }} onKeyDown={(event) => {
+        if (event.key === "Escape" && searchQuery) { event.preventDefault(); setSearchQuery(""); activeNavRef.current?.focus(); }
+        if (event.key === "Enter" && searchResults[0]) { event.preventDefault(); openSearchResult(searchResults[0]); }
+        if (event.key === "ArrowDown" && searchResults.length) { event.preventDefault(); workspaceRef.current?.querySelector<HTMLButtonElement>(".edupi-settings-search-results button")?.focus(); }
+      }} /></label>
+      <nav aria-label="设置分类">
+        {SETTINGS_GROUPS.map((group) => <section className="edupi-settings-nav-group" key={group.label}><h2>{group.label}</h2>{group.sections.map((section) => <button
           type="button"
           key={section.id}
-          ref={section.id === "readiness" ? firstNavRef : section.id === "connections" ? connectionsNavRef : undefined}
+          ref={section.id === activeSection ? activeNavRef : undefined}
           aria-current={activeSection === section.id ? "page" : undefined}
-          onClick={() => setActiveSection(section.id)}
-        ><span aria-hidden="true" />{section.label}</button>)}
+          disabled={settingsBusy}
+          onClick={() => openSection(section.id)}
+        ><EduPiSettingsIcon name={section.icon} />{section.label}</button>)}</section>)}
       </nav>
-      <button className="edupi-admin-sidebar__back" type="button" onClick={() => leaveAdmin(onClose)}><span aria-hidden="true">←</span>返回工作台</button>
+      <div className="edupi-settings-nav-footer">
+        <button type="button" ref={activeSection === "deleted" ? activeNavRef : undefined} aria-current={activeSection === "deleted" ? "page" : undefined} disabled={settingsBusy} onClick={() => openSection("deleted")}><EduPiSettingsIcon name="trash" />回收站</button>
+        <button type="button" ref={activeSection === "system" ? activeNavRef : undefined} aria-current={activeSection === "system" ? "page" : undefined} disabled={settingsBusy} onClick={() => openSection("system")}><EduPiSettingsIcon name="tool" />诊断</button>
+      </div>
     </aside>
 
     <main ref={workspaceRef} className="edupi-admin-workspace" aria-busy={loading || undefined}>
+      {searchQuery.trim() ? <section className="edupi-admin-section edupi-settings-search-results" id="edupi-settings-search-results" aria-label="设置搜索结果"><AdminSectionHeader title="搜索设置" /><span role="status" className="edupi-settings-search-count">{searchResults.length ? `${searchResults.length} 项设置` : "没有匹配的设置"}</span><ul>{searchResults.map((result) => <li key={result.id}><button type="button" onClick={() => openSearchResult(result)}><span><strong>{result.label}</strong><small>{result.path}</small></span><span aria-hidden="true">›</span></button></li>)}</ul></section> : null}
+      <div className="edupi-settings-content" hidden={Boolean(searchQuery.trim())}>
       {activeSection === "readiness" ? <section className="edupi-admin-section">
-        <AdminSectionHeader title="概览" meta={`${completeCount}/${readiness.length} 项就绪`} onRefresh={refresh} />
-        <section className="edupi-admin-readiness" aria-labelledby="edupi-admin-readiness-title">
-          <header><div><span>上线就绪</span><h2 id="edupi-admin-readiness-title">{loading ? "正在读取" : !allSourcesLoaded ? "数据读取失败" : completeCount === readiness.length ? "已经准备好" : "还需要补充"}</h2></div><strong>{Math.round((completeCount / Math.max(1, readiness.length)) * 100)}%</strong></header>
-          <div className="edupi-admin-readiness__bar" aria-hidden="true"><span style={{ width: `${readiness.length ? (completeCount / readiness.length) * 100 : 0}%` }} /></div>
-          <div className="edupi-admin-readiness__items">{readiness.map((item) => <button type="button" key={item.id} onClick={item.action}><i className={item.complete ? "is-complete" : ""} aria-hidden="true">{item.complete ? "✓" : "·"}</i><span>{item.label}</span><em>{item.complete ? "完成" : "去设置"}</em></button>)}</div>
-        </section>
-      </section> : null}
-
-      {activeSection === "automation" ? <section className="edupi-admin-section">
-        <AdminSectionHeader title="自动运行" meta={snapshot.status?.core?.status === "ready" ? formatCoreSchedulerStatus(snapshot.status.core.scheduler, kernelRuns.length) : snapshot.status?.core?.reason || "运行状态不可用"} onRefresh={refresh} />
+        <AdminSectionHeader title="自动运行" onRefresh={refresh} />
+        <div className="edupi-admin-section-break edupi-settings-automation-status" data-setting-id="automation-status"><h2>运行状态</h2><span>{snapshot.status?.core?.status === "ready" ? formatCoreSchedulerStatus(snapshot.status.core.scheduler, kernelRuns.length) : "运行状态不可用"}</span></div>
         <div className="edupi-admin-metrics"><AdminMetric value={kernelSummary?.running ?? "—"} label="运行中" /><AdminMetric value={kernelSummary?.needs_review ?? "—"} label="待确认" /><AdminMetric value={kernelSummary?.succeeded ?? "—"} label="已完成" /></div>
-        <div className="edupi-admin-metrics"><AdminMetric value={snapshot.status?.proactivity?.status === "active" ? "主动" : snapshot.status?.proactivity?.status === "paused" ? "已暂停" : snapshot.status?.proactivity?.status === "disabled" ? "按需" : "不可用"} label="主动运行" /><AdminMetric value={snapshot.status?.proactivity?.currentAttentionDeliveries ?? "—"} label="待交付" /><AdminMetric value={snapshot.status?.proactivity?.teacherFeedback ? "可记录" : "未启用"} label="教师反馈" /></div>
-        <EduPiProactivityCanary feedbackEnabled={snapshot.status?.proactivity?.teacherFeedback === true} onChanged={refresh} />
-        <EduPiProactivityCanary domain="student_followup" onChanged={refresh} />
-        <EduPiProactivityCanary domain="calendar_administration" onChanged={refresh} />
-        <EduPiProactivityCanary domain="lesson_reflection" onChanged={refresh} />
-        <EduPiProactivityCanary domain="parent_communication" onChanged={refresh} />
+        <dl className="edupi-settings-runtime-state">
+          <div><dt>主动运行</dt><dd>{snapshot.status?.proactivity?.status === "active" ? "主动" : snapshot.status?.proactivity?.status === "paused" ? "已暂停" : snapshot.status?.proactivity?.status === "disabled" ? "按需" : "不可用"}</dd></div>
+          <div><dt>待交付</dt><dd>{snapshot.status?.proactivity?.currentAttentionDeliveries ?? "—"}</dd></div>
+          <div><dt>教师反馈</dt><dd>{snapshot.status?.proactivity?.teacherFeedback ? "可记录" : "未启用"}</dd></div>
+        </dl>
+        <details className="edupi-admin-readiness">
+          <summary><span>准备状态</span><strong>{loading ? "正在读取" : !allSourcesLoaded ? "暂不可用" : `${completeCount}/${readiness.length} 项完成`}</strong></summary>
+          {allSourcesLoaded ? <div className="edupi-admin-readiness__bar" aria-hidden="true"><span style={{ width: `${readiness.length ? (completeCount / readiness.length) * 100 : 0}%` }} /></div> : null}
+          <div className="edupi-admin-readiness__items">{readiness.map((item) => <button type="button" key={item.id} onClick={item.action}><i className={item.complete ? "is-complete" : ""} aria-hidden="true">{item.complete ? "✓" : "·"}</i><span>{item.label}</span><em>{item.complete ? "完成" : "去设置"}</em></button>)}</div>
+        </details>
+        <div className="edupi-settings-automation-domains" data-setting-id="automation-domains"><h2>主动运行范围</h2>{([
+          ["teaching_preparation", "课前准备"], ["student_followup", "学生跟进"], ["calendar_administration", "校历与行政"], ["lesson_reflection", "课后复盘"], ["parent_communication", "家长沟通"],
+        ] as const).map(([domain, label]) => <details key={domain}><summary><span>{label}</span><small>试用配置</small></summary><EduPiProactivityCanary domain={domain} feedbackEnabled={snapshot.status?.proactivity?.teacherFeedback === true} onChanged={refresh} /></details>)}</div>
         <EduPiPromptOutboxRecovery />
+        <div className="edupi-admin-section-break" data-setting-id="automation-history"><h2>最近运行</h2></div>
         <div className="edupi-admin-runtime" role="list" aria-label="最近自动运行">
           {kernelRuns.length > 0 ? kernelRuns.slice(0, 12).map((run) => {
             const action = kernelRunAction(run);
             return <div role="listitem" key={run.run_id}>
               <i className={`is-${run.status || "unknown"}`} aria-hidden="true" />
               <span><strong>{kernelRunTitle(run, education?.tasks || [])}</strong><small>{kernelRunDetail(run)}</small></span>
-              {action ? <button type="button" onClick={() => { const target = action.target; if (target === "models") setActiveSection("models"); else leaveAdmin(() => onNavigate(target)); }}>{action.label}</button> : <em>{run.status === "running" || run.status === "awaiting_delivery" ? "运行中" : run.status === "needs_review" ? "待确认" : run.status === "failed" ? "失败" : run.status === "succeeded" ? "完成" : "无内容"}</em>}
+              {action ? <button type="button" onClick={() => { const target = action.target; if (target === "models") openSection("models"); else leaveAdmin(() => onNavigate(target)); }}>{action.label}</button> : <em>{run.status === "running" || run.status === "awaiting_delivery" ? "运行中" : run.status === "needs_review" ? "待确认" : run.status === "failed" ? "失败" : run.status === "succeeded" ? "完成" : "无内容"}</em>}
               {run.updated_at ? <time dateTime={run.updated_at}>{new Date(run.updated_at).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time> : null}
             </div>;
           }) : <div className="is-empty" role="status">还没有运行记录</div>}
         </div>
-        <EduPiBackgroundJobs data={snapshot.education} onMaterials={() => onNavigate("materials")} onModels={() => setActiveSection("models")} />
+        <details className="edupi-settings-diagnostics"><summary>文档任务</summary><EduPiBackgroundJobs data={snapshot.education} onMaterials={() => leaveAdmin(() => onNavigate("materials"))} onModels={() => openSection("models")} /></details>
       </section> : null}
 
-      {activeSection === "workspace" ? <section className="edupi-admin-section">
-        <AdminSectionHeader title="工作与资源" onRefresh={refresh} />
+      {connectionsMounted ? <section className="edupi-admin-section is-connections" hidden={activeSection !== "connections"} data-setting-id="applications">
+        <AdminSectionHeader title="应用连接" />
+        <OpenConnectorAdminPanel managedConnections={snapshot.platform?.connectors?.connectors ?? []} onManagedConfigured={refresh} />
+      </section> : null}
+
+      {modelsMounted ? <section className="edupi-admin-section is-models" hidden={activeSection !== "models"}>
+        <AdminSectionHeader title="AI 与模型" meta={modelPane === "chat" && snapshot.models === null ? "模型数据不可用" : undefined} />
+        <div className="edupi-admin-tabs" role="group" aria-label="模型类别">
+          <button id="edupi-models-chat-tab" type="button" aria-pressed={modelPane === "chat"} aria-controls="edupi-models-chat" onClick={() => setModelPane("chat")}>对话模型</button>
+          <button id="edupi-models-browser-tab" type="button" aria-pressed={modelPane === "browser"} aria-controls="edupi-models-browser" onClick={() => setModelPane("browser")}>浏览器决策</button>
+        </div>
+        <div id="edupi-models-chat" data-setting-id="chat-models" className="edupi-admin-embedded-models" aria-labelledby="edupi-models-chat-tab" hidden={modelPane !== "chat"}>{modelsPanel(education?.workspace)}</div>
+        <div id="edupi-models-browser" data-setting-id="browser-decision" aria-labelledby="edupi-models-browser-tab" hidden={modelPane !== "browser"}><JevSettingsCard /></div>
+      </section> : null}
+
+      {settingsMounted ? <section className="edupi-admin-section is-settings" hidden={!isPreferenceSection(activeSection)}>{settingsPanel(settingsPage)}{settingsPage === "data" ? <button className="edupi-settings-data-link" type="button" onClick={() => openSection("deleted")}><EduPiSettingsIcon name="trash" /><span>回收站</span><span aria-hidden="true">›</span></button> : null}</section> : null}
+
+      {activeSection === "deleted" ? <section className="edupi-admin-section">
+        <AdminSectionHeader title="回收站" onRefresh={refresh} /><div data-setting-id="deleted-entities" />
+        <EduPiDeletedEntities activeCount={education?.entityDeletionCount ?? 0} historyCount={education?.entityDeletionHistoryCount ?? 0} countUnavailable={education?.entityDeletionLedgerUnavailable ?? true} onLoad={readEducationEntityDeletions} onRestore={restoreDeletedEntity} />
+      </section> : null}
+
+      {activeSection === "system" ? <section className="edupi-admin-section">
+        <AdminSectionHeader title="诊断" onRefresh={refresh} /><div data-setting-id="runtime-status" />
+        <div className="edupi-admin-list">
+          <div><span><strong>{desktopChrome.isDesktop ? "EduPi Desktop" : "EduPi Web"}</strong><small>{desktopChrome.isDesktop ? "当前运行版本" : "网页版本"}</small></span><em>{desktopChrome.isDesktop ? nativeIdentity.host ? `v${nativeIdentity.host.appVersion}` : nativeIdentity.loading ? "检测中" : "无法检测" : `v${APP_VERSION_DISPLAY}`}</em></div>
+          <button type="button" disabled={coreReconnecting || coreRepairing} onClick={coreConnected ? refresh : () => void reconnectCore()} aria-label={coreConnected ? "检查 Core 状态" : "重新连接 Core"}><span><strong>EduPi Core</strong><small aria-live="polite">{readableRuntimeReason(coreReconnectMessage) || readableRuntimeReason(snapshot.status?.core?.reason) || systemStatusLabel(snapshot.status?.core?.lifecycle || snapshot.status?.core?.status)}</small></span><em className={coreConnected ? "is-ready" : ""}>{coreReconnecting ? "连接中" : coreRepairing ? "修复中" : loading ? "检查中" : coreConnected ? "已连接" : "重新连接"}</em></button>
+          {desktopChrome.isDesktop && ["runtime_root_invalid", "runtime_state_invalid", "runtime_writer_unavailable"].some((code) => snapshot.status?.core?.reason?.includes(code)) ? <button type="button" disabled={coreRepairing || coreReconnecting} onClick={() => void repairCore()}><span><strong>修复 Core Runtime</strong><small>只清理运行状态绑定，保留教师数据</small></span><em>{coreRepairing ? "处理中" : "修复"}</em></button> : null}
+          <div><span><strong>教育投影</strong><small>{readableRuntimeReason(snapshot.status?.projection?.reason) || systemStatusLabel(snapshot.status?.projection?.status)}</small></span><em className={projectionConnected ? "is-ready" : ""}>{projectionConnected ? "已连接" : "检查"}</em></div>
+          <div><span><strong>自动运行内核</strong><small>{automationStatus}</small></span><em>{kernelSummary?.running ? `${kernelSummary.running} 项运行中` : "空闲"}</em></div>
+        </div>
+        <details className="edupi-settings-diagnostics"><summary>技术信息</summary><EduPiCoreCompatibility value={snapshot.compatibility} onNavigate={(view) => leaveAdmin(() => onNavigate(view))} onOpenContext={() => leaveAdmin(onOpenContext)} /></details>
+        <details className="edupi-settings-diagnostics"><summary>教育数据</summary>
         <div className="edupi-admin-work-grid">
           <article>
             <h2>任务与产物</h2>
@@ -332,47 +441,9 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
           </article>
         </div>
         <button className="edupi-admin-work-student-ai" type="button" onClick={() => leaveAdmin(onAskStudentUpdate)}>让 EduPi 更新学生档案</button>
+        </details>
       </section> : null}
-
-      {activeSection === "connections" ? <section className="edupi-admin-section">
-        <AdminSectionHeader title="连接" onRefresh={refresh} />
-        <JevSettingsCard />
-        <h2 className="edupi-admin-connection-title">服务连接</h2>
-        <div className="edupi-admin-list">{snapshot.platform?.connectors?.connectors?.map((connector) => {
-          const id = connector.connector_id || "";
-          const connected = connector.status === "connected" || connector.status === "conversation_verified";
-          const content = <><span><strong>{connector.label || id}</strong><small>{connector.capabilities?.join(" · ")}</small></span><em className={connected ? "is-ready" : ""}>{connectorStatusLabel(connector.status)}{connectorSetupIds.has(id) ? " ›" : ""}</em></>;
-          return connectorSetupIds.has(id)
-            ? <button type="button" key={id} onClick={() => setSelectedConnector(id)}>{content}</button>
-            : <div key={id}>{content}</div>;
-        })}</div>
-        {selectedConnector ? <EduPiConnectorSetup connectorId={selectedConnector} status={snapshot.platform?.connectors?.connectors?.find((item) => item.connector_id === selectedConnector)?.status || "not_configured"} onClose={() => setSelectedConnector(null)} onConfigured={refresh} /> : null}
-      </section> : null}
-
-      {activeSection === "openconnector" ? <section className="edupi-admin-section is-openconnector"><OpenConnectorConsolePanel onBack={() => { setActiveSection("connections"); requestAnimationFrame(() => connectionsNavRef.current?.focus()); }} /></section> : null}
-
-      {modelsMounted ? <section className="edupi-admin-section is-models" hidden={activeSection !== "models"}>
-        <AdminSectionHeader title="AI 与模型" meta={snapshot.models === null ? "模型数据不可用" : defaultModel ? `${defaultModel.provider} / ${defaultModel.modelId}` : "默认模型待配置"} />
-        <div className="edupi-admin-embedded-models">{modelsPanel}</div>
-      </section> : null}
-
-      {activeSection === "deleted" ? <section className="edupi-admin-section">
-        <AdminSectionHeader title="回收站" meta="删除与恢复记录" onRefresh={refresh} />
-        <EduPiDeletedEntities activeCount={education?.entityDeletionCount ?? 0} historyCount={education?.entityDeletionHistoryCount ?? 0} countUnavailable={education?.entityDeletionLedgerUnavailable ?? true} onLoad={readEducationEntityDeletions} onRestore={restoreDeletedEntity} />
-      </section> : null}
-
-      {activeSection === "system" ? <section className="edupi-admin-section">
-        <AdminSectionHeader title="系统" meta={education?.workspace || "数据目录待连接"} onRefresh={refresh} />
-        <div className="edupi-admin-list">
-          <div><span><strong>{desktopChrome.isDesktop ? "EduPi Desktop" : "EduPi Web"}</strong><small>{desktopChrome.isDesktop ? "当前运行版本" : "网页版本"}</small></span><em>{desktopChrome.isDesktop ? nativeIdentity.host ? `v${nativeIdentity.host.appVersion}` : nativeIdentity.loading ? "检测中" : "无法检测" : `v${APP_VERSION_DISPLAY}`}</em></div>
-          <button type="button" disabled={coreReconnecting || coreRepairing} onClick={coreConnected ? refresh : () => void reconnectCore()} aria-label={coreConnected ? "检查 Core 状态" : "重新连接 Core"}><span><strong>EduPi Core</strong><small aria-live="polite">{coreReconnectMessage || snapshot.status?.core?.reason || systemStatusLabel(snapshot.status?.core?.lifecycle || snapshot.status?.core?.status)}</small></span><em className={coreConnected ? "is-ready" : ""}>{coreReconnecting ? "连接中" : coreRepairing ? "修复中" : loading ? "检查中" : coreConnected ? "已连接" : "重新连接"}</em></button>
-          {desktopChrome.isDesktop && ["runtime_root_invalid", "runtime_state_invalid", "runtime_writer_unavailable"].some((code) => snapshot.status?.core?.reason?.includes(code)) ? <button type="button" disabled={coreRepairing || coreReconnecting} onClick={() => void repairCore()}><span><strong>修复 Core Runtime</strong><small>只清理运行状态绑定，保留教师数据</small></span><em>{coreRepairing ? "处理中" : "修复"}</em></button> : null}
-          <div><span><strong>教育投影</strong><small>{snapshot.status?.projection?.reason || systemStatusLabel(snapshot.status?.projection?.status)}</small></span><em className={projectionConnected ? "is-ready" : ""}>{projectionConnected ? "已连接" : "检查"}</em></div>
-          <button type="button" onClick={() => setActiveSection("automation")}><span><strong>自动运行内核</strong><small>{automationStatus}</small></span><em>{kernelSummary?.running ? `${kernelSummary.running} 项运行中` : "查看"}</em></button>
-          <button type="button" onClick={onOpenSettings}><span><strong>应用更新</strong><small>检查、下载并安装新版本</small></span><em>检查更新</em></button>
-        </div>
-        <EduPiCoreCompatibility value={snapshot.compatibility} onNavigate={onNavigate} onOpenContext={onOpenContext} />
-      </section> : null}
+      </div>
     </main>
   </section>;
 }

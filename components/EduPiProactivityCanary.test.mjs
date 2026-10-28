@@ -27,6 +27,8 @@ test("active canary view has one stop action", () => {
   const html = renderToStaticMarkup(component.EduPiProactivityCanaryView({ state: active, selectedKey: JSON.stringify(["class-7-1", "数学"]), busy: false, message: null, onSelect() {}, onToggle() {} }));
   assert.match(html, />停止主动运行</);
   assert.match(html, /剩余 11 次/);
+  assert.match(html, /七一班 · 数学/);
+  assert.doesNotMatch(html, /class-7-1/);
   assert.equal((html.match(/<button/g) || []).length, 1);
   assert.doesNotMatch(html, /<select/);
 });

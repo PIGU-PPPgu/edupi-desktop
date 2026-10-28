@@ -9,7 +9,7 @@ test("the EduPi shell owns the default desktop surface and embeds Agent collabor
   assert.match(appShell, /display: edupiEducationModule \? "none" : "flex"/);
   assert.match(appShell, /chatPanel=\{edupiChatWindow\}/);
   assert.doesNotMatch(appShell, /agentPanel=\{edupiChatWindow\}/);
-  assert.match(appShell, /chatSidebar=\{renderSessionSidebar\("embedded-chat"\)\}/);
+  assert.match(appShell, /chatSidebar=\{initialSessionRestored \? renderSessionSidebar\("embedded-chat"\) : null\}/);
   assert.match(appShell, /onSessionCreated=\{handleEducationSessionCreated\}/);
   assert.match(appShell, /renderFilePreview=/);
   assert.doesNotMatch(appShell, /<EduPiEducationHome/);
@@ -70,7 +70,8 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   for (const label of ["自动准备教学产物", "课次", "上课日期", "材料", "产物", "创建并准备"]) assert.match(taskBoard, new RegExp(label));
   assert.match(taskBoard, /preparationSource: managedPreparation/);
   assert.match(taskBoard, /pendingCreateRef/);
-  assert.match(taskBoard, /clientRequestId: pendingCreateRef\.current\.id/);
+  assert.match(taskBoard, /const clientRequestId = pendingCreateRef\.current\.id;/);
+  assert.match(taskBoard, /onCreateTask\(\{ clientRequestId, \.\.\.requested \}\)/);
   assert.match(taskBoard, /material\.subject === activeSubject/);
   assert.match(taskBoard, /material\.class_id === activeClass/);
   assert.match(taskBoard, /lessonDateMatchesSlot/);
@@ -107,7 +108,7 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   assert.match(taskBoard, /await onMoveTask/);
   assert.doesNotMatch(workspaceViews, /EduPiRhythmImporter/);
   for (const label of ["日程", "待确认", "今天", "上一时段", "下一时段", "日", "周", "月", "新建日程", "添加课表", "上传文件", "日期待确认"]) assert.match(calendarWorkspace, new RegExp(label));
-  assert.match(calendarWorkspace, /compact=\{entry\.kind !== "task"\}/);
+  assert.match(calendarWorkspace, /compact=\{entry\.kind !== "task" \|\| entry\.rangeStart === entry\.rangeEnd\}/);
   assert.match(calendarWorkspace, /entry\.sourceLabel/);
   assert.match(calendarWorkspace, /entry\.statusLabel/);
   assert.match(objectSider, /isRecognizedTimetableNote\(slot\?\.notes\)/);
@@ -149,7 +150,7 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   assert.match(panel, /activeAgentSessionId/);
   assert.match(panel, /useEduPiContentSiderCollapse/);
   assert.match(`${panel}\n${objectSider}`, /收起列表/);
-  assert.match(panel, /aria-label="展开列表"/);
+  assert.match(await read("./EduPiObjectNavigationRestore.tsx"), /aria-label="展开列表"/);
   assert.doesNotMatch(panel, />列表<\/button>/);
   assert.match(panel, /\/api\/edupi\/tasks\/\$\{encodeURIComponent\(pendingTaskBinding\.taskId\)\}\/session/);
   assert.match(appShell, /onActivateAgentSession=/);
@@ -232,10 +233,8 @@ test("refreshes education data after Core imports without remounting chat", asyn
   const appShell = await read("./AppShell.tsx");
   const panel = await read("./EduPiEducationPanel.tsx");
   const conversationFiles = await read("./EduPiConversationFiles.tsx");
-  const loadEffect = panel.slice(
-    panel.indexOf("useEffect(() => {"),
-    panel.indexOf("useEffect(() => {", panel.indexOf("useEffect(() => {") + 1),
-  );
+  const loadEffectEnd = panel.indexOf("}, [loadWorkspace, refreshKey]);");
+  const loadEffect = panel.slice(panel.lastIndexOf("useEffect(() => {", loadEffectEnd), loadEffectEnd + "}, [loadWorkspace, refreshKey]);".length);
   const agentEndHandler = appShell.slice(
     appShell.indexOf("const handleAgentEnd"),
     appShell.indexOf("const handleEducationImportCompleted"),
@@ -321,7 +320,6 @@ test("routes education uploads through Desktop staging without Core paths or aut
   assert.match(materials, /EduPiMaterialScheduleProposal/);
   assert.match(panel, /materialReceivedOnly/);
   assert.doesNotMatch(materials, /resolveScheduleSourceSelection|documentPairingSubmission|calendar-preview|document-pairings|确认导入|确认更新/);
-  assert.match(materials, /旧安排更新、撤回和课表导入暂不可用/);
   assert.match(materials, /onIntakeMaterial\(item, \{ title:/);
   assert.match(workspaceViews, /stagedMaterials/);
   assert.match(materials, /接入 EduPi/);
@@ -353,7 +351,8 @@ test("calendar entries and sidebar nodes open a right-side raw detail drawer wit
   assert.match(panel, /sourceOccurrenceRef: event\.sourceOccurrenceRef/);
   assert.match(panel, /timeInterval/);
   assert.match(calendarWorkspace, /sourceOccurrenceRef/);
-  assert.match(calendarWorkspace, /startAt/);
+  assert.match(calendarWorkspace, /calendarFormTime\(/);
+  assert.match(await read("../lib/edupi-calendar-form-time.ts"), /startAt/);
   assert.match(calendarWorkspace, /location/);
   assert.match(calendarWorkspace, /enabled=\{data\.capabilities\.calendar\.enabled \|\| data\.capabilities\.timetable\.enabled\}/);
   assert.doesNotMatch(calendarWorkspace, /enabled=\{Boolean\(data\.l4Preparation\)\}/);
@@ -412,7 +411,8 @@ test("board and calendar task entries share a mounted task peek drawer", async (
   assert.match(board, /onTaskDetail/);
   assert.match(board, /taskPresentation\(task\)\.label/);
   assert.doesNotMatch(board, /if \(task\.boardStage === "done"\)/);
-  assert.match(board, /onOpen=\{\(\) => onTaskDetail\(task\)\}/);
+  assert.match(board, /onOpen=\{\(keyboard\) => \{/);
+  assert.match(board, /setSelectedCardId\(task\.id \?\? null\); onTaskDetail\(task\)/);
   assert.doesNotMatch(board, /onTask\(task, cardStage/);
   assert.match(calendar, /taskForCalendarEntry/);
   assert.match(calendar, /entry\.kind === "task" \? onTaskDetail\(entry\)/);
@@ -561,7 +561,7 @@ test("Cmd K and the tray open one EduPi quick entry across tasks, calendar, arti
 
 test("the CSS defines a harness workspace with an optional object browser and responsive fallback", async () => {
   const css = await read("../app/edupi-workbench.css");
-  assert.match(css, /grid-template-columns: 220px minmax\(0, 1fr\)/);
+  assert.match(css, /grid-template-columns: 208px minmax\(0, 1fr\)/);
   assert.match(css, /\.edupi-teacher-body\.has-object-sider/);
   assert.match(css, /\.edupi-command-center/);
   assert.match(css, /\.edupi-today-layout/);
@@ -587,7 +587,7 @@ test("background jobs expose every available artifact for native opening", async
   assert.match(jobs, /backgroundJobRecovery/);
   assert.match(jobs, /查看“\$\{job\.title\}”技术详情/);
   assert.match(jobs, /failureLabels\[job\.error \|\| ""\] \|\| "处理未完成"/);
-  assert.match(admin, /onModels=\{\(\) => setActiveSection\("models"\)\}/);
+  assert.match(admin, /onModels=\{\(\) => openSection\("models"\)\}/);
   assert.match(css, /\.edupi-background-job-artifacts/);
   assert.match(css, /\.edupi-background-job-details/);
 });

@@ -39,6 +39,8 @@ export type CalendarIntakeInput = {
   location: string | null;
 };
 
+export type CalendarIntakeOutcome = { status?: string; evidenceIds?: string[] };
+
 export type TimetableImportSlot = {
   slot_id: string;
   day_of_week: number;

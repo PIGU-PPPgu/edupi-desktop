@@ -119,6 +119,7 @@ export class DecisionProviderError extends Error {
   constructor(
     public readonly reason: Extract<DecisionFallbackReason, "service_unavailable" | "timeout" | "provider_error">,
     message: string,
+    public readonly upstreamStatus?: number,
   ) {
     super(message);
     this.name = "DecisionProviderError";
@@ -587,7 +588,7 @@ export class JevDecisionProvider implements DecisionProvider {
     }
     if (!response.ok) {
       const reason = response.status === 429 || response.status === 503 || response.status === 529 ? "service_unavailable" : "provider_error";
-      throw new DecisionProviderError(reason, "TypeSafe returned HTTP " + response.status);
+      throw new DecisionProviderError(reason, "TypeSafe returned HTTP " + response.status, response.status);
     }
     let payload: { answers?: Record<string, TypeSafeAnswer>; model?: string; usage?: Record<string, unknown> };
     try {

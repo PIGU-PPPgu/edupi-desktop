@@ -40,6 +40,16 @@ test("DOCX lesson suggestion stays collapsed, review-only and bound to the curre
   assert.doesNotMatch(absent, /查看课次任务/);
 });
 
+test("lesson suggestion displays an exact known class label and retains an unknown class value", () => {
+  const scoped = { ...material, class_id: "class-one" };
+  const data = { teacherMaterials: [scoped], tasks: [task], timetable: [{ class_id: "class-one", class_name: "测试一班" }] };
+  assert.match(render(proposal, data), /数学 · 测试一班/);
+  assert.doesNotMatch(render(proposal, data), /class-one/);
+  const unknown = { ...data, teacherMaterials: [{ ...scoped, class_id: "class-unknown" }] };
+  assert.match(render(proposal, unknown), /数学 · class-unknown/);
+  assert.equal(scoped.class_id, "class-one");
+});
+
 test("held and unavailable DOCX proposals never expose a lesson or adoption control", () => {
   const data = { teacherMaterials: [material], tasks: [task] };
   for (const status of ["held", "unavailable"]) {

@@ -5,7 +5,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
 import { handleExternalLinkClick, openExternal } from "@/lib/desktop-native";
-import { fetchWithDeadline, fetchWithRetry } from "@/lib/fetch-timeout";
+import { fetchJsonWithDeadline, fetchWithDeadline, fetchWithRetry } from "@/lib/fetch-timeout";
 import { normalizeModelEntry } from "@/lib/model-config-normalize";
 import { ConfirmDangerButton } from "./ConfirmDangerButton";
 import type { ModelCatalogPreset, ModelCatalogRecommendation } from "@/lib/model-catalog";
@@ -35,7 +35,7 @@ import VercelIcon from "@lobehub/icons/es/Vercel/components/Mono";
 import GithubCopilotIcon from "@lobehub/icons/es/GithubCopilot/components/Mono";
 import AwsColorIcon from "@lobehub/icons/es/Aws/components/Color";
 import AzureColorIcon from "@lobehub/icons/es/Azure/components/Color";
-import KimiColorIcon from "@lobehub/icons/es/Kimi/components/Color";
+import KimiIcon from "@lobehub/icons/es/Kimi/components/Mono";
 import QwenColorIcon from "@lobehub/icons/es/Qwen/components/Color";
 import ZhipuColorIcon from "@lobehub/icons/es/Zhipu/components/Color";
 import CohereColorIcon from "@lobehub/icons/es/Cohere/components/Color";
@@ -78,7 +78,7 @@ const PROVIDER_ICONS: Record<string, { Icon: IconComponent; hasColor: boolean }>
   "github-copilot":         { Icon: GithubCopilotIcon,    hasColor: false },
   "amazon-bedrock":         { Icon: AwsColorIcon,         hasColor: true },
   "azure-openai-responses": { Icon: AzureColorIcon,       hasColor: true },
-  "kimi-coding":            { Icon: KimiColorIcon,        hasColor: true },
+  "kimi-coding":            { Icon: KimiIcon,             hasColor: false },
   "nvidia":                 { Icon: NvidiaColorIcon,      hasColor: true },
   "opencode":               { Icon: OpenCodeIcon,         hasColor: false },
   "opencode-go":            { Icon: OpenCodeIcon,         hasColor: false },
@@ -793,7 +793,9 @@ function ModelDetail({
   onChange,
   onDelete,
   onUse,
+  embedded = false,
 }: {
+  embedded?: boolean;
   providerName: string;
   provider: ProviderEntry;
   model: ModelEntry;
@@ -951,65 +953,7 @@ function ModelDetail({
       ? "#d97706"
       : "var(--text-dim)";
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-         <SectionTitle>{t("i18n.model")}</SectionTitle>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button className="native-button" disabled={!model.id.trim()} onClick={() => void onUse()}>保存并设为默认</button>
-          {testSummary && (
-            <span
-              title={testSummary}
-              style={{
-                maxWidth: 260,
-                height: 24,
-                padding: "0 8px",
-                border: `1px solid ${testState.phase === "error"
-                  ? "color-mix(in srgb, var(--danger) 40%, transparent)"
-                  : testState.phase === "success"
-                    ? "color-mix(in srgb, var(--success) 40%, transparent)"
-                    : "var(--border)"}`,
-                borderRadius: 4,
-                background: testState.phase === "error"
-                  ? "color-mix(in srgb, var(--danger) 12%, var(--bg-panel))"
-                  : testState.phase === "success"
-                    ? "color-mix(in srgb, var(--success) 12%, var(--bg-panel))"
-                    : "var(--bg-hover)",
-                color: "var(--text)",
-                fontSize: 11,
-                display: "inline-flex",
-                alignItems: "center",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                boxSizing: "border-box",
-              }}
-            >
-              {testSummary}
-            </span>
-          )}
-          <button
-            className={`native-button native-button-compact${testState.phase === "success" ? " is-success" : ""}`}
-            onClick={handleTest}
-            disabled={!model.id.trim() || testState.phase === "testing"}
-             title={t("i18n.testConnection")}
-          >
-            {testState.phase === "success" && (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-             {testState.phase === "testing" ? t("i18n.checking") : testState.phase === "success" ? t("common.ok") : t("i18n.test")}
-          </button>
-          <ConfirmDangerButton label={t("i18n.remove")} onConfirm={onDelete} />
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label={t("models.idLabel")}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
-        <Field label={t("models.nameLabel")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("models.nameLabel")} /></Field>
-      </div>
-
+  const advancedFields = <>
       <div style={{ padding: "10px 0", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <button
@@ -1097,7 +1041,7 @@ function ModelDetail({
         </>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <div className="model-detail__capacity" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <Field label={t("models.contextWindowLabel")}>
           <NumInput value={model.contextWindow !== undefined ? String(model.contextWindow) : ""}
             onChange={(v) => set("contextWindow", v ? parseInt(v) : undefined)} placeholder="128000" />
@@ -1110,7 +1054,7 @@ function ModelDetail({
 
       <div>
         <SectionTitle>{t("models.costLabel")}</SectionTitle>
-        <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
+        <div className="model-detail__cost" style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
           {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => (
             <Field key={k} label={t(`models.cost.${k}`)}>
               <NumInput value={costVal(k)} onChange={(v) => setCost(k, v)} placeholder="0" />
@@ -1118,6 +1062,68 @@ function ModelDetail({
           ))}
         </div>
       </div>
+  </>;
+
+  return (
+    <div className="model-detail" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="model-detail__header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+         <SectionTitle>{t("i18n.model")}</SectionTitle>
+        <div className="model-detail__actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button className={`native-button${embedded ? " native-button-primary" : ""}`} disabled={!model.id.trim()} onClick={() => void onUse()}>保存并设为默认</button>
+          {testSummary && (
+            <span
+              title={testSummary}
+              style={{
+                maxWidth: 260,
+                height: 24,
+                padding: "0 8px",
+                border: `1px solid ${testState.phase === "error"
+                  ? "color-mix(in srgb, var(--danger) 40%, transparent)"
+                  : testState.phase === "success"
+                    ? "color-mix(in srgb, var(--success) 40%, transparent)"
+                    : "var(--border)"}`,
+                borderRadius: 4,
+                background: testState.phase === "error"
+                  ? "color-mix(in srgb, var(--danger) 12%, var(--bg-panel))"
+                  : testState.phase === "success"
+                    ? "color-mix(in srgb, var(--success) 12%, var(--bg-panel))"
+                    : "var(--bg-hover)",
+                color: "var(--text)",
+                fontSize: 11,
+                display: "inline-flex",
+                alignItems: "center",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                boxSizing: "border-box",
+              }}
+            >
+              {testSummary}
+            </span>
+          )}
+          <button
+            className={`native-button native-button-compact${testState.phase === "success" ? " is-success" : ""}`}
+            onClick={handleTest}
+            disabled={!model.id.trim() || testState.phase === "testing"}
+             title={t("i18n.testConnection")}
+          >
+            {testState.phase === "success" && (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+             {testState.phase === "testing" ? t("i18n.checking") : testState.phase === "success" ? t("common.ok") : t("i18n.test")}
+          </button>
+          <ConfirmDangerButton label={t("i18n.remove")} onConfirm={onDelete} />
+        </div>
+      </div>
+
+      <div className="model-detail__identity" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <Field label={t("models.idLabel")}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
+        <Field label={t("models.nameLabel")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("models.nameLabel")} /></Field>
+      </div>
+
+      {embedded ? <details className="model-detail__advanced"><summary>高级参数</summary><div>{advancedFields}</div></details> : advancedFields}
     </div>
   );
 }
@@ -1407,7 +1413,9 @@ function ApiKeyDetail({
   onRemoveModel,
   onUseModel,
   onAddModel,
+  embedded = false,
 }: {
+  embedded?: boolean;
   provider: ApiKeyProvider;
   configProvider: ProviderEntry;
   models: ModelEntry[];
@@ -1516,18 +1524,7 @@ function ApiKeyDetail({
     }
   }, [provider.id, onRefresh]);
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-         <SectionTitle>API Key</SectionTitle>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "var(--success)" : "var(--border)", display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: provider.configured ? "var(--success)" : "var(--text-dim)" }}>
-             {provider.configured ? t("i18n.configured") : t("i18n.notConfigured")}
-          </span>
-        </div>
-      </div>
-
+  const keyFields = <>
       <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
         {provider.configured
           ? t("models.apiKeyStored")
@@ -1561,6 +1558,21 @@ function ApiKeyDetail({
           </button>
         </div>
       </Field>
+  </>;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+         <SectionTitle>API Key</SectionTitle>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "var(--success)" : "var(--border)", display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: provider.configured ? "var(--success)" : "var(--text-dim)" }}>
+             {provider.configured ? t("i18n.configured") : t("i18n.notConfigured")}
+          </span>
+        </div>
+      </div>
+
+      {embedded && provider.configured ? <details className="models-page__credentials"><summary>更新 API Key</summary><div>{keyFields}</div></details> : keyFields}
 
       {error && <p style={{ margin: 0, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
 
@@ -1593,6 +1605,7 @@ function ApiKeyDetail({
               {models[activeModelIndex] ? (
                 <div style={{ border: "1px solid var(--border)", borderRadius: 7, padding: 12 }}>
                   <ModelDetail
+                    embedded={embedded}
                     providerName={provider.id}
                     provider={configProvider}
                     model={models[activeModelIndex]}
@@ -1885,6 +1898,7 @@ function FirstModelSetup({
 // ── Add provider picker ───────────────────────────────────────────────────────
 
 interface AddProviderPickerProps {
+  embedded?: boolean;
   oauthProviders: OAuthProvider[];
   apiKeyProviders: ApiKeyProvider[];
   onSelectOAuth: (id: string) => void;
@@ -1895,12 +1909,12 @@ interface AddProviderPickerProps {
 
 function AddProviderPicker({
   oauthProviders, apiKeyProviders,
-  onSelectOAuth, onSelectApiKey, onAddCustom, onClose,
+  onSelectOAuth, onSelectApiKey, onAddCustom, onClose, embedded = false,
 }: AddProviderPickerProps) {
   const [search, setSearch] = useState("");
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
-  const pickerRef = useModalDismiss<HTMLDivElement>(onClose);
+  const pickerRef = useModalDismiss<HTMLDivElement>(onClose, !embedded);
 
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 30); }, []);
 
@@ -1930,11 +1944,11 @@ function AddProviderPicker({
 
   return (
     <div
-      className="native-modal-backdrop"
-      style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className={embedded ? "models-page-picker" : "native-modal-backdrop"}
+      style={embedded ? undefined : { position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={(e) => { if (!embedded && e.target === e.currentTarget) onClose(); }}
     >
-      <div ref={pickerRef} role="dialog" aria-modal="true" className="native-modal settings-modal provider-picker" style={{ width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
+      <div ref={pickerRef} role={embedded ? undefined : "dialog"} aria-modal={embedded ? undefined : true} className={embedded ? "provider-picker provider-picker-inline" : "native-modal settings-modal provider-picker"} style={embedded ? undefined : { width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
         {/* Search */}
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
@@ -2026,11 +2040,12 @@ function AddProviderPicker({
 interface ModelsConfigProps {
   onClose: () => void;
   embedded?: boolean;
+  cwd?: string;
   onDirtyChange?: (dirty: boolean) => void;
   onSaved?: () => void;
 }
 
-export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved }: ModelsConfigProps) {
+export function ModelsConfig({ onClose, embedded = false, cwd, onDirtyChange, onSaved }: ModelsConfigProps) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
   const [config, setConfig] = useState<ModelsJson>({ providers: {} });
@@ -2045,6 +2060,18 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
   const [apiKeyProvidersLoading, setApiKeyProvidersLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [setupDismissed, setSetupDismissed] = useState(false);
+  const [embeddedView, setEmbeddedView] = useState<"list" | "detail">("list");
+  const [modelOverview, setModelOverview] = useState<{
+    defaultModel?: { provider: string; modelId: string } | null;
+    modelList?: Array<{ provider: string; id: string }>;
+  } | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(embedded);
+  const overviewVersionRef = useRef(0);
+  const lastServiceIdRef = useRef<string | null>(null);
+  const lastServiceButtonRef = useRef<HTMLButtonElement>(null);
+  const addServiceButtonRef = useRef<HTMLButtonElement>(null);
+  const restoreListFocusRef = useRef(false);
+  const detailBackRef = useRef<HTMLButtonElement>(null);
   // Snapshot of the last loaded/saved config — closing with edits beyond this
   // point asks for confirmation instead of silently discarding them.
   const savedSnapshotRef = useRef<string>(JSON.stringify({ providers: {} }));
@@ -2063,7 +2090,34 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
   }, [config, onClose]);
 
   const panelRef = useModalDismiss<HTMLDivElement>(requestClose, !embedded);
-  const discardRef = useModalDismiss<HTMLDivElement>(() => setConfirmDiscard(false), confirmDiscard);
+  const discardRef = useModalDismiss<HTMLDivElement>(() => setConfirmDiscard(false), confirmDiscard && !embedded);
+
+  const refreshModelOverview = useCallback(() => {
+    if (!embedded) return;
+    const version = ++overviewVersionRef.current;
+    setOverviewLoading(true);
+    const url = cwd ? `/api/models?cwd=${encodeURIComponent(cwd)}` : "/api/models";
+    void fetchJsonWithDeadline<NonNullable<typeof modelOverview>>(url, 10_000)
+      .then(({ response, body }) => {
+        if (!response.ok) throw new Error("models unavailable");
+        if (version === overviewVersionRef.current) setModelOverview(body);
+      })
+      .catch(() => { if (version === overviewVersionRef.current) setModelOverview(null); })
+      .finally(() => { if (version === overviewVersionRef.current) setOverviewLoading(false); });
+  }, [cwd, embedded]);
+
+  useEffect(() => {
+    refreshModelOverview();
+    return () => { overviewVersionRef.current += 1; };
+  }, [refreshModelOverview]);
+
+  useEffect(() => {
+    if (!embedded || pickerOpen) return;
+    if (embeddedView === "detail") detailBackRef.current?.focus({ preventScroll: true });
+    else if (lastServiceIdRef.current || restoreListFocusRef.current) {
+      (lastServiceButtonRef.current || addServiceButtonRef.current)?.focus({ preventScroll: true });
+    }
+  }, [embedded, embeddedView, pickerOpen]);
 
   const loadOAuthProviders = useCallback(() => {
     setOauthProvidersLoading(true);
@@ -2094,8 +2148,9 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
 
   const handleAuthChanged = useCallback(() => {
     refreshAuthProviders();
+    refreshModelOverview();
     onSaved?.();
-  }, [onSaved, refreshAuthProviders]);
+  }, [onSaved, refreshAuthProviders, refreshModelOverview]);
 
   useEffect(() => {
     fetch("/api/models-config")
@@ -2105,12 +2160,12 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
         setConfig(normalized);
         savedSnapshotRef.current = JSON.stringify(normalized);
         const keys = Object.keys(normalized.providers ?? {});
-        if (keys.length > 0) setSelection({ type: "provider", name: keys[0] });
+        if (!embedded && keys.length > 0) setSelection({ type: "provider", name: keys[0] });
       })
       .catch(() => setConfig({ providers: {} }))
       .finally(() => setLoading(false));
     refreshAuthProviders();
-  }, [refreshAuthProviders]);
+  }, [embedded, refreshAuthProviders]);
 
   const addCustomProvider = useCallback(() => {
     let finalName = "new-provider";
@@ -2118,6 +2173,7 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
     while (config.providers?.[finalName]) finalName = `new-provider-${n++}`;
     setConfig((prev) => ({ ...prev, providers: { ...(prev.providers ?? {}), [finalName]: { api: "openai-completions" } } }));
     setSelection({ type: "provider", name: finalName });
+    setEmbeddedView("detail");
   }, [config.providers]);
 
   const updateProvider = useCallback((name: string, p: ProviderEntry) => {
@@ -2148,10 +2204,11 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
     });
     setConfig((prev) => {
       const remaining = Object.keys(prev.providers ?? {});
-      setSelection(remaining.length > 0 ? { type: "provider", name: remaining[0] } : null);
+      setSelection(!embedded && remaining.length > 0 ? { type: "provider", name: remaining[0] } : null);
       return prev;
     });
-  }, []);
+    if (embedded) setEmbeddedView("list");
+  }, [embedded]);
 
   const addModel = useCallback((providerName: string, keepProviderSelection = false) => {
     const currentModels = config.providers?.[providerName]?.models ?? [];
@@ -2260,8 +2317,9 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
         throw new Error(`模型已加载，但默认模型设置失败：${defaultResult.error || `HTTP ${defaultResponse.status}`}`);
       }
     }
+    refreshModelOverview();
     if (options.notify !== false) onSaved?.();
-  }, [config, onSaved]);
+  }, [config, onSaved, refreshModelOverview]);
 
   const updateModel = useCallback((providerName: string, index: number, m: ModelEntry) => {
     setConfig((prev) => {
@@ -2296,11 +2354,12 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || "默认模型设置失败");
       setSavedOk(true);
+      refreshModelOverview();
       onSaved?.();
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "默认模型设置失败");
     }
-  }, [config, onSaved]);
+  }, [config, onSaved, refreshModelOverview]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -2317,6 +2376,8 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
       else {
         savedSnapshotRef.current = JSON.stringify(config);
         setSavedOk(true);
+        setConfirmDiscard(false);
+        refreshModelOverview();
         onSaved?.();
         setTimeout(() => setSavedOk(false), 2000);
       }
@@ -2325,12 +2386,13 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
     } finally {
       setSaving(false);
     }
-  }, [config, onSaved]);
+  }, [config, onSaved, refreshModelOverview]);
 
   const onSetupSaved = useCallback((providerId: string, nextConfig: ModelsJson) => {
     setConfig(nextConfig);
     savedSnapshotRef.current = JSON.stringify(nextConfig);
     setSelection({ type: "apikey", providerId });
+    setEmbeddedView("detail");
     setSavedOk(true);
     setTimeout(() => setSavedOk(false), 2000);
     handleAuthChanged();
@@ -2364,6 +2426,7 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
       if (!p) return null;
       const configuredProvider = config.providers?.[p.id] ?? {};
       return <ApiKeyDetail
+        embedded={embedded}
         key={p.id}
         provider={p}
         configProvider={configuredProvider}
@@ -2396,6 +2459,7 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
     if (!model) return null;
     return (
       <ModelDetail
+        embedded={embedded}
         key={`${selection.providerName}-${selection.index}`}
         providerName={selection.providerName}
         provider={provider}
@@ -2406,6 +2470,101 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
       />
     );
   })();
+
+  const managedProviderIds = new Set([...activeOAuth, ...activeApiKey].map((provider) => provider.id));
+  const serviceRows: Array<{ id: string; name: string; kind: string; count: number | null; status: string; connected: boolean; selection: Selection }> = [
+    ...activeOAuth.filter((provider) => !activeApiKey.some((candidate) => candidate.id === provider.id)).map((provider) => ({ id: provider.id, name: provider.name, kind: "OAuth", status: "已连接", connected: true,
+      count: modelOverview?.modelList ? modelOverview.modelList.filter((model) => model.provider === provider.id).length : null,
+      selection: { type: "oauth" as const, providerId: provider.id } })),
+    ...activeApiKey.map((provider) => ({ id: provider.id, name: provider.displayName, kind: "API Key", status: "已连接", connected: true,
+      count: config.providers?.[provider.id]?.models?.length ?? provider.modelCount,
+      selection: { type: "apikey" as const, providerId: provider.id } })),
+    ...providers.filter(([name]) => !managedProviderIds.has(name)).map(([name, provider]) => {
+      const managed = apiKeyProviders.find((candidate) => candidate.id === name);
+      return { id: name, name: managed?.displayName || name, kind: managed ? "API Key" : "自定义服务", status: managed ? "待连接" : "已配置", connected: false,
+        count: provider.models?.length ?? 0,
+        selection: managed ? { type: "apikey" as const, providerId: name } : { type: "provider" as const, name } };
+    }),
+  ];
+  const defaultModel = modelOverview?.defaultModel;
+  const defaultService = serviceRows.find((row) => row.id === defaultModel?.provider);
+  const openEmbeddedSelection = (next: Selection, serviceId: string) => {
+    lastServiceIdRef.current = serviceId;
+    setSelection(next);
+    setEmbeddedView("detail");
+    setPickerOpen(false);
+    setConfirmDiscard(false);
+  };
+  const returnToServices = () => {
+    if (hasUnsavedChanges) { setConfirmDiscard(true); return; }
+    setConfirmDiscard(false);
+    setSelection(null);
+    setEmbeddedView("list");
+  };
+  const discardAndReturn = () => {
+    setConfig(JSON.parse(savedSnapshotRef.current) as ModelsJson);
+    setConfirmDiscard(false);
+    setSaveError(null);
+    setSavedOk(false);
+    setSelection(null);
+    setEmbeddedView("list");
+  };
+  const selectedProviderName = selection?.type === "model" ? selection.providerName : selection?.type === "provider" ? selection.name : null;
+  const selectedProvider = selectedProviderName ? config.providers?.[selectedProviderName] : undefined;
+  const modelDetailSelected = selection?.type === "model";
+  const selectedServiceId = selection?.type === "model" ? selection.providerName : selection?.type === "provider" ? selection.name : selection?.providerId;
+  const selectedService = serviceRows.find((row) => row.id === selectedServiceId);
+
+
+  const embeddedPanel = <div className="models-page" data-setting-id="model-services">
+    {confirmDiscard ? <div className="models-page__discard" role="alert" aria-label="未保存的模型更改">
+      <p>模型设置尚未保存。</p><div><button type="button" className="native-button" onClick={() => setConfirmDiscard(false)}>继续编辑</button><button type="button" className="native-button native-button-danger" onClick={discardAndReturn}>放弃更改</button></div>
+    </div> : null}
+    {initialLoading ? <div className="models-page__loading" role="status">正在读取模型服务…</div>
+      : showFirstSetup ? <FirstModelSetup availableProviderIds={apiKeyProviders.map((provider) => provider.id)} onSetupSaved={onSetupSaved} onUseAdvanced={useAdvancedSetup} />
+      : pickerOpen ? <>
+        <button type="button" className="models-page__back" onClick={() => setPickerOpen(false)}>← 返回模型服务</button>
+        <h2 className="models-page__title">添加模型服务</h2>
+        <AddProviderPicker embedded oauthProviders={oauthProviders} apiKeyProviders={apiKeyProviders}
+          onSelectOAuth={(id) => openEmbeddedSelection({ type: "oauth", providerId: id }, id)}
+          onSelectApiKey={(id) => openEmbeddedSelection({ type: "apikey", providerId: id }, id)}
+          onAddCustom={addCustomProvider} onClose={() => setPickerOpen(false)} />
+      </>
+      : embeddedView === "detail" && selection && detailContent ? <>
+        <button ref={detailBackRef} type="button" className="models-page__back" onClick={() => {
+          if (modelDetailSelected && selectedProviderName) setSelection({ type: "provider", name: selectedProviderName });
+          else returnToServices();
+        }}>← {modelDetailSelected ? "返回服务配置" : "返回模型服务"}</button>
+        {selectedServiceId ? <header className="models-page__service-heading"><span className="models-page__icon"><ProviderIcon id={selectedServiceId} size={24} /></span><div><h2>{selectedService?.name || selectedServiceId}</h2>{selectedService ? <span>{selectedService.kind}</span> : null}</div></header> : null}
+        <div className="models-page__detail">{detailContent}</div>
+        {selection.type === "provider" && selectedProvider ? <section className="models-page__models" aria-label="服务模型">
+          <header><h3>模型</h3><button type="button" className="native-button" onClick={() => addModel(selection.name)}>添加模型</button></header>
+          {selectedProvider.models?.length ? <div className="models-page__list">{selectedProvider.models.map((model, index) => <button type="button" className="models-page__row" key={`${model.id}-${index}`} onClick={() => setSelection({ type: "model", providerName: selection.name, index })}>
+            <span className="models-page__row-content"><strong>{model.name || model.id || "新模型"}</strong>{model.name && model.name !== model.id ? <small>{model.id}</small> : null}</span>
+            {defaultModel?.provider === selection.name && defaultModel.modelId === model.id ? <span className="models-page__status">默认</span> : null}<span aria-hidden="true">›</span>
+          </button>)}</div> : <p className="models-page__empty">尚未添加模型</p>}
+        </section> : null}
+      </> : <>
+        <div className="models-page__default" data-setting-id="default-model">
+          <span><strong>默认模型</strong><small>{overviewLoading ? "正在读取…" : modelOverview === null ? "暂时无法读取" : defaultModel ? `${defaultService?.name || defaultModel.provider} · ${defaultModel.modelId}` : "尚未选择"}</small></span>
+          {defaultService ? <button type="button" className="native-button" onClick={() => openEmbeddedSelection(defaultService.selection, defaultService.id)}>更改</button> : null}
+          {!overviewLoading && modelOverview === null ? <button type="button" className="native-button" onClick={refreshModelOverview}>重新读取</button> : null}
+        </div>
+        <header className="models-page__heading"><h2>模型服务</h2><button ref={addServiceButtonRef} type="button" className="native-button native-button-primary" onClick={() => { restoreListFocusRef.current = true; setPickerOpen(true); }}>添加模型服务</button></header>
+        <div className="models-page__list" aria-label="模型服务">{serviceRows.map((row) => <button
+          ref={row.id === lastServiceIdRef.current ? lastServiceButtonRef : undefined}
+          type="button" className="models-page__row" key={row.id} onClick={() => openEmbeddedSelection(row.selection, row.id)}>
+          <span className="models-page__icon"><ProviderIcon id={row.id} size={24} /></span>
+          <span className="models-page__row-content"><strong>{row.name}</strong><small>{row.kind} · {row.count === null ? "模型待读取" : `${row.count} 个模型`}</small></span>
+          <span className={`models-page__status${row.connected ? " is-ready" : ""}`}>{row.status}</span><span className="models-page__chevron" aria-hidden="true">›</span>
+        </button>)}</div>
+        {!serviceRows.length ? <p className="models-page__empty">尚未配置模型服务</p> : null}
+      </>}
+    {!initialLoading && !showFirstSetup && (hasUnsavedChanges || savedOk || saveError) ? <footer className="models-page__footer">
+      <span role={saveError ? "alert" : "status"}>{saveError || (savedOk ? "已保存" : "有未保存的更改")}</span>
+      {hasUnsavedChanges ? <button type="button" className="native-button native-button-primary" disabled={saving} onClick={handleSave}>{saving ? "保存中…" : "保存更改"}</button> : null}
+    </footer> : null}
+  </div>;
 
   const panel = (
       <div
@@ -2655,13 +2814,13 @@ export function ModelsConfig({ onClose, embedded = false, onDirtyChange, onSaved
 
   return (
     <>
-    {embedded ? panel : (
+    {embedded ? embeddedPanel : (
       <div className="native-modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
         onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
         {panel}
       </div>
     )}
-    {pickerOpen && !showFirstSetup && (
+    {!embedded && pickerOpen && !showFirstSetup && (
       <AddProviderPicker
         oauthProviders={oauthProviders}
         apiKeyProviders={apiKeyProviders}

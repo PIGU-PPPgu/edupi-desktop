@@ -34,6 +34,7 @@ function editorHarness({ read, revise, props = {} } = {}) {
       else effects.delete(index);
     },
   };
+  react.useLayoutEffect = react.useEffect;
   const client = {
     readPreparationArtifact: async (id, revision, signal) => { reads.push({ id, revision, signal }); return read ? read(id, revision, signal) : artifact(); },
     revisePreparationArtifact: async (id, revision, content) => { writes.push({ id, revision, content }); return revise ? revise(id, revision, content) : artifact({ content }); },

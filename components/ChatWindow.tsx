@@ -6,6 +6,7 @@ import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { MessageView } from "./MessageView";
+import { DisclosureChevron } from "./DisclosureChevron";
 import { EduPiConversationFiles } from "./EduPiConversationFiles";
 import { EduPiProactiveHub } from "./EduPiProactiveHub";
 import { EduPiRuntimeFlow } from "./EduPiRuntimeFlow";
@@ -209,7 +210,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
   return (
     <div className="process-details" style={{ marginBottom: 14 }}>
       <button
-        className="process-details-trigger"
+        className="process-details-trigger disclosure-trigger is-inline"
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
@@ -229,10 +230,10 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
         }}
         title={expanded ? t("chat.collapseProcess") : t("chat.expandProcess")}
       >
-        <span className="edupi-disclosure-icon" aria-hidden="true" />
         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {parts.join(" · ")}
         </span>
+        <DisclosureChevron open={expanded} />
       </button>
       {expanded && (
         <div className="process-details-content" style={{ marginTop: 8 }}>
@@ -294,6 +295,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     chatInputRef?.current?.replaceMessage(message);
   }, [chatInputRef]);
 
+  const handleSessionCreated = useCallback((created: SessionInfo) => {
+    if (draftKey) chatInputRef?.current?.promoteDraftToSession(draftKey, created.id);
+    onSessionCreated?.(created);
+  }, [chatInputRef, draftKey, onSessionCreated]);
+
   const {
     loading, error, messages, entryIds, streamState,
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, permissionMode, thinkingLevel,
@@ -313,7 +319,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     handleBuiltinSlashCommand, retryLoad,
     handleToolPresetChange, handlePermissionModeChange, handleThinkingLevelChange, loadSlashCommands, scrollToBottom, scrollUserMsgToTop,
   } = useAgentSession({
-    session, newSessionCwd, draftKey, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
+    session, newSessionCwd, draftKey, onAgentEnd: wrappedOnAgentEnd, onSessionCreated: handleSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
     onEducationImportCompleted, onEduPiAction, onEduPiComputerAction,
   });
@@ -552,7 +558,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   useLayoutEffect(() => {
     const composer = bottomComposerRef.current;
-    if (!composer) {
+    if (!composer || isEmptyNew) {
       bottomComposerHeightRef.current = 0;
       setBottomComposerHeight(0);
       return;
@@ -981,10 +987,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         />
       )}
 
+      {/* Keep the composer mounted while the first optimistic message changes
+          the empty layout. Its refs own the in-flight submission and edits. */}
       {/* Composer overlays the scrollport; trailing spacer clears the last lines. */}
       <div className="relative flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
-      {!isEmptyNew && (
-      <div className="relative flex min-w-0 min-h-0 flex-1 overflow-hidden">
+      <div className="relative flex min-w-0 min-h-0 flex-1 overflow-hidden" style={{ display: isEmptyNew ? "none" : undefined }}>
         <div
           style={{
             position: "absolute",
@@ -1091,32 +1098,27 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           onSelect={selectConversationTurn}
         />
       </div>
-      )}
 
-      {/* Keep the submitting editor mounted when its first optimistic message leaves the empty state. */}
-      <div ref={isEmptyNew ? undefined : bottomComposerRef} className={isEmptyNew
-        ? "flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8"
-        : "absolute inset-x-0 bottom-0 z-20"}>
-        <div className={isEmptyNew ? "chat-empty-state w-full max-w-[820px]" : undefined}>
-        {isEmptyNew ? <>
-          <div className="chat-empty-brand mb-3" style={{
-            display: "flex", alignItems: "center", justifyContent: "flex-start", marginLeft: 16, marginRight: 16,
-          }}>
-            <div className="chat-empty-brand-copy">
-              <strong>{emptyTitle ?? t("chat.emptyTitle")}</strong>
-              <span>{emptySubtitle ?? t("chat.emptySubtitle", { product: PRODUCT_NAME })}</span>
-            </div>
+      <div ref={bottomComposerRef} className={isEmptyNew ? "flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-4 py-8" : "absolute inset-x-0 bottom-0 z-20"}>
+        <div className={isEmptyNew ? "chat-empty-state w-full max-w-[820px]" : undefined} style={isEmptyNew ? { margin: "0 auto" } : undefined}>
+        {isEmptyNew ? <div
+          className="chat-empty-brand mb-3"
+          style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", marginLeft: 16, marginRight: 16 }}
+        >
+          <div className="chat-empty-brand-copy">
+            <strong>{emptyTitle ?? t("chat.emptyTitle")}</strong>
+            <span>{emptySubtitle ?? t("chat.emptySubtitle", { product: PRODUCT_NAME })}</span>
           </div>
-          <NoticeShelf notices={notices} align="right" />
-        </> : <div
+        </div> : null}
+        <div
           style={{
-            padding: `0 ${CHAT_COLUMN_PADDING}px`,
+            padding: isEmptyNew ? undefined : `0 ${CHAT_COLUMN_PADDING}px`,
           }}
         >
           <div style={{ maxWidth: 820, margin: "0 auto" }}>
-            <ExtensionWidgets widgets={belowEditorWidgets} teacherMode={teacherMode} />
+            {isEmptyNew ? <NoticeShelf notices={notices} align="right" /> : <ExtensionWidgets widgets={belowEditorWidgets} teacherMode={teacherMode} />}
           </div>
-        </div>}
+        </div>
         {chatInputElement}
         </div>
       </div>

@@ -164,27 +164,35 @@ export function AppShell() {
     window.addEventListener("keydown", closeTopmostQuickEntry, true);
     return () => window.removeEventListener("keydown", closeTopmostQuickEntry, true);
   }, []);
-  useEffect(() => {
-    const handler = () => {
-      setAppSettingsSection("mobile");
-      setAppSettingsOpen(true);
-    };
-    window.addEventListener("edupi-open-settings", handler);
-    return () => window.removeEventListener("edupi-open-settings", handler);
-  }, []);
 
   const [edupiAdminOpen, setEduPiAdminOpen] = useState(false);
-  const [edupiAdminSection, setEduPiAdminSection] = useState<AdminSectionId>("readiness");
+  const [edupiAdminSection, setEduPiAdminSection] = useState<AdminSectionId>("general");
   const [adminModelsDirty, setAdminModelsDirty] = useState(false);
+  const [adminUpdateBusy, setAdminUpdateBusy] = useState(false);
+  const adminUpdateBusyRef = useRef(adminUpdateBusy);
+  adminUpdateBusyRef.current = adminUpdateBusy;
   const [proactiveOpenRequest, setProactiveOpenRequest] = useState(0);
   const [edupiEducationModule, setEduPiEducationModule] = useState<EducationModule | null>("home");
   useEffect(() => {
     const handler = () => {
+      if (adminUpdateBusyRef.current) return;
       setAppSettingsOpen(false);
+      setEduPiAdminOpen(false);
       setEduPiEducationModule("context");
     };
     window.addEventListener("edupi-open-context", handler);
     return () => window.removeEventListener("edupi-open-context", handler);
+  }, []);
+  useEffect(() => {
+    const handler = () => {
+      if (adminUpdateBusyRef.current) return;
+      setAppSettingsSection("mobile");
+      setAppSettingsOpen(false);
+      setEduPiAdminSection("devices");
+      setEduPiAdminOpen(true);
+    };
+    window.addEventListener("edupi-open-settings", handler);
+    return () => window.removeEventListener("edupi-open-settings", handler);
   }, []);
   const edupiChatActive = edupiEducationModule !== null && searchParams.get("view") === "chat";
   const [projectTrust, setProjectTrust] = useState<ProjectTrustStatus | null>(null);
@@ -455,7 +463,10 @@ export function AppShell() {
     router.replace(`/?${params.toString()}`, { scroll: false });
   }, [router, searchParams]);
 
-  const openEduPiAdmin = useCallback((section: AdminSectionId = "readiness") => {
+  const openEduPiAdmin = useCallback((section: AdminSectionId = "general") => {
+    if (adminUpdateBusyRef.current) return;
+    setAppSettingsOpen(false);
+    setAppSettingsSection(null);
     setEduPiAdminSection(section);
     setEduPiAdminOpen(true);
   }, []);
@@ -530,12 +541,24 @@ export function AppShell() {
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !initialSessionId);
   // Suppresses sessionKey bump in handleCwdChange during the initial URL restore
   const suppressCwdBumpRef = useRef(false);
+  const initialCwdSupersededRef = useRef(false);
+  const handleCwdSelect = useCallback((cwd: string) => {
+    initialCwdSupersededRef.current = true;
+    suppressCwdBumpRef.current = false;
+    // Discard a different startup cwd already queued before this selection.
+    setNewSessionCwd((prev) => prev === cwd ? prev : null);
+    setInitialSessionRestored(true);
+    setInitialCwdStatus("ready");
+    setInitialCwdError(null);
+  }, []);
 
   useEffect(() => {
     const requestedCwd = initialNavigation.requestedCwd;
     if (!requestedCwd) return;
 
     const controller = new AbortController();
+    // A chosen chat or directory wins over delayed startup validation.
+    const canRestore = () => !controller.signal.aborted && !initialCwdSupersededRef.current && !activeCwdRef.current && !activeSessionIdRef.current;
     setInitialCwdStatus("validating");
     setInitialCwdError(null);
 
@@ -547,6 +570,7 @@ export function AppShell() {
     })
       .then(async (response) => {
         const data = await response.json().catch(() => ({})) as { cwd?: string; error?: string };
+        if (!canRestore()) return;
         if (!response.ok || !data.cwd) {
           throw new Error(data.error ?? `HTTP ${response.status}`);
         }
@@ -558,7 +582,7 @@ export function AppShell() {
         setInitialCwdStatus("ready");
       })
       .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
+        if (!canRestore()) return;
         setInitialCwdError(error instanceof Error ? error.message : String(error));
         setInitialCwdStatus("error");
       });
@@ -573,6 +597,9 @@ export function AppShell() {
     if (previousCwd && cwd && previousCwd !== cwd) { setPendingEduPiContext(null); setPendingTeacherDraft(null); }
     // Skip if cwd is null (initial mount).
     if (!cwd) return;
+    setInitialSessionRestored(true);
+    setInitialCwdStatus("ready");
+    setInitialCwdError(null);
     const newProject = projectRoot ?? cwd;
     const currentProject = activeProjectRootRef.current
       ?? (selectedSession ? (selectedSession.projectRoot ?? selectedSession.cwd) : null);
@@ -593,7 +620,7 @@ export function AppShell() {
     if (currentProject) { setPendingEduPiContext(null); setPendingTeacherDraft(null); }
     // Close any session that belongs to a different project — it no longer
     // matches the selected project directory.
-    setSelectedSession(null);
+    if (!selectedSession || (selectedSession.projectRoot ?? selectedSession.cwd) !== newProject) setSelectedSession(null);
     setNewSessionCwd((prev) => {
       if (prev && prev !== cwd) return null;
       return prev;
@@ -681,6 +708,7 @@ export function AppShell() {
     }
     setSelectedSession(null);
     setNewSessionCwd(cwd);
+    setInitialSessionRestored(true);
     setEduPiEducationModule(null);
     // A second click in the same cwd must still create a clean composer. The
     // cwd-derived session identity alone cannot distinguish those blank tasks.
@@ -706,6 +734,7 @@ export function AppShell() {
     }
     setSelectedSession(null);
     setNewSessionCwd(cwd);
+    setInitialSessionRestored(true);
     setSessionKey((key) => key + 1);
     setBranchTree([]);
     setBranchActiveLeafId(null);
@@ -867,16 +896,20 @@ export function AppShell() {
       return true;
     }
     if (action.action === "open_settings") {
-      setAppSettingsOpen(true);
+      openEduPiAdmin("settings");
       return true;
     }
     if (action.action === "open_context") {
+      if (adminUpdateBusy) return false;
       setAppSettingsOpen(false);
+      setEduPiAdminOpen(false);
       setEduPiEducationModule("context");
       return true;
     }
     if (action.action === "close_panel") {
+      if (adminUpdateBusy) return false;
       setAppSettingsOpen(false);
+      setEduPiAdminOpen(false);
       setModelsConfigOpen(false);
       setSkillsConfigOpen(false);
       setPluginsConfigOpen(false);
@@ -924,7 +957,7 @@ export function AppShell() {
     }
     router.replace(`/?${params.toString()}`, { scroll: false });
     return true;
-  }, [router, searchParams]);
+  }, [adminUpdateBusy, openEduPiAdmin, router, searchParams]);
 
   const [reminderDraft, setReminderDraft] = useState<{ taskId: string; title: string; context?: EduPiComposerContext; openId?: string } | null>(null);
   const continueReminder = useCallback(async (taskId: string) => {
@@ -1179,15 +1212,17 @@ export function AppShell() {
   // Show chat area if a session is selected, or if we have a cwd to start a new session in
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
   useEffect(() => {
-    if (!edupiChatActive || selectedSession || effectiveNewSessionCwd || !initialSessionRestored) return;
+    if (!edupiChatActive || selectedSession || effectiveNewSessionCwd || !initialSessionRestored || initialNavigation.requestedCwd) return;
     const controller = new AbortController();
+    const canRestore = () => !controller.signal.aborted && !initialCwdSupersededRef.current && !activeCwdRef.current && !activeSessionIdRef.current;
     void readEduPiWorkspace({ signal: controller.signal }).then(async bundle => {
+      if (!canRestore()) return;
       const response = await fetch("/api/cwd/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd: bundle.data.workspace }), signal: controller.signal });
       if (!response.ok) throw new Error("教育工作区无法打开");
-      if (!controller.signal.aborted) setNewSessionCwd(bundle.data.workspace);
+      if (canRestore()) setNewSessionCwd(bundle.data.workspace);
     }).catch(() => { /* Education panel exposes workspace errors and retry. */ });
     return () => controller.abort();
-  }, [edupiChatActive, selectedSession, effectiveNewSessionCwd, initialSessionRestored]);
+  }, [edupiChatActive, selectedSession, effectiveNewSessionCwd, initialSessionRestored, initialNavigation.requestedCwd]);
   const showChat = selectedSession !== null || effectiveNewSessionCwd !== null;
   const projectTrustCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
   const showPlaceholder = initialSessionRestored && !showChat;
@@ -1373,22 +1408,27 @@ export function AppShell() {
     { id: "models", label: "模型设置", onClick: () => setModelsConfigOpen(true), disabled: false, icon: <span aria-hidden="true">⌘</span> },
     { id: "skills", label: "教学能力", onClick: () => setSkillsConfigOpen(true), disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd, icon: <span aria-hidden="true">◇</span> },
     { id: "plugins", label: "扩展管理", onClick: () => setPluginsConfigOpen(true), disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd, icon: <span aria-hidden="true">◌</span> },
-    { id: "settings", label: "教师设置", onClick: () => setAppSettingsOpen(true), disabled: false, iconOnly: true, icon: <span aria-hidden="true">⚙</span> },
+    { id: "settings", label: "教师设置", onClick: () => edupiEducationModule ? openEduPiAdmin("settings") : setAppSettingsOpen(true), disabled: false, iconOnly: true, icon: <span aria-hidden="true">⚙</span> },
   ];
 
+  // The teacher frame keeps one list mounted; only the first may restore startup state.
   const renderSessionSidebar = (presentation: "default" | "embedded-chat" = "default") => (
       <SessionSidebar
         selectedSessionId={selectedSession?.id ?? null}
         onSelectSession={presentation === "embedded-chat" ? handleEducationSelectSession : handleSelectSession}
         onNewSession={presentation === "embedded-chat" ? handleEducationNewSession : handleNewSession}
-        initialSessionId={initialSessionId}
-        skipInitialProjectSelection={initialNavigation.requestedCwd !== null}
+        initialSessionId={initialSessionRestored ? null : initialSessionId}
+        skipInitialProjectSelection={initialNavigation.requestedCwd !== null || Boolean(selectedSession || effectiveNewSessionCwd)}
         onInitialRestoreDone={handleInitialRestoreDone}
         refreshKey={refreshKey}
         onSessionDeleted={handleSessionDeleted}
-        selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
+        selectedCwd={selectedSession?.cwd ?? effectiveNewSessionCwd}
         onCwdChange={handleCwdChange}
-        onOpenFile={handleOpenFile}
+        onCwdSelect={handleCwdSelect}
+        onOpenFile={(...args) => {
+          if (presentation === "embedded-chat") window.dispatchEvent(new Event("edupi-chat-sidebar-action"));
+          handleOpenFile(...args);
+        }}
         selectedFilePath={activeFileTab?.filePath ?? null}
         explorerRefreshKey={explorerRefreshKey}
         onAtMention={handleAtMention}
@@ -1398,11 +1438,11 @@ export function AppShell() {
         onOpenContext={() => openEducationModule("context")}
         presentation={presentation}
         resourceActions={presentation === "embedded-chat" ? [
-          { id: "connectors", label: "连接器", onClick: () => openEduPiAdmin("connections") },
-          { id: "plugins", label: "插件", onClick: () => setPluginsConfigOpen(true) },
-          { id: "skills", label: "Skills", onClick: () => setSkillsConfigOpen(true) },
-          { id: "knowledge", label: "知识库", onClick: () => openEducationView("memory") },
-          { id: "automation", label: "自动化", onClick: () => openEduPiAdmin("automation") },
+          { id: "connectors", label: "连接器", onClick: () => { window.dispatchEvent(new Event("edupi-chat-sidebar-action")); openEduPiAdmin("connections"); } },
+          { id: "plugins", label: "插件", onClick: () => { window.dispatchEvent(new Event("edupi-chat-sidebar-action")); setPluginsConfigOpen(true); } },
+          { id: "skills", label: "Skills", onClick: () => { window.dispatchEvent(new Event("edupi-chat-sidebar-action")); setSkillsConfigOpen(true); } },
+          { id: "knowledge", label: "知识库", onClick: () => { window.dispatchEvent(new Event("edupi-chat-sidebar-action")); openEducationView("memory"); } },
+          { id: "automation", label: "自动化", onClick: () => { window.dispatchEvent(new Event("edupi-chat-sidebar-action")); openEduPiAdmin("automation"); } },
         ] : undefined}
       />
   );
@@ -1548,7 +1588,7 @@ export function AppShell() {
           zIndex: 200,
         } as React.CSSProperties}
       >
-        {edupiChatActive ? null : sidebarContent}
+        {edupiEducationModule && initialSessionRestored ? null : sidebarContent}
       </div>
       {!edupiEducationModule && sidebarOpen && (
         <div
@@ -2077,7 +2117,7 @@ export function AppShell() {
               activeAgentSessionId={selectedSession?.id ?? null}
               onActivateAgentSession={handleActivateEducationAgentSession}
               onOpenAdmin={() => openEduPiAdmin()}
-              onOpenSettings={() => setAppSettingsOpen(true)}
+              onOpenSettings={() => openEduPiAdmin("settings")}
               onOpenProactive={openEduPiProactive}
               onOpenGuide={() => setFirstRunGuideOpen(true)}
               onOpenPhoneControl={openPhoneControl}
@@ -2090,9 +2130,11 @@ export function AppShell() {
               refreshKey={educationRefreshKey}
               chatPanel={edupiChatWindow}
               reminderPanel={edupiReminderPanel}
-              chatSidebar={renderSessionSidebar("embedded-chat")}
+              chatSidebar={initialSessionRestored ? renderSessionSidebar("embedded-chat") : null}
+              chatSidebarSuspended={edupiAdminOpen}
               renderFilePreview={(filePath) => (
                 <FileViewer
+                  embedded
                   filePath={filePath}
                   cwd={activeCwd ?? undefined}
                   sourceSessionId={selectedSession?.id ?? null}
@@ -2287,17 +2329,19 @@ export function AppShell() {
       refreshToken={modelsRefreshKey}
       initialSection={edupiAdminSection}
       modelSettingsDirty={adminModelsDirty}
-      modelsPanel={<ModelsConfig
+      settingsBusy={adminUpdateBusy}
+      modelsPanel={(cwd) => <ModelsConfig
         embedded
+        cwd={cwd}
         onClose={() => setAdminModelsDirty(false)}
         onDirtyChange={setAdminModelsDirty}
         onSaved={() => setModelsRefreshKey((k) => k + 1)}
       />}
-      onClose={() => setEduPiAdminOpen(false)}
+      settingsPanel={(page) => <AppSettings embedded page={page} initialSection={appSettingsSection} onUpgradeInProgressChange={setAdminUpdateBusy} onClose={() => setEduPiAdminOpen(false)} onOpenConnectionDetails={() => { if (adminUpdateBusyRef.current) return; setEduPiAdminOpen(false); setConnectionDetailsOpen(true); }} />}
+      onClose={() => { if (!adminUpdateBusy) setEduPiAdminOpen(false); }}
       onOpenContext={() => { setEduPiAdminOpen(false); openEducationModule("context"); }}
       onAskStudentUpdate={askEduPiToUpdateStudents}
       onNavigate={openEducationView}
-      onOpenSettings={() => { setEduPiAdminOpen(false); setAppSettingsOpen(true); }}
     />}
     {firstRunGuideOpen && (
       <EduPiFirstRunGuide
@@ -2312,7 +2356,7 @@ export function AppShell() {
         onSkip={finishFirstRunGuide}
       />
     )}
-    <UpdateReminder onOpenSettings={() => setAppSettingsOpen(true)} />
+    <UpdateReminder onOpenSettings={() => openEduPiAdmin("about")} />
     </EduPiForegroundProvider>
   );
 }

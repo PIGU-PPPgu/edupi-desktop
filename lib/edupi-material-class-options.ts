@@ -1,5 +1,9 @@
 export type MaterialClassOption = { value: string; label: string };
 
+export function materialClassLabel(value: string | null, options: readonly MaterialClassOption[]): string | null {
+  return value ? options.find(option => option.value === value)?.label || value : null;
+}
+
 export function hasUnboundSameNameClass(timetable: Array<Record<string, unknown>>): boolean {
   const boundNames = new Set(timetable.flatMap(slot => typeof slot.class_id === "string" && slot.class_id.trim()
     && typeof slot.class_name === "string" && slot.class_name.trim() ? [slot.class_name.trim()] : []));
@@ -15,9 +19,11 @@ export function materialClassOptions(timetable: Array<Record<string, unknown>>, 
     if (!id) continue;
     const name = typeof slot.class_name === "string" ? slot.class_name.trim() : "";
     if (name) boundNames.add(name);
-    canonical.set(id, name ? `${name} · ${id}` : id);
+    canonical.set(id, name);
   }
-  const options = [...canonical].map(([value, label]) => ({ value, label }));
+  const nameCounts = new Map<string, number>();
+  for (const name of canonical.values()) if (name) nameCounts.set(name, (nameCounts.get(name) || 0) + 1);
+  const options = [...canonical].map(([value, name]) => ({ value, label: name ? nameCounts.get(name)! > 1 ? `${name} · ${value}` : name : value }));
   for (const name of teacherClasses) {
     const value = name.trim();
     if (value && !boundNames.has(value) && !canonical.has(value)) options.push({ value, label: value });

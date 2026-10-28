@@ -34,6 +34,7 @@ function fixture(selectedSkill) {
     if (name === "@/hooks/useIsMobile") return { useIsMobile: () => false };
     if (name === "@/hooks/useModalDismiss") return { useModalDismiss: () => ({ current: null }) };
     if (name === "@/lib/desktop-native") return { handleExternalLinkClick() {} };
+    if (name === "./DisclosureChevron") return { DisclosureChevron: () => null };
     throw new Error(`Unexpected dependency: ${name}`);
   } });
   cursor = 0;

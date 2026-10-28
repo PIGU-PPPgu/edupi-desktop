@@ -127,3 +127,60 @@ test("JEV connection test uses the saved server-side key and validates a real de
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+async function configureTestServer(port, timeoutMs = 3000) {
+  const response = await route.PUT(request("PUT", {
+    enabled: true, endpoint: `http://127.0.0.1:${port}/v1/systemone`, model: "jev-local-test",
+    timeoutMs, minConfidence: 0.6, maxConsecutiveFailures: 3, apiKey: "route-local-secret-123456",
+  }));
+  assert.equal(response.status, 200);
+}
+
+test("JEV connection errors report the upstream status without returning its body", async () => {
+  const server = http.createServer((_incoming, outgoing) => {
+    outgoing.writeHead(451, { "content-type": "text/plain" });
+    outgoing.end("private-upstream-detail");
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    await configureTestServer(server.address().port);
+    const response = await route.POST(request("POST", {}));
+    const body = await response.json();
+    assert.equal(response.status, 502);
+    assert.equal(body.upstreamStatus, 451);
+    assert.match(body.error, /地区不可用/);
+    assert.equal(JSON.stringify(body).includes("private-upstream-detail"), false);
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test("JEV connection test honors the saved timeout", async () => {
+  const timers = new Set();
+  const server = http.createServer(async (incoming, outgoing) => {
+    let body = "";
+    for await (const chunk of incoming) body += chunk;
+    const choices = Object.keys(JSON.parse(body).questions.operation.criteria);
+    const timer = setTimeout(() => {
+      timers.delete(timer);
+      outgoing.writeHead(200, { "content-type": "application/json" });
+      outgoing.end(JSON.stringify({ answers: { operation: { choice: "WAIT", confidence: 1,
+        probabilities: Object.fromEntries(choices.map(choice => [choice, choice === "WAIT" ? 1 : 0])) } } }));
+    }, 400);
+    timers.add(timer);
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    await configureTestServer(server.address().port, 100);
+    const response = await route.POST(request("POST", {}));
+    const body = await response.json();
+    assert.equal(response.status, 502);
+    assert.equal(body.code, "timeout");
+    assert.match(body.error, /超时/);
+  } finally {
+    for (const timer of timers) clearTimeout(timer);
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  }
+});

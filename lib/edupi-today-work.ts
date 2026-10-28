@@ -206,5 +206,5 @@ export function isTodayWorkEditorCurrent(
   return Boolean(candidate
     && candidate.snapshotId === editor.snapshotId
     && candidate.revision === editor.revision
-    && (candidate.status === "pending_review" || candidate.status === "held" || candidate.status === "snoozed"));
+    && ["pending_review", "accepted", "modified", "rejected", "held", "snoozed", "suppressed"].includes(candidate.status));
 }

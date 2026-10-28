@@ -7,8 +7,10 @@ import { createJiti } from "jiti";
 
 const foreground = await createJiti(import.meta.url, { tsconfigPaths: true }).import("../lib/edupi-foreground.ts");
 const { notificationSendNeedsReview } = await createJiti(import.meta.url, { tsconfigPaths: true }).import("../lib/edupi-reminder-attempt.ts");
+const disclosure = await createJiti(import.meta.url, { jsx: { runtime: "automatic" } }).import("./DisclosureChevron.tsx");
 function mockRequire(name, react, jsx, query, today = "2026-09-09") {
   if (name === "react") return react;
+  if (name === "./DisclosureChevron") return disclosure;
   if (name.includes("jsx-runtime")) return { jsx, jsxs: jsx };
   if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams(query) };
   if (name === "@/lib/edupi-foreground") return foreground;

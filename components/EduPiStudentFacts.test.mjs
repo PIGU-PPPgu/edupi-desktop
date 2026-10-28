@@ -17,3 +17,9 @@ test("student details show Core fact status and the original source text", () =>
   assert.match(html, /林晓已经掌握有理数加法/);
   assert.match(html, /material-source-2/);
 });
+
+test("an empty student fact projection does not create an empty disclosure", () => {
+  const empty = { ...factSpine, studentViews: [] };
+  const html = renderToStaticMarkup(React.createElement(EduPiStudentFacts, { factSpine: empty, studentId: "roster-student-1", reviewer: "teacher", onEducation() {} }));
+  assert.equal(html, "");
+});

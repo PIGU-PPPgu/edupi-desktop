@@ -4,7 +4,7 @@ import path from "node:path";
 import type { CalendarFact } from "./edupi-education-contract";
 import type { CalendarImportEvent } from "./edupi-education-intake";
 import type { PlanOverlapAction, PlanOverlapState, PlanOverlapSuggestion } from "./edupi-plan-overlap-types";
-import { issueEducationIntake, contentHash } from "./edupi-education-intake";
+import { issueCalendarNotes } from "./edupi-calendar-notes";
 import { issueEntityDelete } from "./edupi-entity-delete";
 import type { readEduPiEducationSnapshot } from "./edupi-core-snapshot";
 
@@ -23,27 +23,31 @@ const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(valu
 const equal = (left: unknown, right: unknown) => hash(left) === hash(right);
 type EducationSnapshot = Awaited<ReturnType<typeof readEduPiEducationSnapshot>>;
 export function createSnapshotBoundPlanCalendar(deps: {
-  readSnapshot: () => Promise<EducationSnapshot>;
+  readSnapshot: typeof readEduPiEducationSnapshot;
   project: (snapshot: EducationSnapshot) => Promise<{ calendar: CalendarFact[] }>;
-  intake?: typeof issueEducationIntake;
+  updateNotes?: typeof issueCalendarNotes;
   deleteEntity?: typeof issueEntityDelete;
 }): Pick<PlanOverlapDependencies, "readCalendar" | "update" | "remove"> {
   let checkedSnapshot: EducationSnapshot | undefined;
+  let checkedCalendar: CalendarFact[] = [];
   const captured = () => {
     if (!checkedSnapshot) throw new Error("请先读取计划。");
     return { ...checkedSnapshot, roots: { runtime: checkedSnapshot.runtime, dataRoot: checkedSnapshot.dataRoot } };
   };
   return {
     readCalendar: async () => {
-      const snapshot = await deps.readSnapshot();
+      const snapshot = await deps.readSnapshot({ scheduleOccurrenceVersion: "1.2" });
       const result = await deps.project(snapshot);
       checkedSnapshot = snapshot;
+      checkedCalendar = result.calendar;
       return result.calendar;
     },
     update: async event => {
       const snapshot = captured();
-      const sourceHash = contentHash(event);
-      await (deps.intake || issueEducationIntake)({ command_type: "import_calendar", source: { source_id: `plan-merge-${sourceHash.slice(7, 31)}`, source_kind: "teacher_message", source_hash: sourceHash, evidence_ids: [`plan-merge-${event.event_id}`] }, events: [event] }, { readSnapshot: async () => snapshot });
+      const original = checkedCalendar.find(item => item.id === event.event_id);
+      if (!original) throw new Error("计划已变化，合并已暂停。");
+      await (deps.updateNotes || issueCalendarNotes)({ canonicalId: event.event_id, expectedNotes: original.notes,
+        notes: event.notes, evidenceIds: [`plan-merge-${event.event_id}`] }, { snapshot });
     },
     remove: async id => {
       const snapshot = captured();
@@ -70,7 +74,14 @@ export function planOverlapPairs(calendar: CalendarFact[], limit = 20): Pair[] {
 }
 function eventInput(event: CalendarFact): CalendarImportEvent {
   if (!["exam", "activity", "meeting", "holiday", "festival", "teaching", "custom"].includes(event.type || "") || !event.id || !event.date) throw new Error("计划字段不支持合并，请先编辑计划。");
-  return { event_id: event.id, date: event.date, end_date: event.endDate, name: event.name, type: event.type as CalendarImportEvent["type"], confidence: event.confidence === "unknown" ? "teacher_confirmed" : event.confidence, notes: event.notes };
+  const hasTime = [event.startsAt, event.endsAt, event.timeZone].some(value => value != null);
+  const interval = event.startsAt && event.endsAt && event.timeZone
+    ? { start: event.startsAt, end: event.endsAt, time_zone: event.timeZone } : null;
+  if (hasTime && !interval) throw new Error("计划时间字段不完整，请先编辑计划。");
+  return { event_id: event.id, date: event.date, end_date: event.endDate, name: event.name, type: event.type as CalendarImportEvent["type"], confidence: event.confidence === "unknown" ? "teacher_confirmed" : event.confidence, notes: event.notes,
+    ...(event.occurrenceRef ? { source_occurrence_ref: event.occurrenceRef } : {}),
+    ...(interval ? { time_interval: interval } : {}),
+    ...(event.occurrenceRef || interval || event.location != null ? { location: event.location ?? null } : {}) };
 }
 const canonicalNotes = (notes: string | null) => notes?.replace(/\s+/g, " ").trim() || null;
 function matchesTarget(event: CalendarFact, target: CalendarImportEvent): boolean {
