@@ -1,5 +1,9 @@
 # 自动下载安装
 
+2026-10-28 Mac .82 最新配对状态，取代下方 cc1d 临时候选。Desktop UI/设置统一源码 PR #396 已按原分支正常合并为 `4f824f1ea9bd78fb811562cd19c1ed529e04791a`，受测源head `cd13e525` 与merge tree同为 `a6190fc1`；其 audit、rust-audit、linux-source 三个源码CI均成功，原两诊断SHA未变。Core主线新 `ecf245c7` 的v16召回来源判定确会改变Mac双闭包，故Core原分支普通合并为 `810455114565bab788cf89eb2524a995713ad3f3` / tree `229ff8931c47786f232a9b81a24c0225a321f6af`，保留原备课历史只读与同消息记忆幂等修补。schema仍8701，Desktop component `5609d8bf`/raw `806e3ff4`，Runtime component `e804c300`/raw `a1d78292`。旧cc1d完整Core CI成功只证明旧头；新8104的10条合并定向命令通过，新头完整CI/PR402合并待完成。Desktop目前已把严格身份改为8104，type与release:verify通过，实际Core合同组合仍在执行；新的小范围pin PR尚未创建，Mac.82标签/签名构建/安装尚未执行。
+
+本次私有Mac验包脚本的4项实证假通过缺口已保留RED反例，修补后13/13定向guard测试与独立只读复核无剩余确定P0–P2；涉及真实schema/raw清单实体比对、job attempt强制匹配、当前App原生签名/装订/Gatekeeper命令及tar11逐文件校验。当前没有用这份脚本验.82包，也没有下载新资产或写通过报告。原.81 App正常停止后，原3 WebView origin恢复且与备份一致，真实教师资料和四固定配置保持；.82已备份现存合成资料247文件逐字节相同，建干净私有source-only源副本但不替代原分支。后续按实际同一run资产、签名、公证及唯一App安装/冷启复核后才清理。
+
 Core统一修补已固定为 `cc1d11940430792a7e30d2f552a964b980ee9794` / tree `d05107af699c36c73d24fb4a220d0db274b0cc9c`，schema仍8701，Desktop component d5070654、Runtime74640e84；原57b之后仅旧备课投影历史只读兼容、同消息记忆幂等及直接回归/生成清单，无新增数量推断实验。旧来源revision仅允许初始两个epoch、完整未截断Core回执，回溯日期的ABA和满100审计记录均拒；记忆同消息不同call精确参数复用回执，改参冲突/跨消息隔离/已删除事实不复活。memory最终13/13、实际冷进程与并行writer通过；artifact现场冻结4文件及r1/r2读回SHA正确、原记录无修改。统一官方生成/type/protocol/双closure/writerC3七命令均过，正常源PR/完整CI仍待；Desktop已消费三严格身份，Mac新包仍未构建。
 
 原生GUI已正式归还。parent在App/helpers停止态恢复原3 WebView origin，全部matchesBackup且无新增origin；strict全字节保护检查如实exit1保留，补充分类证明323原文件321不变、2个后台日志原前缀SHA不变仅追加788/553B，另1份新会话严格是本次授权合成CWD/一个user/两次memory_write。原教师业务/会话0改、四固定配置字节同，不覆写并发日志去制造零差异。证据 `protected-data-after-gui-classified.json`、`webview-prefs-restore-before-install.json` 及 `gui-completion.json`；该次.81结论不替代.82安装复验，尚未清理。
