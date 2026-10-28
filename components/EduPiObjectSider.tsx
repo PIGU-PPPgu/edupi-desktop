@@ -55,7 +55,7 @@ type C1ObjectTarget =
 
 const viewTitles: Record<WorkbenchView, string> = {
   chat: "AI 协作",
-  dashboard: "今天",
+  dashboard: "首页",
   workspace: "工作区",
   teaching: "教学",
   homeroom: "班级",

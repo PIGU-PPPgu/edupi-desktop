@@ -1,5 +1,23 @@
 # 自动下载安装
 
+Core统一修补已固定为 `cc1d11940430792a7e30d2f552a964b980ee9794` / tree `d05107af699c36c73d24fb4a220d0db274b0cc9c`，schema仍8701，Desktop component d5070654、Runtime74640e84；原57b之后仅旧备课投影历史只读兼容、同消息记忆幂等及直接回归/生成清单，无新增数量推断实验。旧来源revision仅允许初始两个epoch、完整未截断Core回执，回溯日期的ABA和满100审计记录均拒；记忆同消息不同call精确参数复用回执，改参冲突/跨消息隔离/已删除事实不复活。memory最终13/13、实际冷进程与并行writer通过；artifact现场冻结4文件及r1/r2读回SHA正确、原记录无修改。统一官方生成/type/protocol/双closure/writerC3七命令均过，正常源PR/完整CI仍待；Desktop已消费三严格身份，Mac新包仍未构建。
+
+原生GUI已正式归还。parent在App/helpers停止态恢复原3 WebView origin，全部matchesBackup且无新增origin；strict全字节保护检查如实exit1保留，补充分类证明323原文件321不变、2个后台日志原前缀SHA不变仅追加788/553B，另1份新会话严格是本次授权合成CWD/一个user/两次memory_write。原教师业务/会话0改、四固定配置字节同，不覆写并发日志去制造零差异。证据 `protected-data-after-gui-classified.json`、`webview-prefs-restore-before-install.json` 及 `gui-completion.json`；该次.81结论不替代.82安装复验，尚未清理。
+
+2026-10-28 Mac .82 统一交付进行中，取代下方 .81“GUI继续”的当前状态。新首页、统一组件/动效及设置管理中心源码已普通合并到原分支，原 UI 工作树/index/mv 未动；3476 项本地测试为3428通过、48条件跳过、0失败，type与lint通过，不能替代新安装版视觉验收。版本准备0.3.82，尚未创建tag、构建、安装或公开feed。
+
+.81 实机已完成原计划合并并实际CUA冷启动回读：A原时间/地点保持、备注只合并一次，B软删，日程19→18、原始20行未新增；同一accepted备课任务保留。实机又发现两项待修：原4份备课产物文件及SHA均完整，但新来源投影导致API409 stale_source；一次Send后模型两次相同memory_write落2个独立ID，冷启动后重复仍存在。两项已在Core原分支完成针对性源码修补与负例验证，最终清单、独立审阅及源CI继续；旧receipt不重种、不静默改写。Native随后已对重复合成记忆执行可见删除、编辑和历史恢复，保留原ID/原文/版本2及两条历史；二次正常退出后由CUA冷启回读、主动rescan均通过，日程仍18条、原意图不再出现。该记忆恢复证据不是旧备课产物写权限，后者只恢复历史只读。新.82仍须核对同对象跨版本保持、四份旧产物阅读及同消息两次写入只落一条，当前不得记新安装通过。证据为~/edupi-install-checkpoints/v0.3.81/evidence/gui-081-{artifact-upgrade-regression,memory-double-write-owner,plan-merge-owner,cold-retention-owner}.json。
+
+当前Native GUI由“重做设置与管理中心”串行独占，Mac实际锁屏时等待用户自行解锁，parent不绕过或同时操作App。Core与Desktop源门通过后只构建Mac；Windows延期。未清理本轮下载/回退/编译目录；最终App停止、原Root/WebView恢复和真实资料/配置保持复核后，才按精确路径清理可重建生成物。
+
+2026-10-28 Mac.81 已完成签名包与唯一应用文件安装，GUI串行验收继续。固定Desktop `a78303e53e9b986a9b942994b77f796081456b50`、Core `57b6c1fd754e69b3f04d50f39fa07fc1e9b3bad2`；Core398正常合main7d659且同tree d5f，官方完整CI40652352539/attempt1通过、research63/63。Desktop394/395已正常合并；395仅三身份+账本，按paths不触发额外CI，新增真实合同12/Corebroker1/type与独立清单核验通过。
+
+唯一Mac签名Draft run40657262218/attempt1全success，Draft426417109保持。三资产最终ID/bytes/官方SHA、永久updater公钥锚/Minisign与篡改拒绝、App/DMG各自签名/装订/Gatekeeper、tar与DMG11身份文件、两Core完整闭包均实际通过。资源实扫820份package.json，仅OpenConnector一份named qs6.16.1；Core的qs/Lark中危不被组件闭包消费。Mac-only指纹 `sha256:673f489d18ab38eec956347499fcc747f4e3ee964ffe427646b2e84f56adb519`，不构成七平台publish证明。
+
+/Applications/EduPi.app 已真实替换为0.3.81，binary SHA256 `a994020a9782b6912142d956b56b68b878fdd6a841eafbb275deef57767c0d07`，CDHash4d2f238833cab53c611a2ed412b6571b5225f843、TeamBY3XZG2839；安装后strict codesign/Gatekeeper再验通过。旧.77整体保留为配对回退，原Root/会话/模型与认证323保护文件在文件安装前后逐字节一致。原3个WebView origin已备份并仅暂隔离workspace/draft/unread，结束需恢复复核。10:34Z文件安装后App/helpers仍停止，installation-handoff已具体交给另一UI任务独占真实流程，parent不并发操作GUI。
+
+历史显式恢复、原A/B计划合并、记忆新marker与冷重启去重仍在实际执行，文件安装不代替这些流程通过；完成后再保护复核和清理，当前未清理下载/回退/构建产物。原UI-Test-Data244文件快照已保护，旧已保存记忆不重试、原intent不重建。Windows延期；Release/feed未公开或改写。本节取代下方旧候选“未构建/未安装”状态，后续真实GUI结果另记。
+
 2026-10-28 Core主线同步追补：此前固定ABA的完整CI40633463071/attempt2已通过，但正常合并398时主线新03ffd造成生成件冲突。现普通组合57b6c1fd保留两父，原样消费已合主线的召回时段/叙事数值边界、连续原文与多日持续事项；未追加数量算法或真实模型实验。新19条定向命令通过；Runtime schema仍8701，回复decoder/status/reason/shape不变，Desktop只更新三严格身份至57b6、component d09ae44a/6cd5b247和raw清单。完整新CI与Core合并仍待，不能沿用ABA通过替代新组合。全Core开发依赖2条qs/Lark中危在双manifest/严格复制闭包中均未消费，Desktop实际qs为6.16.1，待最终包遍历补证。Mac.81仍未创建tag或构建，Windows延期，原改动和资料保护保持。
 
 2026-10-28 R04/R15/R18 统一源码检查：原适配分支已普通合入 UI `132a806e` 和最后 `1409dd6e`，保留双方历史。固定 Core `aba5ffa7019c24a917726ffa4baef37242bc704d` 包含本次主线6225与UI两项日程修补，schema8701c073、Desktop component441ac188、Runtime02fefc91；独立审阅、Main1/Main3备注/身份/鉴权与Desktop实际合同/API通过。本地完整Core首轮在旧手写能力清单漏列新命令处保留失败，修正后daemon与原链余下16项、research62/62全过，不改写首轮exit1；远端完整质量门继续。Desktop完整3417通过/48条件skip/0失败，type/lint通过、npm审计各级0。合并时保留最新安全依赖并补当前SDK记忆写入/遗忘回执；原历史/重播/编辑/压缩隔离不放宽。原教师目录、会话、配置已恢复且App正常退出，旧合成资料244文件已保护。版本.81只准备源码，当前CI与合并未完成，尚未打包、安装、清理或公开feed；窗口验收仍需实际执行。此记录取代下方“正在合并”与旧交接待授权状态。

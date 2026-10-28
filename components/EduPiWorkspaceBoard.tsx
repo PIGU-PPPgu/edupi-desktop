@@ -366,7 +366,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
     <main ref={boardRef} className="edupi-workspace-board" onPointerMove={(event) => { if (!draggedTaskIdRef.current) { const start = dragStartRef.current; if (!start || Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 6) return; suppressClickRef.current = true; beginDrag(start, event.clientX, event.clientY); } queueGhostPosition(event.clientX, event.clientY); setDropTarget(dragTarget(event)?.stage ?? null); }} onPointerUp={(event) => { const target = dragTarget(event); stopDragging(); if (target) void move(target.task, target.stage); }} onPointerCancel={stopDragging} onPointerLeave={() => { if (draggedTaskIdRef.current) stopDragging(); }}>
       <header className="edupi-workspace-board__heading">
         <div><h1>工作区</h1><p>{visibleCount} 项</p></div>
-        <div className="edupi-workspace-board__actions"><button type="button" onClick={() => openList("history")}>历史 <span>{historyCount}</span></button>{!createOpen ? <button ref={createButtonRef} type="button" className="is-primary" disabled={creating || !data.workspace} onClick={openCreate}>新建任务</button> : null}</div>
+        <div className="edupi-workspace-board__actions"><button type="button" className="native-button" onClick={() => openList("history")}>历史 <span>{historyCount}</span></button>{!createOpen ? <button ref={createButtonRef} type="button" className="native-button native-button-primary is-primary" aria-expanded={createOpen} disabled={creating || !data.workspace} onClick={openCreate}>新建任务</button> : null}</div>
       </header>
       {mergeSuggestions}
       <div className="edupi-task-category-segment edupi-segmented-control" role="group" aria-label="任务类型">
@@ -375,19 +375,19 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
       </div>
       {createOpen ? <form ref={createFormRef} aria-label="新建任务" onSubmit={submitCreate} onKeyDown={event => { if (event.key === "Escape" && !event.nativeEvent.isComposing && !createScope.submitting) { event.preventDefault(); event.stopPropagation(); cancelCreate(); } }}>
         <fieldset className="edupi-task-board-create" disabled={creating} style={{ marginInline: 0 }}>
-        <label><span>任务</span><input ref={titleRef} required maxLength={240} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：准备第一次单元检测" /></label>
-        <label><span>截止日期</span><input type="date" value={dueDate} onInput={(event) => { dueDateManuallyEditedRef.current = true; setDueDate(event.currentTarget.value); }} /></label>
-        <label><span>备注</span><input maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="可选" /></label>
+        <label><span>任务</span><input ref={titleRef} className="native-input" required maxLength={240} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：准备第一次单元检测" /></label>
+        <label><span>截止日期</span><input className="native-input" type="date" value={dueDate} onInput={(event) => { dueDateManuallyEditedRef.current = true; setDueDate(event.currentTarget.value); }} /></label>
+        <label><span>备注</span><input className="native-input" maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="可选" /></label>
         <label className="edupi-task-board-create__managed"><input type="checkbox" checked={managedPreparation} onChange={(event) => { setManagedPreparation(event.target.checked); if (event.target.checked && !timetableSlotId) setTimetableSlotId(slotId(usableSlots[0] || {})); }} /><span>自动准备教学产物</span></label>
         {managedPreparation ? <div className="edupi-task-board-create__source">
-          <label><span>课次</span><select value={activeSlotId} onChange={(event) => { setTimetableSlotId(event.target.value); setMaterialIds([]); }}><option value="">选择课次</option>{usableSlots.map((slot) => <option key={slotId(slot)} value={slotId(slot)}>{weekdayLabels[timetableDayOfWeek(slot) || 0]} · {rawText(slot.subject)} · {rawText(slot.class_name)} · 第 {String(slot.period ?? "?")} 节</option>)}</select></label>
-          <label><span>上课日期</span><input type="date" value={lessonDate} onChange={(event) => { const nextDate = event.target.value; setLessonDate(nextDate); if (!dueDateManuallyEditedRef.current) setDueDate(dateBefore(nextDate)); }} /></label>
+          <label><span>课次</span><select className="native-select" value={activeSlotId} onChange={(event) => { setTimetableSlotId(event.target.value); setMaterialIds([]); }}><option value="">选择课次</option>{usableSlots.map((slot) => <option key={slotId(slot)} value={slotId(slot)}>{weekdayLabels[timetableDayOfWeek(slot) || 0]} · {rawText(slot.subject)} · {rawText(slot.class_name)} · 第 {String(slot.period ?? "?")} 节</option>)}</select></label>
+          <label><span>上课日期</span><input className="native-input" type="date" value={lessonDate} onChange={(event) => { const nextDate = event.target.value; setLessonDate(nextDate); if (!dueDateManuallyEditedRef.current) setDueDate(dateBefore(nextDate)); }} /></label>
           {lessonDateError ? <p role="alert">{lessonDateError}</p> : null}
           <fieldset><legend>材料</legend>{compatibleMaterials.map((material) => { const checked = materialIds.includes(material.material_id); return <label key={material.material_id}><input type="checkbox" aria-label={material.title} checked={checked} disabled={!checked && materialIds.length >= MAX_PREPARATION_MATERIALS} onChange={(event) => setMaterialIds((current) => event.target.checked ? [...new Set([...current, material.material_id])].slice(0, MAX_PREPARATION_MATERIALS) : current.filter((id) => id !== material.material_id))} /><span>{material.title}</span></label>; })}{activeSlot && compatibleMaterials.length === 0 ? <p>请先接入同班同学科材料</p> : null}</fieldset>
-          <label><span>产物</span><textarea rows={4} maxLength={4800} value={deliverables} onChange={(event) => setDeliverables(event.target.value)} /></label>
+          <label><span>产物</span><textarea className="native-input" rows={4} maxLength={4800} value={deliverables} onChange={(event) => setDeliverables(event.target.value)} /></label>
           {deliverableValidation.error ? <p role="alert">{deliverableValidation.error}</p> : null}
         </div> : null}
-        <div className="edupi-task-board-create__actions"><button type="button" disabled={creating} onClick={cancelCreate}>取消</button><button type="submit" className="is-primary" disabled={creating || !canCreate}>{creating ? "创建中…" : managedPreparation ? "创建并准备" : "创建任务"}</button></div>
+        <div className="edupi-task-board-create__actions"><button type="button" className="native-button" disabled={creating} onClick={cancelCreate}>取消</button><button type="submit" className="native-button native-button-primary is-primary" disabled={creating || !canCreate}>{creating ? "创建中…" : managedPreparation ? "创建并准备" : "创建任务"}</button></div>
         </fieldset>
       </form> : null}
       {message ? <p className={`edupi-task-board-message is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p> : null}

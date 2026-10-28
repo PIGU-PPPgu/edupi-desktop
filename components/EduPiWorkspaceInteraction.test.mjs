@@ -275,7 +275,7 @@ test("month single-day task entries use compact rows with complete accessible so
 
 test("page primary actions and segmented controls are explicit", () => {
   const board = mount("EduPiWorkspaceBoard"), calendar = mount("EduPiCalendarWorkspace");
-  assert.equal(board.button("新建任务").props.className, "is-primary");
+  assert.deepEqual(new Set(board.button("新建任务").props.className.split(" ")), new Set(["native-button", "native-button-primary", "is-primary"]));
   assert.equal(calendar.button("新建日程").props.className, "is-primary");
   assert.notEqual(calendar.button("上传文件").props.className, "is-primary");
   assert.notEqual(calendar.button("添加课表").props.className, "is-primary");

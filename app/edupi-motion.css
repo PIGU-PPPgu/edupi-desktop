@@ -1,4 +1,74 @@
-/* Adapted from Archify assets/template.html. See third-party/archify. */
+/* Workspace motion: a brief focus reveal, followed by quiet direct feedback. */
+@keyframes edupi-focus-in {
+  from { opacity: 0; filter: blur(4px); transform: translateY(10px); }
+  to { opacity: 1; filter: blur(0); transform: translateY(0); }
+}
+
+.edupi-dashboard-heading,
+.edupi-home-launchpad__top,
+.edupi-home-recent,
+.edupi-home-boards,
+.edupi-today-main > .edupi-daily-brief,
+.edupi-today-main > .edupi-today-work,
+.edupi-today-side,
+.edupi-module-heading,
+.edupi-workspace-board__heading,
+.chat-empty-brand {
+  animation: edupi-focus-in var(--motion-enter) var(--ease-native) backwards;
+}
+.edupi-home-launchpad__top { animation-delay: 40ms; }
+.edupi-home-recent { animation-delay: 160ms; }
+.edupi-home-boards { animation-delay: 220ms; }
+.edupi-today-main > .edupi-daily-brief { animation-delay: 240ms; }
+.edupi-today-main > .edupi-today-work { animation-delay: 260ms; }
+.edupi-today-side { animation-delay: 260ms; }
+.chat-empty-brand { animation-duration: 400ms; }
+
+.edupi-workspace-drawer,
+.edupi-task-detail-drawer,
+.edupi-persistent-chat-host.is-drawer {
+  animation: edupi-drawer-in var(--motion-surface) var(--ease-native) backwards;
+}
+.edupi-context-modal__panel,
+.edupi-quick-entry {
+  animation: native-modal-in var(--motion-surface) var(--ease-native) backwards;
+}
+:where(.edupi-teacher-shell) :where(button, input, textarea, select) {
+  transition: background-color var(--motion-fast) ease, border-color var(--motion-fast) ease, color var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+}
+.edupi-teacher-shell :where(button.is-primary, button.native-button-primary):not(:disabled):active {
+  transform: scale(.98);
+}
+.edupi-task-artifact-list__item {
+  transition: border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, background-color var(--motion-fast) ease;
+}
+.edupi-task-board-card:hover { box-shadow: var(--shadow-control); }
+.edupi-teacher-rail__icon { transition: transform 240ms var(--ease-native); }
+.edupi-teacher-rail button:hover .edupi-teacher-rail__icon { transform: translateY(-1px) rotate(-5deg); }
+
+@keyframes edupi-work-surface-in {
+  from { opacity: .45; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes edupi-work-column-in {
+  from { opacity: .5; }
+  to { opacity: 1; }
+}
+.edupi-teacher-main :is(.edupi-teaching-next-line, .edupi-student-directory, .edupi-database, .edupi-review-mini-board, .edupi-calendar-month-grid),
+.edupi-review-mini-board > section {
+  animation: edupi-work-surface-in 420ms var(--ease-native) backwards;
+  animation-delay: 80ms;
+}
+.edupi-task-board-column { animation: edupi-work-column-in 360ms var(--ease-native) backwards; animation-delay: 80ms; }
+.edupi-task-board-column:nth-child(2),
+.edupi-review-mini-board > section:nth-child(2) { animation-delay: 120ms; }
+.edupi-task-board-column:nth-child(3),
+.edupi-review-mini-board > section:nth-child(3) { animation-delay: 160ms; }
+.edupi-task-board-column:nth-child(4),
+.edupi-review-mini-board > section:nth-child(4) { animation-delay: 200ms; }
+.edupi-review-mini-board > section:nth-child(5) { animation-delay: 240ms; }
+
+/* Graph flow adapted from Archify assets/template.html. See third-party/archify. */
 .edupi-graph-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .edupi-graph-controls output { min-width: 42px; text-align: center; font-size: 12px; color: var(--text-muted); }
 @keyframes edupi-edge-flow {
@@ -41,6 +111,38 @@
 .edupi-task-run-card.edupi-runtime-flow .edupi-task-run-card__status { color: var(--ep-blue, var(--accent)); }
 .edupi-task-run-card__chevron { flex: 0 0 16px; width: 16px; height: 16px; color: var(--ep-muted, var(--text-muted)); }
 @media (prefers-reduced-motion: reduce) {
+  .edupi-dashboard-heading,
+  .edupi-home-launchpad__top,
+  .edupi-home-recent,
+  .edupi-home-boards,
+  .edupi-today-main > .edupi-daily-brief,
+  .edupi-today-main > .edupi-today-work,
+  .edupi-today-side,
+  .edupi-module-heading,
+  .edupi-workspace-board__heading,
+  .chat-empty-brand,
+  .edupi-workspace-drawer,
+  .edupi-task-detail-drawer,
+  .edupi-persistent-chat-host.is-drawer,
+  .edupi-context-modal__panel,
+  .edupi-quick-entry,
+  .native-modal,
+  .native-popover:not(.animated-native-popover) { animation: none; animation-delay: 0s; }
+  .edupi-teacher-shell,
+  .edupi-teacher-shell :where(button, input, textarea, select),
+  .edupi-task-board-card,
+  .edupi-task-artifact-list__item { transition: none; }
+  .edupi-teacher-main :is(.edupi-teaching-next-line, .edupi-student-directory, .edupi-database, .edupi-review-mini-board, .edupi-calendar-month-grid),
+  .edupi-task-board-column,
+  .edupi-review-mini-board > section { animation: none !important; animation-delay: 0s !important; }
+  .edupi-calendar-month-cell { transition: none; }
+  .edupi-teacher-shell :where(button.is-primary, button.native-button-primary):not(:disabled):active,
+  .native-button:active:not(:disabled),
+  .native-primary-button:active:not(:disabled),
+  .native-button-primary:hover:not(:disabled),
+  .native-primary-button:hover:not(:disabled),
+  .edupi-teacher-rail button:hover .edupi-teacher-rail__icon { transform: none; }
+  .edupi-teacher-rail__icon { transition: none; }
   .edupi-runtime-flow--generic path, .edupi-student-graph .is-selected .edupi-student-graph__edge { animation: none; }
   .edupi-task-run-card { transition: none; }
 }

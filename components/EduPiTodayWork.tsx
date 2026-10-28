@@ -741,7 +741,7 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
   const isCandidateList = listGroup === "now" || listGroup === "later" || listGroup === "done";
   const l4List = L4_GROUP_LABELS.find(group => listGroup === `l4-${group.key}`);
   if (isCandidateList || listGroup === "history" || listGroup === "active" || l4List) return <section ref={rootRef} className="edupi-today-work">
-    <header className="edupi-module-heading"><div><button type="button" className="edupi-back-link" onClick={() => onObject ? onObject("today:home") : setLocalList(null)}>← 今天</button><h1>{isCandidateList ? GROUP_LABELS[listGroup] : listGroup === "history" ? "工作历史" : listGroup === "active" ? "正在进行" : l4List?.title}</h1></div></header>
+    <header className="edupi-module-heading"><div><button type="button" className="edupi-back-link" onClick={() => onObject ? onObject("today:home") : setLocalList(null)}>← 首页</button><h1>{isCandidateList ? GROUP_LABELS[listGroup] : listGroup === "history" ? "工作历史" : listGroup === "active" ? "正在进行" : l4List?.title}</h1></div></header>
     {feedback ? <p role={feedback.kind === "error" ? "alert" : "status"}>{feedback.text}</p> : null}
     {isCandidateList ? <EduPiPagedRows rows={groups[listGroup]} memoryKey={`today:${listGroup}`} renderRow={candidate => renderCandidate(candidate, true)} />
       : listGroup === "history" ? <EduPiPagedRows rows={[...history.map(candidate => ({ candidate, task: null })), ...historyTasks.map(task => ({ candidate: null, task }))]} memoryKey="today:history" renderRow={row => row.candidate ? renderHistorical(row.candidate) : renderHistoricalTask(row.task!)} />

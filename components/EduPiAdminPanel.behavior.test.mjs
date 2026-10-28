@@ -91,6 +91,7 @@ function mountAdmin(initialSection = "connections") {
     "./desktop": { useDesktopChrome: () => ({ isDesktop: false }), WindowControls: "window-controls" },
     "@/lib/edupi-settings-navigation": navigation,
     "./EduPiSettingsIcon": { EduPiSettingsIcon: "settings-icon" },
+    "./EduPiBrandMark": { EduPiBrandMark: "brand-mark" },
     "./EduPiBackgroundJobs": { EduPiBackgroundJobs: "background-jobs" },
     "@/lib/desktop-window": {},
     "@/lib/edupi-schedule-display": { formatCoreSchedulerStatus: () => "" },

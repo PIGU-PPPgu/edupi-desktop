@@ -20,6 +20,6 @@ test("teacher API rejects actor/source/path injection and returns conflicts", as
   failureCode = "stale_revision"; const response = await post(input); assert.equal(response.status, 409); assert.equal((await response.json()).code, "stale_revision");
   failureCode = "artifact_read_only";
   const readonly = await post(input); assert.equal(readonly.status, 409);
-  const body = await readonly.json(); assert.equal(body.code, "artifact_read_only"); assert.match(body.error, /已暂缓/);
+  const body = await readonly.json(); assert.equal(body.code, "artifact_read_only"); assert.equal(body.error, "该草稿仅可查看，未保存的修改已保留");
   failureCode = null;
 });

@@ -47,6 +47,7 @@ next-env.d.ts
 /.claude/
 /.codegraph/
 /.playwright-cli/
+/.playwright-mcp/
 /.spec-workflow/
 
 # generated macOS desktop bundle inputs and Rust build output
