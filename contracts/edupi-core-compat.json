@@ -6,7 +6,7 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "ecfcc8bddcf7e37e015d58eb1a11fb09c5b69a25",
+    "core_commit": "aba5ffa7019c24a917726ffa4baef37242bc704d",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
     "component_manifest_hash": "sha256:441ac1888302c2b1041439a834eaf686da70d564ccbe33b411dd3202c1ce0ff2",
     "runtime_component_manifest_hash": "sha256:02fefc912f9270769c56a1fef4a1e06ed1d05b764ba9ab095521c17670c4cb05",
@@ -247,5 +247,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/391",
     "https://github.com/PIGU-PPPgu/edupi/pull/390"
   ],
-  "change_note": "Mac integration combines frozen Core main 6225be76 and the reviewed UI calendar notes and exact canonical conflict repairs through ecfcc8bd. Exact source-support recall, cancellation, authenticated history, PDF/image source review, schema and complete dual component closures remain enforced. Notes updates preserve canonical identity, time, location and CAS; foreign aliases cannot block the explicitly reviewed canonical target. Bridge v1.1, occurrence v1.2 and Pi 1.0.2 remain unchanged. No automatic real-root migration, external action, usage collection, policy acceptance or public update-feed write is introduced."
+  "change_note": "Mac integration combines frozen Core main 6225be76 and the reviewed UI calendar notes and exact canonical conflict repairs through aba5ffa7. Exact source-support recall, cancellation, authenticated history, PDF/image source review, schema and complete dual component closures remain enforced. Notes updates preserve canonical identity, time, location and CAS; foreign aliases cannot block the explicitly reviewed canonical target. Bridge v1.1, occurrence v1.2 and Pi 1.0.2 remain unchanged. No automatic real-root migration, external action, usage collection, policy acceptance or public update-feed write is introduced."
 }
