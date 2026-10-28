@@ -6,10 +6,10 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "cc1d11940430792a7e30d2f552a964b980ee9794",
+    "core_commit": "810455114565bab788cf89eb2524a995713ad3f3",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:d5070654cf6cca6ed20999d680c97e16a2ed77d2f5d26346a6ddbdb7fa508ee2",
-    "runtime_component_manifest_hash": "sha256:74640e8442a55f624e8e4ea542c13e0e9d8d82d46481aebfb59da999b2f8794d",
+    "component_manifest_hash": "sha256:5609d8bf2b2f1e1d629d05498941846af31d027ac56b4c91ec67ef352810dc0c",
+    "runtime_component_manifest_hash": "sha256:e804c3005b50ad63c44f3b543e8d62e0e0976b74b10d11366d1d98f8843ffcf5",
     "runtime_schema_hash": "sha256:8701c07308359b90c955caa59674bdc02d36a30b6207808bc406a7ca4fe8144d"
   },
   "contract_identities": [
@@ -247,5 +247,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/391",
     "https://github.com/PIGU-PPPgu/edupi/pull/390"
   ],
-  "change_note": "Mac integration fixes Core cc1d1194 on the previously paired 57b6 source. Completed pre-revision-projection preparation artifacts may regain verified read-only history with complete early-epoch receipts; changed, reverted, deleted, withdrawn or truncated sources do not gain current evidence, execution or editing authority. Identical memory writes within one trusted teacher message reuse the persisted receipt across tool calls without duplicating facts or rewriting historical records. Runtime schema/reasons, Bridge v1.1, occurrence v1.2 and Pi1.0.2 remain unchanged; both complete component closures are enforced. No automatic real-root migration, external send, policy acceptance or public feed update is introduced."
+  "change_note": "Mac integration pairs fixed Core 81045511, combining accepted v16 source-support recall with completed preparation history and same-message memory replay fixes. Historical pre-revision-projection artifacts are readable only with complete early-epoch receipts and exact source bytes, and remain read-only without execution or edit authority. Duplicate identical memory writes within one trusted teacher message reuse the persisted receipt. Runtime schema/reasons, Bridge v1.1, occurrence v1.2 and Pi1.0.2 remain unchanged; complete dual component closures are enforced. No automatic real-root migration, external send, policy acceptance or public feed update is introduced."
 }
