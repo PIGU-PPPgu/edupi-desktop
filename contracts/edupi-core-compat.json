@@ -6,10 +6,10 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "57b6c1fd754e69b3f04d50f39fa07fc1e9b3bad2",
+    "core_commit": "cc1d11940430792a7e30d2f552a964b980ee9794",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:d09ae44a83ced091e67fa4a3eb714e6cf1b1189dea1d6912860b55752b95767c",
-    "runtime_component_manifest_hash": "sha256:6cd5b24749e644de17d66edaf05dd8770d084f70b376824beb10bf9bbf0a2477",
+    "component_manifest_hash": "sha256:d5070654cf6cca6ed20999d680c97e16a2ed77d2f5d26346a6ddbdb7fa508ee2",
+    "runtime_component_manifest_hash": "sha256:74640e8442a55f624e8e4ea542c13e0e9d8d82d46481aebfb59da999b2f8794d",
     "runtime_schema_hash": "sha256:8701c07308359b90c955caa59674bdc02d36a30b6207808bc406a7ca4fe8144d"
   },
   "contract_identities": [
@@ -247,5 +247,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/391",
     "https://github.com/PIGU-PPPgu/edupi/pull/390"
   ],
-  "change_note": "Mac integration combines fixed Core main 03ffd1d4 with the reviewed UI calendar notes/canonical conflict repairs through 57b6c1fd. Latest main recall qualifier/value boundaries, contiguous source evidence, ongoing multi-day calendar behavior, owner authentication and cancellation are consumed without additional inference experiments. The Runtime reply schema/reasons remain compatible; schema8701 and complete dual component closures are enforced. Bridge v1.1, occurrence v1.2 and Pi1.0.2 remain unchanged. No automatic real-root migration, external send, policy acceptance or public feed update is introduced."
+  "change_note": "Mac integration fixes Core cc1d1194 on the previously paired 57b6 source. Completed pre-revision-projection preparation artifacts may regain verified read-only history with complete early-epoch receipts; changed, reverted, deleted, withdrawn or truncated sources do not gain current evidence, execution or editing authority. Identical memory writes within one trusted teacher message reuse the persisted receipt across tool calls without duplicating facts or rewriting historical records. Runtime schema/reasons, Bridge v1.1, occurrence v1.2 and Pi1.0.2 remain unchanged; both complete component closures are enforced. No automatic real-root migration, external send, policy acceptance or public feed update is introduced."
 }
