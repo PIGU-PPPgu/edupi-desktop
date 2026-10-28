@@ -6,11 +6,11 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "9a26adb825b4f6803d0e79a36576e074d431f59a",
+    "core_commit": "aba5ffa7019c24a917726ffa4baef37242bc704d",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:669fe05f9c6d7da1fd76276242012ca336ab83871c870ffd8264cc565d3a6d10",
-    "runtime_component_manifest_hash": "sha256:7afc489e86dde97a6e4c6ae83cd868f68f132513b12bccf2c7ff225b49aa31a0",
-    "runtime_schema_hash": "sha256:1d7ea8b9090dd4b13f093ae91db0b0e16fe061b814a3df7477c0d605fabc393f"
+    "component_manifest_hash": "sha256:441ac1888302c2b1041439a834eaf686da70d564ccbe33b411dd3202c1ce0ff2",
+    "runtime_component_manifest_hash": "sha256:02fefc912f9270769c56a1fef4a1e06ed1d05b764ba9ab095521c17670c4cb05",
+    "runtime_schema_hash": "sha256:8701c07308359b90c955caa59674bdc02d36a30b6207808bc406a7ca4fe8144d"
   },
   "contract_identities": [
     {
@@ -247,5 +247,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/391",
     "https://github.com/PIGU-PPPgu/edupi/pull/390"
   ],
-  "change_note": "Candidate pairing to Core #391 combined source 9a574c9f, including #390 recovery evidence, explicit quantity equivalence and owner recall transport cancellation. Final main identity and successful exact-source checks are required before the Mac signed Draft build. Runtime schema, Bridge and occurrence identities remain unchanged; both component manifests are regenerated from the same candidate. Desktop strictly accepts the documented partial-contact support reason, keeps unsupported sources empty, distinguishes temporary backend holds, and includes all relative model-host modules in the copied server. No Windows build, real teacher-data migration, public Release or feed change."
+  "change_note": "Mac integration combines frozen Core main 6225be76 and the reviewed UI calendar notes and exact canonical conflict repairs through aba5ffa7. Exact source-support recall, cancellation, authenticated history, PDF/image source review, schema and complete dual component closures remain enforced. Notes updates preserve canonical identity, time, location and CAS; foreign aliases cannot block the explicitly reviewed canonical target. Bridge v1.1, occurrence v1.2 and Pi 1.0.2 remain unchanged. No automatic real-root migration, external action, usage collection, policy acceptance or public update-feed write is introduced."
 }

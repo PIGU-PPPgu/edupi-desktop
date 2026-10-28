@@ -1,20 +1,52 @@
-.edupi-family-panel { min-width: 0; }
+.edupi-family-panel { min-width: 0; color: var(--ep-text, var(--text)); }
 .edupi-family-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-.edupi-family-toolbar button { padding: 6px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-panel); color: var(--text); }
-.edupi-family-toolbar button[aria-pressed="true"] { background: var(--bg-selected); }
+.edupi-family-panel .edupi-family-toolbar button,
+:is(.edupi-family-panel, .edupi-family-record) .edupi-family-actions button {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--ep-border, var(--border));
+  border-radius: 6px;
+  background: var(--ep-surface, var(--bg-panel));
+  color: var(--ep-text, var(--text));
+  font: inherit;
+  font-size: 13px;
+}
+.edupi-family-panel .edupi-family-toolbar button[aria-pressed="true"] { background: var(--ep-surface-soft, var(--bg-selected)); color: var(--ep-text, var(--text)); }
+.edupi-family-panel button:disabled,
+.edupi-family-record .edupi-family-actions button:disabled { cursor: not-allowed; opacity: .5; }
 .edupi-family-toolbar button:last-child { margin-left: auto; }
-.edupi-family-record { margin: 10px 0; padding: 12px; border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
-.edupi-family-record header { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.edupi-family-record time, .edupi-family-identity { color: var(--text-muted); font-size: 12px; }
-.edupi-family-record p { overflow-wrap: anywhere; white-space: pre-wrap; margin: 8px 0; }
-.edupi-family-record details { margin-top: 8px; }
-.edupi-family-record dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; font-size: 12px; }
-.edupi-family-record dd { margin: 0; overflow-wrap: anywhere; }
-.edupi-family-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-.edupi-family-editor { display: grid; gap: 12px; padding: 12px 0; }
+.edupi-family-record,
+.edupi-student-events .edupi-family-record {
+  min-width: 0;
+  margin: 0;
+  padding: 16px 0;
+  border: 0;
+  border-bottom: 1px solid var(--ep-border, var(--border));
+  border-radius: 0;
+  color: var(--ep-text, var(--text));
+}
+.edupi-family-record > header,
+.edupi-student-events .edupi-family-record > header { display: flex; justify-content: flex-end; gap: 8px 12px; align-items: baseline; flex-wrap: wrap; }
+.edupi-family-record > header > strong { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; line-height: 1.6; }
+.edupi-family-record > header > span,
+.edupi-family-record time { min-width: 0; color: var(--ep-muted, var(--text-muted)); font-size: 12px; text-align: right; overflow-wrap: anywhere; line-height: 1.6; }
+.edupi-family-identity { margin-top: 4px; color: var(--ep-muted, var(--text-muted)); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.edupi-family-record p,
+.edupi-student-events .edupi-family-record p { overflow-wrap: anywhere; white-space: pre-wrap; margin: 12px 0; font-size: 13px; line-height: 1.6; }
+.edupi-family-record details,
+.edupi-student-events .edupi-family-record details { margin-top: 12px; }
+.edupi-family-record dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; font-size: 12px; line-height: 1.6; }
+.edupi-family-record dt { color: var(--ep-muted, var(--text-muted)); }
+.edupi-family-record dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.edupi-family-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; font-size: 13px; }
+.edupi-family-editor,
+.edupi-student-events .edupi-family-editor { display: grid; gap: 12px; margin: 0; padding: 16px 0; }
 .edupi-family-editor fieldset { display: grid; gap: 12px; padding: 0; margin: 0; border: 0; min-width: 0; }
 .edupi-family-editor label { display: grid; gap: 6px; font-size: 13px; }
-.edupi-family-editor input, .edupi-family-editor select, .edupi-family-editor textarea { min-width: 0; width: 100%; padding: 8px; color: var(--text); background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; }
-.edupi-family-history { padding-left: 18px; font-size: 12px; }
-.edupi-family-history li { margin: 8px 0; }
-.edupi-family-error { color: var(--error, #b73535); }
+:is(.edupi-family-panel, .edupi-family-record) .edupi-family-editor :is(input, select, textarea) { min-width: 0; width: 100%; padding: 8px 10px; color: var(--ep-text, var(--text)); background: var(--ep-surface, var(--bg-panel)); border: 1px solid var(--ep-border, var(--border)); border-radius: 6px; font: inherit; font-size: 13px; line-height: 1.6; }
+.edupi-family-editor input,
+.edupi-family-editor select { min-height: 38px; }
+.edupi-family-editor textarea { resize: vertical; }
+.edupi-family-history { padding-left: 18px; font-size: 12px; line-height: 1.6; }
+.edupi-family-history li { margin: 12px 0; }
+.edupi-family-error { color: var(--ep-red, var(--danger)); }

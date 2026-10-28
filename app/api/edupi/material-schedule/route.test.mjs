@@ -17,14 +17,14 @@ const headers = { host: "localhost:30373", origin: "http://localhost:30373", "x-
 
 function fixture() {
   const calls = [];
-  const state = { metadataRevision: 2, sourceHash: hash("c"), fingerprint: hash("d"), readStatus: "ready", owner: `owner_${"b".repeat(32)}`, deleted: false, relativePath: "synthetic.ics", sourceReview: undefined };
+  const state = { metadataRevision: 2, sourceHash: hash("c"), fingerprint: hash("d"), readStatus: "ready", owner: `owner_${"b".repeat(32)}`, deleted: false, relativePath: "synthetic.ics", sourceReview: undefined, adoptionReceipts: [], calendar: null, readOverride: {} };
   const roots = {};
   const read = () => ({ version: 1, root_ref: hash("a"), owner_id: state.owner,
     source: { material_id: "synthetic-material", source_hash: state.sourceHash, metadata_revision: state.metadataRevision, relative_path: state.relativePath },
     options: { default_time_zone: null, window_start: null, window_end: null, max_occurrences: 200 }, status: state.readStatus,
     events: [{ event_id: "synthetic-event", date: "2026-10-15", name: "合成教研" }], issues: [], evidence: [], parse_fingerprint: state.fingerprint,
     ...(state.sourceReview === undefined ? {} : { source_review_required: state.sourceReview }),
-    read_only: true, automatic_import: false, external_send: false });
+    read_only: true, automatic_import: false, external_send: false, ...state.readOverride });
   const host = {
     call: async operation => { calls.push([operation]); assert.equal(operation, "health"); return { ok: true, result: { data_root_fingerprint: hash("a") } }; },
     callOwnerControl: async (operation, input) => {
@@ -42,11 +42,13 @@ function fixture() {
   };
   const dependencies = {
     "@/lib/request-security": security, "@/lib/desktop-api-auth": native, "@/lib/bounded-form-data": bounded,
-    "@/lib/edupi-core-snapshot": { resolveEduPiBridgeRoots: () => roots, readEduPiEducationSnapshot: async () => {
+    "@/lib/edupi-core-snapshot": { resolveEduPiBridgeRoots: () => roots, readEduPiEducationSnapshot: async options => {
+      assert.equal(options.scheduleOccurrenceVersion, "1.2", "current visibility and stored wall clocks use the formal occurrence projection");
       calls.push(["current-snapshot"]);
       return { payload: { receipts: [{ command_type: "intake_material", receipt_phase: "mutation", status: "accepted",
-        applied_ids: ["synthetic-material"], target: { target_id: "synthetic-material-target", target_kind: "material_intake" } }],
-      review_targets: [{ projection_kind: "material_intake", target: { target_id: "synthetic-material-target" }, source_hash: state.sourceHash }] } };
+        applied_ids: ["synthetic-material"], target: { target_id: "synthetic-material-target", target_kind: "material_intake" } }, ...state.adoptionReceipts],
+      review_targets: [{ projection_kind: "material_intake", target: { target_id: "synthetic-material-target" }, source_hash: state.sourceHash }] },
+      occurrenceProjection: { events: state.calendar || read().events } };
     } },
     "@/lib/edupi-material-metadata": { readMaterialMetadataHistory: async materialId => { calls.push(["current-metadata"]); return { materialId, revision: state.metadataRevision }; } },
     "@/lib/edupi-runtime-supervisor": { ensureEduPiRuntime: async () => host },
@@ -63,6 +65,10 @@ async function withToken(work) {
 const applyBody = () => ({ action: "apply", materialId: "synthetic-material", expectedSourceHash: hash("c"), expectedMetadataRevision: 2,
   expectedParseFingerprint: hash("d"), commandId: "teacher-confirm-synthetic", confirm: true });
 const postRequest = body => new Request(url, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(body) });
+const adoption = (read, patch = {}) => ({ receipt_id: "receipt-synthetic-adopted", command_id: "material_schedule_owner-command-hash",
+  command_type: "import_calendar", receipt_phase: "mutation", target: { target_kind: "calendar_import", command_type: "import_calendar" },
+  status: "accepted", applied_ids: read.events.map(event => event.event_id), rejected_ids: [],
+  evidence_ids: [read.source.material_id, read.parse_fingerprint], created_at: "2026-10-15T00:00:00.000Z", external_send: false, ...patch });
 
 test("native and origin gates reject reads and apply before Core access", async () => withToken(async () => {
   const { GET, POST, calls } = fixture();
@@ -120,4 +126,74 @@ test("Core-ready PDF reaches owner apply and image text confirmation is explicit
   assert.equal(applied.expected_source_hash, hash("c")); assert.equal(applied.expected_metadata_revision, 2);
   state.sourceReview = "caller_verified";
   assert.equal((await POST(postRequest({ ...applyBody(), confirmSourceText: true }))).status, 409);
+}));
+
+test("GET restores an exact authoritative adoption receipt separately from unchanged Core parsing", async () => withToken(async () => {
+  const f = fixture(), expected = f.read(); f.state.adoptionReceipts = [adoption(expected)];
+  for (let i = 0; i < 2; i++) {
+    const response = await f.GET(new Request(`${url}?materialId=synthetic-material`, { headers }));
+    assert.equal(response.status, 200); const body = await response.json();
+    assert.deepEqual(body.result, expected);
+    assert.deepEqual(body.adoptionReceipt, { receiptId: "receipt-synthetic-adopted", ownerCommandId: "material_schedule_owner-command-hash",
+      rootRef: hash("a"), ownerId: f.state.owner, materialId: "synthetic-material", sourceHash: hash("c"), metadataRevision: 2,
+      parseFingerprint: hash("d"), status: "accepted", appliedIds: ["synthetic-event"], createdAt: "2026-10-15T00:00:00.000Z", calendarState: "matching" });
+    assert.equal(body.result.command_id, undefined, "the read result is never manufactured from a POST result");
+  }
+  assert.equal(f.calls.some(call => call[0] === "material_schedule_apply"), false);
+  const coreRead = f.calls.find(call => call[0] === "material_schedule_read")[1];
+  assert.deepEqual(Object.keys(coreRead).sort(), ["expected_metadata_revision", "expected_owner_id", "expected_source_hash", "material_id", "root_ref"], "snapshot receipts never leak into the Core request");
+}));
+
+test("GET never promotes held, validation, foreign, partial or malformed receipts", async () => withToken(async () => {
+  for (const patch of [{ command_type: "intake_material" }, { receipt_phase: "validation" }, { status: "held" },
+    { evidence_ids: ["different-material", hash("d")] }, { evidence_ids: ["synthetic-material", hash("e")] },
+    { applied_ids: [] }, { applied_ids: ["another-event"] }, { applied_ids: ["synthetic-event", "synthetic-event"] },
+    { rejected_ids: ["another-event"] }, { receipt_id: "" }, { command_id: "" }, { created_at: "invalid-date" },
+    { target: { target_kind: "material_intake", command_type: "import_calendar" } }, { external_send: true }]) {
+    const f = fixture(); f.state.adoptionReceipts = [adoption(f.read(), patch)];
+    const body = await (await f.GET(new Request(`${url}?materialId=synthetic-material`, { headers }))).json();
+    assert.equal(body.adoptionReceipt, null, JSON.stringify(patch));
+    assert.equal(body.neverAdopted, undefined);
+  }
+  const f = fixture(), earlier = f.read(); f.state.adoptionReceipts = [adoption(earlier)];
+  f.state.metadataRevision = 3; f.state.fingerprint = hash("f");
+  const body = await (await f.GET(new Request(`${url}?materialId=synthetic-material`, { headers }))).json();
+  assert.equal(body.adoptionReceipt, null, "the earlier parse fingerprint is not proof for changed metadata");
+}));
+
+test("deleted and edited calendar rows retain historical adoption without a current-state claim", async () => withToken(async () => {
+  for (const change of ["deleted", "name", "date", "location", "clock", "invalid-date-status"]) {
+    const f = fixture(), event = { ...f.read().events[0], end_date: null, type: "meeting", notes: null, location: "合成教室",
+      time_interval: { start: "2026-10-15T09:00+08:00", end: "2026-10-15T10:00+08:00", time_zone: "Asia/Shanghai" } };
+    f.state.readOverride = { events: [event] }; f.state.adoptionReceipts = [adoption(f.read())];
+    const current = structuredClone(event);
+    if (change === "name") current.name = "手动修订事项";
+    if (change === "date") current.date = "2026-10-16";
+    if (change === "location") current.location = "修订教室";
+    if (change === "clock") current.time_interval.start = "2026-10-15T08:00+08:00";
+    if (change === "invalid-date-status") current.date_status = "invalid";
+    f.state.calendar = change === "deleted" ? [] : [current];
+    const body = await (await f.GET(new Request(`${url}?materialId=synthetic-material`, { headers }))).json();
+    assert.equal(body.adoptionReceipt.calendarState, "needs_review", change);
+    assert.equal(body.adoptionReceipt.appliedIds.length, 1);
+  }
+}));
+
+test("foreign managed root and owner proof fail before publishing adoption facts", async () => withToken(async () => {
+  for (const readOverride of [{ root_ref: hash("f") }, { owner_id: "another-owner" }, { source: { material_id: "different-material" } }]) {
+    const f = fixture(); f.state.adoptionReceipts = [adoption(f.read())]; f.state.readOverride = readOverride;
+    const response = await f.GET(new Request(`${url}?materialId=synthetic-material`, { headers }));
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).adoptionReceipt, undefined);
+  }
+}));
+
+test("a review-state change is not misrepresented as a new adoption or a different schedule", async () => withToken(async () => {
+  const f = fixture(); f.state.readOverride = { events: [{ ...f.read().events[0], confidence: "inferred" }] };
+  f.state.adoptionReceipts = [adoption(f.read())];
+  f.state.calendar = [{ ...f.read().events[0], confidence: "teacher_confirmed", state: "accepted" }];
+  const response = await f.GET(new Request(`${url}?materialId=synthetic-material`, { headers }));
+  const body = await response.json();
+  assert.equal(body.adoptionReceipt.calendarState, "matching");
+  assert.equal(body.result.events[0].confidence, "inferred", "the parser and teacher review states are never rewritten by desktop adoption display");
 }));

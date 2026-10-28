@@ -8,7 +8,7 @@ import ts from "typescript";
 
 const require = createRequire(import.meta.url);
 const sourceFiles = ["components/AppSettings.tsx", "components/EduPiAdminPanel.tsx", "lib/app-updates.ts",
-  "lib/computer-use-permissions.ts", "lib/i18n/messages/zh-CN.ts", "hooks/useDesktopHostIdentity.ts"];
+  "lib/computer-use-permissions.ts", "lib/i18n/messages/zh-CN.ts", "hooks/useDesktopHostIdentity.ts", "lib/edupi-settings-navigation.ts"];
 const sources = new Map(await Promise.all(sourceFiles.map(async path => [path,
   await readFile(new URL(`../${path}`, import.meta.url), "utf8").catch(error => {
     if (error.code === "ENOENT" && path === "hooks/useDesktopHostIdentity.ts") return null;
@@ -32,10 +32,11 @@ const text = node => typeof node === "string" || typeof node === "number" ? Stri
 
 async function fixture(options = {}) {
   let status = options.status ?? nativeStatus();
+  let cardHidden = false;
   let getStatus = () => options.statusError ? Promise.reject(new Error("synthetic IPC failure")) : Promise.resolve(status);
   let requestPermission = () => Promise.resolve(status);
   let mutateControl = enabled => Promise.resolve({ ...status, enabled });
-  const calls = { reads: 0, requests: [], enable: [], restart: 0, preferences: [], announcements: [] };
+  const calls = { reads: 0, requests: [], enable: [], restart: 0, preferences: [], announcements: [], connectionDetails: 0, upgrades: 0 };
   const preferences = new Map([["computerUseEnabled", options.enabledPreference ?? false]]);
   const savedGlobals = Object.fromEntries(["window", "document", "HTMLElement", "IS_REACT_ACT_ENVIRONMENT"].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   const window = new EventTarget();
@@ -55,7 +56,12 @@ async function fixture(options = {}) {
   const dependencies = {
     react: React,
     "@/lib/branding": branding, "./branding": branding,
-    "@/lib/desktop-updater": { isTauriDesktop: () => options.desktop !== false },
+    "@/lib/desktop-updater": { isTauriDesktop: () => options.desktop !== false,
+      installLatestDesktopRelease: async onProgress => {
+        calls.upgrades++;
+        onProgress({ phase: "downloading", downloadedBytes: 1, totalBytes: 2 });
+        return { installed: true };
+      } },
     "@/lib/desktop-computer-use": {
       getComputerUseStatusNative: () => { calls.reads++; return getStatus(); },
       requestComputerUsePermissionNative: permission => { calls.requests.push(permission); return requestPermission(permission); },
@@ -112,19 +118,23 @@ async function fixture(options = {}) {
   const { EduPiAdminPanel } = load("components/EduPiAdminPanel.tsx");
   let renderer;
   const unmount = async () => { if (renderer) { await act(async () => renderer.unmount()); renderer = null; } };
-  const mount = async (surface = "settings") => {
+  const mount = async (surface = "settings", settingsProps = {}) => {
     await unmount();
-    const props = surface === "settings" ? { onClose() {} } : { initialSection: "system", onClose() {}, onOpenSettings() {}, onNavigate() {} };
+    const props = surface === "settings" ? { onClose() {}, ...settingsProps, onOpenConnectionDetails() { calls.connectionDetails++; } } : { initialSection: "system", onClose() {}, onOpenContext() {},
+      onAskStudentUpdate() {}, onNavigate() {}, modelSettingsDirty: false, modelsPanel: () => null, settingsPanel: () => null };
     await act(async () => { renderer = TestRenderer.create(React.createElement(surface === "settings" ? AppSettings : EduPiAdminPanel, props),
-      { createNodeMock: () => ({ focus() {}, scrollTo() {} }) }); });
+      { createNodeMock: element => ({ ownerDocument: globalThis.document, focus() {}, scrollTo() {}, isConnected: true,
+        closest: selector => selector === "[hidden]" && element.props["data-setting-id"] === "computer-use" && cardHidden ? {} : null,
+        contains: () => true }) }); });
   };
   const button = label => renderer.root.findAllByType("button").find(node => text(node) === label || node.props["aria-label"] === label);
-  const click = async label => { const node = button(label); assert.ok(node, `button ${label}`); assert.notEqual(node.props.disabled, true); await act(async () => node.props.onClick()); };
+  const click = async label => { const node = button(label); assert.ok(node, `button ${label}`); assert.notEqual(node.props.disabled, true); await act(async () => node.props.onClick({ currentTarget: node.instance })); };
   return {
     calls, errors, preferences, window, mount, unmount, click, button,
     setStatus(next) { status = next; }, setStatusReader(next) { getStatus = next; }, setRequest(next) { requestPermission = next; },
+    setCardHidden(next) { cardHidden = next; },
     setControlMutation(next) { mutateControl = next; },
-    versionChip: () => renderer.root.findByType("header").findByType("a"),
+    versionChip: () => renderer.root.findByProps({ "data-setting-id": "updates" }).findByType("a"),
     desktopRow: () => renderer.root.findAllByType("strong").find(node => /^EduPi (Desktop|Web)$/.test(text(node))).parent.parent,
     content: () => text(renderer.root),
     async cleanup() {
@@ -161,6 +171,22 @@ test("web settings and management identify the source version as a web version w
     assert.doesNotMatch(ui.content(), /当前安装版本/);
     assert.equal(ui.calls.reads, 0);
   } finally { await ui.cleanup(); }
+});
+
+test("connection details invokes the desktop callback in standalone and embedded settings and stays blocked during an upgrade", async () => {
+  for (const embedded of [false, true]) {
+    const ui = await fixture();
+    try {
+      await ui.mount("settings", { embedded, page: "about" });
+      await ui.click("连接详情"); assert.equal(ui.calls.connectionDetails, 1);
+      await ui.click("更新"); await ui.click("继续更新");
+      assert.equal(ui.calls.upgrades, 1);
+      assert.equal(ui.button("连接详情").props.disabled, true);
+      await act(async () => ui.button("连接详情").props.onClick());
+      assert.equal(ui.calls.connectionDetails, 1, "an in-progress upgrade also blocks a direct invocation of the navigation handler");
+      assert.deepEqual(ui.calls.requests, []); assert.deepEqual(ui.calls.enable, []);
+    } finally { await ui.cleanup(); }
+  }
 });
 
 test("management system row reads the native version and never calls the source build an installed version", async () => {
@@ -211,6 +237,34 @@ test("an accessibility flow restored while still denied cannot request screen re
     await act(async () => ui.window.dispatchEvent(new Event("focus")));
     assert.deepEqual(ui.calls.requests, ["accessibility"], "restored progress cannot start a new TCC request");
     assert.ok(ui.button("申请权限")); assert.deepEqual(ui.calls.enable, []);
+  } finally { await ui.cleanup(); }
+});
+
+test("a hidden devices page cannot advance an accessibility request from a focus status read", async () => {
+  const ui = await fixture({ status: nativeStatus(701, { accessibility: false }) });
+  try {
+    await ui.mount(); await ui.click("申请权限");
+    ui.setCardHidden(true); ui.setStatus(nativeStatus());
+    const reads = ui.calls.reads;
+    await act(async () => ui.window.dispatchEvent(new Event("focus")));
+    assert.equal(ui.calls.reads, reads + 1, "the hidden page may refresh status without requesting another permission");
+    assert.deepEqual(ui.calls.requests, ["accessibility"]);
+    ui.setCardHidden(false); await ui.click("申请权限");
+    assert.deepEqual(ui.calls.requests, ["accessibility", "screen_recording"]);
+    assert.ok(ui.button("授权后重启")); assert.deepEqual(ui.calls.enable, []); assert.deepEqual(ui.calls.preferences, []);
+  } finally { await ui.cleanup(); }
+});
+
+test("hiding devices while accessibility is pending prevents an automatic screen request from its late receipt", async () => {
+  const ui = await fixture({ status: nativeStatus(701, { accessibility: false }) });
+  const accessibility = deferred(); ui.setRequest(() => accessibility.promise);
+  try {
+    await ui.mount(); await ui.click("申请权限"); ui.setCardHidden(true);
+    await act(async () => accessibility.resolve(nativeStatus()));
+    assert.deepEqual(ui.calls.requests, ["accessibility"]); assert.ok(ui.button("申请权限"));
+    ui.setCardHidden(false); ui.setRequest(() => Promise.resolve(nativeStatus())); await ui.click("申请权限");
+    assert.deepEqual(ui.calls.requests, ["accessibility", "screen_recording"]);
+    assert.ok(ui.button("授权后重启")); assert.deepEqual(ui.calls.enable, []); assert.deepEqual(ui.calls.preferences, []);
   } finally { await ui.cleanup(); }
 });
 
@@ -364,13 +418,17 @@ test("review followup: web manual update and admin refresh never call native ide
   } finally { await ui.cleanup(); }
 });
 
-for (const enabled of [false, true]) test(`review followup: control ${enabled} persists its native receipt after a focus read supersedes rendering`, async () => {
+for (const enabled of [false, true]) test(`review followup: control ${enabled} persists its native receipt after an earlier focus read settles`, async () => {
   const ui = await fixture({ enabledPreference: !enabled,
     status: nativeStatus(701, { enabled: !enabled, screenRecording: true }) });
-  const mutation = deferred(); ui.setControlMutation(() => mutation.promise);
+  const mutation = deferred(), focusRead = deferred(); ui.setControlMutation(() => mutation.promise);
   try {
-    await ui.mount(); await ui.click(enabled ? "开启控制" : "停止控制");
+    await ui.mount(); ui.setStatusReader(() => focusRead.promise);
+    const reads = ui.calls.reads;
     await act(async () => ui.window.dispatchEvent(new Event("focus")));
+    assert.equal(ui.calls.reads, reads + 1, "the overlapping background read must actually start");
+    await ui.click(enabled ? "开启控制" : "停止控制");
+    await act(async () => focusRead.resolve(nativeStatus(701, { enabled: !enabled, screenRecording: true })));
     assert.equal(ui.button(enabled ? "开启控制" : "停止控制").props.disabled, true, "finishing a read cannot release mutation busy");
     await act(async () => mutation.resolve(nativeStatus(701, { enabled, screenRecording: true })));
     assert.equal(ui.preferences.get("computerUseEnabled"), enabled, "a newer read must not discard a definite native control result");
@@ -384,8 +442,11 @@ test("review followup: a confirmed stop rejects an older focus read even when th
   const ui = await fixture({ enabledPreference: true, status: nativeStatus(701, { enabled: true, screenRecording: true }) });
   const mutation = deferred(), staleRead = deferred(); ui.setControlMutation(() => mutation.promise);
   try {
-    await ui.mount(); await ui.click("停止控制"); ui.setStatusReader(() => staleRead.promise);
+    await ui.mount(); ui.setStatusReader(() => staleRead.promise);
+    const reads = ui.calls.reads;
     await act(async () => ui.window.dispatchEvent(new Event("focus")));
+    assert.equal(ui.calls.reads, reads + 1, "the stale background read must actually start");
+    await ui.click("停止控制");
     await act(async () => mutation.resolve(nativeStatus(701, { enabled: false, screenRecording: true })));
     await act(async () => staleRead.resolve(nativeStatus(701, { enabled: true, screenRecording: true })));
     assert.equal(ui.preferences.get("computerUseEnabled"), false); assert.deepEqual(ui.calls.announcements, [false]);
@@ -488,15 +549,19 @@ test("review followup: an older stop receipt cannot overwrite a newer explicit e
 
 test("review followup: a focus IPC failure cannot discard a same-host confirmed stop", async () => {
   const ui = await fixture({ enabledPreference: true, status: nativeStatus(701, { enabled: true, screenRecording: true }) });
-  const stop = deferred(); ui.setControlMutation(() => stop.promise);
+  const stop = deferred(), focusRead = deferred(); ui.setControlMutation(() => stop.promise);
   try {
-    await ui.mount(); await ui.click("停止控制");
-    ui.setStatusReader(() => Promise.reject(new Error("focus read failed")));
+    await ui.mount(); ui.setStatusReader(() => focusRead.promise);
+    const reads = ui.calls.reads;
     await act(async () => ui.window.dispatchEvent(new Event("focus")));
-    assert.equal(ui.button("检测权限").props.disabled, true);
+    assert.equal(ui.calls.reads, reads + 1, "the failing background read must actually start");
+    await ui.click("停止控制");
+    await act(async () => focusRead.reject(new Error("focus read failed")));
+    assert.equal(ui.button("停止控制").props.disabled, true);
+    assert.doesNotMatch(ui.content(), /focus read failed/);
     await act(async () => stop.resolve(nativeStatus(701, { enabled: false, screenRecording: true })));
     assert.equal(ui.preferences.get("computerUseEnabled"), false); assert.deepEqual(ui.calls.announcements, [false]);
-    assert.equal(ui.button("检测权限").props.disabled, false);
+    assert.equal(ui.button("开启控制").props.disabled, false);
   } finally { await ui.cleanup(); }
 });
 

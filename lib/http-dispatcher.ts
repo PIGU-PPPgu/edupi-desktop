@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import * as undici from "undici";
+import type { DesktopSystemProxy } from "./desktop-system-proxy";
 
 export const DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000;
 
@@ -57,6 +58,7 @@ function createUndiciOriginDispatcher(origin: string | URL, options: object): un
 
 export function configureHttpDispatcher(
   timeoutMs: number = DEFAULT_HTTP_IDLE_TIMEOUT_MS,
+  systemProxy?: DesktopSystemProxy,
 ): void {
   if (dispatcherGlobal.__piWebHttpDispatcherConfigured) return;
 
@@ -67,6 +69,7 @@ export function configureHttpDispatcher(
 
   const dispatcher = withUndiciErrorListener(
     new undici.EnvHttpProxyAgent({
+      ...systemProxy,
       allowH2: false,
       bodyTimeout: normalizedTimeoutMs,
       headersTimeout: normalizedTimeoutMs,

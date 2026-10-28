@@ -5,6 +5,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
 import { handleExternalLinkClick } from "@/lib/desktop-native";
+import { DisclosureChevron } from "./DisclosureChevron";
 import type {
   SkillInfo as Skill,
   SkillInstallScope,
@@ -1215,7 +1216,7 @@ export function SkillsConfig({
                             <>
                               <button
                                 type="button"
-                                className="edupi-dormant-skills-trigger"
+                                className="disclosure-trigger is-row"
                                 aria-expanded={dormantOpen}
                                 onClick={() =>
                                   setDormantGroupsOpen((current) => ({
@@ -1223,27 +1224,8 @@ export function SkillsConfig({
                                     [grpLabel]: !dormantOpen,
                                   }))
                                 }
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 5,
-                                  width: "100%",
-                                  padding: "4px 8px 3px",
-                                  border: "none",
-                                  background: "transparent",
-                                  textAlign: "left",
-                                  fontFamily: "inherit",
-                                  fontSize: 10,
-                                  fontWeight: 600,
-                                  color: "var(--text-dim)",
-                                  textTransform: "uppercase",
-                                  letterSpacing: "0.06em",
-                                  cursor: "pointer",
-                                  userSelect: "none",
-                                }}
                               >
-                                <span className="edupi-disclosure-icon" aria-hidden="true" />
-                                {t("i18n.dormant")} ({dormantSkills.length})
+                                <span>{t("i18n.dormant")}</span><small>{dormantSkills.length}</small><DisclosureChevron open={dormantOpen} />
                               </button>
                               {dormantOpen && dormantSkills.map(renderSkillRow)}
                             </>

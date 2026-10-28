@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import type {
   EducationContract,
   EducationWorkCandidate,
@@ -42,6 +42,7 @@ type Props = {
 type EditorMode = "modify" | "snooze" | "suppress";
 
 type EditorState = {
+  workspace: object;
   candidateId: string;
   snapshotId: string;
   revision: number;
@@ -61,7 +62,7 @@ type ReviewRetry = {
   patch?: Record<string, unknown>;
   note?: string;
 };
-type Submission = { candidateId: string; decision: EducationWorkCandidateDecision } | null;
+type Submission = { workspace: object; candidateId: string; decision: EducationWorkCandidateDecision } | null;
 type RatedUsefulness = Exclude<TeacherFeedbackUsefulness, "not_observed">;
 type PendingFeedback = { candidate: EducationWorkCandidate; task: TeacherTask; decision: EducationWorkCandidateDecision; note?: string };
 export type TeacherValueAssessment = { used: boolean; wouldUseAgain: boolean | null; baselineMinutes: number | null; reviewMinutes: number | null; note: string | null };
@@ -224,7 +225,11 @@ function tomorrow(): string {
 
 function readableDate(value: string | null): string {
   if (!value) return "日期待确认";
-  return value;
+  if (isDateOnly(value)) return value.replaceAll("-", "/");
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? "日期待确认" : new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(date);
 }
 
 function actionSuccess(decision: EducationWorkCandidateDecision): string {
@@ -241,11 +246,12 @@ function submittingLabel(decision: EducationWorkCandidateDecision): string {
 function candidateMeta(candidate: EducationWorkCandidate): string {
   if (candidate.status === "snoozed") return `稍后 ${readableDate(candidate.snoozeUntil)}`;
   if (candidate.status === "pending_review") return `截止 ${readableDate(candidate.dueAt)}`;
-  return candidate.dueAt ? `截止 ${candidate.dueAt}` : "日期待确认";
+  return candidate.dueAt ? `截止 ${readableDate(candidate.dueAt)}` : "日期待确认";
 }
 
-function startEditor(candidate: EducationWorkCandidate, mode: EditorMode): EditorState {
+function startEditor(candidate: EducationWorkCandidate, mode: EditorMode, workspace: object): EditorState {
   return {
+    workspace,
     candidateId: candidate.candidateId,
     snapshotId: candidate.snapshotId,
     revision: candidate.revision,
@@ -297,8 +303,85 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
   const [feedbackBusy, setFeedbackBusy] = useState(false);
   const feedbackReviewSequence = useRef(0);
   const [retryReview, setRetryReview] = useState<ReviewRetry | null>(null);
-  const [submission, setSubmission] = useState<Submission>(null);
-  const editorCurrent = isTodayWorkEditorCurrent(editor, data.workCandidates, capability.enabled);
+  const [submittedReview, setSubmission] = useState<Submission>(null);
+  const workspace = useMemo(() => ({ root: data.workspace }), [data.workspace]);
+  const workspaceRef = useRef<typeof workspace | null>(workspace);
+  workspaceRef.current = workspace;
+  const reviewGeneration = useRef(0);
+  const currentReview = useRef<{ workspace: typeof workspace; generation: number } | null>(null);
+  const submission = submittedReview?.workspace === workspace ? submittedReview : null;
+  const rootRef = useRef<HTMLElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const actionLock = useRef(false);
+  const scope = useMemo(() => ({ workspace: data.workspace, listGroup }), [data.workspace, listGroup]);
+  const [focusGeneration, setFocusGeneration] = useState(0);
+  const focusRequest = useRef<{
+    scope: object; candidateId: string; target: "editor" | "action" | "result" | "retry";
+    action?: string; group?: string; ready: boolean; stop: () => void;
+  } | null>(null);
+  const clearFocus = useCallback(() => { focusRequest.current?.stop(); focusRequest.current = null; }, []);
+  useLayoutEffect(() => {
+    workspaceRef.current = workspace;
+    actionLock.current = false;
+    currentReview.current = null;
+    feedbackReviewSequence.current += 1;
+    clearFocus();
+    setEditor(null);
+    setSubmission(null);
+    setChangingDecisionId(null);
+    setFeedback(null);
+    setPendingFeedback(null);
+    setEligibilityRetry(null);
+    setEligibilityBusy(false);
+    setRatingOpen(false);
+    setValueDraft(EMPTY_TEACHER_VALUE);
+    setFeedbackRetry(null);
+    setFeedbackBusy(false);
+    setRetryReview(null);
+    return () => { if (workspaceRef.current === workspace) workspaceRef.current = null; };
+  }, [workspace, clearFocus]);
+  const candidateHeading = useCallback((id: string) => Array.from(rootRef.current?.querySelectorAll<HTMLElement>("[data-today-work-candidate]") ?? [])
+    .find(element => element.dataset.todayWorkCandidate === id), []);
+  const rememberFocus = (candidateId: string, target: NonNullable<typeof focusRequest.current>["target"], action?: string, ready = true) => {
+    clearFocus();
+    const root = rootRef.current, document = root?.ownerDocument;
+    const card = candidateHeading(candidateId)?.closest("article");
+    if (!root || !document || document.hidden || !card
+      || !(card.contains(document.activeElement) || document.activeElement === document.body || document.activeElement === document.documentElement)) return null;
+    const from = document.activeElement;
+    const request: NonNullable<typeof focusRequest.current> = { scope, candidateId, target, action, ready, stop: () => {} };
+    const moved = (event: Event) => {
+      if (event.type === "focusin" && event.target !== from && event.target !== document.body && event.target !== document.documentElement
+        || event.type === "pointerdown" && !card.contains(event.target as Node)) clearFocus();
+    };
+    const hidden = () => { if (document.hidden) clearFocus(); };
+    document.addEventListener("focusin", moved);
+    document.addEventListener("pointerdown", moved);
+    document.addEventListener("visibilitychange", hidden);
+    request.stop = () => { document.removeEventListener("focusin", moved); document.removeEventListener("pointerdown", moved); document.removeEventListener("visibilitychange", hidden); };
+    focusRequest.current = request;
+    return request;
+  };
+  useLayoutEffect(() => () => clearFocus(), [scope, clearFocus]);
+  useLayoutEffect(() => {
+    const request = focusRequest.current, root = rootRef.current;
+    if (!request || !request.ready || busy || submission) return;
+    if (request.scope !== scope || !root?.isConnected || root.ownerDocument.hidden || root.closest("[hidden], [inert]")) { clearFocus(); return; }
+    const card = candidateHeading(request.candidateId)?.closest("article");
+    const action = card?.querySelectorAll<HTMLButtonElement>("[data-today-work-action]");
+    const target = request.target === "editor" ? formRef.current?.querySelector<HTMLElement>("[data-autofocus]")
+      : request.target === "retry" && formRef.current ? formRef.current.querySelector<HTMLButtonElement>('button[type="submit"]')
+        : request.target === "action" || request.target === "retry" ? Array.from(action ?? []).find(button => button.dataset.todayWorkAction === request.action)
+          : card?.querySelector<HTMLElement>("[data-today-work-change]") ?? card?.querySelector<HTMLElement>("h4")
+            ?? root.querySelector<HTMLElement>(`#edupi-today-work-${request.group}, h1`);
+    clearFocus();
+    if (target && !target.matches(":disabled") && target.isConnected) {
+      if (/^H[1-6]$/.test(target.tagName)) target.tabIndex = -1;
+      (request.target === "editor" ? formRef.current : target)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" });
+      target.focus({ preventScroll: true });
+    }
+  }, [busy, submission, editor, data, scope, focusGeneration, clearFocus, candidateHeading]);
+  const editorCurrent = editor?.workspace === workspace && isTodayWorkEditorCurrent(editor, data.workCandidates, capability.enabled);
   const l4Summary = useMemo(() => {
     if (!data.l4Preparation) return summarizeL4Preparation(null);
     const opportunities = data.l4Preparation.opportunities.filter(opportunity => {
@@ -319,23 +402,24 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
   }, []);
 
   useEffect(() => {
-    if (editor && !editorCurrent) {
+    if (editor && editor.workspace === workspace && !editorCurrent) {
       setEditor(null);
       setFeedback({ kind: "error", text: "内容已更新，本次没有写入；请刷新待办后重新决定。", action: "refresh" });
     }
-  }, [editor, editorCurrent]);
+  }, [editor, editorCurrent, workspace]);
 
   const checkFeedbackEligibility = async (pending: PendingFeedback, sequence: number, retry = false) => {
+    if (workspaceRef.current !== workspace) return;
     const capture = feedbackCaptureFor(pending.candidate, pending.task, pending.decision, "useful");
     if (!capture) return;
     try {
       await prepareTeacherFeedbackCapture(capture);
-      if (feedbackReviewSequence.current !== sequence) return;
+      if (workspaceRef.current !== workspace || feedbackReviewSequence.current !== sequence) return;
       setPendingFeedback(pending);
       setEligibilityRetry(null);
       setFeedback({ kind: "success", text: actionSuccess(pending.decision) });
     } catch (error) {
-      if (feedbackReviewSequence.current !== sequence) return;
+      if (workspaceRef.current !== workspace || feedbackReviewSequence.current !== sequence) return;
       if (canRetryFeedbackEligibility(error)) {
         setEligibilityRetry(pending);
         setFeedback({ kind: "error", text: "决定已记录；评价暂不可用，请重试。" });
@@ -352,21 +436,29 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
     patch?: Record<string, unknown>,
     note?: string,
   ) => {
-    if (busy || !capability.enabled) return;
+    if (workspaceRef.current !== workspace || busy || actionLock.current || !capability.enabled) return;
+    actionLock.current = true;
+    const request = { workspace, generation: ++reviewGeneration.current };
+    currentReview.current = request;
+    const requestCurrent = () => workspaceRef.current === workspace && currentReview.current === request;
+    const focus = rememberFocus(candidate.candidateId, "result", decision, false);
     const reviewSequence = ++feedbackReviewSequence.current;
     setFeedback(null);
     setPendingFeedback(null);
     setEligibilityRetry(null);
     setEligibilityBusy(false);
     setRetryReview(null);
-    setSubmission({ candidateId: candidate.candidateId, decision });
+    setSubmission({ workspace, candidateId: candidate.candidateId, decision });
     try {
       const result = await submitTodayWorkReview({ candidate, decision, patch, note });
+      if (!requestCurrent()) return;
+      if (result.data.workspace !== workspace.root) throw new TodayWorkReviewError("stale_snapshot", todayWorkErrorMessage("stale_snapshot"));
       onEducation(result.data);
       setEditor(null);
       setChangingDecisionId(null);
       const task = taskById.get(candidate.taskId);
       const reviewed = result.data.workCandidates.find((item) => item.candidateId === candidate.candidateId);
+      if (focus) focus.group = reviewed?.status === "held" || reviewed?.status === "snoozed" ? "later" : "done";
       setPendingFeedback(null);
       setRatingOpen(false);
       setValueDraft(EMPTY_TEACHER_VALUE);
@@ -376,31 +468,39 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
         void checkFeedbackEligibility({ candidate: reviewed, task, decision, note }, reviewSequence);
       }
     } catch (error) {
+      if (!requestCurrent()) return;
       if (error instanceof TodayWorkReviewError) {
-        if (error.data) onEducation(error.data);
+        if (error.data?.workspace === workspace.root) onEducation(error.data);
         const disposition = todayWorkFailureDisposition(error.code);
+        if (focus) focus.target = disposition === "close" ? "result" : "retry";
         if (disposition === "close") setEditor(null);
         setFeedback({ kind: "error", text: todayWorkErrorMessage(error.code), action: disposition === "close" ? "refresh" : undefined });
         if (disposition === "preserve") setRetryReview({ candidate, decision, patch, note });
-      } else setFeedback({ kind: "error", text: todayWorkErrorMessage("malformed") });
+      } else { if (focus) focus.target = "retry"; setFeedback({ kind: "error", text: todayWorkErrorMessage("malformed") }); }
     } finally {
-      setSubmission(null);
+      if (requestCurrent()) {
+        actionLock.current = false;
+        currentReview.current = null;
+        if (focus) focus.ready = true;
+        setFocusGeneration(value => value + 1);
+        setSubmission(null);
+      }
     }
   };
 
   const retryFeedbackEligibility = async () => {
-    if (!eligibilityRetry || eligibilityBusy) return;
+    if (workspaceRef.current !== workspace || !eligibilityRetry || eligibilityBusy) return;
     const sequence = feedbackReviewSequence.current;
     setEligibilityBusy(true);
     try {
       await checkFeedbackEligibility(eligibilityRetry, sequence, true);
     } finally {
-      if (feedbackReviewSequence.current === sequence) setEligibilityBusy(false);
+      if (workspaceRef.current === workspace && feedbackReviewSequence.current === sequence) setEligibilityBusy(false);
     }
   };
 
   const submitTeacherRating = async () => {
-    if (!pendingFeedback || !valueDraft.usefulness || feedbackBusy) return;
+    if (workspaceRef.current !== workspace || !pendingFeedback || !valueDraft.usefulness || feedbackBusy) return;
     const baselineText = valueDraft.baselineMinutes.trim();
     const reviewText = valueDraft.reviewMinutes.trim();
     const baselineMinutes = baselineText ? Number(baselineText) : null;
@@ -427,41 +527,48 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
     setFeedbackBusy(true);
     try {
       const bound = await prepareTeacherFeedbackCapture(capture);
+      if (workspaceRef.current !== workspace) return;
       setFeedbackRetry(bound);
       await recordTeacherFeedback(bound);
+      if (workspaceRef.current !== workspace) return;
       setFeedbackRetry(null);
       setValueDraft(EMPTY_TEACHER_VALUE);
       setFeedback({ kind: "success", text: "评价已记录。" });
     } catch (error) {
+      if (workspaceRef.current !== workspace) return;
       if (!canRetryFeedbackEligibility(error)) {
         setFeedbackRetry(null);
         setFeedback({ kind: "error", text: "评价目标已变化，请刷新待办。", action: "refresh" });
       } else setFeedback({ kind: "error", text: teacherFeedbackRetryMessage(error) });
     } finally {
-      setFeedbackBusy(false);
+      if (workspaceRef.current === workspace) setFeedbackBusy(false);
     }
   };
 
   const retryTeacherFeedback = async () => {
-    if (!feedbackRetry || feedbackBusy) return;
+    if (workspaceRef.current !== workspace || !feedbackRetry || feedbackBusy) return;
     setFeedbackBusy(true);
     try {
       const bound = feedbackRetry.target.expectedRevision === undefined ? await prepareTeacherFeedbackCapture(feedbackRetry) : feedbackRetry;
+      if (workspaceRef.current !== workspace) return;
       setFeedbackRetry(bound);
       await recordTeacherFeedback(bound);
+      if (workspaceRef.current !== workspace) return;
       setFeedbackRetry(null);
       setFeedback({ kind: "success", text: "反馈已记录。" });
     } catch (error) {
+      if (workspaceRef.current !== workspace) return;
       if (!canRetryFeedbackEligibility(error)) {
         setFeedbackRetry(null);
         setFeedback({ kind: "error", text: "评价目标已变化，请刷新待办。", action: "refresh" });
       } else setFeedback({ kind: "error", text: teacherFeedbackRetryMessage(error, true) });
     } finally {
-      setFeedbackBusy(false);
+      if (workspaceRef.current === workspace) setFeedbackBusy(false);
     }
   };
 
   const refreshEducation = () => {
+    if (workspaceRef.current !== workspace) return;
     feedbackReviewSequence.current += 1;
     setFeedback(null);
     setPendingFeedback(null);
@@ -472,13 +579,17 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
   };
 
   const openEditor = (candidate: EducationWorkCandidate, mode: EditorMode) => {
+    if (workspaceRef.current !== workspace || busy || actionLock.current) return;
+    rememberFocus(candidate.candidateId, "editor");
     setFeedback(null);
     setRetryReview(null);
-    setEditor(startEditor(candidate, mode));
+    setEditor(startEditor(candidate, mode, workspace));
     if (isTauriDesktop()) void observeTeacherUsage({ target: { kind: "work_candidate", targetId: candidate.candidateId, expectedRevision: candidate.revision }, action: "review_started", surface: "today", once: true });
   };
 
   const cancelEditor = () => {
+    if (workspaceRef.current !== workspace || busy || actionLock.current) return;
+    if (editor) rememberFocus(editor.candidateId, "action", editor.mode);
     const candidate = data.workCandidates.find(item => item.candidateId === editor?.candidateId);
     if (candidate && isTauriDesktop()) void observeTeacherUsage({ target: { kind: "work_candidate", targetId: candidate.candidateId, expectedRevision: candidate.revision }, action: "review_dismissed", surface: "today" });
     setEditor(null);
@@ -486,8 +597,14 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
     setRetryReview(null);
   };
 
+  const editorKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
+    if (event.key === "Escape" && !event.defaultPrevented && !event.nativeEvent.isComposing && !busy && !actionLock.current) {
+      event.preventDefault(); event.stopPropagation(); cancelEditor();
+    }
+  };
+
   const submitModify = async (candidate: EducationWorkCandidate) => {
-    if (!editor || !editorCurrent || editor.candidateId !== candidate.candidateId) return;
+    if (workspaceRef.current !== workspace || !editor || !editorCurrent || editor.candidateId !== candidate.candidateId) return;
     const title = editor.title.trim();
     const summary = editor.summary.trim();
     if (!title || !summary) {
@@ -513,6 +630,7 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
   };
 
   const submitSnooze = async (candidate: EducationWorkCandidate) => {
+    if (workspaceRef.current !== workspace) return;
     if (!editor || !editorCurrent || editor.candidateId !== candidate.candidateId || !isDateOnly(editor.snoozeUntil) || editor.snoozeUntil <= localIsoDate()) {
       setFeedback({ kind: "error", text: "请选择晚于今天的日期。" });
       setRetryReview(null);
@@ -522,6 +640,7 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
   };
 
   const submitSuppress = async (candidate: EducationWorkCandidate) => {
+    if (workspaceRef.current !== workspace) return;
     if (!editor || !editorCurrent || editor.candidateId !== candidate.candidateId || !editor.note.trim()) {
       setFeedback({ kind: "error", text: "请填写停止提示的原因。" });
       setRetryReview(null);
@@ -532,47 +651,50 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
 
   const renderEditor = (candidate: EducationWorkCandidate) => {
     if (!editor || !editorCurrent || editor.candidateId !== candidate.candidateId) return null;
-    if (editor.mode === "modify") {
-      return <form className="edupi-today-work__editor" onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void submitModify(candidate); }}>
-        <div className="edupi-today-work__field"><label htmlFor="edupi-today-work-edit-title">标题</label><input id="edupi-today-work-edit-title" value={editor.title} maxLength={240} disabled={busy} onChange={(event) => setEditor({ ...editor, title: event.target.value })} /></div>
+    return <form ref={formRef} className="edupi-today-work__editor" aria-label={editor.mode === "modify" ? "调整工作" : editor.mode === "snooze" ? "安排稍后" : "停止提示"} aria-busy={busy || Boolean(submission)} onKeyDown={editorKeyDown}
+      onSubmit={event => { event.preventDefault(); if (editor.mode === "modify") void submitModify(candidate); else if (editor.mode === "snooze") void submitSnooze(candidate); else void submitSuppress(candidate); }}>
+      {editor.mode === "modify" ? <>
+        <div className="edupi-today-work__field"><label htmlFor="edupi-today-work-edit-title">标题</label><input data-autofocus id="edupi-today-work-edit-title" value={editor.title} maxLength={240} disabled={busy} onChange={(event) => setEditor({ ...editor, title: event.target.value })} /></div>
         <div className="edupi-today-work__field"><label htmlFor="edupi-today-work-edit-summary">说明</label><textarea id="edupi-today-work-edit-summary" value={editor.summary} maxLength={2000} rows={2} disabled={busy} onChange={(event) => setEditor({ ...editor, summary: event.target.value })} /></div>
         <div className="edupi-today-work__field"><label htmlFor="edupi-today-work-edit-due">截止日期</label><input id="edupi-today-work-edit-due" type="date" value={editor.dueAt} disabled={busy} onChange={(event) => setEditor({ ...editor, dueAt: event.target.value })} /></div>
-        <div className="edupi-today-work__editor-actions"><button type="submit" className="is-primary" disabled={busy}>{busy ? "正在调整…" : "保存调整"}</button><button type="button" disabled={busy} onClick={cancelEditor}>取消</button></div>
-      </form>;
-    }
-    if (editor.mode === "snooze") {
-      return <form className="edupi-today-work__editor" onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void submitSnooze(candidate); }}>
-        <div className="edupi-today-work__field"><label htmlFor="edupi-today-work-snooze-until">稍后日期</label><input id="edupi-today-work-snooze-until" type="date" value={editor.snoozeUntil} min={tomorrow()} disabled={busy} onChange={(event) => setEditor({ ...editor, snoozeUntil: event.target.value })} /></div>
-        <div className="edupi-today-work__editor-actions"><button type="submit" className="is-primary" disabled={busy}>{busy ? "正在安排…" : "安排稍后"}</button><button type="button" disabled={busy} onClick={cancelEditor}>取消</button></div>
-      </form>;
-    }
-    return <form className="edupi-today-work__editor" onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void submitSuppress(candidate); }}>
-      <div className="edupi-today-work__field"><label htmlFor="edupi-today-work-suppression-scope">停止范围</label><select id="edupi-today-work-suppression-scope" value={editor.suppressionScope} disabled={busy} onChange={(event) => setEditor({ ...editor, suppressionScope: event.target.value as EditorState["suppressionScope"] })}>{Object.entries(SUPPRESSION_SCOPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+      </> : editor.mode === "snooze" ? <div className="edupi-today-work__field"><label htmlFor="edupi-today-work-snooze-until">稍后日期</label><input data-autofocus id="edupi-today-work-snooze-until" type="date" value={editor.snoozeUntil} min={tomorrow()} disabled={busy} onChange={(event) => setEditor({ ...editor, snoozeUntil: event.target.value })} /></div> : <>
+      <div className="edupi-today-work__field"><label htmlFor="edupi-today-work-suppression-scope">停止范围</label><select data-autofocus id="edupi-today-work-suppression-scope" value={editor.suppressionScope} disabled={busy} onChange={(event) => setEditor({ ...editor, suppressionScope: event.target.value as EditorState["suppressionScope"] })}>{Object.entries(SUPPRESSION_SCOPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
       <div className="edupi-today-work__field"><label htmlFor="edupi-today-work-suppression-note">原因</label><textarea id="edupi-today-work-suppression-note" value={editor.note} maxLength={1000} rows={2} disabled={busy} onChange={(event) => setEditor({ ...editor, note: event.target.value })} /></div>
-      <div className="edupi-today-work__editor-actions"><button type="submit" className="is-danger" disabled={busy}>{busy ? "正在停止…" : "停止提示"}</button><button type="button" disabled={busy} onClick={cancelEditor}>取消</button></div>
+      </>}
+      <div className="edupi-today-work__editor-actions"><button type="button" disabled={busy} onClick={cancelEditor}>取消</button><button type="submit" className={editor.mode === "suppress" ? "is-danger is-primary" : "is-primary"} disabled={busy}>{busy ? "正在提交…" : editor.mode === "modify" ? "保存调整" : editor.mode === "snooze" ? "安排稍后" : "停止提示"}</button></div>
     </form>;
   };
 
   const renderCandidate = (candidate: EducationWorkCandidate, actionable: boolean) => {
     const task = taskById.get(candidate.taskId) || null;
+    const referenceLabels = (ids: string[], kind: "来源" | "依据") => {
+      const labels = ids.map(id => {
+        const sourceTask = data.tasks.find(item => item.id === id);
+        return data.calendar.find(item => item.id === id || sourceTask?.sourceEventId && item.id === sourceTask.sourceEventId)?.name
+          || sourceTask?.sourceEventName || sourceTask?.title || data.teacherMaterials?.find(item => item.material_id === id)?.title
+          || data.continuity.documents.find(item => item.id === id)?.title || null;
+      });
+      const unresolved = labels.filter(label => !label).length;
+      return [...labels.filter((label): label is string => Boolean(label)), ...(unresolved ? [`${unresolved} 项${kind}待核对`] : [])].join("、") || `${kind}待核对`;
+    };
     const isEditing = editorCurrent && editor?.candidateId === candidate.candidateId;
     const decisionRecorded = candidate.status !== "pending_review";
     const changingDecision = changingDecisionId === candidate.candidateId;
     const showActions = actionable && (!decisionRecorded || changingDecision);
     const submittingCandidate = submission?.candidateId === candidate.candidateId;
     return <EduPiUsageArticle target={actionable ? { kind: "work_candidate", targetId: candidate.candidateId, expectedRevision: candidate.revision } : null} action="opportunity_visible" surface="today" className={`edupi-today-work__item is-${candidate.status}`} key={candidate.candidateId}>
-      <header className="edupi-today-work__item-header"><div><span>{candidateMeta(candidate)}</span><h4>{task ? <button type="button" className="edupi-today-work__item-title" disabled={busy} onClick={() => onTaskDetail(task)} aria-label={`打开任务：${candidate.title}`}>{candidate.title}<span aria-hidden="true">›</span></button> : candidate.title}</h4></div><strong className={`edupi-today-work__status is-${candidate.status}`}>{STATUS_LABELS[candidate.status]}</strong></header>
+      <header data-today-work-candidate={candidate.candidateId} className="edupi-today-work__item-header"><div><span title={(candidate.status === "snoozed" ? candidate.snoozeUntil : candidate.dueAt) || undefined}>{candidateMeta(candidate)}</span><h4>{task ? <button type="button" className="edupi-today-work__item-title" disabled={busy} onClick={() => onTaskDetail(task)} aria-label={`打开任务：${candidate.title}`}>{candidate.title}<span aria-hidden="true">›</span></button> : candidate.title}</h4></div><strong className={`edupi-today-work__status is-${candidate.status}`}>{STATUS_LABELS[candidate.status]}</strong></header>
       <p className="edupi-today-work__summary">{candidate.summary}</p>
       <div className="edupi-today-work__reason"><span>原因</span>{workCandidateReasonLabel(candidate.reason)}</div>
-      <details className="edupi-today-work__details"><summary>来源与依据</summary><dl><div><dt>来源</dt><dd>{candidate.sourceIds.join("、")}</dd></div><div><dt>依据</dt><dd>{candidate.evidenceIds.join("、")}</dd></div><div><dt>下一步</dt><dd>{NEXT_CYCLE_LABELS[candidate.nextCycleState] || candidate.nextCycleState}</dd></div><div><dt>候选 ID</dt><dd>{candidate.candidateId}</dd></div></dl></details>
-      {decisionRecorded && !changingDecision ? <div className={`edupi-today-work__decision is-${candidate.status}`} role="status"><span>{STATUS_LABELS[candidate.status]}{candidate.teacherReview.reviewedAt ? ` · ${candidate.teacherReview.reviewedAt}` : ""}</span>{capability.enabled ? <button type="button" disabled={busy} onClick={() => setChangingDecisionId(candidate.candidateId)}>修改决定</button> : null}</div> : null}
-      {showActions && capability.enabled ? <div className="edupi-today-work__actions">
-        <button type="button" className="is-primary" title={ACTION_TITLES.accept} disabled={busy} onClick={() => void review(candidate, "accept")}>{submittingCandidate && submission?.decision === "accept" ? submittingLabel("accept") : "接受"}</button>
-        <button type="button" title={ACTION_TITLES.modify} disabled={busy} onClick={() => isEditing && editor?.mode === "modify" ? cancelEditor() : openEditor(candidate, "modify")}>{isEditing && editor?.mode === "modify" ? "收起调整" : "调整"}</button>
-        <button type="button" title={ACTION_TITLES.hold} disabled={busy} onClick={() => void review(candidate, "hold")}>{submittingCandidate && submission?.decision === "hold" ? submittingLabel("hold") : "暂缓"}</button>
-        <button type="button" title={ACTION_TITLES.snooze} disabled={busy} onClick={() => isEditing && editor?.mode === "snooze" ? cancelEditor() : openEditor(candidate, "snooze")}>稍后</button>
-        <button type="button" title={ACTION_TITLES.suppress} disabled={busy} onClick={() => isEditing && editor?.mode === "suppress" ? cancelEditor() : openEditor(candidate, "suppress")}>停止提示</button>
-        <button type="button" className="is-danger" title={ACTION_TITLES.reject} disabled={busy} onClick={() => void review(candidate, "reject")}>{submittingCandidate && submission?.decision === "reject" ? submittingLabel("reject") : "拒绝"}</button>
+      <details className="edupi-today-work__details"><summary>来源与依据</summary><dl><div><dt>来源</dt><dd>{referenceLabels(candidate.sourceIds, "来源")}</dd></div><div><dt>依据</dt><dd>{referenceLabels(candidate.evidenceIds, "依据")}</dd></div><div><dt>下一步</dt><dd>{NEXT_CYCLE_LABELS[candidate.nextCycleState] || "待核对"}</dd></div></dl></details>
+      {decisionRecorded && !changingDecision ? <div className={`edupi-today-work__decision is-${candidate.status}`} role="status"><span>{STATUS_LABELS[candidate.status]}{candidate.teacherReview.reviewedAt ? <> · <time dateTime={candidate.teacherReview.reviewedAt} title={candidate.teacherReview.reviewedAt}>{readableDate(candidate.teacherReview.reviewedAt)}</time></> : null}</span>{capability.enabled ? <button data-today-work-change type="button" disabled={busy} onClick={() => setChangingDecisionId(candidate.candidateId)}>修改决定</button> : null}</div> : null}
+      {showActions && capability.enabled && !isEditing ? <div className="edupi-today-work__actions">
+        <button data-today-work-action="accept" type="button" className="is-primary" title={ACTION_TITLES.accept} disabled={busy} onClick={() => void review(candidate, "accept")}>{submittingCandidate && submission?.decision === "accept" ? submittingLabel("accept") : "接受"}</button>
+        <button data-today-work-action="modify" type="button" title={ACTION_TITLES.modify} disabled={busy} onClick={() => openEditor(candidate, "modify")}>调整</button>
+        <button data-today-work-action="hold" type="button" title={ACTION_TITLES.hold} disabled={busy} onClick={() => void review(candidate, "hold")}>{submittingCandidate && submission?.decision === "hold" ? submittingLabel("hold") : "暂缓"}</button>
+        <button data-today-work-action="snooze" type="button" title={ACTION_TITLES.snooze} disabled={busy} onClick={() => openEditor(candidate, "snooze")}>稍后</button>
+        <button data-today-work-action="suppress" type="button" title={ACTION_TITLES.suppress} disabled={busy} onClick={() => openEditor(candidate, "suppress")}>停止提示</button>
+        <button data-today-work-action="reject" type="button" className="is-danger" title={ACTION_TITLES.reject} disabled={busy} onClick={() => void review(candidate, "reject")}>{submittingCandidate && submission?.decision === "reject" ? submittingLabel("reject") : "拒绝"}</button>
       </div> : null}
       {isEditing ? renderEditor(candidate) : null}
     </EduPiUsageArticle>;
@@ -582,7 +704,7 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
     const candidates = groups[group];
     if (candidates.length === 0) return null;
     return <section className={`edupi-today-work__group is-${group}`} aria-labelledby={`edupi-today-work-${group}`} key={group}>
-      <header><div><h3 id={`edupi-today-work-${group}`}>{GROUP_LABELS[group]}</h3></div><span>{candidates.length} 项</span></header>
+      <header><div><h3 id={`edupi-today-work-${group}`} tabIndex={-1}>{GROUP_LABELS[group]}</h3></div><span>{candidates.length} 项</span></header>
       <div className="edupi-today-work__items"><EduPiListPreview rows={candidates} renderRow={candidate => renderCandidate(candidate, true)} onShowAll={() => openList(group)} /></div>
     </section>;
   };
@@ -618,7 +740,7 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
   };
   const isCandidateList = listGroup === "now" || listGroup === "later" || listGroup === "done";
   const l4List = L4_GROUP_LABELS.find(group => listGroup === `l4-${group.key}`);
-  if (isCandidateList || listGroup === "history" || listGroup === "active" || l4List) return <section className="edupi-today-work">
+  if (isCandidateList || listGroup === "history" || listGroup === "active" || l4List) return <section ref={rootRef} className="edupi-today-work">
     <header className="edupi-module-heading"><div><button type="button" className="edupi-back-link" onClick={() => onObject ? onObject("today:home") : setLocalList(null)}>← 今天</button><h1>{isCandidateList ? GROUP_LABELS[listGroup] : listGroup === "history" ? "工作历史" : listGroup === "active" ? "正在进行" : l4List?.title}</h1></div></header>
     {feedback ? <p role={feedback.kind === "error" ? "alert" : "status"}>{feedback.text}</p> : null}
     {isCandidateList ? <EduPiPagedRows rows={groups[listGroup]} memoryKey={`today:${listGroup}`} renderRow={candidate => renderCandidate(candidate, true)} />
@@ -626,7 +748,7 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
         : listGroup === "active" ? <EduPiPagedRows rows={activeTasks} memoryKey="today:active" renderRow={renderActiveTask} />
           : l4List ? <EduPiPagedRows rows={l4Summary[l4List.key]} memoryKey={`today:${listGroup}`} renderRow={item => <article key={item.workCaseId}><strong>{item.title}</strong><p>{item.statusLabel}</p></article>} /> : null}
   </section>;
-  return <section className="edupi-today-work" aria-labelledby="edupi-today-work-title" aria-busy={busy}>
+  return <section ref={rootRef} className="edupi-today-work" aria-labelledby="edupi-today-work-title" aria-busy={busy}>
     <header className="edupi-today-work__header"><div><h2 id="edupi-today-work-title">工作判断</h2></div><button type="button" onClick={() => openList("history")}>历史 <span>{history.length + historyTasks.length}</span></button></header>
     {staleHolidayTasks.length > 0 ? <div className="edupi-stale-work-question" role="status"><span>有 {staleHolidayTasks.length} 项旧节日工作还需要吗？</span><div><button type="button" onClick={() => { dismissStaleWork(); openList("history"); }}>查看</button><button type="button" onClick={dismissStaleWork}>先收起</button></div></div> : null}
     {activeTasks.length > 0 ? <div className="edupi-today-flow" aria-label="正在进行的任务"><header><span>正在进行</span><strong>{activeTasks.length} 项</strong></header><div><EduPiListPreview rows={activeTasks} renderRow={renderActiveTask} onShowAll={() => openList("active")} /></div></div> : null}

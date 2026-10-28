@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ConfirmDangerButton } from "./ConfirmDangerButton";
 
 type JevSettingsStatus = {
@@ -13,25 +13,6 @@ type JevSettingsStatus = {
   maxConsecutiveFailures: number;
   keyConfigured: boolean;
   environmentManaged: boolean;
-};
-
-const cardStyle: CSSProperties = {
-  padding: "13px 14px",
-  border: "1px solid var(--border)",
-  borderRadius: 8,
-  background: "var(--bg)",
-};
-
-const inputStyle: CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "7px 9px",
-  border: "1px solid var(--border)",
-  borderRadius: 5,
-  background: "var(--bg-panel)",
-  color: "var(--text)",
-  fontFamily: "var(--font-mono)",
-  fontSize: 12,
 };
 
 function fieldsFromStatus(status: JevSettingsStatus) {
@@ -166,16 +147,11 @@ export function JevSettingsCard() {
     : status.active ? "已配置" : status.keyConfigured ? "已关闭" : "缺少密钥";
 
   return (
-    <form className="native-settings-card" style={cardStyle} onSubmit={(event) => void submit(event)}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ fontSize: 12, fontWeight: 700 }}>快速浏览器决策</div>
-        <span className={status?.active ? "is-ready" : "is-off"} style={{ fontSize: 11 }}>{stateLabel}</span>
-      </div>
-      <div style={{ marginTop: 3, color: "var(--text-muted)", fontSize: 11, lineHeight: 1.5 }}>
-        只用于浏览器下一步判断，不参与对话；受管理浏览器接入后生效。
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12 }}>
+    <form className="jev-settings" onSubmit={(event) => void submit(event)}>
+      <header><h2>JEV</h2><span className={status?.active ? "is-ready" : "is-off"}>{stateLabel}</span></header>
+      <details className="jev-settings__help"><summary>用途</summary><div>只用于浏览器下一步判断，不参与对话；受管理浏览器接入后生效。</div></details>
+      <div className="jev-settings__fields">
+        <label className="jev-settings__toggle">
           <input
             type="checkbox"
             checked={fields.enabled}
@@ -195,7 +171,6 @@ export function JevSettingsCard() {
             spellCheck={false}
             autoComplete="off"
             onChange={(event) => setFields((current) => ({ ...current, endpoint: event.target.value }))}
-            style={inputStyle}
           />
         </label>
         <label className="native-field">
@@ -210,21 +185,21 @@ export function JevSettingsCard() {
             autoComplete="off"
             placeholder={status?.keyConfigured ? "已保存，留空保持不变" : "输入 JEV API Key"}
             onChange={(event) => setApiKey(event.target.value)}
-            style={inputStyle}
           />
         </label>
-        <details>
-          <summary style={{ cursor: "pointer", color: "var(--text-muted)", fontSize: 11 }}>高级</summary>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 9, marginTop: 9 }}>
-            <label className="native-field" style={{ gridColumn: "1 / -1" }}><span className="native-field-label">模型</span><input className="native-input" value={fields.model} disabled={disabled} maxLength={128} autoComplete="off" onChange={(event) => setFields((current) => ({ ...current, model: event.target.value }))} style={inputStyle} /></label>
-            <label className="native-field"><span className="native-field-label">最低置信度</span><input className="native-input" type="number" min="0.01" max="1" step="0.01" value={fields.minConfidence} disabled={disabled} onChange={(event) => setFields((current) => ({ ...current, minConfidence: event.target.value }))} style={inputStyle} /></label>
-            <label className="native-field"><span className="native-field-label">超时 ms</span><input className="native-input" type="number" min="100" max="30000" step="100" value={fields.timeoutMs} disabled={disabled} onChange={(event) => setFields((current) => ({ ...current, timeoutMs: event.target.value }))} style={inputStyle} /></label>
+        <details className="jev-settings__advanced">
+          <summary>高级</summary>
+          <div className="jev-settings__advanced-grid">
+            <label className="native-field"><span className="native-field-label">模型</span><input className="native-input" value={fields.model} disabled={disabled} maxLength={128} autoComplete="off" onChange={(event) => setFields((current) => ({ ...current, model: event.target.value }))} /></label>
+            <label className="native-field"><span className="native-field-label">最低置信度</span><input className="native-input" type="number" min="0.01" max="1" step="0.01" value={fields.minConfidence} disabled={disabled} onChange={(event) => setFields((current) => ({ ...current, minConfidence: event.target.value }))} /></label>
+            <label className="native-field"><span className="native-field-label">超时 ms</span><input className="native-input" type="number" min="100" max="30000" step="100" value={fields.timeoutMs} disabled={disabled} onChange={(event) => setFields((current) => ({ ...current, timeoutMs: event.target.value }))} /></label>
+            <label className="native-field"><span className="native-field-label">连续失败上限</span><input className="native-input" type="number" min="1" max="10" step="1" value={fields.maxConsecutiveFailures} disabled={disabled} onChange={(event) => setFields((current) => ({ ...current, maxConsecutiveFailures: event.target.value }))} /></label>
           </div>
         </details>
         {locked ? <div className="native-inline-alert" role="status">当前由环境变量管理</div> : null}
         {error ? <div className="native-inline-alert is-error" role="alert">{error}</div> : null}
         {message ? <div className="native-inline-alert" role="status">{message}</div> : null}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div className="jev-settings__actions">
           <button className="native-button native-button-primary" type="submit" disabled={disabled}>
             {busy === "save" ? "保存中…" : "保存设置"}
           </button>

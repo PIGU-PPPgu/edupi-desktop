@@ -24,15 +24,15 @@ test("the persistent chat host renders one stable child for every presentation m
   assert.doesNotMatch(appShell, /agentPanel=\{edupiChatWindow\}/);
 });
 
-test("modal focus containment recovers outside and empty focus states", async () => {
+test("shared modal focus guards retain outside and empty focus containment", async () => {
   const panel = await read("./EduPiEducationPanel.tsx");
   const modal = await read("../hooks/useModalDismiss.ts");
   assert.match(panel, /tabIndex=\{-1\}/);
   assert.match(panel, /useModalDismiss<HTMLDivElement>/);
-  assert.match(modal, /const activeInside = active !== null && panel\.contains\(active\)/);
-  assert.match(modal, /if \(!activeInside \|\| active === first\)/);
-  assert.match(modal, /if \(!activeInside \|\| active === last\)/);
-  assert.match(modal, /focusables\.length === 0[\s\S]*event\.preventDefault\(\)/);
+  assert.match(modal, /scopes\.findIndex\(\(scope\) => active !== null && scope\.root\.contains\(active\)\)/);
+  assert.match(modal, /if \(!scope \|\| active === boundary\)/);
+  assert.match(modal, /event\.shiftKey \? scopes\.length - 1 : 0/);
+  assert.match(modal, /scopes\.length === 0[\s\S]*event\.preventDefault\(\)/);
   assert.doesNotMatch(panel, /handleContextModalKeyDown/);
 });
 

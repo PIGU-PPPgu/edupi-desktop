@@ -4,54 +4,41 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("management center is a full admin workspace with persistent navigation", async () => {
-  const [admin, appShell, panel, rail, workspace, materials, css, compatibility] = await Promise.all([
-    read("./EduPiAdminPanel.tsx"),
-    read("./AppShell.tsx"),
-    read("./EduPiEducationPanel.tsx"),
-    read("./EduPiNavigationRail.tsx"),
-    read("./EduPiWorkspaceViews.tsx"),
-    read("./EduPiMaterialsWorkspace.tsx"),
-    read("../app/edupi-admin.css"),
+test("one settings workspace provides grouped navigation and preserves real capability boundaries", async () => {
+  const [admin, appShell, panel, rail, css, navigation, compatibility] = await Promise.all([
+    read("./EduPiAdminPanel.tsx"), read("./AppShell.tsx"), read("./EduPiEducationPanel.tsx"),
+    read("./EduPiNavigationRail.tsx"), read("../app/edupi-admin.css"), read("../lib/edupi-settings-navigation.ts"),
     read("./EduPiCoreCompatibility.tsx"),
   ]);
-
-  for (const endpoint of ["/api/edupi/workspace", "/api/edupi/status", "/api/models"]) assert.match(admin, new RegExp(endpoint.replaceAll("/", "\\/")));
-  assert.doesNotMatch(admin, /\/api\/edupi\/(?:onboarding|education)/);
-  for (const label of ["管理中心", "概览", "自动运行", "工作与资源", "连接", "AI 与模型", "回收站", "系统"]) assert.match(admin, new RegExp(label));
-  for (const label of ["教学能力", "学校平台", "教师与学生", "校历与课表", "上传内容", "任务与产物"]) {
-    assert.doesNotMatch(admin.slice(admin.indexOf("export const ADMIN_SECTIONS"), admin.indexOf("const FALLBACK_CHECKLIST")), new RegExp(`label: "${label}"`));
-  }
-  assert.match(admin, /activeSection === "workspace"/);
-  assert.match(admin, /teachingSkills\.skills\.slice\(0, 20\)/);
-  assert.match(admin, /skill\.lifecycle_state/);
-  assert.match(admin, /skill\.trial_count/);
-  assert.match(admin, /skill\.can_reuse/);
-  assert.match(admin, /tenant\.core_mode/);
-  assert.match(admin, /tenant\.harness_count/);
-  assert.match(admin, /<OpenConnectorConsolePanel onBack=/);
-  assert.match(admin, /activeSection === "openconnector" \? " is-console"/);
+  assert.match(admin, /aria-label="EduPi 设置"/);
+  assert.match(admin, /SETTINGS_GROUPS.map/);
+  assert.match(admin, /aria-label="搜索设置"/);
+  assert.match(admin, /searchSettings\(searchQuery\)/);
+  assert.match(admin, /openSearchResult/);
+  assert.match(admin, /scrollIntoView/);
+  assert.match(admin, /target.focus\(\{ preventScroll: true \}\)/);
+  assert.match(navigation, /label: "自动运行"/);
+  assert.doesNotMatch(navigation, /label: "(?:设置|工作与资源|OpenConnector)"/);
+  assert.match(admin, /section === "settings"\) return "general"/);
+  assert.match(admin, /section === "automation"\) return "readiness"/);
+  assert.match(admin, /section === "openconnector"\) return "connections"/);
+  assert.match(admin, /<OpenConnectorAdminPanel managedConnections=/);
+  assert.match(admin, /onManagedConfigured=\{refresh\}/);
+  assert.doesNotMatch(admin, /连接类别|connectionPane|OpenConnectorConsolePanel/);
   assert.match(admin, /<JevSettingsCard \/>/);
-  for (const label of ["运行中", "待确认", "已完成", "主动运行", "待交付", "教师反馈", "最近自动运行"]) assert.match(admin, new RegExp(label));
-  assert.match(admin, /formatCoreSchedulerStatus/);
-  assert.match(admin, /kernelRunTitle/);
-  assert.match(admin, /kernelRunDetail/);
-  assert.match(admin, /kernelRunAction/);
-  assert.match(admin, /if \(target === "models"\) setActiveSection\("models"\); else leaveAdmin/);
-  assert.doesNotMatch(admin, /formatNextScheduledRun/);
-  assert.match(admin, /ADMIN_SECTIONS/);
-  assert.match(admin, /has-desktop-drag-region/);
-  assert.match(admin, /edupi-window-drag-region/);
-  assert.match(admin, /startWindowDragging/);
-  assert.match(admin, /EduPiConnectorSetup/);
-  assert.match(admin, /setSelectedConnector/);
-  assert.match(admin, /initialSection\?: AdminSectionId/);
-  assert.match(admin, /useState<AdminSectionId>\(\(\) => visibleSection\(initialSection\)\)/);
-  assert.match(admin, /setActiveSection\(visibleSection\(initialSection\)\)/);
-  assert.match(admin, /useState\(false\);[\s\S]+?activeSection === "models"[\s\S]+?setModelsMounted\(true\)/);
-  assert.match(admin, /hidden=\{activeSection !== "models"\}/);
-  assert.match(admin, /workspaceRef\.current\?\.scrollTo\(\{ top: 0 \}\)/);
-  assert.match(admin, /modelSettingsDirty && !window\.confirm/);
+  assert.match(admin, /data-setting-id="browser-decision"/);
+  assert.match(admin, /settingsPanel\(settingsPage\)/);
+  assert.match(admin, /hidden=\{!isPreferenceSection\(activeSection\)\}/);
+  assert.match(admin, /modelsMounted/);
+  assert.match(admin, /connectionsMounted/);
+  assert.match(admin, /modelSettingsDirty && !window.confirm/);
+  assert.match(admin, /if \(settingsBusy\) return/);
+  for (const endpoint of ["/api/edupi/workspace", "/api/edupi/status", "/api/models"]) assert.ok(admin.includes(endpoint));
+  for (const operation of ["reconnectEduPiCore", "repairEduPiCore", "readEducationEntityDeletions", "restoreEducationEntity", "kernelRunTitle", "kernelRunDetail", "kernelRunAction", "formatCoreSchedulerStatus"]) assert.ok(admin.includes(operation));
+  assert.match(admin, /window.dispatchEvent\(new Event\("edupi-education-refresh"\)\)/);
+  assert.match(admin, /<summary>技术信息<\/summary>/);
+  assert.match(admin, /<summary>教育数据<\/summary>/);
+  for (const field of ["skill.lifecycle_state", "skill.trial_count", "skill.can_reuse", "tenant.core_mode", "tenant.harness_count"]) assert.ok(admin.includes(field));
   assert.match(admin, /coreConnected && projectionConnected/);
   assert.match(admin, /systemStatusLabel/);
   assert.match(admin, /EduPiCoreCompatibility/);
@@ -64,9 +51,9 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.match(admin, /APP_VERSION_DISPLAY/);
   assert.match(admin, /当前运行版本/);
   assert.match(admin, /网页版本/);
+  assert.match(admin, /nativeIdentity\.host\.appVersion/);
+  assert.match(admin, /void nativeIdentity\.refresh\(\)/);
   assert.match(admin, />刷新状态<\/button>/);
-  assert.match(admin, /reconnectEduPiCore/);
-  assert.match(admin, /repairEduPiCore/);
   assert.match(admin, /runtime_root_invalid/);
   assert.match(admin, /runtime_state_invalid/);
   assert.match(admin, /runtime_writer_unavailable/);
@@ -74,70 +61,20 @@ test("management center is a full admin workspace with persistent navigation", a
   assert.match(admin, /onClick=\{coreConnected \? refresh : \(\) => void reconnectCore\(\)\}/);
   assert.match(admin, /coreConnected \? "已连接" : "重新连接"/);
   assert.match(admin, /aria-current=\{activeSection === section\.id \? "page" : undefined\}/);
-  assert.match(admin, /modelsPanel/);
+  assert.match(admin, /has-desktop-drag-region/);
+  assert.match(admin, /startWindowDragging/);
   assert.doesNotMatch(admin, /role="dialog"|aria-modal="true"/);
-  assert.doesNotMatch(admin, /edupi-admin-grid/);
-  assert.doesNotMatch(admin, /onOpenModels/);
-  assert.match(admin, /onNavigate\("students"\)/);
-  assert.match(admin, /onAskStudentUpdate/);
-  assert.match(admin, /onNavigate\("calendar"\)/);
-  assert.match(admin, /onNavigate\("materials"\)/);
-  assert.match(admin, /onNavigate\("workspace"\)/);
-  assert.match(admin, /<EduPiDeletedEntities/);
-  assert.match(admin, /readEducationEntityDeletions/);
-  assert.match(admin, /restoreEducationEntity/);
-  assert.match(admin, /window\.dispatchEvent\(new Event\("edupi-education-refresh"\)\)/);
-  assert.doesNotMatch(panel, /<EduPiDeletedEntities/);
-  assert.equal((admin.match(/<p(?:\s|>)/g) || []).length, 0);
-  assert.match(admin, /FALLBACK_CHECKLIST/);
-  assert.match(admin, /数据读取失败/);
-  assert.match(admin, /模型数据不可用/);
-  assert.match(admin, /默认模型待配置/);
-  assert.doesNotMatch(admin, /education\?\.[a-zA-Z]+\.length \|\| 0/);
-  assert.doesNotMatch(admin, /snapshot\.models\?\.modelList\?\.length \|\| 0/);
-  assert.doesNotMatch(admin, /配置模块即将接入/);
-  assert.match(admin, /connectorSetupIds = new Set<string>\(CONNECTOR_SETUP_IDS\)/);
-  assert.match(admin, /connectorSetupIds\.has\(id\)/);
-  assert.match(admin, /status === "configured"\) return "已配置"/);
-
-  assert.match(rail, /APP_VERSION_DISPLAY/);
-  assert.match(rail, /当前版本 v/);
-  assert.match(rail, /手机控制/);
-  assert.match(rail, /PhoneControlIcon/);
-  assert.match(rail, /onOpenPhoneControl/);
   assert.match(rail, /aria-label="设置"/);
-  assert.match(rail, /onOpenSettings/);
-  assert.match(panel, /onOpenAdmin/);
-  assert.match(panel, /onOpenPhoneControl/);
-  assert.match(panel, /打开管理中心/);
-  assert.match(panel, /<EduPiNavigationRail[\s\S]+?onOpenAdmin=\{onOpenAdmin\}/);
-  assert.match(panel, /<EduPiNavigationRail[\s\S]+?onOpenPhoneControl=\{onOpenPhoneControl\}/);
-  assert.match(panel, /<EduPiNavigationRail[\s\S]+?onOpenSettings=\{onOpenSettings\}/);
-  assert.match(appShell, /openEduPiAdmin/);
-  assert.match(appShell, /openPhoneControl/);
-  assert.match(appShell, /onOpenPhoneControl=\{openPhoneControl\}/);
-  assert.match(appShell, /onOpenAdmin=\{\(\) => openEduPiAdmin\(\)\}/);
-  assert.match(appShell, /onOpenSettings=\{\(\) => setAppSettingsOpen\(true\)\}/);
-  assert.match(appShell, /edupiAdminOpen && <EduPiAdminPanel/);
-  assert.match(appShell, /modelsPanel=\{<ModelsConfig[\s\S]+?embedded[\s\S]+?onDirtyChange=\{setAdminModelsDirty\}[\s\S]+?onSaved=/);
+  assert.doesNotMatch(rail, /管理中心/);
+  assert.match(panel, /打开设置/);
+  assert.match(appShell, /settingsPanel=\{\(page\) => <AppSettings embedded page=\{page\}/);
+  assert.match(appShell, /modelsPanel=\{\(cwd\) => <ModelsConfig\s+embedded\s+cwd=\{cwd\}/);
+  assert.match(admin, /modelsPanel\(education\?\.workspace\)/);
+  assert.match(appShell, /<UpdateReminder onOpenSettings=\{\(\) => openEduPiAdmin\("about"\)\}/);
+  assert.match(appShell, /setEduPiAdminSection\("devices"\)/);
   assert.match(appShell, /inert=\{edupiAdminOpen \? true : undefined\}/);
-  assert.match(appShell, /aria-hidden=\{edupiAdminOpen \? true : undefined\}/);
-  assert.match(appShell, /onAskStudentUpdate=\{askEduPiToUpdateStudents\}/);
-  assert.match(appShell, /onOpenSettings=\{\(\) => \{ setEduPiAdminOpen\(false\); setAppSettingsOpen\(true\); \}\}/);
-  assert.match(admin, /<strong>应用更新<\/strong><small>检查、下载并安装新版本<\/small><\/span><em>检查更新<\/em>/);
-  assert.ok(admin.indexOf('className="edupi-admin-list"', admin.indexOf('activeSection === "system"')) < admin.indexOf("<EduPiCoreCompatibility", admin.indexOf('activeSection === "system"')));
-  assert.match(appShell, /params\.set\("view", view\)/);
-  assert.doesNotMatch(workspace, /edupi-dashboard-readiness/);
-  assert.match(workspace, /onOpenAdmin/);
-  assert.match(workspace, /onRemoveStagedMaterial/);
-  assert.match(materials, />移除</);
-  assert.match(css, /\.edupi-admin-sidebar/);
-  assert.match(css, /\.edupi-admin-workspace/);
-  assert.match(css, /\.edupi-admin-section/);
-  assert.doesNotMatch(css, /\.edupi-admin-grid/);
-  assert.match(css, /\.edupi-admin-readiness/);
-  assert.match(css, /\.edupi-core-compatibility/);
-  assert.match(compatibility, /COMMAND_LABELS/);
+  assert.match(css, /edupi-settings-search-results/);
+  assert.match(css, /edupi-settings-nav-group/);
 });
 
 test("management center preserves typed boundaries for unsupported destructive operations", async () => {

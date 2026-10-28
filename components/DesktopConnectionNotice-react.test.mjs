@@ -60,6 +60,9 @@ async function fixture(t, { fullShell = false, enabled = true, desktop = true, i
     "./desktop": { WindowControls: Empty, useDesktopChrome: () => ({ isMacOS: false, dragRegionProps: {} }) },
     "./EduPiForeground": { EduPiForegroundProvider: ({ children }) => children },
     "./UpdateReminder": { UpdateReminder: ({ onOpenSettings }) => React.createElement("button", { onClick: onOpenSettings }, "Open settings") },
+    // The settings shell now hosts preference pages through this slot. The
+    // actual AppSettings component still owns the diagnostic action below.
+    "./EduPiAdminPanel": { EduPiAdminPanel: ({ settingsPanel }) => settingsPanel("about") },
     ...pure,
   };
   function load(name) {

@@ -80,41 +80,47 @@ test("reduced-motion chevrons override the existing important global duration pr
   assert.ok(postcss.list.comma(globalDurations[0].parent.selector).includes("*"), "the native duration also reaches the custom span icons");
 
   const overrides = [];
-  stylesheet.walkDecls(declaration => { if (declaration.important) overrides.push(declaration); });
+  stylesheet.walkDecls(declaration => { if (declaration.important && declaration.prop === "transition-duration") overrides.push(declaration); });
   assert.equal(overrides.length, 1, "only the chevron duration needs an important override");
   const override = overrides[0];
   assert.equal(override.prop, "transition-duration");
   assert.equal(override.value, "0s");
   assert.equal(override.parent.parent.params, "(prefers-reduced-motion: reduce)");
   for (const selector of postcss.list.comma(override.parent.selector)) {
-    const customIcon = selector === ":root body button > .edupi-disclosure-icon:not(:where(.markdown-body *))";
+    const customIcon = selector === ":root body .disclosure-chevron";
     assert.ok(selector.startsWith(":root body ") && (selector.endsWith("::before") || customIcon), "a specific icon selector outranks the universal rule");
     assert.ok(selector.includes(`details > summary${exclusions}`) || selector.includes(".session-time-group__header[aria-expanded]") || customIcon, "the override only reaches shared chevrons");
   }
 });
 
-test("all six custom chevrons share the native mask and keep their existing button state", () => {
+test("all six custom disclosures keep one shared chevron and their existing button state", () => {
   const sharedMaskRule = stylesheet.nodes.find(node => node.type === "rule" && node.nodes.some(declaration => declaration.prop === "mask"));
   assert.ok(sharedMaskRule.selector.includes("summary"));
-  assert.ok(sharedMaskRule.selector.includes(".edupi-disclosure-icon"));
+  const chevron = readFileSync(new URL("../components/DisclosureChevron.tsx", import.meta.url), "utf8");
+  assert.match(chevron, /className="disclosure-chevron"/);
+  assert.match(chevron, /strokeWidth="1.5"/);
+  assert.match(chevron, /aria-hidden="true"/);
+  const svgRule = stylesheet.nodes.find(node => node.type === "rule" && node.selector === ".disclosure-chevron");
+  assert.equal(svgRule.nodes.find(declaration => declaration.prop === "width")?.value, "12px");
+  assert.equal(svgRule.nodes.find(declaration => declaration.prop === "height")?.value, "12px");
   assert.equal(sharedMaskRule.nodes.find(declaration => declaration.prop === "width")?.value, "12px");
   assert.equal(sharedMaskRule.nodes.find(declaration => declaration.prop === "height")?.value, "12px");
   assert.equal(sharedMaskRule.nodes.find(declaration => declaration.prop === "transition")?.value, "transform 140ms ease");
 
-  const cases = [["ChatWindow.tsx", "ProcessDetailsGroup", "first"], ["MessageView.tsx", "UserMessageView", "last"], ["MessageView.tsx", "CollapsibleUserText", "first"], ["MessageView.tsx", "ToolCallBlock", "last"], ["MessageView.tsx", "ThinkingBlock", "first"], ["SkillsConfig.tsx", "SkillsConfig", "first"]];
+  const cases = [["ChatWindow.tsx", "ProcessDetailsGroup", "last"], ["MessageView.tsx", "UserMessageView", "last"], ["MessageView.tsx", "CollapsibleUserText", "last"], ["MessageView.tsx", "ToolCallBlock", "last"], ["MessageView.tsx", "ThinkingBlock", "last"], ["SkillsConfig.tsx", "SkillsConfig", "last"]];
   for (const [file, name, position] of cases) {
     const source = ts.createSourceFile(file, readFileSync(new URL(`../components/${file}`, import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     const component = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
     assert.ok(component, name);
     const icons = [];
     const visit = node => {
-      if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(source) === "span" && node.attributes.properties.some(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(source) === "className" && attribute.initializer?.getText(source) === '"edupi-disclosure-icon"')) icons.push(node);
+      if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(source) === "DisclosureChevron") icons.push(node);
       ts.forEachChild(node, visit);
     };
     visit(component);
     assert.equal(icons.length, 1, `${name} has one shared decorative icon`);
     const icon = icons[0];
-    assert.ok(icon.attributes.properties.some(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(source) === "aria-hidden" && attribute.initializer?.getText(source) === '"true"'));
+    assert.equal(icon.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(source) === "open")?.initializer?.getText(source), name === "SkillsConfig" ? "{dormantOpen}" : "{expanded}");
     const button = icon.parent;
     assert.ok(ts.isJsxElement(button) && button.openingElement.tagName.getText(source) === "button");
     const attributes = button.openingElement.attributes.properties.filter(ts.isJsxAttribute);
@@ -123,7 +129,7 @@ test("all six custom chevrons share the native mask and keep their existing butt
     if (name === "SkillsConfig") assert.equal(attributes.find(attribute => attribute.name.getText(source) === "type")?.initializer?.getText(source), '"button"');
     const children = button.children.filter(child => !ts.isJsxText(child) || child.text.trim());
     assert.equal(position === "first" ? children[0] : children.at(-1), icon, `${name} keeps its icon placement`);
-    assert.ok(!button.getText(source).includes("<svg"), `${name} has no second chevron`);
+    assert.ok(!button.getText(source).includes("<svg") && !button.getText(source).includes("edupi-disclosure-icon"), `${name} has no second chevron`);
   }
 });
 
@@ -154,7 +160,7 @@ test("the real thinking disclosure reads deferred content only when opened and r
   assert.ok(trigger());
   assert.equal(trigger().props["aria-expanded"], false);
   assert.equal(urls.length, 0);
-  assert.equal(trigger().findByProps({ className: "edupi-disclosure-icon" }).props["aria-hidden"], "true");
+  assert.equal(trigger().findByProps({ className: "disclosure-chevron" }).props["aria-hidden"], "true");
   await click();
   assert.equal(trigger().props["aria-expanded"], true);
   assert.deepEqual(urls, ["/api/sessions/synthetic-disclosure-session/entries/synthetic-disclosure-entry/thinking?blockIndex=0"]);

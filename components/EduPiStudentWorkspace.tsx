@@ -10,6 +10,7 @@ import { isUserFacingMemory, taskDisplayTitle, taskKey, taskStatusLabel } from "
 import { EduPiRosterPreview, type RosterPreview } from "./EduPiRosterPreview";
 import { EduPiStudentEvents } from "./EduPiStudentEvents";
 import { EduPiStudentFacts } from "./EduPiStudentFacts";
+import { DisclosureChevron } from "./DisclosureChevron";
 import { EduPiFamilyRecords } from "./EduPiFamilyRecords";
 import { EduPiStudentMemoryActions } from "./EduPiStudentMemoryActions";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
@@ -156,6 +157,11 @@ function StudentProfileHistory({
 
 export function EduPiStudentWorkspace({ mode, data, context, query, selectedStudentId, onStudent, onEducation, onTask, onStartAgent, onDeleteEntity }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const profileInputRef = useRef<HTMLInputElement>(null);
+  const profileFormRef = useRef<HTMLFormElement>(null);
+  const profileScrollRef = useRef<HTMLDivElement>(null);
+  const profileTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const profileFocusRef = useRef<{ studentKey: string; target: "editor" | "trigger"; from: Element | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [editor, setEditor] = useState<StudentProfileEditor | null>(null);
@@ -168,6 +174,7 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   const [profileHistoryError, setProfileHistoryError] = useState<string | null>(null);
   const [restoringProfile, setRestoringProfile] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState("");
+  const alignedStudentIdRef = useRef<string | null>(null);
   const filterKey = JSON.stringify([classFilter, query]);
   const [pagination, setPagination] = useState({ filterKey, page: 0 });
   if (pagination.filterKey !== filterKey) setPagination({ filterKey, page: 0 });
@@ -192,6 +199,19 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   const memories = selectedName ? data.continuity.memories.filter((memory) => memory.state === "active" && isUserFacingMemory(memory) && (memory.student === selectedStudentId || uniqueSelectedName && (memory.student === selectedName || memory.content.includes(selectedName)))) : [];
   const currentSemesterRange = studentSemesterRange(data.calendar);
   const studentDrawerRef = useModalDismiss<HTMLElement>(() => { setEditor(null); onStudent(null); }, Boolean(selected));
+  const editingStudentKey = editor?.studentKey ?? null;
+
+  useEffect(() => {
+    const request = profileFocusRef.current;
+    profileFocusRef.current = null;
+    if (!request || request.studentKey !== selectedStudentId) return;
+    if (request.target === "editor" ? editingStudentKey !== selectedStudentId : editingStudentKey !== null) return;
+    if (document.activeElement !== request.from && document.activeElement !== document.body) return;
+    const target = request.target === "editor" ? profileInputRef.current : profileTriggerRef.current;
+    if (!target?.isConnected) return;
+    if (request.target === "editor" && profileScrollRef.current) profileScrollRef.current.scrollTop = 0;
+    target.focus({ preventScroll: true });
+  }, [editingStudentKey, selectedStudentId]);
 
   const fetchProfileHistory = useCallback(async (signal?: AbortSignal): Promise<StudentProfileVersionHistory> => {
     if (!selectedName || !selectedStudentId) throw new Error("学生身份无效");
@@ -202,13 +222,15 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   }, [selectedName, selectedStudentId]);
 
   useEffect(() => {
-    if (!selected || !selectedStudentId) return;
+    if (!selectedStudentId) { alignedStudentIdRef.current = null; return; }
+    if (!selected || alignedStudentIdRef.current === selectedStudentId) return;
     const selectedClass = String(selected.class_name || "");
     if (classFilter && classFilter !== selectedClass) {
       setClassFilter("");
       return;
     }
     const selectedIndex = directory.filtered.findIndex(({ student, key }) => key === selectedStudentId || student === selected);
+    alignedStudentIdRef.current = selectedStudentId;
     if (selectedIndex < 0) return;
     const selectedPage = Math.floor(selectedIndex / 24);
     setPagination((current) => current.filterKey === filterKey && current.page === selectedPage ? current : { filterKey, page: selectedPage });
@@ -271,6 +293,13 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
     } catch (error) { setMessage({ tone: "error", text: error instanceof Error ? error.message : "导入失败，请重试。" }); }
     finally { setBusy(false); }
   };
+  const closeEditor = () => {
+    const active = document.activeElement;
+    profileFocusRef.current = editor && (profileFormRef.current?.contains(active) || active === document.body)
+      ? { studentKey: editor.studentKey, target: "trigger", from: active }
+      : null;
+    setEditor(null);
+  };
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedName || !editor || editor.studentKey !== selectedStudentId || busy) return;
@@ -280,14 +309,21 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
       const result = await response.json() as { error?: string; data?: EducationContract };
       if (!response.ok || !result.data) throw new Error(result.error || "学生档案修改失败。");
       onEducation(result.data);
-      setEditor(null);
+      closeEditor();
       setMessage({ tone: "success", text: "学生档案已更新" });
     }
     catch (error) { setMessage({ tone: "error", text: error instanceof Error ? error.message : "学生档案修改失败。" }); }
     finally { setBusy(false); }
   };
-  const openEditor = () => {
+  const openEditor = (event: { currentTarget: HTMLButtonElement }) => {
     if (!selectedName || !selectedUpdatedAt || !selectedStudentId) return;
+    profileTriggerRef.current = event.currentTarget;
+    if (editingStudentKey === selectedStudentId) {
+      if (profileScrollRef.current) profileScrollRef.current.scrollTop = 0;
+      profileInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    profileFocusRef.current = { studentKey: selectedStudentId, target: "editor", from: document.activeElement };
     setMessage(null);
     setEditor({ studentKey: selectedStudentId, className:String(selected?.class_name || ""), traits: traits.join("\n"), parentNotes: parentNotes.join("\n"), expectedUpdatedAt: selectedUpdatedAt, expectedRevision: selectedProfileRevision });
   };
@@ -350,21 +386,39 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   };
 
   return <main className={`edupi-module-workspace edupi-class-workspace${selected ? " has-student-drawer" : ""}`}>
-    <header className="edupi-module-heading edupi-student-heading"><h1>{mode === "homeroom" ? "班级" : "学生档案"}</h1><div className="edupi-student-heading__actions"><button type="button" onClick={() => inputRef.current?.click()} disabled={busy}>{busy ? "导入中…" : "导入名单"}</button><button type="button" onClick={exportCurrent} disabled={data.students.length === 0}>导出档案</button><button type="button" onClick={exportTimeline} disabled={!selected || trajectory.length === 0}>导出成长记录</button></div><input ref={inputRef} type="file" accept=".csv,.tsv,.xlsx,.xls,.xlsm,.xlsb,text/csv,text/tab-separated-values,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={importFile} /></header>
+    <header className="edupi-module-heading edupi-student-heading"><h1>{mode === "homeroom" ? "班级" : "学生档案"}</h1><div className="edupi-student-heading__actions"><button type="button" className="is-primary" onClick={() => inputRef.current?.click()} disabled={busy}>{busy ? "导入中…" : "导入名单"}</button><button type="button" onClick={exportCurrent} disabled={data.students.length === 0}>{selected ? "导出当前档案" : "导出全部档案"}</button><button type="button" onClick={exportTimeline} disabled={!selected || trajectory.length === 0}>导出成长记录</button></div><input ref={inputRef} type="file" accept=".csv,.tsv,.xlsx,.xls,.xlsm,.xlsb,text/csv,text/tab-separated-values,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={importFile} /></header>
     {message ? <p className={`edupi-student-message is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p> : null}
-    {classNames.length > 0 ? <label>班级 <select value={classFilter} onChange={event => setClassFilter(event.target.value)}><option value="">全部班级</option>{classNames.map(name => <option key={name} value={name}>{name}</option>)}</select></label> : null}
+    {classNames.length > 0 ? <label className="edupi-student-class-filter">班级 <select value={classFilter} onChange={event => setClassFilter(event.target.value)}><option value="">全部班级</option>{classNames.map(name => <option key={name} value={name}>{name}</option>)}</select></label> : null}
     {lastError ? <details className="edupi-student-message is-error"><summary>最近一次操作失败</summary><p>{lastError}</p><button type="button" onClick={() => setLastError(null)}>清除</button></details> : null}
     {preview ? <EduPiRosterPreview key={preview.sourceName} preview={preview} busy={busy} onCancel={() => setPreview(null)} onImport={(csv) => void confirmImport(csv)} /> : null}
-    <div className="edupi-student-events-toggle"><button type="button" aria-expanded={showRecords} onClick={()=>setShowRecords(value=>!value)}>{showRecords?"收起学生记录":"学习与互动记录"}</button>{selectedName?<span>当前：{selectedName}</span>:null}</div>
+    {!selectedName ? <div className="edupi-student-events-toggle"><button type="button" className="disclosure-trigger is-inline" aria-expanded={showRecords} onClick={()=>setShowRecords(value=>!value)}><span>{showRecords?"收起学生记录":"学习与互动记录"}</span><DisclosureChevron open={showRecords} /></button></div> : null}
     {showRecords&&!selectedName?<EduPiStudentEvents key="all" student={null} semesterRange={currentSemesterRange} onAgent={onStartAgent}/>:null}
-    <section className="edupi-student-directory" aria-label="学生名单"><header><h2>学生</h2>{students.length > 0 ? <span>{students.length} 名学生</span> : null}</header><div>{directory.rows.map(({ student, key }, index) => { const name = studentRecordName(student); const problemCount = records(student.error_patterns).filter((item) => item.status !== "resolved").length; return <button type="button" key={key} className={key === selectedStudentId ? "is-selected" : ""} onClick={() => { setEditor(null); onStudent(student); }}><span className={`is-tint-${index % 4}`}>{name.slice(0, 1)}</span><strong>{name}</strong>{student.class_name ? <small>{String(student.class_name)}</small> : null}{problemCount > 0 ? <small>{problemCount} 条学习问题</small> : null}</button>; })}</div>{students.length === 0 ? <button type="button" className="edupi-student-directory__empty" onClick={() => inputRef.current?.click()}>导入学生名单</button> : null}</section>
+    <section className="edupi-student-directory edupi-student-directory--list" aria-label="学生名单">
+      <header><h2>学生</h2>{students.length > 0 ? <span>{students.length} 名学生</span> : null}</header>
+      {students.length > 0 ? <>
+        <div className="edupi-student-directory__columns" aria-hidden="true"><span>姓名</span><span>班级</span><span>档案记录</span></div>
+        <ul className="edupi-student-directory__rows">{directory.rows.map(({ student, key }) => {
+          const name = studentRecordName(student);
+          const className = typeof student.class_name === "string" ? student.class_name : "";
+          const studentTraits = Array.isArray(student.traits) ? student.traits.filter((trait): trait is string => typeof trait === "string").join("、") : "";
+          const problemCount = records(student.error_patterns).filter((item) => item.status !== "resolved").length;
+          const growthCount = records(student.trajectory).length;
+          const recordLabel = [growthCount > 0 ? `${growthCount} 条成长记录` : "", problemCount > 0 ? `${problemCount} 条学习问题` : ""].filter(Boolean).join(" · ");
+          return <li key={key}><button type="button" className={`edupi-student-directory__row${key === selectedStudentId ? " is-selected" : ""}`} aria-label={[name, className, recordLabel].filter(Boolean).join("，")} aria-pressed={key === selectedStudentId} onClick={() => { setEditor(null); onStudent(student); }}>
+            <span className="edupi-student-directory__identity"><span className="edupi-student-directory__avatar" aria-hidden="true">{name.slice(0, 1)}</span><span><strong>{name}</strong>{className ? <small className="edupi-student-directory__mobile-class">{className}</small> : null}{studentTraits ? <small title={studentTraits}>{studentTraits}</small> : null}</span></span>
+            <span className="edupi-student-directory__class">{className || "—"}</span>
+            <span className="edupi-student-directory__records">{recordLabel || "—"}</span>
+          </button></li>;
+        })}</ul>
+      </> : query || classFilter ? <p className="edupi-student-directory__no-results">未找到匹配学生</p> : <button type="button" className="edupi-student-directory__empty" onClick={() => inputRef.current?.click()}>导入学生名单</button>}
+    </section>
     {directory.pages > 1 ? <EduPiPagination label="学生分页" page={directory.page} pages={directory.pages} previousDisabled={directory.page === 0} nextDisabled={directory.page === directory.pages - 1} onPrevious={() => setPagination({ filterKey, page: directory.page - 1 })} onNext={() => setPagination({ filterKey, page: directory.page + 1 })}/> : null}
     {selected && selectedName ? <aside ref={studentDrawerRef} role="dialog" aria-modal="true" className="edupi-student-drawer" aria-label={`${selectedName}学生档案`}>
-      <header><div><h2>{selectedName}</h2>{[selected.class_name, ...traits].filter(Boolean).length ? <p>{[selected.class_name, ...traits].filter(Boolean).join(" · ")}</p> : null}</div><div className="edupi-student-drawer__actions"><EduPiIconButton type="button" icon="edit" label="手动修改" onClick={openEditor} disabled={!selectedUpdatedAt || busy}/><EduPiIconButton type="button" icon="agent" label="AI 协作" onClick={openStudentAgent}/>{data.capabilities.entityDelete.enabled && data.capabilities.entityDelete.targetKinds.includes("student") ? <EduPiIconButton type="button" icon="delete" label={busy ? "正在删除学生档案" : "删除学生档案"} className="is-delete" busy={busy} disabled={busy} onClick={() => void deleteStudent()}/> : null}<EduPiIconButton type="button" icon="close" label="关闭学生档案" onClick={() => { setEditor(null); onStudent(null); }} data-autofocus/></div></header>
-      <div className="edupi-student-drawer__scroll">
+      <header><div><h2>{selectedName}</h2>{[selected.class_name, ...traits].filter(Boolean).length ? <p>{[selected.class_name, ...traits].filter(Boolean).join(" · ")}</p> : null}</div><div className="edupi-student-drawer__actions"><EduPiIconButton type="button" icon="edit" label="手动修改" onClick={openEditor} disabled={!selectedUpdatedAt || busy} aria-expanded={editingStudentKey === selectedStudentId} aria-controls={editingStudentKey === selectedStudentId ? "edupi-student-profile-editor" : undefined}/><EduPiIconButton type="button" icon="agent" label="AI 协作" onClick={openStudentAgent}/>{data.capabilities.entityDelete.enabled && data.capabilities.entityDelete.targetKinds.includes("student") ? <EduPiIconButton type="button" icon="delete" label={busy ? "正在删除学生档案" : "删除学生档案"} className="is-delete" busy={busy} disabled={busy} onClick={() => void deleteStudent()}/> : null}<EduPiIconButton type="button" icon="close" label="关闭学生档案" onClick={() => { setEditor(null); onStudent(null); }} data-autofocus/></div></header>
+      <div ref={profileScrollRef} className="edupi-student-drawer__scroll">
+        {editor?.studentKey === selectedStudentId ? <form ref={profileFormRef} id="edupi-student-profile-editor" className="edupi-student-profile-editor" onSubmit={saveProfile}><header><h3>修改档案</h3><button type="button" onClick={closeEditor} disabled={busy}>取消</button></header><label><span>班级</span><input ref={profileInputRef} value={editor.className} maxLength={120} onChange={event => setEditor({...editor,className:event.target.value})} /></label><label><span>学生特征</span><textarea value={editor.traits} maxLength={12000} rows={4} placeholder="每行一个特征" onChange={(event) => setEditor({ ...editor, traits: event.target.value })} /></label><label><span>家校备注</span><textarea value={editor.parentNotes} maxLength={12000} rows={5} placeholder="每行一条备注" onChange={(event) => setEditor({ ...editor,parentNotes:event.target.value })} /></label><button type="submit" disabled={busy}>{busy ? "保存中…" : "保存修改"}</button></form> : null}
         <EduPiStudentEvents key={selectedStudentId} student={selectedName} studentId={typeof selected.student_id === "string" ? selected.student_id : undefined} studentClass={String(selected.class_name || "")} semesterRange={currentSemesterRange} onAgent={onStartAgent} familyRecords={typeof selected.student_id === "string" ? <EduPiFamilyRecords key={selected.student_id} studentId={selected.student_id} studentName={selectedName || "学生"} reviewer={context?.name || "teacher"} onEducation={onEducation} /> : undefined} />
         {typeof selected.student_id === "string" ? <EduPiStudentFacts factSpine={data.factSpine} studentId={selected.student_id} reviewer={context?.name || "teacher"} onEducation={onEducation} /> : null}
-        {editor?.studentKey === selectedStudentId ? <form className="edupi-student-profile-editor" onSubmit={saveProfile}><header><h3>修改档案</h3><button type="button" onClick={() => setEditor(null)} disabled={busy}>取消</button></header><label><span>班级</span><input value={editor.className} maxLength={120} onChange={event => setEditor({...editor,className:event.target.value})} /></label><label><span>学生特征</span><textarea value={editor.traits} maxLength={12000} rows={4} placeholder="每行一个特征" onChange={(event) => setEditor({ ...editor, traits: event.target.value })} /></label><label><span>家校备注</span><textarea value={editor.parentNotes} maxLength={12000} rows={5} placeholder="每行一条备注" onChange={(event) => setEditor({ ...editor,parentNotes:event.target.value })} /></label><button type="submit" disabled={busy}>{busy ? "保存中…" : "保存修改"}</button></form> : null}
         <StudentProfileHistory open={profileHistoryOpen} count={selectedProfileHistoryCount} history={visibleProfileHistory} loading={profileHistoryLoading} error={profileHistoryError} current={selectedProfileValues} busy={busy} restoring={restoringProfile} onToggle={setProfileHistoryOpen} onRestore={(version, side) => void restoreProfile(version, side)} />
         <details open><summary>学习问题{patterns.length > 0 ? <span>{patterns.length}</span> : null}</summary><div>{patterns.map((item, index) => <p key={index}><strong>{String(item.description || "学习问题")}</strong><span>{item.status === "resolved" ? "已解决" : "观察中"}{item.last_seen ? ` · ${shortDate(item.last_seen)}` : ""}</span></p>)}{patterns.length === 0 ? <em>暂无学习问题记录</em> : null}</div></details>
         <details><summary>成长记录{trajectory.length > 0 ? <span>{trajectory.length}</span> : null}</summary><div>{trajectory.slice().reverse().map((item, index) => <p key={index}><strong>{String(item.event || "成长记录")}</strong><span>{shortDate(item.date)}{item.note || item.description ? ` · ${String(item.note || item.description)}` : ""}</span></p>)}{trajectory.length === 0 ? <em>暂无成长记录</em> : null}</div></details>

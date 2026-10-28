@@ -127,7 +127,7 @@ test("growth and materials use explicit databases and right-side material detail
   assert.doesNotMatch(materials, /<h1>材料<\/h1>/);
 });
 
-test("review opens with an adaptive fact-aware board and task stages are vertical on desktop", async () => {
+test("review groups follow content and task stages are vertical on desktop", async () => {
   const [panel, board, task, css] = await Promise.all([read("./EduPiEducationPanel.tsx"), read("./EduPiReviewBoard.tsx"), read("./EduPiTaskWorkspace.tsx"), read("../app/edupi-workbench.css")]);
   assert.match(panel, /"board" \| "task" \| "c1"/);
   assert.match(panel, /reviewMode === "board" \? <EduPiReviewBoard/);
@@ -138,5 +138,5 @@ test("review opens with an adaptive fact-aware board and task stages are vertica
   for (const label of ["任务审核", "事实确认", "观察确认", "记忆确认"]) assert.match(board, new RegExp(label));
   assert.match(task, /edupi-task-workspace__flow/);
   assert.match(css, /\.edupi-task-workspace__flow \{ display: grid; grid-template-columns: 180px minmax\(0, 1fr\)/);
-  assert.match(css, /\.edupi-review-mini-board \{ display: grid; grid-template-columns: repeat\(auto-fit/);
+  assert.match(css, /\.edupi-review-mini-board \{ display: grid; grid-template-columns: minmax\(0, 1fr\)/);
 });

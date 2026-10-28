@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { confirmTeacherContextFieldRestore } from "@/lib/desktop-native";
 import type {
   EducationContract,
   EducationTeacherContextCandidate,
@@ -92,7 +93,16 @@ function changed(current: string | undefined, proposal: string | undefined): boo
 }
 
 export function EduPiContextEditor({ initial, candidate = null, capability = null, history = [], reviewer = "teacher", onReviewed, onAgentRequest, onBusyChange, onClose }: Props) {
+  const editorRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+  const manualEntryRef = useRef<HTMLButtonElement>(null);
+  const modifyEntryRef = useRef<HTMLButtonElement>(null);
+  const draftEntryRef = useRef<HTMLButtonElement>(null);
+  const focusedFormRef = useRef<"manual" | "modify" | "draft" | null>(null);
+  const fieldHistorySummaryRef = useRef<HTMLElement>(null);
+  const restoreFocusTargetRef = useRef<HTMLButtonElement | null>(null);
+  const reviewFocusTargetRef = useRef<HTMLButtonElement | null>(null);
   const trustedAfterSnapshotRef = useRef<TrustedAfterSnapshot | null>(null);
   const currentValues = useMemo(() => currentContextValues(candidate, initial), [candidate, initial]);
   const proposalValues = useMemo(() => proposedContextValues(candidate), [candidate]);
@@ -108,6 +118,8 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
   const [fieldVersions, setFieldVersions] = useState<TeacherContextVersion[] | null>(null);
   const [fieldHistoryError, setFieldHistoryError] = useState<string | null>(null);
   const [restoringField, setRestoringField] = useState<string | null>(null);
+  const [restoreFocusRequest, setRestoreFocusRequest] = useState(0);
+  const [reviewFocusRequest, setReviewFocusRequest] = useState(0);
 
   useEffect(() => {
     headingRef.current?.focus();
@@ -132,6 +144,39 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
   useEffect(() => {
     onBusyChange?.(busy);
   }, [busy, onBusyChange]);
+
+  useEffect(() => {
+    const trigger = reviewFocusTargetRef.current;
+    if (!trigger) return;
+    const document = trigger.ownerDocument;
+    if (busy) {
+      const preserveMovedFocus = (event: FocusEvent) => {
+        if (event.target !== trigger && event.target !== document.body && event.target !== document.documentElement) reviewFocusTargetRef.current = null;
+      };
+      document.addEventListener("focusin", preserveMovedFocus);
+      return () => document.removeEventListener("focusin", preserveMovedFocus);
+    }
+    reviewFocusTargetRef.current = null;
+    const editor = editorRef.current;
+    const active = document.activeElement;
+    if (!editor?.isConnected || (active && active !== trigger && active !== document.body && active !== document.documentElement)) return;
+    const manualEntry = manualEntryRef.current;
+    const target = [trigger.disabled ? null : trigger, manualEntry?.disabled ? null : manualEntry, headingRef.current]
+      .find((element) => element?.isConnected && editor.contains(element));
+    target?.focus({ preventScroll: target === trigger });
+  }, [busy, reviewFocusRequest]);
+
+  useEffect(() => {
+    if (busy) return;
+    const trigger = restoreFocusTargetRef.current;
+    if (!trigger) return;
+    restoreFocusTargetRef.current = null;
+    const editor = editorRef.current;
+    if (!editor?.isConnected) return;
+    const target = [fieldHistoryOpen && !trigger.disabled ? trigger : null, fieldHistorySummaryRef.current, headingRef.current]
+      .find((element) => element?.isConnected && editor.contains(element));
+    target?.focus({ preventScroll: target === trigger });
+  }, [busy, fieldHistoryOpen, restoreFocusRequest]);
 
   useEffect(() => {
     if (!fieldHistoryOpen) return;
@@ -197,8 +242,9 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
     }
   }
 
-  async function submit(decision: TeacherContextReviewDecision, patch: TeacherContextEditorValues | null) {
+  async function submit(decision: TeacherContextReviewDecision, patch: TeacherContextEditorValues | null, trigger?: HTMLButtonElement) {
     if (busy || !candidate || !capability?.enabled) return;
+    reviewFocusTargetRef.current = decision !== "modify" && trigger && trigger.ownerDocument.activeElement === trigger ? trigger : null;
     setBusy(true);
     setBusyDecision(decision);
     setFeedback(null);
@@ -253,7 +299,7 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
       }
       marker.awaiting = false;
       setModifyOpen(false);
-      setFeedback(`✓ ${decision === "accept" ? "已接受" : decision === "modify" ? "已修改" : decision === "reject" ? "已拒绝" : "已暂缓"} · 回执 ${String(verified.receipt.receipt_id)}`);
+      setFeedback(decision === "accept" ? "已接受" : decision === "modify" ? "已修改" : decision === "reject" ? "已拒绝" : "已暂缓");
     } catch (reason) {
       const code = reviewFailureCode(reason);
       setError(code === "stale"
@@ -266,6 +312,7 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
     } finally {
       setBusy(false);
       setBusyDecision(null);
+      if (decision !== "modify") setReviewFocusRequest((value) => value + 1);
     }
   }
 
@@ -342,12 +389,14 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
     } finally { setBusy(false); }
   }
 
-  async function restoreField(version: TeacherContextVersion, side: TeacherContextVersionSide, fieldKey: TeacherContextVersionField) {
+  async function restoreField(version: TeacherContextVersion, side: TeacherContextVersionSide, fieldKey: TeacherContextVersionField, trigger: HTMLButtonElement) {
     if (busy || !candidate || !capability?.enabled || candidate.sourceIds.length !== 1) return;
+    restoreFocusTargetRef.current = trigger;
     setBusy(true);
-    setRestoringField(`${version.versionId}:${side}:${fieldKey}`);
-    setFieldHistoryError(null);
     try {
+      if (isActionable(candidate) && !(await confirmTeacherContextFieldRestore())) return;
+      setRestoringField(`${version.versionId}:${side}:${fieldKey}`);
+      setFieldHistoryError(null);
       const response = await fetch("/api/edupi/onboarding/versions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -372,16 +421,40 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
     } finally {
       setRestoringField(null);
       setBusy(false);
+      setRestoreFocusRequest((value) => value + 1);
     }
   }
 
   const status = contextStatusLabel(candidate, capability, currentValues);
   const actionable = isActionable(candidate);
+  const proposalHeading = actionable ? "待确认更新"
+    : (candidate?.status || candidate?.teacherReview.state) === "rejected" && Object.keys(proposalValues).length > 0 ? "已拒绝更新" : null;
   const canReview = Boolean(candidate && capability?.enabled && actionable);
   const contextReady = Object.keys(currentValues).length > 0;
+  const formMode = manualOpen ? "manual" : modifyOpen && canReview ? "modify" : chatDraftOpen ? "draft" : null;
+
+  useEffect(() => {
+    const previousForm = focusedFormRef.current;
+    const editor = editorRef.current;
+    if (formMode) {
+      focusedFormRef.current = formMode;
+      if (previousForm === formMode || busy || !editor?.isConnected) return;
+      const input = formRef.current?.querySelector<HTMLInputElement>("input:not([disabled])");
+      if (input?.isConnected && editor.contains(input)) input.focus({ preventScroll: false });
+      return;
+    }
+    if (!previousForm || busy) return;
+    focusedFormRef.current = null;
+    if (!editor?.isConnected) return;
+    const entry = previousForm === "manual" ? manualEntryRef.current : previousForm === "modify" ? modifyEntryRef.current : draftEntryRef.current;
+    const manualEntry = manualEntryRef.current;
+    const target = [entry?.disabled ? null : entry, manualEntry?.disabled ? null : manualEntry, headingRef.current]
+      .find((element) => element?.isConnected && editor.contains(element));
+    target?.focus({ preventScroll: false });
+  }, [busy, formMode]);
 
   return (
-    <section className="edupi-context-editor" aria-label="教师上下文属性" aria-busy={busy || undefined} onKeyDown={handleKeyDown}>
+    <section ref={editorRef} className="edupi-context-editor" aria-label="教师上下文属性" aria-busy={busy || undefined} onKeyDown={handleKeyDown}>
       <header className="edupi-context-editor__header">
         <div>
           <h2 id="edupi-context-editor-title" ref={headingRef} tabIndex={-1}>教师上下文</h2>
@@ -392,8 +465,8 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
 
       <div className="edupi-context-editor__table-wrap">
         <table className="edupi-context-editor__table">
-          <caption className="edupi-visually-hidden">教师上下文当前生效值与待确认更新</caption>
-          <thead><tr><th scope="col">字段</th><th scope="col">当前生效</th><th scope="col">待确认更新</th></tr></thead>
+          <caption className="edupi-visually-hidden">教师上下文当前生效值{proposalHeading ? `与${proposalHeading}` : ""}</caption>
+          <thead><tr><th scope="col">字段</th><th scope="col">当前生效</th>{proposalHeading ? <th scope="col">{proposalHeading}</th> : null}</tr></thead>
           <tbody>{TEACHER_CONTEXT_FIELDS.map((field) => {
             const current = currentValues[field.key];
             const proposal = proposalValues[field.key];
@@ -401,55 +474,67 @@ export function EduPiContextEditor({ initial, candidate = null, capability = nul
             return <tr key={field.key}>
               <th scope="row">{field.label}</th>
               <td>{current || <span className="edupi-context-editor__empty">未设置</span>}</td>
-              <td>{proposal ? <span className={isChanged ? "edupi-context-editor__proposal is-changed" : "edupi-context-editor__proposal"}>{proposal}{isChanged ? <small>已变更</small> : null}</span> : <span className="edupi-context-editor__empty">—</span>}</td>
+              {proposalHeading ? <td>{proposal ? <span className={isChanged ? "edupi-context-editor__proposal is-changed" : "edupi-context-editor__proposal"}>{proposal}{isChanged ? <small>已变更</small> : null}</span> : <span className="edupi-context-editor__empty">—</span>}</td> : null}
             </tr>;
           })}</tbody>
         </table>
       </div>
 
-      <details className="edupi-context-history is-fields" onToggle={(event) => setFieldHistoryOpen(event.currentTarget.open)}><summary>字段历史 <span>{fieldVersions?.length ?? ""}</span></summary>{fieldHistoryError ? <p className="edupi-context-history__error" role="alert">{fieldHistoryError}</p> : fieldVersions === null ? <p className="edupi-context-history__empty">正在读取…</p> : fieldVersions.length === 0 ? <p className="edupi-context-history__empty">暂无字段版本</p> : <ol>{fieldVersions.slice().reverse().map((version) => <li key={version.versionId}><div><strong>版本 {version.revision}</strong><time>{new Date(version.reviewedAt).toLocaleString("zh-CN")}</time></div>{version.changedFields.map((fieldKey) => {
-        const label = TEACHER_CONTEXT_FIELDS.find((field) => field.key === fieldKey)?.label || fieldKey;
-        const before = version.beforeValues[fieldKey] ?? null;
-        const after = version.afterValues[fieldKey] ?? null;
-        const current = currentValues[fieldKey] ?? null;
-        const disabled = busy || manualOpen || modifyOpen || chatDraftOpen || !candidate || !capability?.enabled || candidate.sourceIds.length !== 1;
-        const valueButton = (side: TeacherContextVersionSide, value: string | null) => current === value
-          ? <span className="edupi-context-field-version__current">{value || "未设置"}<em>当前</em></span>
-          : <button type="button" disabled={disabled} aria-label={`恢复${label}为${value || "未设置"}`} onClick={() => void restoreField(version, side, fieldKey)}>{restoringField === `${version.versionId}:${side}:${fieldKey}` ? <span>恢复中…</span> : <><span>{value || "未设置"}</span><em>恢复</em></>}</button>;
-        return <div className="edupi-context-field-version" key={`${version.versionId}:${fieldKey}`}><b>{label}</b><span>原值</span>{valueButton("before", before)}<span>改为</span>{valueButton("after", after)}</div>;
-      })}{version.note ? <p>{version.note}</p> : null}</li>)}</ol>}</details>
+      {!manualOpen && !modifyOpen && !chatDraftOpen ? <div className="edupi-context-editor__actions" role="group" aria-label="教师资料操作">
+        {!manualOpen && !modifyOpen && !chatDraftOpen ? <button ref={manualEntryRef} type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => { setDraft(currentValues); setManualOpen(true); setError(null); }}>手动填写</button> : null}
+        {!manualOpen && canReview && !modifyOpen && !chatDraftOpen ? <>
+          <button type="button" className="edupi-entry-primary" disabled={busy} onClick={(event) => void submit("accept", null, event.currentTarget)}>{busy && busyDecision === "accept" ? BUSY_LABELS.accept : ACTION_LABELS.accept}</button>
+          <button ref={modifyEntryRef} type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => { setChatDraftOpen(false); setDraft(proposalValues); setModifyOpen(true); }}>{ACTION_LABELS.modify}</button>
+          <button type="button" className="edupi-entry-secondary" disabled={busy} onClick={(event) => void submit("hold", null, event.currentTarget)}>{busy && busyDecision === "hold" ? BUSY_LABELS.hold : ACTION_LABELS.hold}</button>
+          <button type="button" className="edupi-entry-danger" disabled={busy} onClick={(event) => void submit("reject", null, event.currentTarget)}>{busy && busyDecision === "reject" ? BUSY_LABELS.reject : ACTION_LABELS.reject}</button>
+        </> : !manualOpen && !modifyOpen && !chatDraftOpen && onAgentRequest ? <button ref={draftEntryRef} type="button" className="edupi-entry-secondary" disabled={busy} onClick={startDraft}>起草更新</button> : null}
+      </div> : null}
 
-      {history.length ? <details className="edupi-context-history"><summary>操作历史 <span>{history.length}</span></summary><ol>{history.slice(-10).reverse().map((item) => <li key={item.reviewId}><div><strong>{ACTION_LABELS[item.decision as TeacherContextReviewDecision] || item.decision}</strong><span>{REVIEW_STATUS_LABELS[item.status] || item.status}</span></div><time>{item.reviewedAt ? new Date(item.reviewedAt).toLocaleString("zh-CN") : "时间未记录"}</time>{item.teacherReview.note ? <p>{item.teacherReview.note}</p> : null}</li>)}</ol></details> : null}
-
-      {modifyOpen && canReview ? <div className="edupi-context-editor__modify" aria-label="修改待确认更新">
+      {modifyOpen && canReview ? <div ref={formRef} className="edupi-context-editor__modify" aria-label="修改待确认更新">
         <div className="edupi-context-editor__modify-heading"><strong>修改待确认更新</strong><span>只提交非空且有变化的字段</span></div>
         <div className="edupi-context-editor__fields">{TEACHER_CONTEXT_FIELDS.map((field) => <label key={field.key}>{field.label}<input maxLength={120} disabled={busy} value={draft[field.key] || ""} onChange={(event) => updateDraft(field.key, event.target.value)} /></label>)}</div>
-        <div className="edupi-context-editor__modify-actions"><button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => setModifyOpen(false)}>取消</button><button type="button" className="edupi-entry-primary" disabled={busy} onClick={submitModify}>{busy && busyDecision === "modify" ? BUSY_LABELS.modify : "提交修改"}</button></div>
+        <div className="edupi-context-editor__modify-actions"><button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => { setModifyOpen(false); setError(null); }}>取消</button><button type="button" className="edupi-entry-primary" disabled={busy} onClick={submitModify}>{busy && busyDecision === "modify" ? BUSY_LABELS.modify : "提交修改"}</button></div>
       </div> : null}
 
-      {chatDraftOpen ? <div className="edupi-context-editor__modify" aria-label="起草教师上下文更新">
+      {chatDraftOpen ? <div ref={formRef} className="edupi-context-editor__modify" aria-label="起草教师上下文更新">
         <div className="edupi-context-editor__modify-heading"><strong>起草更新</strong><span>字段作参考，要求由你填写</span></div>
         <div className="edupi-context-editor__fields">{TEACHER_CONTEXT_FIELDS.map((field) => <label key={field.key}>{field.label}<input maxLength={120} disabled={busy} value={draft[field.key] || ""} onChange={(event) => updateDraft(field.key, event.target.value)} /></label>)}</div>
-        <div className="edupi-context-editor__modify-actions"><button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => setChatDraftOpen(false)}>取消</button><button type="button" className="edupi-entry-primary" disabled={busy || !onAgentRequest} onClick={submitDraft}>放入对话</button></div>
+        <div className="edupi-context-editor__modify-actions"><button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => { setChatDraftOpen(false); setError(null); }}>取消</button><button type="button" className="edupi-entry-primary" disabled={busy || !onAgentRequest} onClick={submitDraft}>放入对话</button></div>
       </div> : null}
 
-      {manualOpen ? <div className="edupi-context-editor__modify" aria-label="手动填写教师资料">
+      {manualOpen ? <div ref={formRef} className="edupi-context-editor__modify" aria-label="手动填写教师资料">
         <div className="edupi-context-editor__fields">{TEACHER_CONTEXT_FIELDS.map((field) => <label key={field.key}>{field.label}<input maxLength={120} disabled={busy} value={draft[field.key] || ""} onChange={(event) => updateDraft(field.key, event.target.value)} /></label>)}</div>
-        <div className="edupi-context-editor__modify-actions"><button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => setManualOpen(false)}>取消</button><button type="button" className="edupi-entry-primary" disabled={busy} onClick={() => void saveManual()}>{busy ? "保存中…" : "保存"}</button></div>
+        <div className="edupi-context-editor__modify-actions"><button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => { setManualOpen(false); setError(null); }}>取消</button><button type="button" className="edupi-entry-primary" disabled={busy} onClick={() => void saveManual()}>{busy ? "保存中…" : "保存"}</button></div>
       </div> : null}
 
       {feedback ? <div className="edupi-context-editor__feedback" role="status" aria-live="polite">{feedback}</div> : null}
       {error ? <div className="edupi-context-editor__error" role="alert">{error}</div> : null}
 
-      <footer className="edupi-context-editor__actions">
-        {!manualOpen && !modifyOpen && !chatDraftOpen ? <button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => { setDraft(currentValues); setManualOpen(true); setError(null); }}>手动填写</button> : null}
-        {!manualOpen && canReview && !modifyOpen && !chatDraftOpen ? <>
-          <button type="button" className="edupi-entry-primary" disabled={busy} onClick={() => void submit("accept", null)}>{busy && busyDecision === "accept" ? BUSY_LABELS.accept : ACTION_LABELS.accept}</button>
-          <button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => { setChatDraftOpen(false); setDraft(proposalValues); setModifyOpen(true); }}>{ACTION_LABELS.modify}</button>
-          <button type="button" className="edupi-entry-secondary" disabled={busy} onClick={() => void submit("hold", null)}>{busy && busyDecision === "hold" ? BUSY_LABELS.hold : ACTION_LABELS.hold}</button>
-          <button type="button" className="edupi-entry-danger" disabled={busy} onClick={() => void submit("reject", null)}>{busy && busyDecision === "reject" ? BUSY_LABELS.reject : ACTION_LABELS.reject}</button>
-        </> : !manualOpen && !modifyOpen && !chatDraftOpen && onAgentRequest ? <button type="button" className="edupi-entry-secondary" disabled={busy} onClick={startDraft}>起草更新</button> : null}
-      </footer>
+      <details className="edupi-context-editor__history" onToggle={(event) => setFieldHistoryOpen(event.currentTarget.open)}>
+        <summary ref={fieldHistorySummaryRef} tabIndex={0}>字段历史 <span>{fieldVersions?.length ?? ""}</span></summary>
+        {fieldHistoryError ? <p className="edupi-context-editor__history-error" role="alert">{fieldHistoryError}</p> : null}
+        {fieldVersions === null ? fieldHistoryError ? null : <p className="edupi-context-editor__history-state">正在读取…</p> : fieldVersions.length === 0 ? <p className="edupi-context-editor__history-state">暂无字段版本</p> : <ol>{fieldVersions.slice().reverse().map((version) => <li key={version.versionId}>
+          <div className="edupi-context-editor__version-heading"><strong>版本 {version.revision}</strong><time>{new Date(version.reviewedAt).toLocaleString("zh-CN")}</time></div>
+          <table className="edupi-context-editor__version-fields" aria-label={`版本 ${version.revision} 的字段变化`}>
+            <thead><tr><th scope="col">字段</th><th scope="col">原值</th><th scope="col">改为</th></tr></thead>
+            <tbody>{version.changedFields.map((fieldKey) => {
+              const label = TEACHER_CONTEXT_FIELDS.find((field) => field.key === fieldKey)?.label || fieldKey;
+              const before = version.beforeValues[fieldKey] ?? null;
+              const after = version.afterValues[fieldKey] ?? null;
+              const current = currentValues[fieldKey] ?? null;
+              const disabled = busy || manualOpen || modifyOpen || chatDraftOpen || !candidate || !capability?.enabled || candidate.sourceIds.length !== 1;
+              const valueButton = (side: TeacherContextVersionSide, value: string | null) => current === value
+                ? <span className="edupi-context-editor__current-value"><span>{value || "未设置"}</span><small>当前</small></span>
+                : <button type="button" className="edupi-context-editor__restore-value" disabled={disabled} aria-label={`恢复${label}为${value || "未设置"}`} onClick={(event) => void restoreField(version, side, fieldKey, event.currentTarget)}>{restoringField === `${version.versionId}:${side}:${fieldKey}` ? <span>恢复中…</span> : <><span>{value || "未设置"}</span><small>恢复</small></>}</button>;
+              return <tr key={`${version.versionId}:${fieldKey}`}><th scope="row">{label}</th><td>{valueButton("before", before)}</td><td>{valueButton("after", after)}</td></tr>;
+            })}</tbody>
+          </table>
+          {version.note ? <p>{version.note}</p> : null}
+        </li>)}</ol>}
+      </details>
+
+      {history.length ? <details className="edupi-context-editor__history"><summary tabIndex={0}>操作历史 <span>{history.length}</span></summary><ol>{history.slice(-10).reverse().map((item) => <li key={item.reviewId}><div className="edupi-context-editor__version-heading"><strong>{ACTION_LABELS[item.decision as TeacherContextReviewDecision] || item.decision}</strong><span>{REVIEW_STATUS_LABELS[item.status] || item.status}</span><time>{item.reviewedAt ? new Date(item.reviewedAt).toLocaleString("zh-CN") : "时间未记录"}</time></div>{item.teacherReview.note ? <p>{item.teacherReview.note}</p> : null}</li>)}</ol></details> : null}
+
       {!contextReady && !candidate ? <span className="edupi-visually-hidden">尚未配置教师上下文</span> : null}
     </section>
   );

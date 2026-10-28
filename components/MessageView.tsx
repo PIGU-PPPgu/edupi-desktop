@@ -2,6 +2,7 @@
 
 import { memo, useState, useRef, useEffect, useMemo } from "react";
 import { MarkdownBody } from "./MarkdownBody";
+import { DisclosureChevron } from "./DisclosureChevron";
 import { copyText } from "@/lib/clipboard";
 import { useI18n } from "@/hooks/useI18n";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
@@ -201,8 +202,10 @@ function CollapsibleUserText({ text, cwd, onOpenFile }: {
       </div>
       {overflowing && (
         <button
-          onClick={() => setExpanded((v) => !v)}
+          type="button"
+          className="disclosure-trigger is-inline"
           aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
           style={{
             display: "flex",
             alignItems: "center",
@@ -216,8 +219,8 @@ function CollapsibleUserText({ text, cwd, onOpenFile }: {
             fontSize: 11,
           }}
         >
-          <span className="edupi-disclosure-icon" aria-hidden="true" />
           {expanded ? t("i18n.collapse") : t("i18n.expand")}
+          <DisclosureChevron open={expanded} />
         </button>
       )}
     </div>
@@ -322,6 +325,8 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
               {imageBlocksNode}
               <div style={{ display: "flex", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
                 <button
+                  type="button"
+                  className="disclosure-trigger is-inline"
                   onClick={() => setExpanded((prev) => !prev)}
                   title={expanded ? t("i18n.collapse") : t("i18n.expand")}
                   aria-expanded={expanded}
@@ -343,7 +348,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {commandName}
                   </span>
-                  <span className="edupi-disclosure-icon" aria-hidden="true" />
+                  <DisclosureChevron open={expanded} />
                 </button>
                 {commandArgs && (
                   <span style={{
@@ -785,6 +790,7 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
 
   return (
     <div
+      className="message-disclosure"
       style={{
         border: "1px solid var(--border)",
         borderRadius: 6,
@@ -793,8 +799,10 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
       }}
     >
       <button
-        onClick={() => void toggle()}
+        type="button"
+        className="disclosure-trigger is-row"
         aria-expanded={expanded}
+        onClick={() => void toggle()}
         style={{
           display: "flex",
           alignItems: "center",
@@ -809,11 +817,11 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
           textAlign: "left",
         }}
       >
-        <span className="edupi-disclosure-icon" aria-hidden="true" />
          <span>{t("i18n.thinking")}</span>
         {duration !== undefined && (
           <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
         )}
+        <DisclosureChevron open={expanded} />
       </button>
       {expanded && (
         <div
@@ -850,6 +858,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
 
   return (
     <div
+      className={`message-disclosure${isError ? " is-error" : ""}`}
       style={{
         borderRadius: 7,
         overflow: "hidden",
@@ -860,8 +869,10 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
     >
       {/* ── Tool call header ── */}
       <button
-        onClick={() => setExpanded((v) => !v)}
+        type="button"
+        className="disclosure-trigger is-row"
         aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
         style={{
           display: "flex",
           alignItems: "center",
@@ -886,7 +897,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
         {duration !== undefined && (
           <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
         )}
-        <span className="edupi-disclosure-icon" aria-hidden="true" />
+        <DisclosureChevron open={expanded} />
       </button>
 
       {/* ── Expanded: input args ── */}

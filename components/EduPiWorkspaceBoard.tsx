@@ -26,6 +26,13 @@ type Props = {
 const stageLabels: Record<TaskBoardLaneId, string> = { todo: "待处理", progress: "进行中", review: "待我确认", done: "已完成" };
 const DEFAULT_PREPARATION_DELIVERABLES = ["本节教案", "学生学案", "练习与参考答案", "材料准备清单"];
 const weekdayLabels = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+type CreateScope = { workspace: string; alive: boolean; submitting: boolean; sequence: number };
+type CreateFocus = { scope: CreateScope; document: Document; from: Element | null; target: "title" | "trigger"; reveal: boolean; ready: boolean; stop: () => void };
+
+function clearCreateFocus(ref: { current: CreateFocus | null }, request = ref.current) {
+  request?.stop();
+  if (ref.current === request) ref.current = null;
+}
 
 function rawText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -63,7 +70,7 @@ function stageAtPoint(x: number, y: number): TaskBoardLaneId | null {
   return stage === "todo" || stage === "progress" || stage === "review" || stage === "done" ? stage : null;
 }
 
-function TaskCard({ task, session, lane, candidate, workCase, busy, selected, dragSource, onSelect, onOpen, onCardPointerDown, onHandlePointerDown, onMove }: {
+function TaskCard({ task, session, lane, candidate, workCase, busy, selected, dragSource, onOpen, onCardPointerDown, onHandlePointerDown, onMove }: {
   task: TeacherTask;
   session: TaskSessionBinding | null;
   lane: TaskBoardLaneId;
@@ -72,8 +79,7 @@ function TaskCard({ task, session, lane, candidate, workCase, busy, selected, dr
   busy: boolean;
   selected: boolean;
   dragSource: boolean;
-  onSelect: () => void;
-  onOpen: () => void;
+  onOpen: (keyboard: boolean) => void;
   onCardPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
   onHandlePointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
   onMove: (stage: TaskBoardLaneId) => void;
@@ -85,7 +91,7 @@ function TaskCard({ task, session, lane, candidate, workCase, busy, selected, dr
   const selectId = `edupi-task-move-${String(task.id || title).replace(/[^A-Za-z0-9_-]/g, "-")}`;
   return (
     <article className={`edupi-task-board-card${workCase ? " has-flow" : ""}${busy ? " is-moving" : ""}${selected ? " is-selected" : ""}${dragSource ? " is-drag-source" : ""}`} aria-busy={busy || undefined} onPointerDown={onCardPointerDown}>
-      <button type="button" className="edupi-task-board-card__open" onClick={(event) => { if (event.detail === 0) onOpen(); else onSelect(); }} onDoubleClick={onOpen} aria-label={`${title}，${taskState(task, session, lane, candidate, workCase)}，双击打开`} aria-pressed={selected}>
+      <button type="button" className="edupi-task-board-card__open" onClick={(event) => onOpen(event.detail === 0)} aria-label={`打开${title}，${taskState(task, session, lane, candidate, workCase)}`} aria-pressed={selected}>
         <span className="edupi-task-board-card__topline"><span>{taskTypeLabel(task)}</span><time>{lane === "done" ? completion === null ? "完成时间待确认" : shanghaiDate(new Date(completion)) : taskDate(task)}</time></span>
         <strong>{title}</strong>
         {sourceCaption !== "教师内部" ? <span className="edupi-task-board-card__source">{sourceCaption}</span> : null}
@@ -105,15 +111,13 @@ function TaskCard({ task, session, lane, candidate, workCase, busy, selected, dr
 
 export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, onMoveTask, mergeSuggestions, selectedObjectId, onObject }: Props) {
   const policy = useEduPiForegroundPolicy();
-  const [localList, setLocalList] = useState<string | null>(null);
-  const [category, setCategory] = useState<"all" | TaskCategoryId>(() => {
-    const requested = selectedObjectId?.split(":")[3];
-    return TASK_CATEGORY_CONFIG.some(item => item.id === requested) ? requested as TaskCategoryId : "all";
-  });
-  useEffect(() => {
-    const requested = selectedObjectId?.split(":")[3];
-    if (TASK_CATEGORY_CONFIG.some(item => item.id === requested)) setCategory(requested as TaskCategoryId);
-  }, [selectedObjectId]);
+  const [localRoute, setLocalRoute] = useState("workspace:board");
+  // A supplied route, including null, is authoritative on back/forward navigation.
+  const route = selectedObjectId === undefined ? localRoute : selectedObjectId;
+  const parts = route?.split(":") ?? [];
+  const requestedCategory = parts[1] === "list" ? parts[3] : parts[1] === "board" ? parts[2] : undefined;
+  const category: "all" | TaskCategoryId = TASK_CATEGORY_CONFIG.some(item => item.id === requestedCategory) ? requestedCategory as TaskCategoryId : "all";
+  const navigate = (next: string) => { setLocalRoute(next); onObject?.(next); };
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -127,6 +131,19 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   const dueDateManuallyEditedRef = useRef(false);
   const draggedTaskIdRef = useRef<string | null>(null);
   const pendingCreateRef = useRef<{ fingerprint: string; id: string } | null>(null);
+  const boardRef = useRef<HTMLElement>(null);
+  const createFormRef = useRef<HTMLFormElement>(null);
+  const createButtonRef = useRef<HTMLButtonElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const createFocusRef = useRef<CreateFocus | null>(null);
+  const [createFocusTick, setCreateFocusTick] = useState(0);
+  const draftWorkspaceRef = useRef(data.workspace);
+  const createScopeRef = useRef<CreateScope>({ workspace: data.workspace, alive: true, submitting: false, sequence: 0 });
+  if (createScopeRef.current.workspace !== data.workspace) {
+    createScopeRef.current.alive = false;
+    createScopeRef.current = { workspace: data.workspace, alive: true, submitting: false, sequence: 0 };
+  }
+  const createScope = createScopeRef.current;
   const dragStartRef = useRef<{ id: string; x: number; y: number; offX: number; offY: number; width: number } | null>(null);
   const suppressClickRef = useRef(false);
   const ghostFrameRef = useRef(0);
@@ -135,14 +152,27 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   const [movingTaskId, setMovingTaskId] = useState<string | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<TaskBoardLaneId | null>(null);
-  const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ tone: "success" | "error"; text: string; preparationTaskId?: string } | null>(null);
+  useEffect(() => {
+    if (!message?.preparationTaskId) return;
+    const task = data.tasks.find(item => item.id === message.preparationTaskId);
+    const workCase = workCaseForTask({ workCases: data.workCases }, message.preparationTaskId);
+    const progressed = ["running", "draft_ready", "accepted", "modified", "completed"];
+    if (progressed.includes(workCase?.currentState || "") || [...progressed, "ready"].includes(task?.contentStatus || "")) {
+      setMessage(current => current === message ? null : current);
+    }
+  }, [data.tasks, data.workCases, message]);
   const scopedTasks = category === "all" ? data.tasks : data.tasks.filter((task) => taskCategory(task) === category);
   const columns = projectTaskBoard(scopedTasks, data.taskSessions, data.workCandidates, query, { ...policy, ...data });
   const historyColumns = projectTaskBoard(scopedTasks, data.taskSessions, data.workCandidates, query);
-  const listId = (selectedObjectId?.startsWith("workspace:list:") ? selectedObjectId : localList || "").replace(/^workspace:list:/, "").split(":")[0];
+  const historyCount = historyColumns.reduce((total, column) => total + column.tasks.length, 0);
+  const listId = route?.startsWith("workspace:list:") ? parts[2] : "";
   const listColumn = columns.find(column => column.id === listId);
   const inList = Boolean(listColumn || listId === "history" || listId === "all" || listId === "actionable");
-  const openList = (id: string) => { const route = `workspace:list:${id}${category === "all" ? "" : `:${category}`}`; setLocalList(route); onObject?.(route); };
+  const openList = (id: string) => navigate(`workspace:list:${id}${category === "all" ? "" : `:${category}`}`);
+  const changeCategory = (next: "all" | TaskCategoryId) => navigate(inList
+    ? `workspace:list:${listId}${next === "all" ? "" : `:${next}`}`
+    : `workspace:board${next === "all" ? "" : `:${next}`}`);
   const foregroundTasks = data.tasks.filter(task => isTaskForeground(task, policy, data));
   const candidateByTask = new Map(data.workCandidates.map((candidate) => [candidate.taskId, candidate]));
   const taskById = new Map(data.tasks.filter((task) => task.id).map((task) => [task.id!, task]));
@@ -151,8 +181,8 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   const activeSlotId = timetableSlotId || slotId(usableSlots[0] || {});
   const activeSlot = usableSlots.find((slot) => slotId(slot) === activeSlotId) || null;
   const activeSubject = useMemo(() => rawText(activeSlot?.subject), [activeSlot?.subject]);
-  const activeClass = useMemo(() => rawText(activeSlot?.class_name), [activeSlot?.class_name]);
-  const compatibleMaterials = useMemo(() => (data.teacherMaterials || []).filter((material) => material.available !== false
+  const activeClass = useMemo(() => rawText(activeSlot?.class_id) || rawText(activeSlot?.class_name), [activeSlot?.class_id, activeSlot?.class_name]);
+  const compatibleMaterials = useMemo(() => (data.teacherMaterials || []).filter((material) => material.available === true
     && material.subject === activeSubject && material.class_id === activeClass), [activeClass, activeSubject, data.teacherMaterials]);
   const compatibleMaterialIds = useMemo(() => new Set(compatibleMaterials.map((material) => material.material_id)), [compatibleMaterials]);
   useEffect(() => setMaterialIds((current) => {
@@ -169,6 +199,62 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
     && materialIds.length > 0 && materialIds.length <= MAX_PREPARATION_MATERIALS
     && materialIds.every((id) => compatibleMaterialIds.has(id))
     && requestedDeliverables.length > 0 && !deliverableValidation.error));
+
+  useEffect(() => {
+    createScope.alive = true;
+    setCreateOpen(false); setCreating(false); setMessage(null);
+    // A failed projection read must not discard the same directory's draft.
+    if (createScope.workspace) {
+      if (draftWorkspaceRef.current && draftWorkspaceRef.current !== createScope.workspace) {
+        setTitle(""); setDueDate(""); setNote(""); setManagedPreparation(false); setTimetableSlotId(""); setLessonDate(""); setMaterialIds([]);
+        setDeliverables(DEFAULT_PREPARATION_DELIVERABLES.join("\n")); dueDateManuallyEditedRef.current = false; pendingCreateRef.current = null;
+      }
+      draftWorkspaceRef.current = createScope.workspace;
+    }
+    return () => {
+      createScope.alive = false; createScope.submitting = false; createScope.sequence++;
+      if (createFocusRef.current?.scope === createScope) clearCreateFocus(createFocusRef);
+    };
+  }, [createScope]);
+
+  useEffect(() => {
+    const request = createFocusRef.current;
+    if (!request) return;
+    const root = boardRef.current;
+    if (request.scope !== createScope || !createScope.alive || !root?.isConnected || root.ownerDocument !== request.document
+      || request.document.hidden || root.closest("[hidden], [inert]")) { clearCreateFocus(createFocusRef, request); return; }
+    if (creating || !request.ready) return;
+    clearCreateFocus(createFocusRef, request);
+    const active = request.document.activeElement;
+    if (active !== request.from && active !== request.document.body && active !== request.document.documentElement) return;
+    const target = request.target === "title" ? titleRef.current : createButtonRef.current;
+    if (!target?.isConnected || target.disabled || !root.contains(target)) return;
+    if (request.reveal) createFormRef.current?.scrollIntoView({ block: "start", inline: "nearest", behavior: "auto" });
+    target.focus({ preventScroll: request.reveal });
+  }, [createScope, createOpen, creating, inList, createFocusTick]);
+
+  const rememberCreateFocus = (target: CreateFocus["target"], ready: boolean, reveal = false) => {
+    clearCreateFocus(createFocusRef);
+    const document = boardRef.current?.ownerDocument;
+    if (!document || document.hidden) return null;
+    const request: CreateFocus = { scope: createScope, document, from: document.activeElement, target, ready, reveal, stop: () => {} };
+    const moved = (event: FocusEvent) => {
+      if (event.target !== request.from && event.target !== document.body && event.target !== document.documentElement) clearCreateFocus(createFocusRef, request);
+    };
+    const hidden = () => { if (document.hidden) clearCreateFocus(createFocusRef, request); };
+    request.stop = () => { document.removeEventListener("focusin", moved); document.removeEventListener("visibilitychange", hidden); };
+    createFocusRef.current = request;
+    document.addEventListener("focusin", moved); document.addEventListener("visibilitychange", hidden);
+    return request;
+  };
+  const openCreate = () => {
+    if (!createScope.workspace || !createScope.alive || createScopeRef.current !== createScope || createScope.submitting || !boardRef.current?.isConnected) return;
+    rememberCreateFocus("title", true, true); setMessage(null); setCreateOpen(true);
+  };
+  const cancelCreate = () => {
+    if (!createScope.alive || createScopeRef.current !== createScope || createScope.submitting) return;
+    rememberCreateFocus("trigger", true); setMessage(null); setCreateOpen(false);
+  };
 
   const stopDragging = () => {
     draggedTaskIdRef.current = null;
@@ -222,19 +308,25 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
 
   const submitCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!title.trim() || creating) return;
+    if (!canCreate || !createScope.workspace || !createScope.alive || createScopeRef.current !== createScope || createScope.submitting) return;
+    const requested: Omit<CreateTeacherTaskInput, "clientRequestId"> = {
+      title: title.trim(),
+      dueDate: dueDate || null,
+      note: note.trim() || null,
+      preparationSource: managedPreparation ? { kind: "teaching_before_class", timetableSlotId: activeSlotId, lessonDate, materialIds: [...materialIds], deliverables: [...requestedDeliverables] } : null,
+    };
+    createScope.submitting = true;
+    const sequence = ++createScope.sequence;
+    const current = () => createScope.alive && createScopeRef.current === createScope && createScope.sequence === sequence;
+    const focus = rememberCreateFocus("title", false);
     setCreating(true);
     setMessage(null);
     try {
-      const requested: Omit<CreateTeacherTaskInput, "clientRequestId"> = {
-        title: title.trim(),
-        dueDate: dueDate || null,
-        note: note.trim() || null,
-        preparationSource: managedPreparation ? { kind: "teaching_before_class", timetableSlotId: activeSlotId, lessonDate, materialIds, deliverables: requestedDeliverables } : null,
-      };
       const fingerprint = JSON.stringify(requested);
       if (pendingCreateRef.current?.fingerprint !== fingerprint) pendingCreateRef.current = { fingerprint, id: crypto.randomUUID() };
-      const result = await onCreateTask({ clientRequestId: pendingCreateRef.current.id, ...requested });
+      const clientRequestId = pendingCreateRef.current.id;
+      const result = await onCreateTask({ clientRequestId, ...requested });
+      if (!current()) return;
       pendingCreateRef.current = null;
       setTitle("");
       setDueDate("");
@@ -246,21 +338,22 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
       setMaterialIds([]);
       setDeliverables(DEFAULT_PREPARATION_DELIVERABLES.join("\n"));
       setCreateOpen(false);
+      if (focus) focus.target = "trigger";
       setMessage(result.preparationState === "error"
-        ? { tone: "error", text: `任务已创建；自动准备尚未启动：${result.preparationError || "请打开任务后重试"}` }
+        ? { tone: "error", text: `任务已创建；自动准备尚未启动：${result.preparationError || "请打开任务后重试"}`, preparationTaskId: `teacher-task-${clientRequestId.toLowerCase()}` }
         : { tone: "success", text: result.preparationState ? "任务已创建，正在准备教学产物。" : "任务已创建到“待处理”。" });
     } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : "任务创建失败。" });
+      if (current()) setMessage({ tone: "error", text: error instanceof Error ? error.message : "任务创建失败。" });
     } finally {
-      setCreating(false);
+      if (current()) { createScope.submitting = false; if (focus) focus.ready = true; setCreating(false); setCreateFocusTick(value => value + 1); }
     }
   };
 
   const ghostTask = draggedTaskId ? taskById.get(draggedTaskId) ?? null : null;
   if (inList) {
     const listTasks = listColumn?.tasks || (listId === "history" ? historyColumns : columns).flatMap(column => column.tasks).filter(task => listId !== "actionable" || isTaskActionable(task));
-    return <main className="edupi-module-workspace"><header className="edupi-module-heading"><div><button type="button" className="edupi-back-link" onClick={() => { setLocalList(null); onObject?.("workspace:board"); }}>← 工作区</button><h1>{listColumn?.label || (listId === "history" ? "任务历史" : listId === "actionable" ? "需要处理" : "任务")}</h1></div></header>
-      <div className="edupi-foreground-controls"><select aria-label="列表状态" value={listId} onChange={event => openList(event.target.value)}><option value="all">全部状态</option><option value="actionable">需要处理</option>{columns.map(column => <option key={column.id} value={column.id}>{column.label}</option>)}<option value="history">历史</option></select><select aria-label="任务类型" value={category} onChange={event => { const next = event.target.value as typeof category; setCategory(next); onObject?.(`workspace:list:${listId}${next === "all" ? "" : `:${next}`}`); }}><option value="all">全部类型</option>{TASK_CATEGORY_CONFIG.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span>{query.trim() ? `搜索：${query}` : null}</span></div>
+    return <main className="edupi-module-workspace"><header className="edupi-module-heading"><div><button type="button" className="edupi-back-link" onClick={() => navigate(`workspace:board${category === "all" ? "" : `:${category}`}`)}>← 工作区</button><h1>{listColumn?.label || (listId === "history" ? "任务历史" : listId === "actionable" ? "需要处理" : "任务")}</h1></div></header>
+      <div className="edupi-foreground-controls"><select aria-label="列表状态" value={listId} onChange={event => openList(event.target.value)}><option value="all">全部状态</option><option value="actionable">需要处理</option>{columns.map(column => <option key={column.id} value={column.id}>{column.label}</option>)}<option value="history">历史</option></select><select aria-label="任务类型" value={category} onChange={event => changeCategory(event.target.value as typeof category)}><option value="all">全部类型</option>{TASK_CATEGORY_CONFIG.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span>{query.trim() ? `搜索：${query}` : null}</span></div>
       <EduPiPagedRows rows={listTasks} memoryKey={`workspace:${listId}:${category}:${query}`} renderRow={task => {
         const lane = taskBoardLane(task, task.id ? data.taskSessions[task.id] : null, task.id ? candidateByTask.get(task.id) : null);
         const completion = taskCompletionTime(task, data);
@@ -270,18 +363,19 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
     </main>;
   }
   return (
-    <main className="edupi-workspace-board" onPointerMove={(event) => { if (!draggedTaskIdRef.current) { const start = dragStartRef.current; if (!start || Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 6) return; suppressClickRef.current = true; beginDrag(start, event.clientX, event.clientY); } queueGhostPosition(event.clientX, event.clientY); setDropTarget(dragTarget(event)?.stage ?? null); }} onPointerUp={(event) => { const target = dragTarget(event); stopDragging(); if (target) void move(target.task, target.stage); }} onPointerCancel={stopDragging} onPointerLeave={() => { if (draggedTaskIdRef.current) stopDragging(); }}>
+    <main ref={boardRef} className="edupi-workspace-board" onPointerMove={(event) => { if (!draggedTaskIdRef.current) { const start = dragStartRef.current; if (!start || Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 6) return; suppressClickRef.current = true; beginDrag(start, event.clientX, event.clientY); } queueGhostPosition(event.clientX, event.clientY); setDropTarget(dragTarget(event)?.stage ?? null); }} onPointerUp={(event) => { const target = dragTarget(event); stopDragging(); if (target) void move(target.task, target.stage); }} onPointerCancel={stopDragging} onPointerLeave={() => { if (draggedTaskIdRef.current) stopDragging(); }}>
       <header className="edupi-workspace-board__heading">
         <div><h1>工作区</h1><p>{visibleCount} 项</p></div>
-        <div className="edupi-workspace-board__actions"><button type="button" onClick={() => openList("history")}>历史 <span>{data.tasks.length}</span></button><button type="button" onClick={() => setCreateOpen((open) => !open)}>新建任务</button></div>
+        <div className="edupi-workspace-board__actions"><button type="button" onClick={() => openList("history")}>历史 <span>{historyCount}</span></button>{!createOpen ? <button ref={createButtonRef} type="button" className="is-primary" disabled={creating || !data.workspace} onClick={openCreate}>新建任务</button> : null}</div>
       </header>
       {mergeSuggestions}
-      <div className="edupi-task-category-segment" role="group" aria-label="任务类型">
-        <button type="button" className={category === "all" ? "is-active" : ""} onClick={() => setCategory("all")} aria-pressed={category === "all"}>全部 <span>{foregroundTasks.length}</span></button>
-        {TASK_CATEGORY_CONFIG.map((item) => { const count = foregroundTasks.filter((task) => taskCategory(task) === item.id).length; return count > 0 ? <button type="button" key={item.id} className={category === item.id ? "is-active" : ""} onClick={() => setCategory(item.id)} aria-pressed={category === item.id}>{item.label} <span>{count}</span></button> : null; })}
+      <div className="edupi-task-category-segment edupi-segmented-control" role="group" aria-label="任务类型">
+        <button type="button" className={category === "all" ? "is-active" : ""} onClick={() => changeCategory("all")} aria-pressed={category === "all"}>全部 <span>{foregroundTasks.length}</span></button>
+        {TASK_CATEGORY_CONFIG.map((item) => { const count = foregroundTasks.filter((task) => taskCategory(task) === item.id).length; return count > 0 ? <button type="button" key={item.id} className={category === item.id ? "is-active" : ""} onClick={() => changeCategory(item.id)} aria-pressed={category === item.id}>{item.label} <span>{count}</span></button> : null; })}
       </div>
-      {createOpen ? <form className="edupi-task-board-create" onSubmit={submitCreate}>
-        <label><span>任务</span><input autoFocus required maxLength={240} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：准备第一次单元检测" /></label>
+      {createOpen ? <form ref={createFormRef} aria-label="新建任务" onSubmit={submitCreate} onKeyDown={event => { if (event.key === "Escape" && !event.nativeEvent.isComposing && !createScope.submitting) { event.preventDefault(); event.stopPropagation(); cancelCreate(); } }}>
+        <fieldset className="edupi-task-board-create" disabled={creating} style={{ marginInline: 0 }}>
+        <label><span>任务</span><input ref={titleRef} required maxLength={240} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：准备第一次单元检测" /></label>
         <label><span>截止日期</span><input type="date" value={dueDate} onInput={(event) => { dueDateManuallyEditedRef.current = true; setDueDate(event.currentTarget.value); }} /></label>
         <label><span>备注</span><input maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="可选" /></label>
         <label className="edupi-task-board-create__managed"><input type="checkbox" checked={managedPreparation} onChange={(event) => { setManagedPreparation(event.target.checked); if (event.target.checked && !timetableSlotId) setTimetableSlotId(slotId(usableSlots[0] || {})); }} /><span>自动准备教学产物</span></label>
@@ -293,7 +387,8 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
           <label><span>产物</span><textarea rows={4} maxLength={4800} value={deliverables} onChange={(event) => setDeliverables(event.target.value)} /></label>
           {deliverableValidation.error ? <p role="alert">{deliverableValidation.error}</p> : null}
         </div> : null}
-        <div className="edupi-task-board-create__actions"><button type="button" disabled={creating} onClick={() => setCreateOpen(false)}>取消</button><button type="submit" className="is-primary" disabled={creating || !canCreate}>{creating ? "创建中…" : managedPreparation ? "创建并准备" : "创建任务"}</button></div>
+        <div className="edupi-task-board-create__actions"><button type="button" disabled={creating} onClick={cancelCreate}>取消</button><button type="submit" className="is-primary" disabled={creating || !canCreate}>{creating ? "创建中…" : managedPreparation ? "创建并准备" : "创建任务"}</button></div>
+        </fieldset>
       </form> : null}
       {message ? <p className={`edupi-task-board-message is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p> : null}
       <div className="edupi-task-board-scroll">
@@ -309,7 +404,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
                   const session = task.id ? data.taskSessions[task.id] ?? null : null;
                   const candidate = task.id ? candidateByTask.get(task.id) ?? null : null;
                   const workCase = workCaseForTask(data, task.id);
-                  return <div role="listitem" key={task.id || `${task.trigger}:${task.title}`}><TaskCard task={task} session={session} lane={column.id} candidate={candidate} workCase={workCase} busy={movingTaskId === task.id} selected={Boolean(task.id) && selectedCardId === task.id} dragSource={draggedTaskId === task.id} onSelect={() => { if (suppressClickRef.current) { suppressClickRef.current = false; return; } setSelectedCardId(task.id ?? null); }} onOpen={() => onTaskDetail(task)} onCardPointerDown={(event) => { suppressClickRef.current = false; if (!task.id || movingTaskId) return; if ((event.target as HTMLElement).closest("select")) return; const rect = event.currentTarget.getBoundingClientRect(); dragStartRef.current = { id: task.id, x: event.clientX, y: event.clientY, offX: event.clientX - rect.x, offY: event.clientY - rect.y, width: rect.width }; }} onHandlePointerDown={(event) => { if (!task.id || movingTaskId) return; event.preventDefault(); const card = event.currentTarget.closest<HTMLElement>(".edupi-task-board-card"); const rect = card?.getBoundingClientRect(); beginDrag({ id: task.id, offX: rect ? event.clientX - rect.x : 14, offY: rect ? event.clientY - rect.y : 14, width: rect?.width ?? 240 }, event.clientX, event.clientY); }} onMove={(stage) => void move(task, stage)} /></div>;
+                  return <div role="listitem" key={task.id || `${task.trigger}:${task.title}`}><TaskCard task={task} session={session} lane={column.id} candidate={candidate} workCase={workCase} busy={movingTaskId === task.id} selected={Boolean(task.id) && selectedCardId === task.id} dragSource={draggedTaskId === task.id} onOpen={(keyboard) => { if (suppressClickRef.current && !keyboard) { suppressClickRef.current = false; return; } suppressClickRef.current = false; setSelectedCardId(task.id ?? null); onTaskDetail(task); }} onCardPointerDown={(event) => { suppressClickRef.current = false; if (!task.id || movingTaskId) return; if ((event.target as HTMLElement).closest("select")) return; const rect = event.currentTarget.getBoundingClientRect(); dragStartRef.current = { id: task.id, x: event.clientX, y: event.clientY, offX: event.clientX - rect.x, offY: event.clientY - rect.y, width: rect.width }; }} onHandlePointerDown={(event) => { if (!task.id || movingTaskId) return; suppressClickRef.current = true; event.preventDefault(); const card = event.currentTarget.closest<HTMLElement>(".edupi-task-board-card"); const rect = card?.getBoundingClientRect(); beginDrag({ id: task.id, offX: rect ? event.clientX - rect.x : 14, offY: rect ? event.clientY - rect.y : 14, width: rect?.width ?? 240 }, event.clientX, event.clientY); }} onMove={(stage) => void move(task, stage)} /></div>;
                 })}
                 {column.tasks.length === 0 ? <div className="edupi-task-board-column__empty" role="status">暂无任务</div> : null}
                 {column.tasks.length > 10 ? <button type="button" className="edupi-list-more" onClick={() => openList(column.id)}>查看更多 <span>{column.tasks.length} 项</span></button> : null}

@@ -46,6 +46,9 @@ function history(manager: Manager) {
       const digest = messageHash(entry.message), rows = assistants.get(digest) ?? []; rows.push(entry); assistants.set(digest, rows);
     }
   }
+  for (const entry of branch) {
+    if (entry.type === "message" && entry.message.role === "toolResult" && edited.has(entry.id)) toolOwners.set(messageHash(entry.message), null);
+  }
   return { branch, byId, assistants, summaries, edited, toolOwners, userEntryId };
 }
 type History = ReturnType<typeof history>;
@@ -119,7 +122,7 @@ function verifiedAssistant(message: AgentMessage, manager: Manager, root: string
 /** Invalid memory-derived assistant spans are omitted as units, never scrubbed by a name glob.
  * Current surviving entries are reconstructed from Core, not copied from old tool bodies. */
 function projectHistory(messages: AgentMessage[], manager: Manager, root: string, snapshot: Snapshot, verify: Verify,
-  currentAssistant: (message: AgentMessage, view: History) => Provenance | null = () => null) {
+  currentAssistant: (message: AgentMessage, view: History) => Provenance | null = () => null, allowCurrentReceipts = false) {
   const current = new Map(snapshot.entries.map(entry => [entry.id, entry])), view = history(manager);
   const turnFor = new Map<AgentMessage, number>(), tainted = new Set<number>(), surviving = new Map<number, Map<string, RecalledMemory>>();
   const provedResults = new Map<AgentMessage, RecalledMemory[]>(), provedAssistants = new Map<AgentMessage, Provenance>(), turnOnly = new Set<AgentMessage>(); let turn = 0;
@@ -131,9 +134,9 @@ function projectHistory(messages: AgentMessage[], manager: Manager, root: string
       if (!proof) tainted.add(turn); else provedAssistants.set(message, proof);
     }
     if (message.role !== "toolResult") continue;
-    if (!memoryTools.has(message.toolName)) {
-      // Unknown tool sources are useful during their exact captured turn, but
-      // seeing them once cannot mint permanent memory/source authority.
+    if (!memoryTools.has(message.toolName) || allowCurrentReceipts && message.toolName !== "memory_recall") {
+      // Current mutation receipts share the ordinary tool-result window. They
+      // acknowledge this execution without minting memory/source authority.
       if (snapshot.turnKey
         && view.userEntryId && view.toolOwners.get(messageHash(message)) === view.userEntryId) turnOnly.add(message);
       else tainted.add(turn);
@@ -168,6 +171,14 @@ function projectHistory(messages: AgentMessage[], manager: Manager, root: string
           remember(entries);
           projected.push({ role: "user", content: [{ type: "text", text: `[已重新核对的历史记忆]\n${entries.map(entry => entry.content).join("\n")}` }], timestamp: 0 });
         }
+      }
+      if (allowCurrentReceipts && message.role === "toolResult" && memoryTools.has(message.toolName)
+        && message.toolName !== "memory_recall" && turnOnly.has(message)) {
+        // A mutation can revoke the source used by its assistant call. Keep
+        // that call held, but acknowledge this exact execution without an
+        // orphaned tool message or any persistent memory/source authority.
+        needsTurn = true;
+        projected.push({ role: "user", content: [{ type: "text", text: `[本轮工具回执：${message.toolName}]\n` }, ...message.content], timestamp: message.timestamp });
       }
       continue;
     }
@@ -208,6 +219,9 @@ export function createMemorySummaryGuard(root: string, snapshot: (manager: Manag
     const expected = sign(body, key).mac;
     return timingSafeEqual(Buffer.from(mac, "hex"), Buffer.from(expected, "hex"));
   };
+  const currentReceiptWindow = (manager: Manager, checked: Snapshot) => Boolean(binding?.manager === manager
+    && binding.sessionId === manager.getSessionId() && directory(manager.getCwd()) === root
+    && checked.turnKey && currentTurnKey(manager) === checked.turnKey && scopeKey(manager) === checked.scopeKey);
   function currentAssistant(message: AgentMessage, manager: Manager, checked: Snapshot, view = history(manager)): Provenance | null {
     const current = currentOutputs.get(manager);
     if (!current || !checked.turnKey || current.runKey !== checked.turnKey || currentTurnKey(manager) !== checked.turnKey) {
@@ -245,7 +259,8 @@ export function createMemorySummaryGuard(root: string, snapshot: (manager: Manag
         try { verify = verifier(keyFor(manager)); } catch { /* Legacy derived content is omitted. */ }
         if (options.failed && !verifiedAssistant(options.failed, manager, root, checked, verify)
           && !currentAssistant(options.failed, manager, checked)) throw held();
-        const projected = projectHistory(source, manager, root, checked, verify, (message, view) => currentAssistant(message, manager, checked, view));
+        const projected = projectHistory(source, manager, root, checked, verify,
+          (message, view) => currentAssistant(message, manager, checked, view), currentReceiptWindow(manager, checked));
         const messages = convertToLlm(summarizable(projected.messages));
         assertCurrent();
         const route = await pinned.runtime.resolveModel(model, messages, options);
@@ -278,7 +293,8 @@ export function createMemorySummaryGuard(root: string, snapshot: (manager: Manag
     project(messages: AgentMessage[], manager: Manager, checked: Snapshot) {
       let verify: Verify = () => false;
       try { if (binding?.manager === manager && binding.sessionId === manager.getSessionId()) verify = verifier(keyFor(manager)); } catch { /* Unproved derived history is held. */ }
-      return projectHistory(messages, manager, root, checked, verify, (message, view) => currentAssistant(message, manager, checked, view));
+      return projectHistory(messages, manager, root, checked, verify,
+        (message, view) => currentAssistant(message, manager, checked, view), currentReceiptWindow(manager, checked));
     },
     rememberContext(manager: Manager, original: AgentMessage[], projected: AgentMessage[], checked: Snapshot, memories: MemoryRef[], turnKey: string | null) {
       pending.delete(manager);

@@ -4,7 +4,7 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("context editor is a compact five-field comparison sheet", async () => {
+test("context editor keeps the five-field comparison sheet", async () => {
   const source = await read("./EduPiContextEditor.tsx");
   const css = await read("../app/edupi-context.css");
   assert.match(source, /TEACHER_CONTEXT_FIELDS\.map/);
@@ -41,8 +41,7 @@ test("context actions are receipt-bound, strict, and keep Chat as a draft handof
   assert.match(manualSave, /marker\.awaiting = false/);
   assert.match(source, /已收到回执，刷新失败。/);
   assert.match(source, /candidate \? <div className="edupi-context-editor__meta">教师资料/);
-  assert.match(source, /setFeedback\(`✓ /);
-  assert.match(source, /回执 \$\{String\(verified\.receipt\.receipt_id\)\}/);
+  assert.doesNotMatch(source, /setFeedback\([^;]*receipt_id/);
   assert.match(source, /chatDraftOpen/);
   assert.match(source, /buildTeacherContextPrompt\(draft\)/);
   assert.match(source, /放入对话/);
@@ -54,7 +53,7 @@ test("context actions are receipt-bound, strict, and keep Chat as a draft handof
   assert.match(panel, /ref=\{contextModalRef\}/);
   assert.match(panel, /useModalDismiss<HTMLDivElement>/);
   assert.match(panel, /tabIndex=\{-1\}/);
-  assert.match(modal, /focusables\.length === 0[\s\S]*event\.preventDefault\(\)/);
+  assert.match(modal, /scopes\.length === 0[\s\S]*event\.preventDefault\(\)/);
   assert.doesNotMatch(panel, /onKeyDown=\{handleContextModalKeyDown\}/);
   assert.match(panel, /role="dialog" aria-modal="true"/);
   assert.match(panel, /candidate=\{education\?\.teacherContextCandidates\[0\]/);
