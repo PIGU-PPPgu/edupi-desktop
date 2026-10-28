@@ -114,8 +114,9 @@ export function EduPiProactivityCanaryView({ state, selectedKey, busy, message, 
   const budgetExhausted = active && budget && !budget.usageUnverified && budget.remainingCalls === 0;
   const ready = state.scopes.filter((scope) => scope.ready);
   const current = active || recoveryPending ? state.activation.scope : ready.find((scope) => scopeKey(scope) === selectedKey) || null;
+  const namedCurrent = current && state.scopes.find((scope) => scopeKey(scope) === scopeKey(current));
   const currentLabel = current
-    ? `${"className" in current && current.className ? current.className : current.classId} · ${current.subject}`
+    ? `${namedCurrent?.className || ("className" in current && current.className ? current.className : current.classId)} · ${current.subject}`
     : "没有可用范围";
   const blockedLabel = state.activationBlocked === "windows_unavailable" ? "Windows 暂不可用" : state.activationBlocked ? "仅隔离试用" : null;
   return <section className="edupi-proactivity-canary" aria-labelledby={titleId}>

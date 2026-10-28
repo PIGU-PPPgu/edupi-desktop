@@ -1410,7 +1410,7 @@ export function AppShell() {
     { id: "settings", label: "教师设置", onClick: () => edupiEducationModule ? openEduPiAdmin("settings") : setAppSettingsOpen(true), disabled: false, iconOnly: true, icon: <span aria-hidden="true">⚙</span> },
   ];
 
-  // Both sidebars remount across education views; only the first may restore startup state.
+  // The teacher frame keeps one list mounted; only the first may restore startup state.
   const renderSessionSidebar = (presentation: "default" | "embedded-chat" = "default") => (
       <SessionSidebar
         selectedSessionId={selectedSession?.id ?? null}
@@ -1424,7 +1424,10 @@ export function AppShell() {
         selectedCwd={selectedSession?.cwd ?? effectiveNewSessionCwd}
         onCwdChange={handleCwdChange}
         onCwdSelect={handleCwdSelect}
-        onOpenFile={handleOpenFile}
+        onOpenFile={(...args) => {
+          if (presentation === "embedded-chat") window.dispatchEvent(new Event("edupi-chat-sidebar-action"));
+          handleOpenFile(...args);
+        }}
         selectedFilePath={activeFileTab?.filePath ?? null}
         explorerRefreshKey={explorerRefreshKey}
         onAtMention={handleAtMention}
@@ -1434,11 +1437,11 @@ export function AppShell() {
         onOpenContext={() => openEducationModule("context")}
         presentation={presentation}
         resourceActions={presentation === "embedded-chat" ? [
-          { id: "connectors", label: "连接器", onClick: () => openEduPiAdmin("connections") },
-          { id: "plugins", label: "插件", onClick: () => setPluginsConfigOpen(true) },
-          { id: "skills", label: "Skills", onClick: () => setSkillsConfigOpen(true) },
-          { id: "knowledge", label: "知识库", onClick: () => openEducationView("memory") },
-          { id: "automation", label: "自动化", onClick: () => openEduPiAdmin("automation") },
+          { id: "connectors", label: "连接器", onClick: () => { window.dispatchEvent(new Event("edupi-chat-sidebar-action")); openEduPiAdmin("connections"); } },
+          { id: "plugins", label: "插件", onClick: () => { window.dispatchEvent(new Event("edupi-chat-sidebar-action")); setPluginsConfigOpen(true); } },
+          { id: "skills", label: "Skills", onClick: () => { window.dispatchEvent(new Event("edupi-chat-sidebar-action")); setSkillsConfigOpen(true); } },
+          { id: "knowledge", label: "知识库", onClick: () => { window.dispatchEvent(new Event("edupi-chat-sidebar-action")); openEducationView("memory"); } },
+          { id: "automation", label: "自动化", onClick: () => { window.dispatchEvent(new Event("edupi-chat-sidebar-action")); openEduPiAdmin("automation"); } },
         ] : undefined}
       />
   );
@@ -1583,7 +1586,7 @@ export function AppShell() {
           zIndex: 200,
         } as React.CSSProperties}
       >
-        {edupiChatActive ? null : sidebarContent}
+        {edupiEducationModule && initialSessionRestored ? null : sidebarContent}
       </div>
       {!edupiEducationModule && sidebarOpen && (
         <div
@@ -2125,9 +2128,11 @@ export function AppShell() {
               refreshKey={educationRefreshKey}
               chatPanel={edupiChatWindow}
               reminderPanel={edupiReminderPanel}
-              chatSidebar={renderSessionSidebar("embedded-chat")}
+              chatSidebar={initialSessionRestored ? renderSessionSidebar("embedded-chat") : null}
+              chatSidebarSuspended={edupiAdminOpen}
               renderFilePreview={(filePath) => (
                 <FileViewer
+                  embedded
                   filePath={filePath}
                   cwd={activeCwd ?? undefined}
                   sourceSessionId={selectedSession?.id ?? null}

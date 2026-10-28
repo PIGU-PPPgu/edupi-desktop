@@ -53,7 +53,7 @@ test("context actions are receipt-bound, strict, and keep Chat as a draft handof
   assert.match(panel, /ref=\{contextModalRef\}/);
   assert.match(panel, /useModalDismiss<HTMLDivElement>/);
   assert.match(panel, /tabIndex=\{-1\}/);
-  assert.match(modal, /focusables\.length === 0[\s\S]*event\.preventDefault\(\)/);
+  assert.match(modal, /scopes\.length === 0[\s\S]*event\.preventDefault\(\)/);
   assert.doesNotMatch(panel, /onKeyDown=\{handleContextModalKeyDown\}/);
   assert.match(panel, /role="dialog" aria-modal="true"/);
   assert.match(panel, /candidate=\{education\?\.teacherContextCandidates\[0\]/);

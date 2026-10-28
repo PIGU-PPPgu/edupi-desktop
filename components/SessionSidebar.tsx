@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState, useCallback, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useRef, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { SessionInfo } from "@/lib/types";
 import type { EducationModule } from "@/lib/edupi-education-ui";
@@ -1576,6 +1576,7 @@ function SessionItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
 
   const title = session.name || visibleTeacherMessageText(session.firstMessage).slice(0, 50) || session.id.slice(0, 12);
 
@@ -1626,6 +1627,15 @@ function SessionItem({
     setMenuOpen(true);
   }, [menuOpen]);
 
+  useLayoutEffect(() => {
+    if (!menuOpen) return;
+    const owner = menuButtonRef.current?.closest("[data-session-popup-owner]");
+    if (!owner) return;
+    const invalidate = () => setMenuOpen(false);
+    owner.addEventListener("edupi-chat-sidebar-invalidated", invalidate);
+    return () => owner.removeEventListener("edupi-chat-sidebar-invalidated", invalidate);
+  }, [menuOpen]);
+
   useEffect(() => {
     if (!menuOpen) return;
     const onPointerDown = (ev: MouseEvent) => {
@@ -1634,7 +1644,15 @@ function SessionItem({
       if (menuButtonRef.current?.contains(target)) return;
       setMenuOpen(false);
     };
-    const onKeyDown = (ev: KeyboardEvent) => { if (ev.key === "Escape") setMenuOpen(false); };
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape" || ev.defaultPrevented) return;
+      const ownership = new window.CustomEvent("edupi-modal-keyboard-owner", { cancelable: true, detail: menuButtonRef.current });
+      if (!document.dispatchEvent(ownership)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      setMenuOpen(false);
+      menuButtonRef.current?.focus({ preventScroll: true });
+    };
     const onScrollOrResize = () => setMenuOpen(false);
     document.addEventListener("mousedown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -1828,6 +1846,7 @@ function SessionItem({
               aria-label={t("sidebar.moreActions")}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
+              aria-controls={menuOpen ? menuId : undefined}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 24, height: 24, padding: 0, flexShrink: 0,
@@ -1850,6 +1869,7 @@ function SessionItem({
           {menuOpen && menuPos && createPortal(
             <div
               ref={menuRef}
+              id={menuId}
               className="native-popover session-item-menu"
               role="menu"
               onClick={(e) => e.stopPropagation()}

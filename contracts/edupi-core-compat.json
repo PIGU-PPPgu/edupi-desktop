@@ -3,10 +3,10 @@
   "core_repository": "edupi",
   "core_sdk": { "pi": "1.0.2", "pi_durable": "1.0.2" },
   "core_runtime": {
-    "core_commit": "af19ac0457cf41dcda88566d9479b0e9405a66d3",
+    "core_commit": "4b3ba5e586a3ab12b35c1f994e624f7c5c8164a5",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:9cbb5912bf322110770947cb1b585d7d49916aa2e86f7d109587931e973086b1",
-    "runtime_component_manifest_hash": "sha256:1475fbf65b8ed8956d86aa8de83e2db99ff94bd3895c3532cff432218d6cbeef",
+    "component_manifest_hash": "sha256:ffec4b6960746873f1392d6b5421d6850ce831adb07a7ec8083ff7f3ee8b7ee5",
+    "runtime_component_manifest_hash": "sha256:20e9d19936ea2858c1557ebfde49473271f82fb523b99a0e11839fa148fc57e4",
     "runtime_schema_hash": "sha256:cc13c2871366620b42edacbff67802e06e7d99bce85950bc87627b8656363eaa"
   },
   "contract_identities": [
@@ -231,5 +231,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/310",
     "https://github.com/PIGU-PPPgu/edupi/pull/311"
   ],
-  "change_note": "Local installed-app acceptance pairs Core af19ac04 on top of merged Core #311 03bbb893 and feedback #310 c8066d3d. The owner-controlled calendar_notes_update runtime operation preserves canonical identity, issuer, date, time and location; snapshot/intake CAS, reviewed-basis conflict review and durable replay remain enforced. New notes audit state requires a matching data rollback when downgrading to Core03. Runtime schema and component closures are updated locally; Bridge v1.1, schedule occurrence v1.2, fixtures and 12 public Bridge commands remain unchanged. Existing DOCX chapter and uploaded-schedule adoption still reread current source and require teacher confirmation. No external sends, automatic material approval or owner bootstrap is added. No cloud receiver or approved policy documents are supplied, so collection remains off. Live capabilities require explicit isolated-canary enabling. This pairing is not a public release."
+  "change_note": "Local installed-app acceptance pairs Core 4b3ba5e5 on top of notes update af19ac04 and merged Core #311 03bbb893 and feedback #310 c8066d3d. The owner-controlled calendar_notes_update runtime operation preserves canonical identity, issuer, date, time and location; snapshot/intake CAS, reviewed-basis conflict review and durable replay remain enforced. New notes audit state requires a matching data rollback when downgrading to Core03. Exact canonical conflict replacement also ignores foreign alias claims without weakening identity or CAS. Runtime schema and component closures are updated locally; Bridge v1.1, schedule occurrence v1.2, fixtures and 12 public Bridge commands remain unchanged. Existing DOCX chapter and uploaded-schedule adoption still reread current source and require teacher confirmation. No external sends, automatic material approval or owner bootstrap is added. No cloud receiver or approved policy documents are supplied, so collection remains off. Live capabilities require explicit isolated-canary enabling. This pairing is not a public release."
 }

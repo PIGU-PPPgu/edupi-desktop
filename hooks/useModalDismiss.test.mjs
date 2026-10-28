@@ -9,11 +9,15 @@ const compiled = ts.transpileModule(fs.readFileSync(new URL("./useModalDismiss.t
 }).outputText;
 
 function fixture() {
-  const effects = [], listeners = new Set(), exports = {};
+  const effects = [], listeners = new Set(), listenersByName = new Map(), exports = {};
   const document = {
     activeElement: null,
-    addEventListener(_name, callback) { listeners.add(callback); },
-    removeEventListener(_name, callback) { listeners.delete(callback); },
+    addEventListener(name, callback) {
+      listeners.add(callback);
+      if (!listenersByName.has(name)) listenersByName.set(name, new Set());
+      listenersByName.get(name).add(callback);
+    },
+    removeEventListener(name, callback) { listeners.delete(callback); listenersByName.get(name)?.delete(callback); },
   };
   const element = (tagName, parentElement = null, open = false) => {
     const node = {
@@ -35,6 +39,7 @@ function fixture() {
     contains: target => controls.includes(target),
     querySelector: () => controls[0],
     querySelectorAll: () => controls,
+    focus() { document.activeElement = this; },
   });
   const react = { useRef: current => ({ current }), useEffect: effect => effects.push(effect) };
   vm.runInNewContext(compiled, { exports, document, require: () => react });
@@ -42,10 +47,15 @@ function fixture() {
     const event = { key: value, shiftKey, defaultPrevented: false,
       preventDefault() { this.defaultPrevented = true; }, stopPropagation() {},
     };
-    for (const callback of listeners) callback(event);
+    for (const callback of listenersByName.get("keydown") ?? []) callback(event);
     return event;
   };
-  return { useModalDismiss: exports.useModalDismiss, effects, document, element, control, panel, key, listeners };
+  const queryOwner = owner => {
+    const event = { detail: owner, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+    for (const callback of listenersByName.get("edupi-modal-keyboard-owner") ?? []) callback(event);
+    return event;
+  };
+  return { useModalDismiss: exports.useModalDismiss, effects, document, element, control, panel, key, queryOwner, listeners };
 }
 
 test("a restored navigation list owns Tab and Escape above the student detail modal", () => {
@@ -226,4 +236,43 @@ test("ordinary dialogs preserve deliberate inner focus and retain their boundary
   f.key("Escape");
   assert.equal(dismissals, 1);
   cleanup();
+});
+
+test("an empty ordinary dialog remains keyboard-contained and restores its opener", () => {
+  const f = fixture(), opener = f.control("open empty dialog");
+  let dismissals = 0;
+  f.document.activeElement = opener;
+  const ref = f.useModalDismiss(() => { dismissals += 1; });
+  ref.current = f.panel([]);
+  const cleanup = f.effects.shift()();
+  assert.equal(f.document.activeElement, ref.current);
+  assert.equal(ref.current.tabIndex, -1);
+  assert.equal(f.key("Tab").defaultPrevented, true);
+  assert.equal(f.key("Tab", true).defaultPrevented, true);
+  assert.equal(f.document.activeElement, ref.current);
+  assert.equal(f.key("Escape").defaultPrevented, true);
+  assert.equal(dismissals, 1);
+  cleanup();
+  assert.equal(f.document.activeElement, opener);
+});
+
+test("portal owners query the registered topmost modal independently of the escaped keyboard focus", () => {
+  const f = fixture(), listClose = f.control("list close"), menuOpener = f.control("menu opener"), resourceClose = f.control("resource close"), escapedMenuItem = f.control("body menu item");
+  const listRef = f.useModalDismiss(() => {});
+  listRef.current = f.panel([listClose, menuOpener]);
+  const closeList = f.effects.shift()();
+  assert.equal(f.queryOwner(menuOpener).defaultPrevented, false);
+
+  const resourceRef = f.useModalDismiss(() => {});
+  resourceRef.current = f.panel([resourceClose]);
+  const closeResource = f.effects.shift()();
+  f.document.activeElement = escapedMenuItem;
+  assert.equal(f.queryOwner(menuOpener).defaultPrevented, true, "a lower menu cannot consume the upper modal's Escape");
+  assert.equal(f.queryOwner(resourceClose).defaultPrevented, false);
+
+  closeResource();
+  assert.equal(f.queryOwner(menuOpener).defaultPrevented, false);
+  closeList();
+  assert.equal(f.queryOwner(menuOpener).defaultPrevented, false, "ordinary menus still work when no modal is mounted");
+  assert.equal(f.listeners.size, 0);
 });

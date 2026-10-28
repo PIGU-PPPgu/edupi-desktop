@@ -152,7 +152,16 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   const [movingTaskId, setMovingTaskId] = useState<string | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<TaskBoardLaneId | null>(null);
-  const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ tone: "success" | "error"; text: string; preparationTaskId?: string } | null>(null);
+  useEffect(() => {
+    if (!message?.preparationTaskId) return;
+    const task = data.tasks.find(item => item.id === message.preparationTaskId);
+    const workCase = workCaseForTask({ workCases: data.workCases }, message.preparationTaskId);
+    const progressed = ["running", "draft_ready", "accepted", "modified", "completed"];
+    if (progressed.includes(workCase?.currentState || "") || [...progressed, "ready"].includes(task?.contentStatus || "")) {
+      setMessage(current => current === message ? null : current);
+    }
+  }, [data.tasks, data.workCases, message]);
   const scopedTasks = category === "all" ? data.tasks : data.tasks.filter((task) => taskCategory(task) === category);
   const columns = projectTaskBoard(scopedTasks, data.taskSessions, data.workCandidates, query, { ...policy, ...data });
   const historyColumns = projectTaskBoard(scopedTasks, data.taskSessions, data.workCandidates, query);
@@ -315,7 +324,8 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
     try {
       const fingerprint = JSON.stringify(requested);
       if (pendingCreateRef.current?.fingerprint !== fingerprint) pendingCreateRef.current = { fingerprint, id: crypto.randomUUID() };
-      const result = await onCreateTask({ clientRequestId: pendingCreateRef.current.id, ...requested });
+      const clientRequestId = pendingCreateRef.current.id;
+      const result = await onCreateTask({ clientRequestId, ...requested });
       if (!current()) return;
       pendingCreateRef.current = null;
       setTitle("");
@@ -330,7 +340,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
       setCreateOpen(false);
       if (focus) focus.target = "trigger";
       setMessage(result.preparationState === "error"
-        ? { tone: "error", text: `任务已创建；自动准备尚未启动：${result.preparationError || "请打开任务后重试"}` }
+        ? { tone: "error", text: `任务已创建；自动准备尚未启动：${result.preparationError || "请打开任务后重试"}`, preparationTaskId: `teacher-task-${clientRequestId.toLowerCase()}` }
         : { tone: "success", text: result.preparationState ? "任务已创建，正在准备教学产物。" : "任务已创建到“待处理”。" });
     } catch (error) {
       if (current()) setMessage({ tone: "error", text: error instanceof Error ? error.message : "任务创建失败。" });

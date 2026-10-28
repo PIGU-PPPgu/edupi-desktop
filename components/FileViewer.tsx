@@ -34,6 +34,7 @@ interface Props {
   onMentionLines?: (relativePath: string, startLine: number, endLine: number) => void;
   gitRefreshKey?: number;
   initialDisplayMode?: DisplayMode;
+  embedded?: boolean;
 }
 
 interface FileData {
@@ -44,11 +45,11 @@ interface FileData {
 
 type DisplayMode = "source" | "preview" | "diff";
 
-const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
-  source: "Source",
-  preview: "Preview",
-  diff: "Diff",
-};
+const DISPLAY_MODE_LABEL_KEYS = {
+  source: "i18n.source",
+  preview: "i18n.preview",
+  diff: "i18n.diff",
+} as const;
 
 const FILE_CODE_STYLE: CSSProperties = {
   fontFamily: "var(--font-mono)",
@@ -300,6 +301,7 @@ function FileViewerToolbar({
   metadata,
   watching,
   sourceSessionId,
+  embedded = false,
   children,
 }: {
   filePath: string;
@@ -307,6 +309,7 @@ function FileViewerToolbar({
   metadata?: string | null;
   watching: boolean;
   sourceSessionId?: string | null;
+  embedded?: boolean;
   children?: ReactNode;
 }) {
   const { t } = useI18n();
@@ -317,7 +320,7 @@ function FileViewerToolbar({
         <span className="file-viewer-file-icon" aria-hidden="true">
           {getFileIcon(getFileName(filePath), 15)}
         </span>
-        <span className="file-viewer-path" title={filePath}>{relativePath}</span>
+        {!embedded && <span className="file-viewer-path" title={filePath}>{relativePath}</span>}
         {metadata && <span className="file-viewer-meta" title={metadata}>{metadata}</span>}
       </div>
       <span
@@ -584,7 +587,7 @@ function DiffView({ patch }: { patch: string }) {
   );
 }
 
-function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
+function ImageViewer({ filePath, cwd, sourceSessionId, embedded }: Props) {
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
@@ -643,6 +646,7 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
         metadata={metadata}
         watching={watching}
         sourceSessionId={sourceSessionId}
+        embedded={embedded}
       />
       <div
         className="file-viewer-image-stage"
@@ -680,7 +684,7 @@ function formatDuration(seconds: number): string {
   return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
-function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
+function AudioViewer({ filePath, cwd, sourceSessionId, embedded }: Props) {
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
@@ -739,6 +743,7 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
         metadata={metadata}
         watching={watching}
         sourceSessionId={sourceSessionId}
+        embedded={embedded}
       />
       <div
         className="file-viewer-audio-stage"
@@ -764,7 +769,7 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
   );
 }
 
-function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
+function DocumentViewer({ filePath, cwd, sourceSessionId, embedded = false }: Props) {
   const { t } = useI18n();
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
@@ -776,7 +781,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
   const isPdf = ext === "pdf";
   const previewUrl = isPdf
     ? getFileApiUrl(filePath, "read", sourceSessionId, bust ? { v: bust } : undefined)
-    : getFileApiUrl(filePath, "preview", sourceSessionId, bust ? { v: bust } : undefined);
+    : getFileApiUrl(filePath, "preview", sourceSessionId, { v: bust || undefined, embedded: embedded ? 1 : undefined });
 
   useEffect(() => {
     setBust(0);
@@ -842,6 +847,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
         metadata={metadata}
         watching={watching}
         sourceSessionId={sourceSessionId}
+        embedded={embedded}
       />
       <div className="file-viewer-document-stage">
         {error ? (
@@ -853,7 +859,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
             key={previewUrl}
             src={previewUrl}
             sandbox={isPdf ? undefined : "allow-same-origin"}
-            title={t("i18n.previewFile", { file: getFileName(filePath) })}
+            title={embedded ? t("i18n.preview") : t("i18n.previewFile", { file: getFileName(filePath) })}
             style={{ width: "100%", height: "100%", border: "none", background: isPdf ? "var(--bg)" : "#eef1f5" }}
           />
         )}
@@ -862,20 +868,20 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
   );
 }
 
-export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, gitRefreshKey, initialDisplayMode }: Props) {
+export function FileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, gitRefreshKey, initialDisplayMode, embedded = false }: Props) {
   if (isImagePath(filePath)) {
-    return <ImageViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
+    return <ImageViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} embedded={embedded} />;
   }
   if (isAudioPath(filePath)) {
-    return <AudioViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
+    return <AudioViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} embedded={embedded} />;
   }
   if (isDocumentPreviewPath(filePath)) {
-    return <DocumentViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} />;
+    return <DocumentViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} embedded={embedded} />;
   }
-  return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} onMentionLines={onMentionLines} gitRefreshKey={gitRefreshKey} initialDisplayMode={initialDisplayMode} />;
+  return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} onMentionLines={onMentionLines} gitRefreshKey={gitRefreshKey} initialDisplayMode={initialDisplayMode} embedded={embedded} />;
 }
 
-function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, gitRefreshKey, initialDisplayMode }: Props) {
+function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, gitRefreshKey, initialDisplayMode, embedded }: Props) {
   const { isDark } = useTheme();
   const { t } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
@@ -1118,6 +1124,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
         metadata={metadata}
         watching={watching}
         sourceSessionId={sourceSessionId}
+        embedded={embedded}
       >
         {displayModes.length > 1 && (
           <div className="file-viewer-mode-switch" aria-label={t("i18n.fileViewMode")}>
@@ -1132,7 +1139,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
                   aria-pressed={active}
                   className="file-viewer-mode-button"
                 >
-                  {DISPLAY_MODE_LABELS[mode]}
+                  {t(DISPLAY_MODE_LABEL_KEYS[mode])}
                 </button>
               );
             })}

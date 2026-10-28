@@ -244,8 +244,14 @@ html.dark .edupi-teacher-shell {
 .edupi-teacher-body.has-inspector:not(.has-object-sider) { grid-template-columns: minmax(0, 1fr) 300px; }
 .edupi-teacher-body.is-chat { grid-template-columns: 280px minmax(0, 1fr); }
 .edupi-teacher-body.is-chat.is-reminders { grid-template-columns: minmax(0, 1fr); }
-.edupi-chat-session-sidebar { min-width: 0; min-height: 0; overflow: hidden; border-right: 1px solid var(--ep-border); background: var(--ep-surface-soft); }
-.edupi-chat-session-sidebar > * { height: 100%; }
+.edupi-chat-session-sidebar { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; border-right: 1px solid var(--ep-border); background: var(--ep-surface-soft); }
+.edupi-chat-session-sidebar[hidden],
+.edupi-chat-sidebar-trigger[hidden] { display: none !important; }
+.edupi-chat-session-sidebar__content { flex: 1; min-height: 0; overflow: hidden; }
+.edupi-chat-session-sidebar__content > * { height: 100%; }
+.edupi-chat-sidebar-header,
+.edupi-chat-sidebar-trigger,
+.edupi-chat-sidebar-backdrop { display: none; }
 .edupi-teacher-body.has-body-controls .edupi-module-heading,
 .edupi-teacher-body.has-body-controls .edupi-dashboard-heading,
 .edupi-teacher-body.has-body-controls .edupi-workspace-board__heading { padding-right: calc(12px + var(--edupi-body-controls-width, 0px)); }
@@ -1058,6 +1064,7 @@ html.dark .edupi-teacher-shell {
 .edupi-database-row__detail strong { overflow: hidden; color: var(--ep-muted); font-size: 10px; font-weight: 520; text-overflow: ellipsis; white-space: nowrap; }
 .edupi-database-row__detail button { height: 30px; padding: 0 10px; border: 1px solid var(--ep-border-strong); border-radius: 6px; background: var(--ep-surface); color: var(--ep-text); cursor: pointer; font-size: 10px; }
 .edupi-method-status { margin: 0 0 10px; padding: 9px 12px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface-soft); color: var(--ep-muted); font-size: 10px; }
+.edupi-database-row.edupi-method-row { min-width: 0; }
 .edupi-method-editor { width: min(100%, 680px); min-width: 0; margin: 0 auto 20px; padding: 20px; border: 1px solid var(--ep-border); border-radius: 7px; background: var(--ep-surface-soft); }
 .edupi-method-editor > fieldset { display: grid; min-width: 0; gap: 16px; margin: 0; padding: 0; border: 0; }
 .edupi-method-editor > fieldset > label { display: grid; gap: 8px; color: var(--ep-muted); font-size: 12px; }
@@ -1076,16 +1083,18 @@ html.dark .edupi-teacher-shell {
 .edupi-method-detail section button { min-height: 30px; padding: 0 10px; border: 1px solid var(--ep-border-strong); border-radius: 6px; background: var(--ep-surface); color: var(--ep-text); cursor: pointer; font-size: 10px; }
 .edupi-method-editor__actions button.is-primary { border-color: var(--ep-blue); background: var(--ep-blue); color: white; }
 .edupi-method-editor__actions button:disabled { cursor: default; opacity: .5; }
-.edupi-method-detail { display: grid; gap: 10px; padding: 13px 14px; border-top: 1px solid var(--ep-border); background: var(--ep-surface-soft); }
-.edupi-method-detail > section { display: grid; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--ep-border); }
+.edupi-method-detail { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 13px 14px; border-top: 1px solid var(--ep-border); background: var(--ep-surface-soft); }
+.edupi-method-detail > section { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--ep-border); }
 .edupi-method-detail h3,
 .edupi-method-detail p { margin: 0; }
 .edupi-method-detail h3 { color: var(--ep-text); font-size: 10px; }
-.edupi-method-detail p { color: var(--ep-muted); font-size: 10px; line-height: 1.6; }
+.edupi-method-detail p { color: var(--ep-muted); font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
 .edupi-method-content { white-space: pre-wrap; }
-.edupi-method-trial { display: grid; gap: 5px; padding: 8px 0; border-top: 1px solid var(--ep-border); }
+.edupi-method-trial { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 8px 0; border-top: 1px solid var(--ep-border); }
 .edupi-method-trial:first-of-type { border-top: 0; }
-.edupi-method-trial > p:first-child { display: flex; justify-content: space-between; gap: 10px; }
+.edupi-method-trial > p:first-child { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; }
+.edupi-method-trial > p:first-child > strong { min-width: 0; overflow-wrap: anywhere; }
+.edupi-method-trial > p:first-child > span { max-width: 100%; margin-left: auto; }
 .edupi-method-trial span { color: var(--ep-dim); }
 .edupi-method-trial button { justify-self: start; }
 .edupi-method-technical > summary { cursor: pointer; color: var(--ep-dim); font-size: 9px; }
@@ -1927,7 +1936,7 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-persistent-chat-host .chat-window { background: var(--ep-surface); }
 .edupi-persistent-chat-host .chat-empty-brand-copy span { display: none; }
 .edupi-persistent-chat-host .chat-composer { border-color: var(--ep-border-strong) !important; border-radius: 10px !important; box-shadow: none !important; }
-.edupi-workspace-drawer { position: absolute; z-index: 120; top: 0; right: 0; bottom: 0; display: grid; width: min(580px, calc(100% - 72px)); grid-template-rows: 58px minmax(0, 1fr); border-left: 1px solid var(--ep-border-strong); background: var(--ep-surface); box-shadow: -18px 0 44px rgba(19, 25, 34, .16); animation: edupi-drawer-in 160ms ease-out both; }
+.edupi-workspace-drawer { position: absolute; z-index: 120; top: 0; right: 0; bottom: 0; display: grid; width: min(580px, calc(100% - 72px)); grid-template-rows: 58px minmax(0, 1fr); border-left: 1px solid var(--ep-border-strong); background: var(--ep-surface); box-shadow: -18px 0 44px rgba(19, 25, 34, .16); }
 @keyframes edupi-drawer-in { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: translateX(0); } }
 .edupi-workspace-drawer > header { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 0 15px; border-bottom: 1px solid var(--ep-border); }
 .edupi-workspace-drawer > header > div:first-child { display: flex; min-width: 0; align-items: center; gap: 8px; }
@@ -1961,7 +1970,7 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-workspace-drawer .chat-empty-brand-copy span { display: none; }
 .edupi-workspace-drawer .chat-composer { border-color: var(--ep-border-strong) !important; border-radius: 10px !important; box-shadow: none !important; }
 .edupi-task-detail-layer { position: absolute; z-index: 125; top: 58px; right: 0; bottom: 0; left: 0; background: rgba(20, 26, 35, .2); }
-.edupi-task-detail-drawer { position: absolute; top: 0; right: 0; bottom: 0; display: grid; width: min(420px, calc(100% - 56px)); grid-template-rows: auto minmax(0, 1fr) auto; border-left: 1px solid var(--ep-border-strong); background: var(--ep-surface); box-shadow: -16px 0 36px rgba(19, 25, 34, .15); animation: edupi-drawer-in 160ms ease-out both; }
+.edupi-task-detail-drawer { position: absolute; top: 0; right: 0; bottom: 0; display: grid; width: min(420px, calc(100% - 56px)); grid-template-rows: auto minmax(0, 1fr) auto; border-left: 1px solid var(--ep-border-strong); background: var(--ep-surface); box-shadow: -16px 0 36px rgba(19, 25, 34, .15); }
 .edupi-task-detail-drawer__header { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 16px 12px; border-bottom: 1px solid var(--ep-border); }
 .edupi-task-detail-drawer__header > div:first-child { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 .edupi-task-detail-drawer__header span { color: var(--ep-blue); font-size: 10px; font-weight: 700; letter-spacing: .05em; }
@@ -2169,9 +2178,17 @@ details[open] > .edupi-disclosure-detail { animation: edupi-expand-in .17s ease-
   .edupi-teacher-body.has-object-sider.is-object-sider-collapsed.has-inspector { grid-template-columns: minmax(0, 1fr); }
   .edupi-content-sider { position: absolute; z-index: 80; top: 0; bottom: 0; left: 0; display: flex; width: min(280px, 84vw) !important; box-shadow: 12px 0 30px rgba(18, 24, 32, .16); }
   .edupi-teacher-body.has-detail-surface > .edupi-content-sider:not([hidden]) { display: flex; z-index: 310; }
-  .edupi-teacher-body.is-chat { grid-template-columns: minmax(0, 1fr); grid-template-rows: 210px minmax(0, 1fr); }
+  .edupi-teacher-body.is-chat { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
   .edupi-teacher-body.is-chat.is-reminders { grid-template-rows: minmax(0, 1fr); }
-  .edupi-chat-session-sidebar { display: block; border-right: 0; border-bottom: 1px solid var(--ep-border); }
+  .edupi-chat-session-sidebar { position: absolute; z-index: 220; inset: 0 auto 0 0; display: none; width: min(320px, calc(100% - 48px)); border-right: 1px solid var(--ep-border-strong); box-shadow: 12px 0 30px rgba(18, 24, 32, .16); }
+  .edupi-chat-session-sidebar.is-foreground,
+  .edupi-chat-session-sidebar:focus-within { display: flex; }
+  .edupi-chat-sidebar-header { display: flex; min-height: 50px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--ep-border); }
+  .edupi-chat-sidebar-header strong { font-size: 13px; font-weight: 600; }
+  .edupi-chat-sidebar-header button { display: grid; width: 32px; height: 32px; padding: 0; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--ep-muted); font-size: 20px; cursor: pointer; }
+  .edupi-chat-sidebar-trigger { position: absolute; z-index: 74; top: 12px; left: 14px; display: flex; height: 32px; align-items: center; gap: 7px; padding: 0 9px; border: 1px solid var(--ep-border); border-radius: 7px; background: var(--ep-surface); color: var(--ep-muted); cursor: pointer; font: inherit; font-size: 11px; }
+  .edupi-chat-sidebar-backdrop { position: absolute; z-index: 210; inset: 0; display: block; border: 0; background: rgba(18, 24, 32, .16); }
+  .edupi-chat-session-sidebar .edupi-chat-resources { grid-template-columns: minmax(0, 1fr); }
   .edupi-module-workspace,
   .edupi-task-workspace { padding: 24px 18px 40px; }
   .edupi-class-workspace.has-student-drawer { padding-right: 18px; }

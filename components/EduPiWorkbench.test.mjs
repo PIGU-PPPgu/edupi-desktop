@@ -9,7 +9,7 @@ test("the EduPi shell owns the default desktop surface and embeds Agent collabor
   assert.match(appShell, /display: edupiEducationModule \? "none" : "flex"/);
   assert.match(appShell, /chatPanel=\{edupiChatWindow\}/);
   assert.doesNotMatch(appShell, /agentPanel=\{edupiChatWindow\}/);
-  assert.match(appShell, /chatSidebar=\{renderSessionSidebar\("embedded-chat"\)\}/);
+  assert.match(appShell, /chatSidebar=\{initialSessionRestored \? renderSessionSidebar\("embedded-chat"\) : null\}/);
   assert.match(appShell, /onSessionCreated=\{handleEducationSessionCreated\}/);
   assert.match(appShell, /renderFilePreview=/);
   assert.doesNotMatch(appShell, /<EduPiEducationHome/);
@@ -70,7 +70,8 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   for (const label of ["自动准备教学产物", "课次", "上课日期", "材料", "产物", "创建并准备"]) assert.match(taskBoard, new RegExp(label));
   assert.match(taskBoard, /preparationSource: managedPreparation/);
   assert.match(taskBoard, /pendingCreateRef/);
-  assert.match(taskBoard, /clientRequestId: pendingCreateRef\.current\.id/);
+  assert.match(taskBoard, /const clientRequestId = pendingCreateRef\.current\.id;/);
+  assert.match(taskBoard, /onCreateTask\(\{ clientRequestId, \.\.\.requested \}\)/);
   assert.match(taskBoard, /material\.subject === activeSubject/);
   assert.match(taskBoard, /material\.class_id === activeClass/);
   assert.match(taskBoard, /lessonDateMatchesSlot/);
