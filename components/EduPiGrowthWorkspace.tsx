@@ -100,13 +100,13 @@ export function EduPiGrowthWorkspace({ data, teachingSkills, query, selectedObje
   };
   const headingTitle = category === "teacher" ? "教师专业成长" : "EduPi 能力成长";
   const teacherRecordCount = growth.length + documents.length + artifacts.length;
-  const recordCount = category === "teacher" ? teacherRecordCount : skills.length;
+  const headingDescription = category !== "teacher" && teachingSkills.status === "unavailable" ? "教学方法暂不可用" : null;
   let headingAction: ReactNode = null;
   if (category === "teacher") headingAction = <button type="button" className="is-primary" onClick={() => onStartAgent("教学复盘", "replace")}>记录复盘</button>;
   else if (teachingSkills.mutationEnabled && !activeEditor) headingAction = <button data-method-create type="button" className="is-primary" onClick={() => edit(null, "create")}>新增教学方法</button>;
 
   return <main ref={rootRef} className="edupi-module-workspace edupi-database-workspace">
-    <header className="edupi-module-heading"><div><h1>{headingTitle}</h1><p>{recordCount} 条记录</p></div>{headingAction}</header>
+    <header className="edupi-module-heading"><div><h1>{headingTitle}</h1>{headingDescription ? <p>{headingDescription}</p> : null}</div>{headingAction}</header>
     {category !== "teacher" && savedMessage ? <p className="edupi-method-status" role="status">{savedMessage}</p> : null}
     {category !== "teacher" && !teachingSkills.mutationEnabled ? <p className="edupi-method-status">旧方法仍可查看，当前版本不能修改。</p> : null}
     {category !== "teacher" && activeEditor?.mode === "create" ? <EduPiTeachingMethodEditor key="create" mode="create" focusOrigin={activeEditor.origin} mutationEnabled={teachingSkills.mutationEnabled} onSaved={(next, restoreFocus) => saved(activeEditor, next, "方法已保存", restoreFocus)} onCancel={restoreFocus => closeEditor(activeEditor, restoreFocus)} /> : null}

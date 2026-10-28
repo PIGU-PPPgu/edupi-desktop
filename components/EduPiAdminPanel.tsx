@@ -21,6 +21,7 @@ import { kernelRunAction, kernelRunDetail, kernelRunTitle, type KernelRunDisplay
 import { EduPiDeletedEntities } from "./EduPiDeletedEntities";
 import { readEducationEntityDeletions, restoreEducationEntity } from "@/lib/edupi-entity-delete-client";
 import { EduPiProactivityCanary } from "./EduPiProactivityCanary";
+import { EduPiBrandMark } from "./EduPiBrandMark";
 import { EduPiPromptOutboxRecovery } from "./EduPiPromptOutboxRecovery";
 import { JevSettingsCard } from "./JevSettingsCard";
 import { OpenConnectorAdminPanel } from "./OpenConnectorAdminPanel";
@@ -316,7 +317,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
   return <section className={`edupi-admin-panel${desktopChrome.isDesktop ? " has-desktop-drag-region" : ""}`} aria-label="EduPi 设置">
     {desktopChrome.isDesktop ? <div className="edupi-window-drag-region" {...desktopChrome.dragRegionProps} onMouseDown={(event) => { if (event.button === 0 && event.target === event.currentTarget) void startWindowDragging(); }}><WindowControls /></div> : null}
     <aside className="edupi-admin-sidebar">
-      <header><button className="edupi-admin-sidebar__back" type="button" disabled={settingsBusy} onClick={() => leaveAdmin(onClose)}><EduPiSettingsIcon name="arrow" />返回工作台</button><strong>设置</strong></header>
+      <header><button className="edupi-admin-sidebar__back" type="button" disabled={settingsBusy} onClick={() => leaveAdmin(onClose)}><EduPiSettingsIcon name="arrow" />返回工作台</button><div className="edupi-admin-sidebar__identity"><EduPiBrandMark /><strong>设置</strong></div></header>
       <label className="edupi-settings-search"><EduPiSettingsIcon name="search" /><input ref={searchRef} type="search" aria-label="搜索设置" aria-controls={searchQuery.trim() ? "edupi-settings-search-results" : undefined} placeholder="搜索设置" autoComplete="off" maxLength={100} value={searchQuery} disabled={settingsBusy} onChange={(event) => { setSearchQuery(event.target.value); setSearchTarget(null); }} onKeyDown={(event) => {
         if (event.key === "Escape" && searchQuery) { event.preventDefault(); setSearchQuery(""); activeNavRef.current?.focus(); }
         if (event.key === "Enter" && searchResults[0]) { event.preventDefault(); openSearchResult(searchResults[0]); }

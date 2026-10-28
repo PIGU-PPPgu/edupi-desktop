@@ -4,6 +4,7 @@ import type { WorkbenchView } from "@/lib/edupi-workbench";
 import { workbenchViews } from "@/lib/edupi-workbench";
 import { useRouter } from "next/navigation";
 import { EduPiSidebarIcon } from "./EduPiSidebarIcon";
+import { EduPiBrandMark } from "./EduPiBrandMark";
 
 type Props = {
   activeView: WorkbenchView;
@@ -22,7 +23,7 @@ type Props = {
 };
 
 const groups: Array<{ label: string; views: WorkbenchView[] }> = [
-  { label: "协作", views: ["chat", "dashboard", "workspace"] },
+  { label: "协作", views: ["dashboard", "chat", "workspace"] },
   { label: "教师工作", views: ["teaching", "homeroom", "calendar"] },
   { label: "长期积累", views: ["memory", "insights", "growth"] },
   { label: "控制", views: ["materials", "review"] },
@@ -58,11 +59,12 @@ export function EduPiNavigationRail({ activeView, pendingReviewCount, runningAge
   const router = useRouter();
   const item = (view: WorkbenchView) => {
     const config = workbenchViews.find((entry) => entry.id === view)!;
-    return <button key={view} type="button" title={config.label} aria-label={config.label} className={activeView === view ? "is-active" : ""} aria-current={activeView === view ? "page" : undefined} onClick={() => onSelect(view)}><span className="edupi-teacher-rail__icon"><RailIcon view={view} /></span><span className="edupi-teacher-rail__text"><span>{config.label}</span><small>{config.shortLabel}</small></span>{view === "review" && pendingReviewCount > 0 ? <em>{pendingReviewCount}</em> : null}</button>;
+    const selected = activeView === view || view === "homeroom" && activeView === "students";
+    return <button key={view} type="button" title={config.label} aria-label={config.label} className={selected ? "is-active" : ""} aria-current={selected ? "page" : undefined} onClick={() => onSelect(view)}><span className="edupi-teacher-rail__icon"><RailIcon view={view} /></span><span className="edupi-teacher-rail__text"><span>{config.label}</span><small>{config.shortLabel}</small></span>{view === "review" && pendingReviewCount > 0 ? <em>{pendingReviewCount}</em> : null}</button>;
   };
   return (
     <nav className={`edupi-teacher-rail${collapsed ? " is-collapsed" : ""}`} aria-label="EduPi 主导航">
-      <div className="edupi-teacher-rail__brand"><span>π</span><div><strong>EduPi</strong><small>{workspaceLabel}</small></div><button type="button" className="edupi-teacher-rail__collapse" onClick={onCollapse} title={collapsed ? "展开主导航" : "收起主导航"} aria-label={collapsed ? "展开主导航" : "收起主导航"} aria-expanded={!collapsed}><EduPiSidebarIcon expanded={!collapsed} /></button></div>
+      <div className="edupi-teacher-rail__brand"><EduPiBrandMark /><div><strong>EduPi</strong><small>{workspaceLabel}</small></div><button type="button" className="edupi-teacher-rail__collapse" onClick={onCollapse} title={collapsed ? "展开主导航" : "收起主导航"} aria-label={collapsed ? "展开主导航" : "收起主导航"} aria-expanded={!collapsed}><EduPiSidebarIcon expanded={!collapsed} /></button></div>
       <div className="edupi-teacher-rail__items">
         {groups.map((group) => <section className="edupi-teacher-rail__group" key={group.label}><div className="edupi-teacher-rail__group-title">{group.label}</div>{group.views.map(item)}</section>)}
       </div>

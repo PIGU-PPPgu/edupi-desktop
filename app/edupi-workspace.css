@@ -356,9 +356,9 @@
   margin: 0 0 6px;
   color: var(--ep-text);
   font-size: var(--ep-page-title-size, 24px);
-  font-weight: 600;
-  letter-spacing: -.025em;
-  line-height: 1.25;
+  font-weight: 620;
+  letter-spacing: -.04em;
+  line-height: 1.2;
 }
 
 .edupi-calendar-heading p {
@@ -372,7 +372,7 @@
   height: 34px;
   padding: 0 12px;
   border: 1px solid var(--ep-border-strong);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   background: var(--ep-surface);
   color: var(--ep-text);
   cursor: pointer;
@@ -516,6 +516,7 @@
 .edupi-calendar-weekdays {
   border: 1px solid var(--ep-border);
   border-bottom: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--ep-surface-soft);
 }
 
@@ -532,6 +533,7 @@
 
 .edupi-calendar-month-grid {
   border: 1px solid var(--ep-border);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   background: var(--ep-border);
   gap: 1px;
 }
@@ -542,10 +544,11 @@
   min-height: 103px;
   padding: 6px;
   background: var(--ep-surface);
+  transition: background-color var(--motion-fast) ease;
 }
 
 .edupi-calendar-month-cell.is-outside { background: var(--ep-surface-soft); }
-.edupi-calendar-month-cell.is-selected { box-shadow: inset 0 2px var(--ep-blue); }
+.edupi-calendar-month-cell.is-selected { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ep-blue) 45%, var(--ep-border)); }
 .edupi-calendar-month-cell__week { position: absolute; top: 10px; left: 7px; color: var(--ep-dim); font-size: 9px; }
 
 .edupi-calendar-month-cell__date {
@@ -564,6 +567,7 @@
 }
 
 .edupi-calendar-month-cell.is-outside .edupi-calendar-month-cell__date { color: var(--ep-dim); }
+.edupi-calendar-month-cell__date:hover { background: color-mix(in srgb, var(--ep-blue-soft) 72%, var(--ep-surface)); }
 .edupi-calendar-month-cell__date[aria-current="date"] { background: var(--ep-blue); color: white; font-weight: 700; }
 
 .edupi-calendar-month-cell__entries {

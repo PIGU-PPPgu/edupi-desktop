@@ -14,27 +14,32 @@
 :root {
   color-scheme: light;
 
-  /* Native-inspired semantic colors. Keep the canvas warm and reserve pure
-     white for controls and elevated content. */
-  --bg: #f7f7f5;
-  --bg-panel: rgba(241, 241, 239, 0.92);
-  --bg-hover: rgba(29, 29, 31, 0.055);
-  --bg-selected: rgba(29, 29, 31, 0.08);
-  --border: rgba(60, 60, 67, 0.16);
-  --separator: rgba(60, 60, 67, 0.12);
+  /* Light workspace surfaces with color reserved for service artwork. */
+  --bg: #fcfcfd;
+  --bg-panel: #f5f6f8;
+  --bg-hover: rgba(39, 48, 69, 0.045);
+  --bg-selected: rgba(72, 101, 160, 0.08);
+  --border: #e4e7ed;
+  --separator: #edf0f4;
   --surface: #ffffff;
   --surface-muted: rgba(255, 255, 255, 0.64);
   --surface-elevated: #ffffff;
-  --text: #1d1d1f;
-  --text-muted: #68686d;
-  --text-dim: #94949a;
-  --text-meta: #85858b;
-  --accent: #2f63c9;
-  --accent-hover: #2452a8;
+  --text: #242735;
+  --text-muted: #676e7e;
+  --text-dim: #6e7585;
+  --text-meta: #777e8e;
+  --accent: #4869b1;
+  --accent-hover: #36548f;
   --accent-contrast: #ffffff;
   --accent-soft: rgba(47, 99, 201, 0.09);
   --accent-border: rgba(47, 99, 201, 0.27);
   --focus-ring: rgba(47, 99, 201, 0.25);
+  --action-bg: #25283b;
+  --action-hover: #383d56;
+  --action-contrast: #ffffff;
+  --brand-start: #5e85bb;
+  --brand-orbit: #d9f3f4;
+  --illustration-paper: #ffffff;
   --danger: #d92d20;
   --success: #2f8b62;
   --warning: #c27a16;
@@ -47,35 +52,37 @@
   /* Typography */
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
     "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display",
-    "PingFang SC", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Segoe UI Variable Display", "Segoe UI", sans-serif;
 
   /* Shape, spacing and elevation */
   --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
   --control-height-sm: 28px;
-  --control-height: 32px;
+  --control-height: 36px;
   --shadow-control: 0 1px 2px rgba(15, 23, 42, 0.045);
-  --shadow-composer: 0 1px 2px rgba(15, 23, 42, 0.06),
-    0 12px 32px rgba(15, 23, 42, 0.08);
-  --shadow-popover: 0 16px 44px rgba(15, 23, 42, 0.14),
-    0 2px 8px rgba(15, 23, 42, 0.06);
+  --shadow-composer: 0 3px 0 rgba(35, 47, 70, 0.045),
+    0 16px 40px rgba(35, 47, 70, 0.065);
+  --shadow-popover: 0 12px 40px rgba(35, 47, 70, 0.1),
+    0 2px 6px rgba(35, 47, 70, 0.035);
   --shadow-dialog: 0 28px 80px rgba(15, 23, 42, 0.22),
     0 4px 16px rgba(15, 23, 42, 0.08);
-  --ease-native: cubic-bezier(0.2, 0.75, 0.25, 1);
+  --motion-fast: 160ms;
+  --motion-surface: 280ms;
+  --motion-enter: 560ms;
+  --ease-native: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html.dark {
   color-scheme: dark;
-  --bg: #1c1c1e;
-  --bg-panel: rgba(36, 36, 38, 0.94);
+  --bg: #141821;
+  --bg-panel: #1b202c;
   --bg-hover: rgba(255, 255, 255, 0.075);
   --bg-selected: rgba(255, 255, 255, 0.12);
   --border: rgba(235, 235, 245, 0.15);
   --separator: rgba(235, 235, 245, 0.1);
-  --surface: #252527;
+  --surface: #202634;
   --surface-muted: rgba(44, 44, 46, 0.72);
   --surface-elevated: #2c2c2e;
   --text: #f5f5f7;
@@ -88,6 +95,12 @@ html.dark {
   --accent-soft: rgba(125, 167, 255, 0.16);
   --accent-border: rgba(125, 167, 255, 0.36);
   --focus-ring: rgba(125, 167, 255, 0.32);
+  --action-bg: #e6eaf5;
+  --action-hover: #ffffff;
+  --action-contrast: #202536;
+  --brand-start: #45658d;
+  --brand-orbit: #a7dcdf;
+  --illustration-paper: #2f4056;
   --danger: #ff6961;
   --success: #30d158;
   --warning: #ffd60a;
@@ -1295,7 +1308,7 @@ html.dark .sidebar-view-switcher-thumb {
 
 .native-popover:not(.animated-native-popover) {
   transform-origin: bottom center;
-  animation: native-popover-in 140ms var(--ease-native) both;
+  animation: native-popover-in var(--motion-fast) var(--ease-native) backwards;
 }
 
 @keyframes native-popover-in {
@@ -1363,10 +1376,12 @@ html.dark .sidebar-view-switcher-thumb {
   from {
     opacity: 0;
     transform: translateY(8px) scale(0.985);
+    filter: blur(3px);
   }
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+    filter: blur(0);
   }
 }
 
@@ -1383,7 +1398,7 @@ html.dark .sidebar-view-switcher-thumb {
   border-radius: 14px !important;
   background: var(--surface-elevated) !important;
   box-shadow: var(--shadow-dialog) !important;
-  animation: native-modal-in 180ms var(--ease-native) both;
+  animation: native-modal-in var(--motion-surface) var(--ease-native) backwards;
 }
 
 .native-modal-header {
@@ -1597,16 +1612,17 @@ html.dark .sidebar-view-switcher-thumb {
 
 .native-button-primary {
   border-color: transparent !important;
-  background: var(--accent) !important;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 30%, transparent);
-  color: var(--accent-contrast) !important;
+  background: var(--action-bg) !important;
+  box-shadow: var(--shadow-control);
+  color: var(--action-contrast) !important;
   font-weight: 620;
 }
 
 .native-button-primary:hover:not(:disabled) {
   border-color: transparent !important;
-  background: var(--accent-hover) !important;
-  color: #fff !important;
+  background: var(--action-hover) !important;
+  color: var(--action-contrast) !important;
+  transform: translateY(-1px);
 }
 
 .native-button-primary:disabled {
@@ -1783,9 +1799,9 @@ html.dark .sidebar-view-switcher-thumb {
   padding: 0 13px;
   border: 0;
   border-radius: var(--radius-md);
-  background: var(--accent);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 28%, transparent);
-  color: var(--accent-contrast);
+  background: var(--action-bg);
+  box-shadow: var(--shadow-control);
+  color: var(--action-contrast);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -1796,8 +1812,9 @@ html.dark .sidebar-view-switcher-thumb {
 }
 
 .native-primary-button:hover:not(:disabled) {
-  background: var(--accent-hover);
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--accent) 30%, transparent);
+  background: var(--action-hover);
+  box-shadow: var(--shadow-control);
+  transform: translateY(-1px);
 }
 
 .native-primary-button:active:not(:disabled) {
@@ -1817,6 +1834,23 @@ html.dark .sidebar-view-switcher-thumb {
   margin: 0 auto;
   padding: 0 0 13px;
 }
+
+.edupi-brand-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--brand-start) 25%, transparent);
+  border-radius: 11px;
+  background: var(--brand-start);
+  box-shadow: 2px 3px 0 color-mix(in srgb, var(--brand-start) 18%, transparent);
+  color: #fff;
+}
+.edupi-brand-mark svg { width: 100%; height: 100%; }
+.edupi-brand-mark__orbit { stroke: var(--brand-orbit); stroke-width: 1; opacity: .6; }
+.chat-empty-brand > .edupi-brand-mark { width: 60px; height: 60px; flex-basis: 60px; margin-right: 20px; border-radius: 18px; transform: rotate(-8deg); }
 
 .chat-composer {
   overflow: visible;
@@ -1939,7 +1973,7 @@ html.dark .sidebar-view-switcher-thumb {
 .chat-empty-brand-copy strong {
   color: var(--text);
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: 26px;
   font-weight: 650;
   letter-spacing: -0.025em;
 }

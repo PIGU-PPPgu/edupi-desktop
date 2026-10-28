@@ -14,6 +14,7 @@ const pure = {};
 for (const name of ["edupi-composer-context", "image-attachments", "file-fuzzy", "tool-presets", "normalize",
   "scroll-memory", "streaming-message", "agent-message-history", "ansi", "terminal-input", "message-display",
   "chat-file-drop", "chat-lazy-load", "edupi-calendar-result"]) pure[`@/lib/${name}`] = await jiti.import(`../lib/${name}.ts`);
+pure["./EduPiBrandMark"] = await jiti.import("./EduPiBrandMark.tsx");
 const sources = Object.fromEntries(["ChatInput", "ChatWindow"].map(name => [name, fs.readFileSync(new URL(`./${name}.tsx`, import.meta.url), "utf8")]));
 sources.useAgentSession = fs.readFileSync(new URL("../hooks/useAgentSession.ts", import.meta.url), "utf8");
 sources.drafts = fs.readFileSync(new URL("../lib/draft-store.ts", import.meta.url), "utf8");

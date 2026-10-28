@@ -20,8 +20,8 @@
   min-height: 34px;
   padding: 0 11px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-panel);
+  border-radius: var(--radius-md);
+  background: var(--surface);
   color: var(--text);
   cursor: pointer;
   font: inherit;
@@ -30,6 +30,7 @@
 
 .edupi-admin-panel button:hover { background: var(--bg-hover); }
 .edupi-admin-panel button:disabled { cursor: default; opacity: .5; }
+.edupi-admin-panel button { transition: color var(--motion-fast) ease, background-color var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease; }
 .edupi-admin-panel button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .edupi-admin-sidebar {
@@ -38,25 +39,26 @@
   min-height: 0;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 20px;
-  padding: 24px 16px;
+  padding: 16px 10px 10px;
   border-right: 1px solid var(--border);
-  background: var(--bg-panel);
+  background: color-mix(in srgb, var(--bg-panel) 94%, var(--surface));
 }
 
 .edupi-admin-sidebar > header { display: grid; gap: 20px; padding: 0 8px; }
+.edupi-admin-sidebar__identity { display: flex; align-items: center; gap: 10px; }
 .edupi-admin-sidebar > header strong { font-size: 18px; font-weight: 650; letter-spacing: -.02em; }
 .edupi-admin-panel .edupi-admin-sidebar__back { display: flex; width: fit-content; min-height: 24px; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; color: var(--text-muted); font-size: 12px; }
 .edupi-admin-sidebar nav { display: grid; min-height: 0; align-content: start; gap: 24px; overflow-y: auto; }
 .edupi-settings-nav-group > h2 { margin: 0; padding: 0 10px 8px; color: var(--text-muted); font-size: 11px; font-weight: 500; }
 .edupi-settings-nav-group { display: grid; gap: 2px; }
 .edupi-settings-nav-group > button,
-.edupi-settings-nav-footer > button { display: flex; width: 100%; min-height: 36px; align-items: center; gap: 10px; padding: 0 10px; border: 0; background: transparent; color: var(--text-muted); text-align: left; font-size: 13px; }
+.edupi-settings-nav-footer > button { display: flex; width: 100%; min-height: 36px; align-items: center; gap: 10px; padding: 0 10px; border: 1px solid transparent; background: transparent; color: var(--text-muted); text-align: left; font-size: 13px; }
 .edupi-settings-nav-group > button svg,
 .edupi-settings-nav-footer > button svg { flex: 0 0 auto; }
 .edupi-settings-nav-group > button[aria-current="page"],
-.edupi-settings-nav-footer > button[aria-current="page"] { background: var(--bg-selected); color: var(--text); box-shadow: inset 2px 0 var(--accent); font-weight: 600; }
+.edupi-settings-nav-footer > button[aria-current="page"] { border-color: var(--border); background: var(--surface); color: var(--text); box-shadow: var(--shadow-control); font-weight: 650; }
 .edupi-settings-nav-footer { display: grid; gap: 2px; padding-top: 8px; border-top: 1px solid var(--border); }
-.edupi-settings-search { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text-muted); }
+.edupi-settings-search { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--text-muted); }
 .edupi-settings-search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .edupi-settings-search svg { flex: 0 0 auto; }
 .edupi-settings-search input { width: 100%; min-width: 0; height: 34px; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 12px; }
@@ -89,8 +91,10 @@
   overflow: auto;
   scrollbar-gutter: stable;
   container-type: inline-size;
-  background: var(--bg);
+  background: var(--surface);
 }
+
+html.dark .edupi-admin-workspace { background: var(--bg); }
 
 .edupi-admin-section {
   width: min(896px, 100%);
@@ -255,10 +259,10 @@
 }
 
 .edupi-admin-section__header > div { display: flex; min-width: 0; align-items: center; gap: 12px; }
-.edupi-admin-section__header h1 { margin: 0; font-size: 24px; font-weight: 650; letter-spacing: -.03em; }
+.edupi-admin-section__header h1 { margin: 0; font-size: 26px; font-weight: 620; letter-spacing: -.035em; }
 .edupi-admin-section__header small { max-width: 420px; overflow: hidden; color: var(--text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 
-.edupi-admin-work-grid { display: grid; margin-top: 18px; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); }
+.edupi-admin-work-grid { display: grid; margin-top: 18px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-control); }
 .edupi-admin-work-grid article { display: grid; min-width: 0; min-height: 82px; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-rows: auto auto; align-content: center; align-items: center; gap: 4px 16px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
 .edupi-admin-work-grid article:last-child { border-bottom: 0; }
 .edupi-admin-work-grid h2 { grid-column: 1; grid-row: 1; margin: 0; font-size: 13px; font-weight: 600; }
@@ -287,8 +291,9 @@
   overflow: hidden;
   margin-top: 18px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-panel);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
 }
 
 .edupi-admin-readiness > summary {
@@ -351,8 +356,9 @@
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   margin-top: 24px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-panel);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
 }
 
 .edupi-admin-metrics > div { display: grid; gap: 8px; min-height: 88px; align-content: center; padding: 16px 20px; border-right: 1px solid var(--border); }
@@ -364,8 +370,9 @@
   overflow: hidden;
   margin-top: 14px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-panel);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
 }
 
 .edupi-admin-list > button,
@@ -390,6 +397,33 @@
 .edupi-admin-list small { color: var(--text-muted); font-size: 11px; }
 .edupi-admin-list em { color: var(--text-muted); font-size: 11px; font-style: normal; white-space: nowrap; }
 .edupi-admin-list em.is-ready { color: #18805a; }
+
+@keyframes edupi-admin-enter {
+  from { opacity: 0; filter: blur(2px); transform: translateY(6px); }
+  to { opacity: 1; filter: none; transform: none; }
+}
+
+.edupi-admin-section__header,
+.edupi-admin-readiness,
+.edupi-admin-work-grid,
+.edupi-admin-metrics,
+.edupi-admin-list {
+  animation: edupi-admin-enter 340ms var(--ease-native) backwards;
+}
+
+.edupi-admin-readiness,
+.edupi-admin-work-grid,
+.edupi-admin-metrics,
+.edupi-admin-list { animation-delay: 60ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .edupi-admin-section__header,
+  .edupi-admin-readiness,
+  .edupi-admin-work-grid,
+  .edupi-admin-metrics,
+  .edupi-admin-list { animation: none; }
+  .edupi-admin-panel button { transition: none; }
+}
 
 .edupi-proactivity-canary { display: grid; margin-top: 14px; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); }
 .edupi-proactivity-canary > div,
@@ -627,6 +661,7 @@
   .edupi-admin-sidebar > header { padding-inline: 5px; }
   .edupi-admin-sidebar { gap: 14px; }
   .edupi-admin-sidebar nav { gap: 16px; }
+  .edupi-admin-sidebar .edupi-brand-mark { width: 30px; height: 30px; flex-basis: 30px; }
   .edupi-admin-section { padding: 24px 14px 36px; }
   .edupi-admin-section__header h1 { font-size: 21px; }
   .edupi-admin-work-grid { grid-template-columns: 1fr; }

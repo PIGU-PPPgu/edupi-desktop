@@ -163,6 +163,7 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   const profileTriggerRef = useRef<HTMLButtonElement | null>(null);
   const profileFocusRef = useRef<{ studentKey: string; target: "editor" | "trigger"; from: Element | null } | null>(null);
   const [busy, setBusy] = useState(false);
+  const rosterImportInFlightRef = useRef(false);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [editor, setEditor] = useState<StudentProfileEditor | null>(null);
   const [preview, setPreview] = useState<RosterPreview | null>(null);
@@ -274,15 +275,17 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   const importFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file || busy) return;
+    if (!file || busy || rosterImportInFlightRef.current) return;
+    rosterImportInFlightRef.current = true;
     setPreview(null);
     setBusy(true); setMessage(null);
     try { await importRosterFile(file); }
     catch (error) { setMessage({ tone: "error", text: error instanceof Error ? error.message : "学生名单导入失败。" }); }
-    finally { setBusy(false); }
+    finally { rosterImportInFlightRef.current = false; setBusy(false); }
   };
   const confirmImport = async (csv: string) => {
-    if (!preview || busy) return;
+    if (!preview || busy || rosterImportInFlightRef.current) return;
+    rosterImportInFlightRef.current = true;
     setBusy(true); setMessage(null);
     try {
       const response = await fetch("/api/edupi/students/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourceName: preview.sourceName, csv }) });
@@ -291,7 +294,7 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
       onEducation(result.data); setPreview(null);
       setMessage({ tone: "success", text: `已导入 ${result.result?.imported ?? 0} 名学生` });
     } catch (error) { setMessage({ tone: "error", text: error instanceof Error ? error.message : "导入失败，请重试。" }); }
-    finally { setBusy(false); }
+    finally { rosterImportInFlightRef.current = false; setBusy(false); }
   };
   const closeEditor = () => {
     const active = document.activeElement;
@@ -386,7 +389,7 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   };
 
   return <main className={`edupi-module-workspace edupi-class-workspace${selected ? " has-student-drawer" : ""}`}>
-    <header className="edupi-module-heading edupi-student-heading"><h1>{mode === "homeroom" ? "班级" : "学生档案"}</h1><div className="edupi-student-heading__actions"><button type="button" className="is-primary" onClick={() => inputRef.current?.click()} disabled={busy}>{busy ? "导入中…" : "导入名单"}</button><button type="button" onClick={exportCurrent} disabled={data.students.length === 0}>{selected ? "导出当前档案" : "导出全部档案"}</button><button type="button" onClick={exportTimeline} disabled={!selected || trajectory.length === 0}>导出成长记录</button></div><input ref={inputRef} type="file" accept=".csv,.tsv,.xlsx,.xls,.xlsm,.xlsb,text/csv,text/tab-separated-values,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={importFile} /></header>
+    <header className="edupi-module-heading edupi-student-heading"><h1>{mode === "homeroom" ? "班级" : "学生档案"}</h1><div className="edupi-student-heading__actions">{data.students.length > 0 ? <button type="button" className="is-primary" onClick={() => inputRef.current?.click()} disabled={busy}>{busy ? "导入中…" : "导入名单"}</button> : null}<button type="button" onClick={exportCurrent} disabled={data.students.length === 0}>{selected ? "导出当前档案" : "导出全部档案"}</button><button type="button" onClick={exportTimeline} disabled={!selected || trajectory.length === 0}>导出成长记录</button></div><input ref={inputRef} type="file" accept=".csv,.tsv,.xlsx,.xls,.xlsm,.xlsb,text/csv,text/tab-separated-values,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={importFile} /></header>
     {message ? <p className={`edupi-student-message is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p> : null}
     {classNames.length > 0 ? <label className="edupi-student-class-filter">班级 <select value={classFilter} onChange={event => setClassFilter(event.target.value)}><option value="">全部班级</option>{classNames.map(name => <option key={name} value={name}>{name}</option>)}</select></label> : null}
     {lastError ? <details className="edupi-student-message is-error"><summary>最近一次操作失败</summary><p>{lastError}</p><button type="button" onClick={() => setLastError(null)}>清除</button></details> : null}
@@ -410,7 +413,7 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
             <span className="edupi-student-directory__records">{recordLabel || "—"}</span>
           </button></li>;
         })}</ul>
-      </> : query || classFilter ? <p className="edupi-student-directory__no-results">未找到匹配学生</p> : <button type="button" className="edupi-student-directory__empty" onClick={() => inputRef.current?.click()}>导入学生名单</button>}
+      </> : data.students.length === 0 ? <button type="button" className="edupi-student-directory__empty" onClick={() => inputRef.current?.click()} disabled={busy}>{busy ? "导入中…" : "导入学生名单"}</button> : <p className="edupi-student-directory__no-results edupi-student-directory__filtered-empty">当前筛选无学生</p>}
     </section>
     {directory.pages > 1 ? <EduPiPagination label="学生分页" page={directory.page} pages={directory.pages} previousDisabled={directory.page === 0} nextDisabled={directory.page === directory.pages - 1} onPrevious={() => setPagination({ filterKey, page: directory.page - 1 })} onNext={() => setPagination({ filterKey, page: directory.page + 1 })}/> : null}
     {selected && selectedName ? <aside ref={studentDrawerRef} role="dialog" aria-modal="true" className="edupi-student-drawer" aria-label={`${selectedName}学生档案`}>

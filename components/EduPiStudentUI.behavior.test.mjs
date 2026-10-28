@@ -87,6 +87,75 @@ function workspace({ selectedStudentId = null, rows = students(), query = "", gl
   return { ...f, get tree() { return f.tree; }, page: () => f.find(node => node.type.name === "EduPiPagination")?.props.page ?? 0, next() { f.find(node => node.type.name === "EduPiPagination").props.onNext(); f.render(); }, chooseClass(value) { f.find(node => node.type === "select").props.onChange({ target: { value } }); f.render(); } };
 }
 
+function importingWorkspace() {
+  const requests = [], applied = [];
+  const f = workspace({ rows: [], globals: {
+    FormData: class { append() {} }, window: { setTimeout: () => 1, clearTimeout() {} },
+    fetch: (url, init) => new Promise(resolve => requests.push({ url, init, resolve })),
+  } });
+  f.props.onEducation = next => { applied.push(next); f.props.data = next; }; f.render();
+  const preview = { sourceName: "SYNTHETIC.csv", sheets: [{ name: "合成名单", rows: [["姓名", "班级"], ["合成学生", "合成班级"]] }] };
+  const response = body => ({ ok: true, json: async () => body });
+  const event = () => ({ target: { files: [{ name: "SYNTHETIC.csv" }], value: "synthetic-selection" } });
+  return { f, requests, applied, preview, response, event };
+}
+
+test("empty-roster preview is single-flight before React commits busy and keeps its one import action disabled", async () => {
+  const { f, requests, preview, response, event } = importingWorkspace();
+  const input = f.find(node => node.type === "input" && node.props.type === "file");
+  const first = input.props.onChange(event()), duplicate = input.props.onChange(event());
+  try {
+    assert.equal(requests.length, 1, "same-tick file changes must not dispatch a second preview");
+    f.render();
+    const actions = f.nodes().filter(node => node.type === "button" && text(node) === "导入中…");
+    assert.equal(actions.length, 1); assert.equal(actions[0].props.disabled, true);
+  } finally {
+    requests.forEach(request => request.resolve(response(preview)));
+    await Promise.all([first, duplicate]); await f.settle();
+  }
+  assert.equal(f.nodes().filter(node => node.type.name === "EduPiRosterPreview").length, 1);
+});
+
+test("roster confirmation is single-flight before busy commits and applies the confirmed readback once", async () => {
+  const { f, requests, applied, preview, response, event } = importingWorkspace();
+  const reading = f.find(node => node.type === "input" && node.props.type === "file").props.onChange(event());
+  requests[0].resolve(response(preview)); await reading; await f.settle();
+  const proposal = f.find(node => node.type.name === "EduPiRosterPreview");
+  const csv = '"姓名","特征","家校备注","班级"\r\n"合成学生","","","合成班级"';
+  proposal.props.onImport(csv); proposal.props.onImport(csv);
+  const confirmed = { ...f.props.data, students: [{ student_id: "synthetic-imported-student", name: "合成学生", class_name: "合成班级" }] };
+  try {
+    assert.equal(requests.filter(request => request.url === "/api/edupi/students/import").length, 1, "same-tick confirms must dispatch one mutation");
+    f.render(); assert.equal(f.find(node => node.type.name === "EduPiRosterPreview").props.busy, true);
+    assert.deepEqual(JSON.parse(requests[1].init.body), { sourceName: preview.sourceName, csv });
+  } finally {
+    requests.slice(1).forEach(request => request.resolve(response({ data: confirmed, result: { imported: 1 } })));
+    await f.settle();
+  }
+  assert.equal(applied.length, 1); assert.equal(f.props.data, confirmed);
+  assert.equal(f.find(node => node.type.name === "EduPiRosterPreview"), undefined);
+  assert.equal(f.nodes().filter(node => node.type === "button" && node.props.className?.startsWith("edupi-student-directory__row")).length, 1);
+});
+
+test("a failed roster preview or confirmation unlocks only an explicit retry and preserves the current preview", async () => {
+  const { f, requests, applied, preview, response, event } = importingWorkspace();
+  let reading = f.find(node => node.type === "input" && node.props.type === "file").props.onChange(event());
+  requests[0].resolve({ ok: false, json: async () => ({ error: "合成预览失败" }) }); await reading; await f.settle();
+  assert.equal(requests.length, 1); assert.equal(f.find(node => node.type.name === "EduPiRosterPreview"), undefined);
+  reading = f.find(node => node.type === "input" && node.props.type === "file").props.onChange(event());
+  assert.equal(requests.length, 2); requests[1].resolve(response(preview)); await reading; await f.settle();
+  f.find(node => node.type.name === "EduPiRosterPreview").props.onImport("合成CSV");
+  requests[2].resolve({ ok: false, json: async () => ({ error: "合成导入失败" }) }); await f.settle();
+  assert.equal(requests.length, 3); assert.equal(applied.length, 0);
+  const proposal = f.find(node => node.type.name === "EduPiRosterPreview");
+  assert.equal(proposal.props.preview, preview); assert.equal(proposal.props.busy, false);
+  proposal.props.onImport("合成CSV"); proposal.props.onImport("合成CSV");
+  assert.equal(requests.length, 4, "the explicit retry is also single-flight");
+  const confirmed = { ...f.props.data, students: [{ student_id: "synthetic-imported-student", name: "合成学生", class_name: "合成班级" }] };
+  requests[3].resolve(response({ data: confirmed, result: { imported: 1 } })); await f.settle();
+  assert.equal(applied.length, 1); assert.equal(f.find(node => node.type.name === "EduPiRosterPreview"), undefined);
+});
+
 test("manual roster paging and class filters survive a selected student's rerenders", () => {
   const f = workspace({ selectedStudentId: "student-0" });
   f.next();
@@ -152,7 +221,8 @@ test("roster rows expose one name and the all-student record toggle is absent fr
   assert.ok(f.nodes().some(node => node.type === "button" && text(node) === "导出当前档案"));
   f.props.query = "不存在的合成姓名";
   f.render();
-  assert.ok(f.nodes().some(node => node.props.className === "edupi-student-directory__no-results" && text(node) === "未找到匹配学生"));
+  assert.ok(f.nodes().some(node => String(node.props.className || "").split(" ").includes("edupi-student-directory__no-results")
+    && String(node.props.className || "").split(" ").includes("edupi-student-directory__filtered-empty") && text(node) === "当前筛选无学生"));
   assert.equal(f.nodes().some(node => node.props.className === "edupi-student-directory__empty"), false);
 });
 
