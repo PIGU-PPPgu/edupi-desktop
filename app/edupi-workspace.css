@@ -309,7 +309,7 @@
 .edupi-schedule-review { margin: 8px 0 18px; border-block: 1px solid var(--ep-border); color: var(--ep-text); font-size: 12px; }
 .edupi-schedule-review > header { display: flex; min-height: 46px; align-items: center; justify-content: space-between; gap: 12px; }
 .edupi-schedule-review > header strong { font-size: 13px; }
-.edupi-schedule-review button, .edupi-schedule-review select { min-height: 30px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface); color: var(--ep-text); font: inherit; cursor: pointer; }
+.edupi-schedule-review button { min-height: 30px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface); color: var(--ep-text); font: inherit; cursor: pointer; }
 .edupi-schedule-review button { padding: 4px 10px; }
 .edupi-schedule-review button:disabled { opacity: .5; cursor: not-allowed; }
 .edupi-schedule-review > p { margin: 0 0 12px; color: var(--ep-muted); }
@@ -329,7 +329,11 @@
 .edupi-schedule-review__source dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .edupi-schedule-review__detail small { color: var(--ep-muted); overflow-wrap: anywhere; }
 .edupi-schedule-review__actions { display: flex; grid-column: 1 / -1; align-items: center; flex-wrap: wrap; gap: 8px; }
-.edupi-schedule-review__actions select { max-width: 100%; padding: 4px 8px; }
+.edupi-schedule-review__choices { display: flex; min-width: 0; flex: 1 1 100%; flex-wrap: wrap; gap: 8px 20px; margin: 0; padding: 0; border: 0; }
+.edupi-schedule-review__choices legend { margin-bottom: 6px; padding: 0; color: var(--ep-muted); }
+.edupi-schedule-review__choices label { display: inline-flex; min-height: 32px; align-items: center; gap: 7px; cursor: pointer; }
+.edupi-schedule-review__choices input { width: 15px; height: 15px; margin: 0; accent-color: var(--ep-blue); }
+.edupi-schedule-review__choices:disabled label { opacity: .5; cursor: not-allowed; }
 .edupi-schedule-review__actions button.is-primary { border-color: var(--ep-blue); background: var(--ep-blue); color: white; }
 
 .edupi-calendar-heading {
