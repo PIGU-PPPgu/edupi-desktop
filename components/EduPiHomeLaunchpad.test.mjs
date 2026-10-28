@@ -67,3 +67,43 @@ test("an unavailable task source is not presented as an empty completed queue", 
   assert.match(html, /任务暂不可用/);
   assert.doesNotMatch(html, /暂无待处理任务/);
 });
+
+test("the actual home actions retain their supplied callbacks and open only the chosen task", async t => {
+  const { create } = await jiti.import("react-test-renderer");
+  const previous = globalThis.IS_REACT_ACT_ENVIRONMENT;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  let renderer;
+  t.after(async () => {
+    if (renderer) await React.act(async () => renderer.unmount());
+    if (previous === undefined) delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+    else globalThis.IS_REACT_ACT_ENVIRONMENT = previous;
+  });
+  const data = buildEducationContract({ workspace: "/tmp/edupi-home-launchpad-test", tasks: [
+    { id: "synthetic-home-task", title: "合成近期任务", status: "planned", due_date: "2026-10-29" },
+  ] });
+  const calls = { search: 0, context: 0, conversation: 0, routes: [], tasks: [] };
+  await React.act(async () => {
+    renderer = create(React.createElement(EduPiForegroundContext.Provider, {
+      value: { today: "2026-10-28", graceDays: 3, pinnedTaskIds: [] },
+    }, React.createElement(DashboardView, {
+      data, context: null, kernelState: { status: "empty", runs: [], running: 0, updatedAt: null }, runningAgentCount: 0,
+      selectedObjectId: null, onEducation: noop, onObject: noop, onOpenFile: noop, onStartAgent: noop, onCalendarSelection: noop,
+      onOpenQuickEntry: () => calls.search++, onOpenContext: () => calls.context++, onNewConversation: () => calls.conversation++,
+      onNavigate: view => calls.routes.push(view), onTaskDetail: task => calls.tasks.push(task),
+    })));
+  });
+  const text = node => typeof node === "string" ? node : Array.isArray(node) ? node.map(text).join("") : node?.children ? node.children.map(text).join("") : "";
+  const buttons = () => renderer.root.findAllByType("button");
+  const click = async predicate => {
+    const button = buttons().find(predicate); assert.ok(button, "the actual requested home action exists");
+    await React.act(async () => button.props.onClick());
+  };
+  await click(button => button.props["aria-label"] === "搜索任务与日程");
+  await click(button => button.props["aria-label"] === "教学上下文");
+  await click(button => text(button) === "新建对话");
+  for (const label of ["打开对话", "课前准备", "学生档案", "材料整理", "工作区", "日程", "观察与洞察"]) await click(button => text(button).trim() === label);
+  await click(button => button.props["aria-label"] === "打开任务：合成近期任务");
+  assert.deepEqual([calls.search, calls.context, calls.conversation], [1, 1, 1]);
+  assert.deepEqual(calls.routes, ["chat", "teaching", "students", "materials", "workspace", "calendar", "insights"]);
+  assert.equal(calls.tasks.length, 1); assert.equal(calls.tasks[0], data.tasks[0]);
+});
