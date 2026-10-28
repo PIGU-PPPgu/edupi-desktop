@@ -44,13 +44,13 @@ async function mount({ ready = true, initial = artifact(), strict = false } = {}
   const render = () => root.render(strict ? jsx(React.StrictMode, { children: jsx(exports.EduPiPreparationArtifactEditor, { ...props }) }) : jsx(exports.EduPiPreparationArtifactEditor, { ...props }));
   const f = { document, window, props, requests, saved, agent, focused, scrolled,
     get textarea() { return document.querySelector('textarea[aria-label="产物正文"]'); },
-    get history() { return document.querySelector('select[aria-label="产物历史版本"]'); },
+    get history() { return document.querySelector('[role="group"][aria-label="产物历史版本"]'); },
     get reads() { return requests.filter(request => !request.body); },
     get writes() { return requests.filter(request => request.body); },
     button(label) { const result = [...document.querySelectorAll("button")].find(button => button.textContent === label); assert.ok(result, `button ${label}`); return result; },
     async click(label) { await act(async () => { const button = f.button(label); assert.equal(button.disabled, false, label); button.focus(); button.click(); await tick(); }); },
     async draft(value) { await act(async () => { propsOf(f.textarea).onChange({ target: { value } }); }); },
-    async select(revision) { await act(async () => { assert.equal(f.history.disabled, false); f.history.focus(); propsOf(f.history).onChange({ target: { value: String(revision) } }); await tick(); }); },
+    async select(revision) { await act(async () => { const button = f.history.querySelector(`[data-artifact-revision="${revision}"]`); assert.ok(button); assert.equal(button.disabled, false); button.focus(); button.click(); await tick(); }); },
     async reply(request, value = initial, { error, code } = {}) { await act(async () => { request.resolve({ ok: !error, json: async () => error ? { error, code } : { artifact: value } }); await tick(); }); },
     async key(key, composing = false) { await act(async () => { const event = new window.Event("keydown", { bubbles: true, cancelable: true }); Object.assign(event, { key, isComposing: composing }); document.querySelector(".edupi-artifact-editor").dispatchEvent(event); await tick(); }); },
     async update(next) { await act(async () => { Object.assign(props, next); render(); await tick(); }); },
@@ -78,10 +78,10 @@ test("entering edit focuses the actual textarea and Cancel/Escape return to the 
 test("a pending save locks fields/history/cancel and preserves exact version CAS and teacher content", async () => {
   const f = await mount(); try {
     await f.click("编辑正文"); await f.draft("保留重复正文\n保留重复正文");
-    const save = propsOf(f.button("保存草稿")).onClick, changeHistory = propsOf(f.history).onChange, changeText = propsOf(f.textarea).onChange;
+    const save = propsOf(f.button("保存草稿")).onClick, changeHistory = propsOf(f.history.querySelector('[data-artifact-revision="1"]')).onClick, changeText = propsOf(f.textarea).onChange;
     await f.click("保存草稿");
-    assert.equal(f.textarea.disabled, true); assert.equal(f.history.disabled, true); assert.equal(f.button("取消").disabled, true);
-    await act(async () => { save(); changeHistory({ target: { value: "1" } }); changeText({ target: { value: "不应进入草稿" } }); });
+    assert.equal(f.textarea.disabled, true); assert.equal([...f.history.querySelectorAll("button")].every(button => button.disabled), true); assert.equal(f.button("取消").disabled, true);
+    await act(async () => { save(); changeHistory(); changeText({ target: { value: "不应进入草稿" } }); });
     await f.key("Escape"); assert.ok(f.textarea); assert.equal(f.reads.length, 1); assert.equal(f.writes.length, 1);
     assert.deepEqual(f.writes[0].body, { artifactId: "synthetic-a", expectedRevision: 2, content: "保留重复正文\n保留重复正文\n" });
     await f.reply(f.writes[0], artifact({ revision: 3, current_revision: 3, content: f.writes[0].body.content, relative_path: ".edupi/output/synthetic-v3.md" }));
@@ -95,7 +95,7 @@ test("history reads lock editing and restoring an older version still submits ag
     await f.click("编辑正文"); await f.select(1);
     assert.equal(f.textarea.disabled, true); assert.equal(f.button("保存草稿").disabled, true);
     await f.reply(f.reads.at(-1), artifact({ revision: 1, current_revision: 4, content: "历史正文" }));
-    assert.equal(f.textarea.value, "历史正文"); assert.ok(f.document.activeElement === f.history);
+    assert.equal(f.textarea.value, "历史正文"); assert.ok(f.document.activeElement === f.history.querySelector('[aria-pressed="true"]'));
     await f.click("恢复此版本"); assert.equal(f.writes[0].body.expectedRevision, 4); assert.equal(f.writes[0].body.content, "历史正文\n");
     await f.reply(f.writes[0], artifact({ revision: 5, current_revision: 5, content: "历史正文\n" }));
     assert.ok(f.document.activeElement === f.button("编辑正文"));
@@ -159,5 +159,49 @@ test("readonly preview stays readonly and StrictMode read replay leaves edit/sav
   const f = await mount({ strict: true }); try {
     await f.click("编辑正文"); assert.ok(f.document.activeElement === f.textarea); await f.draft("严格模式正文"); await f.click("保存草稿");
     await f.reply(f.writes[0], artifact({ content: "严格模式正文\n", revision: 3, current_revision: 3 })); assert.equal(f.saved.length, 1);
+  } finally { await f.close(); }
+});
+
+test("visible version buttons read historical content without writing, then require explicit restore and preserve a failed restore draft", async () => {
+  const f = await mount(); try {
+    await f.click("编辑正文");
+    const group = f.document.querySelector('[role="group"][aria-label="产物历史版本"]');
+    assert.ok(group, "versions must be directly visible in the editor");
+    assert.equal(group.querySelectorAll("button").length, 2);
+    assert.equal(f.document.querySelector('select[aria-label="产物历史版本"]'), null);
+    assert.equal(group.querySelector('[data-artifact-revision="2"]').getAttribute("aria-pressed"), "true");
+    await f.draft("切换前的未保存正文"); const reads = f.reads.length;
+    await f.select(2); assert.equal(f.reads.length, reads); assert.equal(f.textarea.value, "切换前的未保存正文");
+    await f.select(1); assert.equal(f.writes.length, 0);
+    assert.equal(new URL(f.reads.at(-1).url, "http://synthetic").searchParams.get("revision"), "1");
+    await f.reply(f.reads.at(-1), artifact({ revision: 1, current_revision: 4, content: "明确选择的历史正文" }));
+    assert.equal(f.textarea.value, "明确选择的历史正文");
+    assert.equal(group.querySelector('[data-artifact-revision="1"]').getAttribute("aria-pressed"), "true");
+    assert.equal(group.querySelector('[data-artifact-revision="2"]').getAttribute("aria-pressed"), "false");
+    assert.equal(f.writes.length, 0, "reading an old body must not restore or save it");
+    await f.click("恢复此版本");
+    assert.deepEqual(f.writes[0].body, { artifactId: "synthetic-a", expectedRevision: 4, content: "明确选择的历史正文\n" });
+    await f.reply(f.writes[0], null, { error: "恢复未确认", code: "unavailable" });
+    assert.equal(f.textarea.value, "明确选择的历史正文"); assert.equal(f.saved.length, 0);
+    assert.ok(f.document.activeElement === f.button("恢复此版本"));
+    await f.click("恢复此版本");
+    await f.reply(f.writes[1], artifact({ revision: 5, current_revision: 5, content: "明确选择的历史正文\n", relative_path: ".edupi/output/restored-v5.md" }));
+    assert.equal(f.saved.length, 1); assert.equal(f.saved[0].current_revision, 5);
+    assert.ok(f.document.activeElement === f.button("编辑正文"));
+  } finally { await f.close(); }
+});
+
+test("all versions remain directly addressable and readonly history buttons still cannot restore or collaborate", async () => {
+  const history = Array.from({ length: 24 }, (_, index) => ({ revision: 24 - index, actor: index % 2 ? "teacher" : "agent", updated_at: "2026-10-28T00:00:00Z" }));
+  const f = await mount({ initial: artifact({ access: "read_only", revision: 24, current_revision: 24, history }) }); try {
+    assert.equal(f.history.querySelectorAll("button").length, 24);
+    assert.equal(f.history.querySelectorAll('[aria-pressed="true"]').length, 1);
+    assert.match(f.history.querySelector('[aria-pressed="true"]').textContent, /✓.*24/);
+    await f.select(1); assert.equal(f.writes.length, 0);
+    await f.reply(f.reads.at(-1), artifact({ access: "read_only", revision: 1, current_revision: 24, history, content: "只读历史正文" }));
+    assert.equal(f.history.querySelector('[data-artifact-revision="1"]').getAttribute("aria-pressed"), "true");
+    assert.equal(f.document.querySelector("article").textContent, "只读历史正文");
+    assert.equal([...f.document.querySelectorAll("button")].some(button => ["编辑正文", "恢复此版本", "保存草稿", "AI 协作"].includes(button.textContent)), false);
+    assert.equal(f.writes.length, 0); assert.equal(f.agent.length, 0);
   } finally { await f.close(); }
 });

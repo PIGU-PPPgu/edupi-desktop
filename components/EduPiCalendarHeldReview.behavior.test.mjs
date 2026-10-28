@@ -36,6 +36,7 @@ function mount(props = {}) {
   const hooks = {
     useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = { value: typeof initial === "function" ? initial() : initial }; const slot = slots[index]; return [slot.value, value => { const next = typeof value === "function" ? value(slot.value) : value; if (!Object.is(next, slot.value)) { slot.value = next; dirty = true; } }]; },
     useRef(initial) { const index = cursor++; slots[index] ??= { current: initial }; return slots[index]; },
+    useId() { return hooks.useRef("synthetic-schedule-review").current; },
     useMemo(create, deps) { const index = cursor++; if (!same(slots[index]?.deps, deps)) slots[index] = { deps, value: create() }; return slots[index].value; },
     useEffect(create, deps) { const index = cursor++; if (!same(slots[index]?.deps, deps)) effects.set(index, { create, deps }); },
   };
@@ -76,7 +77,7 @@ function mount(props = {}) {
     button(label) { const node = nodes(render()).find(node => node.type === "button" && text(node) === label); assert.ok(node, `button ${label}`); return node; },
     click(label) { const button = this.button(label); assert.ok(!button.props.disabled, label); const key = button.props["data-schedule-review-trigger"] ? "trigger" : button.props["data-schedule-refresh"] ? "refresh" : button.props["data-schedule-more"] ? "more" : label; elements.get(key)?.focus(); button.props.onClick(); render(); },
     row(index = 0) { const node = nodes(render()).filter(node => node.type === "button" && node.props["data-schedule-conflict"])[index]; assert.ok(node); elements.get(`row:${node.props["data-schedule-conflict"]}`).focus(); node.props.onClick(); render(); },
-    select(value) { const node = nodes(render()).find(node => node.type === "select"); assert.ok(node); elements.get("decision").focus(); node.props.onChange({ target: { value } }); render(); },
+    select(value) { const node = nodes(render()).find(node => node.type === "input" && node.props.type === "radio" && node.props.value === value); assert.ok(node); elements.get("decision").focus(); node.props.onChange({ target: { value, checked: true } }); render(); },
     get selected() { return nodes(render()).find(node => node.type === "button" && node.props["data-schedule-conflict"] && node.props["aria-expanded"]); },
     get content() { return text(render()); }, get bootstrapCount() { return bootstrapCount; },
     outside() { return move({ name: "another control", isConnected: true }); }, body() { move(document.body); },
@@ -155,8 +156,9 @@ test("all valid decisions still require a teacher choice and preserve the exact 
   for (const decision of ["keep_existing", "replace_with_candidate", "keep_both_distinct"]) {
     const item = conflict("a"); item.candidate = { ...item.candidate, source_item_id: "different-item", source_occurrence_ref: "another-occurrence" };
     const f = mount(); f.click("核对安排"); f.reads[0].resolve(page([item])); await f.flush(); f.row();
-    const options = nodes(f.render()).filter(node => node.type === "option").map(node => node.props.value);
-    assert.deepEqual(options, ["", "keep_existing", "replace_with_candidate", "keep_both_distinct"]);
+    const options = nodes(f.render()).filter(node => node.type === "input" && node.props.type === "radio");
+    assert.deepEqual(options.map(node => node.props.value), ["keep_existing", "replace_with_candidate", "keep_both_distinct"]);
+    assert.ok(options.every(node => node.props.checked === false));
     assert.equal(f.button("确认处理").props.disabled, true); assert.equal(f.resolutions.length, 0);
     f.select(decision); const confirm = f.button("确认处理").props.onClick; f.click("确认处理"); confirm(); f.render();
     assert.equal(f.resolutions.length, 1);
@@ -174,7 +176,7 @@ test("all valid decisions still require a teacher choice and preserve the exact 
 
 test("same occurrence keeps its original restriction and uncertain retry sends the same captured decision", async () => {
   const f = mount({ request: { id: 1, target: target("a") } }); f.reads[0].resolve(page([conflict("a")])); await f.flush();
-  assert.equal(nodes(f.render()).some(node => node.type === "option" && node.props.value === "keep_both_distinct"), false);
+  assert.equal(nodes(f.render()).some(node => node.type === "input" && node.props.value === "keep_both_distinct"), false);
   f.select("replace_with_candidate"); f.click("确认处理"); const capture = f.resolutions[0].capture;
   f.resolutions[0].reject(new Error("response lost")); await f.flush();
   assert.match(f.content, /用原决定重试/); assert.equal(f.document.activeElement, f.elements.get("trigger"));

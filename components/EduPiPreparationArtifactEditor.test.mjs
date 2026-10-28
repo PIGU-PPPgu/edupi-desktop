@@ -78,6 +78,7 @@ function editorHarness({ read, revise, props = {} } = {}) {
     reads, writes, saved, previews, updatesAfterUnmount, render, find, get,
     click(label) { const button = get("button", label); assert.ok(!button.props.disabled, `Button is disabled: ${label}`); button.props.onClick(); return render(); },
     change(type, label, value) { const field = get(type, label); assert.ok(!field.props.disabled, `Field is disabled: ${label}`); field.props.onChange({ target: { value } }); return render(); },
+    selectRevision(revision) { const button = nodes(render()).find(node => node.type === "button" && node.props["data-artifact-revision"] === revision); assert.ok(button, `version ${revision}`); assert.equal(button.props.disabled, false); button.props.onClick(); return render(); },
     update(nextProps) { currentProps = { ...currentProps, ...nextProps }; return render(); },
     async settle() { await tick(); return mounted ? render() : null; },
     unmount() { mounted = false; for (const slot of slots) slot?.cleanup?.(); effects.clear(); tree = null; },
@@ -111,7 +112,7 @@ test("held drafts and their history are readable without edit, restore or AI act
   assert.match(textOf(app.render()), /只读/);
   assert.equal(app.get("article", "合成预览").props.children, "保留的最新正文");
   for (const label of ["编辑正文", "AI 协作", "保存草稿", "恢复此版本"]) assert.equal(app.find("button", label), undefined);
-  app.change("select", "产物历史版本", "1"); await app.settle();
+  app.selectRevision(1); await app.settle();
   assert.equal(app.get("article", "合成预览").props.children, "保留的历史正文");
   assert.equal(app.find("button", "恢复此版本"), undefined);
   assert.equal(app.writes.length, 0); assert.equal(agentCalls, 0);
@@ -180,7 +181,7 @@ test("editor retains a conflicting draft and restores history through versioned 
   current = { ...current, revision: 3, current_revision: 3, content: "他人修订" };
   app.click("重新读取版本"); await app.settle();
   assert.equal(app.get("textarea", "产物正文").props.value, "保留的草稿");
-  app.change("select", "产物历史版本", "1"); await app.settle();
+  app.selectRevision(1); await app.settle();
   assert.equal(app.get("textarea", "产物正文").props.value, "历史正文");
   rejectSave = false;
   app.click("恢复此版本"); await app.settle();
@@ -233,7 +234,7 @@ test("preview receives the latest Core artifact path on initial read and after c
   assert.equal(app.get("article", "合成预览").props["data-path"], current.relative_path);
   assert.equal(app.previews.at(-1).revision, 3);
   app.click("编辑正文");
-  app.change("select", "产物历史版本", "1"); await app.settle();
+  app.selectRevision(1); await app.settle();
   assert.equal(app.get("textarea", "产物正文").props.value, "历史正文");
   current = { ...current, content: "Core 最新保存正文", revision: 4, current_revision: 4, relative_path: ".edupi/output/synthetic-current-v4.md" };
   app.click("取消"); await app.settle();
@@ -287,7 +288,7 @@ test("unmount ignores pending history reads and save completions", async () => {
   const reader = editorHarness({ read: (_id, revision) => revision === 1 ? history.promise : Promise.resolve(artifact()) });
   reader.render(); await reader.settle();
   reader.click("编辑正文");
-  reader.change("select", "产物历史版本", "1");
+  reader.selectRevision(1);
   reader.unmount();
   history.resolve(artifact({ revision: 1, content: "延迟历史正文" })); await reader.settle();
   assert.equal(reader.updatesAfterUnmount.length, 0);

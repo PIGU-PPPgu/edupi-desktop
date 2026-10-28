@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import {
   bootstrapScheduleConflictReview,
@@ -81,6 +81,7 @@ export function EduPiScheduleConflictReview({ enabled, request, scopeKey = "" }:
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [focusTick, setFocusTick] = useState(0);
+  const decisionName = useId();
   const rootRef = useRef<HTMLElement>(null);
   const mounted = useRef(true);
   const operation = useRef<{ kind: "read" | "resolve"; controller: AbortController | null; requestId?: number } | null>(null);
@@ -122,7 +123,7 @@ export function EduPiScheduleConflictReview({ enabled, request, scopeKey = "" }:
     const active = focus.document.activeElement;
     if (active !== focus.from && active !== focus.document.body && active !== focus.document.documentElement) { stopFocus(); return; }
     const selector = { decision: "[data-schedule-decision]", list: "[data-schedule-conflict]", trigger: "[data-schedule-review-trigger]", refresh: "[data-schedule-refresh]", more: "[data-schedule-more]" }[focus.target];
-    const target = root.querySelector<HTMLButtonElement | HTMLSelectElement>(selector) || root.querySelector<HTMLButtonElement>("[data-schedule-review-trigger]");
+    const target = root.querySelector<HTMLButtonElement | HTMLInputElement>(selector) || root.querySelector<HTMLButtonElement>("[data-schedule-review-trigger]");
     stopFocus();
     if (target?.isConnected && !target.disabled && root.contains(target)) target.focus({ preventScroll: false });
   }, [busy, open, selectedId, items, error, pending, focusTick, stopFocus]);
@@ -235,7 +236,7 @@ export function EduPiScheduleConflictReview({ enabled, request, scopeKey = "" }:
       {selected && !pending ? <div className="edupi-schedule-review__detail">
         <ScheduleDetails conflict={selected} item={selected.canonical} title="原安排" />
         <ScheduleDetails conflict={selected} item={selected.candidate} title="新安排" />
-        <div className="edupi-schedule-review__actions"><select data-schedule-decision aria-label="处理方式" value={decision} disabled={busy} onChange={(event) => setDecision(event.target.value as ScheduleConflictDecision | "")}><option value="">选择处理方式</option>{DECISIONS.filter((option) => option.value !== "keep_both_distinct" || !sameOccurrence && selected.canonicalId !== selected.candidate.source_item_id).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><button type="button" className="is-primary" disabled={!decision || busy} onClick={() => { if (decision) void decide({ capture: captureScheduleDecision(selected, decision), conflict: selected }); }}>确认处理</button></div>
+        <div className="edupi-schedule-review__actions"><fieldset className="edupi-schedule-review__choices" disabled={busy}><legend>处理方式</legend>{DECISIONS.filter((option) => option.value !== "keep_both_distinct" || !sameOccurrence && selected.canonicalId !== selected.candidate.source_item_id).map((option) => <label key={option.value}><input type="radio" data-schedule-decision name={decisionName} value={option.value} checked={decision === option.value} disabled={busy} onChange={(event) => { if (event.target.checked) setDecision(option.value); }} /><span>{option.label}</span></label>)}</fieldset><button type="button" className="is-primary" disabled={!decision || busy} onClick={() => { if (decision) void decide({ capture: captureScheduleDecision(selected, decision), conflict: selected }); }}>确认处理</button></div>
       </div> : null}
       {pending ? <div className="edupi-schedule-review__actions"><span>处理结果待核对</span><button type="button" disabled={busy} onClick={() => void decide(pending)}>重试原决定</button></div> : null}
       {cursor ? <button type="button" data-schedule-more disabled={busy || Boolean(pending)} onClick={() => void more()}>更多</button> : null}
