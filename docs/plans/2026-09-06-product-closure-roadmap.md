@@ -1,5 +1,13 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-10-28 Mac.81 已完成签名包与唯一应用文件安装，GUI串行验收继续。固定Desktop `a78303e53e9b986a9b942994b77f796081456b50`、Core `57b6c1fd754e69b3f04d50f39fa07fc1e9b3bad2`；Core398正常合main7d659且同tree d5f，官方完整CI40652352539/attempt1通过、research63/63。Desktop394/395已正常合并；395仅三身份+账本，按paths不触发额外CI，新增真实合同12/Corebroker1/type与独立清单核验通过。
+
+唯一Mac签名Draft run40657262218/attempt1全success，Draft426417109保持。三资产最终ID/bytes/官方SHA、永久updater公钥锚/Minisign与篡改拒绝、App/DMG各自签名/装订/Gatekeeper、tar与DMG11身份文件、两Core完整闭包均实际通过。资源实扫820份package.json，仅OpenConnector一份named qs6.16.1；Core的qs/Lark中危不被组件闭包消费。Mac-only指纹 `sha256:673f489d18ab38eec956347499fcc747f4e3ee964ffe427646b2e84f56adb519`，不构成七平台publish证明。
+
+/Applications/EduPi.app 已真实替换为0.3.81，binary SHA256 `a994020a9782b6912142d956b56b68b878fdd6a841eafbb275deef57767c0d07`，CDHash4d2f238833cab53c611a2ed412b6571b5225f843、TeamBY3XZG2839；安装后strict codesign/Gatekeeper再验通过。旧.77整体保留为配对回退，原Root/会话/模型与认证323保护文件在文件安装前后逐字节一致。原3个WebView origin已备份并仅暂隔离workspace/draft/unread，结束需恢复复核。10:34Z文件安装后App/helpers仍停止，installation-handoff已具体交给另一UI任务独占真实流程，parent不并发操作GUI。
+
+历史显式恢复、原A/B计划合并、记忆新marker与冷重启去重仍在实际执行，文件安装不代替这些流程通过；完成后再保护复核和清理，当前未清理下载/回退/构建产物。原UI-Test-Data244文件快照已保护，旧已保存记忆不重试、原intent不重建。Windows延期；Release/feed未公开或改写。本节取代下方旧候选“未构建/未安装”状态，后续真实GUI结果另记。
+
 2026-10-28 Core主线同步追补：此前固定ABA的完整CI40633463071/attempt2已通过，但正常合并398时主线新03ffd造成生成件冲突。现普通组合57b6c1fd保留两父，原样消费已合主线的召回时段/叙事数值边界、连续原文与多日持续事项；未追加数量算法或真实模型实验。新19条定向命令通过；Runtime schema仍8701，回复decoder/status/reason/shape不变，Desktop只更新三严格身份至57b6、component d09ae44a/6cd5b247和raw清单。完整新CI与Core合并仍待，不能沿用ABA通过替代新组合。全Core开发依赖2条qs/Lark中危在双manifest/严格复制闭包中均未消费，Desktop实际qs为6.16.1，待最终包遍历补证。Mac.81仍未创建tag或构建，Windows延期，原改动和资料保护保持。
 
 2026-10-28 R04/R15/R18 统一源码检查：原适配分支已普通合入 UI `132a806e` 和最后 `1409dd6e`，保留双方历史。固定 Core `aba5ffa7019c24a917726ffa4baef37242bc704d` 包含本次主线6225与UI两项日程修补，schema8701c073、Desktop component441ac188、Runtime02fefc91；独立审阅、Main1/Main3备注/身份/鉴权与Desktop实际合同/API通过。本地完整Core首轮在旧手写能力清单漏列新命令处保留失败，修正后daemon与原链余下16项、research62/62全过，不改写首轮exit1；远端完整质量门继续。Desktop完整3417通过/48条件skip/0失败，type/lint通过、npm审计各级0。合并时保留最新安全依赖并补当前SDK记忆写入/遗忘回执；原历史/重播/编辑/压缩隔离不放宽。原教师目录、会话、配置已恢复且App正常退出，旧合成资料244文件已保护。版本.81只准备源码，当前CI与合并未完成，尚未打包、安装、清理或公开feed；窗口验收仍需实际执行。此记录取代下方“正在合并”与旧交接待授权状态。
