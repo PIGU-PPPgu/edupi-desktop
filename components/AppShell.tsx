@@ -2085,6 +2085,8 @@ export function AppShell() {
               onReplaceAgentPrompt={(prompt) => setPendingEduPiContext({ context: createComposerContext(prompt), openId: crypto.randomUUID() })}
               onPrepareTeacherDraft={(text) => setPendingTeacherDraft({ text, openId: crypto.randomUUID() })}
               quickEntryOpen={quickEntryOpen}
+              onOpenQuickEntry={openQuickEntry}
+              onNewConversation={(cwd) => handleEducationNewSession("home", cwd)}
               onCloseQuickEntry={() => setQuickEntryOpen(false)}
               onFocusAgentChat={focusEducationChat}
               refreshKey={educationRefreshKey}

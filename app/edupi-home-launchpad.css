@@ -1,0 +1,95 @@
+.edupi-home-launchpad { display: grid; gap: 24px; margin-top: 24px; }
+.edupi-home-launchpad__top { display: grid; grid-template-columns: minmax(260px, .85fr) minmax(0, 1.4fr); gap: 28px; }
+.edupi-home-launchpad h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.02em; }
+.edupi-home-start { position: relative; display: flex; min-height: 214px; overflow: hidden; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 20px; padding: 24px; border: 1px solid #a9c9d9; border-radius: 16px; background: radial-gradient(ellipse at 110% 0%, #bad6ca, transparent 75%), #a7cbdc; color: #193d50; }
+.edupi-home-start h2 { font-size: 28px; font-weight: 550; letter-spacing: -.04em; }
+.edupi-home-start p { margin: 6px 0 0; font-size: 12px; }
+.edupi-home-start > .edupi-home-art { position: absolute; top: 8px; right: -5px; width: 146px; opacity: .85; transform: rotate(9deg); pointer-events: none; }
+.edupi-home-start > div, .edupi-home-start > button { position: relative; z-index: 1; }
+.edupi-home-start > button { display: inline-flex; min-height: 32px; align-items: center; gap: 14px; padding: 0 12px; border: 0; border-radius: 8px; background: #242a3d; color: #fff; cursor: pointer; font-size: 12px; transition: transform 200ms var(--ease-native), background 160ms ease; }
+.edupi-home-start > button:hover { transform: translateY(-2px); background: #344259; }
+.edupi-home-services > header { display: flex; min-height: 34px; align-items: center; padding-bottom: 10px; }
+.edupi-home-services > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.edupi-home-services button { display: grid; min-width: 0; gap: 12px; justify-items: center; padding: 0 0 6px; border: 0; border-radius: 12px; background: transparent; color: var(--ep-text); cursor: pointer; }
+.edupi-home-services button > .edupi-home-art { display: grid; width: 100%; min-height: 126px; place-items: center; border: 1px solid transparent; border-radius: 13px; background: var(--ep-surface-soft); transition: background 200ms ease, border-color 200ms ease; }
+.edupi-home-services button strong { font-size: 12px; font-weight: 500; }
+.edupi-home-services > div > button,
+.edupi-home-boards > div > button { --home-item-delay: 0ms; animation: edupi-home-item-in 420ms var(--ease-native) backwards; animation-delay: calc(120ms + var(--home-item-delay)); }
+.edupi-home-services > div > button:nth-child(2),
+.edupi-home-boards > div > button:nth-child(2) { --home-item-delay: 50ms; }
+.edupi-home-services > div > button:nth-child(3),
+.edupi-home-boards > div > button:nth-child(3) { --home-item-delay: 100ms; }
+.edupi-home-boards > div > button { animation-delay: calc(260ms + var(--home-item-delay)); }
+@keyframes edupi-home-item-in {
+  from { opacity: 0; filter: blur(3px); transform: translateY(8px) scale(.985); }
+  to { opacity: 1; filter: none; transform: none; }
+}
+.edupi-home-services button:hover > .edupi-home-art { border-color: var(--ep-border); background: color-mix(in srgb, var(--ep-blue-soft) 60%, var(--ep-surface)); }
+.edupi-home-art { --home-art-color: #7c8de4; --home-art-light: #e9edff; display: block; flex-shrink: 0; color: var(--home-art-color); }
+.edupi-home-art > svg { display: block; width: 112px; max-width: 100%; height: auto; overflow: visible; transition: transform 360ms var(--ease-native); }
+.edupi-home-art.is-students, .edupi-home-art.is-calendar { --home-art-color: #df9b56; --home-art-light: #fff0db; }
+.edupi-home-art.is-materials, .edupi-home-art.is-insights { --home-art-color: #759e88; --home-art-light: #e8f4eb; }
+.edupi-home-art.is-chat { --home-art-color: #5c89ab; --home-art-light: #d8e9ee; }
+.edupi-home-art__paper { fill: var(--illustration-paper); filter: drop-shadow(0 5px 4px rgba(50, 70, 100, .06)); }
+.edupi-home-art__back { fill: var(--home-art-light); }
+.edupi-home-art__medal { fill: var(--home-art-color); stroke: var(--illustration-paper); stroke-width: 3px; }
+.edupi-home-art__spark { stroke: #fff; stroke-width: 1.5px; }
+.edupi-home-art__shadow { fill: var(--home-art-color); opacity: .09; }
+.edupi-home-art__accent { fill: var(--home-art-color); opacity: .65; }
+.edupi-home-services button:hover svg { transform: translateY(-4px) rotate(-3deg); }
+.edupi-home-services button:active svg { transform: translateY(-1px) rotate(-1deg) scale(.96); transition-duration: 90ms; }
+.edupi-home-start > button:active { transform: translateY(0) scale(.97); transition-duration: 90ms; }
+.edupi-home-recent, .edupi-home-boards { padding-top: 20px; border-top: 1px solid var(--ep-border); }
+.edupi-home-recent > header, .edupi-home-boards > header { display: flex; min-height: 28px; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.edupi-home-recent > header > button { display: inline-flex; align-items: center; gap: 8px; padding: 4px 0; border: 0; background: transparent; color: var(--ep-muted); cursor: pointer; font-size: 12px; }
+.edupi-home-recent > ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 16px; margin: 0; padding: 0; list-style: none; }
+.edupi-home-recent li { min-width: 0; }
+.edupi-home-recent li > button { display: flex; width: 100%; min-width: 0; min-height: 65px; align-items: center; gap: 12px; padding: 10px 8px; border: 0; border-radius: 10px; background: transparent; color: var(--ep-text); cursor: pointer; text-align: left; }
+.edupi-home-recent li > button:hover { background: var(--ep-surface-soft); }
+.edupi-home-recent__text { display: grid; min-width: 0; flex: 1; gap: 4px; }
+.edupi-home-recent__text > strong { overflow: hidden; font-size: 12px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.edupi-home-recent__text > small { overflow: hidden; color: var(--ep-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.edupi-home-task-orb { position: relative; width: 34px; height: 34px; flex: 0 0 34px; border-radius: 10px; background: #f3f5fa; }
+.edupi-home-task-orb > i { position: absolute; top: 10px; left: 7px; width: 18px; height: 18px; border-radius: 50%; background: #faa574; box-shadow: 3px -4px 8px #f5ca82; }
+.edupi-home-task-orb > b { position: absolute; top: 5px; right: 4px; width: 9px; height: 9px; border: 2px solid #f3f5fa; border-radius: 50%; background: #87b8e2; }
+.edupi-home-task-orb.is-1 > i { background: #8ec9a4; box-shadow: 3px -4px 8px #c1e5a1; }
+.edupi-home-task-orb.is-2 > i { background: #9da6e6; box-shadow: 3px -4px 8px #c7b5e6; }
+.edupi-home-recent__arrow { flex-shrink: 0; color: var(--ep-muted); opacity: 0; transform: translate(-3px, 3px); transition: transform 200ms var(--ease-native), opacity 160ms ease; }
+.edupi-home-recent button:hover .edupi-home-recent__arrow, .edupi-home-recent button:focus-visible .edupi-home-recent__arrow { opacity: 1; transform: none; }
+.edupi-home-recent__empty { margin: 0; padding: 16px 8px; color: var(--ep-muted); font-size: 12px; }
+.edupi-home-boards > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.edupi-home-boards > div > button { position: relative; display: grid; min-width: 0; min-height: 132px; grid-template-columns: 108px minmax(0, 1fr); align-items: center; gap: 10px; padding: 12px; overflow: hidden; border: 1px solid transparent; border-radius: 14px; background: #f5e9e4; color: #34353e; cursor: pointer; text-align: left; transition: transform 260ms var(--ease-native), border-color 160ms ease; }
+.edupi-home-boards > div > .is-calendar { background: #eeedf5; }
+.edupi-home-boards > div > .is-insights { background: #e8efea; }
+.edupi-home-boards > div > button:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--ep-text) 16%, transparent); }
+.edupi-home-boards button > strong { align-self: start; padding-top: 18px; font-size: 15px; font-weight: 600; letter-spacing: -.02em; }
+.edupi-home-boards button > span:last-child { position: absolute; right: 12px; bottom: 12px; display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; background: #34353e; color: #fff; transition: transform 260ms var(--ease-native); }
+.edupi-home-boards button:hover > span:last-child { transform: rotate(45deg); }
+.edupi-home-boards button:hover .edupi-home-art > svg { transform: rotate(-5deg) scale(1.04); }
+.edupi-home-boards > div > button:active { transform: translateY(-1px) scale(.985); transition-duration: 90ms; }
+.edupi-home-launchpad button:focus-visible { outline: 2px solid var(--ep-blue); outline-offset: 3px; }
+html.dark .edupi-home-services .edupi-home-art { --illustration-paper: #e9edf6; }
+html.dark .edupi-home-boards .edupi-home-art, html.dark .edupi-home-start .edupi-home-art { --illustration-paper: #fff; }
+@media (max-width: 1100px) {
+  .edupi-home-launchpad__top { grid-template-columns: minmax(220px, .8fr) minmax(0, 1.2fr); gap: 20px; }
+  .edupi-home-services > div { gap: 8px; }
+  .edupi-home-boards > div { gap: 10px; }
+  .edupi-home-boards > div > button { grid-template-columns: 76px minmax(0, 1fr); gap: 4px; padding: 8px; }
+  .edupi-home-boards button > strong { font-size: 13px; }
+}
+@media (max-width: 620px) {
+  .edupi-home-launchpad { gap: 20px; }
+  .edupi-home-launchpad__top { grid-template-columns: 1fr; gap: 20px; }
+  .edupi-home-start { min-height: 178px; }
+  .edupi-home-services button > .edupi-home-art { min-height: 94px; }
+  .edupi-home-art > svg { width: 92px; }
+  .edupi-home-recent > ul { grid-template-columns: 1fr; }
+  .edupi-home-boards > div { grid-template-columns: 1fr; }
+  .edupi-home-boards > div > button { min-height: 106px; grid-template-columns: 96px minmax(0, 1fr); }
+  .edupi-home-boards button > strong { align-self: center; padding-top: 0; font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .edupi-home-services > div > button, .edupi-home-boards > div > button { animation: none !important; animation-delay: 0s; }
+  .edupi-home-launchpad button, .edupi-home-art > svg, .edupi-home-recent__arrow, .edupi-home-boards button > span:last-child { transition: none !important; }
+  .edupi-home-launchpad button:hover, .edupi-home-launchpad button:hover svg, .edupi-home-launchpad button:active, .edupi-home-launchpad button:active svg, .edupi-home-boards button:hover > span:last-child { transform: none !important; }
+}

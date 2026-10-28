@@ -44,8 +44,8 @@ export type AgentStep = {
 };
 
 export const workbenchViews: Array<{ id: WorkbenchView; label: string; shortLabel: string; module: EducationModule }> = [
+  { id: "dashboard", label: "首页", shortLabel: "首页", module: "home" },
   { id: "chat", label: "AI 协作", shortLabel: "协作", module: "home" },
-  { id: "dashboard", label: "今天", shortLabel: "今天", module: "home" },
   { id: "workspace", label: "工作区", shortLabel: "任务板", module: "tasks" },
   { id: "teaching", label: "教学", shortLabel: "教学", module: "tasks" },
   { id: "homeroom", label: "班级", shortLabel: "班级", module: "students" },

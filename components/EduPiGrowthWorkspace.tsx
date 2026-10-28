@@ -53,15 +53,13 @@ export function EduPiGrowthWorkspace({ data, teachingSkills, query, selectedObje
     setEditor({ methodId: method.skillId, mode });
   };
   const headingTitle = category === "teacher" ? "教师专业成长" : "EduPi 能力成长";
-  let headingDescription = "教学方法从试用到后续备课复用的记录";
-  if (category === "teacher") headingDescription = "真实教学实践、反馈与改进记录";
-  else if (teachingSkills.status === "unavailable") headingDescription = "教学方法暂不可用";
+  const headingDescription = category !== "teacher" && teachingSkills.status === "unavailable" ? "教学方法暂不可用" : null;
   let headingAction: ReactNode = null;
   if (category === "teacher") headingAction = <button type="button" onClick={() => onStartAgent("教学复盘", "replace")}>记录复盘</button>;
   else if (teachingSkills.mutationEnabled) headingAction = <button type="button" onClick={() => { setSavedMessage(""); setEditor((current) => current?.mode === "create" ? null : { methodId: null, mode: "create" }); }}>新增教学方法</button>;
 
   return <main className="edupi-module-workspace edupi-database-workspace">
-    <header className="edupi-module-heading"><div><h1>{headingTitle}</h1><p>{headingDescription}</p></div>{headingAction}</header>
+    <header className="edupi-module-heading"><div><h1>{headingTitle}</h1>{headingDescription ? <p>{headingDescription}</p> : null}</div>{headingAction}</header>
     {category !== "teacher" && savedMessage ? <p className="edupi-method-status" role="status">{savedMessage}</p> : null}
     {category !== "teacher" && !teachingSkills.mutationEnabled ? <p className="edupi-method-status">旧方法仍可查看，当前版本不能修改。</p> : null}
     {category !== "teacher" && editor?.mode === "create" ? <EduPiTeachingMethodEditor key="create" mode="create" mutationEnabled={teachingSkills.mutationEnabled} onSaved={(next) => saved(next, "方法已保存为草稿")} onCancel={() => setEditor(null)} /> : null}

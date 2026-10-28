@@ -1,5 +1,35 @@
 
+.native-modal[aria-labelledby="app-settings-title"] {
+  width: min(700px, calc(100vw - 36px)) !important;
+}
+
+.native-modal[aria-labelledby="app-settings-title"] > .native-modal-header {
+  padding: 18px 24px 16px !important;
+}
+
+.native-modal[aria-labelledby="app-settings-title"] .native-modal-title {
+  font-size: 20px !important;
+  letter-spacing: -.025em;
+}
+
+.native-modal[aria-labelledby="app-settings-title"] .app-settings-quick { gap: 12px; }
+
+.native-modal[aria-labelledby="app-settings-title"] .native-settings-card {
+  padding: 16px 18px !important;
+  border-color: var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  background: var(--surface) !important;
+}
+
+.native-modal[aria-labelledby="app-settings-title"] .app-settings-quick__choices button[aria-pressed="true"] {
+  border-color: var(--accent-border) !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  box-shadow: none;
+}
+
 .settings-context-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-top: 10px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); }
+.native-modal[aria-labelledby="app-settings-title"] .settings-context-summary { margin-top: 12px; border-color: var(--separator); border-radius: var(--radius-md); background: var(--bg-panel); }
 .settings-context-summary strong { font-size: 12px; }
 .settings-context-summary span { color: var(--text-muted); font-size: 11px; }
 .computer-use-settings { display: grid; gap: 9px; margin-top: 11px; }

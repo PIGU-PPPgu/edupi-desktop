@@ -17,6 +17,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import { PRODUCT_NAME } from "@/lib/branding";
+import { EduPiBrandMark } from "./EduPiBrandMark";
 import { importDroppedProjectFiles, partitionChatDroppedFiles } from "@/lib/chat-file-drop";
 import {
   captureScrollDistance,
@@ -1102,6 +1103,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           <div className="chat-empty-brand mb-3" style={{
             display: "flex", alignItems: "center", justifyContent: "flex-start", marginLeft: 16, marginRight: 16,
           }}>
+            <EduPiBrandMark />
             <div className="chat-empty-brand-copy">
               <strong>{emptyTitle ?? t("chat.emptyTitle")}</strong>
               <span>{emptySubtitle ?? t("chat.emptySubtitle", { product: PRODUCT_NAME })}</span>
