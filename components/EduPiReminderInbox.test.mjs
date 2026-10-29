@@ -11,6 +11,7 @@ const disclosure = await createJiti(import.meta.url, { jsx: { runtime: "automati
 function mockRequire(name, react, jsx, query, today = "2026-09-09") {
   if (name === "react") return react;
   if (name === "./DisclosureChevron") return disclosure;
+  if (name === "./AffectSegmentedControl") return { SegmentedControl: "segmented-control" };
   if (name.includes("jsx-runtime")) return { jsx, jsxs: jsx };
   if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams(query) };
   if (name === "@/lib/edupi-foreground") return foreground;
@@ -100,6 +101,8 @@ test("opening an uncertain native reminder preserves its unread row and failed r
     createdAt: new Date().toISOString(), read: false, handled: false, withdrawn: false, snoozedUntil: null,
     notificationAttemptedAt: new Date(Date.now() - 121_000).toISOString(), notificationAttemptId: "11111111-1111-4111-8111-111111111111",
     notificationSendState: "unknown" };
+  const older = { ...item, id: "synthetic-older", title: "较早合成事项", read: true,
+    createdAt: new Date(Date.now() - 60_000).toISOString(), notificationSendState: "sent" };
   assert.equal(notificationSendNeedsReview(item), true);
   assert.equal(notificationSendNeedsReview(item, Date.parse(item.notificationAttemptedAt) + 119_999), false);
   const exports = {};
@@ -107,7 +110,7 @@ test("opening an uncertain native reminder preserves its unread row and failed r
     module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
   vm.runInNewContext(code, { exports, AbortController, Date, setInterval: () => 1, clearInterval() {},
     fetch: async (_url, options) => {
-      if (!options?.method) return { ok: true, json: async () => ({ items: [item] }) };
+      if (!options?.method) return { ok: true, json: async () => ({ items: [item, older] }) };
       posted.push(JSON.parse(options.body));
       return { ok: false, status: 409 };
     }, require: name => mockRequire(name, react, jsx, "reminders=1", today) });
@@ -130,6 +133,14 @@ test("opening an uncertain native reminder preserves its unread row and failed r
   assert.ok(JSON.stringify(render()).includes(item.title), "409 must leave the reminder visible");
   assert.ok(JSON.stringify(render()).includes("提醒保存失败"));
   assert.equal(item.read, false);
+  const rows = nodes(render()).filter(node => node.type === "button" && node.props.className?.includes("edupi-reminder-inbox__row"));
+  assert.equal(rows.length, 2);
+  rows[1].props.onClick();
+  assert.equal(nodes(render()).filter(node => node.type === "button" && node.props.className?.includes("edupi-reminder-inbox__row"))[1].props["aria-current"], "true");
+  nodes(render()).find(node => node.type === "segmented-control" && node.props["aria-label"] === "提醒状态").props.onReselect("pending");
+  const resetRows = nodes(render()).filter(node => node.type === "button" && node.props.className?.includes("edupi-reminder-inbox__row"));
+  assert.equal(resetRows[0].props["aria-current"], "true", "reselecting the current reminder status returns to the first item");
+  assert.equal(resetRows[1].props["aria-current"], undefined);
 });
 
 test("notification dismissal is not presented as completing the Core task", () => {
@@ -149,7 +160,10 @@ test("standalone reminders use a full-width master-detail workbench", () => {
   assert.match(css, /\.edupi-teacher-body\.is-chat\.is-reminders\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
   assert.match(source, /className="edupi-reminder-inbox__workbench"/);
   assert.match(source, /aria-label="提醒状态"/);
-  assert.match(source, /aria-pressed=\{filter === option\.value\}/);
+  assert.match(source, /<SegmentedControl<ReminderFilter>/);
+  assert.match(source, /value=\{filter\}/);
+  assert.match(source, /onChange=\{\(next\) => \{ setFilter\(next\); setSelectedId\(null\); \}\}/);
+  assert.match(source, /onReselect=\{\(\) => setSelectedId\(null\)\}/);
   assert.match(source, /aria-label="提醒详情"/);
   assert.match(source, />继续聊<\/button>/);
   assert.match(css, /\.edupi-reminder-inbox__workbench\s*\{[^}]*grid-template-columns:\s*minmax\(300px, 36%\) minmax\(0, 1fr\)/s);

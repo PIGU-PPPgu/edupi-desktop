@@ -387,9 +387,7 @@
   color: var(--ep-surface);
 }
 
-.edupi-calendar-content-segment { display: inline-flex; width: fit-content; margin: 0 0 12px; padding: 3px; border: 1px solid var(--ep-border); border-radius: 8px; background: var(--ep-surface-soft); }
-.edupi-calendar-content-segment button { min-width: 72px; height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: var(--ep-muted); cursor: pointer; font-size: 12px; }
-.edupi-calendar-content-segment button.is-active { background: var(--ep-surface); color: var(--ep-text); box-shadow: 0 1px 4px rgba(18, 24, 32, .08); font-weight: 650; }
+.edupi-affect-segment.is-calendar-content { margin: 0 0 12px; }
 
 .edupi-calendar-intake { margin: 0 0 14px; border: 1px solid var(--ep-border); border-radius: 8px; background: var(--ep-surface); }
 .edupi-calendar-intake > header { display: flex; min-height: 40px; align-items: center; justify-content: space-between; padding: 0 12px; border-bottom: 1px solid var(--ep-border); }
@@ -433,15 +431,13 @@
   border-bottom: 1px solid var(--ep-border);
 }
 
-.edupi-calendar-period-nav,
-.edupi-calendar-view-segment {
+.edupi-calendar-period-nav {
   display: inline-flex;
   align-items: center;
   gap: 1px;
 }
 
-.edupi-calendar-period-nav button,
-.edupi-calendar-view-segment button {
+.edupi-calendar-period-nav button {
   height: 30px;
   border: 1px solid var(--ep-border);
   background: var(--ep-surface);
@@ -466,21 +462,7 @@
   font-weight: 650;
 }
 
-.edupi-calendar-view-segment {
-  border: 1px solid var(--ep-border);
-  border-radius: 7px;
-  overflow: hidden;
-}
-
-.edupi-calendar-view-segment button {
-  width: 46px;
-  border: 0;
-  border-right: 1px solid var(--ep-border);
-}
-
-.edupi-calendar-view-segment button:last-child { border-right: 0; }
-.edupi-calendar-view-segment button.is-active { background: var(--ep-text); color: var(--ep-surface); }
-.edupi-calendar-view-segment kbd { display: none; }
+.edupi-affect-segment.is-calendar-view { justify-self: start; }
 
 .edupi-timetable-grid { display: grid; min-width: 860px; grid-template-columns: 112px repeat(5, minmax(138px, 1fr)); margin-top: 12px; overflow: hidden; border: 1px solid var(--ep-border-strong); border-radius: 8px; background: var(--ep-surface); }
 .edupi-timetable-grid__corner,
@@ -729,7 +711,7 @@
 
 @media (max-width: 900px) {
   .edupi-calendar-toolbar { grid-template-columns: auto auto minmax(0, 1fr); }
-  .edupi-calendar-view-segment { grid-column: 1 / -1; justify-self: start; margin-bottom: 8px; }
+  .edupi-affect-segment.is-calendar-view { grid-column: 1 / -1; margin-bottom: 8px; }
   .edupi-calendar-day__agenda { grid-template-columns: 1fr; }
   .edupi-calendar-day__agenda section + section { border-top: 1px solid var(--ep-border); border-left: 0; padding-top: 16px; padding-left: 0; }
   .edupi-timetable-grid { overflow: visible; }
@@ -744,8 +726,7 @@
   .edupi-calendar-heading h1 { font-size: 24px; }
   .edupi-calendar-heading__actions button { height: 31px; padding-inline: 8px; font-size: 11px; }
   .edupi-calendar-intake form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .edupi-calendar-content-segment { width: 100%; }
-  .edupi-calendar-content-segment button { flex: 1; }
+  .edupi-affect-segment.is-calendar-content { width: 100%; }
   .edupi-calendar-toolbar { gap: 6px; }
   .edupi-calendar-period-title { font-size: 12px; }
   .edupi-calendar-month-cell { min-height: 76px; padding: 4px; }
@@ -770,8 +751,7 @@
   .edupi-calendar-detail { top: 0; width: 100%; }
   .edupi-calendar-toolbar { grid-template-columns: auto auto minmax(0, 1fr); }
   .edupi-calendar-period-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .edupi-calendar-view-segment { width: 100%; }
-  .edupi-calendar-view-segment button { flex: 1; }
+  .edupi-affect-segment.is-calendar-view { width: 100%; }
   .edupi-calendar-month-cell { min-height: 61px; padding: 2px; }
   .edupi-calendar-month-cell__date { height: 19px; min-width: 20px; font-size: 10px; }
   .edupi-calendar-month-cell__entries { margin-top: 2px; }

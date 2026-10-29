@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createJiti } from "jiti";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import vm from "node:vm";
 
@@ -17,7 +19,7 @@ test("a resumed guide goes back to model setup, clears feedback and persists the
     const values = []; let cursor = 0;
     const react = { useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === "function" ? initial() : initial; return [values[i], next => { values[i] = typeof next === "function" ? next(values[i]) : next; }]; }, useRef(value) { const i = cursor++; values[i] ??= { current: value }; return values[i]; }, useEffect() {} };
     const jsx = (type, props) => ({ type, props }); const exports = {};
-    vm.runInNewContext(ts.transpileModule(guide, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, require: name => name === "react" ? react : name.includes("jsx-runtime") ? { jsx, jsxs: jsx } : name.includes("app-prefs") ? { APP_PREF_KEYS: { edupiFirstRunGuideStep: "step" }, getPref: () => savedStep, setPref: (_key, value) => { savedStep = value; } } : { readEduPiWorkspace: async () => ({ context: { configured: false } }) } });
+    vm.runInNewContext(ts.transpileModule(guide, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, require: name => name === "react" ? react : name.includes("jsx-runtime") ? { jsx, jsxs: jsx } : name.includes("app-prefs") ? { APP_PREF_KEYS: { edupiFirstRunGuideStep: "step", edupiFirstRunWelcomeSeen: "welcome", edupiFirstRunGuideComplete: "complete" }, getPref: key => key === "step" ? savedStep : key === "welcome" ? "true" : "false", setPref: (key, value) => { if (key === "step") savedStep = value; } } : { readEduPiWorkspace: async () => ({ context: { configured: false } }) } });
     const render = () => { cursor = 0; return exports.EduPiFirstRunGuide({ onOpenModels: () => modelOpened++, onOpenContext() {}, onSkip() {} }); };
     const nodes = value => !value || typeof value !== "object" ? [] : Array.isArray(value) ? value.flatMap(nodes) : [value, ...nodes(value.props?.children)];
     return { render, button: text => nodes(render()).find(node => node.type === "button" && node.props.children === text), nodes: () => nodes(render()) };
@@ -49,12 +51,29 @@ test("setup readiness follows saved roster and actual preparation artifacts", as
   assert.equal(isGuideStepReady(5,bundle),true);
 });
 
+test("first visit shows the product tour before setup and previews real destinations", async () => {
+  const jiti = createJiti(import.meta.url, {jsx:{runtime:"automatic"},tsconfigPaths:true});
+  const { EduPiFirstRunGuide } = await jiti.import("./EduPiFirstRunGuide.tsx");
+  const { EduPiFirstRunPreview } = await jiti.import("./EduPiFirstRunPreview.tsx");
+  const props = {onOpenModels(){},onOpenContext(){},onOpenCalendar(){},onOpenMaterials(){},onOpenStudents(){},onOpenTeaching(){},onEnterToday(){},onComplete(){},onSkip(){}};
+  const first = renderToStaticMarkup(React.createElement(EduPiFirstRunGuide, props));
+  assert.match(first, /role="dialog" aria-modal="true"/);
+  assert.match(first, /欢迎使用 EduPi/);
+  assert.match(first, /开始探索/);
+  assert.match(first, /第 1 步，共 8 步/);
+  assert.match(first, /功能预览/);
+  for (const [step, name] of [[-1,"首页"],[0,"AI 协作"],[2,"班级"],[3,"日程"],[4,"材料"],[5,"教学"]]) {
+    const html = renderToStaticMarkup(React.createElement(EduPiFirstRunPreview, {step}));
+    assert.match(html, new RegExp(name));
+  }
+});
+
 test("the first-run guide includes roster and preparation and checks saved results", () => {
   assert.match(guide, /"连接模型"/);
   assert.match(guide, /"确认教师资料"/);
   assert.match(guide, /"导入校历与课表"/);
   assert.match(guide, /"上传第一份材料"/);
-  assert.match(guide, /"进入今天"/);
+  assert.match(guide, /"进入首页"/);
   assert.match(guide, /onOpenCalendar/);
   assert.match(guide, /onOpenMaterials/);
   assert.match(guide, /检查并继续/);
@@ -63,8 +82,8 @@ test("the first-run guide includes roster and preparation and checks saved resul
   assert.match(guide, /const \[opened, setOpened\] = useState\(false\)/);
   assert.match(guide, /STEPS\.length/);
   assert.match(guide, />稍后再说</);
-  assert.match(guide, /role="region"/);
-  assert.doesNotMatch(guide, /aria-modal="true"/);
+  assert.match(guide, /role=\{opened \? "region" : "dialog"\}/);
+  assert.match(guide, /aria-modal=\{opened \? undefined : true\}/);
   assert.doesNotMatch(guide, /功能|价值|安全边界|工作原理|详细说明/);
 });
 
@@ -74,6 +93,9 @@ test("AppShell persists completion, uses existing surfaces, and reopens from hel
   assert.match(shell, /useEffect\(\(\) => \{\s*setFirstRunGuideOpen\(!getPrefBool\(APP_PREF_KEYS\.edupiFirstRunGuideComplete, false\)\);\s*\}, \[\]\)/s);
   assert.doesNotMatch(shell, /useState\(\(\) => \(\s*!getPrefBool/);
   assert.match(shell, /setPrefBool\(APP_PREF_KEYS\.edupiFirstRunGuideComplete, true\)/);
+  assert.match(shell, /const pauseFirstRunGuide = useCallback\(\(\) => setFirstRunGuideOpen\(false\), \[\]\)/);
+  assert.match(shell, /onComplete=\{finishFirstRunGuide\}/);
+  assert.match(shell, /onSkip=\{pauseFirstRunGuide\}/);
   assert.match(shell, /<EduPiFirstRunGuide/);
   assert.match(shell, /onOpenModels=\{\(\) => openEduPiAdmin\("models"\)\}/);
   assert.match(shell, /onOpenContext=\{\(\) => \{ setEduPiAdminOpen\(false\); openEducationModule\("context"\); \}\}/);
@@ -89,11 +111,12 @@ test("the guide restores invoking focus, supports Escape, and does not trap focu
   assert.match(guide, /primaryRef\.current\?\.focus\(\)/);
   assert.match(guide, /returnFocusRef\.current = document\.activeElement/);
   assert.match(guide, /requestAnimationFrame\(\(\) => returnTarget\?\.focus\(\)\)/);
-  assert.match(guide, /event\.key !== "Escape"/);
-  assert.doesNotMatch(guide, /event\.key !== "Tab"/);
-  assert.match(guide, /role="region"/);
+  assert.match(guide, /event\.key === "Escape"/);
+  assert.match(guide, /event\.key !== "Tab" \|\| opened/);
+  assert.match(guide, /role=\{opened \? "region" : "dialog"\}/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
-  assert.match(css, /\.edupi-first-run__primary:focus-visible/);
-  assert.match(css, /\.edupi-first-run\.is-opened \{[\s\S]*right: auto;[\s\S]*left: 50%;[\s\S]*width: min\(560px, calc\(100vw - 360px\)\)/);
-  assert.match(css, /@media \(max-width: 760px\) \{[\s\S]*\.edupi-first-run\.is-opened[\s\S]*bottom: 10px/);
+  assert.match(css, /\.edupi-first-run :is\(button\):focus-visible/);
+  assert.match(css, /\.edupi-first-run\.is-opened \{[^}]*width: min\(650px, calc\(100vw - 32px\)\)/);
+  assert.match(css, /\.edupi-first-run\.is-opened \{[^}]*inset: auto 16px 16px auto/);
+  assert.match(css, /@media \(max-width: 760px\) \{[\s\S]*\.edupi-first-run\.is-opened[\s\S]*bottom: 8px/);
 });

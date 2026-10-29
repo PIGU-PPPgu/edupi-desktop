@@ -11,6 +11,7 @@ import type { CreateTeacherTaskInput, CreateTeacherTaskOutcome } from "@/lib/edu
 import { dateBefore, lessonDateMatchesSlot, MAX_PREPARATION_MATERIALS, preparationDeliverables, timetableDayOfWeek, timetableSlotId as slotId } from "@/lib/edupi-teacher-task-form";
 import { isTaskForeground, paginateForeground, shanghaiDate, taskCompletionTime, taskReferenceDate } from "@/lib/edupi-foreground";
 import { EduPiPagedRows, useEduPiForegroundPolicy } from "./EduPiForeground";
+import { SegmentedControl } from "./AffectSegmentedControl";
 
 type Props = {
   data: EducationContract;
@@ -369,10 +370,16 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
         <div className="edupi-workspace-board__actions"><button type="button" className="native-button" onClick={() => openList("history")}>历史 <span>{historyCount}</span></button>{!createOpen ? <button ref={createButtonRef} type="button" className="native-button native-button-primary is-primary" aria-expanded={createOpen} disabled={creating || !data.workspace} onClick={openCreate}>新建任务</button> : null}</div>
       </header>
       {mergeSuggestions}
-      <div className="edupi-task-category-segment edupi-segmented-control" role="group" aria-label="任务类型">
-        <button type="button" className={category === "all" ? "is-active" : ""} onClick={() => changeCategory("all")} aria-pressed={category === "all"}>全部 <span>{foregroundTasks.length}</span></button>
-        {TASK_CATEGORY_CONFIG.map((item) => { const count = foregroundTasks.filter((task) => taskCategory(task) === item.id).length; return count > 0 ? <button type="button" key={item.id} className={category === item.id ? "is-active" : ""} onClick={() => changeCategory(item.id)} aria-pressed={category === item.id}>{item.label} <span>{count}</span></button> : null; })}
-      </div>
+      <SegmentedControl<"all" | TaskCategoryId>
+        className="edupi-affect-segment is-task-category"
+        aria-label="任务类型"
+        value={category}
+        options={[
+          { value: "all", label: "全部", count: foregroundTasks.length },
+          ...TASK_CATEGORY_CONFIG.flatMap((item) => { const count = foregroundTasks.filter((task) => taskCategory(task) === item.id).length; return count > 0 ? [{ value: item.id, label: item.label, count }] : []; }),
+        ]}
+        onChange={changeCategory}
+      />
       {createOpen ? <form ref={createFormRef} aria-label="新建任务" onSubmit={submitCreate} onKeyDown={event => { if (event.key === "Escape" && !event.nativeEvent.isComposing && !createScope.submitting) { event.preventDefault(); event.stopPropagation(); cancelCreate(); } }}>
         <fieldset className="edupi-task-board-create" disabled={creating} style={{ marginInline: 0 }}>
         <label><span>任务</span><input ref={titleRef} className="native-input" required maxLength={240} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：准备第一次单元检测" /></label>

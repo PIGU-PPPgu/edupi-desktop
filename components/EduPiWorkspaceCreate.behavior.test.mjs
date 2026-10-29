@@ -39,7 +39,8 @@ function mount({ workspace = "/ui-test/one", immediate = false } = {}) {
     useMemo(fn, deps) { const i = cursor++; if (!same(slots[i]?.deps, deps)) slots[i] = { deps, value: fn() }; return slots[i].value; },
     useEffect(create, deps) { const i = cursor++, old = slots[i]; if (!same(old?.deps, deps)) { slots[i] = { deps, create }; effects.push(() => { old?.cleanup?.(); slots[i].cleanup = create(); }); } },
   };
-  const modules = { ...libraries, react, "react/jsx-runtime": { jsx, jsxs: jsx }, "./EduPiForeground": { useEduPiForegroundPolicy: () => ({ today: "2026-10-28", graceDays: 3, pinnedTaskIds: [] }), EduPiPagedRows: "paged-rows" } };
+  const modules = { ...libraries, react, "react/jsx-runtime": { jsx, jsxs: jsx }, "./EduPiForeground": { useEduPiForegroundPolicy: () => ({ today: "2026-10-28", graceDays: 3, pinnedTaskIds: [] }), EduPiPagedRows: "paged-rows" },
+    "./AffectSegmentedControl": { SegmentedControl: "segmented-control" } };
   const exported = {};
   vm.runInNewContext(code, { exports: exported, document, Error, crypto: { randomUUID: () => `ui-create-${++uuid}` }, requestAnimationFrame: fn => { fn(); return 1; }, cancelAnimationFrame() {},
     require(name) { assert.ok(modules[name], name); return modules[name]; },

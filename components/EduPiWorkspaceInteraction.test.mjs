@@ -42,6 +42,7 @@ function mount(name, initialProps = {}, controlled = true, componentName = name,
     "./EduPiOperationHistory": { EduPiOperationHistory: "operation-history" },
     "./EduPiActionIcon": { EduPiIconButton: "icon-button" },
     "./EduPiScheduleConflictReview": { EduPiScheduleConflictReview: "conflict-review" },
+    "./AffectSegmentedControl": { SegmentedControl: "segmented-control" },
   };
   class Input {}
   class Textarea {}
@@ -91,9 +92,10 @@ function mount(name, initialProps = {}, controlled = true, componentName = name,
   };
 }
 
-function category(app) { return nodes(app.render()).find(node => node.type === "div" && node.props["aria-label"] === "任务类型").props.children; }
-function currentCategory(app) { return nodes(category(app)).find(node => node.type === "button" && node.props["aria-pressed"])?.props.children[0]?.trim(); }
-function clickCategory(app, label) { const button = nodes(category(app)).find(node => node.type === "button" && textOf(node).startsWith(label)); assert.ok(button); button.props.onClick(); app.render(); }
+function segment(app, label) { const node = nodes(app.render()).find(node => node.type === "segmented-control" && node.props["aria-label"] === label); assert.ok(node, label); return node; }
+function category(app) { return segment(app, "任务类型"); }
+function currentCategory(app) { const control = category(app); return control.props.options.find(option => option.value === control.props.value)?.label; }
+function clickCategory(app, label) { const control = category(app); const option = control.props.options.find(option => option.label === label); assert.ok(option, label); control.props.onChange(option.value); app.render(); }
 const cardButton = card => nodes(card).find(node => node.type === "button" && node.props.className === "edupi-task-board-card__open");
 const pointer = (x, y, select = false) => ({ clientX: x, clientY: y, target: { closest: () => select ? {} : null }, currentTarget: { getBoundingClientRect: () => ({ x: 0, y: 0, width: 240 }) } });
 
@@ -188,8 +190,8 @@ test("task move dropdown stays independent of the main-card action", async () =>
 
 function calendarState(app) {
   const tree = app.render();
-  const view = nodes(tree).find(node => node.type === "div" && node.props["aria-label"] === "切换日程视图");
-  return { view: nodes(view).find(node => node.type === "button" && node.props["aria-pressed"])?.props.children[0], period: textOf(nodes(tree).find(node => node.props.className === "edupi-calendar-period-title")) };
+  const view = segment(app, "切换日程视图");
+  return { view: view.props.options.find(option => option.value === view.props.value)?.label, period: textOf(nodes(tree).find(node => node.props.className === "edupi-calendar-period-title")) };
 }
 
 test("calendar shortcuts operate on the page and release the real listener on unmount", () => {
@@ -228,18 +230,21 @@ test("calendar list navigation obeys explicit return routes and content filters 
   app.setProps({ selectedObjectId: "calendar:calendar" });
   assert.equal(app.button("列表").props["aria-pressed"], false);
   app.setProps({ selectedObjectId: "calendar:list:events" });
-  assert.equal(app.button("校历").props["aria-pressed"], true);
-  app.button("汇总").props.onClick();
+  assert.equal(segment(app, "切换日程内容").props.value, "calendar");
+  segment(app, "切换日程内容").props.onReselect("calendar");
+  assert.equal(app.calls.routes.at(-1), "calendar:calendar", "reselecting the current source returns to the calendar");
+  app.setProps({ selectedObjectId: "calendar:list:events" });
+  segment(app, "切换日程内容").props.onChange("summary");
   assert.equal(app.calls.routes.at(-1), "calendar:calendar");
-  assert.equal(app.button("汇总").props["aria-pressed"], true);
+  assert.equal(segment(app, "切换日程内容").props.value, "summary");
   assert.equal(app.button("列表").props["aria-pressed"], false);
   app.button("列表").props.onClick();
   app.button("日历").props.onClick();
   assert.equal(app.calls.routes.at(-1), "calendar:calendar");
   app.setProps({ selectedObjectId: "calendar:list:courses" });
-  app.button("校历").props.onClick();
+  segment(app, "切换日程内容").props.onChange("calendar");
   assert.equal(app.calls.routes.at(-1), "calendar:calendar");
-  assert.equal(app.button("校历").props["aria-pressed"], true);
+  assert.equal(segment(app, "切换日程内容").props.value, "calendar");
   assert.equal(app.button("列表").props["aria-pressed"], false);
 });
 
@@ -279,7 +284,7 @@ test("page primary actions and segmented controls are explicit", () => {
   assert.equal(calendar.button("新建日程").props.className, "is-primary");
   assert.notEqual(calendar.button("上传文件").props.className, "is-primary");
   assert.notEqual(calendar.button("添加课表").props.className, "is-primary");
-  for (const app of [board, calendar]) assert.ok(nodes(app.render()).some(node => String(node.props.className || "").includes("edupi-segmented-control")));
+  for (const app of [board, calendar]) assert.ok(nodes(app.render()).some(node => node.type === "segmented-control" && String(node.props.className || "").includes("edupi-affect-segment")));
 });
 
 function intake(initialProps = {}, environment = {}) {

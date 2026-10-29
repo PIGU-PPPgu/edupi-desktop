@@ -404,7 +404,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     return () => controller.abort();
   }, [loadWorkspace, refreshKey]);
 
-  useEffect(() => { if (initialModule === "context") setContextOpen(true); }, [initialModule]);
+  useEffect(() => { if (initialModule !== "context" && !contextBusy) setContextOpen(false); }, [initialModule, contextBusy]);
 
   useEffect(() => {
     const refresh = (event: Event) => {
