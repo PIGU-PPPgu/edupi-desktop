@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { setTimeout } from "node:timers/promises";
 
 const submissionIdPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
-const appleStatusRoute = /https:\/\/appstoreconnect\.apple\.com\/notary\/v2\/submissions\//;
+const appleStatusRoute = /https:\/\/appstoreconnect\.apple\.com\/notary\/v2\//;
 const transportError = /NSURLErrorDomain Code=-(?:1005|1009)\b/;
 
 function safeDiagnostic(result, credentials) {
@@ -61,6 +61,7 @@ export async function notarizeMacOSDmg(target, {
   log(`Apple notary submission ${submissionId} uploaded`);
 
   let lastFailure = null;
+  let consecutiveTransportFailures = 0;
   for (let poll = 1; poll <= maxPolls; poll++) {
     const result = run("xcrun", ["notarytool", "info", submissionId, ...auth], {
       encoding: "utf8", maxBuffer: 1024 * 1024, timeout: 30_000,
@@ -76,13 +77,18 @@ export async function notarizeMacOSDmg(target, {
         throw new Error(`Apple notary submission ${submissionId}: ${info.status === "Invalid" ? "Invalid" : "unknown status"}`);
       }
       lastFailure = null;
+      consecutiveTransportFailures = 0;
     } else {
       const output = `${result?.stdout ?? ""}${result?.stderr ?? ""}`;
       const timedOut = result?.error?.code === "ETIMEDOUT";
-      if (!timedOut && (!transportError.test(output) || !appleStatusRoute.test(output))) {
+      if (!timedOut && (!transportError.test(output) || !appleStatusRoute.test(output) || /statusCode:\s*[45]\d{2}\b/.test(output))) {
         throw new Error(`Apple notary status failed for ${submissionId}: ${safeDiagnostic(result, credentials)}`);
       }
       lastFailure = safeDiagnostic(result, credentials);
+      consecutiveTransportFailures += 1;
+      if (consecutiveTransportFailures >= 6) {
+        throw new Error(`Apple notary status unavailable after 6 consecutive transport failures for ${submissionId}: ${lastFailure}`);
+      }
     }
     if (poll === maxPolls) break;
     await wait(15_000);
