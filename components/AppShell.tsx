@@ -2354,6 +2354,7 @@ export function AppShell() {
         onOpenMaterials={() => openEducationView("materials")}
         onOpenStudents={() => openEducationView("students")}
         onOpenTeaching={() => openEducationView("teaching")}
+        onModelSaved={() => setModelsRefreshKey((key) => key + 1)}
         onEnterToday={() => openEducationModule("home")}
         onComplete={finishFirstRunGuide}
         onSkip={pauseFirstRunGuide}

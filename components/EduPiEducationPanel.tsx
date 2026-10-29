@@ -1027,9 +1027,15 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
 
   useEffect(() => {
     let active = true;
-    const request = isTauriDesktop() ? listDesktopStagedMaterials() : loadStagedMaterials();
-    void request.then((items) => { if (active) setStagedMaterials(items); }).catch(() => {});
-    return () => { active = false; };
+    let sequence = 0;
+    const refresh = () => {
+      const current = ++sequence;
+      const request = isTauriDesktop() ? listDesktopStagedMaterials() : loadStagedMaterials();
+      void request.then((items) => { if (active && current === sequence) setStagedMaterials(items); }).catch(() => {});
+    };
+    refresh();
+    window.addEventListener("edupi-material-staging-changed", refresh);
+    return () => { active = false; window.removeEventListener("edupi-material-staging-changed", refresh); };
   }, []);
 
   const openFile = useCallback((path: string) => {

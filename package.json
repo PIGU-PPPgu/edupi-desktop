@@ -20,6 +20,7 @@
   },
   "files": [
     "bin",
+    "scripts/run-next-server.mjs",
     ".next",
     "!.next/cache",
     "!.next/dev",
@@ -29,12 +30,12 @@
     "package.json"
   ],
   "scripts": {
-    "dev": "next dev --webpack -H 127.0.0.1 -p 30141",
+    "dev": "node scripts/run-next-server.mjs dev local",
     "dev:edupi-c1-checkpoint": "node scripts/run-edupi-c1-visible-checkpoint.mjs",
-    "dev:lan": "next dev --webpack -H 0.0.0.0 -p 30141",
+    "dev:lan": "node scripts/run-next-server.mjs dev lan",
     "build": "next build --webpack",
-    "start": "next start -H 127.0.0.1 -p 30141",
-    "start:lan": "next start -H 0.0.0.0 -p 30141",
+    "start": "node scripts/run-next-server.mjs start local",
+    "start:lan": "node scripts/run-next-server.mjs start lan",
     "desktop:dev": "node scripts/desktop-dev.mjs --config src-tauri/tauri.dev.conf.json",
     "desktop:prepare": "node scripts/prepare-desktop.mjs",
     "desktop:stage-windows-native": "node scripts/windows-native-stage.mjs stage",

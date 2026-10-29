@@ -3,6 +3,7 @@ import path from "node:path";
 import { ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
 import type { CredentialStore } from "@earendil-works/pi-ai";
 import { validatePrivateModelConfiguration, modelConfigurationError, ISOLATED_MODEL_APIS } from "../desktop/core-runtime-model-config.mjs";
+import { isTeachingModelIneligible } from "./model-setup-presets";
 
 export type PrivateRuntimeModelConfiguration = {
   model: Record<string, unknown>; apiKey: string; maxTokens: number; allowLoopback: boolean;
@@ -31,6 +32,7 @@ export async function readRuntimeModelConfiguration({ projectRoot, agentDir, sig
     const settings = SettingsManager.inMemory({ ...read(path.join(agentDir, "settings.json")), ...read(path.join(projectRoot, ".pi/settings.json")) });
     const provider = settings.getDefaultProvider(), id = settings.getDefaultModel();
     if (!provider || !id) throw modelConfigurationError();
+    if (isTeachingModelIneligible(provider)) throw modelConfigurationError();
     const models = read(path.join(agentDir, "models.json"));
     const providers = models.providers as Record<string, Record<string, unknown>> | undefined;
     const configured = providers?.[provider] ?? {};
@@ -63,6 +65,7 @@ export async function readRuntimeModelConfiguration({ projectRoot, agentDir, sig
     if (Object.keys(configured).length) runtime.registerProvider(provider, structuredClone(configured));
     const selected = runtime.getPhysicalModel(provider, id);
     if (runtime.getError() || !selected || runtime.isUsingOAuth(provider) || !ISOLATED_MODEL_APIS.includes(selected.api)) throw modelConfigurationError();
+    if (isTeachingModelIneligible(provider, selected.baseUrl)) throw modelConfigurationError();
     const compatibility = runtime.getCompatibilityRequestConfig(selected);
     if (hasFields(selected.headers) || hasFields(compatibility.headers)) throw modelConfigurationError();
     const auth = await runtime.getAuth(selected, { signal });
@@ -70,6 +73,7 @@ export async function readRuntimeModelConfiguration({ projectRoot, agentDir, sig
       || Object.entries(auth.auth.headers ?? {}).some(([name, value]) => name.toLowerCase() !== "authorization" || value !== `Bearer ${auth.auth.apiKey}`)) throw modelConfigurationError();
     assertActive();
     const endpoint = new URL(auth.auth.baseUrl || selected.baseUrl);
+    if (isTeachingModelIneligible(provider, endpoint.href)) throw modelConfigurationError();
     const loopback = endpoint.protocol === "http:" && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(endpoint.hostname);
     return validatePrivateModelConfiguration({ model: { ...selected, baseUrl: endpoint.href }, apiKey: auth.auth.apiKey,
       maxTokens: Math.min(selected.maxTokens, 8192), allowLoopback: allowLoopback || loopback });

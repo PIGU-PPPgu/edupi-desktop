@@ -4,7 +4,8 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { completeSimple, type AssistantMessage } from "@earendil-works/pi-ai/compat";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
-import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
+import { hasJsonContentType } from "@/lib/request-security";
+import { isPrivateModelApiRequestAllowed } from "@/lib/private-model-api-auth";
 import { normalizeModelEntry } from "@/lib/model-config-normalize";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +39,7 @@ function isLoopbackModelEndpoint(value: unknown): boolean {
 }
 
 export async function POST(req: Request) {
-  if (!isApiRequestAllowed(req)) {
+  if (!isPrivateModelApiRequestAllowed(req)) {
     return NextResponse.json({ ok: false, error: "Untrusted API request" }, { status: 403 });
   }
   if (!hasJsonContentType(req)) {

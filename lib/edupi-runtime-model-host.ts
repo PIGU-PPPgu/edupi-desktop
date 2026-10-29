@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { getAgentDir, ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { readRuntimeModelConfiguration, type PrivateRuntimeModelConfiguration } from "./edupi-runtime-model-config";
+import { isTeachingModelIneligible } from "./model-setup-presets";
 import { boundedPrivateData, privateDataKeys, validatePrivateModelConfiguration, RECALL_MODEL_MAX_CALLS, RECALL_MODEL_TIMEOUT_MS } from "../desktop/core-runtime-model-config.mjs";
 
 // Keep attempts and unfinished work across child restarts and server reloads.
@@ -91,14 +92,17 @@ export function createRuntimeModelHost({ coreRoot, projectRoot, agentDir = getAg
           const runtime = await ModelRuntime.create({ authPath: path.join(agentDir, "auth.json"), modelsPath: path.join(agentDir, "models.json"), signal: controller.signal });
           const provider = settings.getDefaultProvider();
           const id = settings.getDefaultModel();
+          if (provider && isTeachingModelIneligible(provider)) return failure("model_unavailable");
           const model = provider && id ? runtime.getModel(provider, id) : undefined;
           if (!model) return failure("model_unavailable");
+          if (isTeachingModelIneligible(model.provider, model.baseUrl)) return failure("model_unavailable");
           const auth = await runtime.getAuth(model, { signal: controller.signal });
           const compatibility = runtime.getCompatibilityRequestConfig(model);
           // The isolated SDK accepts apiKey/baseUrl, but not resolved auth headers.
           if (!auth?.auth.apiKey || Object.keys(auth.auth.headers || {}).length || Object.keys(compatibility.headers || {}).length || runtime.isUsingOAuth(model.provider)) return failure("model_unavailable");
           if (controller.signal.aborted) return failure("cancelled");
           const endpoint = new URL(auth.auth.baseUrl || model.baseUrl);
+          if (isTeachingModelIneligible(model.provider, endpoint.href)) return failure("model_unavailable");
           const configuredLoopback = endpoint.protocol === "http:" && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(endpoint.hostname);
           if (configuredLoopback) endpoint.hostname = "127.0.0.1";
           const configuration = { model: { ...model, baseUrl: endpoint.href }, apiKey: auth.auth.apiKey,

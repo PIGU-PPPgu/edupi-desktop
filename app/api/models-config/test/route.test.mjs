@@ -8,6 +8,7 @@ import { createJiti } from "jiti";
 
 const agentRoot = fs.mkdtempSync(path.join(os.tmpdir(), "edupi-model-test-agent-"));
 process.env.PI_CODING_AGENT_DIR = agentRoot;
+process.env.PI_WEB_PRIVATE_MODEL_LOCAL = "1";
 const { POST } = await createJiti(import.meta.url, { tsconfigPaths: true }).import("./route.ts");
 
 function request(body) {

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
-import { handleExternalLinkClick, openExternal } from "@/lib/desktop-native";
+import { fetchPrivateModelApi, handleExternalLinkClick, openExternal, privateModelApiHeaders } from "@/lib/desktop-native";
 import { fetchJsonWithDeadline, fetchWithDeadline, fetchWithRetry } from "@/lib/fetch-timeout";
 import { normalizeModelEntry } from "@/lib/model-config-normalize";
 import { ConfirmDangerButton } from "./ConfirmDangerButton";
@@ -385,7 +385,7 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
     setDiscoveryState({ phase: "loading" });
     setSelectedModelIds([]);
     try {
-      const res = await fetch("/api/models-config/discover", {
+      const res = await fetchPrivateModelApi("/api/models-config/discover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ providerName: name, provider: { ...provider, models: undefined } }),
@@ -851,7 +851,7 @@ function ModelDetail({
     if (!model.id.trim() || testState.phase === "testing") return;
     setTestState({ phase: "testing" });
     try {
-      const res = await fetch("/api/models-config/test", {
+      const res = await fetchPrivateModelApi("/api/models-config/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ providerName, provider, model }),
@@ -1482,7 +1482,7 @@ function ApiKeyDetail({
     setError(null);
     setSavedOk(false);
     try {
-      const res = await fetch(`/api/auth/api-key/${encodeURIComponent(provider.id)}`, {
+      const res = await fetchPrivateModelApi(`/api/auth/api-key/${encodeURIComponent(provider.id)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ apiKey: apiKey.trim() }),
@@ -1513,7 +1513,7 @@ function ApiKeyDetail({
     setRemoving(true);
     setError(null);
     try {
-      const res = await fetch(`/api/auth/api-key/${encodeURIComponent(provider.id)}`, { method: "DELETE" });
+      const res = await fetchPrivateModelApi(`/api/auth/api-key/${encodeURIComponent(provider.id)}`, { method: "DELETE" });
       const d = await res.json() as { success?: boolean; error?: string };
       if (!res.ok || d.error) setError(d.error ?? `HTTP ${res.status}`);
       else onRefresh();
@@ -1684,14 +1684,16 @@ function ProviderIcon({ id, size }: { id: string; size: number }) {
 
 type SetupStage = "provider" | "credentials" | "verify";
 
-function FirstModelSetup({
+export function FirstModelSetup({
   availableProviderIds,
   onSetupSaved,
   onUseAdvanced,
+  onBusyChange,
 }: {
   availableProviderIds: readonly string[];
   onSetupSaved: (providerId: string, config: ModelsJson) => void;
   onUseAdvanced: () => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [stage, setStage] = useState<SetupStage>("provider");
   const [preset, setPreset] = useState<ModelSetupPreset | null>(null);
@@ -1720,9 +1722,20 @@ function FirstModelSetup({
   const handleDiscover = async () => {
     if (!preset || !transientProvider || !apiKey.trim() || busy) return;
     setBusy(true);
+    onBusyChange?.(true);
     setError(null);
     try {
-      const response = await fetch("/api/models-config/discover", {
+      const bundled = await fetch(`/api/models-config/provider-models?provider=${encodeURIComponent(preset.id)}`, { headers: await privateModelApiHeaders() }).catch(() => null);
+      if (bundled?.ok) {
+        const payload = await bundled.json() as { provider?: { models?: DiscoveredModel[] } };
+        if (payload.provider?.models?.length) {
+          setModels(payload.provider.models);
+          setModelId(pickSetupModel(payload.provider.models, preset.modelHints));
+          setStage("verify");
+          return;
+        }
+      }
+      const response = await fetchPrivateModelApi("/api/models-config/discover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ providerName: preset.id, provider: transientProvider }),
@@ -1739,6 +1752,7 @@ function FirstModelSetup({
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
     }
   };
 
@@ -1746,6 +1760,7 @@ function FirstModelSetup({
     const chosen = models.find((model) => model.id === modelId.trim()) || (modelId.trim() ? { id: modelId.trim() } : null);
     if (!preset || !transientProvider || !chosen || busy) return;
     setBusy(true);
+    onBusyChange?.(true);
     setError(null);
     try {
       let model: ModelEntry = { id: chosen.id, ...(chosen.name ? { name: chosen.name } : {}) };
@@ -1761,7 +1776,7 @@ function FirstModelSetup({
         if (catalog.recommendation) model = fillEmptyModelFields(model, catalog.recommendation.preset).model;
       }
 
-      const testResponse = await fetch("/api/models-config/test", {
+      const testResponse = await fetchPrivateModelApi("/api/models-config/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ providerName: preset.id, provider: transientProvider, model }),
@@ -1772,7 +1787,7 @@ function FirstModelSetup({
         return;
       }
 
-      const saveResponse = await fetch(`/api/auth/api-key/${encodeURIComponent(preset.id)}`, {
+      const saveResponse = await fetchPrivateModelApi(`/api/auth/api-key/${encodeURIComponent(preset.id)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ apiKey: apiKey.trim() }),
@@ -1782,16 +1797,16 @@ function FirstModelSetup({
         setError(saveResult.error ?? `HTTP ${saveResponse.status}`);
         return;
       }
-      const configResponse = await fetch("/api/models-config");
+      const configResponse = await fetchPrivateModelApi("/api/models-config");
       if (!configResponse.ok) throw new Error("模型配置读取失败");
       const config = await configResponse.json() as ModelsJson;
       const previous = config.providers?.[preset.id] || {};
       const discoveredModels = models.map((entry) => ({ id: entry.id, ...(entry.name ? { name: entry.name } : {}) }));
       const savedModels = mergeModelEntries([model], previous.models || [], discoveredModels);
       const updated = { ...config, providers: { ...config.providers, [preset.id]: { ...previous, baseUrl: preset.baseUrl, api: preset.api, models: savedModels } } };
-      const configSaved = await fetch("/api/models-config", {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(updated)});
+      const configSaved = await fetchPrivateModelApi("/api/models-config", {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(updated)});
       if (!configSaved.ok) throw new Error("模型配置保存失败");
-      const defaultResponse = await fetch("/api/models-config/default", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({provider:preset.id,modelId:chosen.id}) });
+      const defaultResponse = await fetchPrivateModelApi("/api/models-config/default", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({provider:preset.id,modelId:chosen.id}) });
       const defaultResult = await defaultResponse.json() as {success?:boolean;error?:string};
       if (!defaultResponse.ok || !defaultResult.success) { setError(defaultResult.error || "默认模型保存失败"); return; }
       onSetupSaved(preset.id, updated);
@@ -1799,6 +1814,7 @@ function FirstModelSetup({
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
     }
   };
 
@@ -1813,7 +1829,7 @@ function FirstModelSetup({
             <span style={{ width: 22, height: 22, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 11, fontWeight: 700, border: `1px solid ${index <= currentStage ? "var(--text-muted)" : "var(--border)"}`, background: index < currentStage ? "var(--bg-selected)" : "transparent" }}>
               {index + 1}
             </span>
-            <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+            <span className="edupi-model-setup__stage-label" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
           </div>
         ))}
       </div>
@@ -2153,7 +2169,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd, onDirtyChange, on
   }, [onSaved, refreshAuthProviders, refreshModelOverview]);
 
   useEffect(() => {
-    fetch("/api/models-config")
+    fetchPrivateModelApi("/api/models-config")
       .then((r) => r.json())
       .then((d: ModelsJson) => {
         const normalized = d.providers ? d : { ...d, providers: {} };
@@ -2243,7 +2259,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd, onDirtyChange, on
     let api = current.api;
     let runtimeModels: ModelEntry[] = [];
     try {
-      const response = await fetchWithRetry(`/api/models-config/provider-models?provider=${encodeURIComponent(managedProvider.id)}`);
+      const response = await fetchWithRetry(`/api/models-config/provider-models?provider=${encodeURIComponent(managedProvider.id)}`, { init: { headers: await privateModelApiHeaders() } });
       if (response.ok) {
         const result = await response.json() as { provider?: { baseUrl?: string; api?: string; models?: ModelEntry[] } };
         baseUrl ||= result.provider?.baseUrl;
@@ -2295,7 +2311,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd, onDirtyChange, on
     const nextConfig = { ...config, providers: { ...(config.providers ?? {}), [managedProvider.id]: nextProvider } };
     setConfig(nextConfig);
     setSelection({ type: "apikey", providerId: managedProvider.id });
-    const saveResponse = await fetch("/api/models-config", {
+    const saveResponse = await fetchPrivateModelApi("/api/models-config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(nextConfig),
@@ -2309,7 +2325,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd, onDirtyChange, on
     if (!hadUsableModel && preferred) {
       const defaultResponse = await fetchWithDeadline("/api/models-config/default", 6_000, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await privateModelApiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ provider: managedProvider.id, modelId: preferred.id }),
       });
       const defaultResult = await defaultResponse.json() as { success?: boolean; error?: string };
@@ -2346,11 +2362,11 @@ export function ModelsConfig({ onClose, embedded = false, cwd, onDirtyChange, on
       const provider = config.providers?.[providerName];
       const model = provider?.models?.[index];
       if (!provider || !model?.id.trim()) throw new Error("模型 ID 不能为空");
-      const save = await fetch("/api/models-config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
+      const save = await fetchPrivateModelApi("/api/models-config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
       const saved = await save.json();
       if (!save.ok || saved.error) throw new Error(saved.error || "模型保存失败");
       savedSnapshotRef.current = JSON.stringify(config);
-      const response = await fetch("/api/models-config/default", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: providerName, modelId: model.id.trim() }) });
+      const response = await fetchPrivateModelApi("/api/models-config/default", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: providerName, modelId: model.id.trim() }) });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || "默认模型设置失败");
       setSavedOk(true);
@@ -2366,7 +2382,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd, onDirtyChange, on
     setSaveError(null);
     setSavedOk(false);
     try {
-      const res = await fetch("/api/models-config", {
+      const res = await fetchPrivateModelApi("/api/models-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),

@@ -84,6 +84,16 @@ export async function fetchDesktopApi(apiPath: string, init: RequestInit = {}): 
   return fetch(apiPath, { ...init, headers: await desktopApiHeaders(init.headers) });
 }
 
+/** Model configuration also works in the local browser development server. */
+export async function privateModelApiHeaders(initial?: HeadersInit): Promise<Headers> {
+  return isTauriDesktop() ? desktopApiHeaders(initial) : new Headers(initial);
+}
+
+export async function fetchPrivateModelApi(apiPath: string, init: RequestInit = {}): Promise<Response> {
+  if (!/^\/api\/(?:models-config(?:\/(?:default|discover|test))?|auth\/api-key\/[^/?#]+)$/iu.test(apiPath)) throw new Error("Private model API path is invalid.");
+  return fetch(apiPath, { ...init, headers: await privateModelApiHeaders(init.headers) });
+}
+
 export async function showOpenConnectorConsole(port: number): Promise<void> {
   if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("invalid_console_port");
   if (!isTauriDesktop()) throw new Error("desktop_only");

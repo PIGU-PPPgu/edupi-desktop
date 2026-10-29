@@ -62,9 +62,17 @@ export function studentProfileUpdateRequestId(input: StudentProfileUpdateInput):
   return `student-profile-update-${createHash("sha256").update(identity).digest("base64url")}`;
 }
 
-export async function importStudentRoster({ students, sourceName, signal }: { students: StudentRosterRow[]; sourceName: string; signal?: AbortSignal }): Promise<StudentRosterResponse> {
+export function automaticRosterRequestId(bytes: Uint8Array, sourceName: string): string {
+  return `student-roster-auto-${createHash("sha256").update(sourceName).update("\0").update(bytes).digest("base64url")}`;
+}
+
+export function manualRosterRequestId(csv: string, sourceName: string): string {
+  return `student-roster-manual-${createHash("sha256").update(sourceName).update("\0").update(csv, "utf8").digest("base64url")}`;
+}
+
+export async function importStudentRoster({ students, sourceName, signal, requestId }: { students: StudentRosterRow[]; sourceName: string; signal?: AbortSignal; requestId?: string }): Promise<StudentRosterResponse> {
   const roots = resolveEduPiBridgeRoots();
-  const requestId = `student-roster-${Date.now().toString(36)}`;
+  const durableRequestId = requestId ?? `student-roster-${Date.now().toString(36)}`;
   const response = await runCoreProcess<StudentRosterResponse>({
     runtime: roots.runtime,
     dataRoot: roots.dataRoot,
@@ -75,7 +83,7 @@ export async function importStudentRoster({ students, sourceName, signal }: { st
       protocol_version: 1,
       producer: "edupi-desktop",
       operation: "students",
-      request_id: requestId,
+      request_id: durableRequestId,
       action: "import",
       source_name: sourceName,
       students: students.map((student) => ({ name: student.name, traits: student.traits, parent_notes: student.parentNotes,...(student.className?{class_name:student.className}:{}) })),

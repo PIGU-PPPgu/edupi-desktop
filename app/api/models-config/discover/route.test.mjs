@@ -13,9 +13,16 @@ function request(headers = {}) {
 }
 
 test("model discovery rejects cross-site and non-JSON credential requests", async () => {
+  const previous = process.env.PI_WEB_PRIVATE_MODEL_LOCAL;
+  process.env.PI_WEB_PRIVATE_MODEL_LOCAL = "1";
+  try {
   const crossSite = await POST(request({ origin: "https://attacker.example", "sec-fetch-site": "cross-site" }));
   assert.equal(crossSite.status, 403);
 
   const wrongType = await POST(request({ "content-type": "text/plain" }));
   assert.equal(wrongType.status, 415);
+  } finally {
+    if (previous === undefined) delete process.env.PI_WEB_PRIVATE_MODEL_LOCAL;
+    else process.env.PI_WEB_PRIVATE_MODEL_LOCAL = previous;
+  }
 });

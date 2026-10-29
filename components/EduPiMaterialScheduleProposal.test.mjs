@@ -87,13 +87,38 @@ async function behaviorFixture() {
   const checkbox = tree => { if (Array.isArray(tree)) return tree.map(checkbox).find(Boolean);
     if (!tree || typeof tree !== "object") return null;
     return tree.type === "input" && tree.props.type === "checkbox" ? tree : checkbox(tree.props?.children); };
-  return { render, button, checkbox, reads, applies, nativeCalls, text, confirm: value => { confirms = value; },
+  const summary = tree => { if (Array.isArray(tree)) return tree.map(summary).find(Boolean);
+    if (!tree || typeof tree !== "object") return null;
+    return tree.type === "summary" ? tree : summary(tree.props?.children); };
+  return { render, button, checkbox, summary, reads, applies, nativeCalls, text, confirm: value => { confirms = value; },
     holdConfirmation: () => { holdConfirmation = true; }, finishConfirmation: value => pendingConfirmations.shift()(value),
     holdApply: () => { holdApply = true; }, finishApply: error => error ? pending.shift().reject(error)
       : pending.shift().resolve({ status: "accepted", applied_ids: ["synthetic-event"], rejected_ids: [], automatic_import: false, external_send: false }),
     update: patch => { current = { ...current, ...patch }; }, setProps: value => { props = value; },
     flush: () => new Promise(resolve => setImmediate(resolve)), cleanup: () => slots.forEach(slot => slot?.cleanup?.()) };
 }
+
+test("an in-flight schedule adoption keeps its disclosure open until the receipt settles", async () => {
+  const fixture = await behaviorFixture();
+  try {
+    fixture.setProps({ materialId: "material-synthetic", initialProposal: proposal("proposed"), lockOpenDuringApply: true });
+    fixture.confirm(true);
+    fixture.holdApply();
+    let tree = fixture.render();
+    tree.props.onToggle({ currentTarget: { open: true } }); await fixture.flush(); tree = fixture.render();
+    fixture.button(tree, "确认采用").props.onClick(); await fixture.flush(); tree = fixture.render();
+    assert.equal(fixture.applies.length, 1);
+    let prevented = false;
+    fixture.summary(tree).props.onClick({ preventDefault() { prevented = true; } });
+    assert.equal(prevented, true);
+    const disclosure = { open: false };
+    tree.props.onToggle({ currentTarget: disclosure });
+    assert.equal(disclosure.open, true);
+    assert.equal(fixture.reads[0].signal.aborted, false);
+    fixture.finishApply(); await fixture.flush(); tree = fixture.render();
+    assert.match(fixture.text(tree), /已采用/);
+  } finally { fixture.cleanup(); }
+});
 
 test("disclosure reads current proof, cancel performs no apply and reopening cannot reuse cached authority", async () => {
   const fixture = await behaviorFixture();

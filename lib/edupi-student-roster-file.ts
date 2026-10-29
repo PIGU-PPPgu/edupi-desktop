@@ -1,5 +1,5 @@
 import { read, utils } from "xlsx";
-import { parseStudentRosterCsv, parseStudentRosterRows, StudentRosterError, type StudentRosterRow } from "./edupi-student-roster-model";
+import { detectStudentRosterMapping, isStudentRosterSummaryLabel, parseStudentRosterCsv, parseStudentRosterRows, StudentRosterError, type StudentRosterRow } from "./edupi-student-roster-model";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const EXCEL_EXTENSIONS = new Set(["xlsx", "xls", "xlsm", "xlsb"]);
@@ -26,6 +26,33 @@ export function previewStudentRosterFile(bytes: Uint8Array, sourceName: string):
   } catch (error) {
     if (error instanceof StudentRosterError) throw error;
     throw new StudentRosterError("invalid_csv", "名单无法读取，请检查文件。");
+  }
+}
+
+export type AutomaticRosterClassification =
+  | { status: "ready"; students: StudentRosterRow[] }
+  | { status: "needs_review"; sheets: Array<{ name: string; rows: string[][] }>; reason: string };
+
+/** Never auto-select the first parseable sheet when another sheet might be a roster. */
+export function classifyStudentRosterFile(bytes: Uint8Array, sourceName: string): AutomaticRosterClassification {
+  const sheets = previewStudentRosterFile(bytes, sourceName);
+  const review = (reason: string): AutomaticRosterClassification => ({ status: "needs_review", sheets, reason });
+  if (sheets.length >= 20) return review("工作表较多，请确认要导入哪一张名单。");
+  const rosterLike = sheets.map((sheet) => ({ sheet, mapping: detectStudentRosterMapping(sheet.rows) }))
+    .filter(({ mapping }) => mapping.columns[0] >= 0);
+  if (rosterLike.length !== 1) return review(rosterLike.length ? "发现多张学生名单，请选择工作表。" : "未可靠识别姓名列，请检查表头。");
+  const [{ sheet, mapping }] = rosterLike;
+  if (!mapping.confident) return review("表头或字段不唯一，请核对列对应关系。");
+  const selectedColumns = new Set(mapping.columns.filter((column) => column >= 0));
+  for (const row of sheet.rows.slice(mapping.header + 1).filter((values) => values.some((value) => value.trim()))) {
+    const name = (row[mapping.columns[0]] ?? "").trim();
+    if (isStudentRosterSummaryLabel(name)) return review("名单中包含汇总、表头或备注行，请核对后导入。");
+    if (row.some((value, column) => value.trim() && !selectedColumns.has(column))) return review("部分列有数据但不会导入，请核对字段对应关系。");
+  }
+  try {
+    return { status: "ready", students: parseStudentRosterRows(sheet.rows) };
+  } catch (error) {
+    return review(error instanceof Error ? error.message : "名单内容需要核对。");
   }
 }
 

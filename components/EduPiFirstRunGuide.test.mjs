@@ -13,28 +13,31 @@ const prefs = await readFile(new URL("../lib/app-prefs.ts", import.meta.url), "u
 const css = await readFile(new URL("../app/edupi-first-run.css", import.meta.url), "utf8");
 const rail = await readFile(new URL("./EduPiNavigationRail.tsx", import.meta.url), "utf8");
 
-test("a resumed guide goes back to model setup, clears feedback and persists the previous step", async () => {
+test("a resumed guide keeps its step while inline setup and back navigation work", async () => {
   let savedStep = "1", modelOpened = 0;
   const mount = () => {
     const values = []; let cursor = 0;
-    const react = { useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === "function" ? initial() : initial; return [values[i], next => { values[i] = typeof next === "function" ? next(values[i]) : next; }]; }, useRef(value) { const i = cursor++; values[i] ??= { current: value }; return values[i]; }, useEffect() {} };
+    const react = { useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === "function" ? initial() : initial; return [values[i], next => { values[i] = typeof next === "function" ? next(values[i]) : next; }]; }, useRef(value) { const i = cursor++; values[i] ??= { current: value }; return values[i]; }, useCallback(callback) { return callback; }, useEffect() {} };
     const jsx = (type, props) => ({ type, props }); const exports = {};
-    vm.runInNewContext(ts.transpileModule(guide, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, require: name => name === "react" ? react : name.includes("jsx-runtime") ? { jsx, jsxs: jsx } : name.includes("app-prefs") ? { APP_PREF_KEYS: { edupiFirstRunGuideStep: "step", edupiFirstRunWelcomeSeen: "welcome", edupiFirstRunGuideComplete: "complete" }, getPref: key => key === "step" ? savedStep : key === "welcome" ? "true" : "false", setPref: (key, value) => { if (key === "step") savedStep = value; } } : { readEduPiWorkspace: async () => ({ context: { configured: false } }) } });
+    vm.runInNewContext(ts.transpileModule(guide, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, require: name => name === "react" ? react : name === "next/dynamic" ? { default: () => () => null } : name.includes("jsx-runtime") ? { jsx, jsxs: jsx } : name.includes("app-prefs") ? { APP_PREF_KEYS: { edupiFirstRunGuideStep: "step", edupiFirstRunWelcomeSeen: "welcome", edupiFirstRunGuideComplete: "complete" }, getPref: key => key === "step" ? savedStep : key === "welcome" ? "true" : "false", setPref: (key, value) => { if (key === "step") savedStep = value; } } : { readEduPiWorkspace: async () => ({ context: { configured: false } }) } });
     const render = () => { cursor = 0; return exports.EduPiFirstRunGuide({ onOpenModels: () => modelOpened++, onOpenContext() {}, onSkip() {} }); };
     const nodes = value => !value || typeof value !== "object" ? [] : Array.isArray(value) ? value.flatMap(nodes) : [value, ...nodes(value.props?.children)];
     return { render, button: text => nodes(render()).find(node => node.type === "button" && node.props.children === text), nodes: () => nodes(render()) };
   };
   const component = mount();
-  component.button("打开教师资料").props.onClick();
-  component.button("检查并继续").props.onClick(); await new Promise(resolve => setImmediate(resolve));
-  assert.ok(component.nodes().some(node => node.props?.role === "status"));
+  component.button("填写教师资料").props.onClick();
+  assert.equal(component.render().props.className, "edupi-first-run is-inline");
+  component.button("跳过此步").props.onClick();
+  assert.equal(savedStep, "2");
+  component.button("上一步").props.onClick();
+  assert.equal(savedStep, "1");
   component.button("上一步").props.onClick();
   assert.equal(savedStep, "0");
   assert.equal(component.button("上一步"), undefined);
   assert.equal(component.render().props.className, "edupi-first-run");
-  assert.equal(component.nodes().some(node => node.props?.role === "status"), false);
-  const resumed = mount(); resumed.button("打开 AI 与模型").props.onClick();
-  assert.equal(modelOpened, 1);
+  const resumed = mount(); resumed.button("选择模型").props.onClick();
+  assert.equal(resumed.render().props.className, "edupi-first-run is-inline");
+  assert.equal(modelOpened, 0);
 });
 
 test("setup readiness follows saved roster and actual preparation artifacts", async () => {
@@ -71,7 +74,8 @@ test("first visit shows the product tour before setup and previews real destinat
 test("the first-run guide includes roster and preparation and checks saved results", () => {
   assert.match(guide, /"连接模型"/);
   assert.match(guide, /"确认教师资料"/);
-  assert.match(guide, /"导入校历与课表"/);
+  assert.match(guide, /"导入行事历与课表"/);
+  assert.match(guide, /<EduPiOnboardingCalendarUpload/);
   assert.match(guide, /"上传第一份材料"/);
   assert.match(guide, /"进入首页"/);
   assert.match(guide, /onOpenCalendar/);

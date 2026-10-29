@@ -31,13 +31,49 @@ function csvRows(source: string): string[][] {
   return rows.filter((items) => items.some(Boolean));
 }
 
-function headerKey(value: string): "name" | "traits" | "parentNotes" | "className" | null {
-  const key = value.trim().toLocaleLowerCase().replace(/[\s_-]+/g, "");
+export type StudentRosterField = "name" | "traits" | "parentNotes" | "className";
+const ROSTER_FOOTER_LABEL = /^(?:合计|总计|小计|共计|汇总|统计|总数|人数|备注|说明|班主任|任课教师|制表人|填表人|审核人|签名|姓名|学生姓名)(?=$|[\s:：()（）\[\]【】,，;；·•\-—0-9０-９])/u;
+
+export function isStudentRosterSummaryLabel(value: string): boolean {
+  const name = value.trim();
+  const compact = name.replace(/\s+/gu, "");
+  return ROSTER_FOOTER_LABEL.test(name) || ROSTER_FOOTER_LABEL.test(compact)
+    || /^共[0-9０-９]+[人名]$/u.test(compact) || /^[0-9０-９]+$/u.test(compact);
+}
+const ROSTER_FIELDS: readonly StudentRosterField[] = ["name", "traits", "parentNotes", "className"];
+const IGNORED_HEADER_LABELS = new Set(["学号", "序号", "编号", "id", "index"]);
+const normalizeHeader = (value: string) => value.trim().toLocaleLowerCase().replace(/[\s_-]+/g, "");
+
+function headerKey(value: string): StudentRosterField | null {
+  const key = normalizeHeader(value);
   if (["姓名", "学生姓名", "学生", "name", "studentname"].includes(key)) return "name";
   if (["特征", "特点", "性格特征", "traits", "tags"].includes(key)) return "traits";
   if (["家长备注", "家校备注", "家长沟通", "parentnotes", "notes"].includes(key)) return "parentNotes";
   if (["班级","班级名称","class","classname"].includes(key)) return "className";
   return null;
+}
+
+/** Shared exact-header mapping for preview and safe automatic import. */
+export function detectStudentRosterHeaderColumns(headers: readonly string[]): number[] {
+  const fields = headers.map(headerKey);
+  return ROSTER_FIELDS.map((field) => fields.indexOf(field));
+}
+
+export function detectStudentRosterMapping(sourceRows: readonly (readonly unknown[])[]): { header: number; columns: number[]; confident: boolean } {
+  const candidates = sourceRows.slice(0, 20).map((row, index) => ({
+    index,
+    fields: row.map((value) => headerKey(String(value ?? ""))),
+  })).filter(({ fields }) => fields.includes("name"));
+  const selected = candidates[0];
+  const fields = selected?.fields ?? sourceRows[0]?.map((value) => headerKey(String(value ?? ""))) ?? [];
+  const headerValues = sourceRows[selected?.index ?? 0] ?? [];
+  return {
+    header: selected?.index ?? 0,
+    columns: detectStudentRosterHeaderColumns(headerValues.map((value) => String(value ?? ""))),
+    confident: candidates.length === 1
+      && ROSTER_FIELDS.every((field) => fields.filter((value) => value === field).length <= 1)
+      && headerValues.every((value, index) => fields[index] !== null || !String(value ?? "").trim() || IGNORED_HEADER_LABELS.has(normalizeHeader(String(value)))),
+  };
 }
 
 function list(value: string | undefined): string[] {
@@ -55,13 +91,10 @@ function cellText(value: unknown): string {
 export function parseStudentRosterRows(sourceRows: unknown[][]): StudentRosterRow[] {
   if (!Array.isArray(sourceRows) || sourceRows.length < 2) throw new StudentRosterError("invalid_csv", "名单至少需要表头和一名学生。");
   const rows = sourceRows.map((row) => Array.isArray(row) ? row.map(cellText) : []);
-  const headerIndex = rows.slice(0, 20).findIndex((row) => row.map(headerKey).includes("name"));
-  if (headerIndex < 0) throw new StudentRosterError("missing_name", "名单需要“姓名”列。");
-  const columns = rows[headerIndex].map(headerKey);
-  const nameIndex = columns.indexOf("name");
-  const traitsIndex = columns.indexOf("traits");
-  const parentNotesIndex = columns.indexOf("parentNotes");
-  const classIndex=columns.indexOf("className");
+  const mapping = detectStudentRosterMapping(rows);
+  if (mapping.columns[0] < 0) throw new StudentRosterError("missing_name", "名单需要“姓名”列。");
+  const headerIndex = mapping.header;
+  const [nameIndex, traitsIndex, parentNotesIndex, classIndex] = mapping.columns;
   const students = rows.slice(headerIndex + 1).filter((row) => row.some(Boolean)).map((row) => ({
     name: (row[nameIndex] || "").trim(),
     traits: traitsIndex >= 0 ? list(row[traitsIndex]) : [],

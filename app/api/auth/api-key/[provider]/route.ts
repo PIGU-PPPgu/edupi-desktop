@@ -2,13 +2,17 @@ import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { NextResponse } from "next/server";
 import { invalidateModelsCache } from "@/lib/models-cache";
 import { removeStoredCredentialIfType, storeProviderCredential } from "@/lib/provider-credential-store";
+import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
+import { isPrivateModelApiRequestAllowed } from "@/lib/private-model-api-auth";
+import { hasJsonContentType } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ provider: string }> };
 
 // GET /api/auth/api-key/[provider] — returns auth status (never returns the actual key)
-export async function GET(_req: Request, { params }: Params) {
+export async function GET(req: Request, { params }: Params) {
+  if (!isPrivateModelApiRequestAllowed(req)) return NextResponse.json({ error: "请求被拒绝。" }, { status: 403 });
   const { provider } = await params;
   const modelRuntime = await ModelRuntime.create();
   const status = modelRuntime.getProviderAuthStatus(provider);
@@ -19,9 +23,12 @@ export async function GET(_req: Request, { params }: Params) {
 
 // POST /api/auth/api-key/[provider]  body: { apiKey: string }
 export async function POST(req: Request, { params }: Params) {
+  if (!isPrivateModelApiRequestAllowed(req)) return NextResponse.json({ error: "请求被拒绝。" }, { status: 403 });
+  if (!hasJsonContentType(req)) return NextResponse.json({ error: "请提交 API Key。" }, { status: 415 });
   const { provider } = await params;
   try {
-    const { apiKey } = await req.json() as { apiKey?: string };
+    const body = await parseJsonWithinLimit(req, 16 * 1024) as { apiKey?: unknown } | null;
+    const apiKey = body?.apiKey;
     if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
       return NextResponse.json({ error: "apiKey is required" }, { status: 400 });
     }
@@ -54,12 +61,14 @@ export async function POST(req: Request, { params }: Params) {
     invalidateModelsCache();
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    if (error instanceof RequestBodyTooLargeError) return NextResponse.json({ error: "API Key 过大。" }, { status: 413 });
+    return NextResponse.json({ error: "API Key 保存失败。" }, { status: 500 });
   }
 }
 
 // DELETE /api/auth/api-key/[provider] — removes stored API key
-export async function DELETE(_req: Request, { params }: Params) {
+export async function DELETE(req: Request, { params }: Params) {
+  if (!isPrivateModelApiRequestAllowed(req)) return NextResponse.json({ error: "请求被拒绝。" }, { status: 403 });
   const { provider } = await params;
   try {
     const removal = await removeStoredCredentialIfType(provider, "api_key");
@@ -71,7 +80,7 @@ export async function DELETE(_req: Request, { params }: Params) {
     }
     invalidateModelsCache();
     return NextResponse.json({ success: true });
-  } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "API Key 移除失败。" }, { status: 500 });
   }
 }
