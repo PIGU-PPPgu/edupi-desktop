@@ -17,7 +17,7 @@ test("dependency security is checked on PRs, main, and a daily schedule", async 
   assert.match(workflow, /run: npm run security:audit/);
   assert.match(workflow, /npm ci\s+npm ls fast-glob undici brace-expansion --all\s+node --test scripts\/dependency-security\.test\.mjs/);
   assert.match(workflow, /if: github\.event_name != 'schedule'/);
-  assert.match(workflow, /npm test\s+node_modules\/\.bin\/tsc --noEmit\s+npm run lint/);
+  assert.match(workflow, /npm test\s+PI_WEB_DESKTOP_BUILD=1 npx next typegen --webpack\s+node_modules\/\.bin\/tsc --noEmit\s+npm run lint/);
   assert.match(workflow, /run: cargo install cargo-audit --locked/);
   assert.match(workflow, /run: cargo audit --file src-tauri\/Cargo\.lock --deny warnings/);
   assert.doesNotMatch(workflow, /--(?:ignore|no-yanked|target-os|target-arch|stale)\b/);
