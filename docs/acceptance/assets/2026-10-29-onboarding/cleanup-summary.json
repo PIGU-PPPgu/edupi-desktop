@@ -1,0 +1,13 @@
+{
+  "kind": "source_onboarding_preview_cleanup_summary",
+  "generatedTargetsRemoved": 4,
+  "allocatedBytesBefore": 503816192,
+  "availableBytesDelta": 505339904,
+  "allAbsent": true,
+  "protectedRetained": {
+    "node_modules": true,
+    "user_untracked_mv": true,
+    "onboarding_art": true
+  },
+  "note": "The private original receipt retains exact local paths; this public summary omits workstation locations."
+}

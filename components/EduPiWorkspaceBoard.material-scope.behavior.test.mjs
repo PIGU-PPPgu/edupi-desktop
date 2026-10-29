@@ -34,7 +34,8 @@ async function mount({ timetable = [slot()], materials = [material("own")] } = {
   window.HTMLElement.prototype.attachEvent = () => {};
   window.HTMLElement.prototype.detachEvent = () => {};
   const runtime = { ...modules, react: React, "react/jsx-runtime": { jsx, jsxs, Fragment },
-    "./EduPiForeground": { useEduPiForegroundPolicy: () => ({ today: "2026-10-28", graceDays: 3, pinnedTaskIds: [] }), EduPiPagedRows: () => null } };
+    "./EduPiForeground": { useEduPiForegroundPolicy: () => ({ today: "2026-10-28", graceDays: 3, pinnedTaskIds: [] }), EduPiPagedRows: () => null },
+    "./AffectSegmentedControl": { SegmentedControl: () => null } };
   const exported = {};
   vm.runInNewContext(code, { exports: exported, window, document, crypto: globalThis.crypto,
     requestAnimationFrame: fn => { fn(); return 1; }, cancelAnimationFrame() {},

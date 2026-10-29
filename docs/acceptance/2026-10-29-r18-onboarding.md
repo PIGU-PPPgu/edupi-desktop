@@ -27,7 +27,7 @@
 
 `node --test components/EduPiFirstRunGuide.test.mjs components/EduPiContextEditor.test.mjs components/EduPiWorkbenchV3.test.mjs` 为 16 pass / 0 fail / 0 skip；`node_modules/.bin/tsc --noEmit`、目标 ESLint、`git diff --check` 退出 0。测试覆盖首次欢迎、真实目的地预览、旧步骤返回、保存结果检查和既有入口接线。页面端操作覆盖动画与尺寸，未把静态断言替代交互验证。
 
-来源浏览器和开发服务已关闭。确认 `.next/`、`.playwright-mcp/` 不受 Git 跟踪且无活动句柄后，连同来源视频抽帧、合成工作区临时目录一并删除；这些目录清理前分配 503,816,192 字节，可用空间实测增加 505,339,904 字节，差值受并发磁盘活动影响，见[来源清理回执](assets/2026-10-29-onboarding/cleanup-origin.json)。源码、验收截图、项目依赖和原有 `mv/` 均保留。
+来源浏览器和开发服务已关闭。确认 `.next/`、`.playwright-mcp/` 不受 Git 跟踪且无活动句柄后，连同来源视频抽帧、合成工作区临时目录一并删除；这些目录清理前分配 503,816,192 字节，可用空间实测增加 505,339,904 字节，差值受并发磁盘活动影响，见[脱敏清理摘要](assets/2026-10-29-onboarding/cleanup-summary.json)。带精确本机路径的原回执留在来源工作树，未加入公开源码。源码、验收截图、项目依赖和原有 `mv/` 均保留。
 
 ## 待验收
 
