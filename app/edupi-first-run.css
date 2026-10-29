@@ -164,6 +164,82 @@
 .edupi-first-run__skip:hover { color: #fff; }
 .edupi-first-run :is(button):focus-visible { outline: 3px solid #9cc5ff; outline-offset: 3px; }
 
+.edupi-first-run__inline {
+  --bg: #fff;
+  --bg-panel: #f7f9fe;
+  --bg-hover: #edf3ff;
+  --bg-selected: #e8f0ff;
+  --surface: #fff;
+  --surface-muted: #f7f9fe;
+  --border: #dce4f0;
+  --text: #1b2944;
+  --text-muted: #63718a;
+  --text-dim: #8894a9;
+  --accent: #2d70e5;
+  --danger: #b3373b;
+  --ep-surface: #fff;
+  --ep-surface-soft: #f7f9fe;
+  --ep-text: #1b2944;
+  --ep-muted: #63718a;
+  --ep-border: #dce4f0;
+  --ep-border-strong: #bccbe0;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 18px 20px;
+  overflow-y: auto;
+  color: var(--text);
+  outline: none;
+}
+.edupi-first-run__inline > :is(section, form) { width: min(720px, 100%); flex: 0 0 auto; overflow: hidden; border: 1px solid rgba(210, 223, 255, .64); border-radius: 16px; background: var(--bg); box-shadow: 0 20px 50px rgba(1, 8, 35, .25); }
+.edupi-first-run__inline-skip { padding: 6px 12px; border: 1px solid rgba(225, 235, 255, .2); border-radius: 8px; background: rgba(6, 15, 40, .82); color: #fff; cursor: pointer; font: inherit; font-size: 12px; }
+.edupi-first-run__inline-skip:hover { color: #fff; }
+.edupi-first-run__inline-model > p, .edupi-first-run__inline-error { padding: 25px; color: var(--text-muted); font-size: 13px; }
+.edupi-first-run__inline-error button { min-height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); cursor: pointer; }
+.edupi-first-run__plan-note { margin: 0 24px 20px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 11px; }
+.edupi-first-run__plan-note summary { cursor: pointer; }
+.edupi-first-run__plan-note p { margin: 9px 0; line-height: 1.5; }
+.edupi-first-run__plan-note a { display: inline-block; margin-right: 16px; color: var(--accent); }
+
+.edupi-first-run__teacher-form { display: grid; gap: 20px; padding: 29px 32px 25px; }
+.edupi-first-run__teacher-form header h3, .edupi-first-run__roster-pick h3 { margin: 0; color: var(--text); font-size: 23px; letter-spacing: -.04em; }
+.edupi-first-run__roster-pick p { margin: 5px 0 0; color: var(--text-muted); font-size: 12px; }
+.edupi-first-run__teacher-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.edupi-first-run__teacher-fields label { display: grid; gap: 6px; color: var(--text); font-size: 12px; font-weight: 600; }
+.edupi-first-run__teacher-fields .is-wide { grid-column: 1 / -1; }
+.edupi-first-run__teacher-fields :is(input, select) { width: 100%; height: 39px; min-width: 0; padding: 0 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); color: var(--text); font: inherit; font-size: 13px; }
+.edupi-first-run__teacher-fields :is(input, select):focus-visible { border-color: var(--accent); outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 1px; }
+.edupi-first-run__teacher-form footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.edupi-first-run__form-primary { min-height: 39px; padding: 0 17px; border: 1px solid #2d70e5; border-radius: 8px; background: #2d70e5; color: #fff; cursor: pointer; font: inherit; font-size: 12px; font-weight: 650; }
+.edupi-first-run__form-primary:disabled { opacity: .55; cursor: wait; }
+.edupi-first-run__form-secondary { min-height: 35px; padding: 0 11px; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; font: inherit; font-size: 12px; }
+.edupi-first-run__form-error { margin: 0; color: var(--danger); font-size: 12px; }
+
+.edupi-first-run__roster { padding: 27px; }
+.edupi-first-run__roster-pick { display: flex; min-height: 330px; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; }
+.edupi-first-run__roster-icon { display: grid; width: 56px; height: 56px; place-items: center; border: 1px solid #d9e5ff; border-radius: 16px; background: #edf3ff; color: #2d70e5; font-size: 30px; }
+.edupi-first-run__roster-pick p { max-width: 310px; margin: 0 0 8px; line-height: 1.5; }
+.edupi-first-run__roster-success { display: flex; min-height: 280px; flex-direction: column; align-items: center; justify-content: center; gap: 18px; color: var(--text); }
+.edupi-first-run__roster-success strong { font-size: 21px; }
+.edupi-first-run__roster-reason { margin: 0 0 12px; color: var(--text-muted); font-size: 12px; }
+.edupi-first-run__roster .edupi-roster-preview { margin: 0; border: 0; box-shadow: none; }
+.edupi-first-run__roster .edupi-roster-preview__ai { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 13px; color: var(--text-muted); font-size: 11px; }
+.edupi-first-run__roster .edupi-roster-preview__ai button { flex: 0 0 auto; min-height: 30px; padding: 0 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-panel); color: var(--text); cursor: pointer; font: inherit; font-size: 11px; }
+.edupi-first-run__roster .edupi-roster-preview__ai button:disabled { opacity: .55; cursor: wait; }
+.edupi-first-run__calendar-upload { display: grid; gap: 17px; padding: 28px 31px; }
+.edupi-first-run__calendar-upload header h3 { margin: 0; color: var(--text); font-size: 23px; letter-spacing: -.04em; }
+.edupi-first-run__calendar-upload header p { max-width: 540px; margin: 7px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.55; }
+.edupi-first-run__calendar-pick { display: flex; min-height: 235px; flex-direction: column; align-items: center; justify-content: center; gap: 14px; border: 1px dashed #bfd0ec; border-radius: 13px; background: var(--bg-panel); }
+.edupi-first-run__calendar-pick > div { display: grid; width: 48px; height: 48px; place-items: center; border-radius: 13px; background: #e9f0ff; color: var(--accent); font-size: 27px; }
+.edupi-first-run__calendar-pick > span { color: var(--text-muted); font-size: 11px; }
+.edupi-first-run__calendar-result { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-panel); font-size: 12px; }
+.edupi-first-run__calendar-result strong { overflow-wrap: anywhere; }
+.edupi-first-run__calendar-result span { flex: 0 0 auto; color: var(--text-muted); }
+.edupi-first-run__calendar-upload .edupi-material-inbox { margin: 0; }
+.edupi-first-run__calendar-upload footer { display: flex; justify-content: flex-end; gap: 9px; }
+
 .edupi-first-run.is-opened { inset: auto 16px 16px auto; width: min(650px, calc(100vw - 32px)); padding: 0; background: none; backdrop-filter: none; pointer-events: none; animation: none; }
 .edupi-first-run.is-opened .edupi-first-run__dialog { display: block; width: 100%; height: auto; min-height: 0; border-radius: 14px; background: rgba(8, 16, 41, .96); pointer-events: auto; animation: edupi-first-run-dock 280ms cubic-bezier(.2, .8, .2, 1) both; }
 .edupi-first-run.is-opened .edupi-first-run__dialog::before { display: none; }
@@ -188,10 +264,20 @@
   .edupi-first-run__scene { padding: 12px 12px 0; }
   .edupi-first-run__preview { width: min(100%, 535px); height: clamp(200px, 29vh, 230px); }
   .edupi-first-run__content { padding: 6px 18px 25px; }
+  .edupi-first-run__inline { padding: 0 8px 15px; }
+  .edupi-first-run__teacher-form { padding: 20px 17px; }
+  .edupi-first-run__teacher-fields { grid-template-columns: 1fr; }
+  .edupi-first-run__teacher-fields .is-wide { grid-column: auto; }
+  .edupi-first-run__roster { padding: 17px; }
+  .edupi-first-run__roster .edupi-roster-preview__ai { align-items: flex-start; flex-direction: column; }
+  .edupi-first-run__calendar-upload { padding: 19px 16px; }
+  .edupi-first-run__calendar-result { align-items: flex-start; flex-direction: column; }
   .edupi-first-run.is-opened { top: auto; right: 8px; bottom: 8px; left: 8px; width: auto; transform: none; }
 }
 
 @media (max-width: 380px) {
+  .edupi-first-run__inline-model [aria-label="模型设置步骤"] > div { justify-content: center; }
+  .edupi-first-run__inline-model .edupi-model-setup__stage-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .edupi-first-run__preview-body { padding: 10px 11px; }
   .edupi-first-run__preview-students > div,
   .edupi-first-run__preview-materials > div { padding: 5px 9px; }

@@ -182,7 +182,7 @@ if (production) {
   builder = null;
   if (code !== 0) { console.error(JSON.stringify({ status: "build-failed", code, root })); await stop(); }
 }
-next = spawn(process.execPath, [nextBinary, production ? "start" : "dev", ...(production ? [] : ["--webpack"]), "-H", "127.0.0.1", "-p", String(port)], { cwd: worktree, env: environment, stdio: ["ignore", log, log] });
+next = spawn(process.execPath, [nextBinary, production ? "start" : "dev", ...(production ? [] : ["--webpack"]), "-H", "127.0.0.1", "-p", String(port)], { cwd: worktree, env: { ...environment, PI_WEB_PRIVATE_MODEL_LOCAL: "1" }, stdio: ["ignore", log, log] });
 fs.closeSync(log);
 const supplemental = fs.existsSync(path.join(root, "p0p2-resources.json")) ? JSON.parse(fs.readFileSync(path.join(root, "p0p2-resources.json"), "utf8")) : null;
 const metadata = { root, dataRoot, agentDir, stateDir, url: `http://127.0.0.1:${port}`, port, modelPort, coreRoot, coreCommit, runnerPid: process.pid, nextPid: next.pid, today, synthetic: true, mode: production ? "production_source" : "development", students: 3, studentEvents: supplemental?.studentEvents ?? 26, taskCount: 36, resume: `node scripts/run-edupi-p0p2-fixture.mjs --core ${coreRoot} --resume ${root} --port ${port}${production ? " --production" : ""}` };

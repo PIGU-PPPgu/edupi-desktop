@@ -1,9 +1,11 @@
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { projectModel } from "@/lib/model-provider-projection";
+import { isPrivateModelApiRequestAllowed } from "@/lib/private-model-api-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  if (!isPrivateModelApiRequestAllowed(request)) return Response.json({ error: "请求被拒绝。" }, { status: 403 });
   const providerId = new URL(request.url).searchParams.get("provider")?.trim() || "";
   if (!/^[a-z0-9][a-z0-9._-]{0,79}$/i.test(providerId)) {
     return Response.json({ error: "Provider ID 无效" }, { status: 400 });

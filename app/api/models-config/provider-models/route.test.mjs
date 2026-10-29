@@ -8,9 +8,18 @@ const { GET } = await jiti.import("./route.ts");
 const { projectModel } = await jiti.import("../../../../lib/model-provider-projection.ts");
 
 test("provider-models rejects malformed provider ids before loading the runtime", async () => {
-  const response = await GET(new Request("http://localhost/api/models-config/provider-models?provider=../secret"));
+  const previous = process.env.PI_WEB_PRIVATE_MODEL_LOCAL;
+  process.env.PI_WEB_PRIVATE_MODEL_LOCAL = "1";
+  const response = await GET(new Request("http://localhost/api/models-config/provider-models?provider=../secret", { headers: { host: "localhost" } }));
+  if (previous === undefined) delete process.env.PI_WEB_PRIVATE_MODEL_LOCAL;
+  else process.env.PI_WEB_PRIVATE_MODEL_LOCAL = previous;
   assert.equal(response.status, 400);
   assert.match((await response.json()).error, /Provider ID/);
+});
+
+test("provider-models refuses a remote read before loading custom endpoint metadata", async () => {
+  const response = await GET(new Request("http://192.168.1.10:30141/api/models-config/provider-models?provider=fixture", { headers: { host: "localhost:30141" } }));
+  assert.equal(response.status, 403);
 });
 
 test("provider-models never returns credentials or request headers", async () => {

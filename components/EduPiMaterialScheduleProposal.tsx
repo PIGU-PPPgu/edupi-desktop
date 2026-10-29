@@ -13,7 +13,9 @@ type Props = {
   materialId: string;
   metadataRevision?: number;
   initialProposal?: UploadProposal;
-  onApplied?: () => void;
+  onApplied?: (result: MaterialScheduleApplyResult) => void;
+  onBusyChange?: (busy: boolean) => void;
+  lockOpenDuringApply?: boolean;
   onPreview?: () => void;
 };
 const PAGE_SIZE = 10;
@@ -31,7 +33,7 @@ function sameProof(left: MaterialScheduleRead, right: MaterialScheduleRead): boo
     && left.parse_fingerprint === right.parse_fingerprint;
 }
 
-export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, initialProposal, onApplied, onPreview }: Props) {
+export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, initialProposal, onApplied, onBusyChange, lockOpenDuringApply = false, onPreview }: Props) {
   const [current, setCurrent] = useState<MaterialScheduleRead | null>(null);
   const [currentSequence, setCurrentSequence] = useState<number | null>(null);
   const [applied, setApplied] = useState<{ scope: string; proof: MaterialScheduleRead; result: MaterialScheduleApplyResult } | null>(null);
@@ -48,6 +50,7 @@ export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, in
   const sequence = useRef(0);
   const expanded = useRef(false);
   const adoptionInFlight = useRef(false);
+  const applyInFlight = useRef(false);
   const scope = JSON.stringify([materialId, metadataRevision ?? null]);
   const previousScope = useRef<ProposalScope>({ key: scope, materialId, metadataRevision });
   const activeScope = useRef(scope);
@@ -86,7 +89,7 @@ export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, in
     const request = new AbortController();
     controller.current = request;
     rememberFocus("read", revision, trigger);
-    setBusy(true); setCurrentSequence(null); setError(""); setImageTextConfirmed(false);
+    setBusy(true); onBusyChange?.(true); setCurrentSequence(null); setError(""); setImageTextConfirmed(false);
     try {
       const observed = await readMaterialSchedule(materialId, undefined, undefined, request.signal);
       if (activeScope.current !== scope || sequence.current !== revision || request.signal.aborted) return;
@@ -95,9 +98,9 @@ export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, in
     } catch (error) {
       if (activeScope.current === scope && sequence.current === revision && !request.signal.aborted) setError(materialScheduleErrorMessage(error));
     } finally {
-      if (activeScope.current === scope && sequence.current === revision) { setBusy(false); setFocusGeneration(value => value + 1); }
+      if (activeScope.current === scope && sequence.current === revision) { setBusy(false); onBusyChange?.(false); setFocusGeneration(value => value + 1); }
     }
-  }, [materialId, scope, rememberFocus]);
+  }, [materialId, scope, rememberFocus, onBusyChange]);
   useEffect(() => {
     controller.current?.abort(); sequence.current += 1; focusRequest.current = null;
     const previous = previousScope.current, next = { key: scope, materialId, metadataRevision };
@@ -139,25 +142,28 @@ export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, in
     rememberFocus("adopt", revision, trigger);
     adoptionInFlight.current = true;
     setApplying(true); setError("");
+    onBusyChange?.(true);
     try {
       if (!await confirmMaterialScheduleNative(currentProof.events.length)) return;
       if (activeScope.current !== scope || sequence.current !== revision || controller.current?.signal.aborted) return;
+      applyInFlight.current = true;
       const result = await applyMaterialSchedule(capture);
-      if (activeScope.current === scope && sequence.current === revision) { setApplied({ scope, proof: currentProof, result }); onApplied?.(); }
+      if (activeScope.current === scope && sequence.current === revision) { setApplied({ scope, proof: currentProof, result }); onApplied?.(result); }
     } catch (error) {
       if (activeScope.current === scope && sequence.current === revision) { setCurrentSequence(null); setError(materialScheduleErrorMessage(error)); }
     } finally {
-      adoptionInFlight.current = false; setApplying(false);
-      if (activeScope.current === scope && sequence.current === revision) setFocusGeneration(value => value + 1);
+      applyInFlight.current = false; adoptionInFlight.current = false; setApplying(false);
+      if (activeScope.current === scope && sequence.current === revision) { onBusyChange?.(false); setFocusGeneration(value => value + 1); }
     }
   };
 
   return <details ref={detailsRef} className="edupi-material-inbox" onToggle={event => {
+    if (lockOpenDuringApply && applyInFlight.current) { if (!event.currentTarget.open) event.currentTarget.open = true; return; }
     expanded.current = event.currentTarget.open;
     if (expanded.current) void load();
-    else { controller.current?.abort(); sequence.current += 1; focusRequest.current = null; setCurrentSequence(null); setBusy(false); setImageTextConfirmed(false); }
+    else { controller.current?.abort(); sequence.current += 1; focusRequest.current = null; setCurrentSequence(null); setBusy(false); onBusyChange?.(false); setImageTextConfirmed(false); }
     }}>
-    <summary>安排提案 <span>{label}</span></summary>
+    <summary onClick={event => { if (lockOpenDuringApply && applyInFlight.current) event.preventDefault(); }}>安排提案 <span>{label}</span></summary>
     <div className="edupi-material-pairing__current">
     {!scopedCurrent && initial?.read_result ? <small>上传时提案</small> : null}
     {lines.length ? <ul>{visible.map(line => <li key={line.id}>{line.text}</li>)}</ul> : null}

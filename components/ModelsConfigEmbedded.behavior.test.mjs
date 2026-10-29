@@ -62,7 +62,7 @@ function mountModels({ embedded = true, cwd, readOverview = async () => overview
     "@/hooks/useIsMobile": { useIsMobile: () => false },
     "@/hooks/useI18n": { useI18n: () => ({ t: (key) => key }) },
     "@/hooks/useModalDismiss": { useModalDismiss: (_callback, enabled = true) => { modalFlags.push(enabled); return hooks.useRef(null); } },
-    "@/lib/desktop-native": {},
+    "@/lib/desktop-native": { fetchPrivateModelApi: transport, privateModelApiHeaders: async (headers) => headers },
     "@/lib/fetch-timeout": { fetchJsonWithDeadline: async (url) => { requests.push({ url }); return { response: reply(null), body: await readOverview(url) }; } },
     "@/lib/model-config-normalize": normalize,
     "@/lib/model-setup-presets": presets,

@@ -411,7 +411,7 @@ export function buildNextLaunchSpec(worktree, port, environment = process.env) {
       cwd: resolvedWorktree,
       shell: false,
       stdio: "inherit",
-      env: environment,
+      env: { ...environment, PI_WEB_PRIVATE_MODEL_LOCAL: "1" },
     },
   };
 }
