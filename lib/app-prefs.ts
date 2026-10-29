@@ -23,6 +23,7 @@ export const APP_PREF_KEYS = {
   edupiObjectSiderCollapsed: "edupi-object-sider-collapsed",
   edupiFirstRunGuideComplete: "edupi-first-run-guide-complete",
   edupiFirstRunGuideStep: "edupi-first-run-guide-step",
+  edupiFirstRunWelcomeSeen: "edupi-first-run-welcome-seen",
   edupiForegroundGraceDays: "edupi-foreground-grace-days",
   edupiPinnedTaskIds: "edupi-pinned-task-ids",
   edupiDismissedStaleTaskIds: "edupi-dismissed-stale-task-ids",

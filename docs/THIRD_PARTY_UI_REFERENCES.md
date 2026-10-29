@@ -1,5 +1,15 @@
 # Third-party UI references
 
+## affectUI
+
+EduPi vendors the free `Segmented Control Clean` component for reminder status, calendar views, and workspace task categories. The component keeps its React 19 keyboard, pointer, reduced-motion, and dark-mode behavior. EduPi adds a repeat-selection callback for the existing reminder/calendar detail reset and reobserves dynamically replaced task category options. Existing view state, callbacks, and local color tokens remain in EduPi; no Pro component or new package dependency is used.
+
+- Source: https://github.com/flohoeller/affectui/blob/c87280abc0aadb7da181756a734609fc112df87e/components/segmented-control-clean.tsx
+- Reviewed revision: `c87280abc0aadb7da181756a734609fc112df87e`
+- Copyright: 2026 Florian Höller (adfects)
+- License: MIT
+- Bundled attribution: `src-tauri/resources/third-party/affectui/LICENSE` and `SOURCE.md`
+
 ## NomiFun ContentSider
 
 `components/EduPiContentSider.tsx` and `hooks/useEduPiContentSiderCollapse.ts` are adapted from NomiFun's `ContentSider` and collapse-state hook.

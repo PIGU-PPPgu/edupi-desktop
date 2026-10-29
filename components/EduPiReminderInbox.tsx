@@ -10,6 +10,7 @@ import type { EducationContract } from "@/lib/edupi-education-contract";
 import { readEduPiWorkspace } from "@/lib/edupi-education-client";
 import { useEduPiForegroundPolicy } from "./EduPiForeground";
 import { DisclosureChevron } from "./DisclosureChevron";
+import { SegmentedControl } from "./AffectSegmentedControl";
 
 type ReminderFilter = "pending" | "snoozed" | "handled" | "history";
 
@@ -226,20 +227,15 @@ export function EduPiReminderInbox({
       {open ? (
         <div className="edupi-reminder-inbox__body">
           <div className="edupi-reminder-inbox__toolbar">
-            <div className="edupi-reminder-inbox__tabs" role="group" aria-label="提醒状态">
-              {FILTERS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={filter === option.value}
-                  className={filter === option.value ? "is-active" : ""}
-                  onClick={() => { setFilter(option.value); setSelectedId(null); }}
-                >
-                  <span>{option.label}</span>
-                  {!unknownEmpty ? <b>{counts[option.value]}</b> : null}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl<ReminderFilter>
+              className="edupi-affect-segment is-reminder"
+              aria-label="提醒状态"
+              variant="tray"
+              value={filter}
+              options={FILTERS.map((option) => ({ ...option, count: unknownEmpty ? undefined : counts[option.value] }))}
+              onChange={(next) => { setFilter(next); setSelectedId(null); }}
+              onReselect={() => setSelectedId(null)}
+            />
             {!unknownEmpty ? <span className="edupi-reminder-inbox__toolbar-count">{filtered.length} 条</span> : null}
           </div>
 

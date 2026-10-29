@@ -498,6 +498,7 @@ export function AppShell() {
     setPrefBool(APP_PREF_KEYS.edupiFirstRunGuideComplete, true);
     setFirstRunGuideOpen(false);
   }, []);
+  const pauseFirstRunGuide = useCallback(() => setFirstRunGuideOpen(false), []);
 
   const askEduPiToUpdateStudents = useCallback(() => {
     openEducationView("chat");
@@ -2355,7 +2356,7 @@ export function AppShell() {
         onOpenTeaching={() => openEducationView("teaching")}
         onEnterToday={() => openEducationModule("home")}
         onComplete={finishFirstRunGuide}
-        onSkip={finishFirstRunGuide}
+        onSkip={pauseFirstRunGuide}
       />
     )}
     <UpdateReminder onOpenSettings={() => openEduPiAdmin("about")} />

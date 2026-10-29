@@ -1,0 +1,18 @@
+{
+  "targetsRemoved": [
+    "/Users/iguppp/.openclaw/workspace/edupi-desktop/.next",
+    "/Users/iguppp/.openclaw/workspace/edupi-desktop/.playwright-mcp",
+    "/tmp/edupi-onboarding-video-20261029",
+    "/tmp/edupi-onboarding-qa-20261029"
+  ],
+  "allocatedBytesBefore": 503816192,
+  "beforeAvailableBytes": 952343646208,
+  "afterAvailableBytes": 952848986112,
+  "availableBytesDelta": 505339904,
+  "allAbsent": true,
+  "protectedRetained": {
+    "node_modules": true,
+    "mv": true,
+    "onboardingArt": true
+  }
+}

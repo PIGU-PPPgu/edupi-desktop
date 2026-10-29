@@ -1,0 +1,16 @@
+{
+  "base": "a9f10da61ca3508478c797540e1cd9ff38af2627",
+  "branch": "codex/desktop-ui-motion-20261028",
+  "sourceSha256": {
+    "app/edupi-first-run.css": "48efd143e1d0cc1c1bd1158445691bff4eb7e3bdeec65cb3dce06e3ff66d3d5d",
+    "components/EduPiEducationPanel.tsx": "d893aab7d27c1bc382b12806b223247e674489d411400ed74dea371df879ba27",
+    "components/EduPiFirstRunGuide.test.mjs": "e23e1bd89d68ddd116bde5eb53f10c7a31b74fdfa44f348622ed0e1bae674419",
+    "components/EduPiFirstRunGuide.tsx": "9d422fbae302a18a3d416010019e58cc16d84b016eb1a89be7f459943da792b1",
+    "components/EduPiFirstRunPreview.tsx": "80c290e88862428d4c08fba8556f4eec9aa0f9664130686ce85e5a36705c4f11",
+    "lib/app-prefs.ts": "5170f690aff8906a38b17b274e10626c6a592c799e56ff867a02fcd1f8ff87d1",
+    "public/onboarding/edupi-night-campus.webp": "1aa0ef1baa79290977f18df76c9195bff12085c106e7470463190604853d8c26"
+  },
+  "manifestSha256": "2fd0481609cc775becbf8f4337d64c96b8b1fb83ff733de6638d949fc9709145",
+  "environment": "macOS arm64 / Node 22.23.1 / Next dev 16.4.2 / Chromium 156.0.8078.49",
+  "reference": "29.6 s, 220x480 phone video of desktop onboarding; visual and interaction reference only"
+}

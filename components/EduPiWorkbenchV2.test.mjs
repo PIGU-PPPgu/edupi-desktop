@@ -20,7 +20,7 @@ test("calendar separates content type and keeps editing inside the detail drawer
   const calendar = await read("./EduPiCalendarWorkspace.tsx");
   assert.match(calendar, /type CalendarContentMode = "summary" \| "calendar" \| "timetable"/);
   for (const label of ["汇总", "校历", "课程表"]) assert.match(calendar, new RegExp(`label: "${label}"`));
-  assert.match(calendar, /edupi-calendar-content-segment/);
+  assert.match(calendar, /className="edupi-affect-segment is-calendar-content"/);
   assert.match(calendar, /entry\.kind === contentMode/);
   assert.match(calendar, /embedded/);
   assert.match(calendar, /editor=\{/);
@@ -35,7 +35,7 @@ test("task board and task sidebar expose the same teacher-facing categories", as
     read("../lib/edupi-task-category.ts"),
   ]);
   assert.match(board, /TASK_CATEGORY_CONFIG/);
-  assert.match(board, /edupi-task-category-segment/);
+  assert.match(board, /className="edupi-affect-segment is-task-category"/);
   assert.match(sider, /groupTasksByCategory/);
   for (const label of ["教学准备", "学生跟进", "校历节点", "材料证据", "活动安排"]) {
     assert.match(`${board}\n${sider}\n${categories}`, new RegExp(label));

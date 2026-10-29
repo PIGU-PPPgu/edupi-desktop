@@ -352,24 +352,7 @@ html.dark .edupi-teacher-shell {
 }
 .edupi-reminder-inbox.is-compact .edupi-reminder-inbox__body { max-height: 360px; overflow-y: auto; padding-top: 10px; }
 .edupi-reminder-inbox__toolbar { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 14px; }
-.edupi-reminder-inbox__tabs { display: flex; align-items: center; gap: 3px; }
-.edupi-reminder-inbox__tabs button {
-  display: inline-flex;
-  min-height: 31px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ep-muted);
-  cursor: pointer;
-  font-size: 12px;
-}
-.edupi-reminder-inbox__tabs button:hover { background: var(--ep-surface-soft); color: var(--ep-text); }
-.edupi-reminder-inbox__tabs button.is-active { border-color: var(--ep-border); background: var(--ep-surface); color: var(--ep-text); box-shadow: 0 1px 1px rgba(18, 24, 32, .04); }
-.edupi-reminder-inbox__tabs b { min-width: 18px; padding: 1px 4px; border-radius: 9px; background: var(--ep-surface-soft); color: var(--ep-dim); font-size: 10px; font-weight: 650; text-align: center; }
-.edupi-reminder-inbox__tabs button.is-active b { background: var(--ep-blue-soft); color: var(--ep-blue); }
+.edupi-reminder-inbox__toolbar .edupi-affect-segment { min-width: 0; }
 .edupi-reminder-inbox__toolbar-count { color: var(--ep-dim); font-size: 11px; }
 .edupi-reminder-inbox__message { margin: 0; padding: 8px 10px; border: 1px solid var(--ep-border); border-radius: 6px; font-size: 11px; }
 .edupi-reminder-inbox__message.is-error { border-color: color-mix(in srgb, var(--ep-red) 30%, var(--ep-border)); background: var(--ep-red-soft); color: var(--ep-red); }
@@ -532,11 +515,18 @@ html.dark .edupi-teacher-shell {
 .edupi-module-heading > button.is-primary { border-color: var(--ep-text); background: var(--ep-text); color: var(--ep-surface); }
 .edupi-module-empty { display: flex; min-height: 90px; align-items: center; justify-content: center; color: var(--ep-muted); font-size: 13px; }
 .edupi-page-error { display: flex; align-items: center; gap: 10px; margin: 20px 0 0; padding: 12px 14px; border: 1px solid var(--ep-border); border-radius: 7px; background: var(--ep-surface); color: var(--ep-muted); font-size: 13px; }
-.edupi-teacher-shell .edupi-segmented-control { display: inline-flex; width: fit-content; max-width: 100%; flex-wrap: wrap; align-items: center; gap: 3px; padding: 3px; border: 1px solid var(--ep-border); border-radius: 8px; background: var(--ep-surface-soft); }
-.edupi-teacher-shell .edupi-segmented-control > button { display: inline-flex; width: auto; min-width: 42px; height: 30px; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--ep-muted); font-size: 13px; font-weight: 450; white-space: nowrap; cursor: pointer; }
-.edupi-teacher-shell .edupi-segmented-control > button:hover { color: var(--ep-text); background: color-mix(in srgb, var(--ep-text) 4%, transparent); }
-.edupi-teacher-shell .edupi-segmented-control > button[aria-pressed="true"] { border-color: var(--ep-border); background: var(--ep-surface); color: var(--ep-text); font-weight: 550; box-shadow: 0 1px 2px rgba(0, 0, 0, .04); }
-.edupi-teacher-shell .edupi-segmented-control > button:focus-visible { outline: 2px solid var(--ep-blue); outline-offset: 1px; }
+.ui-segc.edupi-affect-segment {
+  --ui-segc-ink: var(--ep-text);
+  --ui-segc-text: var(--ep-muted);
+  --ui-segc-hover-text: var(--ep-text);
+  --ui-segc-line: var(--ep-border);
+  --ui-segc-wash: var(--ep-surface-soft);
+  --ui-segc-fill: color-mix(in srgb, var(--ep-text) 8%, var(--ep-surface));
+  --ui-segc-track: var(--ep-surface-soft);
+  --ui-segc-card: var(--ep-surface);
+  --ui-segc-focus: var(--ep-blue);
+  font-family: inherit;
+}
 .edupi-section-heading { min-height: 42px; align-items: center; border-bottom: 1px solid var(--ep-border); }
 .edupi-section-heading h2 { margin: 0; font-size: 16px; }
 
@@ -1123,11 +1113,7 @@ html.dark .edupi-teacher-shell {
 .edupi-workspace-board__actions > button.is-primary { border-color: var(--ep-text); background: var(--ep-text); color: var(--ep-surface); }
 .edupi-workspace-board__mode { display: flex; height: 30px; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface); color: var(--ep-muted); font-size: 11px; }
 .edupi-workspace-board__mode i { width: 7px; height: 7px; border-radius: 50%; background: var(--ep-green); }
-.edupi-task-category-segment { display: flex; flex: 0 0 auto; gap: 4px; margin: 0 0 12px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
-.edupi-task-category-segment button { display: inline-flex; height: 30px; flex: 0 0 auto; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface); color: var(--ep-muted); cursor: pointer; font-size: 11px; }
-.edupi-task-category-segment button:hover { border-color: var(--ep-border-strong); color: var(--ep-text); }
-.edupi-task-category-segment button.is-active { border-color: var(--ep-text); background: var(--ep-text); color: var(--ep-surface); }
-.edupi-task-category-segment button span { opacity: .62; font-variant-numeric: tabular-nums; }
+.edupi-affect-segment.is-task-category { flex: 0 1 auto; margin: 0 0 12px; }
 .edupi-task-board-create { display: grid; min-width: 0; margin-bottom: 12px; padding: 10px 12px; grid-template-columns: minmax(220px, 1fr) 160px minmax(180px, .7fr) auto; align-items: end; gap: 10px; border: 1px solid var(--ep-border-strong); border-radius: 8px; background: var(--ep-surface); }
 .edupi-task-board-create label { display: flex; min-width: 0; flex-direction: column; gap: 5px; color: var(--ep-muted); font-size: 10px; }
 .edupi-task-board-create input { width: 100%; height: 32px; min-width: 0; padding: 0 9px; border: 1px solid var(--ep-border); border-radius: 6px; outline: 0; background: var(--ep-surface-soft); color: var(--ep-text); font-size: 12px; }
@@ -2293,7 +2279,6 @@ details[open] > .edupi-disclosure-detail { animation: edupi-expand-in .17s ease-
   .edupi-daily-brief > footer { padding-inline: 16px; }
   .edupi-reminder-inbox.is-standalone { padding: 18px 12px 18px; }
   .edupi-reminder-inbox__header h1 { font-size: 21px; }
-  .edupi-reminder-inbox__tabs button { padding-inline: 7px; }
   .edupi-reminder-inbox__toolbar-count { display: none; }
   .edupi-reminder-inbox__workbench { grid-template-rows: minmax(190px, 38%) minmax(250px, 1fr); }
   .edupi-reminder-inbox__detail-header { display: block; }
