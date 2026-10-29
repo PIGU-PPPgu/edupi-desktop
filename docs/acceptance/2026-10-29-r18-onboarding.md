@@ -40,3 +40,9 @@
 独立合成根、离线模型条件下，原生 CUA 驱动浏览器从欢迎进入模型选择、教师资料、名单预览、行事历接入，再到首页；暗色按钮对比度修正后实际可读。含“合计”尾行的名单先进入预览，仍勾选时“导入 2 名学生”禁用；取消尾行后变为“导入 1 名学生”并启用。预览根的 Core writer admission 拒绝这次页面写入，学生文件未增加，**不记页面写入成功**。独立固定 pin E2 `EDUPI_CORE_ROOT=<pin-810> node scripts/test-edupi-onboarding-roster-e2.mjs` 实际导入 2+1 名合成学生，按姓名、班级、特征和家校备注重新读取；汇总尾行保持零写入。行事历 E2 `npm run test:edupi-uploaded-calendar-e2` 实测接收/预览、取消零写入、确认采用、旧证明拒绝及重启回读，`external_send=false`。模型配置路由在打包模式只接受桌面进程令牌，官方 LAN 模式拒绝；Coding Plan 在教育运行入口拒绝，普通 Pi 对话模型设置未改。
 
 源码完整 `npm test` 为 3465 pass、48 环境跳过、0 fail；后续权限和名单预览改动已跑定向测试、`tsc --noEmit` 与 lint（0 error、1 条原有 warning）。`.85` 源码 CI 通过，但唯一 Mac Draft run `40861032790` 在 Next route 导出约束失败、无资产。辅助函数移至 `lib` 后，`.86` 本机 `PI_WEB_DESKTOP_BUILD=1 npm run build` 与源码 CI 的 `next typegen` 均通过；唯一 `.86` Mac run `40866811260` 后续在 DMG 公证查询遇 Apple 网络 `-1009`，无最终装订证明，未安装。`.87` 仅修补这项已知传输故障的有限重试，定向 11/11 通过。这仍是开发预览和合成 E2 证据；`.87` 签名 Mac 安装版、冷启动、直接设置页面写入/回读与真实资料保护需要在同一候选上补验。Windows 按当前授权延期。
+
+## 全屏玻璃开场与动效修正
+
+另一 UI 工作树的最新五文件清单摘要为 `cf6f07ca2bf89a580fd871e29fbdbd252234c34ac24b7be09babae98d4575edc`，五个来源文件逐项 SHA-256 与清单一致；背景 WebP 与当前 Desktop 原件相同。合入当前 Desktop 时保留了桌面令牌读取默认模型、引导“稍后再说”不标记完成、右下缩栏和原有表单保存逻辑。欢迎变成全屏场景，原位预览节点在模型、教师资料、名单、行事历步骤连续变形；标题、按钮和字段字号放大。来源工作树及原 `mv/` 未改。
+
+macOS 本机、固定 Core 合成数据根和隔离 Pi agent 下，先用 `PI_WEB_DESKTOP_BUILD=1 npm run build` 完整打包，再用本机 `npm run start` 在生产模式实际页面操作。原生 CUA 浏览器核对了1280×720欢迎/模型/教师/名单/行事历四种原位表单；首次合并中模型表单焦点使外层舞台 `scrollTop=80`，顶栏被裁切并露出底部蓝块。改为 `focus({ preventScroll: true })` 后重建生产包，四种表单外层 `scrollTop=0`，顶栏完整。320×568 的行事历表单 `document.scrollWidth=320`，内层最多滚动76px 后“跳过此步”按钮完整位于视口内。定向引导测试6/6、类型和目标 lint通过；当前未把浏览器预览当成已安装原生 WebView。

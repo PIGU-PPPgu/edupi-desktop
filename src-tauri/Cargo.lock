@@ -3923,13 +3923,14 @@ dependencies = [
 
 [[package]]
 name = "pi-agent-desktop"
-version = "0.3.87"
+version = "0.3.88"
 dependencies = [
  "base64 0.22.1",
  "block2",
  "dunce",
  "getrandom 0.3.4",
  "libc",
+ "minisign-verify",
  "nomi-computer",
  "nomi-config",
  "nomi-tools",

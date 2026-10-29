@@ -27,15 +27,15 @@ type Props = {
 };
 
 const STEPS = [
-  { title: "连接模型", note: "先连接通用 API，后续备课与疑难名单可使用它。", action: "选择模型" },
+  { title: "连接模型", note: "为备课和复杂名单连接通用 API。", action: "选择模型" },
   { title: "确认教师资料", note: "学科和年级会成为每次协作的背景。", action: "填写教师资料" },
-  { title: "导入学生名单", note: "上传 Excel 或 CSV，清晰名单会自动入库。", action: "上传名单" },
-  { title: "导入行事历与课表", note: "真实日期能让 EduPi 提前准备截止前的工作。", action: "上传行事历" },
+  { title: "导入学生名单", note: "上传名单，清晰数据自动入库。", action: "上传名单" },
+  { title: "导入行事历与课表", note: "按真实日期提前准备待办与材料。", action: "上传行事历" },
   { title: "上传第一份材料", note: "把作业、课件和通知放进工作区。", action: "打开材料" },
   { title: "第一次备课", note: "从课程和已有材料生成课前准备。", action: "打开教学" },
   { title: "进入首页", note: "继续处理下一节课、待办或对话。", action: "进入首页" },
 ] as const;
-const WELCOME = { title: "欢迎使用 EduPi", note: "备课、班级、日程和 AI 协作，从这里开始。", action: "开始探索" } as const;
+const WELCOME = { title: "欢迎使用 EduPi", note: "备课、班级、日程与 AI 协作。", action: "开始探索" } as const;
 
 export function isGuideStepReady(step: number, bundle: EduPiWorkspaceBundle): boolean {
   if (step === 1) return Boolean(bundle.context.configured && bundle.context.name?.trim() && bundle.context.subject?.trim() && bundle.context.grade?.trim());
@@ -65,6 +65,7 @@ export function EduPiFirstRunGuide({
   const [inlineBusy, setInlineBusy] = useState(false);
   const [checking, setChecking] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [artReady, setArtReady] = useState(false);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const inlineRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -81,10 +82,21 @@ export function EduPiFirstRunGuide({
   }, []);
 
   useEffect(() => {
+    const art = new Image();
+    let active = true;
+    const reveal = () => { if (active) setArtReady(true); };
+    art.onload = reveal;
+    art.onerror = reveal;
+    art.src = "/onboarding/edupi-night-campus.webp";
+    if (art.complete) reveal();
+    return () => { active = false; art.onload = null; art.onerror = null; };
+  }, []);
+
+  useEffect(() => {
     primaryRef.current?.focus();
   }, [step, welcome]);
 
-  useEffect(() => { if (inline) inlineRef.current?.focus(); }, [inline]);
+  useEffect(() => { if (inline) inlineRef.current?.focus({ preventScroll: true }); }, [inline]);
 
   const leaveGuide = (callback: () => void) => {
     if (checking || inline && inlineBusyRef.current) return;
@@ -169,18 +181,20 @@ export function EduPiFirstRunGuide({
   const position = welcome ? 0 : step + 1;
   const total = STEPS.length + 1;
   return (
-    <aside className={`edupi-first-run${opened ? " is-opened" : ""}${inline ? " is-inline" : ""}`} role={opened ? "region" : "dialog"} aria-modal={opened ? undefined : true} aria-label={inline ? current.title : undefined} aria-labelledby={inline ? undefined : "edupi-first-run-title"} onKeyDown={handleKeyDown}>
+    <aside className={`edupi-first-run${opened ? " is-opened" : ""}${inline ? " is-inline" : ""}${welcome && !opened && !inline ? " is-welcome" : ""}`} role={opened ? "region" : "dialog"} aria-modal={opened ? undefined : true} aria-label={inline ? current.title : undefined} aria-labelledby={inline ? undefined : "edupi-first-run-title"} onKeyDown={handleKeyDown}>
       <section className="edupi-first-run__dialog">
+        <div className={`edupi-first-run__art${artReady ? " is-ready" : ""}`} aria-hidden="true" />
         {!opened ? <div className="edupi-first-run__top">{inline ? <button type="button" className="edupi-first-run__quiet" disabled={inlineBusy} onClick={closeInline}>返回</button> : null}<strong>EduPi</strong><span>教师工作台</span><button type="button" className="edupi-first-run__quiet" disabled={inlineBusy} onClick={() => leaveGuide(onSkip)}>稍后再说</button></div> : null}
+        {!opened ? <div className="edupi-first-run__scene"><EduPiFirstRunPreview step={welcome ? -1 : step} expanded={Boolean(inline)}>
         {inline ? <div ref={inlineRef} className="edupi-first-run__inline" tabIndex={-1} key={`inline-${step}`}>
           {inline === "model" ? <EduPiOnboardingModelSetup onBusyChange={onInlineBusyChange} onComplete={() => { if (flowVersionRef.current !== inlineVersion) return; onModelSaved?.(); advance(); }} onAdvanced={() => { if (inlineBusyRef.current) return; flowVersionRef.current += 1; setInline(null); setOpened(true); onOpenModels(); }} /> : null}
           {inline === "teacher" ? <EduPiOnboardingTeacherForm onBusyChange={onInlineBusyChange} onComplete={() => advanceIfCurrent(inlineVersion)} /> : null}
           {inline === "roster" ? <EduPiOnboardingRoster onBusyChange={onInlineBusyChange} onComplete={() => advanceIfCurrent(inlineVersion)} /> : null}
           {inline === "calendar" ? <EduPiOnboardingCalendarUpload onBusyChange={onInlineBusyChange} onComplete={() => advanceIfCurrent(inlineVersion)} onReview={() => { if (inlineBusyRef.current) return; flowVersionRef.current += 1; setInline(null); setOpened(true); onOpenMaterials(); }} onOpenCalendar={() => { if (inlineBusyRef.current) return; flowVersionRef.current += 1; setInline(null); setOpened(true); onOpenCalendar(); }} /> : null}
           <button type="button" className="edupi-first-run__inline-skip" disabled={inlineBusy} onClick={skipInline}>跳过此步</button>
-        </div> : <>
-        {!opened ? <div className="edupi-first-run__scene" key={`scene-${position}`}><EduPiFirstRunPreview step={welcome ? -1 : step} /></div> : null}
-        <div className="edupi-first-run__content" key={`copy-${position}`}>
+        </div> : null}
+        </EduPiFirstRunPreview></div> : null}
+        {!inline ? <div className="edupi-first-run__content" key={`copy-${position}`}>
           {!opened ? <div className="edupi-first-run__progress" aria-label={`第 ${position + 1} 步，共 ${total} 步`}>
             {Array.from({ length: total }, (_, index) => <span key={index} className={index <= position ? "is-active" : ""} />)}
           </div> : null}
@@ -196,8 +210,7 @@ export function EduPiFirstRunGuide({
             {step < STEPS.length - 1 && !welcome ? <button type="button" className="edupi-first-run__skip" disabled={checking} onClick={advance}>跳过此步</button> : null}
             {opened ? <button type="button" className="edupi-first-run__skip" disabled={checking} onClick={() => leaveGuide(onSkip)}>稍后再说</button> : null}
           </div>
-        </div>
-        </>}
+        </div> : null}
       </section>
     </aside>
   );
