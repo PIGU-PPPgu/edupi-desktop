@@ -1,6 +1,6 @@
 [package]
 name = "pi-agent-desktop"
-version = "0.3.87"
+version = "0.3.88"
 description = "Desktop shell for Pi Agent"
 authors = ["pi-agent-desktop contributors"]
 license = "MIT"
@@ -87,6 +87,7 @@ windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Globa
 
 [dev-dependencies]
 base64 = "0.22"
+minisign-verify = "0.3.0"
 tauri = { version = "2.12.5", features = ["test"] }
 
 [target.'cfg(unix)'.dev-dependencies]

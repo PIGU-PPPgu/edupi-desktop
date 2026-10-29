@@ -64,8 +64,9 @@ test("first visit shows the product tour before setup and previews real destinat
   assert.match(first, /欢迎使用 EduPi/);
   assert.match(first, /开始探索/);
   assert.match(first, /第 1 步，共 8 步/);
-  assert.match(first, /功能预览/);
-  for (const [step, name] of [[-1,"首页"],[0,"AI 协作"],[2,"班级"],[3,"日程"],[4,"材料"],[5,"教学"]]) {
+  assert.match(first, /data-shape="shelf"/);
+  assert.match(first, /edupi-first-run__handwriting/);
+  for (const [step, name] of [[-1,"EduPi"],[0,"AI 协作"],[2,"班级"],[3,"日程"],[4,"材料"],[5,"教学"]]) {
     const html = renderToStaticMarkup(React.createElement(EduPiFirstRunPreview, {step}));
     assert.match(html, new RegExp(name));
   }
@@ -113,6 +114,7 @@ test("AppShell persists completion, uses existing surfaces, and reopens from hel
 
 test("the guide restores invoking focus, supports Escape, and does not trap focus away from setup pages", () => {
   assert.match(guide, /primaryRef\.current\?\.focus\(\)/);
+  assert.match(guide, /inlineRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(guide, /returnFocusRef\.current = document\.activeElement/);
   assert.match(guide, /requestAnimationFrame\(\(\) => returnTarget\?\.focus\(\)\)/);
   assert.match(guide, /event\.key === "Escape"/);

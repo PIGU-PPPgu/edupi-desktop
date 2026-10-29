@@ -161,11 +161,18 @@ test("official releases require Developer ID and notarization before publishing"
   assert.match(buildJob, /spctl --assess --type open --context context:primary-signature/);
   assert.match(buildJob, /RELEASE_ID: \$\{\{ needs\.release\.outputs\.release_id \}\}/);
   assert.match(buildJob, /node scripts\/replace-release-asset\.mjs/);
+  assert.match(buildJob, /node scripts\/replace-release-asset-set\.mjs/);
+  assert.match(buildJob, /bash scripts\/ensure-macos-app-ticket\.sh/);
+  assert.match(buildJob, /bash scripts\/verify-macos-bundle-triad\.sh/);
+  assert.match(buildJob, /--example verify_updater_archive/);
   const notary = buildJob.indexOf("node scripts/notarize-macos-dmg.mjs");
   const staple = buildJob.indexOf("node scripts/staple-macos-artifact.mjs");
   const validateDmg = buildJob.indexOf('node scripts/validate-macos-staple.mjs "${dmgs[0]}"');
   const gatekeeper = buildJob.indexOf("spctl --assess --type open --context context:primary-signature");
   const replaceDmg = buildJob.indexOf("node scripts/replace-release-asset.mjs");
+  assert.ok(buildJob.indexOf("bash scripts/ensure-macos-app-ticket.sh") < notary);
+  assert.ok(buildJob.indexOf("--example verify_updater_archive") < buildJob.indexOf("bash scripts/verify-macos-bundle-triad.sh"));
+  assert.ok(buildJob.indexOf("bash scripts/verify-macos-bundle-triad.sh") < replaceDmg);
   assert.ok(notary < staple && staple < validateDmg && validateDmg < gatekeeper && gatekeeper < replaceDmg,
     "Accepted notarization, successful stapling, validation and Gatekeeper must precede asset replacement");
   assert.match(buildJob, /--release-id "\$RELEASE_ID"/);
