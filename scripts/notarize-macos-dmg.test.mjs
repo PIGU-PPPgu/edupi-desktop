@@ -10,6 +10,10 @@ const disconnected = {
   status: 1,
   stderr: `Error Domain=NSURLErrorDomain Code=-1009 NSErrorFailingURLStringKey=https://appstoreconnect.apple.com/notary/v2/submissions/${submissionId}`,
 };
+const disconnectedBeforeSubmissionLookup = {
+  status: 1,
+  stderr: "Error Domain=NSURLErrorDomain Code=-1009 NSErrorFailingURLStringKey=https://appstoreconnect.apple.com/notary/v2/teams/TESTTEAM",
+};
 
 function harness(results) {
   const calls = [], waits = [];
@@ -35,6 +39,13 @@ test("rechecks one uploaded submission after a transient Apple status outage", a
   assert.deepEqual(waits, [15_000, 15_000]);
 });
 
+test("retries the same submission when Apple's notary status transport fails before the submissions path", async () => {
+  const { calls, waits, options } = harness([submitted, disconnectedBeforeSubmissionLookup, status("Accepted")]);
+  assert.equal(await notarizeMacOSDmg("EduPi.dmg", options), submissionId);
+  assert.equal(calls.filter(([, args]) => args[1] === "submit").length, 1);
+  assert.deepEqual(waits, [15_000]);
+});
+
 test("an invalid notarization result fails without another submission or status poll", async () => {
   const { calls, waits, options } = harness([submitted, status("Invalid")]);
   await assert.rejects(notarizeMacOSDmg("EduPi.dmg", options), /Invalid/);
@@ -48,6 +59,14 @@ test("persistent Apple transport failure remains a hard failure at the poll limi
   assert.equal(calls.filter(([, args]) => args[1] === "submit").length, 1);
   assert.equal(calls.length, 4);
   assert.deepEqual(waits, [15_000, 15_000]);
+});
+
+test("persistent transport outages stop before the full paid-run poll budget", async () => {
+  const { calls, waits, options } = harness([submitted, ...Array(6).fill(disconnected)]);
+  options.maxPolls = 80;
+  await assert.rejects(notarizeMacOSDmg("EduPi.dmg", options), /after 6 consecutive transport failures.*network=-1009/);
+  assert.equal(calls.length, 7);
+  assert.equal(waits.length, 5);
 });
 
 test("a timed-out status request retries the same submission", async () => {
@@ -105,4 +124,14 @@ test("non-retryable status errors retain safe HTTP diagnostics", async () => {
     assert.doesNotMatch(error.message, /test-only|test@example\.invalid/);
     return true;
   });
+});
+
+test("an HTTP authorization failure on Apple's domain is not retried as a transport outage", async () => {
+  const { calls, waits, options } = harness([submitted, {
+    status: 1,
+    stderr: `NSURLErrorDomain Code=-1009 statusCode: 401 https://appstoreconnect.apple.com/notary/v2/teams/TESTTEAM`,
+  }]);
+  await assert.rejects(notarizeMacOSDmg("EduPi.dmg", options), /http=401/);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(waits, []);
 });
