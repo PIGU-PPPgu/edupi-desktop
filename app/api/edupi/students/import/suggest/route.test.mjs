@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createJiti } from "jiti";
 
-const { parseSuggestionHeaders, parseRosterMappingSuggestion, suggestStudentRosterColumns, isTeachingModelIneligible, POST } = await createJiti(import.meta.url, { tsconfigPaths: true }).import("./route.ts");
+const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
+const { parseSuggestionHeaders, parseRosterMappingSuggestion, suggestStudentRosterColumns } = await jiti.import("../../../../../../lib/edupi-student-roster-suggestion.ts");
+const { isTeachingModelIneligible } = await jiti.import("../../../../../../lib/model-setup-presets.ts");
+const { POST } = await jiti.import("./route.ts");
 
 test("suggestion accepts only bounded header labels and no roster rows", () => {
   assert.deepEqual(parseSuggestionHeaders({ headers: [" 姓名 ", "班别"] }), ["姓名", "班别"]);

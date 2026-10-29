@@ -39,4 +39,4 @@
 
 独立合成根、离线模型条件下，原生 CUA 驱动浏览器从欢迎进入模型选择、教师资料、名单预览、行事历接入，再到首页；暗色按钮对比度修正后实际可读。含“合计”尾行的名单先进入预览，仍勾选时“导入 2 名学生”禁用；取消尾行后变为“导入 1 名学生”并启用。预览根的 Core writer admission 拒绝这次页面写入，学生文件未增加，**不记页面写入成功**。独立固定 pin E2 `EDUPI_CORE_ROOT=<pin-810> node scripts/test-edupi-onboarding-roster-e2.mjs` 实际导入 2+1 名合成学生，按姓名、班级、特征和家校备注重新读取；汇总尾行保持零写入。行事历 E2 `npm run test:edupi-uploaded-calendar-e2` 实测接收/预览、取消零写入、确认采用、旧证明拒绝及重启回读，`external_send=false`。模型配置路由在打包模式只接受桌面进程令牌，官方 LAN 模式拒绝；Coding Plan 在教育运行入口拒绝，普通 Pi 对话模型设置未改。
 
-源码完整 `npm test` 为 3465 pass、48 环境跳过、0 fail；后续权限和名单预览改动已跑定向测试、`tsc --noEmit` 与 lint（0 error、1 条原有 warning）。这仍是开发预览和合成 E2 证据；`.85` 源码 CI、签名 Mac 安装版、冷启动、直接设置写入/回读与真实资料保护需要在同一候选上补验。Windows 按当前授权延期。
+源码完整 `npm test` 为 3465 pass、48 环境跳过、0 fail；后续权限和名单预览改动已跑定向测试、`tsc --noEmit` 与 lint（0 error、1 条原有 warning）。`.85` 源码 CI 通过，但其唯一 Mac-only Draft run `40861032790` 在 Next route 导出约束失败，Draft 无资产。辅助函数已移至 `lib`，`.86` 同源码在本机 `PI_WEB_DESKTOP_BUILD=1 npm run build` 通过，加入源码 CI 的 `next typegen` 预检；定向 11 项通过。这仍是开发预览和合成 E2 证据；`.86` 签名 Mac 安装版、冷启动、直接设置页面写入/回读与真实资料保护需要在同一候选上补验。Windows 按当前授权延期。

@@ -62,6 +62,7 @@ jobs:
         if: github.event_name != 'schedule'
         run: |
           npm test
+          PI_WEB_DESKTOP_BUILD=1 npx next typegen --webpack
           node_modules/.bin/tsc --noEmit
           npm run lint
 

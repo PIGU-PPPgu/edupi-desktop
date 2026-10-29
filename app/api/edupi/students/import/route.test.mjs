@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createJiti } from "jiti";
 
-const { processAutomaticStudentRoster, processManualStudentRoster } = await createJiti(import.meta.url, { tsconfigPaths: true }).import("./route.ts");
+const { processAutomaticStudentRoster, processManualStudentRoster } = await createJiti(import.meta.url, { tsconfigPaths: true }).import("../../../../../lib/edupi-student-roster-import.ts");
 const { manualRosterRequestId } = await createJiti(import.meta.url, { tsconfigPaths: true }).import("../../../../../lib/edupi-student-roster-server.ts");
 const bytes = text => new TextEncoder().encode(text);
 
