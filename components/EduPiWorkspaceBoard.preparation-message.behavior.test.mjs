@@ -37,7 +37,8 @@ async function mount() {
   window.HTMLElement.prototype.scrollIntoView = () => {};
   window.HTMLElement.prototype.attachEvent = () => {};
   window.HTMLElement.prototype.detachEvent = () => {};
-  const runtime = { ...modules, react: React, "react/jsx-runtime": { jsx, jsxs, Fragment }, "./EduPiForeground": { useEduPiForegroundPolicy: () => ({ today: "2026-10-28", graceDays: 3, pinnedTaskIds: [] }), EduPiPagedRows: () => null } };
+  const runtime = { ...modules, react: React, "react/jsx-runtime": { jsx, jsxs, Fragment }, "./EduPiForeground": { useEduPiForegroundPolicy: () => ({ today: "2026-10-28", graceDays: 3, pinnedTaskIds: [] }), EduPiPagedRows: () => null },
+    "./AffectSegmentedControl": { SegmentedControl: () => null } };
   const exports = {};
   vm.runInNewContext(code, { exports, Error, window, document, crypto: globalThis.crypto, requestAnimationFrame: callback => { callback(); return 1; }, cancelAnimationFrame() {}, require(name) { assert.ok(runtime[name], name); return runtime[name]; } });
   const requests = [], root = createRoot(document.getElementById("root"));
