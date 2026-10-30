@@ -2,6 +2,8 @@
 
 ## 当前状态
 
+2026-10-30 `.89` 安装版：唯一 `/Applications/EduPi.app` 为签名公证的 `.89`，固定 Desktop Main `02ee02ffe99d25397124850d1df663268687fa71`／Core `f599fc389eecde7de4718a731e8304524c11dc72`。原生新隔离根首次欢迎、教师资料保存、ICS材料暂存均可操作；在 owner 未初始化时明确显示“本机身份尚未建立”，采用禁用。点“建立本机身份”后同材料显示单项提案；首次原生采用弹窗取消仍待确认，第二次确认后材料“已采用1项安排”、日程页仅一条、操作历史写入一次。正常退出再冷启后同一教师资料、日程与材料回执保持；日程“推断／待确认”保留后续教师核对。真实325保护文件逐字节相同，3个WebView origin恢复；App已退出、真实模型未调用。私有原生记录 `~/edupi-install-checkpoints/v0.3.89/evidence/installed-gui-089.json` 与资料/安装证明在同目录。Core的新Main `86ef6c98676789e61dec81594c75968922a964e3` 于本次构建后合入，尚未消费。本段取代下方`.88`为当前安装版的状态。
+
 2026-10-30：最新五文件 UI 已随 Desktop [PR404](https://github.com/PIGU-PPPgu/edupi-desktop/pull/404) 合并，固定 Core `f599fc389eecde7de4718a731e8304524c11dc72` 的 `.88` Mac-only 签名 Draft [run40911065931](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/40911065931) 通过并安装为唯一 `/Applications/EduPi.app`。原生 WebView 在隔离根 `edupi-route1-canary-088-20261030` 显示全屏欢迎；模型厂商与 DeepSeek 表单打开，教师资料保存、两名合成学生 CSV 导入及班级页回读成功。正常退出再冷启动后欢迎未重复、教师与两名学生仍在，ICS 暂存材料也在材料页重读。该 ICS 的安排提案显示“教师身份暂不可用”，没有采用或排课；这一步仍需处理。真实325保护文件逐字节相同，原三个 WebView origin 已恢复，App 已正常退出；没有调用真实模型或构建 Windows。私有原生证据在 `~/edupi-install-checkpoints/v0.3.88/evidence/installed-gui-088.json`，签名和资产证据在同目录。
 
 2026-10-29 来源预览阶段：视频参考中的沉浸式主画面、浮动产品预览、逐步切换、底部主操作，以及进入功能后缩成可继续操作的引导栏，已在 EduPi 首次使用流程中实现。预览内容改为 EduPi 实际入口：AI 协作、教师资料、班级、日程、材料、教学和首页。保留原七步的真实保存结果检查、跳过、返回及续接；欢迎画面是新增的首步。当时源码已并入原 Desktop 路线的待提交改动，**已实现待安装验收**；当时的 `/Applications/EduPi.app` 尚未更新。本段仅记录来源阶段，当前状态以上段为准。
