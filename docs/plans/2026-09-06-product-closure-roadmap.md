@@ -1,6 +1,6 @@
 # EduPi 产品闭环 PR 路线图
 
-2026-10-31 R04 后续 Core 配对当前状态：已在原 Desktop 分支固定 Core Main `d87b44d6` 和新的双组件清单；Mac 本机的 Core 来源／Goal 只读证明、真实 broker→Pi SDK、Bridge、完整打包闭包和3514项配对测试均通过，内部候选来源字段不能从 Owner 回执进入 Desktop。精确 [Core Quality run41111244444](https://github.com/PIGU-PPPgu/edupi/actions/runs/41111244444)/attempt1 已完整成功；Desktop [PR426](https://github.com/PIGU-PPPgu/edupi-desktop/pull/426) 已提交，仓库未报告检查，合并及新配对的签名安装未完成，不能追认 `.93` 包内 Core `028450cd`。本项为源码本机与Core远端验收通过、Desktop集成待合并；[操作、身份与未验门](2026-09-07-signed-updates.md)在原发布账本顶部。
+2026-10-31 R04 后续 Core 配对当前状态：已在原 Desktop 分支固定 Core Main `d87b44d6` 和新的双组件清单；Mac 本机的 Core 来源／Goal 只读证明、真实 broker→Pi SDK、Bridge、完整打包闭包和3514项配对测试均通过，内部候选来源字段不能从 Owner 回执进入 Desktop。精确 [Core Quality run41111244444](https://github.com/PIGU-PPPgu/edupi/actions/runs/41111244444)/attempt1 已完整成功；Desktop [PR426](https://github.com/PIGU-PPPgu/edupi-desktop/pull/426) 已普通合入精确 Main `c386edf7ad0f507ffe9a5e6105d72fd7c1f89163`，仓库未报告独立PR检查；新配对的签名安装未执行，不能追认 `.93` 包内 Core `028450cd`。本项为源码配对及本机/远端Core验证通过、待下一Mac候选安装；[操作、身份与未验门](2026-09-07-signed-updates.md)在原发布账本顶部。
 
 2026-10-31 R04 下一输入（历史只读评估，源码配对状态见上段）：Core [PR415](https://github.com/PIGU-PPPgu/edupi/pull/415) 在 `.93` 固定候选完成后合入 Main `d87b44d628cdd3ded19a0bf82ec9cf82abd433f4`，新增记忆来源与当前 Goal 的只读证明、更新双组件清单；Bridge／Runtime schema与命令未变。精确 Core Quality run41111244444 当时尚在运行；这批未被包内固定 Core `028450cd` 消费，不改写下面已验 `.93` 安装身份。
 
