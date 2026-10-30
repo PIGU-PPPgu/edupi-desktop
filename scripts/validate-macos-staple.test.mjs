@@ -22,8 +22,8 @@ test("retries the observed CloudKit offline failure and still requires successfu
 test("persistent CloudKit failure does not pass after the retry limit", async () => {
   const { calls, waits, options } = harness([offline]);
   await assert.rejects(validateMacOSStaple("EduPi.dmg", options), /status 68/);
-  assert.equal(calls.length, 3);
-  assert.equal(waits.length, 2);
+  assert.equal(calls.length, 6);
+  assert.deepEqual(waits, [5_000, 10_000, 15_000, 20_000, 20_000]);
 });
 
 test("retries a lost CloudKit ticket-delivery connection and still requires successful validation", async () => {
@@ -36,8 +36,15 @@ test("retries a lost CloudKit ticket-delivery connection and still requires succ
 test("persistent lost CloudKit connections fail after the retry limit", async () => {
   const { calls, waits, options } = harness([cloudKitConnectionLost]);
   await assert.rejects(validateMacOSStaple("EduPi.dmg", options), /status 68/);
-  assert.equal(calls.length, 3);
-  assert.equal(waits.length, 2);
+  assert.equal(calls.length, 6);
+  assert.deepEqual(waits, [5_000, 10_000, 15_000, 20_000, 20_000]);
+});
+
+test("a fourth valid CloudKit response completes validation after the prior three-disconnect failure", async () => {
+  const { calls, waits, options } = harness([cloudKitConnectionLost, cloudKitConnectionLost, cloudKitConnectionLost, { status: 0 }]);
+  await validateMacOSStaple("EduPi.app", options);
+  assert.equal(calls.length, 4);
+  assert.deepEqual(waits, [5_000, 10_000, 15_000]);
 });
 
 test("invalid tickets and unrecognized failures are not retried", async () => {
