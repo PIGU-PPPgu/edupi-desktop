@@ -10,8 +10,9 @@ const SHAPES: readonly Shape[] = ["shelf", "workspace", "focus", "shelf", "works
 
 function SceneContent({ page }: { page: number }) {
   if (page === 0) return <div className="edupi-first-run__demo-welcome">
-    <strong>在截止前备好要交付的内容，自动记住学生和班级情况。</strong>
-    <span>少重复整理，把时间留给判断与沟通。</span>
+    <strong>你好，我是 EduPi。</strong>
+    <p>我想做你身边的教师助理，记住班里的变化，把临近的工作提前准备好。</p>
+    <p className="edupi-first-run__intro-hope">希望你少一点赶工，多一点时间留给学生，也留给自己。</p>
   </div>;
   if (page === 1) return <div className="edupi-first-run__demo-model">
     <div className="is-connection"><span>模型</span><i /><strong>EduPi</strong><i /><span>课堂</span></div>

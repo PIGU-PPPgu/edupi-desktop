@@ -1,0 +1,19 @@
+{
+  "removed": [
+    {
+      "kind": ".next",
+      "allocatedBytes": 491405312
+    },
+    {
+      "kind": ".playwright-mcp",
+      "allocatedBytes": 12288
+    },
+    {
+      "kind": "isolated data",
+      "allocatedBytes": 4096
+    }
+  ],
+  "allocatedBytes": 491421696,
+  "availableDeltaBytes": 492040192,
+  "pathsAbsent": true
+}
