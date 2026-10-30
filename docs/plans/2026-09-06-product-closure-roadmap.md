@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-10-31 R04 下一输入：Core [PR415](https://github.com/PIGU-PPPgu/edupi/pull/415) 在 `.93` 固定候选完成后合入 Main `d87b44d628cdd3ded19a0bf82ec9cf82abd433f4`，新增记忆来源与当前 Goal 的只读证明、更新双组件清单；Bridge／Runtime schema与命令未变。精确 Core Quality run41111244444 尚在运行；这批未被包内固定 Core `028450cd` 消费，不改写下面已验 `.93` 安装身份。下一步是等待新CI并做独立源码配对/隔离接线，再决定下一 Mac 候选，避免为连续移动的 Main 重复签名构建。
+
 2026-10-31 `.93` TCC 当前结论：正常经 LaunchServices 启动唯一已签名 `/Applications/EduPi.app`、同时明确使用隔离根时，应用内辅助功能与屏幕录制均显示已授权，重新检测仍保持。终端直接执行同包二进制曾把录屏显示为未授权，尽管系统设置的 EduPi 开关开启；两种路径分开记录，未改TCC或系统设置。App退出后原WebView来源与真实325项资料再次核对一致；精确回执见[发布验收账本](2026-09-07-signed-updates.md)。屏幕观察工具本身未在本轮重新触发。
 
 2026-10-31 R04／R18 `.93` Mac 安装版当前状态：Desktop Main `ceb576b406479270327fb707dd0755c8f6e8fc0a` 精确固定 Core Main `028450cdef5596538b436b1f69051d2964f792f2`；Core PR与Main完整CI、唯一Mac-only签名 [run41092582414](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41092582414) 均成功。三项同轮资产ID/大小/SHA、Apple App/DMG Accepted、装订、严格签名、Gatekeeper、Minisign及篡改拒绝在CI和本机核对；Release `.93` 仍Draft。唯一 `/Applications/EduPi.app` 已安装 `.93`，隔离原生逐帧证实“手写→介绍零字／部分／全文”、光标结束消失和打字中进入模型步骤；固定Core的合成PDF原文、owner围栏、取消零写、确认单条采用、跨日程及冷启动保持实际通过。真实资料与配置325项字节不变，原3个WebView来源恢复，App已退出；本轮两个下载／解压目录按白名单精确清理，旧`.92`和资料备份保留。公开Mac预发布仍`.89`、feed`.70`，Windows/Linux延期；原生减少动态效果未改系统偏好，只沿用隔离浏览器证据。精确资产和可复核记录见[发布验收账本](2026-09-07-signed-updates.md)，本段取代下方`.93`“正在构建”状态。
