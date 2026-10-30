@@ -6,10 +6,10 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "f599fc389eecde7de4718a731e8304524c11dc72",
+    "core_commit": "86ef6c98676789e61dec81594c75968922a964e3",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:d43681dc2f2f6c4adbd8a44040b9beb17503b0d98cee6e45f2ffd6a01e8e517f",
-    "runtime_component_manifest_hash": "sha256:03eff1468097b80a1d1fa9d12c19010e81702fd293b1a6ea3fd213b969639cbd",
+    "component_manifest_hash": "sha256:0b3ab7b12788ace1395dcc29ee64242de35f777637e5f6c60c4ad18da6de5ab1",
+    "runtime_component_manifest_hash": "sha256:162e231dbf3c47509ae97e2d0140bf65a4cf8b5d87208d0c6acae581a1317313",
     "runtime_schema_hash": "sha256:8701c07308359b90c955caa59674bdc02d36a30b6207808bc406a7ca4fe8144d"
   },
   "contract_identities": [
@@ -247,7 +247,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/391",
     "https://github.com/PIGU-PPPgu/edupi/pull/390",
     "https://github.com/PIGU-PPPgu/edupi/pull/403",
-    "https://github.com/PIGU-PPPgu/edupi/pull/404"
+    "https://github.com/PIGU-PPPgu/edupi/pull/404",
+    "https://github.com/PIGU-PPPgu/edupi/pull/408"
   ],
-  "change_note": "Mac integration pairs fixed Core f599fc38, adding bounded v17 current-source teaching-math recall qualifiers while retaining preparation history and same-message memory replay fixes. Historical pre-revision-projection artifacts remain read-only without execution or edit authority. Runtime schema/reasons, Bridge v1.1, occurrence v1.2 and Pi1.0.2 remain unchanged; complete dual component closures are enforced. No automatic real-root migration, external send, policy acceptance or public feed update is introduced."
+  "change_note": "Mac integration pairs fixed Core 86ef6c98, adding one bounded retry for transient PDF visible-source deadlines while preserving current-source and owner fences. Historical preparation and memory replay remain read-only where previously restricted. Runtime schema/reasons, Bridge v1.1, occurrence v1.2 and Pi1.0.2 remain unchanged; complete dual component closures are enforced. No automatic real-root migration, external send, policy acceptance or public feed update is introduced."
 }
