@@ -1,5 +1,7 @@
 # 自动下载安装
 
+2026-10-31 `.93` 安装版 TCC 补验：包内可执行文件直接由终端启动并指向合成根时，应用内辅助功能“已授权”但录屏“未授权”；macOS“录屏与系统录音”中的 EduPi 开关同时显示开启。调用应用的“申请权限”并正常重启后，直接启动路径仍报未授权，**不据此认定安装版权限丢失**。随后用 macOS LaunchServices `open -n -a /Applications/EduPi.app --env ...` 正常启动同一已签名 App，并将 `EDUPI_DATA_ROOT`／`EDUPI_PROJECT_ROOT` 明确指向相同合成根；应用显示路径 `/Applications/EduPi.app`、Bundle ID `com.abcwyc.pi-agent`、Team `BY3XZG2839`、版本`.93`，辅助功能和屏幕录制均为“已授权”，重新检测后保持。两种启动方式的截图时间与SHA、系统开关截图、精确进程身份记录于私有 `~/edupi-install-checkpoints/v0.3.93/evidence/tcc-launch-method-093.json`；未切换TCC权限或更改系统设置、launchd。最终App退出、再次恢复3个原WebView来源，真实325项资料/配置仍逐字节相同。此项验证的是**正常启动下的权限状态**，未另行触发屏幕观察工具。
+
 2026-10-31 `.93` Mac-only 安装验收通过，取代下方同版本“正在构建”的历史状态：Desktop [PR422](https://github.com/PIGU-PPPgu/edupi-desktop/pull/422) 已合精确 Main `ceb576b406479270327fb707dd0755c8f6e8fc0a`／tree `dc78abc168ac545ec448ff21def8f7db66afb54a`，固定 Core `028450cdef5596538b436b1f69051d2964f792f2`。Core [PR413](https://github.com/PIGU-PPPgu/edupi/pull/413) 的 [run41084223087](https://github.com/PIGU-PPPgu/edupi/actions/runs/41084223087) 与合并后 Main 的 [run41091654483](https://github.com/PIGU-PPPgu/edupi/actions/runs/41091654483) 均完整成功，旧失败和超时保留历史。[唯一签名 Draft run41092582414](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41092582414)/attempt1 固定上述 Desktop head，notary-preflight、release、Mac build 全成功；Mac-only 的 draft-proof/manifest/notify 条件跳过。Release `429268157`、tag `v0.3.93`、target 精确 `ceb576b4` 保持 Draft；以下三项为同轮最终替换并核对后的资产，Mac 集合指纹 `sha256:9ca966e085aaf97d59835f927fea052a05d142508c3e207cf8175b5b5a062d64`，不冒充七平台 publish proof。
 
 | 最终资产 | ID | 字节 | SHA-256 |
