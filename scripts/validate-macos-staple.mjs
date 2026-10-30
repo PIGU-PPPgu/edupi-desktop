@@ -7,7 +7,8 @@ async function runMacOSStapler(target, operation, {
   run = spawnSync, wait = setTimeout, log = text => process.stderr.write(text),
 } = {}) {
   if (!target) throw new Error("A signed application or disk image path is required");
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  const maxAttempts = operation === "validate" ? 6 : 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const result = run("xcrun", ["stapler", operation, target], { encoding: "utf8" });
     const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
     log(output);
@@ -23,12 +24,12 @@ async function runMacOSStapler(target, operation, {
       && /NSURLErrorDomain Code=-1009\b/.test(output);
     const transientCloudKitError = result.status === 68 && (legacyOfflineValidation ||
       (ticketEndpointOnly && /NSURLErrorDomain Code=-100[59]\b/.test(output)));
-    if (attempt === 3 || !transientCloudKitError) {
+    if (attempt === maxAttempts || !transientCloudKitError) {
       const label = operation === "validate" ? "Staple validation" : "Ticket stapling";
       throw new Error(`${label} failed with status ${result.status ?? "unavailable"}`);
     }
-    log(`CloudKit connection interrupted; retrying ${operation} (${attempt}/3).\n`);
-    await wait(5_000);
+    log(`CloudKit connection interrupted; retrying ${operation} (${attempt}/${maxAttempts}).\n`);
+    await wait(operation === "validate" ? 5_000 * Math.min(attempt, 4) : 5_000);
   }
 }
 
