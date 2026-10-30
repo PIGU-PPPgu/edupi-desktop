@@ -20,6 +20,6 @@ EduPi Desktop 0.3.93，macOS Apple Silicon 技术候选。
 
 记忆写入、遗忘与学生记录的执行回执在当前轮保留；历史来源失效时仍隔离旧回复，回执不授予后续轮次或压缩永久记忆权威。
 
-保留此前依赖安全修补；Next 更新至 16.4.3，测试环境使用 linkedom。Core 精确提交、Runtime schema 与双组件身份以包内兼容清单为准。
+保留此前依赖安全修补；OpenConnector 的 `@hono/node-server` 解析至 2.1.5，修复静态路径双重解码绕过。Next 更新至 16.4.3，测试环境使用 linkedom。Core 精确提交、Runtime schema 与双组件身份以包内兼容清单为准。
 
 本轮只处理 macOS。Release 保持 Draft，不更新公开 feed，不构建 Windows/Linux。
