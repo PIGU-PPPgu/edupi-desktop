@@ -1,5 +1,9 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-10-30 R04 最新 Core 召回围栏配对：Core Main `42d464edcb0950ffca99549bae52821a5b7dea01` 的 [CI](https://github.com/PIGU-PPPgu/edupi/actions/runs/41052122748) 成功。Desktop 本地源码已更新固定 pin／双组件清单，并对新 `compound_unverified` held 回执补独立 SDK 接线回归；真实 Core 进程、Bridge 合同、打包闭包、隔离 SDK 召回均通过，完整 Desktop 测试 3512通过／16条件跳过／0失败，type/lint 通过。该改动尚待源码 PR/CI 和新 Mac 安装候选；下方 `.92` 的原生安装结果只覆盖其固定 Core `86ef6c9`，两份候选身份不混用。私有测试日志见 `~/edupi-install-checkpoints/core-pair-42d-20261030/evidence/`。
+
+2026-10-30 R04／R18 Mac `.92` 当前安装状态：Desktop Main `938e8c76f59a5ea1c755f20d4587b84c65f90480` 固定 Core `86ef6c98676789e61dec81594c75968922a964e3`，同轮 Mac 签名 [run41046509399](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41046509399) 成功，Release `v0.3.92` 仍为 Draft。唯一 `/Applications/EduPi.app` 已安装 `.92`，签名、公证、装订、Gatekeeper、更新包验签和篡改拒绝实际通过；隔离原生 PDF 接入、身份门、取消与确认采用、跨日程及冷启动保持通过，真实资料和配置 325 项字节不变，原 WebView 来源已恢复，App 已退出。本轮四个确认可重建的缓存/下载目录已精确清理，回退与证据保留。[资产和操作证据](2026-09-07-signed-updates.md)列出精确身份。R18 首屏文字和主按钮在原生 AX 可见，手写持续时长未在本轮计时；下方“待安装验收”只代表旧阶段。公开 Mac 预发布仍为 `.89`、自动更新源 `.70`，Windows/Linux 继续延期。Core Main 后续 `42d464ed` 的召回证据围栏将单独配对，`.92` 安装结果不代表它已被消费。
+
 2026-10-30 R18 首屏口吻新状态：按用户继续修正，将能力说明改为 EduPi 第一人称打招呼，说明想成为老师身边的教师助理、记住班级变化并提前准备工作，希望老师少赶工、多留时间给学生和自己。保留手写动画，配套增加段落空间；隔离开发页 1440/768/320×568/480、减少动态效果与进入模型步骤实测通过，定向 6 项、类型、目标 lint 和 diff 检查通过。此轮未重跑生产构建，状态**已实现待安装验收**。[证据](../acceptance/2026-10-29-r18-onboarding.md#当前状态)取代下方能力陈述为当前口吻。
 
 2026-10-30 R18 首屏自我介绍新状态：保留已验的全屏手写 `Welcome To Edupi`，按用户反馈把两张能力分类卡替换为一段具体自我介绍：截止前备好交付内容、自动记住学生与班级情况，减少重复整理，让老师保留判断与沟通时间。基线 Desktop `8d2ec910`、分支 `codex/onboarding-intro-positioning-20261030`；隔离开发/生产浏览器实看桌面及 320×568/480，定向 6 项、类型、目标 lint、生产构建和差异检查通过。状态**已实现待安装验收**，本机现有安装包尚未包含本次文案与布局。[证据](../acceptance/2026-10-29-r18-onboarding.md#当前状态)取代下方“两张卡片”为当前首屏状态。
