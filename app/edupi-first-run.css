@@ -123,7 +123,7 @@
 .edupi-first-run.is-inline .edupi-first-run__scene { padding-top: 25px; }
 
 .edupi-first-run__welcome-script { display: flex; width: min(1160px, 94vw); flex: 0 0 auto; flex-wrap: wrap; align-items: baseline; justify-content: center; column-gap: .18em; color: #ecf8ff; font-family: "EduPi Welcome Script", cursive; font-size: clamp(82px, min(12vw, 19vh), 175px); font-weight: 600; line-height: 1; letter-spacing: -.035em; text-shadow: 0 0 18px rgba(114, 181, 255, .78), 0 0 48px rgba(54, 117, 255, .45); pointer-events: none; }
-.edupi-first-run__welcome-script span { display: block; clip-path: inset(-.12em 110% -.12em 0); }
+.edupi-first-run__welcome-script span { display: block; margin-right: -.18em; padding-right: .18em; clip-path: inset(-.12em -.12em -.12em 0); mask-image: linear-gradient(90deg, #000 49%, transparent 51%); mask-size: 210% 100%; mask-position: 100% 0; }
 .edupi-first-run__welcome-script.is-ready span { animation: edupi-first-run-script-write 1100ms cubic-bezier(.22, .76, .19, 1) forwards; }
 .edupi-first-run__welcome-script span:nth-child(1) { animation-delay: 180ms; }
 .edupi-first-run__welcome-script span:nth-child(2) { animation-delay: 1160ms; animation-duration: 480ms; }
@@ -326,7 +326,7 @@
 @keyframes edupi-first-run-demo-out { to { opacity: 0; transform: translateY(-7px) scale(.98); } }
 @keyframes edupi-first-run-form-in { from { opacity: 0; transform: translateY(12px) scale(.97); filter: blur(7px); } }
 @keyframes edupi-first-run-welcome-shell { from { background-color: transparent; border-color: transparent; box-shadow: none; } to { background-color: rgba(5, 11, 30, .84); } }
-@keyframes edupi-first-run-script-write { to { clip-path: inset(-.12em -.12em -.12em 0); } }
+@keyframes edupi-first-run-script-write { to { mask-position: 0 0; } }
 @keyframes edupi-first-run-feature-in { from { opacity: 0; transform: translateY(12px); } }
 @keyframes edupi-first-run-signal { to { transform: translateX(25px); } }
 @keyframes edupi-first-run-meter { to { opacity: .35; transform: scaleX(.65); } }
@@ -400,7 +400,7 @@
   .edupi-first-run.is-welcome .edupi-first-run__dialog { grid-template-rows: 50px minmax(0, 1fr) 110px; }
   .edupi-first-run.is-welcome .edupi-first-run__scene { gap: 9px; padding-bottom: 12px; }
   .edupi-first-run.is-welcome .edupi-first-run__welcome-script { font-size: 58px; line-height: .82; }
-  .edupi-first-run.is-welcome .edupi-first-run__preview[data-scene="0"] { height: 165px; }
+  .edupi-first-run.is-welcome .edupi-first-run__preview[data-scene="0"] { height: 175px; }
   .edupi-first-run.is-welcome .edupi-first-run__content { min-height: 110px; padding-bottom: 18px; }
 }
 
@@ -427,7 +427,7 @@
   .edupi-first-run__primary,
   .edupi-first-run__progress span { animation: none !important; transition: none !important; }
   .edupi-first-run__art.is-ready { opacity: 1; filter: none; transform: none; }
-  .edupi-first-run__welcome-script span { clip-path: none; }
+  .edupi-first-run__welcome-script span { clip-path: none; mask-image: none; }
   .edupi-first-run__welcome-feature { opacity: 1; transform: none; }
   .edupi-first-run__demo-layer.is-outgoing { display: none; }
   .edupi-first-run__primary:hover:not(:disabled), .edupi-first-run__primary:active:not(:disabled) { transform: none; }

@@ -54,11 +54,12 @@ export function EduPiWelcomeScript() {
   useEffect(() => {
     let active = true;
     if (!document.fonts?.load) { setFontReady(true); return; }
+    const fallback = window.setTimeout(() => { if (active) setFontReady(true); }, 2500);
     document.fonts.load('600 170px "EduPi Welcome Script"').then(
-      () => { if (active) setFontReady(true); },
-      () => { if (active) setFontReady(true); },
+      () => { window.clearTimeout(fallback); if (active) setFontReady(true); },
+      () => { window.clearTimeout(fallback); if (active) setFontReady(true); },
     );
-    return () => { active = false; };
+    return () => { active = false; window.clearTimeout(fallback); };
   }, []);
 
   return <div className={`edupi-first-run__welcome-script${fontReady ? " is-ready" : ""}`} aria-hidden="true"><span>Welcome</span><span>To</span><span>Edupi</span></div>;
