@@ -14,6 +14,7 @@ import { createMemorySummaryGuard, memoryHistoryIds, projectMemoryHistory } from
 const hash = (text: string) => `sha256:${createHash("sha256").update(text).digest("hex")}`;
 const canonical = (directory: string) => { try { return realpathSync(directory); } catch { return resolve(directory); } };
 const categories = ["semester", "class", "teaching", "preferences", "school"] as const;
+const entryFields = "category,content,id,managed_method,source_fingerprint,student,student_id";
 const parameters = Type.Object({
   category: Type.Optional(Type.Union([...categories.map(value => Type.Literal(value)), Type.Literal("all")])),
   query: Type.Optional(Type.String({ minLength: 2, maxLength: 512 })),
@@ -54,7 +55,8 @@ function response(value: unknown, identity: Record<string, unknown>, queried: bo
     || queried && result.entries.length > 0 && (support?.status !== "assessed" || result.model_execute !== true)) {
     return { status: "held", reason_code: "recall_unavailable", entries: [] };
   }
-  const valid = result.entries.every((entry: Entry) => entry && typeof entry.id === "string"
+  const valid = result.entries.every((entry: Entry) => entry && Object.keys(entry).sort().join(",") === entryFields
+    && typeof entry.id === "string"
     && categories.includes(entry.category) && typeof entry.content === "string" && entry.content.length <= 12000
     && /^sha256:[a-f0-9]{64}$/u.test(entry.source_fingerprint)
     && (entry.student_id === null || typeof entry.student_id === "string")
