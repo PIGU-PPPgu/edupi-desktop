@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-10-30 R18 首次欢迎视觉增量：按用户新反馈，全屏持续手写 `Welcome To Edupi`，预览卡改为“提前交付”和“班级情况自动记忆”两项；本地 Caveat 字体附 OFL 许可证。隔离浏览器在 1440/1024/768/320px 实际检查描写中、完成后、延迟字体、减少动态效果、进入模型表单和 320×480 短窗，6 项定向测试、类型、目标 lint 与 diff 检查通过。状态**已实现待安装验收**；`.89` 安装版和已固定源码的 `.90` Mac Draft 都不含此视觉更正，下一签名候选仍需原生复验。[逐项证据](../acceptance/2026-10-29-r18-onboarding.md#当前状态)。
+
 2026-10-30 R18 发布状态：按用户选择，[v0.3.89](https://github.com/PIGU-PPPgu/edupi-desktop/releases/tag/v0.3.89) 已从 Draft 公开为 **macOS Apple Silicon 预发布**。受测源码、唯一成功 Mac run、三项签名资产 ID/大小/SHA、本机安装签名与 325 项真实资料保持在发布前后核对一致；匿名 GitHub API 可见。公开 Latest Release 和七平台自动更新源仍是 `.70`，`.89` 没有 Windows/Linux 资产，也未作为三平台正式版发布；`.90` 新 Core 候选继续单独验收。[发布回执](2026-09-07-signed-updates.md)取代下方 `.89`“仍为 Draft”的历史发布状态。
 
 2026-10-30 R04 新Core来源配对：Core Main `86ef6c98676789e61dec81594c75968922a964e3`（PR408）的 Main CI `41020434456` 已成功；其树 `296ace449592430b6df679bc29ca4d362cde7f13` 与已合并源头5e92fa18同树。新提交为PDF可见来源在原14秒围栏内的一次限时重试与只在诊断开关下输出的阶段计时；Bridge v1.1、occurrence v1.2、Runtime schema及命令集合不变，双组件清单变更。Desktop消费者源码已更新精确commit及双manifest身份，固定Core的身份/进程测试43通过／1环境跳过；真实Desktop隔离路由对新Core的PDF/PNG/JPEG来源读取与明确采用均通过，PDF及JPEG两条完整备课链用本机合成模型各2次调用，产物/反馈/预留在宿主冷启后回读保持，无外发。Core本机`test:material-visual-source`、`material_schedule_read --documents`通过，源工作树无改动。以上是**源码/隔离根配对证据**；唯一已安装`.89`仍固定旧Core `f599fc38`，新Core未打包安装，不能提前记安装版通过。私有证据 `~/edupi-install-checkpoints/v0.3.90/evidence/`，待源码PR/CI及后续Mac签名候选。本文不改写`.89`已验身份或公开feed状态。

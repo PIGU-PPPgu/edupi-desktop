@@ -2,6 +2,16 @@
 
 ## 当前状态
 
+2026-10-30 R18 欢迎画面视觉修正：用户指出旧版手写 `hello` 被限制在 190px 预览卡内且约 1.5 秒后消失。本次分支 `codex/onboarding-welcome-handwriting-20261030` 基于 Desktop Main `97fc276e5d75521f133b47fb00e87103ff68819f`，将完整 `Welcome To Edupi` 改为全屏手写字体逐词显现，优先等本地字体就绪，超时 2.5 秒仍会显示文字；停留欢迎页时文字持续可见。预览卡只展示“提前交付”和“班级情况自动记忆”，不再把备课放在首屏主位。字体为 Google Fonts Caveat，连同 SIL OFL 许可证保存在 `public/onboarding/`。七步的保存检查、跳过、返回、表单和续接逻辑未改。
+
+六个源码、测试与字体文件的逐项摘要见[源码清单](assets/2026-10-30-welcome-handwriting/source.json)，清单摘要 `13f0a073e8ce1ab4eb61ede4a8928fd9ad0bae0e2c10eedbdd27ae0626506171`。
+
+隔离 Next dev 浏览器实际打开 1440×900、1024×768、768×600、320×568 和 320×480；手写标题、两项能力卡与主按钮均在视口内，最短窗口无横向溢出或卡片裁切。[描写中](assets/2026-10-30-welcome-handwriting/desktop-writing.png)、[生产构建写完后](assets/2026-10-30-welcome-handwriting/desktop-complete.png)、[320×480](assets/2026-10-30-welcome-handwriting/mobile-320x480.png)为实际页面截图。额外模拟字体加载延迟约 1.2 秒，动画在字体就绪后才开始；再模拟约 4.5 秒延迟，2.5 秒 fallback 在字体尚未加载时让标题开始显示。停留 8 秒标题仍可见。减少动态效果时手写与卡片动画为 `none`、文字直接可见；点击“开始探索”进入 02/08 模型步骤，表单从原预览面板展开，页面 `pageerror` 为 0。隔离 Core 不可用产生的非目标 503 不能证明模型或教学业务可用。
+
+本增量针对性 `node --test components/EduPiFirstRunGuide.test.mjs` 为 6 pass / 0 fail / 0 skip；`node_modules/.bin/tsc --noEmit`、目标 ESLint 与 `git diff --check` 退出 0。停止开发服务后，`npm run build` 退出 0；构建期间有外部连接 `ETIMEDOUT` 重试及未改动的会话导出路由动态依赖 warning，均未导致失败。`npm run start` 的生产页面实测本地字体请求 200、手写和两项能力可见、点击进入 02/08 模型步骤。**已实现待安装验收**：`.89` 安装版与已固定源码的 `.90` 候选均未包含本次更正，不能用开发页或生产网页截图宣称已更新安装版；下一签名候选需单独原生核对。
+
+两轮浏览器、开发与生产服务均已停止；各轮确认 30141 无监听、`.next/` 无活动句柄且 `.next/`、`.playwright-mcp/` 不受 Git 跟踪后，删除这两个生成目录及本轮隔离数据、视频抽帧。两轮删除路径原分配量合计 2,583,810,048 字节，同卷可用空间实测增量合计 2,585,554,944 字节；源码、字体许可、已收录截图及原视频保留。[脱敏清理摘要](assets/2026-10-30-welcome-handwriting/cleanup-summary.json)。
+
 2026-10-30 `.89` 安装版：唯一 `/Applications/EduPi.app` 为签名公证的 `.89`，固定 Desktop Main `02ee02ffe99d25397124850d1df663268687fa71`／Core `f599fc389eecde7de4718a731e8304524c11dc72`。原生新隔离根首次欢迎、教师资料保存、ICS材料暂存均可操作；在 owner 未初始化时明确显示“本机身份尚未建立”，采用禁用。点“建立本机身份”后同材料显示单项提案；首次原生采用弹窗取消仍待确认，第二次确认后材料“已采用1项安排”、日程页仅一条、操作历史写入一次。正常退出再冷启后同一教师资料、日程与材料回执保持；日程“推断／待确认”保留后续教师核对。真实325保护文件逐字节相同，3个WebView origin恢复；App已退出、真实模型未调用。私有原生记录 `~/edupi-install-checkpoints/v0.3.89/evidence/installed-gui-089.json` 与资料/安装证明在同目录。Core的新Main `86ef6c98676789e61dec81594c75968922a964e3` 于本次构建后合入，尚未消费。本段取代下方`.88`为当前安装版的状态。
 
 2026-10-30：最新五文件 UI 已随 Desktop [PR404](https://github.com/PIGU-PPPgu/edupi-desktop/pull/404) 合并，固定 Core `f599fc389eecde7de4718a731e8304524c11dc72` 的 `.88` Mac-only 签名 Draft [run40911065931](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/40911065931) 通过并安装为唯一 `/Applications/EduPi.app`。原生 WebView 在隔离根 `edupi-route1-canary-088-20261030` 显示全屏欢迎；模型厂商与 DeepSeek 表单打开，教师资料保存、两名合成学生 CSV 导入及班级页回读成功。正常退出再冷启动后欢迎未重复、教师与两名学生仍在，ICS 暂存材料也在材料页重读。该 ICS 的安排提案显示“教师身份暂不可用”，没有采用或排课；这一步仍需处理。真实325保护文件逐字节相同，原三个 WebView origin 已恢复，App 已正常退出；没有调用真实模型或构建 Windows。私有原生证据在 `~/edupi-install-checkpoints/v0.3.88/evidence/installed-gui-088.json`，签名和资产证据在同目录。

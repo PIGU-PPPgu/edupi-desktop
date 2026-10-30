@@ -1,0 +1,14 @@
+{
+  "base": "97fc276e5d75521f133b47fb00e87103ff68819f",
+  "branch": "codex/onboarding-welcome-handwriting-20261030",
+  "sourceSha256": {
+    "app/edupi-first-run.css": "cfdba25ae915d0a7d64287d91c2471fee3d5a54379ce5ca658687525bc7c0125",
+    "components/EduPiFirstRunGuide.test.mjs": "d9647f3a088619502b2871ef67d152e17697980a9f086b33525e3c8d2145d17a",
+    "components/EduPiFirstRunGuide.tsx": "7fe35ab9f50d0f65de60cf2764b0b8399787294e364b3e3b3e2c6934723bfd4c",
+    "components/EduPiFirstRunPreview.tsx": "264246463f38e2769538273ea9d733fa36bb3ced0b9aa28a383b0ee5eb9c686b",
+    "public/onboarding/Caveat.woff2": "bebc0d71ba7689db2c257074da6bfbe0a829552399970116a163d2a290289729",
+    "public/onboarding/OFL-Caveat.txt": "163a2b400e16916ad3196296c946c526d0efce6baf22a2164269ffc62fb9f671"
+  },
+  "manifestSha256": "13f0a073e8ce1ab4eb61ede4a8928fd9ad0bae0e2c10eedbdd27ae0626506171",
+  "method": "SHA-256 of sorted path and file digest lines separated by LF"
+}

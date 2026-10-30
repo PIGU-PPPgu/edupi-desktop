@@ -6,7 +6,7 @@ import { readEduPiWorkspace, type EduPiWorkspaceBundle } from "@/lib/edupi-educa
 import { APP_PREF_KEYS, getPref, setPref } from "@/lib/app-prefs";
 import { isTeachingModelIneligible } from "@/lib/model-setup-presets";
 import { fetchPrivateModelApi } from "@/lib/desktop-native";
-import { EduPiFirstRunPreview } from "./EduPiFirstRunPreview";
+import { EduPiFirstRunPreview, EduPiWelcomeScript } from "./EduPiFirstRunPreview";
 import { EduPiOnboardingTeacherForm } from "./EduPiOnboardingTeacherForm";
 import { EduPiOnboardingRoster } from "./EduPiOnboardingRoster";
 import { EduPiOnboardingCalendarUpload } from "./EduPiOnboardingCalendarUpload";
@@ -27,7 +27,7 @@ type Props = {
 };
 
 const STEPS = [
-  { title: "连接模型", note: "为备课和复杂名单连接通用 API。", action: "选择模型" },
+  { title: "连接模型", note: "用于提前准备和复杂名单核对。", action: "选择模型" },
   { title: "确认教师资料", note: "学科和年级会成为每次协作的背景。", action: "填写教师资料" },
   { title: "导入学生名单", note: "上传名单，清晰数据自动入库。", action: "上传名单" },
   { title: "导入行事历与课表", note: "按真实日期提前准备待办与材料。", action: "上传行事历" },
@@ -35,7 +35,7 @@ const STEPS = [
   { title: "第一次备课", note: "从课程和已有材料生成课前准备。", action: "打开教学" },
   { title: "进入首页", note: "继续处理下一节课、待办或对话。", action: "进入首页" },
 ] as const;
-const WELCOME = { title: "欢迎使用 EduPi", note: "备课、班级、日程与 AI 协作。", action: "开始探索" } as const;
+const WELCOME = { title: "Welcome To Edupi", note: "按日程提前准备待办与材料，自动记住班级情况。", action: "开始探索" } as const;
 
 export function isGuideStepReady(step: number, bundle: EduPiWorkspaceBundle): boolean {
   if (step === 1) return Boolean(bundle.context.configured && bundle.context.name?.trim() && bundle.context.subject?.trim() && bundle.context.grade?.trim());
@@ -185,7 +185,7 @@ export function EduPiFirstRunGuide({
       <section className="edupi-first-run__dialog">
         <div className={`edupi-first-run__art${artReady ? " is-ready" : ""}`} aria-hidden="true" />
         {!opened ? <div className="edupi-first-run__top">{inline ? <button type="button" className="edupi-first-run__quiet" disabled={inlineBusy} onClick={closeInline}>返回</button> : null}<strong>EduPi</strong><span>教师工作台</span><button type="button" className="edupi-first-run__quiet" disabled={inlineBusy} onClick={() => leaveGuide(onSkip)}>稍后再说</button></div> : null}
-        {!opened ? <div className="edupi-first-run__scene"><EduPiFirstRunPreview step={welcome ? -1 : step} expanded={Boolean(inline)}>
+        {!opened ? <div className="edupi-first-run__scene">{welcome ? <EduPiWelcomeScript /> : null}<EduPiFirstRunPreview step={welcome ? -1 : step} expanded={Boolean(inline)}>
         {inline ? <div ref={inlineRef} className="edupi-first-run__inline" tabIndex={-1} key={`inline-${step}`}>
           {inline === "model" ? <EduPiOnboardingModelSetup onBusyChange={onInlineBusyChange} onComplete={() => { if (flowVersionRef.current !== inlineVersion) return; onModelSaved?.(); advance(); }} onAdvanced={() => { if (inlineBusyRef.current) return; flowVersionRef.current += 1; setInline(null); setOpened(true); onOpenModels(); }} /> : null}
           {inline === "teacher" ? <EduPiOnboardingTeacherForm onBusyChange={onInlineBusyChange} onComplete={() => advanceIfCurrent(inlineVersion)} /> : null}
@@ -195,10 +195,10 @@ export function EduPiFirstRunGuide({
         </div> : null}
         </EduPiFirstRunPreview></div> : null}
         {!inline ? <div className="edupi-first-run__content" key={`copy-${position}`}>
-          {!opened ? <div className="edupi-first-run__progress" aria-label={`第 ${position + 1} 步，共 ${total} 步`}>
+          {!opened && !welcome ? <div className="edupi-first-run__progress" aria-label={`第 ${position + 1} 步，共 ${total} 步`}>
             {Array.from({ length: total }, (_, index) => <span key={index} className={index <= position ? "is-active" : ""} />)}
           </div> : null}
-          {!opened ? <span className="edupi-first-run__step">{String(position + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}</span> : null}
+          {!opened && !welcome ? <span className="edupi-first-run__step">{String(position + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}</span> : null}
           <h2 id="edupi-first-run-title">{current.title}</h2>
           {!opened ? <p>{current.note}</p> : null}
           {feedback ? <p className="edupi-first-run__feedback" role="status">{feedback}</p> : null}

@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "EduPi Welcome Script";
+  src: url('/onboarding/Caveat.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+
 .edupi-first-run {
   position: fixed;
   z-index: 5200;
@@ -41,17 +49,17 @@
 }
 .edupi-first-run__dialog::after { position: absolute; z-index: 2; inset: -12%; opacity: 0; background: radial-gradient(circle at 22% 36%, rgba(130, 206, 255, .28), transparent 22%), radial-gradient(circle at 75% 25%, rgba(156, 195, 255, .2), transparent 27%), radial-gradient(circle at 60% 75%, rgba(88, 163, 255, .17), transparent 29%); content: ""; filter: blur(36px); mix-blend-mode: screen; pointer-events: none; transition: opacity 420ms ease; }
 .edupi-first-run.is-welcome { padding: 0; background: #061842; backdrop-filter: none; }
-.edupi-first-run.is-welcome .edupi-first-run__dialog { width: 100vw; height: 100dvh; min-height: 0; grid-template-rows: 72px minmax(0, 1fr) 350px; border: 0; border-radius: 0; box-shadow: none; }
+.edupi-first-run.is-welcome .edupi-first-run__dialog { width: 100vw; height: 100dvh; min-height: 0; grid-template-rows: 72px minmax(0, 1fr) 155px; border: 0; border-radius: 0; box-shadow: none; }
 .edupi-first-run.is-welcome .edupi-first-run__art { background-position: center 57%; }
 .edupi-first-run.is-welcome .edupi-first-run__dialog::after { inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; background: radial-gradient(ellipse at 28% 12%, rgba(217, 242, 255, .2), transparent 35%), radial-gradient(ellipse at 83% 40%, rgba(80, 150, 255, .13), transparent 38%), linear-gradient(140deg, rgba(255, 255, 255, .055), transparent 48%, rgba(180, 218, 255, .06)); box-shadow: none; backdrop-filter: blur(5px) saturate(135%); filter: none; mask-image: radial-gradient(ellipse 82% 60% at 50% 26%, #000 8%, transparent 92%); mix-blend-mode: screen; opacity: .73; animation: edupi-first-run-liquid 10s ease-in-out infinite alternate; }
 .edupi-first-run.is-welcome .edupi-first-run__top { min-height: 72px; padding-inline: clamp(25px, 4vw, 65px); }
-.edupi-first-run.is-welcome .edupi-first-run__scene { padding-top: clamp(75px, 14vh, 165px); }
-.edupi-first-run.is-welcome .edupi-first-run__preview[data-scene="0"] { width: min(660px, 82vw); height: 190px; border-color: rgba(226, 239, 255, .32); backdrop-filter: blur(28px) saturate(145%); }
-.edupi-first-run.is-welcome .edupi-first-run__handwriting { width: 350px; height: 170px; }
-.edupi-first-run.is-welcome .edupi-first-run__content { min-height: 300px; padding-bottom: clamp(48px, 8vh, 100px); }
-.edupi-first-run.is-welcome .edupi-first-run__content h2 { font-size: clamp(42px, 4.2vw, 60px); }
-.edupi-first-run.is-welcome .edupi-first-run__content > p { font-size: 18px; }
-.edupi-first-run.is-welcome .edupi-first-run__primary { min-width: 230px; min-height: 54px; font-size: 16px; }
+.edupi-first-run.is-welcome .edupi-first-run__scene { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(18px, 5vh, 55px); padding: 0 20px clamp(34px, 8vh, 90px); }
+.edupi-first-run.is-welcome .edupi-first-run__preview[data-scene="0"] { width: min(760px, 84vw); height: 175px; flex: 0 0 auto; border-color: rgba(226, 239, 255, .32); backdrop-filter: blur(28px) saturate(145%); }
+.edupi-first-run.is-welcome .edupi-first-run__content { min-height: 155px; padding-bottom: clamp(34px, 5vh, 60px); }
+.edupi-first-run.is-welcome .edupi-first-run__content h2,
+.edupi-first-run.is-welcome .edupi-first-run__content > p { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.edupi-first-run.is-welcome .edupi-first-run__secondary { display: none; }
+.edupi-first-run.is-welcome .edupi-first-run__primary { min-width: 230px; min-height: 54px; font-size: 17px; }
 
 .edupi-first-run__top {
   z-index: 3;
@@ -114,16 +122,19 @@
 .edupi-first-run.is-inline .edupi-first-run__dialog { grid-template-rows: auto minmax(0, 1fr); }
 .edupi-first-run.is-inline .edupi-first-run__scene { padding-top: 25px; }
 
-.edupi-first-run__demo-welcome { position: relative; display: grid; height: 100%; place-items: center; }
-.edupi-first-run__handwriting { position: absolute; width: 270px; height: 140px; overflow: visible; stroke: #c1deff; stroke-width: 3.8; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 9px #5c91ff) drop-shadow(0 0 21px #3b69e6); animation: edupi-first-run-trace-out 240ms 1550ms forwards; }
-.edupi-first-run__handwriting path { stroke-dasharray: 280; stroke-dashoffset: 280; animation: edupi-first-run-draw 440ms cubic-bezier(.37, .04, .31, 1) forwards; }
-.edupi-first-run__handwriting path:nth-child(2) { animation-delay: 400ms; animation-duration: 310ms; }
-.edupi-first-run__handwriting path:nth-child(3) { animation-delay: 670ms; animation-duration: 250ms; }
-.edupi-first-run__handwriting path:nth-child(4) { animation-delay: 880ms; animation-duration: 250ms; }
-.edupi-first-run__handwriting path:nth-child(5) { animation-delay: 1100ms; animation-duration: 380ms; }
-.edupi-first-run__welcome-shelf { display: flex; width: 100%; align-items: center; justify-content: space-around; gap: 7px; opacity: 0; animation: edupi-first-run-shelf-in 320ms 1480ms forwards; }
-.edupi-first-run__welcome-shelf strong { flex: 1; font-size: 19px; font-style: italic; letter-spacing: -.06em; }
-.edupi-first-run__welcome-shelf span { padding: 8px 10px; border: 1px solid rgba(205, 224, 255, .15); border-radius: 7px; background: rgba(89, 133, 220, .12); font-size: 15px; }
+.edupi-first-run__welcome-script { display: flex; width: min(1160px, 94vw); flex: 0 0 auto; flex-wrap: wrap; align-items: baseline; justify-content: center; column-gap: .18em; color: #ecf8ff; font-family: "EduPi Welcome Script", cursive; font-size: clamp(82px, min(12vw, 19vh), 175px); font-weight: 600; line-height: 1; letter-spacing: -.035em; text-shadow: 0 0 18px rgba(114, 181, 255, .78), 0 0 48px rgba(54, 117, 255, .45); pointer-events: none; }
+.edupi-first-run__welcome-script span { display: block; margin-right: -.18em; padding-right: .18em; clip-path: inset(-.12em -.12em -.12em 0); mask-image: linear-gradient(90deg, #000 49%, transparent 51%); mask-size: 210% 100%; mask-position: 100% 0; }
+.edupi-first-run__welcome-script.is-ready span { animation: edupi-first-run-script-write 1100ms cubic-bezier(.22, .76, .19, 1) forwards; }
+.edupi-first-run__welcome-script span:nth-child(1) { animation-delay: 180ms; }
+.edupi-first-run__welcome-script span:nth-child(2) { animation-delay: 1160ms; animation-duration: 480ms; }
+.edupi-first-run__welcome-script span:nth-child(3) { animation-delay: 1590ms; animation-duration: 880ms; }
+.edupi-first-run__demo-welcome { display: grid; height: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 14px; }
+.edupi-first-run__welcome-feature { display: flex; min-width: 0; align-items: center; gap: 13px; padding: 17px; border: 1px solid rgba(205, 224, 255, .18); border-radius: 10px; background: rgba(91, 140, 225, .1); animation: edupi-first-run-feature-in 450ms 1700ms cubic-bezier(.22, 1, .36, 1) both; }
+.edupi-first-run__welcome-feature:nth-child(2) { animation-delay: 1950ms; }
+.edupi-first-run__welcome-feature svg { width: 36px; height: 36px; flex: 0 0 36px; stroke: #abcfff; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.edupi-first-run__welcome-feature > div { display: grid; gap: 5px; min-width: 0; }
+.edupi-first-run__welcome-feature strong { font-size: 18px; font-weight: 650; }
+.edupi-first-run__welcome-feature span { color: rgba(229, 239, 255, .82); font-size: 15px; }
 
 .edupi-first-run__demo-model { display: grid; height: 100%; place-content: center; gap: 20px; text-align: center; }
 .edupi-first-run__demo-model .is-connection { display: flex; align-items: center; justify-content: center; gap: 10px; }
@@ -315,9 +326,8 @@
 @keyframes edupi-first-run-demo-out { to { opacity: 0; transform: translateY(-7px) scale(.98); } }
 @keyframes edupi-first-run-form-in { from { opacity: 0; transform: translateY(12px) scale(.97); filter: blur(7px); } }
 @keyframes edupi-first-run-welcome-shell { from { background-color: transparent; border-color: transparent; box-shadow: none; } to { background-color: rgba(5, 11, 30, .84); } }
-@keyframes edupi-first-run-draw { to { stroke-dashoffset: 0; } }
-@keyframes edupi-first-run-trace-out { to { opacity: 0; transform: translateY(-8px) scale(.92); } }
-@keyframes edupi-first-run-shelf-in { to { opacity: 1; transform: none; } }
+@keyframes edupi-first-run-script-write { to { mask-position: 0 0; } }
+@keyframes edupi-first-run-feature-in { from { opacity: 0; transform: translateY(12px); } }
 @keyframes edupi-first-run-signal { to { transform: translateX(25px); } }
 @keyframes edupi-first-run-meter { to { opacity: .35; transform: scaleX(.65); } }
 @keyframes edupi-first-run-scan { from { transform: translateX(-45px); } to { transform: translateX(250px); } }
@@ -330,17 +340,21 @@
   .edupi-first-run { padding: 8px; }
   .edupi-first-run__dialog { width: 100%; height: calc(100dvh - 16px); min-height: 0; grid-template-rows: 50px minmax(0, 1fr) 240px; border-radius: 17px; }
   .edupi-first-run__art { background-size: auto 70%; background-position: center 38%; }
-  .edupi-first-run.is-welcome .edupi-first-run__dialog { width: 100vw; height: 100dvh; grid-template-rows: 55px minmax(0, 1fr) 290px; border-radius: 0; }
+  .edupi-first-run.is-welcome .edupi-first-run__dialog { width: 100vw; height: 100dvh; grid-template-rows: 55px minmax(0, 1fr) 120px; border-radius: 0; }
   .edupi-first-run.is-welcome .edupi-first-run__art { background-size: auto 100%; background-position: center 50%; }
   .edupi-first-run.is-welcome .edupi-first-run__dialog::after { inset: 0; width: 100%; height: 100%; }
   .edupi-first-run.is-welcome .edupi-first-run__top { min-height: 55px; padding-inline: 20px; }
-  .edupi-first-run.is-welcome .edupi-first-run__scene { padding-top: clamp(32px, 7vh, 65px); }
-  .edupi-first-run.is-welcome .edupi-first-run__preview[data-scene="0"] { width: min(82vw, 400px); height: 150px; }
-  .edupi-first-run.is-welcome .edupi-first-run__handwriting { width: 220px; height: 125px; }
-  .edupi-first-run.is-welcome .edupi-first-run__content { min-height: 290px; padding: 0 18px 35px; }
-  .edupi-first-run.is-welcome .edupi-first-run__content h2 { font-size: 34px; }
-  .edupi-first-run.is-welcome .edupi-first-run__content > p { font-size: 16px; }
-  .edupi-first-run.is-welcome .edupi-first-run__primary { min-height: 48px; font-size: 16px; }
+  .edupi-first-run.is-welcome .edupi-first-run__scene { gap: 14px; padding: 0 12px 22px; }
+  .edupi-first-run.is-welcome .edupi-first-run__welcome-script { width: 94vw; column-gap: .12em; font-size: clamp(60px, 18vw, 86px); line-height: .92; }
+  .edupi-first-run.is-welcome .edupi-first-run__preview[data-scene="0"] { width: min(90vw, 400px); height: 175px; }
+  .edupi-first-run.is-welcome .edupi-first-run__demo-welcome { grid-template-columns: 1fr; gap: 5px; }
+  .edupi-first-run.is-welcome .edupi-first-run__welcome-feature { gap: 9px; padding: 5px 8px; }
+  .edupi-first-run.is-welcome .edupi-first-run__welcome-feature svg { width: 28px; height: 28px; flex-basis: 28px; }
+  .edupi-first-run.is-welcome .edupi-first-run__welcome-feature > div { gap: 1px; }
+  .edupi-first-run.is-welcome .edupi-first-run__welcome-feature strong { font-size: 16px; }
+  .edupi-first-run.is-welcome .edupi-first-run__welcome-feature span { font-size: 13px; }
+  .edupi-first-run.is-welcome .edupi-first-run__content { min-height: 120px; padding: 0 18px 25px; }
+  .edupi-first-run.is-welcome .edupi-first-run__primary { min-height: 50px; font-size: 16px; }
   .edupi-first-run__top { min-height: 50px; padding-inline: 16px; }
   .edupi-first-run__scene { padding: 20px 10px 0; }
   .edupi-first-run__preview[data-shape="shelf"] { width: min(270px, calc(100vw - 36px)); height: 96px; }
@@ -376,13 +390,18 @@
 @media (max-width: 380px) {
   .edupi-first-run__inline-model [aria-label="模型设置步骤"] > div { justify-content: center; }
   .edupi-first-run__inline-model .edupi-model-setup__stage-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .edupi-first-run__welcome-shelf span { padding: 6px; }
   .edupi-first-run__content h2 { font-size: 29px; }
   .edupi-first-run__content > p { font-size: 16px; }
-  .edupi-first-run.is-welcome .edupi-first-run__content h2 { font-size: 34px; }
-  .edupi-first-run.is-welcome .edupi-first-run__content > p { font-size: 16px; }
   .edupi-first-run.is-opened .edupi-first-run__content { gap: 5px; }
   .edupi-first-run.is-opened .edupi-first-run__content h2 { flex-basis: 100%; }
+}
+
+@media (max-width: 760px) and (max-height: 540px) {
+  .edupi-first-run.is-welcome .edupi-first-run__dialog { grid-template-rows: 50px minmax(0, 1fr) 110px; }
+  .edupi-first-run.is-welcome .edupi-first-run__scene { gap: 9px; padding-bottom: 12px; }
+  .edupi-first-run.is-welcome .edupi-first-run__welcome-script { font-size: 58px; line-height: .82; }
+  .edupi-first-run.is-welcome .edupi-first-run__preview[data-scene="0"] { height: 175px; }
+  .edupi-first-run.is-welcome .edupi-first-run__content { min-height: 110px; padding-bottom: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -397,9 +416,8 @@
   .edupi-first-run__preview-body,
   .edupi-first-run__preview-form,
   .edupi-first-run__demo-layer,
-  .edupi-first-run__handwriting,
-  .edupi-first-run__handwriting path,
-  .edupi-first-run__welcome-shelf,
+  .edupi-first-run__welcome-script span,
+  .edupi-first-run__welcome-feature,
   .edupi-first-run__demo-model .is-connection i::after,
   .edupi-first-run__demo-model .is-model-lines span,
   .edupi-first-run__demo-roster .is-roster-body i,
@@ -408,11 +426,10 @@
   .edupi-first-run__demo-teaching .is-artifacts span,
   .edupi-first-run__primary,
   .edupi-first-run__progress span { animation: none !important; transition: none !important; }
-  .edupi-first-run__handwriting { display: none; }
   .edupi-first-run__art.is-ready { opacity: 1; filter: none; transform: none; }
-  .edupi-first-run__welcome-shelf { opacity: 1; }
+  .edupi-first-run__welcome-script span { clip-path: none; mask-image: none; }
+  .edupi-first-run__welcome-feature { opacity: 1; transform: none; }
   .edupi-first-run__demo-layer.is-outgoing { display: none; }
-  .edupi-first-run__handwriting path { stroke-dashoffset: 0; }
   .edupi-first-run__primary:hover:not(:disabled), .edupi-first-run__primary:active:not(:disabled) { transform: none; }
 }
 
