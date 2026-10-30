@@ -1,0 +1,23 @@
+{
+  "removed": [
+    {
+      "kind": "Next build cache",
+      "allocatedBytes": 1288482816
+    },
+    {
+      "kind": "browser diagnostics",
+      "allocatedBytes": 77824
+    },
+    {
+      "kind": "isolated data",
+      "allocatedBytes": 12288
+    },
+    {
+      "kind": "video reference frames",
+      "allocatedBytes": 1781760
+    }
+  ],
+  "allocatedBytes": 1290354688,
+  "availableDeltaBytes": 1291218944,
+  "pathsAbsent": true
+}

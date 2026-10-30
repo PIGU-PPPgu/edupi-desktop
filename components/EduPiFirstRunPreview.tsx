@@ -10,14 +10,14 @@ const SHAPES: readonly Shape[] = ["shelf", "workspace", "focus", "shelf", "works
 
 function SceneContent({ page }: { page: number }) {
   if (page === 0) return <div className="edupi-first-run__demo-welcome">
-    <svg className="edupi-first-run__handwriting" viewBox="0 0 270 140" fill="none" aria-hidden="true">
-      <path d="M28 112 C35 78 43 43 45 29 C48 17 41 16 37 27 C30 48 26 90 26 115 M31 84 C45 66 60 63 65 73 C70 84 60 105 66 114 C69 118 76 115 82 109" />
-      <path d="M88 96 C106 95 118 88 114 79 C111 71 99 74 92 83 C82 96 84 111 98 115 C108 118 120 113 126 108" />
-      <path d="M147 27 C144 55 132 92 134 108 C135 117 146 117 154 107" />
-      <path d="M178 25 C174 57 165 90 166 107 C168 118 180 116 188 107" />
-      <path d="M218 84 C204 88 196 107 204 115 C213 124 233 112 239 98 C244 86 235 79 224 84 C211 89 206 108 215 116" />
-    </svg>
-    <div className="edupi-first-run__welcome-shelf"><strong>EduPi</strong><span>备课</span><span>班级</span><span>日程</span></div>
+    <div className="edupi-first-run__welcome-feature">
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="11" /><path d="M16 9v8l5 3" /></svg>
+      <div><strong>提前交付</strong><span>截止前备好待办与材料</span></div>
+    </div>
+    <div className="edupi-first-run__welcome-feature">
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="11" cy="10" r="3" /><circle cx="22" cy="12" r="3" /><path d="M4 25c0-5 3-8 7-8s7 3 7 8M17 19c3-2 9-1 11 6" /></svg>
+      <div><strong>班级情况自动记忆</strong><span>学生情况在后续对话接着用</span></div>
+    </div>
   </div>;
   if (page === 1) return <div className="edupi-first-run__demo-model">
     <div className="is-connection"><span>模型</span><i /><strong>EduPi</strong><i /><span>课堂</span></div>
@@ -46,6 +46,22 @@ function SceneContent({ page }: { page: number }) {
   return <div className="edupi-first-run__demo-home">
     <strong>首页</strong><span>下一节课</span><span>待我确认</span><span>新建对话 ↗</span>
   </div>;
+}
+
+export function EduPiWelcomeScript() {
+  const [fontReady, setFontReady] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!document.fonts?.load) { setFontReady(true); return; }
+    document.fonts.load('600 170px "EduPi Welcome Script"').then(
+      () => { if (active) setFontReady(true); },
+      () => { if (active) setFontReady(true); },
+    );
+    return () => { active = false; };
+  }, []);
+
+  return <div className={`edupi-first-run__welcome-script${fontReady ? " is-ready" : ""}`} aria-hidden="true"><span>Welcome</span><span>To</span><span>Edupi</span></div>;
 }
 
 export function EduPiFirstRunPreview({ step, expanded = false, children }: PreviewProps) {

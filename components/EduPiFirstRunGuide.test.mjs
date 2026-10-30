@@ -61,11 +61,13 @@ test("first visit shows the product tour before setup and previews real destinat
   const props = {onOpenModels(){},onOpenContext(){},onOpenCalendar(){},onOpenMaterials(){},onOpenStudents(){},onOpenTeaching(){},onEnterToday(){},onComplete(){},onSkip(){}};
   const first = renderToStaticMarkup(React.createElement(EduPiFirstRunGuide, props));
   assert.match(first, /role="dialog" aria-modal="true"/);
-  assert.match(first, /欢迎使用 EduPi/);
+  assert.match(first, /Welcome To Edupi/);
   assert.match(first, /开始探索/);
-  assert.match(first, /第 1 步，共 8 步/);
+  assert.doesNotMatch(first, /第 1 步，共 8 步/);
   assert.match(first, /data-shape="shelf"/);
-  assert.match(first, /edupi-first-run__handwriting/);
+  assert.match(first, /edupi-first-run__welcome-script/);
+  assert.match(first, /提前交付/);
+  assert.match(first, /班级情况自动记忆/);
   for (const [step, name] of [[-1,"EduPi"],[0,"AI 协作"],[2,"班级"],[3,"日程"],[4,"材料"],[5,"教学"]]) {
     const html = renderToStaticMarkup(React.createElement(EduPiFirstRunPreview, {step}));
     assert.match(html, new RegExp(name));
