@@ -35,7 +35,7 @@ const STEPS = [
   { title: "第一次备课", note: "从课程和已有材料生成课前准备。", action: "打开教学" },
   { title: "进入首页", note: "继续处理下一节课、待办或对话。", action: "进入首页" },
 ] as const;
-const WELCOME = { title: "Welcome To Edupi", note: "按日程提前准备待办与材料，自动记住班级情况。", action: "开始探索" } as const;
+const WELCOME = { title: "Welcome To Edupi", note: "在截止前备好要交付的内容，自动记住学生和班级情况。少重复整理，把时间留给判断与沟通。", action: "开始探索" } as const;
 
 export function isGuideStepReady(step: number, bundle: EduPiWorkspaceBundle): boolean {
   if (step === 1) return Boolean(bundle.context.configured && bundle.context.name?.trim() && bundle.context.subject?.trim() && bundle.context.grade?.trim());

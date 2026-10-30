@@ -1,0 +1,12 @@
+{
+  "base": "8d2ec9106378c6aba633b25ae16af0b40a178daa",
+  "branch": "codex/onboarding-intro-positioning-20261030",
+  "sourceSha256": {
+    "app/edupi-first-run.css": "4c5b8c8dae6951587307d81b3eb2e4590fcffbeb3db97aab228ffbf2084192e3",
+    "components/EduPiFirstRunGuide.test.mjs": "4fef77b23bc308bf18a8189eb06ee7a13f2348e686c9da406e563a0f48019093",
+    "components/EduPiFirstRunGuide.tsx": "bdcd50474eeef1b04ef6cdfe637d7b96f8fa814ae69b18ac7e9f038d89b29e12",
+    "components/EduPiFirstRunPreview.tsx": "ed31295baf69b942ad203ae99e60fa7354c5ca6aba57c3038df4656d0afbcf4d"
+  },
+  "manifestSha256": "eb1aa842171737e7f11ce778720d10840ae6600441dd4e346a32f9c13edc9b6b",
+  "method": "SHA-256 of sorted path and file digest lines separated by LF"
+}

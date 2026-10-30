@@ -128,13 +128,9 @@
 .edupi-first-run__welcome-script span:nth-child(1) { animation-delay: 180ms; }
 .edupi-first-run__welcome-script span:nth-child(2) { animation-delay: 1160ms; animation-duration: 480ms; }
 .edupi-first-run__welcome-script span:nth-child(3) { animation-delay: 1590ms; animation-duration: 880ms; }
-.edupi-first-run__demo-welcome { display: grid; height: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 14px; }
-.edupi-first-run__welcome-feature { display: flex; min-width: 0; align-items: center; gap: 13px; padding: 17px; border: 1px solid rgba(205, 224, 255, .18); border-radius: 10px; background: rgba(91, 140, 225, .1); animation: edupi-first-run-feature-in 450ms 1700ms cubic-bezier(.22, 1, .36, 1) both; }
-.edupi-first-run__welcome-feature:nth-child(2) { animation-delay: 1950ms; }
-.edupi-first-run__welcome-feature svg { width: 36px; height: 36px; flex: 0 0 36px; stroke: #abcfff; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-.edupi-first-run__welcome-feature > div { display: grid; gap: 5px; min-width: 0; }
-.edupi-first-run__welcome-feature strong { font-size: 18px; font-weight: 650; }
-.edupi-first-run__welcome-feature span { color: rgba(229, 239, 255, .82); font-size: 15px; }
+.edupi-first-run__demo-welcome { display: flex; height: 100%; flex-direction: column; align-items: flex-start; justify-content: center; gap: 9px; padding-inline: 14px; text-align: left; animation: edupi-first-run-intro-in 500ms 1750ms cubic-bezier(.22, 1, .36, 1) both; }
+.edupi-first-run__demo-welcome strong { max-width: 650px; font-size: 25px; font-weight: 650; letter-spacing: -.025em; line-height: 1.3; }
+.edupi-first-run__demo-welcome span { color: rgba(229, 239, 255, .82); font-size: 15px; line-height: 1.4; }
 
 .edupi-first-run__demo-model { display: grid; height: 100%; place-content: center; gap: 20px; text-align: center; }
 .edupi-first-run__demo-model .is-connection { display: flex; align-items: center; justify-content: center; gap: 10px; }
@@ -327,7 +323,7 @@
 @keyframes edupi-first-run-form-in { from { opacity: 0; transform: translateY(12px) scale(.97); filter: blur(7px); } }
 @keyframes edupi-first-run-welcome-shell { from { background-color: transparent; border-color: transparent; box-shadow: none; } to { background-color: rgba(5, 11, 30, .84); } }
 @keyframes edupi-first-run-script-write { to { mask-position: 0 0; } }
-@keyframes edupi-first-run-feature-in { from { opacity: 0; transform: translateY(12px); } }
+@keyframes edupi-first-run-intro-in { from { opacity: 0; transform: translateY(12px); } }
 @keyframes edupi-first-run-signal { to { transform: translateX(25px); } }
 @keyframes edupi-first-run-meter { to { opacity: .35; transform: scaleX(.65); } }
 @keyframes edupi-first-run-scan { from { transform: translateX(-45px); } to { transform: translateX(250px); } }
@@ -347,12 +343,9 @@
   .edupi-first-run.is-welcome .edupi-first-run__scene { gap: 14px; padding: 0 12px 22px; }
   .edupi-first-run.is-welcome .edupi-first-run__welcome-script { width: 94vw; column-gap: .12em; font-size: clamp(60px, 18vw, 86px); line-height: .92; }
   .edupi-first-run.is-welcome .edupi-first-run__preview[data-scene="0"] { width: min(90vw, 400px); height: 175px; }
-  .edupi-first-run.is-welcome .edupi-first-run__demo-welcome { grid-template-columns: 1fr; gap: 5px; }
-  .edupi-first-run.is-welcome .edupi-first-run__welcome-feature { gap: 9px; padding: 5px 8px; }
-  .edupi-first-run.is-welcome .edupi-first-run__welcome-feature svg { width: 28px; height: 28px; flex-basis: 28px; }
-  .edupi-first-run.is-welcome .edupi-first-run__welcome-feature > div { gap: 1px; }
-  .edupi-first-run.is-welcome .edupi-first-run__welcome-feature strong { font-size: 16px; }
-  .edupi-first-run.is-welcome .edupi-first-run__welcome-feature span { font-size: 13px; }
+  .edupi-first-run.is-welcome .edupi-first-run__demo-welcome { gap: 7px; padding-inline: 4px; }
+  .edupi-first-run.is-welcome .edupi-first-run__demo-welcome strong { font-size: 19px; line-height: 1.25; }
+  .edupi-first-run.is-welcome .edupi-first-run__demo-welcome span { font-size: 13px; }
   .edupi-first-run.is-welcome .edupi-first-run__content { min-height: 120px; padding: 0 18px 25px; }
   .edupi-first-run.is-welcome .edupi-first-run__primary { min-height: 50px; font-size: 16px; }
   .edupi-first-run__top { min-height: 50px; padding-inline: 16px; }
@@ -417,7 +410,7 @@
   .edupi-first-run__preview-form,
   .edupi-first-run__demo-layer,
   .edupi-first-run__welcome-script span,
-  .edupi-first-run__welcome-feature,
+  .edupi-first-run__demo-welcome,
   .edupi-first-run__demo-model .is-connection i::after,
   .edupi-first-run__demo-model .is-model-lines span,
   .edupi-first-run__demo-roster .is-roster-body i,
@@ -428,7 +421,7 @@
   .edupi-first-run__progress span { animation: none !important; transition: none !important; }
   .edupi-first-run__art.is-ready { opacity: 1; filter: none; transform: none; }
   .edupi-first-run__welcome-script span { clip-path: none; mask-image: none; }
-  .edupi-first-run__welcome-feature { opacity: 1; transform: none; }
+  .edupi-first-run__demo-welcome { opacity: 1; transform: none; }
   .edupi-first-run__demo-layer.is-outgoing { display: none; }
   .edupi-first-run__primary:hover:not(:disabled), .edupi-first-run__primary:active:not(:disabled) { transform: none; }
 }
