@@ -10,14 +10,8 @@ const SHAPES: readonly Shape[] = ["shelf", "workspace", "focus", "shelf", "works
 
 function SceneContent({ page }: { page: number }) {
   if (page === 0) return <div className="edupi-first-run__demo-welcome">
-    <div className="edupi-first-run__welcome-feature">
-      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="11" /><path d="M16 9v8l5 3" /></svg>
-      <div><strong>提前交付</strong><span>截止前备好待办与材料</span></div>
-    </div>
-    <div className="edupi-first-run__welcome-feature">
-      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="11" cy="10" r="3" /><circle cx="22" cy="12" r="3" /><path d="M4 25c0-5 3-8 7-8s7 3 7 8M17 19c3-2 9-1 11 6" /></svg>
-      <div><strong>班级情况自动记忆</strong><span>学生情况在后续对话接着用</span></div>
-    </div>
+    <strong>在截止前备好要交付的内容，自动记住学生和班级情况。</strong>
+    <span>少重复整理，把时间留给判断与沟通。</span>
   </div>;
   if (page === 1) return <div className="edupi-first-run__demo-model">
     <div className="is-connection"><span>模型</span><i /><strong>EduPi</strong><i /><span>课堂</span></div>
@@ -79,7 +73,7 @@ export function EduPiFirstRunPreview({ step, expanded = false, children }: Previ
   }, [page, shown]);
 
   return <div className="edupi-first-run__preview" data-shape={expanded ? "form" : SHAPES[page]} data-scene={page} aria-hidden={expanded ? undefined : true}>
-    <div className="edupi-first-run__preview-chrome" aria-hidden="true"><span /><span /><span /><strong>{TITLES[shown]}</strong><em>EduPi</em></div>
+    <div className="edupi-first-run__preview-chrome" aria-hidden="true"><span /><span /><span /><strong>{TITLES[shown]}</strong>{shown === 0 ? null : <em>EduPi</em>}</div>
     <div className="edupi-first-run__preview-body" aria-hidden="true">
       {outgoing !== null && outgoing !== shown ? <div className="edupi-first-run__demo-layer is-outgoing" key={`out-${outgoing}`}><SceneContent page={outgoing} /></div> : null}
       <div className="edupi-first-run__demo-layer is-current" key={`current-${shown}`}><SceneContent page={shown} /></div>

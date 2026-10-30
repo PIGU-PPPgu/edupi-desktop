@@ -2,6 +2,12 @@
 
 ## 当前状态
 
+2026-10-30 R18 首屏自我介绍调整：用户认可全屏手写，指出其下方两张能力卡更像分类而非开场介绍。本次分支 `codex/onboarding-intro-positioning-20261030` 基于 Desktop Main `8d2ec9106378c6aba633b25ae16af0b40a178daa`，保留手写 `Welcome To Edupi`，把卡片改为一句实际能力“在截止前备好要交付的内容，自动记住学生和班级情况。”和一句预期帮助“少重复整理，把时间留给判断与沟通。”；预览栏去掉重复的右侧 EduPi 标识。七步设置、持久化与审核边界未改。四个受影响源码/测试的[摘要清单](assets/2026-10-30-onboarding-intro/source.json)为 `eb1aa842171737e7f11ce778720d10840ae6600441dd4e346a32f9c13edc9b6b`。
+
+隔离浏览器实际打开[桌面生产画面](assets/2026-10-30-onboarding-intro/desktop.png)、[320×480 画面](assets/2026-10-30-onboarding-intro/mobile-320x480.png)，另量测 320×568：能力与结果两句在预览卡内、按钮在视口内、文档无横向溢出。首次开发预览误命中旧 service worker 缓存，清空隔离浏览器缓存并离开原页面后重新进入才读取到新源码；该旧画面未计为验证。定向引导测试 6 pass / 0 fail / 0 skip，`tsc --noEmit`、目标 ESLint 与 `git diff --check` 退出 0。开发服务停止后 `npm run build` 退出 0，过程有一次外部连接 `ETIMEDOUT` 重试及未改动的会话导出路由 warning；生产 `npm run start` 实际返回新文案，本地手写字体请求 200，点击“开始探索”进入 02/08。此增量**已实现待安装验收**，不能用网页结果代替下一签名 App 的原生验收；下方两张卡片记录为此轮之前的历史状态。
+
+浏览器、开发与生产服务已停止；核对 30141 无监听、`.next/` 无句柄且 `.next/`、`.playwright-mcp/` 不受 Git 跟踪后，删除这两个生成目录及本轮隔离数据。原分配量合计 1,288,122,368 字节，同卷可用空间实测增加 1,289,138,176 字节；源码、已收录截图和原有依赖保留。[脱敏清理摘要](assets/2026-10-30-onboarding-intro/cleanup-summary.json)。
+
 2026-10-30 R18 欢迎画面视觉修正：用户指出旧版手写 `hello` 被限制在 190px 预览卡内且约 1.5 秒后消失。本次分支 `codex/onboarding-welcome-handwriting-20261030` 基于 Desktop Main `97fc276e5d75521f133b47fb00e87103ff68819f`，将完整 `Welcome To Edupi` 改为全屏手写字体逐词显现，优先等本地字体就绪，超时 2.5 秒仍会显示文字；停留欢迎页时文字持续可见。预览卡只展示“提前交付”和“班级情况自动记忆”，不再把备课放在首屏主位。字体为 Google Fonts Caveat，连同 SIL OFL 许可证保存在 `public/onboarding/`。七步的保存检查、跳过、返回、表单和续接逻辑未改。
 
 六个源码、测试与字体文件的逐项摘要见[源码清单](assets/2026-10-30-welcome-handwriting/source.json)，清单摘要 `13f0a073e8ce1ab4eb61ede4a8928fd9ad0bae0e2c10eedbdd27ae0626506171`。
