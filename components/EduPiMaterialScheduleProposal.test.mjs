@@ -35,14 +35,15 @@ test("reopened material has no cached current claim and rereads on disclosure", 
   assert.match(source, /controller\.current\?\.abort/);
 });
 
-async function behaviorFixture() {
+async function behaviorFixture({ initialOwnerReady = true } = {}) {
   const require = createRequire(import.meta.url);
   const model = await createJiti(import.meta.url, { tsconfigPaths: true }).import("../lib/edupi-material-schedule.ts");
   const sourceModel = await createJiti(import.meta.url, { tsconfigPaths: true }).import("../lib/edupi-docx-chapter-suggestion.ts");
   const timeModel = await createJiti(import.meta.url, { tsconfigPaths: true }).import("../lib/edupi-calendar-form-time.ts");
   const source = await fs.readFile(new URL("./EduPiMaterialScheduleProposal.tsx", import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-  const slots = [], effects = [], reads = [], applies = [], nativeCalls = [];
+  const slots = [], effects = [], reads = [], applies = [], nativeCalls = [], bootstraps = [];
+  let ownerReady = initialOwnerReady;
   let cursor = 0, dirty = false, confirms = false, holdApply = false, holdConfirmation = false;
   const pending = [], pendingConfirmations = [];
   const hash = value => `sha256:${value.repeat(64)}`;
@@ -62,7 +63,15 @@ async function behaviorFixture() {
     } },
   };
   const client = { ...model,
-    readMaterialSchedule: async (materialId, _fetch, _headers, signal) => { reads.push({ materialId, signal }); return structuredClone(current); },
+    readMaterialSchedule: async (materialId, _fetch, _headers, signal) => {
+      reads.push({ materialId, signal });
+      if (!ownerReady) throw new model.MaterialScheduleError("owner_uninitialized");
+      return structuredClone(current);
+    },
+    bootstrapMaterialScheduleOwner: async materialId => {
+      bootstraps.push(materialId); ownerReady = true;
+      return { rootRef: current.root_ref, ownerId: current.owner_id, created: true };
+    },
     applyMaterialSchedule: async capture => { applies.push(capture);
       if (holdApply) return new Promise((resolve, reject) => pending.push({ resolve, reject }));
       return { status: "accepted", applied_ids: ["synthetic-event"], rejected_ids: [], automatic_import: false, external_send: false }; },
@@ -90,13 +99,30 @@ async function behaviorFixture() {
   const summary = tree => { if (Array.isArray(tree)) return tree.map(summary).find(Boolean);
     if (!tree || typeof tree !== "object") return null;
     return tree.type === "summary" ? tree : summary(tree.props?.children); };
-  return { render, button, checkbox, summary, reads, applies, nativeCalls, text, confirm: value => { confirms = value; },
+  return { render, button, checkbox, summary, reads, applies, nativeCalls, bootstraps, text, confirm: value => { confirms = value; },
     holdConfirmation: () => { holdConfirmation = true; }, finishConfirmation: value => pendingConfirmations.shift()(value),
     holdApply: () => { holdApply = true; }, finishApply: error => error ? pending.shift().reject(error)
       : pending.shift().resolve({ status: "accepted", applied_ids: ["synthetic-event"], rejected_ids: [], automatic_import: false, external_send: false }),
     update: patch => { current = { ...current, ...patch }; }, setProps: value => { props = value; },
     flush: () => new Promise(resolve => setImmediate(resolve)), cleanup: () => slots.forEach(slot => slot?.cleanup?.()) };
 }
+
+test("fresh-root owner setup stays behind a click and never adopts a calendar automatically", async () => {
+  const f = await behaviorFixture({ initialOwnerReady: false });
+  try {
+    let tree = f.render();
+    tree.props.onToggle({ currentTarget: { open: true } }); await f.flush(); tree = f.render();
+    assert.match(f.text(tree), /本机身份尚未建立/);
+    assert.equal(f.bootstraps.length, 0);
+    assert.equal(f.button(tree, "确认采用").props.disabled, true);
+    f.button(tree, "建立本机身份").props.onClick(); await f.flush(); await f.flush(); tree = f.render();
+    assert.deepEqual(f.bootstraps, ["material-synthetic"]);
+    assert.equal(f.reads.length, 2);
+    assert.equal(f.button(tree, "确认采用").props.disabled, false);
+    assert.equal(f.applies.length, 0);
+    assert.equal(f.nativeCalls.length, 0);
+  } finally { f.cleanup(); }
+});
 
 test("an in-flight schedule adoption keeps its disclosure open until the receipt settles", async () => {
   const fixture = await behaviorFixture();
