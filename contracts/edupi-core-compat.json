@@ -254,5 +254,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/413",
     "https://github.com/PIGU-PPPgu/edupi/pull/415"
   ],
-  "change_note": "Desktop source pairs Core d87b44d6 after the signed macOS 0.3.93 candidate. Core adds read-only owner-message provenance and active Goal binding proof for future recall work; the Owner recall response and conservative compound-query hold are unchanged. Bridge v1.1, occurrence v1.2, runtime schema and Pi1.0.2 remain unchanged; complete dual component closures are enforced. This source pairing does not alter the installed 0.3.93 bundle or public update feed."
+  "change_note": "macOS 0.3.94 candidate pairs Core d87b44d6 after the signed 0.3.93 candidate. Core adds read-only owner-message provenance and active Goal binding proof for future recall work; the Owner recall response and conservative compound-query hold are unchanged. Bridge v1.1, occurrence v1.2, runtime schema and Pi1.0.2 remain unchanged; complete dual component closures are enforced. Public update feed remains unchanged."
 }

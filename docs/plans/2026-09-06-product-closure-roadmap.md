@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-10-31 R04 `.94` Mac 候选准备：Desktop Main `9061be99` 已合 Core `d87b44d6` 的源码配对；当前工作分支把应用／Cargo／组件版本和发布说明同步为 `.94`。本机版本验证、发布工作流52项测试及Cargo元数据通过。签名 Draft、唯一安装版及公开feed仍以[发布账本](2026-09-07-signed-updates.md)为准，当前未触发新构建；`.93` 安装版仍固定旧 Core `028450cd`，不冒充 `.94` 验收。新Core校验用依赖副本已移入精确废纸篓项，未永久删除，也不计为释放空间。
+
 2026-10-31 R04 后续 Core 配对当前状态：已在原 Desktop 分支固定 Core Main `d87b44d6` 和新的双组件清单；Mac 本机的 Core 来源／Goal 只读证明、真实 broker→Pi SDK、Bridge、完整打包闭包和3514项配对测试均通过，内部候选来源字段不能从 Owner 回执进入 Desktop。精确 [Core Quality run41111244444](https://github.com/PIGU-PPPgu/edupi/actions/runs/41111244444)/attempt1 已完整成功；Desktop [PR426](https://github.com/PIGU-PPPgu/edupi-desktop/pull/426) 已普通合入精确 Main `c386edf7ad0f507ffe9a5e6105d72fd7c1f89163`，仓库未报告独立PR检查；新配对的签名安装未执行，不能追认 `.93` 包内 Core `028450cd`。本项为源码配对及本机/远端Core验证通过、待下一Mac候选安装；[操作、身份与未验门](2026-09-07-signed-updates.md)在原发布账本顶部。
 
 2026-10-31 R04 下一输入（历史只读评估，源码配对状态见上段）：Core [PR415](https://github.com/PIGU-PPPgu/edupi/pull/415) 在 `.93` 固定候选完成后合入 Main `d87b44d628cdd3ded19a0bf82ec9cf82abd433f4`，新增记忆来源与当前 Goal 的只读证明、更新双组件清单；Bridge／Runtime schema与命令未变。精确 Core Quality run41111244444 当时尚在运行；这批未被包内固定 Core `028450cd` 消费，不改写下面已验 `.93` 安装身份。
