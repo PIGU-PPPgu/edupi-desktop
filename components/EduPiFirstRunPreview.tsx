@@ -1,19 +1,37 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
-type PreviewProps = { step: number; expanded?: boolean; children?: ReactNode };
+type PreviewProps = { step: number; expanded?: boolean; introReady?: boolean; children?: ReactNode };
 type Shape = "shelf" | "workspace" | "focus";
 
 const TITLES = ["EduPi", "AI 协作", "教师资料", "班级", "日程", "材料", "教学", "首页"] as const;
 const SHAPES: readonly Shape[] = ["shelf", "workspace", "focus", "shelf", "workspace", "shelf", "workspace", "focus"];
 
-function SceneContent({ page }: { page: number }) {
-  if (page === 0) return <div className="edupi-first-run__demo-welcome">
-    <strong>你好，我是 EduPi。</strong>
-    <p>我想做你身边的教师助理，记住班里的变化，把临近的工作提前准备好。</p>
-    <p className="edupi-first-run__intro-hope">希望你少一点赶工，多一点时间留给学生，也留给自己。</p>
-  </div>;
+export const EDUPI_WELCOME_INTRO = [
+  "你好，我是 EduPi。",
+  "我想做你身边的教师助理，记住班里的变化，把临近的工作提前准备好。",
+  "希望你少一点赶工，多一点时间留给学生，也留给自己。",
+] as const;
+
+function WelcomeIntro({ ready }: { ready: boolean }) {
+  let delay = 0;
+  const paragraphs = EDUPI_WELCOME_INTRO.map((line, lineIndex) => {
+    const characters = Array.from(line).map((character, index) => {
+      const hold = character === "。" ? 220 : character === "，" ? 110 : 32;
+      const style = { "--intro-delay": `${delay}ms`, "--intro-hold": `${hold}ms` } as CSSProperties;
+      delay += hold;
+      return <span key={index} className="edupi-first-run__intro-char" style={style}>{character}</span>;
+    });
+    delay += 200;
+    return lineIndex === 0 ? <strong key={lineIndex}>{characters}</strong> : <p key={lineIndex} className={lineIndex === 2 ? "edupi-first-run__intro-hope" : undefined}>{characters}</p>;
+  });
+
+  return <div className="edupi-first-run__demo-welcome" data-typing-ready={ready}>{paragraphs}</div>;
+}
+
+function SceneContent({ page, introReady = true }: { page: number; introReady?: boolean }) {
+  if (page === 0) return <WelcomeIntro ready={introReady} />;
   if (page === 1) return <div className="edupi-first-run__demo-model">
     <div className="is-connection"><span>模型</span><i /><strong>EduPi</strong><i /><span>课堂</span></div>
     <div className="is-model-lines"><span /><span /><span /></div>
@@ -43,7 +61,7 @@ function SceneContent({ page }: { page: number }) {
   </div>;
 }
 
-export function EduPiWelcomeScript() {
+export function EduPiWelcomeScript({ onWritten }: { onWritten?: () => void }) {
   const [fontReady, setFontReady] = useState(false);
 
   useEffect(() => {
@@ -57,10 +75,17 @@ export function EduPiWelcomeScript() {
     return () => { active = false; window.clearTimeout(fallback); };
   }, []);
 
-  return <div className={`edupi-first-run__welcome-script${fontReady ? " is-ready" : ""}`} aria-hidden="true"><span>Welcome</span><span>To</span><span>Edupi</span></div>;
+  useEffect(() => {
+    if (!fontReady || !onWritten) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { onWritten(); return; }
+    const fallback = window.setTimeout(onWritten, 3000);
+    return () => window.clearTimeout(fallback);
+  }, [fontReady, onWritten]);
+
+  return <div className={`edupi-first-run__welcome-script${fontReady ? " is-ready" : ""}`} aria-hidden="true"><span>Welcome</span><span>To</span><span onAnimationEnd={onWritten}>Edupi</span></div>;
 }
 
-export function EduPiFirstRunPreview({ step, expanded = false, children }: PreviewProps) {
+export function EduPiFirstRunPreview({ step, expanded = false, introReady = true, children }: PreviewProps) {
   const page = Math.max(0, Math.min(step + 1, TITLES.length - 1));
   const [shown, setShown] = useState(page);
   const [outgoing, setOutgoing] = useState<number | null>(null);
@@ -76,8 +101,8 @@ export function EduPiFirstRunPreview({ step, expanded = false, children }: Previ
   return <div className="edupi-first-run__preview" data-shape={expanded ? "form" : SHAPES[page]} data-scene={page} aria-hidden={expanded ? undefined : true}>
     <div className="edupi-first-run__preview-chrome" aria-hidden="true"><span /><span /><span /><strong>{TITLES[shown]}</strong>{shown === 0 ? null : <em>EduPi</em>}</div>
     <div className="edupi-first-run__preview-body" aria-hidden="true">
-      {outgoing !== null && outgoing !== shown ? <div className="edupi-first-run__demo-layer is-outgoing" key={`out-${outgoing}`}><SceneContent page={outgoing} /></div> : null}
-      <div className="edupi-first-run__demo-layer is-current" key={`current-${shown}`}><SceneContent page={shown} /></div>
+      {outgoing !== null && outgoing !== shown ? <div className="edupi-first-run__demo-layer is-outgoing" key={`out-${outgoing}`}><SceneContent page={outgoing} introReady={introReady} /></div> : null}
+      <div className="edupi-first-run__demo-layer is-current" key={`current-${shown}`}><SceneContent page={shown} introReady={introReady} /></div>
     </div>
     {expanded ? <div className="edupi-first-run__preview-form">{children}</div> : null}
   </div>;

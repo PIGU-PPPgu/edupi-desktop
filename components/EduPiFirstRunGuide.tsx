@@ -6,7 +6,7 @@ import { readEduPiWorkspace, type EduPiWorkspaceBundle } from "@/lib/edupi-educa
 import { APP_PREF_KEYS, getPref, setPref } from "@/lib/app-prefs";
 import { isTeachingModelIneligible } from "@/lib/model-setup-presets";
 import { fetchPrivateModelApi } from "@/lib/desktop-native";
-import { EduPiFirstRunPreview, EduPiWelcomeScript } from "./EduPiFirstRunPreview";
+import { EDUPI_WELCOME_INTRO, EduPiFirstRunPreview, EduPiWelcomeScript } from "./EduPiFirstRunPreview";
 import { EduPiOnboardingTeacherForm } from "./EduPiOnboardingTeacherForm";
 import { EduPiOnboardingRoster } from "./EduPiOnboardingRoster";
 import { EduPiOnboardingCalendarUpload } from "./EduPiOnboardingCalendarUpload";
@@ -35,7 +35,7 @@ const STEPS = [
   { title: "第一次备课", note: "从课程和已有材料生成课前准备。", action: "打开教学" },
   { title: "进入首页", note: "继续处理下一节课、待办或对话。", action: "进入首页" },
 ] as const;
-const WELCOME = { title: "Welcome To Edupi", note: "你好，我是 EduPi。我想做你身边的教师助理，记住班里的变化，把临近的工作提前准备好。希望你少一点赶工，多一点时间留给学生，也留给自己。", action: "开始探索" } as const;
+const WELCOME = { title: "Welcome To Edupi", note: EDUPI_WELCOME_INTRO.join(""), action: "开始探索" } as const;
 
 export function isGuideStepReady(step: number, bundle: EduPiWorkspaceBundle): boolean {
   if (step === 1) return Boolean(bundle.context.configured && bundle.context.name?.trim() && bundle.context.subject?.trim() && bundle.context.grade?.trim());
@@ -66,6 +66,8 @@ export function EduPiFirstRunGuide({
   const [checking, setChecking] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [artReady, setArtReady] = useState(false);
+  const [welcomeIntroReady, setWelcomeIntroReady] = useState(false);
+  const onWelcomeWritten = useCallback(() => setWelcomeIntroReady(true), []);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const inlineRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -185,7 +187,7 @@ export function EduPiFirstRunGuide({
       <section className="edupi-first-run__dialog">
         <div className={`edupi-first-run__art${artReady ? " is-ready" : ""}`} aria-hidden="true" />
         {!opened ? <div className="edupi-first-run__top">{inline ? <button type="button" className="edupi-first-run__quiet" disabled={inlineBusy} onClick={closeInline}>返回</button> : null}<strong>EduPi</strong><span>教师工作台</span><button type="button" className="edupi-first-run__quiet" disabled={inlineBusy} onClick={() => leaveGuide(onSkip)}>稍后再说</button></div> : null}
-        {!opened ? <div className="edupi-first-run__scene">{welcome ? <EduPiWelcomeScript /> : null}<EduPiFirstRunPreview step={welcome ? -1 : step} expanded={Boolean(inline)}>
+        {!opened ? <div className="edupi-first-run__scene">{welcome ? <EduPiWelcomeScript onWritten={onWelcomeWritten} /> : null}<EduPiFirstRunPreview step={welcome ? -1 : step} expanded={Boolean(inline)} introReady={welcomeIntroReady}>
         {inline ? <div ref={inlineRef} className="edupi-first-run__inline" tabIndex={-1} key={`inline-${step}`}>
           {inline === "model" ? <EduPiOnboardingModelSetup onBusyChange={onInlineBusyChange} onComplete={() => { if (flowVersionRef.current !== inlineVersion) return; onModelSaved?.(); advance(); }} onAdvanced={() => { if (inlineBusyRef.current) return; flowVersionRef.current += 1; setInline(null); setOpened(true); onOpenModels(); }} /> : null}
           {inline === "teacher" ? <EduPiOnboardingTeacherForm onBusyChange={onInlineBusyChange} onComplete={() => advanceIfCurrent(inlineVersion)} /> : null}

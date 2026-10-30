@@ -1,0 +1,15 @@
+{
+  "removed": [
+    {
+      "kind": ".next",
+      "allocatedBytes": 1281695744
+    },
+    {
+      "kind": "isolated data",
+      "allocatedBytes": 4096
+    }
+  ],
+  "allocatedBytes": 1281699840,
+  "availableDeltaBytes": 1282748416,
+  "pathsAbsent": true
+}
