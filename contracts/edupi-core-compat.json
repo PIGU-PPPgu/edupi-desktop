@@ -6,10 +6,10 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "028450cdef5596538b436b1f69051d2964f792f2",
+    "core_commit": "d87b44d628cdd3ded19a0bf82ec9cf82abd433f4",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:31e945cbe9067162151d975d4cbe54387ea0760a7d422d8078228a48f78457d9",
-    "runtime_component_manifest_hash": "sha256:331bf1faccccbe9c290adb472bc45baf67bdcba0b50a64315a3199aa9e7a5d87",
+    "component_manifest_hash": "sha256:51833f5ddef39b5ea10c1cb89722aca55ec143346eb8761430dd6aace98df186",
+    "runtime_component_manifest_hash": "sha256:9f8a66748c2648d3847b67859f3b261361f7ca44b799d770ac80e6ee3617f713",
     "runtime_schema_hash": "sha256:8701c07308359b90c955caa59674bdc02d36a30b6207808bc406a7ca4fe8144d"
   },
   "contract_identities": [
@@ -251,7 +251,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/408",
     "https://github.com/PIGU-PPPgu/edupi/pull/411",
     "https://github.com/PIGU-PPPgu/edupi/pull/412",
-    "https://github.com/PIGU-PPPgu/edupi/pull/413"
+    "https://github.com/PIGU-PPPgu/edupi/pull/413",
+    "https://github.com/PIGU-PPPgu/edupi/pull/415"
   ],
-  "change_note": "Mac integration pairs fixed Core 028450cd (production closure unchanged from 87c06e64). Compound memory recall with incomplete source support or multiple independently supported partial sources is held instead of combining answers; PDF visible-source deadline and owner fences remain. Bridge v1.1, occurrence v1.2, runtime schema and Pi1.0.2 remain unchanged; complete dual component closures are enforced. No automatic real-root migration, external send, policy acceptance or public feed update is introduced."
+  "change_note": "Desktop source pairs Core d87b44d6 after the signed macOS 0.3.93 candidate. Core adds read-only owner-message provenance and active Goal binding proof for future recall work; the Owner recall response and conservative compound-query hold are unchanged. Bridge v1.1, occurrence v1.2, runtime schema and Pi1.0.2 remain unchanged; complete dual component closures are enforced. This source pairing does not alter the installed 0.3.93 bundle or public update feed."
 }
