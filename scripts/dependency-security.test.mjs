@@ -424,6 +424,36 @@ test("connector Hono static serving cannot bypass a protected prefix by double d
   assert.equal(reads.some(filename => filename.endsWith("/private/secret.txt")), false);
 });
 
+test("OpenConnector node static serving rejects a double-decoded protected path", async () => {
+  const connectorRequire = createRequire(import.meta.resolve("@oomol-lab/open-connector"));
+  const staticEntry = connectorRequire.resolve("@hono/node-server/serve-static");
+  const manifestPath = path.resolve(path.dirname(staticEntry), "..", "package.json");
+  const installed = JSON.parse(await readFile(manifestPath, "utf8"));
+  const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
+  assert.ok(semver.gte(installed.version, "2.1.3"));
+  assert.equal(installed.version, lock.packages["node_modules/@hono/node-server"].version);
+  const { Hono } = await import(pathToFileURL(connectorRequire.resolve("hono")).href);
+  const { serveStatic } = await import(pathToFileURL(staticEntry).href);
+  const root = await mkdtemp(path.join(os.tmpdir(), "edupi-node-static-"));
+  try {
+    await mkdir(path.join(root, "private"));
+    await writeFile(path.join(root, "public.txt"), "SYNTHETIC_PUBLIC_STATIC_BODY");
+    await writeFile(path.join(root, "private/secret.txt"), "SYNTHETIC_PROTECTED_STATIC_BODY");
+    const app = new Hono();
+    app.use("/private/*", context => context.text("denied", 403));
+    app.use("*", serveStatic({ root }));
+    const publicResponse = await app.request("http://localhost/public.txt");
+    assert.equal(publicResponse.status, 200);
+    assert.equal(await publicResponse.text(), "SYNTHETIC_PUBLIC_STATIC_BODY");
+    assert.equal((await app.request("http://localhost/private/secret.txt")).status, 403);
+    const encoded = await app.request("http://localhost/%2570rivate/secret.txt");
+    assert.equal(encoded.status, 404);
+    assert.equal((await encoded.text()).includes("SYNTHETIC_PROTECTED_STATIC_BODY"), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("the connector's SOCKS address parser rejects a pathological IPv6 zone in a bounded child", () => {
   const connectorRequire = createRequire(import.meta.resolve("@oomol-lab/open-connector"));
   const imapRequire = createRequire(connectorRequire.resolve("imapflow"));
