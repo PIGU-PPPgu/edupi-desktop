@@ -29,8 +29,13 @@ function fixture() {
     call: async operation => { calls.push([operation]); assert.equal(operation, "health"); return { ok: true, result: { data_root_fingerprint: hash("a") } }; },
     callOwnerControl: async (operation, input) => {
       calls.push([operation, input]);
-      if (operation === "owner_read") return { ok: true, result: { root_ref: hash("a"), owner: { id: state.owner } } };
+      if (operation === "owner_read") return { ok: true, result: { root_ref: hash("a"), owner: state.owner ? { id: state.owner } : null } };
       assert.equal(input.root_ref, hash("a")); assert.equal(input.expected_owner_id, state.owner);
+      if (operation === "owner_control") {
+        assert.equal(input.action, "bootstrap"); assert.equal(state.owner, null);
+        state.owner = `owner_${"b".repeat(32)}`;
+        return { ok: true, result: { owner_id: state.owner } };
+      }
       if (state.deleted) return { ok: false, error_code: "material_schedule_source_unavailable" };
       if (input.expected_source_hash !== state.sourceHash || input.expected_metadata_revision !== state.metadataRevision) return { ok: false, error_code: "material_schedule_stale" };
       if (operation === "material_schedule_read") return { ok: true, result: read() };
@@ -74,7 +79,36 @@ test("native and origin gates reject reads and apply before Core access", async 
   const { GET, POST, calls } = fixture();
   assert.equal((await GET(new Request(`${url}?materialId=synthetic-material`, { headers: { host: "localhost:30373" } }))).status, 403);
   assert.equal((await POST(new Request(url, { method: "POST", headers: { ...headers, origin: "https://foreign.example", "content-type": "application/json" }, body: JSON.stringify(applyBody()) }))).status, 403);
+  const bootstrap = JSON.stringify({ action: "bootstrap_owner", materialId: "synthetic-material", confirm: true });
+  assert.equal((await POST(new Request(url, { method: "POST", headers: { host: "localhost:30373", "content-type": "application/json" }, body: bootstrap }))).status, 403);
+  assert.equal((await POST(new Request(url, { method: "POST", headers: { ...headers, origin: "https://foreign.example", "content-type": "application/json" }, body: bootstrap }))).status, 403);
   assert.equal(calls.length, 0);
+}));
+
+test("a fresh root establishes owner identity only after an explicit material action", async () => withToken(async () => {
+  const f = fixture(); f.state.owner = null;
+  const readRequest = () => new Request(`${url}?materialId=synthetic-material`, { headers });
+  const bootstrap = body => new Request(url, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(body) });
+  assert.equal((await f.GET(readRequest())).status, 409);
+  assert.equal(f.calls.some(call => call[0] === "owner_control"), false);
+  for (const body of [{ action: "bootstrap_owner", materialId: "synthetic-material", confirm: false },
+    { action: "bootstrap_owner", materialId: "synthetic-material", confirm: true, grant: "all" }]) {
+    assert.equal((await f.POST(bootstrap(body))).status, 400);
+  }
+  f.state.sourceHash = "unverified";
+  assert.equal((await f.POST(bootstrap({ action: "bootstrap_owner", materialId: "synthetic-material", confirm: true }))).status, 409);
+  f.state.sourceHash = hash("c");
+  assert.equal(f.calls.some(call => call[0] === "owner_control"), false);
+  const response = await f.POST(bootstrap({ action: "bootstrap_owner", materialId: "synthetic-material", confirm: true }));
+  assert.equal(response.status, 200);
+  const accepted = await response.json();
+  assert.deepEqual(accepted, { ok: true, result: { rootRef: hash("a"), ownerId: f.state.owner, created: true }, externalSend: false });
+  assert.equal(f.calls.filter(call => call[0] === "owner_control").length, 1);
+  assert.equal(f.calls.some(call => call[0] === "material_schedule_apply"), false);
+  assert.equal((await f.GET(readRequest())).status, 200);
+  const replay = await f.POST(bootstrap({ action: "bootstrap_owner", materialId: "synthetic-material", confirm: true }));
+  assert.equal((await replay.json()).result.created, false);
+  assert.equal(f.calls.filter(call => call[0] === "owner_control").length, 1);
 }));
 
 test("material schedule rereads current source hash and metadata revision rather than upload cache", async () => withToken(async () => {

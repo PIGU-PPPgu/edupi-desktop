@@ -158,6 +158,21 @@ export async function readMaterialSchedule(materialId: string, fetcher: Fetcher 
     : observed;
 }
 
+export async function bootstrapMaterialScheduleOwner(materialId: string, fetcher: Fetcher = fetch,
+  headersProvider: typeof desktopApiHeaders = desktopApiHeaders): Promise<{ rootRef: string; ownerId: string; created: boolean }> {
+  if (!ID.test(materialId)) fail("material_schedule_invalid");
+  const response = await fetcher(URL_PATH, { method: "POST",
+    headers: await requestHeaders(headersProvider, { "content-type": "application/json" }),
+    body: JSON.stringify({ action: "bootstrap_owner", materialId, confirm: true }) });
+  const body = await responseBody(response);
+  if (!response.ok || body.ok !== true || body.externalSend !== false) responseError(body);
+  const result = record(body.result);
+  if (!result || typeof result.rootRef !== "string" || !HASH.test(result.rootRef)
+    || typeof result.ownerId !== "string" || !ID.test(result.ownerId)
+    || typeof result.created !== "boolean") fail();
+  return result as { rootRef: string; ownerId: string; created: boolean };
+}
+
 export async function applyMaterialSchedule(capture: MaterialScheduleApplyCapture, fetcher: Fetcher = fetch, headersProvider: typeof desktopApiHeaders = desktopApiHeaders): Promise<MaterialScheduleApplyResult> {
   if (!ID.test(capture.materialId) || !ID.test(capture.commandId) || !HASH.test(capture.expectedSourceHash)
     || !HASH.test(capture.expectedParseFingerprint) || !Number.isSafeInteger(capture.expectedMetadataRevision)
@@ -180,6 +195,7 @@ export async function applyMaterialSchedule(capture: MaterialScheduleApplyCaptur
 export function materialScheduleErrorMessage(error: unknown): string {
   const code = error instanceof MaterialScheduleError ? error.code : "material_schedule_unavailable";
   if (code === "forbidden") return "请在桌面应用中核对安排";
+  if (code === "owner_uninitialized") return "本机身份尚未建立";
   if (code.startsWith("owner_") || code === "permission_denied") return "教师身份暂不可用";
   if (code === "material_schedule_stale" || code === "material_schedule_command_conflict") return "材料已变化，请重新读取";
   if (code === "material_schedule_source_unavailable") return "材料来源暂不可用";

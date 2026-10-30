@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
 import { isDesktopApiRequestAllowed } from "@/lib/desktop-api-auth";
 import { readEduPiEducationSnapshot, resolveEduPiBridgeRoots } from "@/lib/edupi-core-snapshot";
@@ -34,12 +35,17 @@ function caught(error: unknown) {
   return errorResponse(typeof code === "string" ? code : "material_schedule_unavailable", statusFor(String(code)));
 }
 
-async function runtimeContext(signal: AbortSignal) {
+async function runtimeRoot(signal: AbortSignal) {
   const roots = resolveEduPiBridgeRoots();
   const host = await ensureEduPiRuntime(roots);
   const health = await host.call("health", null, signal);
   const rootRef = record(health.result)?.data_root_fingerprint;
   if (health.ok !== true || typeof rootRef !== "string" || !HASH.test(rootRef)) fail("material_schedule_unavailable");
+  return { roots, host, rootRef };
+}
+
+async function runtimeContext(signal: AbortSignal) {
+  const { roots, host, rootRef } = await runtimeRoot(signal);
   const authorization = await host.callOwnerControl("owner_read", {}, signal);
   if (authorization.ok !== true) fail(String(authorization.error_code || "material_schedule_unavailable"));
   const value = record(authorization.result), owner = record(value?.owner);
@@ -47,7 +53,7 @@ async function runtimeContext(signal: AbortSignal) {
   return { roots, host, rootRef, ownerId: owner.id };
 }
 
-async function currentProof(context: Awaited<ReturnType<typeof runtimeContext>>, materialId: string, signal: AbortSignal) {
+async function currentProof(context: Awaited<ReturnType<typeof runtimeRoot>>, materialId: string, signal: AbortSignal) {
   const [snapshot, metadata] = await Promise.all([
     readEduPiEducationSnapshot({ roots: context.roots, signal, scheduleOccurrenceVersion: "1.2" }), readMaterialMetadataHistory(materialId, signal),
   ]);
@@ -60,6 +66,31 @@ async function currentProof(context: Awaited<ReturnType<typeof runtimeContext>>,
   if (current.length !== 1 || typeof current[0].source_hash !== "string" || !HASH.test(current[0].source_hash)
     || metadata.materialId !== materialId || !Number.isSafeInteger(metadata.revision) || metadata.revision < 0) fail("material_schedule_source_unavailable");
   return { proof: { expected_source_hash: current[0].source_hash, expected_metadata_revision: metadata.revision }, snapshot };
+}
+
+async function bootstrapOwnerForMaterial(materialId: string, signal: AbortSignal) {
+  const context = await runtimeRoot(signal);
+  await currentProof(context, materialId, signal);
+  const before = await context.host.callOwnerControl("owner_read", {}, signal);
+  if (before.ok !== true) fail(String(before.error_code || "material_schedule_unavailable"));
+  const current = record(before.result);
+  if (current?.root_ref !== context.rootRef) fail("owner_identity_mismatch");
+  const existing = record(current.owner);
+  if (existing) {
+    if (typeof existing.id !== "string" || !ID.test(existing.id)) fail("material_schedule_unavailable");
+    return { rootRef: context.rootRef, ownerId: existing.id, created: false };
+  }
+  const boot = await context.host.callOwnerControl("owner_control", {
+    command_id: `desktop-material-owner-${randomUUID()}`, root_ref: context.rootRef,
+    expected_owner_id: null, action: "bootstrap",
+  }, signal);
+  if (boot.ok !== true) fail(String(boot.error_code || "material_schedule_unavailable"));
+  const ownerId = record(boot.result)?.owner_id;
+  if (typeof ownerId !== "string" || !ID.test(ownerId)) fail("material_schedule_unavailable");
+  const after = await context.host.callOwnerControl("owner_read", {}, signal);
+  if (after.ok !== true || record(after.result)?.root_ref !== context.rootRef
+    || record(record(after.result)?.owner)?.id !== ownerId) fail("material_schedule_unavailable");
+  return { rootRef: context.rootRef, ownerId, created: true };
 }
 
 function adoptionReceipt(
@@ -130,6 +161,12 @@ export async function POST(request: Request) {
   if (!hasJsonContentType(request)) return errorResponse("material_schedule_invalid", 415);
   try {
     const body = record(await parseJsonWithinLimit(request, 4 * 1024));
+    if (body?.action === "bootstrap_owner") {
+      if (Object.keys(body).length !== 3 || !Object.hasOwn(body, "materialId") || !Object.hasOwn(body, "confirm")
+        || typeof body.materialId !== "string" || !ID.test(body.materialId) || body.confirm !== true) return errorResponse("material_schedule_invalid", 400);
+      const result = await bootstrapOwnerForMaterial(body.materialId, request.signal);
+      return NextResponse.json({ ok: true, result, externalSend: false });
+    }
     if (!body || Object.keys(body).some(key => ![...APPLY_KEYS, "confirmSourceText"].includes(key))
       || !APPLY_KEYS.every(key => Object.hasOwn(body, key))
       || Object.hasOwn(body, "confirmSourceText") && body.confirmSourceText !== true

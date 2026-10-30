@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { EduPiMaterialScheduleProposal as UploadProposal } from "@/lib/edupi-core-process-client";
-import { applyMaterialSchedule, captureMaterialScheduleApply, materialScheduleCanApply, materialScheduleErrorMessage,
+import { applyMaterialSchedule, bootstrapMaterialScheduleOwner, captureMaterialScheduleApply, materialScheduleCanApply, materialScheduleErrorMessage, MaterialScheduleError,
   readMaterialSchedule, type MaterialScheduleApplyResult, type MaterialScheduleRead } from "@/lib/edupi-material-schedule";
 import { calendarTimeLabel } from "@/lib/edupi-calendar-form-time";
 import { EduPiPagination } from "./EduPiActionIcon";
@@ -40,6 +40,7 @@ export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, in
   const [busy, setBusy] = useState(false);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState("");
+  const [needsOwner, setNeedsOwner] = useState(false);
   const [page, setPage] = useState(0);
   const [imageTextConfirmed, setImageTextConfirmed] = useState(false);
   const [focusGeneration, setFocusGeneration] = useState(0);
@@ -89,14 +90,17 @@ export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, in
     const request = new AbortController();
     controller.current = request;
     rememberFocus("read", revision, trigger);
-    setBusy(true); onBusyChange?.(true); setCurrentSequence(null); setError(""); setImageTextConfirmed(false);
+    setBusy(true); onBusyChange?.(true); setCurrentSequence(null); setError(""); setNeedsOwner(false); setImageTextConfirmed(false);
     try {
       const observed = await readMaterialSchedule(materialId, undefined, undefined, request.signal);
       if (activeScope.current !== scope || sequence.current !== revision || request.signal.aborted) return;
       setCurrent(observed); setCurrentSequence(revision); setPage(0);
       setApplied(value => value && sameProof(value.proof, observed) ? value : null);
     } catch (error) {
-      if (activeScope.current === scope && sequence.current === revision && !request.signal.aborted) setError(materialScheduleErrorMessage(error));
+      if (activeScope.current === scope && sequence.current === revision && !request.signal.aborted) {
+        setError(materialScheduleErrorMessage(error));
+        setNeedsOwner(error instanceof MaterialScheduleError && error.code === "owner_uninitialized");
+      }
     } finally {
       if (activeScope.current === scope && sequence.current === revision) { setBusy(false); onBusyChange?.(false); setFocusGeneration(value => value + 1); }
     }
@@ -108,7 +112,7 @@ export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, in
     // A parent projection catching up to this exact verified version does not erase its write history.
     setCurrent(value => isParentCatchUp(value, previous, next) ? value : null);
     setApplied(value => value?.scope === previous.key && isParentCatchUp(value.proof, previous, next) ? { ...value, scope } : null);
-    setCurrentSequence(null); setError(""); setPage(0); setImageTextConfirmed(false);
+    setCurrentSequence(null); setError(""); setNeedsOwner(false); setPage(0); setImageTextConfirmed(false);
     if (expanded.current) void load();
     return () => { controller.current?.abort(); sequence.current += 1; focusRequest.current = null; };
   }, [load, materialId, metadataRevision, scope]);
@@ -135,6 +139,19 @@ export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, in
   const visible = lines.slice(Math.min(page, pages - 1) * PAGE_SIZE, (Math.min(page, pages - 1) + 1) * PAGE_SIZE);
   const sourceReviewRequired = scopedCurrent?.source_review_required === "image_text";
   const sourceReviewed = !sourceReviewRequired || imageTextConfirmed;
+  const initializeOwner = async (trigger?: HTMLButtonElement) => {
+    if (!expanded.current || !needsOwner || busy || applying) return;
+    const revision = sequence.current;
+    setBusy(true); onBusyChange?.(true); setError("");
+    try {
+      await bootstrapMaterialScheduleOwner(materialId);
+      if (activeScope.current === scope && sequence.current === revision && expanded.current) await load(trigger);
+    } catch (error) {
+      if (activeScope.current === scope && sequence.current === revision && expanded.current) setError(materialScheduleErrorMessage(error));
+    } finally {
+      if (activeScope.current === scope && sequence.current === revision) { setBusy(false); onBusyChange?.(false); }
+    }
+  };
   const adopt = async (trigger?: HTMLButtonElement) => {
     if (!currentProof || !materialScheduleCanApply(currentProof) || !sourceReviewed || adoptedCount !== null || busy || adoptionInFlight.current) return;
     const revision = sequence.current;
@@ -161,7 +178,7 @@ export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, in
     if (lockOpenDuringApply && applyInFlight.current) { if (!event.currentTarget.open) event.currentTarget.open = true; return; }
     expanded.current = event.currentTarget.open;
     if (expanded.current) void load();
-    else { controller.current?.abort(); sequence.current += 1; focusRequest.current = null; setCurrentSequence(null); setBusy(false); onBusyChange?.(false); setImageTextConfirmed(false); }
+    else { controller.current?.abort(); sequence.current += 1; focusRequest.current = null; setCurrentSequence(null); setBusy(false); onBusyChange?.(false); setNeedsOwner(false); setImageTextConfirmed(false); }
     }}>
     <summary onClick={event => { if (lockOpenDuringApply && applyInFlight.current) event.preventDefault(); }}>安排提案 <span>{label}</span></summary>
     <div className="edupi-material-pairing__current">
@@ -176,6 +193,7 @@ export function EduPiMaterialScheduleProposal({ materialId, metadataRevision, in
       onChange={event => setImageTextConfirmed(event.target.checked)} />已核对图片正文</label> : null}
     <div className="edupi-material-inbox__row">
       {onPreview ? <button type="button" onClick={onPreview}>预览原材料</button> : null}
+      {needsOwner ? <button type="button" disabled={busy || applying} onClick={event => void initializeOwner(event?.currentTarget)}>建立本机身份</button> : null}
       <button ref={reloadRef} type="button" disabled={busy || applying} onClick={event => void load(event?.currentTarget)}>重新读取</button>
       <button ref={adoptRef} type="button" disabled={!currentProof || !materialScheduleCanApply(currentProof) || !sourceReviewed || busy || applying || adoptedCount !== null}
         onClick={event => void adopt(event?.currentTarget)}>{applying ? "采用中…" : "确认采用"}</button>
