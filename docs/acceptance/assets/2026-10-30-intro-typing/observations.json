@@ -1,0 +1,100 @@
+{
+  "base": "374a95221008d30e4ff473a3e33f9d5aaa6ceaab",
+  "branch": "codex/onboarding-intro-typing-20261030",
+  "origin": "127.0.0.1:30144",
+  "serviceWorkers": "blocked in isolated browser contexts",
+  "development": {
+    "visibleCharacters": [
+      0,
+      12,
+      69
+    ],
+    "totalCharacters": 69,
+    "caretDuringTyping": true,
+    "caretAfterCompletion": false,
+    "sameRootPreserved": true,
+    "introTopBefore": 425.50384521484375,
+    "introTopAfter": 425.50384521484375,
+    "pageErrors": []
+  },
+  "production": {
+    "visibleCharacters": [
+      0,
+      12,
+      69
+    ],
+    "totalCharacters": 69,
+    "caretDuringTyping": true,
+    "caretAfterCompletion": false,
+    "introTopBefore": 425.50384521484375,
+    "introTopAfter": 425.50384521484375
+  },
+  "layouts": [
+    {
+      "viewport": [
+        320,
+        480
+      ],
+      "copyInside": true,
+      "buttonInside": true,
+      "scrollWidth": 320
+    },
+    {
+      "viewport": [
+        320,
+        568
+      ],
+      "copyInside": true,
+      "buttonInside": true,
+      "scrollWidth": 320
+    },
+    {
+      "viewport": [
+        768,
+        600
+      ],
+      "copyInside": true,
+      "buttonInside": true,
+      "scrollWidth": 768
+    },
+    {
+      "viewport": [
+        1024,
+        768
+      ],
+      "copyInside": true,
+      "buttonInside": true,
+      "scrollWidth": 1024
+    }
+  ],
+  "continueDuringTyping": {
+    "visibleCharactersBeforeClick": 6,
+    "destinationStep": "02 / 08"
+  },
+  "reducedMotion": {
+    "visibleCharacters": 69,
+    "totalCharacters": 69,
+    "animation": "none",
+    "cursor": "none"
+  },
+  "initialFailure": {
+    "visibleCharactersAfterAnimation": 17,
+    "totalCharacters": 69,
+    "cause": "1ms steps(1, end) ended at a progress value just below 1 for some delayed characters",
+    "fix": "step-start reveals the glyph at its scheduled start"
+  },
+  "checks": {
+    "focusedGuideTests": {
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    "typecheck": "passed",
+    "targetedLint": "passed",
+    "productionBuild": "passed",
+    "buildWarnings": [
+      "untouched session export dynamic dependency",
+      "experimental SQLite warning"
+    ]
+  }
+}
