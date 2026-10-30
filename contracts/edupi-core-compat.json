@@ -6,10 +6,10 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "42d464edcb0950ffca99549bae52821a5b7dea01",
+    "core_commit": "87c06e64f8e321b4e6bd76018697fb6c67ee7cfc",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:66fadac82db34267c6788b465edfd4dfa7f66344e5bc518be9d43051bc6b78e8",
-    "runtime_component_manifest_hash": "sha256:3b9b3cc6dd5e4dad702d13fbb63ba114911f77ef998ea77ab3a558a08cb9df72",
+    "component_manifest_hash": "sha256:31e945cbe9067162151d975d4cbe54387ea0760a7d422d8078228a48f78457d9",
+    "runtime_component_manifest_hash": "sha256:331bf1faccccbe9c290adb472bc45baf67bdcba0b50a64315a3199aa9e7a5d87",
     "runtime_schema_hash": "sha256:8701c07308359b90c955caa59674bdc02d36a30b6207808bc406a7ca4fe8144d"
   },
   "contract_identities": [
@@ -249,7 +249,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/403",
     "https://github.com/PIGU-PPPgu/edupi/pull/404",
     "https://github.com/PIGU-PPPgu/edupi/pull/408",
-    "https://github.com/PIGU-PPPgu/edupi/pull/411"
+    "https://github.com/PIGU-PPPgu/edupi/pull/411",
+    "https://github.com/PIGU-PPPgu/edupi/pull/412"
   ],
-  "change_note": "Mac integration pairs fixed Core 42d464ed. Compound memory recall with incomplete source support is held instead of combining partial evidence; PDF visible-source deadline and owner fences remain. Bridge v1.1, occurrence v1.2, runtime schema and Pi1.0.2 remain unchanged; complete dual component closures are enforced. No automatic real-root migration, external send, policy acceptance or public feed update is introduced."
+  "change_note": "Mac integration pairs fixed Core 87c06e64. Compound memory recall with incomplete source support or multiple independently supported partial sources is held instead of combining answers; PDF visible-source deadline and owner fences remain. Bridge v1.1, occurrence v1.2, runtime schema and Pi1.0.2 remain unchanged; complete dual component closures are enforced. No automatic real-root migration, external send, policy acceptance or public feed update is introduced."
 }
