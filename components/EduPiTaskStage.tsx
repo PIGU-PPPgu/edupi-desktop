@@ -98,6 +98,8 @@ function reviewActionLabel(value: string): string {
 
 function ReviewStage({ task, workCase, workCandidate, workReview = false, enabled, blocked, reason, busy, message, onReview, onOpenAgent, taskSessionBusy, taskSessionError }: { task: TeacherTask; workCase: EducationWorkCase | null; workCandidate?: EducationWorkCandidate | null; workReview?: boolean; enabled: boolean; blocked: boolean; reason: string; busy: TaskReviewAction | null; message: string | null; onReview: (action: TaskReviewAction, payload: ReviewPayload) => Promise<void>; onOpenAgent: () => void; taskSessionBusy: boolean; taskSessionError: string | null }) {
   const usageRef = useUsageVisibility({ target: enabled && !blocked ? taskUsageTarget(task, workCase, workCandidate) : null, action: "review_started", surface: "task" });
+  const capabilityTask = task.trigger === "capability_package" && workCase?.kind === "capability_package" && workCase.taskId === task.id;
+  const reflectionTask = capabilityTask && task.evidence?.rule === "capability:lesson_reflection_internal_draft";
   const [note, setNote] = useState("");
   const [title, setTitle] = useState(task.title);
   const [dueDate, setDueDate] = useState(task.dueDate || "");
@@ -120,14 +122,14 @@ function ReviewStage({ task, workCase, workCandidate, workReview = false, enable
   const showDecisionEditor = enabled && !blocked && (!decisionRecorded || changingDecision);
   const reviewFields = showDecisionEditor ? (
     <div className="edupi-review-fields">
-      <label>审核意见<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="补充判断依据" /></label>
-      <details><summary>修改内容</summary><div className="edupi-review-edit-grid"><label>任务标题<input value={title} onChange={(event) => setTitle(event.target.value)} /></label><label>截止日期<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>{!workReview ? <label>教学产物<textarea rows={4} value={deliverables} onChange={(event) => setDeliverables(event.target.value)} /></label> : null}</div></details>
+      <label>{reflectionTask ? "下次课调整" : "审核意见"}<textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder={reflectionTask ? "写下要加入的调整" : "补充判断依据"} /></label>
+      {!capabilityTask ? <details><summary>修改内容</summary><div className="edupi-review-edit-grid"><label>任务标题<input value={title} onChange={(event) => setTitle(event.target.value)} /></label><label>截止日期<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>{!workReview ? <label>教学产物<textarea rows={4} value={deliverables} onChange={(event) => setDeliverables(event.target.value)} /></label> : null}</div></details> : null}
     </div>
   ) : null;
   const reviewActions = showDecisionEditor ? (
     <div className="edupi-review-actions" aria-label="教师审核动作">
       <button type="button" className="is-primary" disabled={!enabled || busy !== null} onClick={() => void submit("accept")}>{busy === "accept" ? "正在记录" : "接受"}</button>
-      <button type="button" disabled={!enabled || busy !== null || !title.trim()} onClick={() => void submit("modify")}>{busy === "modify" ? "正在记录" : "修改后接受"}</button>
+      <button type="button" disabled={!enabled || busy !== null || !title.trim() || capabilityTask && decisionRequiresNote} onClick={() => void submit("modify")}>{busy === "modify" ? "正在记录" : "修改后接受"}</button>
       <button type="button" disabled={!enabled || busy !== null || decisionRequiresNote} onClick={() => void submit("hold")}>{busy === "hold" ? "正在记录" : "暂缓"}</button>
       <button type="button" className="is-danger" disabled={!enabled || busy !== null || decisionRequiresNote} onClick={() => void submit("reject")}>{busy === "reject" ? "正在记录" : "拒绝"}</button>
       {!workReview ? <button type="button" className="is-quiet" disabled={!enabled || busy !== null || !canRollback} onClick={() => void submit("rollback")}>{busy === "rollback" ? "正在回滚" : "回滚"}</button> : null}

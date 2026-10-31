@@ -66,11 +66,11 @@ test("real Core recall host screens current captured sources through private IPC
         supervisorSessionId: `desktop-recall-${++sequence}`, coreCommit: "a".repeat(40), componentManifestHash: protocol.CORE_RUNTIME_SCHEMA_HASH,
         ambientPlanning: true, ownerMessageRegistration: true } }, channel);
     }
-    const call = async (payload, signal) => {
+    const call = async (payload, signal, operation = "owner_memory_recall") => {
       const response = await fetch(host.daemon.endpoint, { method: "POST", signal, headers: { "content-type": "application/json",
         authorization: `Bearer ${token}`, "x-edupi-owner-control": ownerToken }, body: JSON.stringify({ protocol: protocol.CORE_RUNTIME_PROTOCOL,
         protocol_version: protocol.CORE_RUNTIME_PROTOCOL_VERSION, schema_hash: protocol.CORE_RUNTIME_SCHEMA_HASH,
-        request_id: `desktop-recall-call-${++sequence}`, operation: "owner_memory_recall", payload }) });
+        request_id: `desktop-recall-call-${++sequence}`, operation, payload }) });
       const result = await response.json(); assert.equal(protocol.validateRuntimeResponse(result).ok, true); return result;
     };
     await open(); assert.equal(requests, 0, "startup and no-query reads cannot invoke a model");
@@ -78,6 +78,13 @@ test("real Core recall host screens current captured sources through private IPC
     const allowed = await call({ ...identity, category: "class", query: fixture.markers.a });
     assert.equal(allowed.result.model_execute, true); assert.equal(allowed.result.source_support.status, "assessed");
     assert.deepEqual(allowed.result.entries.map(entry => entry.content), [fixture.markers.a]);
+    const entry = allowed.result.entries[0];
+    const proof = await call({ root_ref: fixture.rootRef, expected_owner_id: fixture.ownerId,
+      query_message_ref: identity.message_ref, memory_id: entry.id, category: entry.category,
+      source_fingerprint: entry.source_fingerprint }, undefined, "owner_recall_source_proof_read");
+    assert.equal(proof.result.status, "held", "legacy memory without registered origin stays unverified");
+    assert.equal(proof.result.read_only, true);
+    assert.equal(proof.result.external_send, false);
     assert.deepEqual(modelProfiles[0], { temperature: 0, maxTokens: 4096 }, "the actual SDK request must match the assessed recall profile");
     const missing = await call({ ...identity, category: "class", query: "寄送地址在哪里" });
     assert.equal(missing.result.model_execute, true); assert.deepEqual(missing.result.entries, []);
