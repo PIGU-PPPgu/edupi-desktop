@@ -1,0 +1,516 @@
+{
+  "startedAt": "2026-10-31T11:15:55.581910+08:00",
+  "scope": "Explicit old EduPi application copies and reproducible build caches only",
+  "installedBefore": {
+    "version": "0.3.94",
+    "bundleId": "com.abcwyc.pi-agent",
+    "executableSha256": "3a12349c662d41cf73e204eb935a62085bd3fca0c1afb2f2d6012ee7c95366cf"
+  },
+  "rollbackRetained": {
+    "path": "~/edupi-install-checkpoints/v0.3.94/rollback/EduPi-before-094.saved-bundle",
+    "identity": {
+      "version": "0.3.93",
+      "bundleId": "com.abcwyc.pi-agent",
+      "executableSha256": "2ace0a1c611790eef470c20eeeef55e46f7888a4049c2e2334f65a8334abec08"
+    },
+    "condition": "Keep one .93 rollback until user finishes own .94 update verification."
+  },
+  "protectedCheckpointDataAndEvidenceRoots": 78,
+  "availableKiBBefore": 866439432,
+  "preflight": [
+    {
+      "path": "~/edupi-install-checkpoints/settings-redesign-20261023/EduPi-before-redesign.app",
+      "kind": "old-app",
+      "allocatedKiB": 964656,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.70",
+      "launchServicesUnregisterExit": 0
+    },
+    {
+      "path": "~/edupi-install-checkpoints/settings-redesign-20261023/subfeature-audit-20261027/EduPi-before-child-workflows.app",
+      "kind": "old-app",
+      "allocatedKiB": 961192,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.77",
+      "launchServicesUnregisterExit": 0
+    },
+    {
+      "path": "~/edupi-install-checkpoints/settings-redesign-20261023/subfeature-audit-20261027/EduPi-before-child-recovery.app",
+      "kind": "old-app",
+      "allocatedKiB": 961204,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.77",
+      "launchServicesUnregisterExit": 0
+    },
+    {
+      "path": "~/edupi-install-checkpoints/settings-redesign-20261023/subfeature-audit-20261027/EduPi-before-nested-ui-polish.app",
+      "kind": "old-app",
+      "allocatedKiB": 961072,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.77",
+      "launchServicesUnregisterExit": 0
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.81/rollback/EduPi-before-081.saved-bundle",
+      "kind": "old-app",
+      "allocatedKiB": 961084,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.77"
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.82/rollback/EduPi-before-082.saved-bundle",
+      "kind": "old-app",
+      "allocatedKiB": 968996,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.81"
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.83/rollback/EduPi-before-083.saved-bundle",
+      "kind": "old-app",
+      "allocatedKiB": 969044,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.82"
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.88/rollback/EduPi-before-088.saved-bundle",
+      "kind": "old-app",
+      "allocatedKiB": 969044,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.83"
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.89/rollback/EduPi-before-089.saved-bundle",
+      "kind": "old-app",
+      "allocatedKiB": 969584,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.88"
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.92/rollback/EduPi-before-092.saved-bundle",
+      "kind": "old-app",
+      "allocatedKiB": 969652,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.89"
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.93/rollback/EduPi-before-093.saved-bundle",
+      "kind": "old-app",
+      "allocatedKiB": 969776,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.92"
+    },
+    {
+      "path": "~/.codex/worktrees/settings-admin-redesign/edupi-desktop/.next-desktop",
+      "kind": "generated-build",
+      "allocatedKiB": 890644,
+      "git": {
+        "trackedFiles": 0,
+        "ignored": true,
+        "rule": ".gitignore:19:/.next-desktop/\t.next-desktop"
+      },
+      "openHandles": 0
+    },
+    {
+      "path": "~/.codex/worktrees/settings-admin-redesign/edupi-desktop/src-tauri/resources/server",
+      "kind": "generated-build",
+      "allocatedKiB": 429928,
+      "git": {
+        "trackedFiles": 0,
+        "ignored": true,
+        "rule": ".gitignore:56:/src-tauri/resources/server/\tsrc-tauri/resources/server"
+      },
+      "openHandles": 0
+    },
+    {
+      "path": "~/.codex/worktrees/settings-admin-redesign/edupi-desktop/src-tauri/resources/Pi Agent Server.app",
+      "kind": "generated-build",
+      "allocatedKiB": 110288,
+      "git": {
+        "trackedFiles": 0,
+        "ignored": true,
+        "rule": ".gitignore:55:/src-tauri/resources/Pi Agent Server.app/\tsrc-tauri/resources/Pi Agent Server.app"
+      },
+      "openHandles": 0
+    },
+    {
+      "path": "~/.codex/worktrees/settings-admin-redesign/edupi-desktop/src-tauri/resources/edupi-core",
+      "kind": "generated-build",
+      "allocatedKiB": 156696,
+      "git": {
+        "trackedFiles": 0,
+        "ignored": true,
+        "rule": ".gitignore:57:/src-tauri/resources/edupi-core/\tsrc-tauri/resources/edupi-core"
+      },
+      "openHandles": 0
+    },
+    {
+      "path": "~/.codex/worktrees/settings-admin-redesign/edupi-desktop/src-tauri/resources/open-connector",
+      "kind": "generated-build",
+      "allocatedKiB": 236928,
+      "git": {
+        "trackedFiles": 0,
+        "ignored": true,
+        "rule": ".gitignore:59:/src-tauri/resources/open-connector/\tsrc-tauri/resources/open-connector"
+      },
+      "openHandles": 0
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.77/cargo-compat-wyY2o9/registry",
+      "kind": "temporary-cargo-cache",
+      "allocatedKiB": 1720808,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.77/cargo-compat-wyY2o9/.global-cache",
+      "kind": "temporary-cargo-cache",
+      "allocatedKiB": 152,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0
+    }
+  ],
+  "removed": [
+    {
+      "path": "~/edupi-install-checkpoints/settings-redesign-20261023/EduPi-before-redesign.app",
+      "kind": "old-app",
+      "allocatedKiB": 964656,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.70",
+      "launchServicesUnregisterExit": 0,
+      "existsAfter": false
+    },
+    {
+      "path": "~/edupi-install-checkpoints/settings-redesign-20261023/subfeature-audit-20261027/EduPi-before-child-workflows.app",
+      "kind": "old-app",
+      "allocatedKiB": 961192,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.77",
+      "launchServicesUnregisterExit": 0,
+      "existsAfter": false
+    },
+    {
+      "path": "~/edupi-install-checkpoints/settings-redesign-20261023/subfeature-audit-20261027/EduPi-before-child-recovery.app",
+      "kind": "old-app",
+      "allocatedKiB": 961204,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.77",
+      "launchServicesUnregisterExit": 0,
+      "existsAfter": false
+    },
+    {
+      "path": "~/edupi-install-checkpoints/settings-redesign-20261023/subfeature-audit-20261027/EduPi-before-nested-ui-polish.app",
+      "kind": "old-app",
+      "allocatedKiB": 961072,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.77",
+      "launchServicesUnregisterExit": 0,
+      "existsAfter": false
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.81/rollback/EduPi-before-081.saved-bundle",
+      "kind": "old-app",
+      "allocatedKiB": 961084,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.77",
+      "existsAfter": false
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.82/rollback/EduPi-before-082.saved-bundle",
+      "kind": "old-app",
+      "allocatedKiB": 968996,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.81",
+      "existsAfter": false
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.83/rollback/EduPi-before-083.saved-bundle",
+      "kind": "old-app",
+      "allocatedKiB": 969044,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.82",
+      "existsAfter": false
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.88/rollback/EduPi-before-088.saved-bundle",
+      "kind": "old-app",
+      "allocatedKiB": 969044,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.83",
+      "existsAfter": false
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.89/rollback/EduPi-before-089.saved-bundle",
+      "kind": "old-app",
+      "allocatedKiB": 969584,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.88",
+      "existsAfter": false
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.92/rollback/EduPi-before-092.saved-bundle",
+      "kind": "old-app",
+      "allocatedKiB": 969652,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.89",
+      "existsAfter": false
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.93/rollback/EduPi-before-093.saved-bundle",
+      "kind": "old-app",
+      "allocatedKiB": 969776,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "version": "0.3.92",
+      "existsAfter": false
+    },
+    {
+      "path": "~/.codex/worktrees/settings-admin-redesign/edupi-desktop/.next-desktop",
+      "kind": "generated-build",
+      "allocatedKiB": 890644,
+      "git": {
+        "trackedFiles": 0,
+        "ignored": true,
+        "rule": ".gitignore:19:/.next-desktop/\t.next-desktop"
+      },
+      "openHandles": 0,
+      "existsAfter": false
+    },
+    {
+      "path": "~/.codex/worktrees/settings-admin-redesign/edupi-desktop/src-tauri/resources/server",
+      "kind": "generated-build",
+      "allocatedKiB": 429928,
+      "git": {
+        "trackedFiles": 0,
+        "ignored": true,
+        "rule": ".gitignore:56:/src-tauri/resources/server/\tsrc-tauri/resources/server"
+      },
+      "openHandles": 0,
+      "existsAfter": false
+    },
+    {
+      "path": "~/.codex/worktrees/settings-admin-redesign/edupi-desktop/src-tauri/resources/Pi Agent Server.app",
+      "kind": "generated-build",
+      "allocatedKiB": 110288,
+      "git": {
+        "trackedFiles": 0,
+        "ignored": true,
+        "rule": ".gitignore:55:/src-tauri/resources/Pi Agent Server.app/\tsrc-tauri/resources/Pi Agent Server.app"
+      },
+      "openHandles": 0,
+      "existsAfter": false
+    },
+    {
+      "path": "~/.codex/worktrees/settings-admin-redesign/edupi-desktop/src-tauri/resources/edupi-core",
+      "kind": "generated-build",
+      "allocatedKiB": 156696,
+      "git": {
+        "trackedFiles": 0,
+        "ignored": true,
+        "rule": ".gitignore:57:/src-tauri/resources/edupi-core/\tsrc-tauri/resources/edupi-core"
+      },
+      "openHandles": 0,
+      "existsAfter": false
+    },
+    {
+      "path": "~/.codex/worktrees/settings-admin-redesign/edupi-desktop/src-tauri/resources/open-connector",
+      "kind": "generated-build",
+      "allocatedKiB": 236928,
+      "git": {
+        "trackedFiles": 0,
+        "ignored": true,
+        "rule": ".gitignore:59:/src-tauri/resources/open-connector/\tsrc-tauri/resources/open-connector"
+      },
+      "openHandles": 0,
+      "existsAfter": false
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.77/cargo-compat-wyY2o9/registry",
+      "kind": "temporary-cargo-cache",
+      "allocatedKiB": 1720808,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "existsAfter": false
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.77/cargo-compat-wyY2o9/.global-cache",
+      "kind": "temporary-cargo-cache",
+      "allocatedKiB": 152,
+      "git": {
+        "trackedFiles": 0,
+        "gitContext": "not a Git worktree; ignore rule not applicable"
+      },
+      "openHandles": 0,
+      "existsAfter": false
+    }
+  ],
+  "skipped": [],
+  "complete": true,
+  "resumeNote": "Outer .saved-bundle copies are not registered applications; unregister the actual registered nested helper .app before removal. Four visible old .app copies were already removed.",
+  "registrationHandling": [
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.81/rollback/EduPi-before-081.saved-bundle/Contents/Resources/resources/Pi Agent Server.app",
+      "exitCode": 0
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.82/rollback/EduPi-before-082.saved-bundle/Contents/Resources/resources/Pi Agent Server.app",
+      "exitCode": 0
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.83/rollback/EduPi-before-083.saved-bundle/Contents/Resources/resources/Pi Agent Server.app",
+      "exitCode": 0
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.88/rollback/EduPi-before-088.saved-bundle/Contents/Resources/resources/Pi Agent Server.app",
+      "exitCode": 0
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.89/rollback/EduPi-before-089.saved-bundle/Contents/Resources/resources/Pi Agent Server.app",
+      "exitCode": 0
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.92/rollback/EduPi-before-092.saved-bundle/Contents/Resources/resources/Pi Agent Server.app",
+      "exitCode": 0
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.93/rollback/EduPi-before-093.saved-bundle/Contents/Resources/resources/Pi Agent Server.app",
+      "exitCode": 0
+    },
+    {
+      "path": "~/edupi-install-checkpoints/v0.3.94/rollback/EduPi-before-094.saved-bundle/Contents/Resources/resources/Pi Agent Server.app",
+      "exitCode": 0,
+      "retainedBackupOnlyUnregistered": true
+    }
+  ],
+  "removedEmptyDirectories": [
+    "~/edupi-install-checkpoints/v0.3.86/macos-assets",
+    "~/edupi-install-checkpoints/v0.3.73/download",
+    "~/edupi-install-checkpoints/v0.3.74/download",
+    "~/edupi-install-checkpoints/v0.3.76/task-trash/native-cargo-94298"
+  ],
+  "finishedAt": "2026-10-31T11:20:43.496294+08:00",
+  "installedAfter": {
+    "version": "0.3.94",
+    "bundleId": "com.abcwyc.pi-agent",
+    "executableSha256": "3a12349c662d41cf73e204eb935a62085bd3fca0c1afb2f2d6012ee7c95366cf"
+  },
+  "installedAppUnchanged": true,
+  "latestRollbackUnchanged": true,
+  "protectedCheckpointRootsMetadataUnchangedSinceResume": true,
+  "generatedCheckoutGitStatusUnchanged": true,
+  "removedAllocatedKiB": 14170748,
+  "availableKiBAfter": 879582396,
+  "availableDeltaCaveat": "Observed same-volume free-space delta; APFS shared blocks and concurrent activity may affect it.",
+  "observedAvailableDeltaKiB": 13142964,
+  "postcheck": {
+    "at": "2026-10-31T11:23:13.791716+08:00",
+    "indexedEduPiApplications": [
+      "/Applications/EduPi.app"
+    ],
+    "existingRegisteredEduPiAppPaths": [
+      "/Applications/EduPi.app",
+      "/Applications/EduPi.app/Contents/Resources/resources/Pi Agent Server.app"
+    ],
+    "allRemovedTargetsAbsent": true,
+    "currentAppVersion": "0.3.94",
+    "currentAppBinarySha256": "3a12349c662d41cf73e204eb935a62085bd3fca0c1afb2f2d6012ee7c95366cf",
+    "updateInstallationPerformed": false,
+    "guiOperated": false,
+    "teacherContentsOrCredentialsRead": false
+  }
+}
