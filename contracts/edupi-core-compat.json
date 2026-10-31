@@ -6,10 +6,10 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "2a0016a4f9499c97e705fd8d4b28acdbc49d2d91",
+    "core_commit": "cb28c87f1557e7daaf94c0f3f5ac74a9a1c8deb0",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:5e333c1926aa088d87407d4708f404d2a7789bc0dd372babca79ce957ed1e045",
-    "runtime_component_manifest_hash": "sha256:c25b32dcc6ac6baf47783b12881dd9c607257189fd369b22c32db3eabb5221b3",
+    "component_manifest_hash": "sha256:23c403715e04e35967f6032e17b00930b79d03ef4e57abf330e49e36bbe35ff3",
+    "runtime_component_manifest_hash": "sha256:dae471f045ded35088434616663e36146931fa8869dda16c971976032c6130b8",
     "runtime_schema_hash": "sha256:79b9d2af1de039967f53f5ffdbdeb0d7faed4c7b8122cac307086c485d17ef4b"
   },
   "contract_identities": [
@@ -257,5 +257,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/400",
     "https://github.com/PIGU-PPPgu/edupi/pull/417"
   ],
-  "change_note": "macOS 0.3.95 candidate pairs merged Core main 2a0016a4 with PR #416, #400 and #417. Owner-only source proof remains read-only; G4 review_task can modify current next-lesson adjustments and managed route-use is not claimed without a receipt. Runtime schema and both component manifests are pinned. Bridge v1.1 still supports 12 commands and education_workspace only; eight dormant commands and two projections remain unsupported. Public feed and external-send policy remain unchanged."
+  "change_note": "Next source pairing targets Core main cb28c87f after the fixed macOS 0.3.95 signed candidate. Core's dream and DingTalk timeout fixes do not change Bridge v1.1 or Runtime schema; the bundled DingTalk change updates both component identities. Owner-only source proof stays read-only; G4 review_task remains the sole current adjustment review path. Twelve commands and education_workspace remain supported; eight dormant commands and two projections remain unsupported. The signed 0.3.95 assets and public feed are unchanged."
 }
