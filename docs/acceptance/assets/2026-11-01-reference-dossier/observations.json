@@ -1,0 +1,79 @@
+{
+  "date": "2026-11-01",
+  "browser": "Codex in-app browser",
+  "url": "http://127.0.0.1:30147/?edupi=1&view=homeroom&student=synthetic-student-0",
+  "syntheticOnly": true,
+  "originalApplicationNotOperated": true,
+  "finalDom": {
+    "avatar": 1254,
+    "coverage": "50%",
+    "main": {
+      "scroll": 1064,
+      "width": 1064
+    },
+    "offset": "0px",
+    "opacity": "1",
+    "viewport": {
+      "height": 720,
+      "width": 1280
+    }
+  },
+  "motion": {
+    "rangeSwitch": "8w to6m recalculated dates and path",
+    "initialStrokeDashoffset": "0.938439px",
+    "finalStrokeDashoffset": "0px",
+    "keyboardEnd": "2026年11月，0条记录",
+    "pointerHover": "2026年10月，10条记录",
+    "reducedMotion": {
+      "line": "none",
+      "fill": "none",
+      "bar": "none",
+      "offset": "0px"
+    },
+    "emulatedMediaRestored": true
+  },
+  "table": {
+    "resolvedFilterRows": 1,
+    "expandedRecordedDetail": true,
+    "csvDownloadMatchesSelectedRow": true,
+    "testDownloadRemoved": true,
+    "studentSwitchResetsFilter": "all",
+    "emptyStudentCoverage": "—",
+    "emptyStudentCurves": 0,
+    "class703ResolvedRows": 1,
+    "class704ResolvedEmpty": true
+  },
+  "responsive": [
+    {
+      "width": 320,
+      "mainClient": 312,
+      "mainScroll": 312,
+      "tableClient": 276,
+      "tableScroll": 276,
+      "primaryVisible": true
+    },
+    {
+      "width": 768,
+      "mainClient": 760,
+      "mainScroll": 760
+    },
+    {
+      "width": 1024,
+      "mainClient": 820,
+      "mainScroll": 820
+    }
+  ],
+  "viewportOverrideReset": true,
+  "cache": {
+    "initialization": "Old cached Next resources produced script/slots errors; passing interactions followed scoped preview cache bypass.",
+    "serviceWorkerBypassForThisPreviewTab": true,
+    "httpCacheDisabled": false,
+    "unsupportedStorageClearNotExecuted": true
+  },
+  "unverified": [
+    "native installed build",
+    "new Core-backed write or restore",
+    "automatic updater",
+    "source screenshot motion timing (static reference only)"
+  ]
+}

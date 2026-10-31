@@ -1,43 +1,43 @@
-# EduPi desktop chrome and icon rail — design QA
-
-- Source visual truth: user-attached `codex-clipboard-53c28811-ad08-469b-b3cf-9d5de6fbd465.png` (session path intentionally omitted; 2880 × 1800 px).
-- Expanded implementation: `/tmp/edupi-expanded-qa.png` (1440 × 900 px).
-- Collapsed implementation: `/tmp/edupi-collapsed-qa.png` (1440 × 900 px).
-- Combined comparison: `/tmp/edupi-design-qa-comparison.png` (source normalized above expanded and collapsed implementations).
-- CSS viewport: 1440 × 900.
-- Density normalization: the 2× source was downsampled from 2880 × 1800 to 1440 × 900; implementation captures were 1× at the same CSS size.
-- State: light theme, AI 协作, expanded and collapsed primary navigation.
-
-**Findings**
-
-- No actionable P0/P1/P2 differences remain.
-- The expanded rail preserves the source hierarchy, 220 px track, typography, neutral palette, borders, session sidebar and main composer placement.
-- The collapsed state now uses a conventional 58 px icon rail. All 11 module buttons remain visible; active state, pending-review badge, activity indicator, tutorial and management controls remain available. Labels are hidden visually and retained through titles and accessible names.
-- Packaged desktop mode adds a separate 28 px first grid row carrying the existing Tauri drag-region contract. It participates in layout rather than covering buttons with an absolute overlay.
-
-**Required Fidelity Surfaces**
-
-- Fonts and typography: unchanged from the source-aligned EduPi system stack; weights, truncation and hierarchy remain stable.
-- Spacing and layout rhythm: expanded proportions are unchanged. The collapsed 58 px rail uses centered 40 px controls and consistent vertical spacing. Desktop-only content begins below the new 28 px drag row.
-- Colors and tokens: uses the existing `--ep-*` tokens; no new palette, gradient or shadow system was introduced.
-- Image and icon quality: no raster assets were required. Existing product navigation icons are reused at their authored size; no replacement placeholders were introduced.
-- Copy and content: module names and teacher content are unchanged. Collapsed labels move into native title/ARIA affordances instead of being deleted.
-
-**Interaction Evidence**
-
-- Collapse: 220 px → 58 px.
-- Expand: 58 px → 220 px.
-- Collapsed module icons: 11/11 visible.
-- Browser console: zero errors and warnings.
-- Desktop drag contract: `data-tauri-drag-region`, `core:window:allow-start-dragging`, and packaged-app build are all verified. Automated physical window movement was unavailable because macOS did not expose the EduPi window to the accessibility driver during this run.
-
-**Comparison History**
-
-1. Earlier P1: collapsing reduced the rail to 22 px and hid every module. Fixed with the persistent 58 px icon rail; post-fix capture shows all navigation icons and utilities.
-2. Earlier P1: EduPi mode hid AppShell's normal top bar and therefore exposed no drag surface. Fixed with the desktop-only 28 px grid row; controls are shifted below it rather than occluded.
-
-**Follow-up Polish**
-
-- P3: the expand/collapse control displays the normal focus ring immediately after keyboard or automated activation. This is intentional accessibility feedback and disappears when focus moves.
+# 档案参考复刻验收
 
 final result: passed
+
+## 对比对象
+
+- 源图：用户本轮附件 `codex-clipboard-2da47192-ebfb-45ed-a4bf-34149e96e58a.png`，本机原路径 `/var/folders/xk/qmn_r8g93ljb7b5vqzq3rd040000gn/T/codex-clipboard-2da47192-ebfb-45ed-a4bf-34149e96e58a.png`。选取上半张档案界面，原图1242×1660；不将参考图中的患者资料像素提交到仓库。
+- 实现：`http://127.0.0.1:30147/?edupi=1&view=homeroom&student=synthetic-student-0`，Codex in-app browser，浅色、桌面1280×720、实际CSS像素截图。实现代码 `1b95d923f23a4881526d3d9ca3f97aa2d265aed0`。
+- 全视图：本机忽略目录 `output/design-qa/2026-11-01-reference-dossier/comparison-full.png`。源界面裁剪165,257,914×638，归一为992×692；实现截图裁剪244,32,992×688，下方补4px空白。两图放入同一2016×724比较画布后目视核对，未把分别查看两图当并排比较。
+- 图表近景：同目录 `comparison-charts.png`，源图589×205归一为660×230，实现660×234，同一1344×266画布比较。实现独立截图见[最终学生页](docs/acceptance/assets/2026-11-01-reference-dossier/student-final.jpg)与[班级页](docs/acceptance/assets/2026-11-01-reference-dossier/class-final.jpg)。
+
+## 比较与修正
+
+| 轮次 | 发现 | 修正及复验 |
+| --- | --- | --- |
+| 初轮 | P1：上一版纵向档案卡片没有参考图的双图表与记录表结构 | 主列改为双图表、紧凑记录表，人物和活动记录形成独立右栏；功能明细移入可操作的资料页 |
+| 第二轮 | P2：右栏起点偏低、默认人物过大；向上调整后标题又被全宽工具栏遮挡 | 右栏上移68px，人物缩为174px；顶部工具栏限定左列660px。最终右栏宽300px、标题顶52px，姓名、图表与栏顶均可见 |
+| 第三轮 | P2：表格与图表间距过大，首行较参考明显下移 | 图表后距8px，表头46px，记录行60px并顶部对齐；完成态重新截图并并排比较 |
+| 取证修正 | 一次截图发生在淡入早期，不能作为完成态 | 重新确认页面opacity=1、所有行与按钮opacity=1、曲线offset=0后保存最终截图；保留早期帧作动效记录，不据此通过完成态 |
+
+当前没有未处理的P0／P1／P2视觉问题。源图的医疗内容、英文品牌及人物身份按EduPi业务替换，原生导航框架保留；没有把药物依从率、病情或健康分数移植成学生能力分。默认人物与教室为生成插画，人物有默认标记。此处通过的是参考布局、视觉层级和已实现交互，不能声称静态图中未知的原始动效时序已逐帧还原。
+
+## 五项视觉核对
+
+- 字体：保留本机中文无衬线字体，大姓名32–42px，图表标题15px，记录正文13px；中文内容不套英文虚假字距，日期和坐标数值可读。标题层级为h1姓名、h2主要内容、h3右栏小节。
+- 布局：左主区约三分之二、右栏300px，两张并列浅灰图卡、下方记录表；缩减旧圆角卡片与重复边框。320px下图表单列，主要AI动作留在姓名旁，记录文字换行。
+- 颜色：白底与轻灰面、薄网格、黑色曲线、薄荷色进度、珊瑚色动作与读数标记，沿用主题变量。保留暗色能力，未改系统外观。
+- 图片：两张真实透明位图，1254×1254，WebP展示、PNG回退，contain且不拉伸；未用文字圆圈、CSS绘图或整页位图代替人物。图表为真正数据驱动的SVG交互。
+- 文案：只保留对象名称、数据范围与操作。曲线统计已有档案记录数，比例统计问题解决或名单档案覆盖；缺日期待核，零分母为“—”，不以假数据填图。
+
+## 交互和运行证据
+
+范围选择实际重算8周／6月／全部；绘入offset从`0.938439px`到`0px`。End键读11月0条，真实鼠标移动悬停读10月10条；减少动态效果下曲线、填充、柱图animation均为none，offset为0。媒体模拟和临时viewport覆盖已恢复。
+
+记录筛选和展开可操作，实际下载CSV仅含已筛选记录；该合成下载已验证后从Downloads移除。703班已解决记录1条，切704为空；换学生后筛选重置all，无数据人物页显示“—”且不画假曲线。320px表格client／scroll均276px、主区均312px；768px主区均760px、1024px均820px，无横向溢出。窄屏稳定展开状态已目视检查，文字、日期、状态和展开按钮未裁切。[完整观测](docs/acceptance/assets/2026-11-01-reference-dossier/observations.json)。
+
+初始旧预览缓存导致Next脚本／slots错误；仅对当前预览tab旁路Service Worker后完成上述通过阶段，没有清空浏览器存储或修改正式App。预览保留该局部旁路，HTTP cacheDisabled已恢复false。通过阶段未新增页面渲染错误。数据均为合成资料，API代理不调用真实Core或模型。
+
+## 交付与边界
+
+88项定向测试、类型、目标lint、3份CSS解析及diff检查通过。源码审查提出的跨日日期冻结、班级已解决列表缺失均已修补并回归；学生表格按ID重置选择状态。
+
+本地预览保留供用户检查，[保留目录与清理条件](docs/acceptance/assets/2026-11-01-reference-dossier/preview-retention.json)已记账；不删除在用`.next`或另一任务的30144服务。未新建安装包、未操作正常EduPi、未验收真实Core写入／恢复或自动升级。P3后续项仅为语言与实际数据造成的细小排版差异；原截图的动画时间无法从静态源确认。
