@@ -25,14 +25,39 @@ const parameters = Type.Object({
 type RecallParameters = Static<typeof parameters>;
 type Entry = { id: string; category: typeof categories[number]; content: string; source_fingerprint: string;
   student_id: string | null; student: string | null; managed_method: boolean };
-type Recall = { status: "current" | "held"; reason_code: string | null; entries: Entry[] };
+type SourceProof = { status: "verified" | "held"; case_status: "bound" | "held"; reason_code: string | null };
+type Recall = { status: "current" | "held"; reason_code: string | null; entries: Entry[]; source_proof?: SourceProof };
 type Turn = { manager: SessionManager; sessionId: string; clientRequestId: string; text: string; active: boolean; captured: boolean;
   sourceNonce: string; startingLeafId: string | null; startingUserId: string | null; boundUserId: string | null; boundUserHash: string | null };
 type Dependencies = {
   disabled?: () => boolean;
   readOutbox?: typeof readEduPiPromptOutbox;
-  core?: () => Promise<{ rootRef: string; call: (request: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown> }>;
+  core?: () => Promise<{ rootRef: string; call: (request: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown>;
+    proofCall?: (request: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown> }>;
 };
+
+function sourceProof(value: unknown, fingerprint: string): SourceProof {
+  const envelope = value as { ok?: unknown; result?: Record<string, unknown> } | null;
+  const result = envelope?.ok === true ? envelope.result : null;
+  const unavailable = { status: "held" as const, case_status: "held" as const, reason_code: "proof_unavailable" };
+  if (!result || Object.keys(result).sort().join(",") !== "case_reason_code,case_status,external_send,model_execute,read_only,reason_code,source_fingerprint,status,version,work_case_ref"
+    || result.version !== 1 || result.source_fingerprint !== fingerprint || result.read_only !== true
+    || result.external_send !== false || result.model_execute !== false) return unavailable;
+  const bound = result.status === "verified" && result.reason_code === null && result.case_status === "bound"
+    && result.case_reason_code === null && typeof result.work_case_ref === "string"
+    && result.work_case_ref.length > 0 && result.work_case_ref.length <= 160;
+  const unbound = result.status === "verified" && result.reason_code === null && result.case_status === "held"
+    && typeof result.case_reason_code === "string" && result.case_reason_code.length > 0
+    && result.case_reason_code.length <= 80 && result.work_case_ref === null;
+  const held = result.status === "held" && typeof result.reason_code === "string" && result.case_status === "held"
+    && result.reason_code.length > 0 && result.reason_code.length <= 80
+    && typeof result.case_reason_code === "string" && result.case_reason_code.length > 0
+    && result.case_reason_code.length <= 80 && result.work_case_ref === null;
+  if (!bound && !unbound && !held) return unavailable;
+  return { status: result.status as SourceProof["status"], case_status: result.case_status as SourceProof["case_status"],
+    reason_code: result.status === "held" ? result.reason_code as string : result.case_status === "held"
+      ? result.case_reason_code as string : null };
+}
 
 function response(value: unknown, identity: Record<string, unknown>, queried: boolean): Recall {
   const envelope = value as { ok?: unknown; result?: Record<string, unknown> } | null;
@@ -90,7 +115,8 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
     const health = await host.call("health", null);
     const rootRef = (health.result as { data_root_fingerprint?: unknown } | undefined)?.data_root_fingerprint;
     if (health.ok !== true || typeof rootRef !== "string" || !/^sha256:[a-f0-9]{64}$/u.test(rootRef)) throw new Error("recall_unavailable");
-    return { rootRef, call: (request: Record<string, unknown>, signal?: AbortSignal) => host.callOwnerControl("owner_memory_recall", request, signal) };
+    return { rootRef, call: (request: Record<string, unknown>, signal?: AbortSignal) => host.callOwnerControl("owner_memory_recall", request, signal),
+      proofCall: (request: Record<string, unknown>, signal?: AbortSignal) => host.callOwnerControl("owner_recall_source_proof_read", request, signal) };
   });
 
   function sourceCurrent(turn: Turn, manager: unknown): boolean {
@@ -154,7 +180,21 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
         ...(params.student_id ? { student_id: params.student_id } : {}), ...(memoryIds?.length ? { memory_ids: memoryIds } : {}),
         limit: params.limit ?? 30 }, signal);
       if (!current(turn, manager)) return denied();
-      return response(value, identity, Boolean(params.query));
+      const result = response(value, identity, Boolean(params.query));
+      // This is a provenance hint for one displayed result, never an answer
+      // support decision or a permit to combine sources. Keep private refs in Core.
+      if (!params.query || result.entries.length !== 1 || !host.proofCall) return result;
+      const entry = result.entries[0];
+      let proof: SourceProof;
+      try {
+        const answer = await host.proofCall({ root_ref: host.rootRef, expected_owner_id: binding.ownerId,
+          query_message_ref: binding.messageRef!,
+          ...(entry.student_id ? { student_id: entry.student_id } : {}), memory_id: entry.id,
+          category: entry.category, source_fingerprint: entry.source_fingerprint }, signal);
+        proof = sourceProof(answer, entry.source_fingerprint);
+      } catch { proof = { status: "held", case_status: "held", reason_code: "proof_unavailable" }; }
+      if (!current(turn, manager)) return denied();
+      return { ...result, source_proof: proof };
     } catch { return denied("recall_unavailable"); }
   }
 
