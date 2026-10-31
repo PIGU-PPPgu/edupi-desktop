@@ -37,6 +37,13 @@ R03 旧版回滚的首次脚本返回失败：旧 Core `00d05a1` 无法读取新
 
 开发模式在两个隔离 localhost 端口出现 Next 客户端 `OuterLayoutRouter` 的 `slots` 错误，页面停在加载态；同一签名包内的生产服务器在内置浏览器成功打开并完成上述 G4 操作。开发模式问题单列，不用它否定已通过的生产包内流程。
 
+## 11 月 1 日续验
+
+- R03 [Core PR #423](https://github.com/PIGU-PPPgu/edupi/pull/423) 精确 [CI run 41222808413](https://github.com/PIGU-PPPgu/edupi/actions/runs/41222808413) 成功，合入 Main `62600c32b408578953b7332c9db79d49f973f5c7`，合并树与受测 head 相同。旧版直接运行新版 owner gate 的结果是预期拒绝；合成业务文件和 Durable 库不变，新版重开与预升级备份恢复通过。签名 App 回滚仍未验。
+- Core `cb28c87f` 的 `npm run test:schedule-upload-dedupe` 退出 0：规范日程、同源副本去重、改期与冲突、ICS/Word/PDF/PNG/JPEG 的当前来源与教师确认、来源字节漂移和撤销后拒旧回执均通过。PDF/PNG/JPEG 与 DOCX 的合成公开 Owner 路径各证实选定第 6 份材料后生成 4 份备课草稿、审核/反馈回读与重启不重生。测试没有读取真实校历或证明任意学校官方源及时更新。
+- 同 Core 的 `npm run test:teacher-feedback` 退出 0：六领域反馈目标、纠正链、漏报、重启、合成记录排除、同意门、脱敏账本、90 天保留与擦除回归均通过。原生反馈表单仍未在 0.3.95 安装版操作，云端接收 API 仍未提供。
+- 真实 `zai-coding-cn/glm-5.3-flash` 固定套餐合成数学首测最多 7 次且实际预留 7 次，0 重试、0 换供应商。负数题与分数崩溃恢复各生成 4 份校验产物；正数题最后解正确但中间等式错误，Core 以 `inequivalent_step` 拒绝、没有 ready 产物。因此这轮内容质量为 **2/3 场景通过**，不能改写为全过。[Core PR #424](https://github.com/PIGU-PPPgu/edupi/pull/424) 已将正确最终解下的步骤纠正交给有界 BigInt 算法，原失败模型输出离线重放后 4 份产物通过数学/来源校验，额外 provider 调用 0；该 PR 的精确 CI、合并及修后真实模型/安装版仍待验证。私有完整模型回执在 `~/` 对应系统临时目录 `edupi-g1-real-model-ZZbIeH/evidence.json`；仓库只记脱敏摘要。
+
 ## 未验证
 
 - 0.3.95 唯一 macOS App 原生安装、通知点击、升级及回滚、真实资料保持；正常 0.3.94 仍在用，按仓库隔离门不启动第二实例。
