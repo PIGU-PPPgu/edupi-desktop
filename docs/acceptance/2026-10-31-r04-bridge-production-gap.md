@@ -1,6 +1,6 @@
 # R04 Core 与 Desktop 生产合同缺口
 
-2026-10-31，Core PR #416／#417 与 Desktop 0.3.95 候选配对中。当前 Core Bridge v1.1 生产能力为 12 条命令和 `education_workspace` 投影；下列八条虽有 schema，Core `edupi_bridge_command.mjs` 仍返回 `unsupported_command`，不能只改兼容清单。#417 已通过现有 `review_task modify` 修订 G4 当前下次课调整草稿，不新增独立调整审核权威；教学方法 `route_verified` 无实际路由回执时保持 false。
+2026-10-31，Core PR #416／#417 已合至 main `2a0016a4`，Desktop 0.3.95 候选正在配对。当前 Core Bridge v1.1 生产能力为 12 条命令和 `education_workspace` 投影；下列八条虽有 schema，Core `edupi_bridge_command.mjs` 仍返回 `unsupported_command`，不能只改兼容清单。#417 已通过现有 `review_task modify` 修订 G4 当前下次课调整草稿，不新增独立调整审核权威；教学方法 `route_verified` 无实际路由回执时保持 false。
 
 | 预声明命令 | 缺少的生产条件 |
 | --- | --- |

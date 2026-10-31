@@ -6,7 +6,7 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "ad12d12adc59a32084ab1c721c65d64c36b50a72",
+    "core_commit": "2a0016a4f9499c97e705fd8d4b28acdbc49d2d91",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
     "component_manifest_hash": "sha256:5e333c1926aa088d87407d4708f404d2a7789bc0dd372babca79ce957ed1e045",
     "runtime_component_manifest_hash": "sha256:c25b32dcc6ac6baf47783b12881dd9c607257189fd369b22c32db3eabb5221b3",
@@ -257,5 +257,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/400",
     "https://github.com/PIGU-PPPgu/edupi/pull/417"
   ],
-  "change_note": "macOS 0.3.95 candidate stages Core PR #416, merged #400 and PR #417 exact tree pending #417 main merge. Owner-only source proof remains read-only; G4 review_task can modify current next-lesson adjustments and managed route-use is not claimed without a receipt. Runtime schema and both component manifests are pinned. Bridge v1.1 still supports 12 commands and education_workspace only; eight dormant commands and two projections remain unsupported. Public feed and external-send policy remain unchanged."
+  "change_note": "macOS 0.3.95 candidate pairs merged Core main 2a0016a4 with PR #416, #400 and #417. Owner-only source proof remains read-only; G4 review_task can modify current next-lesson adjustments and managed route-use is not claimed without a receipt. Runtime schema and both component manifests are pinned. Bridge v1.1 still supports 12 commands and education_workspace only; eight dormant commands and two projections remain unsupported. Public feed and external-send policy remain unchanged."
 }
