@@ -855,6 +855,10 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
     : null;
   const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
   const isError = result?.isError ?? false;
+  const sourceProof = block.toolName === "memory_recall"
+    ? (result?.details as { source_proof?: { status?: unknown } } | undefined)?.source_proof : undefined;
+  const sourceProofLabel = sourceProof?.status === "verified" ? "来源已核验"
+    : sourceProof?.status === "held" ? "来源待核验" : null;
 
   return (
     <div
@@ -894,6 +898,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
           {getToolPreview(block)}
         </span>
+        {sourceProofLabel && <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>{sourceProofLabel}</span>}
         {duration !== undefined && (
           <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
         )}

@@ -12,15 +12,25 @@ const { MessageView, replaceUserMessageText } = await jiti.import("./MessageView
 const { createComposerContext, composeTeacherMessage } = await jiti.import("../lib/edupi-composer-context.ts");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 
-function renderMessage(message) {
+function renderMessage(message, toolResults) {
   return renderToStaticMarkup(
     React.createElement(
       I18nProvider,
       null,
-      React.createElement(MessageView, { message }),
+      React.createElement(MessageView, { message, toolResults }),
     ),
   );
 }
+
+test("shows Core source provenance without claiming answer support", () => {
+  const message = { role: "assistant", provider: "synthetic", model: "synthetic", stopReason: "toolUse",
+    content: [{ type: "toolCall", toolCallId: "recall-1", toolName: "memory_recall", input: { query: "本周安排" } }] };
+  const result = status => ({ role: "toolResult", toolCallId: "recall-1", toolName: "memory_recall",
+    content: [{ type: "text", text: "当前来源" }], details: { source_proof: { status } } });
+  assert.match(renderMessage(message, new Map([["recall-1", result("verified")]])), /来源已核验/);
+  assert.match(renderMessage(message, new Map([["recall-1", result("held")]])), /来源待核验/);
+  assert.doesNotMatch(renderMessage(message, new Map([["recall-1", result("unknown")]])), /来源已核验|来源待核验/);
+});
 
 const COMPLETE_SKILL_EXPANSION = `<skill name="review" location="/skills/review/SKILL.md">
 References are relative to /skills/review.
