@@ -1,0 +1,27 @@
+{
+  "sourceBase": "78a08128fa4eb5537bf1436984a625024b48759f",
+  "branch": "codex/class-dossier-redesign-20261031",
+  "environment": "macOS arm64 / Node22.23.1 / Next16.4.3 / Chrome via Playwright",
+  "focusedRegression": {
+    "command": "node --test selected student UI/identity/events/focus/pagination/profile-history/class aggregation/drawer/disclosure/fork-extractions files",
+    "tests": 76,
+    "pass": 76,
+    "fail": 0,
+    "skip": 0
+  },
+  "typecheck": {
+    "command": "node_modules/.bin/tsc --noEmit",
+    "exitCode": 0
+  },
+  "eslint": {
+    "command": "node_modules/.bin/eslint components/EduPiStudentWorkspace.tsx components/EduPiClassDossier.tsx lib/edupi-class-dossier.ts lib/edupi-student-pagination.ts",
+    "exitCode": 0
+  },
+  "review": "Fresh read-only review found unassigned-filter,scroll-return,and trimmed-class membership issues; corrected and regression covered. Reviewer final: no remaining definiteP1/P2.",
+  "originalApplication": "Not launched,updated,or interacted with during this change.",
+  "stylesheetParsing": {
+    "files": 5,
+    "result": "passed"
+  },
+  "codeCommit": "609150cc4c7f0287e232cdeb5c27fb94ef02e38b"
+}

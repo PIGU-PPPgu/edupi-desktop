@@ -1,0 +1,24 @@
+{
+  "at": "2026-11-01T00:14:09.336840+08:00",
+  "removed": [
+    "task checkout .next",
+    "task-owned isolated temporary runtime root"
+  ],
+  "allocatedKiB": 405184,
+  "availableKiBBefore": 859551720,
+  "availableKiBAfter": 859956904,
+  "observedAvailableDeltaKiB": 405184,
+  "listener30144": false,
+  "openHandles": 0,
+  "trackedFiles": 0,
+  "nextGitIgnored": true,
+  "allRemovedPathsAbsent": true,
+  "retained": [
+    "source and lockfiles",
+    "in-use node_modules",
+    "QA observations and screenshots",
+    "normal installed EduPi app",
+    "teacher data and configuration"
+  ],
+  "normalAppNotOperated": true
+}

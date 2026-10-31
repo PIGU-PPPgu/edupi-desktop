@@ -1,8 +1,12 @@
 import { studentRecordKey, studentRecordName } from "./edupi-student-roster-model";
+import { UNASSIGNED_CLASS_FILTER } from "./edupi-class-dossier";
 
 export function studentDirectoryPage(students: Record<string, unknown>[], classFilter: string, query: string, requestedPage: number) {
   const filtered = students.map((student, index) => ({ student, key: studentRecordKey(student, index) }))
-    .filter(({ student }) => !classFilter || student.class_name === classFilter)
+    .filter(({ student }) => {
+      const className = typeof student.class_name === "string" ? student.class_name.trim() : "";
+      return classFilter === UNASSIGNED_CLASS_FILTER ? !className : !classFilter || className === classFilter;
+    })
     .filter(({ student }) => !query || JSON.stringify(student).toLocaleLowerCase().includes(query.toLocaleLowerCase()))
     .sort((left, right) => studentRecordName(left.student).localeCompare(studentRecordName(right.student), "zh-CN"));
   const pages = Math.max(1, Math.ceil(filtered.length / 24));

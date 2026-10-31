@@ -26,9 +26,11 @@ test("database pagination uses named arrow controls", () => {
   assert.doesNotMatch(html, />下一页</);
 });
 
-test("student and material drawers use icon actions for direct operations", async () => {
+test("student full pages and material drawers preserve direct operations", async () => {
   const [panel, students, materials, metadata, css] = await Promise.all([read("./EduPiEducationPanel.tsx"), read("./EduPiStudentWorkspace.tsx"), read("./EduPiMaterialsWorkspace.tsx"), read("./EduPiMaterialMetadataEditor.tsx"), read("../app/edupi-workbench.css")]);
-  for (const label of ["手动修改", "AI 协作", "删除学生档案", "关闭学生档案"]) assert.match(students, new RegExp(`label=(?:\\{[^}]*\\}|\")?[^\\n]*${label}`));
+  for (const label of ["手动修改", "删除学生档案"]) assert.match(students, new RegExp(`label=(?:\\{[^}]*\\}|\")?[^\\n]*${label}`));
+  assert.match(students, /onClick=\{openStudentAgent\}>AI 协作/);
+  assert.match(students, /onClick=\{closeStudent\}>←/);
   assert.doesNotMatch(students, /icon="records"/);
   for (const label of ["关闭材料详情", "预览材料", "打开文件", "显示所在文件夹", "打开关联任务", "删除材料", "补充或修订材料"]) assert.match(materials, new RegExp(label));
   assert.match(metadata, /EduPiIconButton[^>]+label="修改材料信息"/);

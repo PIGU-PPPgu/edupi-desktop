@@ -11,15 +11,15 @@ const { buildEducationContract } = await jiti.import("../lib/edupi-education-con
 
 const student = { student_id: "synthetic-student-a", name: "合成学生甲", class_name: "测试班", updated_at: "2026-10-07T00:00:00Z", error_patterns: [], trajectory: [] };
 const createData = () => buildEducationContract({ workspace: "/tmp/edupi-student-synthetic", students: [student] });
-const render = (data, query = "") => renderToStaticMarkup(React.createElement(EduPiStudentWorkspace, { mode: "homeroom", data, context: null, query, selectedStudentId: student.student_id, onStudent() {}, onEducation() {}, onTask() {}, onStartAgent() {}, async onDeleteEntity() { return true; } }));
+const render = (data, query = "", selectedStudentId = student.student_id) => renderToStaticMarkup(React.createElement(EduPiStudentWorkspace, { mode: "homeroom", data, context: null, query, selectedStudentId, onStudent() {}, onEducation() {}, onTask() {}, onStartAgent() {}, async onDeleteEntity() { return true; } }));
 
 test("empty roster has one import action and a filtered roster remains truthful", () => {
   const empty = buildEducationContract({ workspace: "/tmp/edupi-student-synthetic", students: [] });
-  const emptyHtml = render(empty);
+  const emptyHtml = render(empty, "", null);
   assert.doesNotMatch(emptyHtml, />导入名单<\/button>/u);
   assert.match(emptyHtml, />导入学生名单<\/button>/u);
 
-  const filteredHtml = render(createData(), "未匹配的合成名字");
+  const filteredHtml = render(createData(), "未匹配的合成名字", null);
   assert.match(filteredHtml, /当前筛选无学生/u);
   assert.match(filteredHtml, />导入名单<\/button>/u);
   assert.doesNotMatch(filteredHtml, />导入学生名单<\/button>/u);

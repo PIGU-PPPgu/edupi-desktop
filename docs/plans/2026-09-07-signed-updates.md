@@ -1,5 +1,7 @@
 # 自动下载安装
 
+2026-11-01 R12／R17 档案UI源码增量 `609150cc` 已完成隔离开发验收，班级首页与全页学生档案的[预览和范围](../acceptance/2026-11-01-class-dossier.md)已记录；没有新安装包、原生升级或公开资产变化，已安装／公开 `.94` 的签名身份仍按下方记录。用户自行更新核验的安排保持，本轮没有操作正常 App。端口30144的开发服务及隔离浏览器已停，确认无句柄／无跟踪后删除本轮`.next`和隔离临时根，分配及空闲实测增量均为`405184 KiB`；截图、源文件与在用依赖保留。后续安装验收需使用新签名版本，不能把开发预览记成`.94`已安装的行为。
+
 2026-11-01 R04 下一源码配对已合、安装未开始：Desktop [PR437](https://github.com/PIGU-PPPgu/edupi-desktop/pull/437) 普通合并 `8d8e6720`，与经 Mac 本机完整测试的 head `a6ac5807` 同树；固定 Core main `cb28c87f` 的精确CI成功。Desktop 对该合并提交没有远端 check-runs/statuses；本机 `npm test` 3518通过／15条件跳过／0失败，真实进程／SDK／打包闭包与C1 E2的证据见[原 R04 合同账本](../acceptance/2026-10-31-r04-bridge-production-gap.md#r04-接续计划)。此次没有新签名 run、Release 或安装。下方 `.95` Draft 资产依旧是旧 Core `2a0016a4`，唯一正常 App、公开 `.94` 预发布及 feed `.70` 均未切换，不能将源码配对结果写作 `.95` 安装通过。
 
 2026-10-31 R04 新 Core 源码配对（不改变下方 `.95` 签名资产）：Desktop 原分支从已合 main `78a08128` 出发，按 Core `cb28c87f`／[CI41204099294](https://github.com/PIGU-PPPgu/edupi/actions/runs/41204099294) 更新下一源码候选的固定身份与双组件清单；Bridge v1.1、Runtime schema和支持集不变。本机真实 Core host、C1 E2、Pi SDK 召回、打包闭包、类型、发布元数据及 lint 的精确结果见[原 R04 合同账本](../acceptance/2026-10-31-r04-bridge-production-gap.md#r04-接续计划)。此处状态仅为源码定向验收通过、PR／Desktop CI 待执行；`.95` Draft tag `3edfff1d` 仍带 Core `2a0016a4`，公开 `.94` 预发布、feed `.70`、唯一正常安装 App 和真实资料均未动。新固定身份如需安装验证，必须另有独立签名候选，不用 `.95` 原包验收替代。

@@ -10,6 +10,7 @@ const roster = await jiti.import("../lib/edupi-student-roster-model.ts");
 const pagination = await jiti.import("../lib/edupi-student-pagination.ts");
 const graph = await jiti.import("../lib/edupi-student-graph.ts");
 const profileEdit = await jiti.import("../lib/edupi-student-profile-edit.ts");
+const classDossier = await jiti.import("../lib/edupi-class-dossier.ts");
 const compile = file => ts.transpileModule(fs.readFileSync(new URL(file, import.meta.url), "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
@@ -72,16 +73,16 @@ function mount(code, name, props, modules, globals = {}, commit = () => {}) {
 
 const students = () => Array.from({ length: 61 }, (_, index) => ({ student_id: `student-${index}`, name: `学生${String(index).padStart(2, "0")}`, class_name: index < 31 ? "703" : "704", error_patterns: [], trajectory: [], traits: [], updated_at: "2026-10-07T00:00:00Z" }));
 function workspace({ selectedStudentId = null, rows = students(), query = "", globals = {}, commit } = {}) {
-  const props = { mode: "homeroom", data: { students: rows, calendar: [], tasks: [], continuity: { familyContacts: [], memories: [] }, capabilities: { entityDelete: { enabled: false, targetKinds: [] } } }, context: null, query, selectedStudentId, onStudent() {}, onEducation() {}, onTask() {}, onStartAgent() {}, onDeleteEntity() {} };
+  const props = { mode: "students", data: { students: rows, calendar: [], tasks: [], continuity: { familyContacts: [], memories: [] }, capabilities: { entityDelete: { enabled: false, targetKinds: [] } } }, context: null, query, selectedStudentId, onStudent() {}, onEducation() {}, onTask() {}, onStartAgent() {}, onDeleteEntity() {} };
   const modules = {
     "@/lib/edupi-student-roster-model": roster, "@/lib/edupi-student-pagination": pagination,
-    "@/lib/edupi-student-profile-edit": profileEdit, "@/lib/edupi-student-profile-prompt": {},
+    "@/lib/edupi-student-profile-edit": profileEdit, "@/lib/edupi-class-dossier": classDossier, "@/lib/edupi-student-profile-prompt": {},
     "@/lib/edupi-workbench": { isUserFacingMemory: () => true },
     "@/lib/edupi-student-semester": { studentSemesterRange: () => null },
     "@/hooks/useModalDismiss": { useModalDismiss: () => ({ current: null }) },
     "./EduPiActionIcon": { ...placeholder("EduPiPagination"), ...placeholder("EduPiIconButton") },
   };
-  for (const component of ["EduPiRosterPreview", "EduPiStudentEvents", "EduPiStudentFacts", "DisclosureChevron", "EduPiFamilyRecords", "EduPiStudentMemoryActions"]) modules[`./${component}`] = placeholder(component);
+  for (const component of ["EduPiRosterPreview", "EduPiStudentEvents", "EduPiStudentFacts", "DisclosureChevron", "EduPiFamilyRecords", "EduPiStudentMemoryActions", "EduPiClassDossier"]) modules[`./${component}`] = placeholder(component);
   const f = mount(workspaceCode, "EduPiStudentWorkspace", props, modules, globals, commit);
   f.render();
   return { ...f, get tree() { return f.tree; }, page: () => f.find(node => node.type.name === "EduPiPagination")?.props.page ?? 0, next() { f.find(node => node.type.name === "EduPiPagination").props.onNext(); f.render(); }, chooseClass(value) { f.find(node => node.type === "select").props.onChange({ target: { value } }); f.render(); } };
@@ -157,7 +158,7 @@ test("a failed roster preview or confirmation unlocks only an explicit retry and
 });
 
 test("manual roster paging and class filters survive a selected student's rerenders", () => {
-  const f = workspace({ selectedStudentId: "student-0" });
+  const f = workspace();
   f.next();
   assert.equal(f.page(), 1);
   f.props.data = { ...f.props.data, students: f.props.data.students.map(student => ({ ...student })) };
@@ -174,12 +175,15 @@ test("new external student selection aligns once, after asynchronous data and wh
   const f = workspace({ rows: [], selectedStudentId: "student-60" });
   f.props.data = { ...f.props.data, students: students() };
   f.render();
+  f.props.selectedStudentId = null; f.render();
   assert.equal(f.page(), 2, "selection arriving before data is aligned once its row is available");
   f.props.selectedStudentId = "student-0";
   f.render();
+  f.props.selectedStudentId = null; f.render();
   f.chooseClass("703");
   f.props.selectedStudentId = "student-60";
   f.render();
+  f.props.selectedStudentId = null; f.render();
   assert.equal(f.find(node => node.type === "select").props.value, "");
   assert.equal(f.page(), 2);
   f.props.selectedStudentId = null;
@@ -189,6 +193,7 @@ test("new external student selection aligns once, after asynchronous data and wh
   assert.equal(f.page(), 1);
   f.props.selectedStudentId = "student-60";
   f.render();
+  f.props.selectedStudentId = null; f.render();
   assert.equal(f.page(), 2, "closing and reopening the same student is a new explicit selection");
 });
 
@@ -197,6 +202,7 @@ test("roster searches remain authoritative and shrinking data clamps the current
   f.props.selectedStudentId = "student-60";
   f.render();
   assert.equal(f.props.query, "学生00");
+  f.props.selectedStudentId = null;
   f.props.query = "";
   f.render();
   assert.equal(f.page(), 0, "clearing a search does not replay an already handled selection");
@@ -219,11 +225,43 @@ test("roster rows expose one name and the all-student record toggle is absent fr
   assert.equal(f.nodes().some(node => node.props.className === "edupi-student-events-toggle"), false);
   assert.ok(f.nodes().some(node => node.type.name === "EduPiStudentEvents" && node.props.student === "学生00"));
   assert.ok(f.nodes().some(node => node.type === "button" && text(node) === "导出当前档案"));
+  f.props.selectedStudentId = null;
   f.props.query = "不存在的合成姓名";
   f.render();
   assert.ok(f.nodes().some(node => String(node.props.className || "").split(" ").includes("edupi-student-directory__no-results")
     && String(node.props.className || "").split(" ").includes("edupi-student-directory__filtered-empty") && text(node) === "当前筛选无学生"));
   assert.equal(f.nodes().some(node => node.props.className === "edupi-student-directory__empty"), false);
+});
+
+test("unassigned class membership and directory scope survive opening and returning", () => {
+  const f = workspace({rows:[{student_id:"synthetic-unassigned",name:"合成未分班学生",class_name:"   ",traits:[],trajectory:[],error_patterns:[]}]});
+  f.chooseClass(classDossier.UNASSIGNED_CLASS_FILTER);
+  assert.equal(f.nodes().filter(node => node.props.className === "edupi-student-directory__row").length,1);
+  f.props.selectedStudentId = "synthetic-unassigned"; f.render();
+  assert.equal(f.nodes().some(node => node.props.className === "edupi-student-directory__row"),false);
+  assert.equal(f.nodes().some(node => node.props.role === "dialog"),false);
+  f.props.selectedStudentId = null; f.render();
+  assert.equal(f.find(node => node.type === "select").props.value,classDossier.UNASSIGNED_CLASS_FILTER);
+  assert.equal(f.nodes().filter(node => node.props.className === "edupi-student-directory__row").length,1);
+});
+
+test("class overview can be selected after a roster search without clearing the query", () => {
+  const f = workspace({query:"学生00"}); f.props.mode="homeroom"; f.render();
+  assert.ok(f.nodes().some(node=>node.props.className==="edupi-student-directory__row"));
+  f.find(node=>node.type==="button" && text(node)==="班级档案").props.onClick(); f.render();
+  assert.ok(f.nodes().some(node=>node.type.name==="EduPiClassDossier"));
+  assert.equal(f.props.query,"学生00");
+});
+
+test("full-page entry resets scroll and returning restores the directory position", () => {
+  const dom=profileFocusDom();const f=workspace({globals:{document:dom.document},commit:dom.commit});
+  let main=f.find(node=>node.type==="main");main.props.ref.current.scrollTop=360;
+  main.props.onScroll({currentTarget:main.props.ref.current});
+  f.props.selectedStudentId="student-0";f.render();
+  assert.equal(f.find(node=>node.type==="main").props.ref.current.scrollTop,0);
+  f.find(node=>node.type==="main").props.ref.current.scrollTop=80;
+  f.props.selectedStudentId=null;f.render();
+  assert.equal(f.find(node=>node.type==="main").props.ref.current.scrollTop,360);
 });
 
 function events({ fail = false, total = { value: 40 } } = {}) {

@@ -4,19 +4,20 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("student drawer docks on wide screens and becomes an overlay on narrow screens", async () => {
-  const [student, css] = await Promise.all([read("./EduPiStudentWorkspace.tsx"), read("../app/edupi-workbench.css")]);
-  assert.match(student, /has-student-drawer/);
-  assert.match(css, /\.edupi-class-workspace\.has-student-drawer\s*\{[^}]*padding-right:\s*calc\(clamp\(400px, 34vw, 560px\) \+ 36px\)/s);
-  assert.match(css, /\.edupi-student-drawer\s*\{[^}]*position:\s*absolute;[^}]*width:\s*clamp\(400px, 34vw, 560px\)/s);
-  assert.match(css, /@media \(max-width: 1240px\)[\s\S]*\.edupi-class-workspace\.has-student-drawer\s*\{[^}]*padding-right:\s*28px/s);
-  assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.edupi-student-drawer\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*300;[^}]*width:\s*100%/s);
+test("student profiles use a full content page instead of a narrow modal drawer", async () => {
+  const [student, css] = await Promise.all([read("./EduPiStudentWorkspace.tsx"), read("../app/edupi-student-dossier.css")]);
+  assert.match(student, /className="edupi-student-dossier"/);
+  assert.match(student, /返回班级/);
+  assert.doesNotMatch(student, /role="dialog"|aria-modal="true"|has-student-drawer/);
+  assert.match(css, /\.edupi-student-dossier\s*\{[^}]*width:\s*100%/s);
+  assert.match(css, /\.edupi-student-dossier__grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
+  assert.match(css, /@container \(max-width: 620px\)/);
 });
 
 test("student profiles expose real manual replacement and global AI collaboration", async () => {
   const student = await read("./EduPiStudentWorkspace.tsx");
   assert.match(student, /icon="edit" label="手动修改"/);
-  assert.match(student, /icon="agent" label="AI 协作"/);
+  assert.match(student, /onClick=\{openStudentAgent\}>AI 协作/);
   assert.match(student, /buildStudentProfileConversationPrompt/);
   assert.match(student, /onStartAgent\(prompt, "replace"\)/);
   assert.match(student, /method: "PUT"/);

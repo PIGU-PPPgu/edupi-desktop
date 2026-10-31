@@ -19,6 +19,8 @@ import "./edupi-rhythm-review.css";
 import "./edupi-workbench.css";
 import "./edupi-student-graph.css";
 import "./edupi-student-workspace.css";
+import "./edupi-class-dossier.css";
+import "./edupi-student-dossier.css";
 import "./edupi-foreground.css";
 import "./edupi-resource-picker.css";
 import "./edupi-chat-resources.css";

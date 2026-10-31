@@ -294,25 +294,6 @@
   font-size: 13px;
 }
 
-.edupi-student-drawer .edupi-student-graph.is-empty > .edupi-student-graph__expand,
-.edupi-student-drawer .edupi-student-graph.is-empty > .edupi-graph-controls,
-.edupi-student-drawer .edupi-student-graph.is-empty > .edupi-student-graph__legend {
-  display: none;
-}
-
-.edupi-student-drawer .edupi-student-graph.is-empty > .edupi-student-graph__viewport {
-  min-height: 0;
-  border: 0;
-  background: transparent;
-  cursor: default;
-  touch-action: auto;
-}
-
-.edupi-student-drawer .edupi-student-graph.is-empty .edupi-student-graph__empty {
-  min-height: 0;
-  padding: 16px 0;
-  place-items: start;
-}
 
 @container (max-width: 520px) {
   .edupi-student-directory--list > .edupi-student-directory__columns,
