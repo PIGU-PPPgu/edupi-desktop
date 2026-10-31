@@ -172,6 +172,7 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
       const identity = { root_ref: host.rootRef, message_ref: binding.messageRef!,
         conversation_id: proactivityConversationId(binding.domain), message_id: binding.captureMessageId,
         original_text_hash: hash(turn.text.trim()) };
+      const proofDeadline = performance.now() + 15_000;
       const value = await host.call({ ...identity, expected_owner_id: binding.ownerId,
         registration: { carrier_id: binding.carrierId, plan_id: binding.planId,
           producer_epoch: binding.registration!.producerEpoch, sequence: binding.registration!.sequence },
@@ -184,10 +185,12 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
       // This is a provenance hint for one displayed result, never an answer
       // support decision or a permit to combine sources. Keep private refs in Core.
       if (!params.query || result.entries.length !== 1 || !host.proofCall) return result;
+      const proofBudget = Math.min(3000, Math.floor(proofDeadline - performance.now()));
+      if (proofBudget <= 0) return result;
       const entry = result.entries[0];
       let proof: SourceProof;
       try {
-        const proofSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(3000)]) : AbortSignal.timeout(3000);
+        const proofSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(proofBudget)]) : AbortSignal.timeout(proofBudget);
         const answer = await host.proofCall({ root_ref: host.rootRef, expected_owner_id: binding.ownerId,
           query_message_ref: binding.messageRef!,
           ...(entry.student_id ? { student_id: entry.student_id } : {}), memory_id: entry.id,
