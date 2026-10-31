@@ -6,10 +6,10 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "0120097d400dd1ddd8992027fa24ff99674b9bd1",
+    "core_commit": "6d6bbf0b7d2cf020113f7d623aea37e0923b5af8",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:bf6870a6f8ea87413b0c49ffe1ef5a3a7093f3d3936b95798a616add59b868e0",
-    "runtime_component_manifest_hash": "sha256:4811b645dc971f4a6828f4cf915f79cc7f58b1b56fff4cd83ac699fc83f2b5d9",
+    "component_manifest_hash": "sha256:efcf6f2f6e775b4ea06927c4a852d0b1cee87d49d5589b784158a6d21ccd8fd4",
+    "runtime_component_manifest_hash": "sha256:e8835894c608b1ad84d8f95a7e5e8f7b2d3c9e559a43e72b11ef705a907f4a95",
     "runtime_schema_hash": "sha256:79b9d2af1de039967f53f5ffdbdeb0d7faed4c7b8122cac307086c485d17ef4b"
   },
   "contract_identities": [
@@ -253,7 +253,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/412",
     "https://github.com/PIGU-PPPgu/edupi/pull/413",
     "https://github.com/PIGU-PPPgu/edupi/pull/415",
-    "https://github.com/PIGU-PPPgu/edupi/pull/416"
+    "https://github.com/PIGU-PPPgu/edupi/pull/416",
+    "https://github.com/PIGU-PPPgu/edupi/pull/417"
   ],
-  "change_note": "macOS 0.3.95 candidate stages Core PR #416 exact head pending its main merge. Owner-only source proof is read-only and cannot release compound answers; Runtime schema and both component manifests are pinned. Bridge v1.1 still supports 12 commands and education_workspace only; eight dormant commands and two projections remain unsupported. Public update feed and external-send policy remain unchanged."
+  "change_note": "macOS 0.3.95 candidate stages Core PR #416 plus #417 exact tree pending main merges. Owner-only source proof remains read-only; G4 review_task can modify current next-lesson adjustments and managed route-use is not claimed without a receipt. Runtime schema and both component manifests are pinned. Bridge v1.1 still supports 12 commands and education_workspace only; eight dormant commands and two projections remain unsupported. Public feed and external-send policy remain unchanged."
 }
