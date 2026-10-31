@@ -1,6 +1,6 @@
 # R04 Core 与 Desktop 生产合同缺口
 
-2026-10-31，Core PR #416／#417 已合至 main `2a0016a4`，Desktop 0.3.95 候选正在配对。当前 Core Bridge v1.1 生产能力为 12 条命令和 `education_workspace` 投影；下列八条虽有 schema，Core `edupi_bridge_command.mjs` 仍返回 `unsupported_command`，不能只改兼容清单。#417 已通过现有 `review_task modify` 修订 G4 当前下次课调整草稿，不新增独立调整审核权威；教学方法 `route_verified` 无实际路由回执时保持 false。
+2026-10-31，Core PR #416／#417 已合至 main `2a0016a4`，Desktop PR #433 已合至 main `3edfff1d`；固定该配对的 0.3.95 Mac-only 签名 Draft 已通过资产与包内身份核验，安装版原生验收尚未执行。当前 Core Bridge v1.1 生产能力为 12 条命令和 `education_workspace` 投影；下列八条虽有 schema，Core `edupi_bridge_command.mjs` 仍返回 `unsupported_command`，不能只改兼容清单。#417 已通过现有 `review_task modify` 修订 G4 当前下次课调整草稿，不新增独立调整审核权威；教学方法 `route_verified` 无实际路由回执时保持 false。
 
 | 预声明命令 | 缺少的生产条件 |
 | --- | --- |
@@ -17,4 +17,4 @@
 
 PR #416 新增 `owner_recall_source_proof_read`：Desktop 只在当前已捕获会话的单份召回结果上调用，结果作为运行时诊断，不进入模型提示、聊天历史的“当前已核验”徽标或复合来源放行。完整的两来源同案关联与逐属性答案证明仍是 R04 未完成项。
 
-本文件记录合同边界，不把上述缺口标为已交付。安装版复验须使用合并后精确 Core SHA、双组件清单、签名候选及隔离根；当前正常 App 在运行时按 `AGENTS.md` 不启动第二实例。
+本文件记录合同边界，不把上述缺口标为已交付。安装版复验固定 Core `2a0016a4f9499c97e705fd8d4b28acdbc49d2d91`、Desktop `3edfff1d3706213b36638594e504aea5d9ce4e3f`、同轮 Draft run `41174329943` 及双组件清单；当前正常 App 在运行时按 `AGENTS.md` 不启动第二实例。精确签名、资产与未验条件见[发布账本](../plans/2026-09-07-signed-updates.md)。
