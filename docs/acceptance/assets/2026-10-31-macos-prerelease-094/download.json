@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-31T10:26:27.184045+08:00",
+  "version": "0.3.94",
+  "assetId": 693416124,
+  "name": "EduPi_0.3.94_aarch64.dmg",
+  "authenticationUsed": false,
+  "status": 200,
+  "contentType": "application/octet-stream",
+  "finalHost": "release-assets.githubusercontent.com",
+  "bytes": 235544060,
+  "sha256": "7be7c261826a0fbc3d291f3484765bea803ba1fed4ebd65010d578d9592cd25a",
+  "matchesAcceptedSignedDmg": true,
+  "seconds": 144.99,
+  "storage": "Stream hashed in memory; no duplicate file created.",
+  "installationEvidenceReuse": "Same asset ID and complete byte digest as previously installed and natively accepted .94; running user App was not reinstalled or interrupted."
+}
