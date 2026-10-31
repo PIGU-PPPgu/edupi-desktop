@@ -1,0 +1,29 @@
+{
+  "reason": "Live interactive reference preview retained for user review",
+  "url": "http://127.0.0.1:30147/?edupi=1&view=homeroom&student=synthetic-student-0",
+  "loopbackOnly": true,
+  "normalInstalledApplicationTouched": false,
+  "services": [
+    {
+      "port": 30146,
+      "purpose": "task Next development server",
+      "execSession": 6410
+    },
+    {
+      "port": 30147,
+      "purpose": "synthetic API proxy; does not forward API calls to real Core/models",
+      "execSession": 78737
+    }
+  ],
+  "retainedGeneratedPaths": [
+    "task checkout .next",
+    "task-owned isolated runtime root from output/design-qa/2026-11-01-reference-dossier/runtime.json"
+  ],
+  "nextAllocatedKiBAtReceipt": 420456,
+  "cleanupCondition": "After user review or cancellation: stop both task services, confirm no handles/listeners, then remove task .next and isolated runtime root; retain source/assets/evidence/in-use dependencies.",
+  "removedTemporaryDownload": "Validated synthetic filtered CSV was copied to ignored QA output and removed from Downloads.",
+  "browserViewportOverrideReset": true,
+  "browserReducedMotionOverrideRestored": true,
+  "previewTabServiceWorkerBypassRetained": true,
+  "httpCacheDisabled": false
+}

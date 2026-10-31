@@ -1,0 +1,38 @@
+{
+  "sourceBase": "7013618a8da86d07c97dab2593ce14ccb6da5454",
+  "environment": "macOS arm64 / Node22.23.1 / Next16.4.3 / Codex in-app browser",
+  "regression": {
+    "tests": 88,
+    "pass": 88,
+    "fail": 0,
+    "skip": 0
+  },
+  "typecheck": {
+    "command": "node_modules/.bin/tsc --noEmit",
+    "exitCode": 0
+  },
+  "eslint": {
+    "command": "node_modules/.bin/eslint components/EduPiStudentWorkspace.tsx components/EduPiClassDossier.tsx components/EduPiDossierRecordTable.tsx components/EduPiDossierCharts.tsx lib/edupi-dossier-charts.ts lib/edupi-class-dossier.ts",
+    "exitCode": 0
+  },
+  "cssParsing": {
+    "changedFiles": 3,
+    "passed": true
+  },
+  "review": [
+    "Cross-day date baseline frozen until remount: corrected; mounted refresh test1→2 passed.",
+    "Class resolved filter had no resolved rows: separate scoped resolved projection added and exercised703/704.",
+    "Student table keyed by student ID; filter resets when changing namesakes."
+  ],
+  "initialFailures": [
+    "Next/image default interop failed Jiti SSR; replaced by standards-based picture/WebP with PNG fallback.",
+    "Undated helper copy changed; expectation updated while preserving count and no-data assertions.",
+    "Preview cached Next scripts/slots initialization failed; scoped preview service-worker bypass restored passing render; no general browser storage clear executed."
+  ],
+  "unverified": [
+    "new native installation or release",
+    "Core-backed mutation/restore in this round",
+    "source reference original motion timings (static screenshot)"
+  ],
+  "codeCommit": "1b95d923f23a4881526d3d9ca3f97aa2d265aed0"
+}

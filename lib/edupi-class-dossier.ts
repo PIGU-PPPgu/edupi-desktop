@@ -21,6 +21,7 @@ export type ClassDossier = {
   recordedStudents: number;
   growth: ClassDossierEntry[];
   concerns: ClassDossierEntry[];
+  resolved: ClassDossierEntry[];
   traits: Array<{ text: string; count: number }>;
   updatedAt: string | null;
 };
@@ -58,6 +59,7 @@ export function buildClassDossier(
     ? !text(student.class_name) : !classFilter || text(student.class_name) === classFilter);
   const growth: ClassDossierEntry[] = [];
   const concerns: ClassDossierEntry[] = [];
+  const resolved: ClassDossierEntry[] = [];
   const traits = new Map<string, number>();
   let recordedStudents = 0;
   let latest: { date: string; timestamp: number } | null = null;
@@ -88,10 +90,11 @@ export function buildClassDossier(
         source: text(entry.source_label) || text(entry.source_name) || "学生档案",
       });
     });
-    patterns.filter((entry) => entry.status !== "resolved").forEach((entry, entryIndex) => {
+    patterns.forEach((entry, entryIndex) => {
       const observed = dossierDate(entry.last_seen);
-      concerns.push({
-        key: `${studentKey}:concern:${entryIndex}`,
+      const target = entry.status === "resolved" ? resolved : concerns;
+      target.push({
+        key: `${studentKey}:${entry.status === "resolved" ? "resolved" : "concern"}:${entryIndex}`,
         student,
         studentName,
         className,
@@ -112,6 +115,7 @@ export function buildClassDossier(
     recordedStudents,
     growth: growth.sort(byLatest),
     concerns: concerns.sort(byLatest),
+    resolved: resolved.sort(byLatest),
     traits: [...traits].map(([trait, count]) => ({ text: trait, count })).sort((a, b) => b.count - a.count),
     updatedAt: latest?.date ?? null,
   };

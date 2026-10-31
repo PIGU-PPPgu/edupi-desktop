@@ -10,8 +10,8 @@ test("student profiles use a full content page instead of a narrow modal drawer"
   assert.match(student, /返回班级/);
   assert.doesNotMatch(student, /role="dialog"|aria-modal="true"|has-student-drawer/);
   assert.match(css, /\.edupi-student-dossier\s*\{[^}]*width:\s*100%/s);
-  assert.match(css, /\.edupi-student-dossier__grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
-  assert.match(css, /@container \(max-width: 620px\)/);
+  assert.match(css, /\.edupi-student-dossier\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
+  assert.match(css, /@container \(max-width: 720px\)/);
 });
 
 test("student profiles expose real manual replacement and global AI collaboration", async () => {

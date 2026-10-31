@@ -1,0 +1,132 @@
+.edupi-dossier-chart-card,
+.edupi-dossier-chart-mini {
+  --chart-mint: #c4e9bb;
+  --chart-mint-ink: #297d55;
+  --chart-coral: #d87b87;
+  --chart-grid: color-mix(in srgb, var(--ep-text) 13%, transparent);
+  min-width: 0;
+  color: var(--ep-text);
+}
+
+.edupi-dossier-chart-card {
+  display: flex;
+  min-height: 224px;
+  flex-direction: column;
+  padding: 20px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ep-text) 3%, var(--ep-surface));
+}
+
+.edupi-dossier-chart-card > header,
+.edupi-dossier-chart-mini > header {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.edupi-dossier-chart-card :is(h2,h3),
+.edupi-dossier-chart-mini h3 {
+  margin: 0;
+  color: var(--ep-text);
+  font-size: 15px;
+  font-weight: 550;
+  line-height: 1.5;
+}
+
+.edupi-dossier-chart-card select {
+  max-width: 96px;
+  min-height: 26px;
+  margin: -3px -4px 0 0;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ep-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.edupi-dossier-chart-card select:focus-visible,
+.edupi-dossier-chart-trend svg:focus-visible,
+.edupi-dossier-chart-mini button:focus-visible {
+  outline: 2px solid var(--ep-blue);
+  outline-offset: 3px;
+}
+
+.edupi-dossier-chart-coverage__value {
+  display: block;
+  margin-top: 26px;
+  font-size: 38px;
+  font-weight: 450;
+  line-height: 1.1;
+  letter-spacing: -.045em;
+  font-variant-numeric: tabular-nums;
+}
+
+.edupi-dossier-chart-coverage__value > span { font-size: .85em; }
+.edupi-dossier-chart-coverage__labels,
+.edupi-dossier-chart-coverage__counts {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ep-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.edupi-dossier-chart-coverage__labels { margin: auto 0 8px; padding-top: 18px; }
+.edupi-dossier-chart-coverage__counts { margin-top: 7px; font-variant-numeric: tabular-nums; }
+.edupi-dossier-chart-coverage__ruler { display: block; width: 100%; height: 34px; overflow: visible; }
+.edupi-dossier-chart-coverage__tick { stroke: var(--chart-grid); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.edupi-dossier-chart-coverage__fill { fill: var(--chart-mint); transform-origin: 0 50%; animation: edupiDossierChartGrow 680ms cubic-bezier(.2,.75,.25,1) both; }
+
+.edupi-dossier-chart-trend__figure { min-width: 0; margin: 18px 0 0; }
+.edupi-dossier-chart-trend__plot { position: relative; min-width: 0; height: 116px; margin-left: 22px; }
+.edupi-dossier-chart-trend__plot > svg { display: block; width: 100%; height: 116px; overflow: visible; border-radius: 2px; touch-action: pan-y; }
+.edupi-dossier-chart-trend__grid { stroke: var(--chart-grid); stroke-width: 1; stroke-dasharray: 2 4; vector-effect: non-scaling-stroke; }
+.edupi-dossier-chart-trend__line { stroke: var(--ep-text); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 0; animation: edupiDossierChartDraw 720ms cubic-bezier(.25,.65,.2,1) both; }
+.edupi-dossier-chart-trend__single { fill: var(--ep-text); }
+.edupi-dossier-chart-trend__active > line { stroke: var(--chart-coral); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.edupi-dossier-chart-trend__active > circle { fill: var(--chart-coral); }
+.edupi-dossier-chart-trend__active > .edupi-dossier-chart-trend__halo { fill: color-mix(in srgb, var(--chart-coral) 20%, transparent); }
+.edupi-dossier-chart-trend__y { position: absolute; top: 5px; bottom: 7px; left: -22px; display: flex; width: 16px; flex-direction: column; justify-content: space-between; align-items: flex-end; color: var(--ep-muted); font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; }
+.edupi-dossier-chart-trend__x { position: relative; height: 20px; margin-left: 22px; color: var(--ep-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.edupi-dossier-chart-trend__x > span { position: absolute; top: 2px; white-space: nowrap; transform: translateX(-50%); }
+.edupi-dossier-chart-trend__x > span.is-first { transform: none; }
+.edupi-dossier-chart-trend__x > span.is-last { transform: translateX(-100%); }
+.edupi-dossier-chart-trend__tooltip { position: absolute; z-index: 2; top: -12px; display: grid; gap: 3px; min-width: 100px; max-width: 160px; padding: 8px 10px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface); color: var(--ep-text); box-shadow: 0 3px 9px color-mix(in srgb, var(--ep-text) 5%, transparent); font-size: 11px; line-height: 1.4; pointer-events: none; transform: translateX(-50%); }
+.edupi-dossier-chart-trend__tooltip > span { color: var(--ep-muted); }
+.edupi-dossier-chart-trend__tooltip > strong { font-weight: 550; font-size: 13px; }
+.edupi-dossier-chart-note { margin: auto 0 0; padding-top: 4px; color: var(--ep-muted); font-size: 11px; line-height: 1.5; }
+.edupi-dossier-chart-empty { display: flex; flex: 1; min-height: 110px; align-items: center; justify-content: center; margin: 0; color: var(--ep-muted); font-size: 13px; line-height: 1.6; }
+
+.edupi-dossier-chart-mini { padding-top: 20px; }
+.edupi-dossier-chart-mini > header > div { display: grid; gap: 3px; }
+.edupi-dossier-chart-mini > header > div > span { color: var(--ep-muted); font-size: 12px; }
+.edupi-dossier-chart-mini > header > strong { font-size: 25px; line-height: 1.2; font-weight: 450; letter-spacing: -.035em; }
+.edupi-dossier-chart-mini > header > strong > span { color: var(--ep-muted); font-size: 12px; letter-spacing: 0; }
+.edupi-dossier-chart-mini__bars { display: grid; height: 82px; grid-template-columns: repeat(8, minmax(0,1fr)); gap: 7px; margin-top: 20px; }
+.edupi-dossier-chart-mini__bars > button { display: flex; width: 100%; min-width: 0; height: 100%; align-items: stretch; padding: 0; border: 0; border-radius: 3px; background: transparent; cursor: pointer; }
+.edupi-dossier-chart-mini__track { position: relative; display: flex; width: 100%; height: 100%; align-items: flex-end; border-bottom: 1px solid var(--chart-grid); }
+.edupi-dossier-chart-mini__bar { display: block; width: 100%; min-height: 2px; border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--chart-mint-ink) 18%, var(--ep-surface)); transform-origin: bottom; animation: edupiDossierChartGrow 640ms cubic-bezier(.2,.75,.25,1) both; }
+.edupi-dossier-chart-mini__zero { display: block; width: 100%; min-height: 1px; background: var(--chart-grid); }
+.edupi-dossier-chart-mini__bars > button:is(:hover,:focus-visible) .edupi-dossier-chart-mini__bar { background: var(--chart-mint-ink); }
+.edupi-dossier-chart-mini__dates { display: flex; justify-content: space-between; margin-top: 7px; color: var(--ep-muted); font-size: 11px; }
+.edupi-dossier-chart-mini__readout { display: block; min-height: 18px; margin-top: 5px; color: var(--ep-muted); text-align: center; font-size: 11px; }
+.edupi-dossier-chart-mini .edupi-dossier-chart-empty { justify-content: flex-start; min-height: 78px; }
+.edupi-dossier-chart-sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
+
+html.dark .edupi-dossier-chart-card,
+html.dark .edupi-dossier-chart-mini { --chart-mint: #365c47; --chart-mint-ink: #87c7a4; --chart-coral: #ee9aa5; }
+@keyframes edupiDossierChartDraw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes edupiDossierChartGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes edupiDossierChartRise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.edupi-dossier-chart-mini__bar { animation-name: edupiDossierChartRise; }
+@media (prefers-reduced-motion: reduce) {
+  .edupi-dossier-chart-trend__line,
+  .edupi-dossier-chart-coverage__fill,
+  .edupi-dossier-chart-mini__bar { animation: none; }
+}

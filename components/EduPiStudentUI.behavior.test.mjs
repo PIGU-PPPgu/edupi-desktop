@@ -10,6 +10,7 @@ const roster = await jiti.import("../lib/edupi-student-roster-model.ts");
 const pagination = await jiti.import("../lib/edupi-student-pagination.ts");
 const graph = await jiti.import("../lib/edupi-student-graph.ts");
 const profileEdit = await jiti.import("../lib/edupi-student-profile-edit.ts");
+const dossierCharts = await jiti.import("../lib/edupi-dossier-charts.ts");
 const classDossier = await jiti.import("../lib/edupi-class-dossier.ts");
 const compile = file => ts.transpileModule(fs.readFileSync(new URL(file, import.meta.url), "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
@@ -75,6 +76,8 @@ const students = () => Array.from({ length: 61 }, (_, index) => ({ student_id: `
 function workspace({ selectedStudentId = null, rows = students(), query = "", globals = {}, commit } = {}) {
   const props = { mode: "students", data: { students: rows, calendar: [], tasks: [], continuity: { familyContacts: [], memories: [] }, capabilities: { entityDelete: { enabled: false, targetKinds: [] } } }, context: null, query, selectedStudentId, onStudent() {}, onEducation() {}, onTask() {}, onStartAgent() {}, onDeleteEntity() {} };
   const modules = {
+    "./EduPiDossierCharts": { ...placeholder("DossierCoverageCard"), ...placeholder("DossierTrendCard"), ...placeholder("DossierMiniActivity") },
+    "./EduPiDossierRecordTable": placeholder("EduPiDossierRecordTable"),
     "@/lib/edupi-student-roster-model": roster, "@/lib/edupi-student-pagination": pagination,
     "@/lib/edupi-student-profile-edit": profileEdit, "@/lib/edupi-class-dossier": classDossier, "@/lib/edupi-student-profile-prompt": {},
     "@/lib/edupi-workbench": { isUserFacingMemory: () => true },
@@ -506,4 +509,15 @@ test("technical read failures show a short Chinese state with closed technical d
   const details = descendants(alert).find(node => node.type === "details");
   assert.equal(details.props.open, undefined);
   assert.ok(text(details).includes("Core writer admission denied"));
+});
+
+test("a mounted trend includes new-day records when data refreshes after midnight", () => {
+  const NativeDate=Date; let clock=new NativeDate(2026,9,31,12).getTime();
+  class ClockDate extends NativeDate { constructor(...args) { if(args.length) super(...args); else super(clock); } }
+  const f=mount(compile("./EduPiDossierCharts.tsx"),"DossierTrendCard",{title:"合成趋势",entries:[{date:"2026-10-31"},{date:"2026-11-01"}]},{"@/lib/edupi-dossier-charts":dossierCharts},{Date:ClockDate});
+  f.render();let svg=f.find(node=>node.type==="svg" && node.props["aria-label"]?.startsWith("合成趋势"));
+  assert.match(svg.props["aria-label"],/共 1 条记录/);
+  clock=new NativeDate(2026,10,1,12).getTime();f.props.entries=[...f.props.entries];f.render();
+  svg=f.find(node=>node.type==="svg" && node.props["aria-label"]?.startsWith("合成趋势"));
+  assert.match(svg.props["aria-label"],/共 2 条记录/);
 });
