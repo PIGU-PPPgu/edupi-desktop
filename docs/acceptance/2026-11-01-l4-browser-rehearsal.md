@@ -43,6 +43,7 @@ R03 旧版回滚的首次脚本返回失败：旧 Core `00d05a1` 无法读取新
 - Core `cb28c87f` 的 `npm run test:schedule-upload-dedupe` 退出 0：规范日程、同源副本去重、改期与冲突、ICS/Word/PDF/PNG/JPEG 的当前来源与教师确认、来源字节漂移和撤销后拒旧回执均通过。PDF/PNG/JPEG 与 DOCX 的合成公开 Owner 路径各证实选定第 6 份材料后生成 4 份备课草稿、审核/反馈回读与重启不重生。测试没有读取真实校历或证明任意学校官方源及时更新。
 - 同 Core 的 `npm run test:teacher-feedback` 退出 0：六领域反馈目标、纠正链、漏报、重启、合成记录排除、同意门、脱敏账本、90 天保留与擦除回归均通过。原生反馈表单仍未在 0.3.95 安装版操作，云端接收 API 仍未提供。
 - 真实 `zai-coding-cn/glm-5.3-flash` 固定套餐合成数学首测最多 7 次且实际预留 7 次，0 重试、0 换供应商。负数题与分数崩溃恢复各生成 4 份校验产物；正数题最后解正确但中间等式错误，Core 以 `inequivalent_step` 拒绝、没有 ready 产物。因此这轮内容质量为 **2/3 场景通过**，不能改写为全过。[Core PR #424](https://github.com/PIGU-PPPgu/edupi/pull/424) 已将正确最终解下的步骤纠正交给有界 BigInt 算法，原失败模型输出离线重放后 4 份产物通过数学/来源校验，额外 provider 调用 0；该 PR 的精确 CI、合并及修后真实模型/安装版仍待验证。私有完整模型回执在 `~/` 对应系统临时目录 `edupi-g1-real-model-ZZbIeH/evidence.json`；仓库只记脱敏摘要。
+- PR #424 的修后正数题另用固定 GLM 套餐实际预留 2 次请求，0 重试，观察到 1768 tokens。Core 结果为 `draft_ready`；独立只读检查确认四份候选产物与持久状态的 SHA-256 一致，答案含 `2x - 2 = 6 → 2x = 8 → x = 4`，不含模型错误的 `x = 5`，`external_send=false`。旧验收脚本把新增 `math_step_repair_count` 字段误判成失败，原始运行仍保留 `partial_or_failed`；脚本已修并通过无 provider 的离线回归。此为定向内容核验，不等于总体教学质量通过；完整脱敏记录见 Core `docs/loop/evidence/2026-11-01-g1-math-step-repair.json`。
 
 ## 未验证
 
@@ -50,3 +51,5 @@ R03 旧版回滚的首次脚本返回失败：旧 Core `00d05a1` 无法读取新
 - G1–G5 加贯穿安全在**同一签名安装版**的六条自然触发全链；本轮 Core E2、Desktop E2 与 G4 包内浏览器分别记账。
 - R04 可信双来源联合证明、单来源逐属性支持和新的未见语义门；正式盲评、广泛教学内容人工核对与真人连续使用价值。
 - 真实跨到期系统睡眠，按用户要求后置。
+
+合成 G4 数据根 `~/edupi-route1-canary-095-g4-3f7855c1e307` 仅为后续原生验收保留；完成同一签名包的安装审核和重启回读后清理，不作为教师数据。
