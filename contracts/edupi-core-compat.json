@@ -6,10 +6,10 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "52c1633b785c56897f3e1a5e2041ae06d42fa0a1",
+    "core_commit": "ad12d12adc59a32084ab1c721c65d64c36b50a72",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:efcf6f2f6e775b4ea06927c4a852d0b1cee87d49d5589b784158a6d21ccd8fd4",
-    "runtime_component_manifest_hash": "sha256:e8835894c608b1ad84d8f95a7e5e8f7b2d3c9e559a43e72b11ef705a907f4a95",
+    "component_manifest_hash": "sha256:5e333c1926aa088d87407d4708f404d2a7789bc0dd372babca79ce957ed1e045",
+    "runtime_component_manifest_hash": "sha256:c25b32dcc6ac6baf47783b12881dd9c607257189fd369b22c32db3eabb5221b3",
     "runtime_schema_hash": "sha256:79b9d2af1de039967f53f5ffdbdeb0d7faed4c7b8122cac307086c485d17ef4b"
   },
   "contract_identities": [
@@ -254,7 +254,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/413",
     "https://github.com/PIGU-PPPgu/edupi/pull/415",
     "https://github.com/PIGU-PPPgu/edupi/pull/416",
+    "https://github.com/PIGU-PPPgu/edupi/pull/400",
     "https://github.com/PIGU-PPPgu/edupi/pull/417"
   ],
-  "change_note": "macOS 0.3.95 candidate stages Core PR #416 plus #417 exact tree pending main merges. Owner-only source proof remains read-only; G4 review_task can modify current next-lesson adjustments and managed route-use is not claimed without a receipt. Runtime schema and both component manifests are pinned. Bridge v1.1 still supports 12 commands and education_workspace only; eight dormant commands and two projections remain unsupported. Public feed and external-send policy remain unchanged."
+  "change_note": "macOS 0.3.95 candidate stages Core PR #416, merged #400 and PR #417 exact tree pending #417 main merge. Owner-only source proof remains read-only; G4 review_task can modify current next-lesson adjustments and managed route-use is not claimed without a receipt. Runtime schema and both component manifests are pinned. Bridge v1.1 still supports 12 commands and education_workspace only; eight dormant commands and two projections remain unsupported. Public feed and external-send policy remain unchanged."
 }

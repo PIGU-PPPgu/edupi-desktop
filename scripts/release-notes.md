@@ -4,6 +4,8 @@ EduPi Desktop 0.3.95，macOS Apple Silicon 技术候选。
 
 课后复盘的“下次课调整候选”可通过现有任务审核修改，旧产物转入历史；教学方法的发布状态不再冒充实际路由使用证明。
 
+试卷照片识别的视觉服务无响应时会按尝试限时结束并显示失败，不无限等待。
+
 Bridge v1.1 现有 12 条命令继续可用；另 8 条旧命令及 `external_delivery`、`teacher_outcome_evidence` 仍未开放。新合同不改变教师确认与默认不外发规则。
 
 本轮只构建 macOS。Release 保持 Draft，不更新公开 feed，不构建 Windows/Linux。
