@@ -14,6 +14,8 @@ Core 隔离种子先产生一个 G4 `draft_ready` 任务、3 份内部产物及 
 
 随后仅终止该合成根的 Core host PID `26274`，下一次状态请求启动 PID `30852`。状态文件 SHA-256 前后均为 `cbaf6c0ab5a4b3e39cc84f822ada04ebef37fb334732138a21be9c7f88893a69`；浏览器刷新后仍显示“已完成”及调整版本 2。此项证明包内 Web UI、Core 写入和 Core 子进程恢复；没有证明原生 Tauri 启动、系统通知点击、实际睡眠或整机升级回滚。
 
+教师价值评价按钮由 `EduPiCapabilityFeedback` 限定为 Tauri 桌面环境，内置浏览器不会显示。下表的合成反馈来自真实 Core/Runtime API E2；本轮没有把它写成浏览器反馈表单或原生教师操作通过。
+
 ![G4 审核后页面](assets/2026-11-01-l4-browser/g4-review.jpg)
 
 ![Core host 重启后的版本 2](assets/2026-11-01-l4-browser/g4-after-restart.jpg)
