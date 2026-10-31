@@ -1,0 +1,236 @@
+{
+  "date": "2026-11-01",
+  "environment": "macOS arm64, isolated Next development server at127.0.0.1:30144, fresh Chrome context; serviceWorkers blocked",
+  "syntheticOnly": true,
+  "transport": "All /api/** responses intercepted in the isolated browser. Browser save/readback validates UI contract and refresh only, not a new Core persistence acceptance.",
+  "checks": [
+    {
+      "claim": "full page student",
+      "width": 1160,
+      "rosterRows": 0,
+      "dialogs": 0
+    },
+    {
+      "claim": "student responsive",
+      "sizes": [
+        {
+          "size": {
+            "width": 1024,
+            "height": 800
+          },
+          "metrics": {
+            "viewport": 1024,
+            "docWidth": 1024,
+            "width": 828,
+            "scrollWidth": 828,
+            "heading": {
+              "x": 224,
+              "y": 124,
+              "right": 996,
+              "bottom": 193.75
+            },
+            "primary": {
+              "x": 840.765625,
+              "y": 138.71875,
+              "right": 946,
+              "bottom": 179.015625
+            }
+          }
+        },
+        {
+          "size": {
+            "width": 768,
+            "height": 900
+          },
+          "metrics": {
+            "viewport": 768,
+            "docWidth": 768,
+            "width": 768,
+            "scrollWidth": 768,
+            "heading": {
+              "x": 18,
+              "y": 116,
+              "right": 750,
+              "bottom": 185.75
+            },
+            "primary": {
+              "x": 594.765625,
+              "y": 130.71875,
+              "right": 700,
+              "bottom": 171.015625
+            }
+          }
+        },
+        {
+          "size": {
+            "width": 320,
+            "height": 760
+          },
+          "metrics": {
+            "viewport": 320,
+            "docWidth": 320,
+            "width": 320,
+            "scrollWidth": 320,
+            "heading": {
+              "x": 18,
+              "y": 116,
+              "right": 302,
+              "bottom": 185.75
+            },
+            "primary": {
+              "x": 158.765625,
+              "y": 116,
+              "right": 254,
+              "bottom": 156.296875
+            }
+          }
+        }
+      ]
+    },
+    {
+      "claim": "unassigned return preserves scope",
+      "value": "__edupi_unassigned__",
+      "rows": 1
+    },
+    {
+      "claim": "namesakes isolated",
+      "studentUrl": "http://127.0.0.1:30144/?edupi=1&view=homeroom&module=students&inspector=0",
+      "otherStudentsTraitVisible": false,
+      "otherStudentsMemoryVisible": false
+    },
+    {
+      "claim": "directory scroll restored",
+      "before": 477,
+      "detail": 0,
+      "after": 477
+    },
+    {
+      "claim": "graph expansion dismisses with Escape",
+      "remainingDialogs": 0
+    },
+    {
+      "claim": "records error and explicit retry",
+      "passed": true,
+      "scopedRequest": {
+        "path": "/api/edupi/student-events",
+        "method": "GET",
+        "query": "?kind=learning&offset=0&query=&student_id=synthetic-student-0&from=2026-10-01&to=2026-10-31"
+      }
+    },
+    {
+      "claim": "history text readable",
+      "fonts": {
+        "notice": "9px",
+        "time": "12px",
+        "snapshot": "14px"
+      }
+    },
+    {
+      "claim": "class responsive",
+      "sizes": [
+        {
+          "size": {
+            "width": 1024,
+            "height": 800
+          },
+          "metrics": {
+            "clientWidth": 828,
+            "scrollWidth": 828,
+            "docWidth": 1024,
+            "viewport": 1024
+          }
+        },
+        {
+          "size": {
+            "width": 768,
+            "height": 900
+          },
+          "metrics": {
+            "clientWidth": 768,
+            "scrollWidth": 768,
+            "docWidth": 768,
+            "viewport": 768
+          }
+        },
+        {
+          "size": {
+            "width": 320,
+            "height": 760
+          },
+          "metrics": {
+            "clientWidth": 320,
+            "scrollWidth": 320,
+            "docWidth": 320,
+            "viewport": 320
+          }
+        }
+      ]
+    },
+    {
+      "claim": "keyboard reaches edit action",
+      "focusedLabel": "手动修改"
+    },
+    {
+      "claim": "final history text scale",
+      "fonts": {
+        "notice": "14px",
+        "time": "12px",
+        "snapshot": "14px"
+      }
+    },
+    {
+      "claim": "empty roster one import action",
+      "count": 1,
+      "noFakeClassMetrics": true
+    },
+    {
+      "claim": "long trait wraps in 320px",
+      "metrics": {
+        "client": 320,
+        "scroll": 320
+      }
+    }
+  ],
+  "profileWrite": {
+    "count": 1,
+    "request": {
+      "studentId": "synthetic-student-0",
+      "className": "703",
+      "traits": [
+        "喜欢用图形整理思路，愿意与同伴分享方法",
+        "能主动复核解题步骤"
+      ],
+      "parentNotes": [
+        "家长记录：希望每周了解一次错题复盘情况"
+      ],
+      "expectedUpdatedAt": "2026-10-30T09:30:00Z",
+      "expectedRevision": 1
+    },
+    "cancelProducedNoRequest": true,
+    "reloadReadback": true
+  },
+  "namesakeQueries": [
+    {
+      "path": "/api/edupi/student-events",
+      "method": "GET",
+      "query": "?kind=learning&offset=0&query=&student_id=synthetic-student-8"
+    },
+    {
+      "path": "/api/edupi/student-events",
+      "method": "GET",
+      "query": "?kind=learning&offset=0&query=&student_id=synthetic-student-8"
+    }
+  ],
+  "pageErrors": [],
+  "unverified": [
+    "native installed build",
+    "real Core-backed mutation or restore in this round",
+    "automatic update and public release"
+  ],
+  "normalInstalledAppNotOperated": true,
+  "notes": [
+    "Initial QA harness had incomplete memory and session response shapes; corrected before this passing context.",
+    "A timed-out development tool session was reset; a fresh owned browser reran signoff.",
+    "Settled screenshots wait for active CSS animations."
+  ]
+}
