@@ -6,11 +6,11 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "d87b44d628cdd3ded19a0bf82ec9cf82abd433f4",
+    "core_commit": "0120097d400dd1ddd8992027fa24ff99674b9bd1",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:51833f5ddef39b5ea10c1cb89722aca55ec143346eb8761430dd6aace98df186",
-    "runtime_component_manifest_hash": "sha256:9f8a66748c2648d3847b67859f3b261361f7ca44b799d770ac80e6ee3617f713",
-    "runtime_schema_hash": "sha256:8701c07308359b90c955caa59674bdc02d36a30b6207808bc406a7ca4fe8144d"
+    "component_manifest_hash": "sha256:bf6870a6f8ea87413b0c49ffe1ef5a3a7093f3d3936b95798a616add59b868e0",
+    "runtime_component_manifest_hash": "sha256:4811b645dc971f4a6828f4cf915f79cc7f58b1b56fff4cd83ac699fc83f2b5d9",
+    "runtime_schema_hash": "sha256:79b9d2af1de039967f53f5ffdbdeb0d7faed4c7b8122cac307086c485d17ef4b"
   },
   "contract_identities": [
     {
@@ -252,7 +252,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/411",
     "https://github.com/PIGU-PPPgu/edupi/pull/412",
     "https://github.com/PIGU-PPPgu/edupi/pull/413",
-    "https://github.com/PIGU-PPPgu/edupi/pull/415"
+    "https://github.com/PIGU-PPPgu/edupi/pull/415",
+    "https://github.com/PIGU-PPPgu/edupi/pull/416"
   ],
-  "change_note": "macOS 0.3.94 candidate pairs Core d87b44d6 after the signed 0.3.93 candidate. Core adds read-only owner-message provenance and active Goal binding proof for future recall work; the Owner recall response and conservative compound-query hold are unchanged. Bridge v1.1, occurrence v1.2, runtime schema and Pi1.0.2 remain unchanged; complete dual component closures are enforced. Public update feed remains unchanged."
+  "change_note": "macOS 0.3.95 candidate stages Core PR #416 exact head pending its main merge. Owner-only source proof is read-only and cannot release compound answers; Runtime schema and both component manifests are pinned. Bridge v1.1 still supports 12 commands and education_workspace only; eight dormant commands and two projections remain unsupported. Public update feed and external-send policy remain unchanged."
 }
