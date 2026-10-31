@@ -1,0 +1,154 @@
+.edupi-dossier-workspace { container-type: inline-size; --dossier-gap: 24px; }
+.edupi-dossier-workspace .edupi-student-heading { min-height: 84px; margin-bottom: 8px; border-bottom: 0; }
+.edupi-dossier-workspace .edupi-student-heading h1 { font-size: 30px; letter-spacing: -.035em; }
+.edupi-dossier-workspace .edupi-student-heading__actions { margin-left: auto; gap: 10px; }
+.edupi-dossier-workspace .edupi-student-heading__actions > button { min-height: 40px; padding: 8px 16px; font-size: 14px; }
+.edupi-student-heading > .edupi-dossier-back { flex: 0 0 auto; width: auto; min-width: 0; justify-self: start; display: inline-flex; align-items: center; gap: 10px; padding: 8px 0; border: 0; background: none; color: var(--ep-muted); font: inherit; font-size: 14px; cursor: pointer; }
+.edupi-dossier-back:hover { color: var(--ep-text); }
+.edupi-dossier-export { position: relative; z-index: 3; }
+.edupi-dossier-export > summary { min-height: 40px; display: flex; align-items: center; padding: 8px 14px; border: 1px solid var(--ep-border); border-radius: 8px; color: var(--ep-text); font-size: 14px; }
+.edupi-dossier-export > div { position: absolute; right: 0; top: calc(100% + 8px); display: grid; width: 172px; padding: 6px; border: 1px solid var(--ep-border); border-radius: 10px; background: var(--ep-surface); box-shadow: 0 8px 24px color-mix(in srgb, var(--ep-text) 9%, transparent); }
+.edupi-dossier-export button { width: 100%; min-height: 38px; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--ep-text); text-align: left; font: inherit; font-size: 13px; cursor: pointer; }
+.edupi-dossier-export button:hover { background: var(--ep-surface-soft); }
+.edupi-dossier-export button:disabled { color: var(--ep-dim); cursor: default; }
+.edupi-dossier-tabs { display: flex; gap: 28px; margin-bottom: 28px; border-bottom: 1px solid var(--ep-border); }
+.edupi-dossier-tabs > button { position: relative; min-height: 48px; padding: 10px 0 16px; border: 0; background: none; color: var(--ep-muted); font: inherit; font-size: 15px; cursor: pointer; white-space: nowrap; }
+.edupi-dossier-tabs > button[aria-pressed=true] { color: var(--ep-text); font-weight: 600; }
+.edupi-dossier-tabs > button[aria-pressed=true]::after { position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background: var(--ep-text); content: ''; }
+.edupi-dossier-workspace :is(button, summary, select, input, textarea):focus-visible { outline: 2px solid var(--ep-blue); outline-offset: 3px; }
+.edupi-directory-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+.edupi-directory-toolbar h2 { margin: 0; font-size: 24px; letter-spacing: -.02em; }
+.edupi-dossier-workspace .edupi-student-class-filter { font-size: 14px; }
+.edupi-dossier-workspace .edupi-student-directory { margin-top: 12px; border-radius: 12px; }
+.edupi-dossier-workspace .edupi-student-directory > header { min-height: 52px; padding-inline: 20px; background: var(--ep-surface); }
+.edupi-dossier-workspace .edupi-student-directory > header span { font-size: 13px; }
+.edupi-dossier-workspace .edupi-student-directory__row { min-height: 84px; padding: 16px 20px; }
+.edupi-dossier-workspace .edupi-student-directory__identity strong { font-size: 15px; font-weight: 550; }
+.edupi-dossier-workspace .edupi-student-directory__identity small { max-width: 70ch; font-size: 13px; }
+.edupi-dossier-workspace .edupi-student-directory__avatar { flex-basis: 40px; width: 40px; height: 40px; border-radius: 12px; color: var(--ep-blue); background: var(--ep-blue-soft); font-size: 16px; }
+.edupi-dossier-workspace .edupi-student-directory__class, .edupi-dossier-workspace .edupi-student-directory__records { font-size: 13px; }
+.edupi-all-records-label { margin: 24px 0 16px; font-size: 16px; }
+.edupi-student-dossier { width: 100%; min-width: 0; padding-bottom: 40px; animation: edupiDossierEnter 220ms ease-out; }
+.edupi-student-dossier__heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 8px 0 16px; }
+.edupi-student-dossier__heading h1 { margin: 0; color: var(--ep-text); font-size: clamp(32px, 4cqi, 44px); font-weight: 600; line-height: 1.25; letter-spacing: -.045em; overflow-wrap: anywhere; }
+.edupi-student-dossier__heading h1:focus { outline: none; }
+.edupi-student-dossier__heading p { margin: 8px 0 0; color: var(--ep-muted); font-size: 15px; }
+.edupi-student-dossier__actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.edupi-student-dossier__actions button { display: inline-flex; align-items: center; justify-content: center; gap: 20px; min-height: 40px; padding: 9px 14px; border: 1px solid var(--ep-border); border-radius: 8px; background: var(--ep-surface); color: var(--ep-text); font: inherit; font-size: 14px; cursor: pointer; }
+.edupi-student-dossier__actions button.is-primary { border-color: var(--ep-text); background: var(--ep-text); color: var(--ep-surface); }
+.edupi-student-dossier__actions button.is-delete { color: var(--ep-red); }
+.edupi-student-dossier__actions .edupi-icon-action { width: 40px; padding: 0; }
+.edupi-student-dossier__actions button:disabled { opacity: .5; cursor: default; }
+.edupi-student-dossier .edupi-student-drawer__scroll { overflow: visible; padding: 0; }
+.edupi-student-dossier__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .42fr); gap: var(--dossier-gap); align-items: start; }
+.edupi-student-dossier__grid[hidden], .edupi-dossier-records[hidden] { display: none; }
+.edupi-student-dossier__body, .edupi-student-dossier__sidebar { display: grid; min-width: 0; gap: var(--dossier-gap); }
+.edupi-dossier-panel { min-width: 0; padding: 24px; border: 1px solid var(--ep-border); border-radius: 12px; background: var(--ep-surface); }
+.edupi-dossier-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+.edupi-dossier-panel h2 { margin: 0; font-size: 17px; line-height: 1.5; font-weight: 600; }
+.edupi-dossier-panel > header > span { color: var(--ep-muted); font-size: 13px; }
+.edupi-dossier-empty { margin: 0; color: var(--ep-muted); font-size: 14px; line-height: 1.7; }
+.edupi-dossier-traits { background: color-mix(in srgb, var(--ep-blue-soft) 36%, var(--ep-surface)); }
+.edupi-dossier-traits ul { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.edupi-dossier-traits li { display: flex; align-items: baseline; gap: 12px; color: var(--ep-text); font-size: 15px; line-height: 1.8; overflow-wrap: anywhere; }
+.edupi-dossier-traits li::before { flex: 0 0 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--ep-blue); content: ''; }
+.edupi-dossier-timeline { min-height: 240px; }
+.edupi-dossier-timeline ol { margin: 0; padding: 0; list-style: none; }
+.edupi-dossier-timeline li { position: relative; display: grid; grid-template-columns: 100px minmax(0,1fr); gap: 22px; padding: 0 0 28px; }
+.edupi-dossier-timeline li:last-child { padding-bottom: 0; }
+.edupi-dossier-timeline li > div { position: relative; padding-left: 24px; }
+.edupi-dossier-timeline li > div::before { position: absolute; left: -3px; top: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--ep-blue); box-shadow: 0 0 0 4px var(--ep-blue-soft); content: ''; }
+.edupi-dossier-timeline li:not(:last-child) > div::after { position: absolute; top: 24px; bottom: -24px; left: 0; width: 1px; background: var(--ep-border); content: ''; }
+.edupi-dossier-timeline time { color: var(--ep-muted); font-size: 13px; line-height: 1.9; font-variant-numeric: tabular-nums; }
+.edupi-dossier-timeline h3, .edupi-dossier-patterns h3 { margin: 0; color: var(--ep-text); font-size: 15px; line-height: 1.8; font-weight: 500; overflow-wrap: anywhere; }
+.edupi-dossier-timeline p { margin: 6px 0 0; color: var(--ep-muted); font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.edupi-dossier-patterns article { display: flex; gap: 14px; padding: 16px 0; border-top: 1px solid var(--ep-border); }
+.edupi-dossier-patterns article:first-of-type { padding-top: 0; border-top: 0; }
+.edupi-dossier-patterns article:last-child { padding-bottom: 0; }
+.edupi-dossier-patterns time { color: var(--ep-muted); font-size: 12px; }
+.edupi-dossier-status { flex-shrink: 0; align-self: flex-start; margin-top: 3px; padding: 3px 8px; border-radius: 5px; background: var(--ep-blue-soft); color: var(--ep-blue); font-size: 12px; white-space: nowrap; }
+.edupi-dossier-status.is-resolved { background: var(--ep-green-soft, var(--ep-surface-soft)); color: var(--ep-green); }
+.edupi-dossier-identity { overflow: hidden; padding: 24px; border: 1px solid var(--ep-border); border-radius: 12px; background: var(--ep-surface); }
+.edupi-dossier-monogram { position: relative; display: grid; aspect-ratio: 1.3; place-items: center; overflow: hidden; border-radius: 8px; background: color-mix(in srgb, var(--ep-blue) 12%, var(--ep-surface)); color: var(--ep-blue); }
+.edupi-dossier-monogram::before, .edupi-dossier-monogram::after { position: absolute; width: 180px; height: 180px; border: 1px solid color-mix(in srgb, var(--ep-blue) 20%, transparent); border-radius: 50%; content: ''; }
+.edupi-dossier-monogram::before { transform: translate(44%, 40%); }
+.edupi-dossier-monogram::after { transform: translate(-48%, -32%); }
+.edupi-dossier-monogram span { z-index: 1; font-size: 46px; letter-spacing: .04em; font-weight: 450; }
+.edupi-dossier-identity h2 { margin: 20px 0; font-size: 22px; letter-spacing: -.025em; }
+.edupi-dossier-identity dl { display: grid; gap: 16px; margin: 0; }
+.edupi-dossier-identity dl > div { display: flex; justify-content: space-between; gap: 16px; padding-top: 12px; border-top: 1px solid var(--ep-border); font-size: 13px; }
+.edupi-dossier-identity dt { color: var(--ep-muted); }
+.edupi-dossier-identity dd { margin: 0; text-align: right; color: var(--ep-text); overflow-wrap: anywhere; }
+.edupi-dossier-family > details > summary, .edupi-dossier-history > details > summary, .edupi-dossier-facts > details > summary { display: flex; align-items: center; justify-content: space-between; min-height: 28px; font-size: 16px; font-weight: 600; }
+.edupi-dossier-family > details > div, .edupi-dossier-history > details > div, .edupi-dossier-facts > details > div { margin-top: 20px; }
+.edupi-dossier-family > details > div > p { margin: 0 0 12px; font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
+.edupi-dossier-family em { color: var(--ep-muted); font-size: 14px; font-style: normal; }
+.edupi-dossier-family .edupi-student-family-records__identity { font-size: 12px; }
+.edupi-dossier-family article { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--ep-border); }
+.edupi-dossier-family article header { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 14px; }
+.edupi-dossier-family article time { color: var(--ep-muted); font-size: 12px; }
+.edupi-dossier-family article p { font-size: 14px; line-height: 1.7; }
+.edupi-dossier-facts:has(> details:only-child):empty, .edupi-dossier-facts:empty { display: none; }
+.edupi-dossier-facts .edupi-student-core-facts article > p { font-size: 14px; }
+.edupi-dossier-facts .edupi-student-core-facts article > header strong { font-size: 14px; }
+.edupi-dossier-facts .edupi-student-core-facts article > :is(small, details > summary), .edupi-dossier-facts .edupi-student-core-facts article > header span { font-size: 12px; }
+.edupi-dossier-memories { grid-column: 1; }
+.edupi-dossier-memories article { padding: 16px 0; border-top: 1px solid var(--ep-border); }
+.edupi-dossier-memories article:first-of-type { border-top: 0; padding-top: 0; }
+.edupi-dossier-memories article:last-child { padding-bottom: 0; }
+.edupi-dossier-memories article p { margin: 0; color: var(--ep-text); font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
+.edupi-dossier-tasks { grid-column: 1; }
+.edupi-dossier-tasks > button { display: flex; justify-content: space-between; gap: 16px; width: 100%; padding: 14px 0; border: 0; border-top: 1px solid var(--ep-border); background: none; color: var(--ep-text); text-align: left; font: inherit; font-size: 14px; cursor: pointer; }
+.edupi-dossier-tasks > button span { flex-shrink: 0; color: var(--ep-muted); font-size: 12px; }
+.edupi-student-dossier .edupi-student-profile-editor { width: 100%; margin: 0 0 24px; padding: 24px; border: 1px solid var(--ep-border); border-radius: 12px; background: var(--ep-surface-soft); }
+.edupi-student-dossier .edupi-student-profile-editor h2 { margin: 0; font-size: 20px; }
+.edupi-student-dossier .edupi-student-profile-editor :is(input,textarea) { font-size: 15px; line-height: 1.7; }
+.edupi-student-dossier .edupi-student-profile-editor > button { min-height: 40px; font-size: 14px; }
+.edupi-dossier-records .edupi-student-events { padding: 24px; border: 1px solid var(--ep-border); border-radius: 12px; }
+.edupi-dossier-records .edupi-student-events :is(input,textarea,select,button) { font-size: 14px; }
+.edupi-dossier-records .edupi-student-events__tabs > button { min-height: 44px; font-size: 15px; }
+.edupi-dossier-records .edupi-student-graph__viewport { min-height: 380px; }
+@keyframes edupiDossierEnter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@container (max-width: 900px) {
+  .edupi-student-dossier__grid { grid-template-columns: minmax(0,1fr) minmax(220px,.55fr); gap: 16px; }
+  .edupi-student-dossier__body, .edupi-student-dossier__sidebar { gap: 16px; }
+  .edupi-dossier-panel, .edupi-dossier-identity { padding: 20px; }
+  .edupi-dossier-timeline li { grid-template-columns: 85px minmax(0,1fr); gap: 12px; }
+}
+@container (max-width: 620px) {
+  .edupi-student-dossier__grid { grid-template-columns: minmax(0,1fr); }
+  .edupi-student-dossier__sidebar { grid-row: 1; }
+  .edupi-dossier-identity { display: grid; grid-template-columns: 86px minmax(0,1fr); gap: 8px 16px; }
+  .edupi-dossier-monogram { grid-row: span 2; align-self: start; aspect-ratio: 1; }
+  .edupi-dossier-monogram span { font-size: 27px; }
+  .edupi-dossier-identity h2 { margin: 0; font-size: 20px; }
+  .edupi-dossier-identity dl { gap: 8px; }
+  .edupi-dossier-identity dl > div { gap: 8px; padding-top: 6px; font-size: 12px; }
+  .edupi-student-dossier__heading { align-items: flex-start; gap: 12px; }
+  .edupi-student-dossier__actions { max-width: 160px; gap: 8px; }
+  .edupi-student-dossier__actions button.is-primary { gap: 10px; }
+  .edupi-dossier-panel { padding: 20px; }
+  .edupi-dossier-tabs { gap: 22px; margin-bottom: 20px; }
+  .edupi-dossier-records .edupi-student-events { padding: 16px; }
+  .edupi-directory-toolbar { align-items: flex-start; flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) { .edupi-student-dossier { animation: none; } }
+
+.edupi-dossier-history .edupi-student-profile-history__state, .edupi-dossier-history .edupi-student-profile-history__notice { font-size: 14px; line-height: 1.7; }
+.edupi-dossier-history .edupi-student-profile-history li > header :is(strong, span), .edupi-dossier-history .edupi-student-profile-history__sides section > header :is(strong, span, button) { font-size: 13px; }
+.edupi-dossier-history .edupi-student-profile-history li > :is(small, header > time) { font-size: 12px; }
+.edupi-dossier-history .edupi-student-profile-history__sides dl > div { display: block; padding: 12px 0; }
+.edupi-dossier-history .edupi-student-profile-history__sides dt { margin-bottom: 6px; font-size: 12px; }
+.edupi-dossier-history .edupi-student-profile-history__sides dd { margin: 0; white-space: normal; overflow: visible; font-size: 14px; line-height: 1.7; }
+@container (max-width: 620px) { .edupi-dossier-history .edupi-student-profile-history__sides { grid-template-columns: minmax(0,1fr); } }
+.edupi-student-dossier .edupi-dossier-history p.edupi-student-profile-history__notice,
+.edupi-student-dossier .edupi-dossier-history p.edupi-student-profile-history__state { font-size: 14px; line-height: 1.7; }
+.edupi-student-dossier .edupi-dossier-history .edupi-student-profile-history > div > ol > li > header time,
+.edupi-student-dossier .edupi-dossier-history .edupi-student-profile-history > div > ol > li > small { font-size: 12px; }
+.edupi-dossier-records .edupi-student-events > article > p,
+.edupi-dossier-records .edupi-student-graph__details article > p { font-size: 15px; line-height: 1.8; }
+.edupi-dossier-records .edupi-student-events > article > header strong,
+.edupi-dossier-records .edupi-student-events > p { font-size: 14px; line-height: 1.7; }
+.edupi-dossier-records .edupi-student-events > article :is(time, small),
+.edupi-dossier-records .edupi-student-events > article > details > summary,
+.edupi-dossier-records .edupi-student-events__range > span { font-size: 12px; }
