@@ -187,10 +187,11 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
       const entry = result.entries[0];
       let proof: SourceProof;
       try {
+        const proofSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(3000)]) : AbortSignal.timeout(3000);
         const answer = await host.proofCall({ root_ref: host.rootRef, expected_owner_id: binding.ownerId,
           query_message_ref: binding.messageRef!,
           ...(entry.student_id ? { student_id: entry.student_id } : {}), memory_id: entry.id,
-          category: entry.category, source_fingerprint: entry.source_fingerprint }, signal);
+          category: entry.category, source_fingerprint: entry.source_fingerprint }, proofSignal);
         proof = sourceProof(answer, entry.source_fingerprint);
       } catch { proof = { status: "held", case_status: "held", reason_code: "proof_unavailable" }; }
       if (!current(turn, manager)) return denied();
