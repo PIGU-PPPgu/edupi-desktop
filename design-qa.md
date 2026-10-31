@@ -2,6 +2,8 @@
 
 final result: passed
 
+原导航栏设计报告已[保留原文归档](docs/acceptance/2026-11-01-desktop-chrome-qa-archived.md)，本文件仅记录当前档案参考复刻。
+
 ## 对比对象
 
 - 源图：用户本轮附件 `codex-clipboard-2da47192-ebfb-45ed-a4bf-34149e96e58a.png`，本机原路径 `/var/folders/xk/qmn_r8g93ljb7b5vqzq3rd040000gn/T/codex-clipboard-2da47192-ebfb-45ed-a4bf-34149e96e58a.png`。选取上半张档案界面，原图1242×1660；不将参考图中的患者资料像素提交到仓库。
