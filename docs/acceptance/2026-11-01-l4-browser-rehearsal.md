@@ -45,11 +45,18 @@ R03 旧版回滚的首次脚本返回失败：旧 Core `00d05a1` 无法读取新
 - 真实 `zai-coding-cn/glm-5.3-flash` 固定套餐合成数学首测最多 7 次且实际预留 7 次，0 重试、0 换供应商。负数题与分数崩溃恢复各生成 4 份校验产物；正数题最后解正确但中间等式错误，Core 以 `inequivalent_step` 拒绝、没有 ready 产物。因此这轮内容质量为 **2/3 场景通过**，不能改写为全过。[Core PR #424](https://github.com/PIGU-PPPgu/edupi/pull/424) 已将正确最终解下的步骤纠正交给有界 BigInt 算法，原失败模型输出离线重放后 4 份产物通过数学/来源校验，额外 provider 调用 0；该 PR 的精确 CI、合并及修后真实模型/安装版仍待验证。私有完整模型回执在 `~/` 对应系统临时目录 `edupi-g1-real-model-ZZbIeH/evidence.json`；仓库只记脱敏摘要。
 - PR #424 的修后正数题另用固定 GLM 套餐实际预留 2 次请求，0 重试，观察到 1768 tokens。Core 结果为 `draft_ready`；独立只读检查确认四份候选产物与持久状态的 SHA-256 一致，答案含 `2x - 2 = 6 → 2x = 8 → x = 4`，不含模型错误的 `x = 5`，`external_send=false`。旧验收脚本把新增 `math_step_repair_count` 字段误判成失败，原始运行仍保留 `partial_or_failed`；脚本已修并通过无 provider 的离线回归。此为定向内容核验，不等于总体教学质量通过；完整脱敏记录见 Core `docs/loop/evidence/2026-11-01-g1-math-step-repair.json`。
 
+## Core G1 合并与 Desktop 交接
+
+- [Core #424](https://github.com/PIGU-PPPgu/edupi/pull/424) 的精确 [CI](https://github.com/PIGU-PPPgu/edupi/actions/runs/41232104459) 成功，合入 `2b3e55963efa9e91b221342aae1ef4e80dafb898`；[Core #425](https://github.com/PIGU-PPPgu/edupi/pull/425) 的精确 [CI](https://github.com/PIGU-PPPgu/edupi/actions/runs/41236036720) 成功，合入 Core Main `e07885b1dadcd763d7454799088c88b81cad06b3`。两次合并树分别与其受测 head 相同；Core Main 推送 CI 仍排队。
+- #425 修正 G1 真实模型候选教案的 55 分钟活动超时：新 Durable 草稿默认一节 45 分钟，46–60 分钟按比例缩减并记入策略版本，超过 60 分钟拒绝；实际校方节长未知，教师仍须审核。`npm run test:g1-teaching-quality` 129 通过，Durable 25 个合成场景通过。可重放的 `scripts/rehearse_g1_activity_budget_upgrade.mjs --old-core <#424 精确源>` 用旧 Core 发布 55 分钟四份草稿，再由新 Core 同一隔离根重启，状态及四份文件哈希不变、追加模型调用 0，详见 Core `docs/loop/evidence/2026-11-01-g1-activity-budget.json`。
+- Desktop 配对时固定 Core `e07885b1dadcd763d7454799088c88b81cad06b3`；Runtime schema `sha256:79b9d2af1de039967f53f5ffdbdeb0d7faed4c7b8122cac307086c485d17ef4b`，Bridge v1.1 schema `sha256:2749b1208b47bf475bd30d266b5ca1b213aa78c6c8b4dcd53059c524400565c8`。Core Runtime 组件清单内哈希 `sha256:66cd579ff6131cc2cbefce30f0cccee5ed829d9d957c0ba394b9331337853d65`，文件 SHA-256 `4b678a350eb3ce4d0fb3de6c7bcb1bb0294c858e614dd1628a25ca8c68f9c163`；Desktop 组件清单内哈希 `sha256:da4f929007f37f3597dc741547ce891a460e1a12120a4a4768295bfe47940845`，文件 SHA-256 `be7ce62e01ea7b8dbfffa29ab453ead464c9e550a553e43781e1268408312e28`。新 pin、双清单、真实 Core 进程和签名包需由 Desktop 线重新验证，旧 0.3.95 安装候选不追认为包含这些修复。
+- [Core R04 #426](https://github.com/PIGU-PPPgu/edupi/pull/426) 在当前 Main 上等待 CI；它只证明两份选定且当前的来源属于同一 Core 事项，`answer_verified=false`、`question_case_verified=false`。单来源逐属性误判、完整来源库存和新未见语义门仍未解决，Desktop 不应据此放开复合回答。
+
 ## 未验证
 
 - 0.3.95 唯一 macOS App 原生安装、通知点击、升级及回滚、真实资料保持；正常 0.3.94 仍在用，按仓库隔离门不启动第二实例。
 - G1–G5 加贯穿安全在**同一签名安装版**的六条自然触发全链；本轮 Core E2、Desktop E2 与 G4 包内浏览器分别记账。
-- R04 可信双来源联合证明、单来源逐属性支持和新的未见语义门；正式盲评、广泛教学内容人工核对与真人连续使用价值。
+- R04 查询与事项绑定、完整来源库存、逐属性支持和新的未见语义门；正式盲评、广泛教学内容人工核对与真人连续使用价值。
 - 真实跨到期系统睡眠，按用户要求后置。
 
 合成 G4 数据根 `~/edupi-route1-canary-095-g4-3f7855c1e307` 仅为后续原生验收保留；完成同一签名包的安装审核和重启回读后清理，不作为教师数据。

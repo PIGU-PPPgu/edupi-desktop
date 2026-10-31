@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-01 G1 Core 最新状态，取代下文 #424／#425 待 CI 的历史快照：[Core #424](https://github.com/PIGU-PPPgu/edupi/pull/424) 精确 [CI](https://github.com/PIGU-PPPgu/edupi/actions/runs/41232104459) 成功并合入 `2b3e5596`；[Core #425](https://github.com/PIGU-PPPgu/edupi/pull/425) 精确 [CI](https://github.com/PIGU-PPPgu/edupi/actions/runs/41236036720) 成功并合入最新 Core Main `e07885b1dadcd763d7454799088c88b81cad06b3`。G1 正确最终解的错误中间步骤由有界有理数算法纠正，新 Durable 草稿按默认单节 45 分钟收束；旧版 55 分钟草稿在隔离根由新 Core 重启回读，四份产物与状态哈希不变、追加模型调用 0。Core Main 推送 CI 尚排队，不能记为通过。Desktop 下一配对输入为该精确 SHA、Runtime/Bridge schema 和双组件清单，见[本轮验收记录](../acceptance/2026-11-01-l4-browser-rehearsal.md#core-g1-合并与-desktop-交接)。[R04 #426](https://github.com/PIGU-PPPgu/edupi/pull/426) 仅为选定双来源同案只读证明，CI 排队、复合回答仍被拦；原生安装、正式盲测、真实教师价值和 OS 睡眠不由这些合并代替。
+
 2026-11-01 R12／R17 档案参考图增量：用户要求更忠实复刻，本轮 `1b95d923` 将概览换为双图表、紧凑记录表与独立人物／班级侧栏，原详情与历史入口保留。范围切换、路径绘入、悬停／键盘读点、减少动态效果、记录筛选／展开／CSV下载均在IAB合成预览实操；跨日刷新和班级已解决筛选缺口已修。88项定向、类型、目标lint、CSS解析通过；归一并排比较后[设计QA](../../design-qa.md)为passed。[开发与视觉验收记录](../acceptance/2026-11-01-reference-dossier.md)列出数据范围与缓存旁路；当前为**开发验收通过、待安装和用户核验**。未打包、未改公开资产或正常App，活预览与在用缓存有明确保留／清理条件，不将前轮或`.95`包追认为包含本轮UI。
 
 2026-11-01 macOS L4 本轮执行顺序：沿用下方 R03／R04／G1–G6 编号和[现有 R04 接续计划](../acceptance/2026-10-31-r04-bridge-production-gap.md#r04-接续计划)，不另建权威账本。先在最新 Core／Desktop 主线、隔离合成根和 Codex 内置浏览器中核对六领域自然触发、草稿审核、反馈与来源修订；发现失败先修并复验。随后完成 R04 单来源部分支持禁例的新未见语义测试、教学答案与来源核对，以及不含真实睡眠的 Core 重启／重放／旧版拒写／回滚。每项记录精确版本、环境、操作、预期、实际、证据和未验条件；浏览器结果不冒充签名安装版。0.3.95 安装、原生通知、升级与真实资料保持须待正常 App 由用户自行退出后执行；本轮不触发系统睡眠，不操作正在使用的电脑窗口或真实教师数据。正式盲测与真人价值独立记账。
