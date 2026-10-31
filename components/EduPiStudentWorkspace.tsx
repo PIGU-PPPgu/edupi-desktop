@@ -1,5 +1,6 @@
 "use client";
 
+
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { EducationContract, EducationEntityDeleteKind, FamilyContact, TeacherTask } from "@/lib/edupi-education-contract";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
@@ -24,6 +25,8 @@ import { studentSemesterRange } from "@/lib/edupi-student-semester";
 import { EduPiIconButton, EduPiPagination } from "./EduPiActionIcon";
 import { EduPiClassDossier } from "./EduPiClassDossier";
 import { dossierDate, UNASSIGNED_CLASS_FILTER } from "@/lib/edupi-class-dossier";
+import { DossierCoverageCard, DossierTrendCard, DossierMiniActivity } from "./EduPiDossierCharts";
+import { EduPiDossierRecordTable, type DossierRecordRow } from "./EduPiDossierRecordTable";
 
 type Props = {
   mode: "homeroom" | "students";
@@ -171,7 +174,7 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
   const [lastError, setLastError] = useState<string | null>(null);
   const [showRecords, setShowRecords] = useState(false);
   const [classSection, setClassSection] = useState<"overview" | "students">(query ? "students" : "overview");
-  const [studentSection, setStudentSection] = useState<"overview" | "records">("overview");
+  const [studentSection, setStudentSection] = useState<"overview" | "records" | "details">("overview");
   const detailHeadingRef = useRef<HTMLHeadingElement>(null);
   const workspaceRef = useRef<HTMLElement>(null);
   const directoryScrollRef = useRef(0);
@@ -422,6 +425,13 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
       return b - a || right.index - left.index;
     });
 
+  const chartEntries = trajectory.map(item => ({ date: typeof item.date === "string" ? item.date : null, label: String(item.event || "成长记录") }));
+  const resolvedPatterns = patterns.filter(item => item.status === "resolved").length;
+  const dossierRows: DossierRecordRow[] = [
+    ...trajectory.map((item,index) => ({ id: `growth:${index}`, title: String(item.event || "成长记录"), date: typeof item.date === "string" ? item.date : null, note: String(item.note || item.description || ""), kind: "growth" as const })),
+    ...patterns.map((item,index) => ({ id: `pattern:${index}`, title: String(item.description || "学习问题"), date: typeof item.last_seen === "string" ? item.last_seen : null, note: String(item.note || ""), kind: item.status === "resolved" ? "resolved" as const : "attention" as const })),
+  ];
+
   return <main ref={workspaceRef} onScroll={event => { if (!selected) directoryScrollRef.current = event.currentTarget.scrollTop; }} className={`edupi-module-workspace edupi-class-workspace edupi-dossier-workspace${selected ? " has-student-page" : ""}`}>
     <header className="edupi-module-heading edupi-student-heading">
       {selected ? <button type="button" className="edupi-dossier-back" onClick={closeStudent}>← <span>{mode === "homeroom" ? "返回班级" : "返回学生名册"}</span></button> : <h1>{mode === "homeroom" ? "班级" : "学生档案"}</h1>}
@@ -462,27 +472,38 @@ export function EduPiStudentWorkspace({ mode, data, context, query, selectedStud
         {directory.pages > 1 ? <EduPiPagination label="学生分页" page={directory.page} pages={directory.pages} previousDisabled={directory.page === 0} nextDisabled={directory.page === directory.pages - 1} onPrevious={() => setPagination({ filterKey, page: directory.page - 1 })} onNext={() => setPagination({ filterKey, page: directory.page + 1 })} /> : null}
       </>}
     </> : selectedName ? <section ref={studentPageRef} className="edupi-student-dossier" aria-label={`${selectedName}学生档案`}>
-      <header className="edupi-student-dossier__heading"><div><h1 ref={detailHeadingRef} tabIndex={-1}>{selectedName}</h1><p>{selectedClassName || "未分班"}</p></div><div className="edupi-student-dossier__actions"><button type="button" className="is-primary" onClick={openStudentAgent}>AI 协作 <span aria-hidden="true">↗</span></button><EduPiIconButton type="button" icon="edit" label="手动修改" onClick={openEditor} disabled={!selectedUpdatedAt || busy} aria-expanded={editingStudentKey === selectedStudentId} aria-controls={editingStudentKey === selectedStudentId ? "edupi-student-profile-editor" : undefined}/>{data.capabilities.entityDelete.enabled && data.capabilities.entityDelete.targetKinds.includes("student") ? <EduPiIconButton type="button" icon="delete" label={busy ? "正在删除学生档案" : "删除学生档案"} className="is-delete" busy={busy} disabled={busy} onClick={() => void deleteStudent()}/> : null}</div></header>
-      <nav className="edupi-dossier-tabs" aria-label="学生档案视图"><button type="button" aria-pressed={studentSection === "overview"} onClick={() => setStudentSection("overview")}>档案概览</button><button type="button" aria-pressed={studentSection === "records"} onClick={() => setStudentSection("records")}>学习与互动</button></nav>
+      <div className="edupi-student-dossier__content">
+      <header className="edupi-student-dossier__heading"><div><h1 ref={detailHeadingRef} tabIndex={-1}>{selectedName}</h1></div><div className="edupi-student-dossier__actions"><button type="button" className="edupi-dossier-mobile-agent" aria-label="与当前学生协作" onClick={openStudentAgent}>AI 协作</button><EduPiIconButton type="button" icon="edit" label="手动修改" onClick={openEditor} disabled={!selectedUpdatedAt || busy} aria-expanded={editingStudentKey === selectedStudentId} aria-controls={editingStudentKey === selectedStudentId ? "edupi-student-profile-editor" : undefined}/>{data.capabilities.entityDelete.enabled && data.capabilities.entityDelete.targetKinds.includes("student") ? <EduPiIconButton type="button" icon="delete" label={busy ? "正在删除学生档案" : "删除学生档案"} className="is-delete" busy={busy} disabled={busy} onClick={() => void deleteStudent()}/> : null}</div></header>
+      <nav className="edupi-dossier-tabs" aria-label="学生档案视图"><button type="button" aria-pressed={studentSection === "overview"} onClick={() => setStudentSection("overview")}>档案概览</button><button type="button" aria-pressed={studentSection === "records"} onClick={() => setStudentSection("records")}>学习与互动</button><button type="button" aria-pressed={studentSection === "details"} onClick={() => setStudentSection("details")}>资料与历史</button></nav>
       <div ref={profileScrollRef} className="edupi-student-drawer__scroll">
         {editor?.studentKey === selectedStudentId ? <form ref={profileFormRef} id="edupi-student-profile-editor" className="edupi-student-profile-editor" onSubmit={saveProfile}><header><h2>修改档案</h2><button type="button" onClick={closeEditor} disabled={busy}>取消</button></header><label><span>班级</span><input ref={profileInputRef} value={editor.className} maxLength={120} onChange={event => setEditor({...editor,className:event.target.value})} /></label><label><span>学生特征</span><textarea value={editor.traits} maxLength={12000} rows={4} placeholder="每行一个特征" onChange={event => setEditor({ ...editor, traits: event.target.value })} /></label><label><span>家校备注</span><textarea value={editor.parentNotes} maxLength={12000} rows={5} placeholder="每行一条备注" onChange={event => setEditor({ ...editor,parentNotes:event.target.value })} /></label><button type="submit" disabled={busy}>{busy ? "保存中…" : "保存修改"}</button></form> : null}
-        <div className="edupi-student-dossier__grid" hidden={studentSection !== "overview"}>
+        <div className="edupi-student-dossier__grid" hidden={studentSection === "records"}>
           <div className="edupi-student-dossier__body">
+            <div className="edupi-dossier-dashboard" hidden={studentSection !== "overview"}>
+              <div className="edupi-dossier-chart-pair"><DossierCoverageCard title="学习问题跟进" numerator={resolvedPatterns} denominator={patterns.length} numeratorLabel="已解决" remainderLabel="关注中" /><DossierTrendCard title="成长记录趋势" entries={chartEntries} /></div>
+              <EduPiDossierRecordTable key={selectedStudentId} rows={dossierRows} />
+            </div>
+            <div className="edupi-dossier-details" hidden={studentSection !== "details"}>
             <section className="edupi-dossier-panel edupi-dossier-traits"><header><h2>学生特征</h2></header>{traits.length ? <ul>{traits.map((trait, index) => <li key={index}>{trait}</li>)}</ul> : <p className="edupi-dossier-empty">暂无特征记录</p>}</section>
             <section className="edupi-dossier-panel edupi-dossier-timeline"><header><h2>成长记录</h2>{trajectory.length ? <span>{trajectory.length} 条</span> : null}</header>{sortedTrajectory.length ? <ol>{sortedTrajectory.map(({item, index}) => <li key={index}><time>{shortDate(item.date)}</time><div><h3>{String(item.event || "成长记录")}</h3>{item.note || item.description ? <p>{String(item.note || item.description)}</p> : null}</div></li>)}</ol> : <p className="edupi-dossier-empty">暂无成长记录</p>}</section>
             <section className="edupi-dossier-panel edupi-dossier-patterns"><header><h2>学习问题</h2>{patterns.length ? <span>{patterns.length} 条</span> : null}</header>{patterns.length ? patterns.map((item, index) => <article key={index}><span className={`edupi-dossier-status${item.status === "resolved" ? " is-resolved" : ""}`}>{item.status === "resolved" ? "已解决" : "观察中"}</span><div><h3>{String(item.description || "学习问题")}</h3>{item.last_seen ? <time>{shortDate(item.last_seen)}</time> : null}</div></article>) : <p className="edupi-dossier-empty">暂无学习问题记录</p>}</section>
             {typeof selected.student_id === "string" ? <section className="edupi-dossier-panel edupi-dossier-facts"><EduPiStudentFacts factSpine={data.factSpine} studentId={selected.student_id} reviewer={context?.name || "teacher"} onEducation={onEducation} /></section> : null}
             <section className="edupi-dossier-panel edupi-dossier-history"><StudentProfileHistory open={profileHistoryOpen} count={selectedProfileHistoryCount} history={visibleProfileHistory} loading={profileHistoryLoading} error={profileHistoryError} current={selectedProfileValues} busy={busy} restoring={restoringProfile} onToggle={setProfileHistoryOpen} onRestore={(version, side) => void restoreProfile(version, side)} /></section>
+            </div>
           </div>
-          <aside className="edupi-student-dossier__sidebar" aria-label="基本档案">
-            <section className="edupi-dossier-identity"><div className="edupi-dossier-monogram" aria-hidden="true"><span>{selectedName.slice(-2)}</span></div><h2>基本档案</h2><dl><div><dt>班级</dt><dd>{selectedClassName || "未分班"}</dd></div>{context?.grade ? <div><dt>年级</dt><dd>{context.grade}</dd></div> : null}{selectedUpdatedAt ? <div><dt>档案更新</dt><dd>{shortDate(selectedUpdatedAt)}</dd></div> : null}</dl></section>
-            <section className="edupi-dossier-panel edupi-dossier-family"><StudentFamilyRecords notes={parentNotes} contacts={familyContacts} /></section>
-          </aside>
-          <section className="edupi-dossier-panel edupi-dossier-memories"><header><h2>相关记忆</h2>{memories.length ? <span>{memories.length} 条</span> : null}</header>{memories.length ? memories.map(memory => <article key={memory.id}><p>{memory.content}</p><EduPiStudentMemoryActions memory={memory} onEducation={onEducation} onAgent={() => openStudentMemoryAgent(memory.content)} onDelete={() => { void onDeleteEntity("memory", memory.id, memory.content).catch(() => {}); }} /></article>) : <p className="edupi-dossier-empty">暂无已关联记忆</p>}</section>
-          {tasks.length ? <section className="edupi-dossier-panel edupi-dossier-tasks"><header><h2>相关任务</h2></header>{tasks.map(task => <button type="button" key={taskKey(task)} onClick={() => onTask(task)}><strong>{taskDisplayTitle(task)}</strong><span>{taskStatusLabel(task)}</span></button>)}</section> : null}
+
+          <section className="edupi-dossier-panel edupi-dossier-memories" hidden={studentSection !== "details"}><header><h2>相关记忆</h2>{memories.length ? <span>{memories.length} 条</span> : null}</header>{memories.length ? memories.map(memory => <article key={memory.id}><p>{memory.content}</p><EduPiStudentMemoryActions memory={memory} onEducation={onEducation} onAgent={() => openStudentMemoryAgent(memory.content)} onDelete={() => { void onDeleteEntity("memory", memory.id, memory.content).catch(() => {}); }} /></article>) : <p className="edupi-dossier-empty">暂无已关联记忆</p>}</section>
+          {tasks.length ? <section className="edupi-dossier-panel edupi-dossier-tasks" hidden={studentSection !== "details"}><header><h2>相关任务</h2></header>{tasks.map(task => <button type="button" key={taskKey(task)} onClick={() => onTask(task)}><strong>{taskDisplayTitle(task)}</strong><span>{taskStatusLabel(task)}</span></button>)}</section> : null}
         </div>
         <section className="edupi-dossier-records" hidden={studentSection !== "records"} aria-label="学习与互动"><EduPiStudentEvents key={selectedStudentId} student={selectedName} studentId={typeof selected.student_id === "string" ? selected.student_id : undefined} studentClass={String(selected.class_name || "")} semesterRange={currentSemesterRange} onAgent={onStartAgent} familyRecords={typeof selected.student_id === "string" ? <EduPiFamilyRecords key={selected.student_id} studentId={selected.student_id} studentName={selectedName || "学生"} reviewer={context?.name || "teacher"} onEducation={onEducation} /> : undefined} /></section>
+
       </div>
+      </div>
+          <aside className="edupi-student-dossier__sidebar" aria-label="基本档案">
+            <section className="edupi-dossier-identity"><h2>学生档案</h2><div className="edupi-dossier-portrait"><picture><source srcSet="/dossier/default-student-avatar.webp" type="image/webp" /><img src="/dossier/default-student-avatar.png" alt="" width="280" height="220" /></picture><small>默认形象</small></div><div className="edupi-dossier-identity__status"><span>{selectedClassName || "未分班"}</span><button type="button" onClick={openStudentAgent}>AI 协作</button></div><dl><div><dt>班级</dt><dd>{selectedClassName || "未分班"}</dd></div>{context?.grade ? <div><dt>年级</dt><dd>{context.grade}</dd></div> : null}{selectedUpdatedAt ? <div><dt>档案更新</dt><dd>{shortDate(selectedUpdatedAt)}</dd></div> : null}</dl></section>
+            <DossierMiniActivity entries={chartEntries} />
+            <section className="edupi-dossier-panel edupi-dossier-family"><StudentFamilyRecords notes={parentNotes} contacts={familyContacts} /></section>
+          </aside>
     </section> : null}
   </main>;
 }
