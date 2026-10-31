@@ -1,0 +1,45 @@
+{
+  "at": "2026-10-31T10:24:07.371556+08:00",
+  "releaseId": 429443149,
+  "version": "0.3.94",
+  "url": "https://github.com/PIGU-PPPgu/edupi-desktop/releases/tag/v0.3.94",
+  "publishedAt": "2026-10-31T02:23:25Z",
+  "draft": false,
+  "prerelease": true,
+  "name": "EduPi Desktop v0.3.94 macOS 预发布",
+  "anonymousApiStatus": 200,
+  "anonymousHtmlStatus": 200,
+  "tagCommit": "daf0091685252e564c593774d40fe05ba9564c55",
+  "assets": [
+    {
+      "id": 693416124,
+      "name": "EduPi_0.3.94_aarch64.dmg",
+      "size": 235544060,
+      "sha256": "7be7c261826a0fbc3d291f3484765bea803ba1fed4ebd65010d578d9592cd25a"
+    },
+    {
+      "id": 693376334,
+      "name": "EduPi_aarch64.app.tar.gz",
+      "size": 236863681,
+      "sha256": "5da04b8a5009310f7b1e51e55bd3aa6349412c019ea9c75b28e8ffa357a6502c"
+    },
+    {
+      "id": 693376707,
+      "name": "EduPi_aarch64.app.tar.gz.sig",
+      "size": 404,
+      "sha256": "9d0f73a666298bb02c8413905f42d6d37945477e79c80d245a4d31253f48ba86"
+    }
+  ],
+  "releaseNotesMatch": true,
+  "latestReleaseId": 413407109,
+  "latestReleaseTag": "v0.3.70",
+  "latestAndFeedUnchanged": true,
+  "feedCommit": "7924328ee893c9527adb54e25b0023e9f2a26ff7",
+  "feedBlob": "ea4b91ba3952d2e6975c38ea1201a7baa08153d8",
+  "feedSha256": "3b715abea1d91ad7a444b9d57dfada600fd1672e38b5388eb81674ccf2959565",
+  "feedVersion": "0.3.70",
+  "feedPlatformCount": 7,
+  "newBuildTriggeredByThisTask": false,
+  "windowsLinuxBuildTriggered": false,
+  "scope": "Public macOS Apple Silicon prerelease; existing accepted signed assets reused."
+}

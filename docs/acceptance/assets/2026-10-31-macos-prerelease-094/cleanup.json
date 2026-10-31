@@ -1,0 +1,40 @@
+{
+  "at": "2026-10-31T10:28:18.136631+08:00",
+  "removedDirectory": "~/edupi-install-checkpoints/v0.3.94/macos-assets",
+  "removed": [
+    {
+      "name": "EduPi_0.3.94_aarch64.dmg",
+      "bytes": 235544060,
+      "sha256": "7be7c261826a0fbc3d291f3484765bea803ba1fed4ebd65010d578d9592cd25a"
+    },
+    {
+      "name": "EduPi_aarch64.app.tar.gz",
+      "bytes": 236863681,
+      "sha256": "5da04b8a5009310f7b1e51e55bd3aa6349412c019ea9c75b28e8ffa357a6502c"
+    },
+    {
+      "name": "EduPi_aarch64.app.tar.gz.sig",
+      "bytes": 404,
+      "sha256": "9d0f73a666298bb02c8413905f42d6d37945477e79c80d245a4d31253f48ba86"
+    }
+  ],
+  "directoryExistsAfter": false,
+  "allocatedKiBBefore": 461344,
+  "availableKiBBefore": 867302420,
+  "availableKiBAfter": 867763744,
+  "observedAvailableDeltaKiB": 461324,
+  "gitContext": "Outside any Git worktree; tracked and ignore state not applicable. No repository files removed.",
+  "openHandles": 0,
+  "method": "Exact three digest-verified task downloads unlinked individually; empty directory removed with rmdir.",
+  "retained": [
+    "/Applications/EduPi.app",
+    "~/edupi-install-checkpoints/v0.3.94/evidence",
+    "~/edupi-install-checkpoints/v0.3.94/rollback",
+    "source worktrees",
+    "in-use dependencies",
+    "teacher data and credentials"
+  ],
+  "publicAssetsUntouched": true,
+  "normalAppNotInterrupted": true,
+  "availableDeltaCaveat": "Observed free-space difference may also include APFS sharing and concurrent normal activity."
+}

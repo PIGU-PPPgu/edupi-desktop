@@ -1,0 +1,59 @@
+{
+  "at": "2026-10-31T10:22:47.799284+08:00",
+  "version": "0.3.94",
+  "releaseId": 429443149,
+  "desktopCommit": "daf0091685252e564c593774d40fe05ba9564c55",
+  "coreCommit": "d87b44d628cdd3ded19a0bf82ec9cf82abd433f4",
+  "runId": 41120530586,
+  "attempt": 1,
+  "runConclusion": "success",
+  "assets": [
+    {
+      "id": 693416124,
+      "name": "EduPi_0.3.94_aarch64.dmg",
+      "size": 235544060,
+      "sha256": "7be7c261826a0fbc3d291f3484765bea803ba1fed4ebd65010d578d9592cd25a",
+      "localBytesMatch": true
+    },
+    {
+      "id": 693376334,
+      "name": "EduPi_aarch64.app.tar.gz",
+      "size": 236863681,
+      "sha256": "5da04b8a5009310f7b1e51e55bd3aa6349412c019ea9c75b28e8ffa357a6502c",
+      "localBytesMatch": true
+    },
+    {
+      "id": 693376707,
+      "name": "EduPi_aarch64.app.tar.gz.sig",
+      "size": 404,
+      "sha256": "9d0f73a666298bb02c8413905f42d6d37945477e79c80d245a4d31253f48ba86",
+      "localBytesMatch": true
+    }
+  ],
+  "acceptedMacOnlyFingerprint": "sha256:9e13707b556d4b26f758d735c8a3e3378fb33e258b4c2cf0945d0b8f4ee80e74",
+  "reuseOfSameAssetAcceptance": {
+    "signedNotarizedGatekeeper": true,
+    "updaterVerified": true,
+    "tamperRejected": true,
+    "nativeWelcomeEvidence": "installed-onboarding-094.json",
+    "riskReview": "risk-resolution-094.json"
+  },
+  "before": {
+    "draft": true,
+    "prerelease": false,
+    "latestReleaseId": 413407109,
+    "latestReleaseTag": "v0.3.70",
+    "feedCommit": "7924328ee893c9527adb54e25b0023e9f2a26ff7",
+    "feedBlob": "ea4b91ba3952d2e6975c38ea1201a7baa08153d8",
+    "feedSha256": "3b715abea1d91ad7a444b9d57dfada600fd1672e38b5388eb81674ccf2959565",
+    "feedVersion": "0.3.70",
+    "feedPlatformCount": 7
+  },
+  "authorizedPublication": {
+    "draft": false,
+    "prerelease": true,
+    "make_latest": "false",
+    "platform": "macOS Apple Silicon only",
+    "changeUpdaterFeed": false
+  }
+}
