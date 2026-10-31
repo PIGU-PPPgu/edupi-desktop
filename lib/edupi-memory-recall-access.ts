@@ -193,8 +193,11 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
           ...(entry.student_id ? { student_id: entry.student_id } : {}), memory_id: entry.id,
           category: entry.category, source_fingerprint: entry.source_fingerprint }, proofSignal);
         proof = sourceProof(answer, entry.source_fingerprint);
-      } catch { proof = { status: "held", case_status: "held", reason_code: "proof_unavailable" }; }
-      if (!current(turn, manager)) return denied();
+      } catch {
+        if (signal?.aborted) return denied("recall_unavailable");
+        proof = { status: "held", case_status: "held", reason_code: "proof_unavailable" };
+      }
+      if (signal?.aborted || !current(turn, manager)) return denied();
       return { ...result, source_proof: proof };
     } catch { return denied("recall_unavailable"); }
   }
