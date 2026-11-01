@@ -6,11 +6,11 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "cb28c87f1557e7daaf94c0f3f5ac74a9a1c8deb0",
+    "core_commit": "56c7ed54cbe65af6b6526eb4f5ac556e9c88e00d",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:23c403715e04e35967f6032e17b00930b79d03ef4e57abf330e49e36bbe35ff3",
-    "runtime_component_manifest_hash": "sha256:dae471f045ded35088434616663e36146931fa8869dda16c971976032c6130b8",
-    "runtime_schema_hash": "sha256:79b9d2af1de039967f53f5ffdbdeb0d7faed4c7b8122cac307086c485d17ef4b"
+    "component_manifest_hash": "sha256:f1b1e8f961cac81f0e3af256f8832915d9b104233b5669b3f88c41750b5f21ea",
+    "runtime_component_manifest_hash": "sha256:a3122cfcdeac42d4b7d7e91d94bbb0202ce4be4073c176bb1724538e1131aadc",
+    "runtime_schema_hash": "sha256:c0bc52462cf2b42aa63cf8fec23f7fdb3199145ddd8d74e8133d6d58b7a2c5e2"
   },
   "contract_identities": [
     {
@@ -255,7 +255,12 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/415",
     "https://github.com/PIGU-PPPgu/edupi/pull/416",
     "https://github.com/PIGU-PPPgu/edupi/pull/400",
-    "https://github.com/PIGU-PPPgu/edupi/pull/417"
+    "https://github.com/PIGU-PPPgu/edupi/pull/417",
+    "https://github.com/PIGU-PPPgu/edupi/pull/423",
+    "https://github.com/PIGU-PPPgu/edupi/pull/424",
+    "https://github.com/PIGU-PPPgu/edupi/pull/425",
+    "https://github.com/PIGU-PPPgu/edupi/pull/426",
+    "https://github.com/PIGU-PPPgu/edupi/pull/427"
   ],
-  "change_note": "Next source pairing targets Core main cb28c87f after the fixed macOS 0.3.95 signed candidate. Core's dream and DingTalk timeout fixes do not change Bridge v1.1 or Runtime schema; the bundled DingTalk change updates both component identities. Owner-only source proof stays read-only; G4 review_task remains the sole current adjustment review path. Twelve commands and education_workspace remain supported; eight dormant commands and two projections remain unsupported. The signed 0.3.95 assets and public feed are unchanged."
+  "change_note": "The macOS 0.3.96 source candidate pairs Core main 56c7ed54 with runtime schema c0bc5246 and both exact component manifests. The merged source tree equals the fully tested PR427 head. Bridge v1.1, twelve supported commands and education_workspace remain unchanged. Owner-only joint source proof and ordinal witness are read-only; compound answers remain held. G3 calendar administration opens private Durable only for an exact selected isolated canary grant. Eight dormant commands and two projections remain unsupported. Signed 0.3.95 assets and the public feed are unchanged; new installation validation is pending."
 }

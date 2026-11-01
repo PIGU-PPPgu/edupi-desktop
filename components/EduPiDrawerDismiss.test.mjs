@@ -21,12 +21,14 @@ test("workspace, chat, material, and calendar drawers share Escape and focus res
   }
 });
 
-test("student drawer closes with Escape and restores the invoking control", async () => {
+test("student profiles use full-page navigation while task drawers retain modal dismissal", async () => {
   const students = await read("./EduPiStudentWorkspace.tsx");
-  assert.match(students, /useModalDismiss<HTMLElement>/);
+  assert.match(students, /className="edupi-student-dossier"/);
+  assert.match(students, /className="edupi-dossier-back" onClick=\{closeStudent\}/);
+  assert.match(students, /ref=\{detailHeadingRef\} tabIndex=\{-1\}/);
+  assert.doesNotMatch(students, /useModalDismiss<HTMLElement>/);
   const tasks = await read("./EduPiTaskDetailDrawer.tsx");
   assert.match(tasks, /usePanelDismiss<HTMLElement>\(onClose, docked\)/);
   assert.match(tasks, /docked \? "complementary" : "dialog"/);
   assert.doesNotMatch(tasks, /addEventListener\("keydown"/);
-  assert.match(students, /ref=\{studentDrawerRef\}/);
 });

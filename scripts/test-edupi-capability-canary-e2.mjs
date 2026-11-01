@@ -5,6 +5,7 @@ import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
 import { createJiti } from "jiti";
 import { seedCapabilityCanary } from "./edupi-capability-canary-fixture.mjs";
@@ -13,6 +14,15 @@ assert.equal(process.platform, "darwin", "this canary covers macOS only");
 assert.ok(process.env.EDUPI_CORE_ROOT && path.isAbsolute(process.env.EDUPI_CORE_ROOT), "EDUPI_CORE_ROOT is required");
 const coreRoot = fs.realpathSync(process.env.EDUPI_CORE_ROOT), temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "edupi-capability-canary-e2-")));
 const dataRoot = path.join(temp, "data"), stateDir = path.join(temp, "state"), agentDir = path.join(temp, "agent"), home = path.join(dataRoot, ".edupi");
+const durableAdminPath = path.join(home, "runtime", "calendar-administration-durable-v1.sqlite");
+const durableAdminState = () => {
+  const db = new DatabaseSync(durableAdminPath, { readOnly: true });
+  try {
+    assert.equal(db.prepare("PRAGMA quick_check").get().quick_check, "ok");
+    return { activeTasks: db.prepare("SELECT COUNT(*) AS count FROM tasks").get().count,
+      recordedIds: db.prepare("SELECT COUNT(*) AS count FROM record_ids").get().count };
+  } finally { db.close(); }
+};
 for (const directory of [stateDir, agentDir, path.join(home, "memory"), path.join(home, "output"), path.join(home, "locks")]) fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
 const token = crypto.randomBytes(32).toString("hex"), keep = process.env.EDUPI_E2_KEEP === "1";
 let chatCalls = 0;
@@ -91,6 +101,7 @@ try {
   for (const domain of domains) assert.equal((await get(domain)).activation.enabled, false);
   let host = await supervisor.ensureEduPiRuntime(roots), health = await host.call("health", null);
   assert.equal(health.result.capabilities.g3_processor, "activation_pending");
+  assert.equal(fs.existsSync(durableAdminPath), false, "G3 Durable is lazy before an exact selected admin case");
   const rootRef = health.result.data_root_fingerprint;
   for (const domain of domains) {
     const enabled = await toggle(domain, true);
@@ -98,6 +109,7 @@ try {
     assert.equal(enabled.limits.maxModelCalls, 0); assert.equal(enabled.grant.modelBudget, null);
     assert.ok(config.readEduPiProactivityActivation({ dataRoot, domain }).ownerId);
   }
+  assert.equal(fs.existsSync(durableAdminPath), false, "grant activation alone must not open the private Durable store");
   host = await supervisor.ensureEduPiRuntime(roots);
   const owner = (await host.call("owner_read", { root_ref: rootRef })).result.owner;
   const foreignBefore = [];
@@ -216,6 +228,8 @@ try {
   const workCases = snapshot.work_cases.filter(item => item.case_kind === "capability_package");
   assert.equal(workCases.length, 3, "three selected natural requests produce exactly three current cases");
   assert.ok(workCases.every(item => item.current_state === "draft_ready" && item.artifacts.length === 3));
+  assert.equal(fs.existsSync(durableAdminPath), true, "selected G3 admin case must run through Durable");
+  assert.ok(durableAdminState().recordedIds >= 1, "G3 Durable must retain its internal task identity after retirement");
   const { buildCommandEnvelope } = await import(pathToFileURL(path.join(coreRoot, "scripts/edupi_bridge_command.mjs")).href);
   const feedbackFetcher = async (_url, init = {}) => init.method === "POST"
     ? feedbackRoute.POST(request("http://localhost/api/edupi/teacher-feedback", "POST", JSON.parse(init.body)))
@@ -297,6 +311,7 @@ try {
   assert.equal(cancelled.status, 200, JSON.stringify(await cancelled.json()));
   assert.equal(outbox.readEduPiPromptOutbox(sessionId, cancelRequestId, { dataRoot }).stage, "cancelled");
   assert.deepEqual(fs.readFileSync(path.join(home, "output/capability_work_state.json")), beforeRefusal, "settling all three captured questions cannot create work or dispatch Pi");
+  const durableBeforeRestart = durableAdminState();
   for (const domain of domains) assert.equal((await toggle(domain, false)).activation.enabled, false);
   host = await supervisor.ensureEduPiRuntime(roots);
   assert.equal((await host.call("health", null)).result.capabilities.g3_processor, "activation_pending");
@@ -307,9 +322,13 @@ try {
   for (const domain of domains) await toggle(domain, true);
   host = await supervisor.ensureEduPiRuntime(roots);
   assert.deepEqual(fs.readFileSync(path.join(home, "output/capability_work_state.json")), stoppedBytes, "resume never executes foreign grants or duplicates reviewed drafts");
+  assert.equal(fs.existsSync(durableAdminPath), true);
+  const durableAfterRestart = durableAdminState();
+  assert.equal(durableAfterRestart.recordedIds, durableBeforeRestart.recordedIds, "restart cannot duplicate the Durable admin task");
   console.log(JSON.stringify({ status: "passed", domains: summaries, defaultOff: true, exactGrantFence: true, productionOutbox: true,
     registeredContinuation: true, artifactHashReadback: true, reviewReadback: true, syntheticFeedback: true, recipientRefusal: true,
-    recipientPublicConfirmation: publicRecipientConfirmation, threeDomainSettlement: true, crossStudentRefusal: true, unsafeRefusal: true, stopRestartResume: true,
+    recipientPublicConfirmation: publicRecipientConfirmation, threeDomainSettlement: true, durableAdmin: true,
+    crossStudentRefusal: true, unsafeRefusal: true, stopRestartResume: true,
     capabilityModelCalls: 0, syntheticChatCalls: chatCalls, assistantChecks, sseNewlineDelimited: sseFrames.every(frame => frame.newlineDelimited), externalSend: false }));
   if (keep) console.log(JSON.stringify({ status: "retained", temporaryRoot: temp, dataRoot, stateDir, agentDir, requests: selected.requests, recipientFactId: recipientReference.fact_id, publicRecipientConfirmation }));
 } finally {

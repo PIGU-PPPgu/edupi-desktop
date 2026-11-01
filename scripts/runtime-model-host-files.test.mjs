@@ -25,7 +25,7 @@ test("copied current Core model adapter imports without an original Core tree", 
     const { buildG1LiveRequest, createIsolatedRecallSupportAssessor } = await import(pathToFileURL(path.join(root, "scripts/core_runtime_model_adapter.mjs")).href);
     assert.equal(typeof buildG1LiveRequest, "function");
     assert.equal(typeof createIsolatedRecallSupportAssessor, "function");
-    for (const name of ["recall_source_support.mjs", "model_json.mjs"]) {
+    for (const name of ["recall_source_support.mjs", "recall_compound_guard.mjs", "memory_recall_query.mjs", "model_json.mjs"]) {
       assert.deepEqual(fs.readFileSync(path.join(root, "scripts", name)), fs.readFileSync(path.join(process.env.EDUPI_CORE_ROOT, "scripts", name)));
     }
   } finally { fs.rmSync(root, { recursive: true, force: true }); }

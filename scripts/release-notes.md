@@ -1,11 +1,7 @@
-EduPi Desktop 0.3.95，macOS Apple Silicon 技术候选。
+EduPi Desktop 0.3.96，macOS Apple Silicon 技术候选。
 
-配对的 Core 新增受本机 owner 控制的单来源只读证明。教师在对话中检索一份记忆时，Desktop 读取当前来源与 Goal 绑定状态；证明不会变成教学答案判定、复合来源放行或外发许可。未通过的证明只记为待核验，不显示为当前已核验；证明元数据不进入模型提示。Core 同时更新了重定向与查询字符串依赖的安全版本。
+班级与学生档案采用完整主页面，提供独立人物侧栏、可切换时段的成长趋势、问题跟进图表和可筛选的记录表。保留档案编辑、家校记录、资料历史与学习互动。
 
-课后复盘的“下次课调整候选”可通过现有任务审核修改，旧产物转入历史；教学方法的发布状态不再冒充实际路由使用证明。
+配对 Core main 56c7ed54，更新 Runtime schema、双组件清单及隔离模型宿主的依赖闭包。行政日程 Durable 接线由隔离环境中的精确授权控制，来源证明保持只读，复合回答仍需满足既有来源门。
 
-试卷照片识别的视觉服务无响应时会按尝试限时结束并显示失败，不无限等待。
-
-Bridge v1.1 现有 12 条命令继续可用；另 8 条旧命令及 `external_delivery`、`teacher_outcome_evidence` 仍未开放。新合同不改变教师确认与默认不外发规则。
-
-本轮只构建 macOS。Release 保持 Draft，不更新公开 feed，不构建 Windows/Linux。
+本轮只构建 macOS，Release 保持 Draft，不切换公开自动更新源；Windows/Linux 延后。

@@ -1,5 +1,11 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-01 `.96` 生产源码由本构建线程接手，已配对 Core `56c7ed54`、schema `c0bc5246` 和双组件清单，补齐隔离宿主2项真实依赖并接通精确隔离行政授权下的G3 Durable。完整本机配对为3538通过／16条件跳过／0失败，三域真实宿主／私有SQLite／冷启去重E2通过；类型、lint及既有安全策略通过。Core同tree PR全CI通过，但精确Main复跑41282473308在G1 loopback等待后仍running而失败，原失败与独立复验继续保留，未写作Main CI通过。未合#422与过时heartbeat夹具不进入本轮最小生产PR；唯一签名构建、安装及原生验收仍待。[本轮范围与证据](../acceptance/2026-11-01-macos096-update.md)区分各项状态。
+
+2026-11-01 `.96` 源码截止点更新，取代下段“等待 #422”的构建前置：Core #422 候选 `8914b6f2` 的完整 Test 失败且未合，不纳入新包。Core 最新合并 `56c7ed54` 与 PR427 受测 head `a414b8e5` 的 Git tree 同为 `3b71abb04d5933715104f2a95f7f0e3df2720bfe`，后者完整 Core Quality `41274979051` 成功；精确 Main 复跑 `41282473308` 仍运行。现有 Desktop 线程优先完成此已测主线的身份／宿主配对与隔离 E2，再由本线程构建唯一 `.96`；本机正常 App 仍 `.94`，未安装。旧六领域 PR 链已有后续注册式主线路径替代，不整体合入；G6为 hold/feedback，不等于独立自动执行域。
+
+2026-11-01 R04／R12／R17 `.96` 安装更新已获用户授权：从 Desktop main `833ddb32` 准备新 Mac-only 候选，已包含 PR442 档案图表；本轮负责唯一签名构建与本机更新，现有桌面线程串行完成 Core #422 组合 CI／普通合并、六领域接线链核对和最终 Core 配对。当前只准备 `.96` 版本元数据，尚未派签名 run、安装或退出正常 `.94` App。旧 `.95` 固定旧 Core，不能作为本轮产物；公开 `.94` 和 updater feed 不变，Windows/Linux 延后。自有30146／30147预览已停，在无跟踪和无句柄核对后清理 `.next` 与本轮隔离临时根，原缓存分配401900KiB、同卷可用增411463680字节；截图、源码、教师数据与在用依赖保留。
+
 2026-11-01 当前 Core→Desktop 交接，取代下文旧 pin：[R04 #426](https://github.com/PIGU-PPPgu/edupi/pull/426) 精确 [CI](https://github.com/PIGU-PPPgu/edupi/actions/runs/41236122240) 成功，合入 Core Main `5598ac4b03b8c230fd0b94bb20d3a57bee09c8a8`，合并树与受测 head 相同。Desktop 下一配对须固定该 SHA、更新 Runtime schema `sha256:c0bc52462cf2b42aa63cf8fec23f7fdb3199145ddd8d74e8133d6d58b7a2c5e2` 和双组件清单；Bridge schema 不变。Core Main 本次推送 [CI](https://github.com/PIGU-PPPgu/edupi/actions/runs/41261512198) 仍在运行。#426 只提供选定双来源同案只读证明，不授予查询同案或答案正确，复合回答仍拦截；单来源逐属性误判、新未见语义门、同包安装和教师价值仍未通过。精确清单与未验条件见[验收记录](../acceptance/2026-11-01-l4-browser-rehearsal.md#core-g1-合并与-desktop-交接)。
 
 2026-11-01 G1 Core 历史里程碑：[Core #424](https://github.com/PIGU-PPPgu/edupi/pull/424) 和 [#425](https://github.com/PIGU-PPPgu/edupi/pull/425) 的精确 CI 均成功，先后合入 `2b3e5596`、`e07885b1`；后者的 Main 推送 [CI](https://github.com/PIGU-PPPgu/edupi/actions/runs/41240090581) 也成功。正确最终解的错误步骤由有界有理数算法纠正，新 Durable 草稿按默认单节 45 分钟收束；旧版 55 分钟草稿经新 Core 重启回读，四份产物与状态哈希不变，追加模型调用 0。旧 Desktop pin 和签名包不含这些修复。
