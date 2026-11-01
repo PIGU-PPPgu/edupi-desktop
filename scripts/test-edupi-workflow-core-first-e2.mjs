@@ -101,7 +101,8 @@ try {
   await assert.rejects(unauthorizedChild.send({ type: "prompt", message: "未授权直接消息" }), /core_first_required/);
   await assert.rejects(unauthorizedChild.sendWorkflowChildPrompt({ type: "prompt", message: "父回合已结束" }), /core_first_required/);
   console.log(JSON.stringify({ status: "passed", coreFirstGate: true, capturedParent: true,
-    confirmedWorkflow: true, childCalls, parentCalls, privateChild: true, expiredParentDenied: true, externalNetwork: false }));
+    syntheticConfirmation: true, childCalls, parentCalls, privateChild: true, expiredParentDenied: true,
+    parentFetchLoopbackOnly: true }));
 } finally {
   if (deadline) clearTimeout(deadline);
   unauthorizedChild?.destroy();

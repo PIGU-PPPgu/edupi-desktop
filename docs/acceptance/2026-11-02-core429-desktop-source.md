@@ -16,10 +16,11 @@
 | 同一根，`node --test lib/edupi-bridge-contract.test.mjs desktop/core-runtime-host.test.mjs scripts/runtime-model-host-files.test.mjs` | 25 通过、1 条件跳过、0 失败；Core 宿主和模型文件闭包通过 | 无 Windows 原生目标 |
 | 同一根，`node --test desktop/core-runtime-recall.test.mjs` 与 `EDUPI_MEMORY_RECALL_CORE_ROOT=<隔离 Core 根> node --test lib/edupi-memory-recall-access.test.mjs` | 私有 IPC、当前来源、伪造拒绝、模型取消、冷重启、SDK 捕获与跨班隔离通过；只有合成本地模型调用 | 未测真人答案质量 |
 | 同一根，`node scripts/test-edupi-capability-canary-e2.mjs` | 日程行政、课后反思、家校沟通三域的精确授权、私有 Durable、产物哈希回读、停止重启续跑通过；外发 false | 仅隔离 Mac 合成根 |
-| 同一根，`node scripts/test-edupi-workflow-core-first-e2.mjs` | Core-first gate 已启用；捕获父回合的工作流经确认运行一个只读子会话，父回合结束后的直接／内部派发均被拒绝；外部网络调用 0 | 以服务端捕获方法和合成回执驱动，未代替签名安装版用户流程 |
+| 同一根，`node scripts/test-edupi-workflow-core-first-e2.mjs` | Core-first gate 已启用；捕获父回合的工作流经合成确认运行一个只读子会话，父回合结束后的直接／内部派发均被拒绝；父进程 fetch 限 loopback | 以服务端捕获方法和合成回执驱动，未代替签名安装版用户流程，也未观测所有子进程网络 |
 | `EDUPI_CORE_ROOT=<隔离 Core 根> node --test --test-concurrency=4 ...` | 3587 项，3571 通过、16 条件跳过、0 失败 | 默认高并发完整套件曾使同一 Core process 测试硬超时 1 项、取消 1 项；单文件复跑 16 通过／1 条件跳过，失败记录保留于本机诊断日志 |
 | macOS Rust 1.90，`TAURI_CONFIG='{"bundle":{"resources":[]}}' cargo check --locked --manifest-path <Desktop>/src-tauri/Cargo.toml` | 原生源码编译通过；只跳过尚未生成的包内资源目录 | 本次是 `cargo check`，不是签名包；默认 `tuna` Git 索引三分钟无进展，改用 `/tmp` 隔离 Cargo Home 与官方 sparse 源，没有修改全局 Cargo 配置 |
 | `0.3.98` 四处版本元数据和发行说明、同一隔离 Cargo Home 的 `cargo check --locked`、发布工作流定向测试 | 源码候选版本一致、Mac 原生重新检查通过、发布流程 52 通过／3 条件跳过／0 失败 | 未触发 GitHub 签名构建、未创建 tag 或安装包；Core #430 最终身份仍需替换发行说明和 pin |
+| 与签名工作流相同的 `cargo tree --locked --target aarch64-apple-darwin --edges normal,build --prefix none` | 1225 行 Mac 依赖闭包，未发现 `zip v0–v8`；本机可重复读取锁定解析 | Apple 凭据、签名和公证仅在最终 Mac 签名 run 验证，本机树检查不替代 |
 
 本机待清理的纯生成缓存：该 Desktop 工作树的 `src-tauri/target/` 约 1.1 GiB，以及 `/tmp/edupi-cargo-home-20261102.pKcWDK` 约 237 MiB。两者保留至最终 Mac 候选完成本机验证或明确放弃本轮构建；届时先核对句柄、Git 跟踪和保留证据，再按精确路径清理，不触及源码、已安装应用或真实资料。
 
