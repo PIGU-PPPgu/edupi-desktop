@@ -3,7 +3,7 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { APP_PREF_KEYS, getPrefBool, setPrefBool } from "@/lib/app-prefs";
 import { projectManagedWorkflow, projectWorkflowView, type WorkflowStepStatus } from "@/lib/edupi-workflow-view";
-import type { DynamicWorkflowRun } from "@/lib/edupi-dynamic-workflow";
+import type { PublicDynamicWorkflowRun } from "@/lib/edupi-dynamic-workflow";
 import type { AgentMessage } from "@/lib/types";
 import { taskDisplayTitle, taskStatusLabel } from "@/lib/edupi-workbench";
 import { workCaseStateLabel } from "@/lib/edupi-work-case";
@@ -22,10 +22,10 @@ type Props = {
 
 const EMPTY_MESSAGES: readonly AgentMessage[] = [];
 const flowStatus: Record<WorkflowStepStatus, string> = {
-  pending: "待运行", running: "运行中", done: "已完成", failed: "有失败", interrupted: "已中断",
+  pending: "待运行", running: "运行中", done: "已完成", failed: "有失败", interrupted: "已中断", skipped: "已跳过",
 };
 const stepStatus: Record<WorkflowStepStatus, string> = {
-  pending: "待运行", running: "执行中", done: "已完成", failed: "失败", interrupted: "已中断",
+  pending: "待运行", running: "执行中", done: "已完成", failed: "失败", interrupted: "已中断", skipped: "已跳过",
 };
 
 function taskRunStatus({ task, workCase }: EduPiTaskRunInfo): string {
@@ -52,7 +52,7 @@ export function EduPiRuntimeFlow({ running, toolRunning, compacting, activeTools
     for (let index = messages.length - 1; index >= 0; index--) if (messages[index].role === "user") return entryIds[index];
     return undefined;
   }, [messages, entryIds]);
-  const [managedRun, setManagedRun] = useState<DynamicWorkflowRun | null>(null);
+  const [managedRun, setManagedRun] = useState<PublicDynamicWorkflowRun | null>(null);
   useEffect(() => { setManagedRun(null); }, [sessionId]);
   useEffect(() => {
     if (!sessionId) return;
@@ -61,7 +61,7 @@ export function EduPiRuntimeFlow({ running, toolRunning, compacting, activeTools
       try {
         const response = await fetch(`/api/edupi/workflows?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
         if (!response.ok) return;
-        const body = await response.json() as { run?: DynamicWorkflowRun | null };
+        const body = await response.json() as { run?: PublicDynamicWorkflowRun | null };
         if (active) setManagedRun(body.run ?? null);
       } catch { /* The observed Pi activity remains available offline. */ }
     };
@@ -70,6 +70,11 @@ export function EduPiRuntimeFlow({ running, toolRunning, compacting, activeTools
     return () => { active = false; if (timer) clearInterval(timer); };
   }, [sessionId, busy]);
   const graph = managedRun && managedRun.sourceEntryId === currentEntryId ? projectManagedWorkflow(managedRun) : observedGraph;
+  const finalSkipped = graph?.managed && graph.status === "done" ? graph.phases.reduce((count, phase) => count + phase.steps.filter(step => step.status === "skipped").length, 0) : 0;
+  const finalFailed = graph?.managed && graph.status === "done" ? graph.phases.reduce((count, phase) => count + phase.steps.filter(step => step.status === "failed").length, 0) : 0;
+  const graphCount = graph && (finalSkipped || finalFailed)
+    ? `${graph.completed} 完成${finalFailed ? ` · ${finalFailed} 失败` : ""}${finalSkipped ? ` · ${finalSkipped} 跳过` : ""}`
+    : graph ? `${graph.completed}/${graph.total} 项` : "";
   const [expanded, setExpanded] = useState(true);
   const [openPhase, setOpenPhase] = useState<string | null>(null);
   useEffect(() => { setExpanded(getPrefBool(APP_PREF_KEYS.edupiWorkflowExpanded, true)); }, []);
@@ -84,7 +89,7 @@ export function EduPiRuntimeFlow({ running, toolRunning, compacting, activeTools
         }}>
           <span className={`edupi-workflow-view__lamp is-${graph.status}`} aria-hidden="true" />
           <strong>{graph.title}</strong><span className="edupi-workflow-view__status">{flowStatus[graph.status]}</span>
-          <span className="edupi-workflow-view__count">{graph.completed}/{graph.total} 项</span>
+          <span className="edupi-workflow-view__count">{graphCount}</span>
           <span className="edupi-workflow-view__chevron" aria-hidden="true">⌄</span>
         </button> : <div className="edupi-workflow-view__quiet" role="status">
           <span className="edupi-workflow-view__lamp is-running" aria-hidden="true" /><span>{activity}</span>
