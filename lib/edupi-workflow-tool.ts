@@ -137,12 +137,15 @@ export function createEduPiWorkflowTool({ runAgent = runReadOnlyAgent }: { runAg
       }
       signal?.throwIfAborted();
       run.sourceEntryId = source.id;
-      const { run: final, results } = await executeDynamicWorkflow(run, plan,
+      const { run: final } = await executeDynamicWorkflow(run, plan,
         (agent, previous, childSignal) => runAgent(agent, previous, ctx.cwd,
           ctx.model ? { provider: ctx.model.provider, modelId: ctx.model.id } : undefined,
           ctx.thinkingLevel, { sessionId: run.sessionId, sourceEntryId: source.id }, childSignal), signal);
-      const report = results.flatMap(visit => visit.results.map((result, agentIndex) =>
-        `${final.phases[visit.phaseIndex].name} 第 ${visit.visit} 轮 / ${final.phases[visit.phaseIndex].agents[agentIndex].name}${result.draft ? "（待审草稿，未采用）" : ""}：${result.ok ? result.summary : `失败：${result.summary}`}`));
+      // A resumed invocation must return previously completed drafts too: the
+      // interrupted tool call did not deliver its result to the parent chat.
+      const report = final.results.flatMap((phaseResults, phaseIndex) => phaseResults.flatMap((result, agentIndex) => result ? [
+        `${final.phases[phaseIndex].name} 第 ${final.phases[phaseIndex].visits} 轮 / ${final.phases[phaseIndex].agents[agentIndex].name}${result.draft ? "（待审草稿，未采用）" : ""}：${result.ok ? result.summary : `失败：${result.summary}`}`,
+      ] : []));
       return { content: [{ type: "text", text: `工作流${final.status === "done" ? "完成" : "未完成"}。\n${report.join("\n\n").slice(0, 20_000)}` }],
         details: { runId: final.id, status: final.status }, isError: final.status !== "done" };
     },

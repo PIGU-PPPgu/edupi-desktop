@@ -38,7 +38,10 @@ export type DynamicWorkflowRun = PublicDynamicWorkflowRun & {
 const MAX_PHASES = 6;
 const MAX_AGENTS_PER_PHASE = 4;
 const MAX_AGENT_INVOCATIONS = 32;
-const MAX_FILE_BYTES = 256 * 1024;
+// At most 24 distinct agents each retain 4,000 characters. JSON escaping and
+// multibyte text can use more than six bytes per character; keep the cap above
+// that validated worst case while still bounding one private journal file.
+const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_TRANSITIONS = 20;
 const ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const active = (globalThis as typeof globalThis & { __edupiWorkflowRuns?: Set<string> }).__edupiWorkflowRuns ??= new Set<string>();
