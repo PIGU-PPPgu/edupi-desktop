@@ -1,6 +1,9 @@
 "use client";
 
-import { useContext } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { APP_PREF_KEYS, getPrefBool, setPrefBool } from "@/lib/app-prefs";
+import { projectWorkflowView, type WorkflowStepStatus } from "@/lib/edupi-workflow-view";
+import type { AgentMessage } from "@/lib/types";
 import { taskDisplayTitle, taskStatusLabel } from "@/lib/edupi-workbench";
 import { workCaseStateLabel } from "@/lib/edupi-work-case";
 import { hasCurrentExplicitBoardStage, taskBoardLaneLabel } from "@/lib/edupi-task-board";
@@ -11,7 +14,16 @@ type Props = {
   toolRunning: boolean;
   compacting: boolean;
   activeTools?: string[];
+  messages?: readonly AgentMessage[];
   sessionId?: string;
+};
+
+const EMPTY_MESSAGES: readonly AgentMessage[] = [];
+const flowStatus: Record<WorkflowStepStatus, string> = {
+  running: "运行中", done: "已完成", failed: "有失败", interrupted: "已中断",
+};
+const stepStatus: Record<WorkflowStepStatus, string> = {
+  running: "执行中", done: "已完成", failed: "失败", interrupted: "已中断",
 };
 
 function taskRunStatus({ task, workCase }: EduPiTaskRunInfo): string {
@@ -29,16 +41,55 @@ function taskRunStatus({ task, workCase }: EduPiTaskRunInfo): string {
   return taskStatusLabel(task);
 }
 
-export function EduPiRuntimeFlow({ running, toolRunning, compacting, activeTools = [], sessionId }: Props) {
+export function EduPiRuntimeFlow({ running, toolRunning, compacting, activeTools = [], messages = EMPTY_MESSAGES, sessionId }: Props) {
   const context = useContext(EduPiTaskRunContext);
   const info = sessionId && context?.sessionId === sessionId ? context : null;
   const busy = running || toolRunning || compacting;
-  if (!info && !busy) return null;
+  const graph = useMemo(() => projectWorkflowView(messages, busy, activeTools), [messages, busy, activeTools]);
+  const [expanded, setExpanded] = useState(true);
+  const [openPhase, setOpenPhase] = useState<string | null>(null);
+  useEffect(() => { setExpanded(getPrefBool(APP_PREF_KEYS.edupiWorkflowExpanded, true)); }, []);
+  if (!info && !busy && !graph) return null;
 
   const activity = compacting ? "整理对话" : activeTools.length || toolRunning ? "正在执行" : info ? "正在协作" : "处理中";
   const activityDetail = busy && !compacting && activeTools.length ? `执行工具：${activeTools.join("、")}` : undefined;
   if (!info) {
-    return <div className="edupi-runtime-flow edupi-runtime-flow--generic" role="status"><svg viewBox="0 0 72 16" aria-hidden="true"><circle cx="4" cy="8" r="3" fill="currentColor" /><path d="M10 8H62" fill="none" stroke="currentColor" strokeWidth="2" /><circle cx="68" cy="8" r="3" fill="currentColor" /></svg><span title={activityDetail}>{activity}</span></div>;
+    const status = compacting ? activity : graph ? flowStatus[graph.status] : activity;
+    return <section className="edupi-workflow-view" aria-label="执行流程">
+      <div className="edupi-workflow-view__header">
+        {graph ? <button type="button" className="edupi-workflow-view__toggle" aria-expanded={expanded} onClick={() => {
+          setExpanded(value => { setPrefBool(APP_PREF_KEYS.edupiWorkflowExpanded, !value); return !value; });
+        }}>
+          <span className={`edupi-workflow-view__lamp is-${graph.status}`} aria-hidden="true" />
+          <strong>执行流程</strong><span className="edupi-workflow-view__status">{status}</span>
+          <span className="edupi-workflow-view__count">{graph.completed}/{graph.total} 项操作</span>
+          <span className="edupi-workflow-view__chevron" aria-hidden="true">⌄</span>
+        </button> : <div className="edupi-workflow-view__quiet" role="status">
+          <span className="edupi-workflow-view__lamp is-running" aria-hidden="true" /><span>{status}</span>
+        </div>}
+      </div>
+      {graph && expanded ? <div className="edupi-workflow-view__scroll">
+        <ol className="edupi-workflow-view__timeline" aria-label="本轮执行阶段">
+          {graph.phases.map((phase) => <li key={phase.id} className={`edupi-workflow-view__phase is-${phase.status}`}>
+            <div className="edupi-workflow-view__station"><span className="edupi-workflow-view__node" aria-hidden="true" />
+              <strong>{phase.name}</strong><span>{stepStatus[phase.status]}</span></div>
+            <ul className="edupi-workflow-view__steps">
+              {phase.steps.slice(0, openPhase === phase.id ? undefined : 5).map(step => <li key={step.id}
+                className={`edupi-workflow-view__step is-${step.status}`} title={step.toolName}>
+                <span className="edupi-workflow-view__step-mark" aria-hidden="true" />
+                <span className="edupi-workflow-view__step-name">{step.name}</span>
+                <span className="edupi-workflow-view__step-state">{stepStatus[step.status]}</span>
+              </li>)}
+            </ul>
+            {phase.steps.length > 5 ? <button type="button" className="edupi-workflow-view__more"
+              aria-expanded={openPhase === phase.id} onClick={() => setOpenPhase(value => value === phase.id ? null : phase.id)}>
+              {openPhase === phase.id ? "收起" : `还有 ${phase.steps.length - 5} 项`}
+            </button> : null}
+          </li>)}
+        </ol>
+        {graph.hiddenPhases > 0 ? <span className="edupi-workflow-view__older">较早 {graph.hiddenPhases} 阶段</span> : null}
+      </div> : null}
+    </section>;
   }
 
   const status = busy ? activity : info.unavailable ? "任务状态暂不可用" : taskRunStatus(info);
