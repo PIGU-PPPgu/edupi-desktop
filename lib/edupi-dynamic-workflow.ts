@@ -256,13 +256,15 @@ export async function executeDynamicWorkflow(
         run.activePhaseIndex = index;
       } else {
         phase.status = "running";
-        phase.agents.forEach(agent => { if (agent.status !== "done") agent.status = "running"; });
+        phase.agents.forEach((agent, agentIndex) => {
+          if (!["done", "failed"].includes(agent.status) || !run.results[index][agentIndex]) agent.status = "running";
+        });
       }
       await persist();
       const previous = run.lastSummary;
       const settled: DynamicWorkflowAgentResult[] = await Promise.all(definition.agents.map(async (agent, agentIndex) => {
         const saved = run.results[index][agentIndex];
-        if (phase.agents[agentIndex].status === "done" && saved) return saved;
+        if (["done", "failed"].includes(phase.agents[agentIndex].status) && saved) return saved;
         let outcome: DynamicWorkflowAgentResult;
         try { outcome = await executeAgent(agent, previous, signal); }
         catch (error) { outcome = { ok: false, summary: error instanceof Error ? error.message.slice(0, 4000) : "子任务失败" }; }

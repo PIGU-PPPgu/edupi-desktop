@@ -40,9 +40,9 @@
 
 本轮下载副本、分块缓存、解包副本、已卸载挂载目录和隔离夹具，以及已被后续回退取代的 `.93`、`.94` App 副本共十个精确路径已清理。清理前核对版本、无进程句柄与无挂载；删除前分配空间合计 4,894,638,080 字节，约 4.56 GiB。清理后逐一路径不存在且当前 App 保留，`df` 同卷可用空间从 872471356 KiB 增至 877334076 KiB。
 
-唯一当前回退 App 为 `/Users/iguppp/edupi-install-checkpoints/v0.3.97/rollback/EduPi-before-097.saved-bundle`，版本 `.96`，保留至用户验收 `.97` 后清理。既有真实资料备份、源码与在用依赖未清理。
+唯一当前回退 App 为 `~/edupi-install-checkpoints/v0.3.97/rollback/EduPi-before-097.saved-bundle`，版本 `.96`，保留至用户验收 `.97` 后清理。既有真实资料备份、源码与在用依赖未清理。
 
-本机证据目录：`/Users/iguppp/edupi-install-checkpoints/v0.3.97/evidence/`。关键记录为 `public-download-verification.json`、`local-bundle-identity.json`、`mac-installation.json`、`native-about-acceptance.json`、`native-about-097.png`、`native-about-097.ax.txt`、`normal-startup-097.json`、`cleanup-delivered-097.json`。这些记录分别覆盖公开资产、包内来源、实际安装、原生界面、资料保持、正常启动与实际清理，不把前序阶段记录中的“尚未启动”状态当作最终状态。
+本机证据目录：`~/edupi-install-checkpoints/v0.3.97/evidence/`。关键记录为 `public-download-verification.json`、`local-bundle-identity.json`、`mac-installation.json`、`native-about-acceptance.json`、`native-about-097.png`、`native-about-097.ax.txt`、`normal-startup-097.json`、`cleanup-delivered-097.json`。这些记录分别覆盖公开资产、包内来源、实际安装、原生界面、资料保持、正常启动与实际清理，不把前序阶段记录中的“尚未启动”状态当作最终状态。
 
 ## 已知限制
 
