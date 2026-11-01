@@ -723,11 +723,14 @@ export function AppSettings({ onClose, initialSection = null, embedded = false, 
     [components],
   );
   const currentVersion = desktop ? nativeIdentity.host?.appVersion ?? null : APP_VERSION;
-  const updateAvailable = Boolean(currentVersion && appRelease?.latestVersion
-    && appRelease.releaseStatus === "available" && compareAppVersions(currentVersion, appRelease.latestVersion) < 0);
+  const releaseVersionComparison = currentVersion && appRelease?.latestVersion
+    && appRelease.releaseStatus === "available"
+    ? compareAppVersions(currentVersion, appRelease.latestVersion)
+    : null;
+  const updateAvailable = releaseVersionComparison !== null && releaseVersionComparison < 0;
   const notificationAuthorized = notificationStatus?.authorizationStatus !== undefined
     && notificationStatus.authorizationStatus >= 2;
-  const canUpgrade = desktop && !loading && updateAvailable && !upgradeProgress;
+  const canUpgrade = desktop && !loading && !loadError && updateAvailable && !upgradeProgress;
   const downloadPercent = upgradeProgress?.phase === "downloading"
     && upgradeProgress.totalBytes
     ? Math.min(100, Math.round((upgradeProgress.downloadedBytes ?? 0) / upgradeProgress.totalBytes * 100))
@@ -760,18 +763,21 @@ export function AppSettings({ onClose, initialSection = null, embedded = false, 
     ? t("appSettings.checkingReleases")
     : loadError
       ? t("appSettings.checkFailed")
-      : updateAvailable
-        ? t("appSettings.updateAvailable")
-        : t("appSettings.upToDate");
+      : !appRelease || appRelease.releaseStatus === "unknown"
+        ? t("appSettings.releaseUnavailable")
+        : appRelease.releaseStatus === "unpublished" || !appRelease.latestVersion
+          ? t("appSettings.noReleases")
+          : updateAvailable
+            ? t("appSettings.updateAvailable")
+            : releaseVersionComparison !== null && releaseVersionComparison > 0
+              ? t("appSettings.aheadOfStable")
+              : t("appSettings.upToDate");
 
   const currentVersionText = currentVersion
     ? `v${currentVersion === APP_VERSION ? APP_VERSION_DISPLAY : currentVersion}`
     : nativeIdentity.loading ? "检测中" : "无法检测";
   const currentVersionLabel = desktop ? t("appSettings.currentVersion") : "网页版本";
-  const versionsMatch = Boolean(
-    currentVersion && appRelease?.latestVersion
-      && compareAppVersions(currentVersion, appRelease.latestVersion) === 0,
-  );
+  const versionsMatch = releaseVersionComparison === 0;
   const versionAriaLabel = versionsMatch
     ? `${desktop ? t("appSettings.version") : currentVersionLabel}: ${currentVersionText}. ${statusText}`
     : `${currentVersionLabel}: ${currentVersionText}. ${t("appSettings.latestRelease")}: ${latestReleaseText}. ${statusText}`;

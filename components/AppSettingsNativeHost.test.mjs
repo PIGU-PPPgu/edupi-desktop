@@ -104,10 +104,13 @@ async function fixture(options = {}) {
       if (name.startsWith("@/") || name.startsWith("./")) return stubModule;
       return require(name);
     };
-    const fetch = async url => ({ ok: true, json: async () => url.startsWith("/api/updates")
+    const fetch = async url => {
+      if (url.startsWith("/api/updates") && options.updateError) throw new Error("synthetic release API failure");
+      return { ok: true, json: async () => url.startsWith("/api/updates")
       ? { components: [{ project: "edupi-desktop", currentVersion: "0.3.78", latestVersion: "0.3.78", updateAvailable: false,
-        releaseStatus: "available", releaseUrl: "https://example.invalid/releases" }] }
-      : {} });
+        releaseStatus: "available", releaseUrl: "https://example.invalid/releases", ...options.releaseInfo }] }
+      : {} };
+    };
     new Function("require", "module", "exports", "fetch", compiled)(localRequire, componentModule, componentModule.exports, fetch);
     return componentModule.exports;
   };
@@ -153,11 +156,53 @@ test("settings compares the running native .77 with .78 even when the source upd
   try {
     await ui.mount();
     assert.match(ui.versionChip().props["aria-label"], /当前版本: v0\.3\.77\./);
-    assert.match(text(ui.versionChip()), /最新版本v0\.3\.78/);
+    assert.match(text(ui.versionChip()), /最新正式版v0\.3\.78/);
     assert.ok(ui.button("更新"), "the host version must also control update availability");
     assert.deepEqual(ui.calls.requests, []); assert.deepEqual(ui.calls.enable, []);
     await ui.mount("admin");
     assert.equal(text(ui.desktopRow()), "EduPi Desktop当前运行版本v0.3.77");
+  } finally { await ui.cleanup(); }
+});
+
+test("a native preview above stable identifies the stable channel without claiming it is latest", async () => {
+  const ui = await fixture({ status: nativeStatus(701, { host: { ...nativeStatus().host, appVersion: "0.3.96" } }),
+    releaseInfo: { latestVersion: "0.3.70" } });
+  try {
+    await ui.mount();
+    assert.match(text(ui.versionChip()), /当前版本v0\.3\.96.*最新正式版v0\.3\.70/);
+    assert.match(ui.content(), /当前版本高于最新正式版。/);
+    assert.doesNotMatch(ui.content(), /当前已是最新/);
+    assert.equal(ui.button("更新"), undefined, "a preview must never downgrade to stable");
+  } finally { await ui.cleanup(); }
+});
+
+test("a native version equal to stable is reported as the latest stable release", async () => {
+  const ui = await fixture({ status: nativeStatus(701, { host: { ...nativeStatus().host, appVersion: "0.3.78" } }) });
+  try {
+    await ui.mount();
+    assert.match(ui.content(), /当前已是最新正式版。/);
+    assert.doesNotMatch(ui.content(), /当前版本高于/);
+    assert.equal(ui.button("更新"), undefined);
+  } finally { await ui.cleanup(); }
+});
+
+for (const releaseStatus of ["unknown", "unpublished"]) test(`release state ${releaseStatus} never reports up to date`, async () => {
+  const ui = await fixture({ releaseInfo: { releaseStatus, latestVersion: null, releaseUrl: null } });
+  try {
+    await ui.mount();
+    assert.match(ui.content(), releaseStatus === "unknown" ? /无法获取发布信息。/ : /暂无正式版/);
+    assert.doesNotMatch(ui.content(), /当前已是最新/);
+    assert.equal(ui.button("更新"), undefined);
+  } finally { await ui.cleanup(); }
+});
+
+test("a failed release check never reports up to date", async () => {
+  const ui = await fixture({ updateError: true });
+  try {
+    await ui.mount();
+    assert.match(ui.content(), /无法检查 GitHub 发布。/);
+    assert.doesNotMatch(ui.content(), /当前已是最新/);
+    assert.equal(ui.button("更新"), undefined);
   } finally { await ui.cleanup(); }
 });
 
@@ -207,7 +252,7 @@ for (const kind of ["missing host", "IPC failure", "loading"]) test(`native iden
     await ui.mount();
     assert.doesNotMatch(ui.versionChip().props["aria-label"], /当前版本: v0\.3\.78/);
     assert.match(ui.versionChip().props["aria-label"], kind === "loading" ? /检测中/ : /无法检测/);
-    assert.doesNotMatch(ui.versionChip().props["aria-label"], /当前已是最新版本/);
+    assert.doesNotMatch(ui.versionChip().props["aria-label"], /当前已是最新/);
     await ui.mount("admin");
     assert.doesNotMatch(text(ui.desktopRow()), /v0\.3\.78/);
     assert.match(text(ui.desktopRow()), kind === "loading" ? /检测中/ : /无法检测/);
