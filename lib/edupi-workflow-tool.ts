@@ -93,11 +93,12 @@ export function createEduPiWorkflowTool({ runAgent = runReadOnlyAgent }: { runAg
       const preview = [
         `工作区：${ctx.cwd}`,
         `模型：${ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "当前默认模型"}`,
+        `子任务：${plan.phases.reduce((count, phase) => count + phase.agents.length, 0)} 项，每项调用一次模型`,
         ...plan.phases.flatMap((phase, index) => [
           `${index + 1}. ${phase.name}`,
           ...phase.agents.map(agent => `  ${agent.name}：${agent.task}`),
         ]),
-        "子任务仅可读取本地文件，不会执行命令或写入。",
+        "子任务可读取本地文件，相关内容会进入所选模型的上下文；不会执行命令、写入或调用连接器。",
       ].join("\n");
       if (!await ctx.ui.confirm("运行工作流", preview)) {
         return { content: [{ type: "text", text: "工作流未启动。" }], details: { status: "declined" } };

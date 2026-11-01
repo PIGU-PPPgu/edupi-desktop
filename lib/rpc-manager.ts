@@ -41,7 +41,7 @@ import { createDesktopSafeBashOperations, quarantineUnmanagedOpenConnectorEnviro
 import { createEduPiTeacherContextAppendSystemPromptOverride } from "./edupi-teacher-context-prompt";
 import { withEducationModel } from "./edupi-model-context";
 import { ensureLoopbackModelAuth } from "./loopback-model-auth";
-import type { PermissionMode } from "./tool-presets";
+import { PRESET_DEFAULT, PRESET_FULL, type PermissionMode } from "./tool-presets";
 import { createRpcResourceLoader, rpcResourceOptions, type RpcToolMode } from "./rpc-resource-loader";
 import { readSessionToolNames, saveSessionToolNames } from "./session-tool-preferences";
 import { persistInitialPiSessionFile } from "./pi-session-first-file";
@@ -186,10 +186,13 @@ function withExtensionTools(session: AgentSessionLike, toolNames: string[]): str
   if (toolNames.length === 0) return [];
 
   const codingToolNames = new Set(CODING_TOOL_NAMES);
+  const selected = [...toolNames].sort().join(",");
+  const standardPreset = selected === [...PRESET_DEFAULT].sort().join(",") || selected === [...PRESET_FULL].sort().join(",");
   const extensionToolNames = session
     .getAllTools()
     .map((t) => t.name)
-    .filter((name) => !codingToolNames.has(name));
+    // A deliberately narrow tool selection must not acquire an orchestrator.
+    .filter((name) => !codingToolNames.has(name) && (name !== "edupi_workflow" || standardPreset));
 
   return [...new Set([...toolNames, ...extensionToolNames])];
 }
@@ -1617,7 +1620,8 @@ export async function startRpcSession(
     // Some extensions access the SDK's global theme even outside the terminal UI.
     initTheme();
     const agentDir = getAgentDir();
-    const toolMode = { disabled: toolNames?.length === 0 };
+    const toolMode: RpcToolMode = { disabled: toolNames?.length === 0,
+      ...(strictToolNames ? { exactToolNames: toolNames ?? [] } : {}) };
     const memoryRecall = createEduPiMemoryRecallAccess(EDUPI_ROOT, { disabled: () => toolMode.disabled });
     const host: { wrapper?: AgentSessionWrapper } = {};
     const createRuntime: CreateAgentSessionRuntimeFactory = async ({ cwd: sessionCwd, sessionManager, sessionStartEvent }) => {
@@ -1625,6 +1629,7 @@ export async function startRpcSession(
       const requestedTools = explicitTools === undefined ? readSessionToolNames(sessionManager)
         : saveSessionToolNames(sessionManager, explicitTools);
       toolMode.disabled = requestedTools?.length === 0;
+      if (strictToolNames) toolMode.exactToolNames = requestedTools ?? [];
       const normalizedSessionCwd = normalizeRpcCwd(sessionCwd);
       const sessionIsEduPiDataRoot = normalizedSessionCwd === EDUPI_ROOT;
       const sessionIsEduPiCoreRoot = normalizedSessionCwd === EDUPI_CODE_ROOT;
