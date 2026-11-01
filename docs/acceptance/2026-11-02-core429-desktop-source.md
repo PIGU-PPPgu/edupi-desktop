@@ -1,5 +1,7 @@
 # Core #429 与 Desktop 工作流源码配对
 
+2026-11-02 后续中间身份：Desktop `8a371f9` 在本地把 Draft 候选改配 Core #430 合并提交 `3712197126b38399688db814ea78dd8c19815a41`；PR head `c9cabf6b` 与合并 tree 同为 `b5f68ad8c99b7bfd583fe601237a6585a045f3c1`，Runtime schema 仍为 `sha256:ffa8632b29381cf601593478d4755cf38e17b0e112b8ec0600d44108594bcb0a`，Desktop component manifest 仍为 `sha256:67230285d1aabc7ab730d49c1de933649d1a6bbeac777ef2754d1636988b62fb`，Core runtime component manifest 更新为 `sha256:b6cd6c7044b2fe62abcb3e8a3b831d175a60a3c01c0cb6bddcaa35a4586b391e`。精确 Core 的 Bridge／宿主／模型闭包 25 通过／1 条件跳过、C1 GREEN、Core-first 合成捕获工作流与父回合失效拒绝通过；源码 TypeScript 通过。Core #430 的 PR CI 已成功，但同 Goal 多 guard 的 P2 审查线程在合并后仍未解决，Main push CI 仍在运行；后续 Core 风险修复未落地前，本身份不冻结签名安装包。正常 App 仍为 `.97`。
+
 状态：Desktop 源码 `a096aff` 对当前 Core main `7ddb573520f703bd10eb6db2bec8ae1b6cd976b3` 的隔离配对已通过；`f5fe7bb` 只把 Mac 候选版本元数据预备到 `0.3.98`，未构建或创建 Release。Core #430 精确 head `c9cabf6b` 的 [CI](https://github.com/PIGU-PPPgu/edupi/actions/runs/41334068542) 已成功，但仍有一条关于同 Goal 多 guard 的未解决 P2 审查意见，尚未合并；签名 Mac 安装版仍为固定旧 Core 的 `0.3.97`。本记录是源码验证，不是安装验收。
 
 ## 固定身份
