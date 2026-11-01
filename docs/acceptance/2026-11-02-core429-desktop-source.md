@@ -1,6 +1,6 @@
 # Core #429 与 Desktop 工作流源码配对
 
-状态：Desktop 源码 `a096aff` 对当前 Core main `7ddb573520f703bd10eb6db2bec8ae1b6cd976b3` 的隔离配对已通过；`f5fe7bb` 只把 Mac 候选版本元数据预备到 `0.3.98`，未构建或创建 Release。Core #430 尚在 CI，签名 Mac 安装版仍为固定旧 Core 的 `0.3.97`。本记录是源码验证，不是安装验收。
+状态：Desktop 源码 `a096aff` 对当前 Core main `7ddb573520f703bd10eb6db2bec8ae1b6cd976b3` 的隔离配对已通过；`f5fe7bb` 只把 Mac 候选版本元数据预备到 `0.3.98`，未构建或创建 Release。Core #430 精确 head `c9cabf6b` 的 [CI](https://github.com/PIGU-PPPgu/edupi/actions/runs/41334068542) 已成功，但仍有一条关于同 Goal 多 guard 的未解决 P2 审查意见，尚未合并；签名 Mac 安装版仍为固定旧 Core 的 `0.3.97`。本记录是源码验证，不是安装验收。
 
 ## 固定身份
 
@@ -26,6 +26,6 @@
 
 ## 未完成
 
-- Core #430 的精确 CI、合并与新 manifest 消费；本 `7ddb` 配对是中间身份，不能直接构建最终候选。
+- Core #430 的 P2 审查修复、精确新 head CI、合并与新 manifest 消费；本 `7ddb` 配对是中间身份，不能直接构建最终候选。Desktop Draft PR454 的依赖审计、Rust 审计和 Linux 源码 CI `41337374147` 均成功，但不替代最终 pin 的验收。
 - 含工作流 v2 的 Mac 签名、公证、隔离原生确认、Core-first 实际输入、冷启续跑与数据保持；正常 `0.3.97` App 尚未替换。
 - Windows/Linux 未构建或验收，产品复合回答继续 held。
