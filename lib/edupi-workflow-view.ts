@@ -1,15 +1,27 @@
 import type { AgentMessage, AssistantMessage, ToolCallContent, ToolResultMessage } from "./types";
+import type { DynamicWorkflowRun } from "./edupi-dynamic-workflow";
 
-export type WorkflowStepStatus = "running" | "done" | "failed" | "interrupted";
+export type WorkflowStepStatus = "pending" | "running" | "done" | "failed" | "interrupted";
 export type WorkflowStep = { id: string; name: string; toolName: string; status: WorkflowStepStatus };
 export type WorkflowPhase = { id: string; name: string; status: WorkflowStepStatus; steps: WorkflowStep[] };
 export type WorkflowView = {
+  title: string;
+  managed: boolean;
   phases: WorkflowPhase[];
   completed: number;
   total: number;
   hiddenPhases: number;
   status: WorkflowStepStatus;
 };
+
+export function projectManagedWorkflow(run: DynamicWorkflowRun): WorkflowView {
+  const phases = run.phases.map(phase => ({ id: phase.id, name: phase.name, status: phase.status,
+    steps: phase.agents.map(agent => ({ id: agent.id, name: agent.name, toolName: "独立子任务", status: agent.status })) }));
+  return { title: run.title, managed: true, phases,
+    completed: phases.reduce((count, phase) => count + phase.steps.filter(step => step.status === "done").length, 0),
+    total: phases.reduce((count, phase) => count + phase.steps.length, 0),
+    hiddenPhases: 0, status: run.status };
+}
 
 const MAX_PHASES = 12;
 const MAX_STEPS = 48;
@@ -78,5 +90,5 @@ export function projectWorkflowView(messages: readonly AgentMessage[], busy: boo
   const total = all.reduce((count, phase) => count + phase.steps.length, 0);
   const status: WorkflowStepStatus = busy ? "running" : all.some(phase => phase.status === "failed") ? "failed"
     : all.some(phase => phase.status === "interrupted") ? "interrupted" : "done";
-  return { phases, completed, total, hiddenPhases: all.length - phases.length, status };
+  return { title: "执行流程", managed: false, phases, completed, total, hiddenPhases: all.length - phases.length, status };
 }

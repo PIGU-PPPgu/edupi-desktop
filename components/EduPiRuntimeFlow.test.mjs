@@ -33,7 +33,7 @@ test("observed Pi tools become a collapsible graph without exposing command argu
     { role: "toolResult", toolCallId: "read-1", content: [] }];
   const html = render({ running: true, messages });
   assert.match(html, /aria-label="本轮执行阶段"/);
-  assert.match(html, /1\/2 项操作/);
+  assert.match(html, /1\/2 项/);
   assert.match(html, /读取/);
   assert.match(html, /写入文件/);
   assert.match(html, /执行中/);

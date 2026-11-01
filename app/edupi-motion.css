@@ -81,11 +81,11 @@
 }
 .edupi-workflow-view { flex: none; min-width: 0; margin: 8px 12px 0; border: 1px solid var(--ep-border, var(--border)); border-radius: 10px; background: var(--ep-surface, var(--bg-panel)); color: var(--ep-text, var(--text)); }
 .edupi-workflow-view__header { min-height: 42px; }
-.edupi-workflow-view__toggle, .edupi-workflow-view__quiet { display: flex; width: 100%; min-height: 42px; align-items: center; gap: 10px; padding: 0 14px; color: inherit; font: inherit; font-size: 12px; }
+.edupi-workflow-view__toggle, .edupi-workflow-view__quiet { display: flex; width: 100%; min-height: 42px; align-items: center; gap: 10px; padding: 0 14px; color: inherit; font: inherit; font-size: 13px; }
 .edupi-workflow-view__toggle { border: 0; background: transparent; text-align: left; cursor: pointer; }
 .edupi-workflow-view__toggle:hover { background: var(--ep-surface-soft, var(--bg-hover)); }
 .edupi-workflow-view__toggle:focus-visible, .edupi-workflow-view__more:focus-visible { outline: 2px solid var(--ep-blue, var(--accent)); outline-offset: -2px; }
-.edupi-workflow-view__toggle strong { font-size: 12px; font-weight: 600; }
+.edupi-workflow-view__toggle strong { min-width: 0; overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .edupi-workflow-view__status { color: var(--ep-muted, var(--text-muted)); }
 .edupi-workflow-view__count { margin-left: auto; color: var(--ep-muted, var(--text-muted)); white-space: nowrap; }
 .edupi-workflow-view__chevron { color: var(--ep-muted, var(--text-muted)); font-size: 17px; line-height: 1; transition: transform var(--motion-fast) ease; }
@@ -94,25 +94,33 @@
 .edupi-workflow-view__lamp.is-running, .edupi-workflow-view__phase.is-running .edupi-workflow-view__node { background: var(--ep-blue, var(--accent)); }
 .edupi-workflow-view__lamp.is-done, .edupi-workflow-view__phase.is-done .edupi-workflow-view__node { background: var(--ep-green, #177a55); }
 .edupi-workflow-view__lamp.is-failed, .edupi-workflow-view__phase.is-failed .edupi-workflow-view__node { background: var(--ep-red, #b83f4c); }
+.edupi-workflow-view__lamp.is-interrupted, .edupi-workflow-view__phase.is-interrupted .edupi-workflow-view__node { background: var(--ep-muted, var(--text-muted)); }
 .edupi-workflow-view__scroll { overflow-x: auto; padding: 8px 16px 12px; border-top: 1px solid var(--ep-border, var(--border)); scrollbar-width: thin; }
 .edupi-workflow-view__timeline { display: flex; width: max-content; min-width: 100%; gap: 18px; margin: 0; padding: 0; list-style: none; }
-.edupi-workflow-view__phase { position: relative; flex: 0 0 184px; min-width: 0; }
+.edupi-workflow-view__phase { position: relative; flex: 0 0 208px; min-width: 0; }
 .edupi-workflow-view__phase:not(:last-child)::after { position: absolute; top: 12px; left: 16px; right: -18px; height: 2px; background: var(--ep-border-strong, var(--border)); content: ""; }
 .edupi-workflow-view__station { position: relative; z-index: 1; display: flex; min-height: 26px; align-items: center; gap: 7px; padding-right: 5px; background: var(--ep-surface, var(--bg-panel)); }
-.edupi-workflow-view__station strong { min-width: 0; overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.edupi-workflow-view__station strong { min-width: 0; overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .edupi-workflow-view__station > span:last-child { margin-left: auto; color: var(--ep-muted, var(--text-muted)); font-size: 11px; white-space: nowrap; }
 .edupi-workflow-view__node { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--ep-muted, var(--text-muted)); }
 .edupi-workflow-view__steps { display: grid; max-height: 220px; gap: 6px; overflow-y: auto; margin: 8px 0 0; padding: 0; list-style: none; scrollbar-width: thin; }
-.edupi-workflow-view__step { display: flex; min-height: 32px; align-items: center; gap: 7px; padding: 5px 8px; border-radius: 7px; background: var(--ep-surface-soft, var(--bg-hover)); font-size: 11px; }
+.edupi-workflow-view__step { display: flex; min-height: 34px; align-items: center; gap: 7px; padding: 5px 8px; border-radius: 7px; background: var(--ep-surface-soft, var(--bg-hover)); font-size: 12px; }
 .edupi-workflow-view__step-mark { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ep-muted, var(--text-muted)); }
-.edupi-workflow-view__step.is-running .edupi-workflow-view__step-mark { background: var(--ep-blue, var(--accent)); }
-.edupi-workflow-view__step.is-done .edupi-workflow-view__step-mark { background: var(--ep-green, #177a55); }
-.edupi-workflow-view__step.is-failed .edupi-workflow-view__step-mark { background: var(--ep-red, #b83f4c); }
+.edupi-workflow-view__step-mark.is-agent { display: grid; width: 23px; height: 23px; place-items: center; border-radius: 6px; color: #fff; font-size: 12px; font-weight: 650; }
+.edupi-workflow-view__step-mark.is-agent.tone-0 { background: #518d9c; }
+.edupi-workflow-view__step-mark.is-agent.tone-1 { background: #c48145; }
+.edupi-workflow-view__step-mark.is-agent.tone-2 { background: #6a68b6; }
+.edupi-workflow-view__step-mark.is-agent.tone-3 { background: #7b9660; }
+.edupi-workflow-view__step-mark.is-agent.tone-4 { background: #b16b8d; }
+.edupi-workflow-view__step-mark.is-agent.tone-5 { background: #5d83b8; }
+.edupi-workflow-view__step.is-running .edupi-workflow-view__step-mark:not(.is-agent) { background: var(--ep-blue, var(--accent)); }
+.edupi-workflow-view__step.is-done .edupi-workflow-view__step-mark:not(.is-agent) { background: var(--ep-green, #177a55); }
+.edupi-workflow-view__step.is-failed .edupi-workflow-view__step-mark:not(.is-agent) { background: var(--ep-red, #b83f4c); }
 .edupi-workflow-view__step-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .edupi-workflow-view__step-state { margin-left: auto; color: var(--ep-muted, var(--text-muted)); white-space: nowrap; }
 .edupi-workflow-view__more { margin-top: 6px; padding: 3px 5px; border: 0; background: transparent; color: var(--ep-blue, var(--accent)); font: inherit; font-size: 11px; cursor: pointer; }
 .edupi-workflow-view__older { display: block; padding-top: 8px; color: var(--ep-muted, var(--text-muted)); font-size: 11px; }
-@media (max-width: 640px) { .edupi-workflow-view__phase { flex-basis: 156px; } .edupi-workflow-view__count { display: none; } }
+@media (max-width: 640px) { .edupi-workflow-view__phase { flex-basis: 178px; } .edupi-workflow-view__count { display: none; } }
 .edupi-task-run-card {
   display: flex;
   flex-shrink: 0;

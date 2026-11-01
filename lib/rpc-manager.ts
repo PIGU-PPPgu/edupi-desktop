@@ -35,6 +35,7 @@ import { createMemoryForgetTool } from "./edupi-memory-forget-tool";
 import { createPrepareTaskTool } from "./edupi-prepare-task-tool";
 import type { DesktopControlInput } from "./edupi-desktop-control";
 import { createEduPiComputerUseTool } from "./edupi-computer-tool";
+import { createEduPiWorkflowTool } from "./edupi-workflow-tool";
 import { parseComputerUseBridgeResult, type ComputerUseBridgeResult, type ComputerUseInput } from "./edupi-computer-use";
 import { createDesktopSafeBashOperations, quarantineUnmanagedOpenConnectorEnvironment, redactDesktopSpawnContext } from "./desktop-shell-security";
 import { createEduPiTeacherContextAppendSystemPromptOverride } from "./edupi-teacher-context-prompt";
@@ -127,6 +128,10 @@ export interface RpcSessionStartOptions {
   initialModel?: { provider: string; modelId: string };
   thinkingLevel?: ThinkingLevel;
   accessMode?: PermissionMode;
+  /** Host-owned child sessions must not inherit unrelated extension tools. */
+  strictToolNames?: boolean;
+  /** Keep workflow child transcripts out of the normal chat sidebar. */
+  isolatedSessionDir?: string;
 }
 
 /**
@@ -222,7 +227,7 @@ export class AgentSessionWrapper {
   private artifactTaskId: string | null = null;
   private accessMode: PermissionMode = "workspace";
 
-  constructor(public inner: AgentSessionLike, private runtime?: AgentSessionRuntime, private toolMode: RpcToolMode = { disabled: false }, private memoryRecall?: EduPiMemoryRecallAccess) {
+  constructor(public inner: AgentSessionLike, private runtime?: AgentSessionRuntime, private toolMode: RpcToolMode = { disabled: false }, private memoryRecall?: EduPiMemoryRecallAccess, private strictToolNames = false) {
     runtime?.setBeforeSessionInvalidate(() => {
       this.memoryRecall?.invalidate(this.inner.sessionManager);
       this.sessionInvalidated = true;
@@ -414,6 +419,7 @@ export class AgentSessionWrapper {
     if (options.forceEmptySystemPrompt) this.forceEmptySystemPrompt = true;
     if (this.extensionsBound) {
       this.applyForcedEmptySystemPrompt();
+      this.applyStrictToolScope();
       return Promise.resolve();
     }
     if (this.extensionBindingPromise) return this.extensionBindingPromise;
@@ -453,6 +459,7 @@ export class AgentSessionWrapper {
       }
       this.extensionsBound = true;
       this.applyForcedEmptySystemPrompt();
+      this.applyStrictToolScope();
       console.log(`[pi-web] session_start dispatched to extensions for session ${this.inner.sessionId}`);
     })().catch((err) => {
       this.extensionBindingError = err;
@@ -492,6 +499,14 @@ export class AgentSessionWrapper {
     // Pi 1 owns Agent state. The host-only before_agent_start hook supplies the
     // empty prompt; the loader policy also keeps reload from restoring resources.
     if (this.forceEmptySystemPrompt) this.inner.setActiveToolsByName([]);
+  }
+
+  private applyStrictToolScope(): void {
+    if (this.strictToolNames) this.inner.setActiveToolsByName(readSessionToolNames(this.inner.sessionManager) ?? []);
+  }
+
+  private expandToolNames(names: string[]): string[] {
+    return this.strictToolNames ? names : withExtensionTools(this.inner, names);
   }
 
   private runPromptWithMemoryRecall<T>(command: Record<string, unknown>, callback: () => Promise<T>): Promise<T> {
@@ -588,6 +603,7 @@ export class AgentSessionWrapper {
       return null;
     }
     if (this.shouldWaitForExtensions(type)) await this.waitForExtensionsBound();
+    if (this.strictToolNames && (type === "prompt" || type === "steer" || type === "follow_up")) this.applyStrictToolScope();
 
     if (type === "prompt" || type === "steer" || type === "follow_up") {
       if (Reflect.get(command, CORE_CAPTURED_PROMPT) !== true && eduPiDirectPromptGate() !== "allowed") {
@@ -817,7 +833,7 @@ export class AgentSessionWrapper {
         const toolNames = readSessionToolNames(this.inner.sessionManager);
         if (!result.cancelled && toolNames !== undefined) {
           this.setForceEmptySystemPrompt(toolNames.length === 0);
-          this.inner.setActiveToolsByName(withExtensionTools(this.inner, toolNames));
+          this.inner.setActiveToolsByName(this.expandToolNames(toolNames));
         }
         return { cancelled: result.cancelled };
       }
@@ -946,7 +962,7 @@ export class AgentSessionWrapper {
           try { await this.inner.reload(); }
           catch (error) { this.destroy(); throw error; }
         }
-        this.inner.setActiveToolsByName(withExtensionTools(this.inner, toolNames));
+        this.inner.setActiveToolsByName(this.expandToolNames(toolNames));
         this.applyForcedEmptySystemPrompt();
         return null;
       }
@@ -1396,7 +1412,7 @@ export class AgentSessionWrapper {
         const toolNames = readSessionToolNames(this.inner.sessionManager);
         if (!result.cancelled && toolNames !== undefined) {
           this.setForceEmptySystemPrompt(toolNames.length === 0);
-          this.inner.setActiveToolsByName(withExtensionTools(this.inner, toolNames));
+          this.inner.setActiveToolsByName(this.expandToolNames(toolNames));
         }
         return { cancelled: result.cancelled };
       },
@@ -1576,7 +1592,7 @@ export async function startRpcSession(
   cwd: string | undefined,
   options: RpcSessionStartOptions = {},
 ): Promise<{ session: AgentSessionWrapper; realSessionId: string }> {
-  const { toolNames, initialModel, thinkingLevel, accessMode } = options;
+  const { toolNames, initialModel, thinkingLevel, accessMode, strictToolNames, isolatedSessionDir } = options;
   const registry = getRegistry();
   const locks = getLocks();
 
@@ -1591,7 +1607,7 @@ export async function startRpcSession(
     sessionManager = SessionManager.open(sessionFile, undefined);
   } else {
     if (!cwd) throw new Error("cwd is required for a new session");
-    sessionManager = SessionManager.create(cwd, undefined);
+    sessionManager = SessionManager.create(cwd, isolatedSessionDir);
   }
   const sessionCwd = sessionManager.getCwd();
   const finishStartingSession = trackStartingSession(sessionCwd);
@@ -1691,6 +1707,7 @@ export async function startRpcSession(
         customTools: [
           ...(sessionIsEduPiDataRoot && !safeMode ? [memoryRecall.tool] : []),
           defineTool(createBashToolDefinition(sessionCwd, { shellPath: services.settingsManager.getShellPath(), spawnHook: redactDesktopSpawnContext })),
+          ...(!safeMode && !strictToolNames ? [createEduPiWorkflowTool()] : []),
           ...(sessionIsEduPiDataRoot ? [...createEduPiCalendarTools({ projectRoot: EDUPI_ROOT }), createPreparationArtifactTool(EDUPI_ROOT), createEduPiDocumentTool(EDUPI_ROOT), createEduPiPresentationTool(EDUPI_ROOT), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createMemoryWriteTool(EDUPI_ROOT), createMemoryForgetTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiUpdateTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
             projectRoot: EDUPI_ROOT,
             requestAction: (action, signal) => requestEduPiAppAction(action, signal),
@@ -1730,14 +1747,14 @@ export async function startRpcSession(
       // extensions stay usable in Pi Web just like in the `pi` CLI.
       if (toolMode.disabled) inner.setActiveToolsByName([]);
       else if (requestedTools) {
-        inner.setActiveToolsByName(withExtensionTools(inner, requestedTools));
+        inner.setActiveToolsByName(strictToolNames ? requestedTools : withExtensionTools(inner, requestedTools));
       }
       return { ...result, services, diagnostics: services.diagnostics };
     };
 
     const runtime = await createAgentSessionRuntime(createRuntime, { cwd: sessionCwd, agentDir, sessionManager });
     const inner = runtime.session;
-    const wrapper = new AgentSessionWrapper(inner, runtime, toolMode, memoryRecall);
+    const wrapper = new AgentSessionWrapper(inner, runtime, toolMode, memoryRecall, Boolean(strictToolNames));
     host.wrapper = wrapper;
     if (accessMode) wrapper.setAccessMode(accessMode);
     requestEduPiAppAction = (action, signal) => wrapper.requestEduPiAppAction(action, signal);
