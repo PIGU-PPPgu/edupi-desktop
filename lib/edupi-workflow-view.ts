@@ -11,6 +11,7 @@ export type WorkflowView = {
   completed: number;
   total: number;
   hiddenPhases: number;
+  hiddenSteps: number;
   status: WorkflowStepStatus;
 };
 
@@ -20,7 +21,7 @@ export function projectManagedWorkflow(run: DynamicWorkflowRun): WorkflowView {
   return { title: run.title, managed: true, phases,
     completed: phases.reduce((count, phase) => count + phase.steps.filter(step => step.status === "done").length, 0),
     total: phases.reduce((count, phase) => count + phase.steps.length, 0),
-    hiddenPhases: 0, status: run.status };
+    hiddenPhases: 0, hiddenSteps: 0, status: run.status };
 }
 
 const MAX_PHASES = 12;
@@ -43,13 +44,6 @@ function toolCalls(message: AgentMessage): ToolCallContent[] {
     && typeof block.toolName === "string" && Boolean(block.toolName));
 }
 
-function phaseStatus(steps: WorkflowStep[]): WorkflowStepStatus {
-  if (steps.some(step => step.status === "running")) return "running";
-  if (steps.some(step => step.status === "failed")) return "failed";
-  if (steps.some(step => step.status === "interrupted")) return "interrupted";
-  return "done";
-}
-
 /** One station per observed Pi tool batch. No inferred agents, success or parallelism. */
 export function projectWorkflowView(messages: readonly AgentMessage[], busy: boolean, activeTools: readonly string[] = []): WorkflowView | null {
   let promptIndex = -1;
@@ -64,31 +58,54 @@ export function projectWorkflowView(messages: readonly AgentMessage[], busy: boo
     if (message.role === "toolResult" && typeof message.toolCallId === "string") results.set(message.toolCallId, message);
   }
 
-  const all: WorkflowPhase[] = [];
-  let remaining = MAX_STEPS;
-  for (let index = promptIndex + 1; index < messages.length && remaining > 0; index++) {
-    const calls = toolCalls(messages[index]).slice(0, remaining);
+  const phases: WorkflowPhase[] = [];
+  let phaseCount = 0;
+  let total = 0;
+  let completed = 0;
+  let hasFailure = false;
+  let hasInterruption = false;
+  for (let index = promptIndex + 1; index < messages.length; index++) {
+    const calls = toolCalls(messages[index]);
     if (!calls.length) continue;
-    remaining -= calls.length;
-    const steps = calls.map((call) => {
+    phaseCount++;
+    const steps: WorkflowStep[] = [];
+    let phaseRunning = false, phaseFailed = false, phaseInterrupted = false;
+    for (const call of calls) {
       const result = results.get(call.toolCallId);
-      return { id: call.toolCallId, name: workflowToolName(call.toolName), toolName: call.toolName,
-        status: result ? result.isError ? "failed" as const : "done" as const : busy ? "running" as const : "interrupted" as const };
-    });
-    all.push({ id: `wave-${index}`, name: steps.length === 1 ? steps[0].name : `${steps.length} 项操作`,
-      status: phaseStatus(steps), steps });
+      const status: WorkflowStepStatus = result ? result.isError ? "failed" : "done" : busy ? "running" : "interrupted";
+      total++;
+      if (status === "done") completed++;
+      if (status === "failed") hasFailure = true;
+      if (status === "interrupted") hasInterruption = true;
+      if (status === "running") phaseRunning = true;
+      if (status === "failed") phaseFailed = true;
+      if (status === "interrupted") phaseInterrupted = true;
+      steps.push({ id: call.toolCallId, name: workflowToolName(call.toolName), toolName: call.toolName, status });
+      if (steps.length > MAX_STEPS) steps.shift();
+    }
+    phases.push({ id: `wave-${index}`, name: calls.length === 1 ? steps[0].name : `${calls.length} 项操作`,
+      status: phaseRunning ? "running" : phaseFailed ? "failed" : phaseInterrupted ? "interrupted" : "done", steps });
+    if (phases.length > MAX_PHASES) phases.shift();
   }
 
-  if (busy && activeTools.length && !all.some(phase => phase.steps.some(step => step.status === "running"))) {
+  if (busy && activeTools.length && !phases.some(phase => phase.steps.some(step => step.status === "running"))) {
     const steps = activeTools.slice(0, 8).map((name, index) => ({ id: `live-${index}`, name: workflowToolName(name),
       toolName: name, status: "running" as const }));
-    all.push({ id: "live", name: steps.length === 1 ? steps[0].name : `${steps.length} 项操作`, status: "running", steps });
+    total += steps.length;
+    phaseCount++;
+    phases.push({ id: "live", name: steps.length === 1 ? steps[0].name : `${steps.length} 项操作`, status: "running", steps });
+    if (phases.length > MAX_PHASES) phases.shift();
   }
-  if (!all.length) return null;
-  const phases = all.slice(-MAX_PHASES);
-  const completed = all.reduce((count, phase) => count + phase.steps.filter(step => step.status === "done").length, 0);
-  const total = all.reduce((count, phase) => count + phase.steps.length, 0);
-  const status: WorkflowStepStatus = busy ? "running" : all.some(phase => phase.status === "failed") ? "failed"
-    : all.some(phase => phase.status === "interrupted") ? "interrupted" : "done";
-  return { title: "执行流程", managed: false, phases, completed, total, hiddenPhases: all.length - phases.length, status };
+  if (!phaseCount) return null;
+  let displayed = phases.reduce((count, phase) => count + phase.steps.length, 0);
+  while (displayed > MAX_STEPS) {
+    const first = phases[0];
+    const remove = Math.min(displayed - MAX_STEPS, first.steps.length);
+    first.steps = first.steps.slice(remove);
+    displayed -= remove;
+    if (!first.steps.length) phases.shift();
+  }
+  const status: WorkflowStepStatus = busy ? "running" : hasFailure ? "failed" : hasInterruption ? "interrupted" : "done";
+  return { title: "执行流程", managed: false, phases, completed, total,
+    hiddenPhases: phaseCount - phases.length, hiddenSteps: total - displayed, status };
 }

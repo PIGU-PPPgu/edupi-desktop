@@ -36,6 +36,7 @@ import { createPrepareTaskTool } from "./edupi-prepare-task-tool";
 import type { DesktopControlInput } from "./edupi-desktop-control";
 import { createEduPiComputerUseTool } from "./edupi-computer-tool";
 import { createEduPiWorkflowTool } from "./edupi-workflow-tool";
+import { matchingCapturedUserEntry, workflowChildPromptAllowed } from "./edupi-workflow-admission";
 import { parseComputerUseBridgeResult, type ComputerUseBridgeResult, type ComputerUseInput } from "./edupi-computer-use";
 import { createDesktopSafeBashOperations, quarantineUnmanagedOpenConnectorEnvironment, redactDesktopSpawnContext } from "./desktop-shell-security";
 import { createEduPiTeacherContextAppendSystemPromptOverride } from "./edupi-teacher-context-prompt";
@@ -50,6 +51,7 @@ import { createEduPiMemoryRecallAccess, type EduPiMemoryRecallAccess } from "./e
 import { inspectEduPiPromptSession } from "./edupi-prompt-reconciliation";
 
 const CORE_CAPTURED_PROMPT = Symbol("edupi-core-captured-prompt");
+const WORKFLOW_CHILD_PROMPT = Symbol("edupi-workflow-child-prompt");
 
 // The legacy HTTP adapter is intentionally not a production authority. Until
 // Core owns one-shot grants and receipts, do not retain connector credentials in
@@ -132,6 +134,8 @@ export interface RpcSessionStartOptions {
   strictToolNames?: boolean;
   /** Keep workflow child transcripts out of the normal chat sidebar. */
   isolatedSessionDir?: string;
+  /** The active, Core-captured parent turn that authorized an internal child. */
+  workflowParent?: { sessionId: string; sourceEntryId: string };
 }
 
 /**
@@ -210,6 +214,7 @@ export class AgentSessionWrapper {
   private extensionStatuses = new Map<string, string>();
   private extensionWidgets = new Map<string, ExtensionWidgetItem>();
   private promptRunning = false;
+  private coreCapturedPromptActive = false;
   private promptRequestId: string | null = null;
   private acceptedPromptRequestIds = new Set<string>();
   private messageEventIds = new WeakMap<object, string>();
@@ -230,7 +235,7 @@ export class AgentSessionWrapper {
   private artifactTaskId: string | null = null;
   private accessMode: PermissionMode = "workspace";
 
-  constructor(public inner: AgentSessionLike, private runtime?: AgentSessionRuntime, private toolMode: RpcToolMode = { disabled: false }, private memoryRecall?: EduPiMemoryRecallAccess, private strictToolNames = false) {
+  constructor(public inner: AgentSessionLike, private runtime?: AgentSessionRuntime, private toolMode: RpcToolMode = { disabled: false }, private memoryRecall?: EduPiMemoryRecallAccess, private strictToolNames = false, private privateWorkflowChild = false, private workflowParent?: { sessionId: string; sourceEntryId: string }) {
     runtime?.setBeforeSessionInvalidate(() => {
       this.memoryRecall?.invalidate(this.inner.sessionManager);
       this.sessionInvalidated = true;
@@ -278,6 +283,15 @@ export class AgentSessionWrapper {
     return this._alive;
   }
 
+  isPrivateWorkflowChild(): boolean {
+    return this.privateWorkflowChild;
+  }
+
+  hasActiveCoreCaptureFor(sourceEntryId: string): boolean {
+    return this._alive && matchingCapturedUserEntry(this.coreCapturedPromptActive, this.promptRunning,
+      sourceEntryId, this.inner.sessionManager.getBranch());
+  }
+
   isRunning(): boolean {
     return this._alive && (this.promptRunning || this.inner.isStreaming || this.inner.isCompacting || this.inner.isBashRunning);
   }
@@ -295,13 +309,19 @@ export class AgentSessionWrapper {
     return this.send({ ...command, [CORE_CAPTURED_PROMPT]: true });
   }
 
+  /** Internal child dispatch: the parent must still be running its Core-captured turn. */
+  sendWorkflowChildPrompt(command: { type: "prompt"; message: string }): Promise<unknown> {
+    if (!this.privateWorkflowChild || !this.workflowParent) throw new Error("workflow_child_unavailable");
+    return this.send({ ...command, [WORKFLOW_CHILD_PROMPT]: true });
+  }
+
   /**
    * Session-list row built from the in-memory session, for sessions the disk
    * scan cannot see yet. Returns null until a user message exists so an
    * untouched "new chat" runtime never renders a row that later disappears.
    */
   getLiveSnapshot(): LiveSessionSnapshot | null {
-    if (!this._alive) return null;
+    if (!this._alive || this.privateWorkflowChild) return null;
 
     const manager = this.inner.sessionManager;
     const header = manager.getHeader() as Record<string, unknown> | null;
@@ -609,7 +629,10 @@ export class AgentSessionWrapper {
     if (this.strictToolNames && (type === "prompt" || type === "steer" || type === "follow_up")) this.applyStrictToolScope();
 
     if (type === "prompt" || type === "steer" || type === "follow_up") {
-      if (Reflect.get(command, CORE_CAPTURED_PROMPT) !== true && eduPiDirectPromptGate() !== "allowed") {
+      const parentCapture = Reflect.get(command, WORKFLOW_CHILD_PROMPT) === true && this.privateWorkflowChild && this.workflowParent
+        && getRegistry().get(this.workflowParent.sessionId)?.hasActiveCoreCaptureFor(this.workflowParent.sourceEntryId);
+      if (Reflect.get(command, CORE_CAPTURED_PROMPT) !== true && !workflowChildPromptAllowed(eduPiDirectPromptGate(),
+        Reflect.get(command, WORKFLOW_CHILD_PROMPT) === true && this.privateWorkflowChild, Boolean(parentCapture))) {
         throw new Error("core_first_required");
       }
       const imageError = validateAgentImages(command.images);
@@ -665,6 +688,7 @@ export class AgentSessionWrapper {
           }
           this.promptRequestId = clientRequestId ?? null;
           this.promptRunning = true;
+          this.coreCapturedPromptActive = Reflect.get(command, CORE_CAPTURED_PROMPT) === true;
           if (clientRequestId) {
             this.acceptedPromptRequestIds.add(clientRequestId);
             if (this.acceptedPromptRequestIds.size > 256) this.acceptedPromptRequestIds.delete(this.acceptedPromptRequestIds.values().next().value!);
@@ -722,6 +746,7 @@ export class AgentSessionWrapper {
           await this.artifactWrites;
           if (!streamingBehavior) {
             this.promptRunning = false;
+            this.coreCapturedPromptActive = false;
             this.promptRequestId = null;
           }
           this.resetIdleTimer();
@@ -730,6 +755,7 @@ export class AgentSessionWrapper {
         }).catch((error) => {
           if (!streamingBehavior) {
             this.promptRunning = false;
+            this.coreCapturedPromptActive = false;
             this.promptRequestId = null;
           }
           this.resetIdleTimer();
@@ -1533,7 +1559,7 @@ export function getLiveSessionSnapshots(knownSessionIds: ReadonlySet<string>): L
 export function getRunningRpcSessionIds(): string[] {
   const ids = new Set<string>();
   for (const [sessionId, session] of getRegistry()) {
-    if (session.isRunning()) ids.add(session.sessionId || sessionId);
+    if (!session.isPrivateWorkflowChild() && session.isRunning()) ids.add(session.sessionId || sessionId);
   }
   return [...ids];
 }
@@ -1595,7 +1621,7 @@ export async function startRpcSession(
   cwd: string | undefined,
   options: RpcSessionStartOptions = {},
 ): Promise<{ session: AgentSessionWrapper; realSessionId: string }> {
-  const { toolNames, initialModel, thinkingLevel, accessMode, strictToolNames, isolatedSessionDir } = options;
+  const { toolNames, initialModel, thinkingLevel, accessMode, strictToolNames, isolatedSessionDir, workflowParent } = options;
   const registry = getRegistry();
   const locks = getLocks();
 
@@ -1759,7 +1785,8 @@ export async function startRpcSession(
 
     const runtime = await createAgentSessionRuntime(createRuntime, { cwd: sessionCwd, agentDir, sessionManager });
     const inner = runtime.session;
-    const wrapper = new AgentSessionWrapper(inner, runtime, toolMode, memoryRecall, Boolean(strictToolNames));
+    const wrapper = new AgentSessionWrapper(inner, runtime, toolMode, memoryRecall, Boolean(strictToolNames), Boolean(isolatedSessionDir),
+      strictToolNames && isolatedSessionDir ? workflowParent : undefined);
     host.wrapper = wrapper;
     if (accessMode) wrapper.setAccessMode(accessMode);
     requestEduPiAppAction = (action, signal) => wrapper.requestEduPiAppAction(action, signal);

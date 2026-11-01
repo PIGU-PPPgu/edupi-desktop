@@ -28,14 +28,16 @@ function assistantText(sessionFile: string): string {
 
 type Agent = { name: string; task: string };
 type ChildModel = { provider: string; modelId: string };
+type Parent = { sessionId: string; sourceEntryId: string };
 
 async function runReadOnlyAgent(agent: Agent, previous: string, cwd: string, model: ChildModel | undefined,
-  thinkingLevel: ThinkingLevel | undefined, signal?: AbortSignal) {
+  thinkingLevel: ThinkingLevel | undefined, parent: Parent, signal?: AbortSignal) {
   signal?.throwIfAborted();
   const { startHarnessSession } = await import("./harness/runtime");
   const { session } = await startHarnessSession(`workflow-${randomUUID()}`, "", cwd, {
     toolNames: ["read", "find", "grep", "ls"], strictToolNames: true,
     isolatedSessionDir: workflowChildSessionDir(),
+    workflowParent: parent,
     ...(model ? { initialModel: model } : {}),
     ...(thinkingLevel ? { thinkingLevel } : {}),
   });
@@ -60,7 +62,8 @@ async function runReadOnlyAgent(agent: Agent, previous: string, cwd: string, mod
   signal?.addEventListener("abort", abort, { once: true });
   const timeout = setTimeout(() => { error = "子任务超时"; abort(); if (!finished) { finished = true; resolveDone?.(); } }, 10 * 60_000);
   try {
-    await session.send({ type: "prompt", message: [
+    signal?.throwIfAborted();
+    await session.sendWorkflowChildPrompt({ type: "prompt", message: [
       `你是工作流中的「${agent.name}」。只完成当前子任务，使用只读工具；不要写入文件、调用外部连接、创建其他任务或声称已执行未完成的操作。`,
       `当前子任务：${agent.task}`,
       ...(previous ? [`上一阶段的结果：\n${previous}`] : []),
@@ -108,7 +111,7 @@ export function createEduPiWorkflowTool({ runAgent = runReadOnlyAgent }: { runAg
       const { run: final, results } = await executeDynamicWorkflow(run, plan,
         (agent, previous, childSignal) => runAgent(agent, previous, ctx.cwd,
           ctx.model ? { provider: ctx.model.provider, modelId: ctx.model.id } : undefined,
-          ctx.thinkingLevel, childSignal), signal);
+          ctx.thinkingLevel, { sessionId: run.sessionId, sourceEntryId: source.id }, childSignal), signal);
       const report = results.flatMap((phase, phaseIndex) => phase.map((result, agentIndex) =>
         `${final.phases[phaseIndex].name} / ${final.phases[phaseIndex].agents[agentIndex].name}：${result.ok ? result.summary : `失败：${result.summary}`}`));
       return { content: [{ type: "text", text: `工作流${final.status === "done" ? "完成" : "未完成"}。\n${report.join("\n\n").slice(0, 20_000)}` }],

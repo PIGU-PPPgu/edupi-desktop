@@ -109,7 +109,7 @@ export function EduPiRuntimeFlow({ running, toolRunning, compacting, activeTools
             </button> : null}
           </li>)}
         </ol>
-        {graph.hiddenPhases > 0 ? <span className="edupi-workflow-view__older">较早 {graph.hiddenPhases} 阶段</span> : null}
+        {graph.hiddenSteps > 0 ? <span className="edupi-workflow-view__older">较早 {graph.hiddenSteps} 项未显示</span> : null}
       </div> : null}
     </section> : null;
   if (!info) return workflowView;

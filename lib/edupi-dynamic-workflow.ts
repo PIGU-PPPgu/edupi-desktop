@@ -60,7 +60,7 @@ function stateDirectory(create: boolean): string | null {
 export function workflowChildSessionDir(): string {
   const root = stateDirectory(true)!;
   const child = path.join(root, "child-sessions");
-  fs.mkdirSync(child, { mode: 0o700 });
+  fs.mkdirSync(child, { recursive: true, mode: 0o700 });
   const stat = fs.lstatSync(child);
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error("工作流会话目录不安全");
   return child;
