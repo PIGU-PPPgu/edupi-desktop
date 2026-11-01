@@ -184,7 +184,10 @@ export async function startCoreRuntimeHost({ coreRoot, options }, channel = proc
     const daemon = await createCoreRuntimeDaemon({ ...daemonOptions,
       ...(recallSupport ? { recallSupport } : {}),
       ...(g1Runner || g2Live || g3Bindings ? { ownerMessageContinuation: true } : {}),
-      ...(g3Bindings ? { g3Live: Object.freeze({ allowedBindings: g3Bindings, durableCalendarAdministration: false }) } : {}),
+      // Only a selected exact admin grant in the isolated canary can open the
+      // Durable calendar adapter; Core rechecks every unfinished checkpoint.
+      ...(g3Bindings ? { g3Live: Object.freeze({ allowedBindings: g3Bindings,
+        durableCalendarAdministration: g3Bindings.some(binding => binding.domain === "calendar_administration") }) } : {}),
       ...(g2Live ? { g2Live } : {}),
       ...(g1Runner ? { g1Live: { modelRunner: g1Runner, leaseMs: 300000,
         scope: { classId: g1Scope.classId, subject: g1Scope.subject }, grantId: g1Scope.grantId } } : {}) });

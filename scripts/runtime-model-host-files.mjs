@@ -6,6 +6,8 @@ export const RUNTIME_MODEL_HOST_FILES = Object.freeze([
   "core_runtime_isolated_model.mjs",
   "core_runtime_model_worker.mjs",
   "recall_source_support.mjs",
+  "recall_compound_guard.mjs",
+  "memory_recall_query.mjs",
   "model_json.mjs",
   "calendar_work_model_runner.mjs",
   "core_runtime_harness.mjs",

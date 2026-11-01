@@ -5,6 +5,7 @@ const eslintConfig = [
   {
     ignores: [
       "vendor/pptxgenjs/**",
+      "output/design-qa/**",
       "src-tauri/vendor/security-patches/**",
       "desktop/open-connector-console-assets/assets/**",
       ".next-desktop/**",

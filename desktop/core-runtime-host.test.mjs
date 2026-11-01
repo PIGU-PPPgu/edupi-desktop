@@ -27,6 +27,13 @@ test("G3 forwards a frozen exact grant snapshot without reading model configurat
   assert.deepEqual(daemonModule.received.g3Live.allowedBindings, [{ domain: "lesson_reflection", grantId: "selected-grant", ownerId: "selected-owner", scope: { class_id: "selected-class", subject: "math" } }]);
   assert.ok(Object.isFrozen(daemonModule.received.g3Live.allowedBindings[0].scope)); assert.equal(daemonModule.received.g3Live.durableCalendarAdministration, false);
   assert.equal(daemonModule.received.ownerMessageContinuation, true); assert.deepEqual(sent, []); await host.close();
+  const adminBindings = [{ domain: "calendar_administration", grantId: "selected-admin-grant", ownerId: "selected-owner",
+    scope: { class_id: "selected-class", subject: "administration" } }];
+  const adminHost = await startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: adminBindings } }, channel);
+  assert.deepEqual(daemonModule.received.g3Live.allowedBindings, adminBindings);
+  assert.equal(daemonModule.received.g3Live.durableCalendarAdministration, true, "exact selected admin grant enables Durable only in the isolated canary");
+  assert.deepEqual(sent, [], "G3 Durable cannot request model configuration");
+  await adminHost.close();
   let getterCalled = false;
   const getter = { domain: "lesson_reflection", grantId: "selected-grant", get scope() { getterCalled = true; return bindings[0].scope; } };
   for (const g3Bindings of [[getter], [{ domain: "lesson_reflection" }], [{ ...bindings[0], allowedDomains: ["lesson_reflection"] }], [bindings[0], bindings[0]]]) {
