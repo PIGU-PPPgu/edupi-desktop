@@ -1,6 +1,6 @@
 # AI 协作动态工作流
 
-状态：源码已实现，开发态验收通过；签名安装版尚未包含本改动。
+状态：源码已实现，开发态验收通过；[Desktop PR #450](https://github.com/PIGU-PPPgu/edupi-desktop/pull/450) 已普通合并至 main `b2eea255`，合并树 `ef51c8ee` 与受测 head `6f1ed346` 相同。签名安装版尚未包含本改动。
 
 ## 范围与身份
 
