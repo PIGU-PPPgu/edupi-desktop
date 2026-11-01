@@ -6,11 +6,11 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "56c7ed54cbe65af6b6526eb4f5ac556e9c88e00d",
+    "core_commit": "7ddb573520f703bd10eb6db2bec8ae1b6cd976b3",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:f1b1e8f961cac81f0e3af256f8832915d9b104233b5669b3f88c41750b5f21ea",
-    "runtime_component_manifest_hash": "sha256:a3122cfcdeac42d4b7d7e91d94bbb0202ce4be4073c176bb1724538e1131aadc",
-    "runtime_schema_hash": "sha256:c0bc52462cf2b42aa63cf8fec23f7fdb3199145ddd8d74e8133d6d58b7a2c5e2"
+    "component_manifest_hash": "sha256:67230285d1aabc7ab730d49c1de933649d1a6bbeac777ef2754d1636988b62fb",
+    "runtime_component_manifest_hash": "sha256:6b7bc7fdb288e3e68785a68571ca6c4a2872749fad93da8e7694c360ce2f58be",
+    "runtime_schema_hash": "sha256:ffa8632b29381cf601593478d4755cf38e17b0e112b8ec0600d44108594bcb0a"
   },
   "contract_identities": [
     {
@@ -260,7 +260,10 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/424",
     "https://github.com/PIGU-PPPgu/edupi/pull/425",
     "https://github.com/PIGU-PPPgu/edupi/pull/426",
-    "https://github.com/PIGU-PPPgu/edupi/pull/427"
+    "https://github.com/PIGU-PPPgu/edupi/pull/427",
+    "https://github.com/PIGU-PPPgu/edupi/pull/422",
+    "https://github.com/PIGU-PPPgu/edupi/pull/428",
+    "https://github.com/PIGU-PPPgu/edupi/pull/429"
   ],
-  "change_note": "The macOS 0.3.96 source candidate pairs Core main 56c7ed54 with runtime schema c0bc5246 and both exact component manifests. The merged source tree equals the fully tested PR427 head. Bridge v1.1, twelve supported commands and education_workspace remain unchanged. Owner-only joint source proof and ordinal witness are read-only; compound answers remain held. G3 calendar administration opens private Durable only for an exact selected isolated canary grant. Eight dormant commands and two projections remain unsupported. Signed 0.3.95 assets and the public feed are unchanged; new installation validation is pending."
+  "change_note": "This source candidate pairs Core main 7ddb5735, the PR429 tested tree, with Runtime schema ffa8632b and both exact component manifests. Bridge v1.1, twelve supported commands and education_workspace remain unchanged. Owner-only query Goal and cross-category inventory proofs are read-only; answer_verified and question_case_verified stay false, and product compound answers remain held. No signed installer or public update includes this pairing yet."
 }
