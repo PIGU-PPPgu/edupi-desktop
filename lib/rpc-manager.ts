@@ -36,6 +36,7 @@ import { createPrepareTaskTool } from "./edupi-prepare-task-tool";
 import type { DesktopControlInput } from "./edupi-desktop-control";
 import { createEduPiComputerUseTool } from "./edupi-computer-tool";
 import { createEduPiWorkflowTool } from "./edupi-workflow-tool";
+import { createWorkflowReadTools } from "./edupi-workflow-read-tools";
 import { matchingCapturedUserEntry, workflowChildPromptAllowed } from "./edupi-workflow-admission";
 import { parseComputerUseBridgeResult, type ComputerUseBridgeResult, type ComputerUseInput } from "./edupi-computer-use";
 import { createDesktopSafeBashOperations, quarantineUnmanagedOpenConnectorEnvironment, redactDesktopSpawnContext } from "./desktop-shell-security";
@@ -1734,8 +1735,8 @@ export async function startRpcSession(
         ...(initial.scopedModels.length > 0 ? { scopedModels: initial.scopedModels } : {}),
         // Keep the registry available for a later explicit tool selection. The
         // restricted loader and empty active set make this session tool-free.
-        ...(toolMode.disabled ? { noTools: "builtin" as const } : {}),
-        customTools: [
+        ...(toolMode.disabled || strictToolNames ? { noTools: "builtin" as const } : {}),
+        customTools: strictToolNames ? createWorkflowReadTools(sessionCwd) : [
           ...(sessionIsEduPiDataRoot && !safeMode ? [memoryRecall.tool] : []),
           defineTool(createBashToolDefinition(sessionCwd, { shellPath: services.settingsManager.getShellPath(), spawnHook: redactDesktopSpawnContext })),
           ...(!safeMode && !strictToolNames ? [createEduPiWorkflowTool()] : []),
