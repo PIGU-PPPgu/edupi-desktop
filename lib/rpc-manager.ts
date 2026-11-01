@@ -35,12 +35,14 @@ import { createMemoryForgetTool } from "./edupi-memory-forget-tool";
 import { createPrepareTaskTool } from "./edupi-prepare-task-tool";
 import type { DesktopControlInput } from "./edupi-desktop-control";
 import { createEduPiComputerUseTool } from "./edupi-computer-tool";
+import { createEduPiWorkflowTool } from "./edupi-workflow-tool";
+import { matchingCapturedUserEntry, workflowChildPromptAllowed } from "./edupi-workflow-admission";
 import { parseComputerUseBridgeResult, type ComputerUseBridgeResult, type ComputerUseInput } from "./edupi-computer-use";
 import { createDesktopSafeBashOperations, quarantineUnmanagedOpenConnectorEnvironment, redactDesktopSpawnContext } from "./desktop-shell-security";
 import { createEduPiTeacherContextAppendSystemPromptOverride } from "./edupi-teacher-context-prompt";
 import { withEducationModel } from "./edupi-model-context";
 import { ensureLoopbackModelAuth } from "./loopback-model-auth";
-import type { PermissionMode } from "./tool-presets";
+import { PRESET_DEFAULT, PRESET_FULL, type PermissionMode } from "./tool-presets";
 import { createRpcResourceLoader, rpcResourceOptions, type RpcToolMode } from "./rpc-resource-loader";
 import { readSessionToolNames, saveSessionToolNames } from "./session-tool-preferences";
 import { persistInitialPiSessionFile } from "./pi-session-first-file";
@@ -49,6 +51,7 @@ import { createEduPiMemoryRecallAccess, type EduPiMemoryRecallAccess } from "./e
 import { inspectEduPiPromptSession } from "./edupi-prompt-reconciliation";
 
 const CORE_CAPTURED_PROMPT = Symbol("edupi-core-captured-prompt");
+const WORKFLOW_CHILD_PROMPT = Symbol("edupi-workflow-child-prompt");
 
 // The legacy HTTP adapter is intentionally not a production authority. Until
 // Core owns one-shot grants and receipts, do not retain connector credentials in
@@ -127,6 +130,12 @@ export interface RpcSessionStartOptions {
   initialModel?: { provider: string; modelId: string };
   thinkingLevel?: ThinkingLevel;
   accessMode?: PermissionMode;
+  /** Host-owned child sessions must not inherit unrelated extension tools. */
+  strictToolNames?: boolean;
+  /** Keep workflow child transcripts out of the normal chat sidebar. */
+  isolatedSessionDir?: string;
+  /** The active, Core-captured parent turn that authorized an internal child. */
+  workflowParent?: { sessionId: string; sourceEntryId: string };
 }
 
 /**
@@ -181,10 +190,13 @@ function withExtensionTools(session: AgentSessionLike, toolNames: string[]): str
   if (toolNames.length === 0) return [];
 
   const codingToolNames = new Set(CODING_TOOL_NAMES);
+  const selected = [...toolNames].sort().join(",");
+  const standardPreset = selected === [...PRESET_DEFAULT].sort().join(",") || selected === [...PRESET_FULL].sort().join(",");
   const extensionToolNames = session
     .getAllTools()
     .map((t) => t.name)
-    .filter((name) => !codingToolNames.has(name));
+    // A deliberately narrow tool selection must not acquire an orchestrator.
+    .filter((name) => !codingToolNames.has(name) && (name !== "edupi_workflow" || standardPreset));
 
   return [...new Set([...toolNames, ...extensionToolNames])];
 }
@@ -202,6 +214,7 @@ export class AgentSessionWrapper {
   private extensionStatuses = new Map<string, string>();
   private extensionWidgets = new Map<string, ExtensionWidgetItem>();
   private promptRunning = false;
+  private coreCapturedPromptActive = false;
   private promptRequestId: string | null = null;
   private acceptedPromptRequestIds = new Set<string>();
   private messageEventIds = new WeakMap<object, string>();
@@ -222,7 +235,7 @@ export class AgentSessionWrapper {
   private artifactTaskId: string | null = null;
   private accessMode: PermissionMode = "workspace";
 
-  constructor(public inner: AgentSessionLike, private runtime?: AgentSessionRuntime, private toolMode: RpcToolMode = { disabled: false }, private memoryRecall?: EduPiMemoryRecallAccess) {
+  constructor(public inner: AgentSessionLike, private runtime?: AgentSessionRuntime, private toolMode: RpcToolMode = { disabled: false }, private memoryRecall?: EduPiMemoryRecallAccess, private strictToolNames = false, private privateWorkflowChild = false, private workflowParent?: { sessionId: string; sourceEntryId: string }) {
     runtime?.setBeforeSessionInvalidate(() => {
       this.memoryRecall?.invalidate(this.inner.sessionManager);
       this.sessionInvalidated = true;
@@ -270,6 +283,15 @@ export class AgentSessionWrapper {
     return this._alive;
   }
 
+  isPrivateWorkflowChild(): boolean {
+    return this.privateWorkflowChild;
+  }
+
+  hasActiveCoreCaptureFor(sourceEntryId: string): boolean {
+    return this._alive && matchingCapturedUserEntry(this.coreCapturedPromptActive, this.promptRunning,
+      sourceEntryId, this.inner.sessionManager.getBranch());
+  }
+
   isRunning(): boolean {
     return this._alive && (this.promptRunning || this.inner.isStreaming || this.inner.isCompacting || this.inner.isBashRunning);
   }
@@ -287,13 +309,19 @@ export class AgentSessionWrapper {
     return this.send({ ...command, [CORE_CAPTURED_PROMPT]: true });
   }
 
+  /** Internal child dispatch: the parent must still be running its Core-captured turn. */
+  sendWorkflowChildPrompt(command: { type: "prompt"; message: string }): Promise<unknown> {
+    if (!this.privateWorkflowChild || !this.workflowParent) throw new Error("workflow_child_unavailable");
+    return this.send({ ...command, [WORKFLOW_CHILD_PROMPT]: true });
+  }
+
   /**
    * Session-list row built from the in-memory session, for sessions the disk
    * scan cannot see yet. Returns null until a user message exists so an
    * untouched "new chat" runtime never renders a row that later disappears.
    */
   getLiveSnapshot(): LiveSessionSnapshot | null {
-    if (!this._alive) return null;
+    if (!this._alive || this.privateWorkflowChild) return null;
 
     const manager = this.inner.sessionManager;
     const header = manager.getHeader() as Record<string, unknown> | null;
@@ -414,6 +442,7 @@ export class AgentSessionWrapper {
     if (options.forceEmptySystemPrompt) this.forceEmptySystemPrompt = true;
     if (this.extensionsBound) {
       this.applyForcedEmptySystemPrompt();
+      this.applyStrictToolScope();
       return Promise.resolve();
     }
     if (this.extensionBindingPromise) return this.extensionBindingPromise;
@@ -453,6 +482,7 @@ export class AgentSessionWrapper {
       }
       this.extensionsBound = true;
       this.applyForcedEmptySystemPrompt();
+      this.applyStrictToolScope();
       console.log(`[pi-web] session_start dispatched to extensions for session ${this.inner.sessionId}`);
     })().catch((err) => {
       this.extensionBindingError = err;
@@ -492,6 +522,14 @@ export class AgentSessionWrapper {
     // Pi 1 owns Agent state. The host-only before_agent_start hook supplies the
     // empty prompt; the loader policy also keeps reload from restoring resources.
     if (this.forceEmptySystemPrompt) this.inner.setActiveToolsByName([]);
+  }
+
+  private applyStrictToolScope(): void {
+    if (this.strictToolNames) this.inner.setActiveToolsByName(readSessionToolNames(this.inner.sessionManager) ?? []);
+  }
+
+  private expandToolNames(names: string[]): string[] {
+    return this.strictToolNames ? names : withExtensionTools(this.inner, names);
   }
 
   private runPromptWithMemoryRecall<T>(command: Record<string, unknown>, callback: () => Promise<T>): Promise<T> {
@@ -588,9 +626,13 @@ export class AgentSessionWrapper {
       return null;
     }
     if (this.shouldWaitForExtensions(type)) await this.waitForExtensionsBound();
+    if (this.strictToolNames && (type === "prompt" || type === "steer" || type === "follow_up")) this.applyStrictToolScope();
 
     if (type === "prompt" || type === "steer" || type === "follow_up") {
-      if (Reflect.get(command, CORE_CAPTURED_PROMPT) !== true && eduPiDirectPromptGate() !== "allowed") {
+      const parentCapture = Reflect.get(command, WORKFLOW_CHILD_PROMPT) === true && this.privateWorkflowChild && this.workflowParent
+        && getRegistry().get(this.workflowParent.sessionId)?.hasActiveCoreCaptureFor(this.workflowParent.sourceEntryId);
+      if (Reflect.get(command, CORE_CAPTURED_PROMPT) !== true && !workflowChildPromptAllowed(eduPiDirectPromptGate(),
+        Reflect.get(command, WORKFLOW_CHILD_PROMPT) === true && this.privateWorkflowChild, Boolean(parentCapture))) {
         throw new Error("core_first_required");
       }
       const imageError = validateAgentImages(command.images);
@@ -646,6 +688,7 @@ export class AgentSessionWrapper {
           }
           this.promptRequestId = clientRequestId ?? null;
           this.promptRunning = true;
+          this.coreCapturedPromptActive = Reflect.get(command, CORE_CAPTURED_PROMPT) === true;
           if (clientRequestId) {
             this.acceptedPromptRequestIds.add(clientRequestId);
             if (this.acceptedPromptRequestIds.size > 256) this.acceptedPromptRequestIds.delete(this.acceptedPromptRequestIds.values().next().value!);
@@ -703,6 +746,7 @@ export class AgentSessionWrapper {
           await this.artifactWrites;
           if (!streamingBehavior) {
             this.promptRunning = false;
+            this.coreCapturedPromptActive = false;
             this.promptRequestId = null;
           }
           this.resetIdleTimer();
@@ -711,6 +755,7 @@ export class AgentSessionWrapper {
         }).catch((error) => {
           if (!streamingBehavior) {
             this.promptRunning = false;
+            this.coreCapturedPromptActive = false;
             this.promptRequestId = null;
           }
           this.resetIdleTimer();
@@ -817,7 +862,7 @@ export class AgentSessionWrapper {
         const toolNames = readSessionToolNames(this.inner.sessionManager);
         if (!result.cancelled && toolNames !== undefined) {
           this.setForceEmptySystemPrompt(toolNames.length === 0);
-          this.inner.setActiveToolsByName(withExtensionTools(this.inner, toolNames));
+          this.inner.setActiveToolsByName(this.expandToolNames(toolNames));
         }
         return { cancelled: result.cancelled };
       }
@@ -946,7 +991,7 @@ export class AgentSessionWrapper {
           try { await this.inner.reload(); }
           catch (error) { this.destroy(); throw error; }
         }
-        this.inner.setActiveToolsByName(withExtensionTools(this.inner, toolNames));
+        this.inner.setActiveToolsByName(this.expandToolNames(toolNames));
         this.applyForcedEmptySystemPrompt();
         return null;
       }
@@ -1396,7 +1441,7 @@ export class AgentSessionWrapper {
         const toolNames = readSessionToolNames(this.inner.sessionManager);
         if (!result.cancelled && toolNames !== undefined) {
           this.setForceEmptySystemPrompt(toolNames.length === 0);
-          this.inner.setActiveToolsByName(withExtensionTools(this.inner, toolNames));
+          this.inner.setActiveToolsByName(this.expandToolNames(toolNames));
         }
         return { cancelled: result.cancelled };
       },
@@ -1514,7 +1559,7 @@ export function getLiveSessionSnapshots(knownSessionIds: ReadonlySet<string>): L
 export function getRunningRpcSessionIds(): string[] {
   const ids = new Set<string>();
   for (const [sessionId, session] of getRegistry()) {
-    if (session.isRunning()) ids.add(session.sessionId || sessionId);
+    if (!session.isPrivateWorkflowChild() && session.isRunning()) ids.add(session.sessionId || sessionId);
   }
   return [...ids];
 }
@@ -1576,7 +1621,7 @@ export async function startRpcSession(
   cwd: string | undefined,
   options: RpcSessionStartOptions = {},
 ): Promise<{ session: AgentSessionWrapper; realSessionId: string }> {
-  const { toolNames, initialModel, thinkingLevel, accessMode } = options;
+  const { toolNames, initialModel, thinkingLevel, accessMode, strictToolNames, isolatedSessionDir, workflowParent } = options;
   const registry = getRegistry();
   const locks = getLocks();
 
@@ -1591,7 +1636,7 @@ export async function startRpcSession(
     sessionManager = SessionManager.open(sessionFile, undefined);
   } else {
     if (!cwd) throw new Error("cwd is required for a new session");
-    sessionManager = SessionManager.create(cwd, undefined);
+    sessionManager = SessionManager.create(cwd, isolatedSessionDir);
   }
   const sessionCwd = sessionManager.getCwd();
   const finishStartingSession = trackStartingSession(sessionCwd);
@@ -1601,7 +1646,8 @@ export async function startRpcSession(
     // Some extensions access the SDK's global theme even outside the terminal UI.
     initTheme();
     const agentDir = getAgentDir();
-    const toolMode = { disabled: toolNames?.length === 0 };
+    const toolMode: RpcToolMode = { disabled: toolNames?.length === 0,
+      ...(strictToolNames ? { exactToolNames: toolNames ?? [] } : {}) };
     const memoryRecall = createEduPiMemoryRecallAccess(EDUPI_ROOT, { disabled: () => toolMode.disabled });
     const host: { wrapper?: AgentSessionWrapper } = {};
     const createRuntime: CreateAgentSessionRuntimeFactory = async ({ cwd: sessionCwd, sessionManager, sessionStartEvent }) => {
@@ -1609,6 +1655,7 @@ export async function startRpcSession(
       const requestedTools = explicitTools === undefined ? readSessionToolNames(sessionManager)
         : saveSessionToolNames(sessionManager, explicitTools);
       toolMode.disabled = requestedTools?.length === 0;
+      if (strictToolNames) toolMode.exactToolNames = requestedTools ?? [];
       const normalizedSessionCwd = normalizeRpcCwd(sessionCwd);
       const sessionIsEduPiDataRoot = normalizedSessionCwd === EDUPI_ROOT;
       const sessionIsEduPiCoreRoot = normalizedSessionCwd === EDUPI_CODE_ROOT;
@@ -1691,6 +1738,7 @@ export async function startRpcSession(
         customTools: [
           ...(sessionIsEduPiDataRoot && !safeMode ? [memoryRecall.tool] : []),
           defineTool(createBashToolDefinition(sessionCwd, { shellPath: services.settingsManager.getShellPath(), spawnHook: redactDesktopSpawnContext })),
+          ...(!safeMode && !strictToolNames ? [createEduPiWorkflowTool()] : []),
           ...(sessionIsEduPiDataRoot ? [...createEduPiCalendarTools({ projectRoot: EDUPI_ROOT }), createPreparationArtifactTool(EDUPI_ROOT), createEduPiDocumentTool(EDUPI_ROOT), createEduPiPresentationTool(EDUPI_ROOT), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createMemoryWriteTool(EDUPI_ROOT), createMemoryForgetTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiUpdateTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
             projectRoot: EDUPI_ROOT,
             requestAction: (action, signal) => requestEduPiAppAction(action, signal),
@@ -1730,14 +1778,15 @@ export async function startRpcSession(
       // extensions stay usable in Pi Web just like in the `pi` CLI.
       if (toolMode.disabled) inner.setActiveToolsByName([]);
       else if (requestedTools) {
-        inner.setActiveToolsByName(withExtensionTools(inner, requestedTools));
+        inner.setActiveToolsByName(strictToolNames ? requestedTools : withExtensionTools(inner, requestedTools));
       }
       return { ...result, services, diagnostics: services.diagnostics };
     };
 
     const runtime = await createAgentSessionRuntime(createRuntime, { cwd: sessionCwd, agentDir, sessionManager });
     const inner = runtime.session;
-    const wrapper = new AgentSessionWrapper(inner, runtime, toolMode, memoryRecall);
+    const wrapper = new AgentSessionWrapper(inner, runtime, toolMode, memoryRecall, Boolean(strictToolNames), Boolean(isolatedSessionDir),
+      strictToolNames && isolatedSessionDir ? workflowParent : undefined);
     host.wrapper = wrapper;
     if (accessMode) wrapper.setAccessMode(accessMode);
     requestEduPiAppAction = (action, signal) => wrapper.requestEduPiAppAction(action, signal);

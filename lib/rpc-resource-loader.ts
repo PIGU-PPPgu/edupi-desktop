@@ -1,7 +1,7 @@
 import { DefaultResourceLoader, type ExtensionFactory, type ResourceLoader } from "@earendil-works/pi-coding-agent";
 
 type LoaderOptions = ConstructorParameters<typeof DefaultResourceLoader>[0];
-export type RpcToolMode = { disabled: boolean };
+export type RpcToolMode = { disabled: boolean; exactToolNames?: string[] };
 
 export function rpcResourceOptions(base: LoaderOptions, mode: RpcToolMode, hostFactories: ExtensionFactory[] = []): LoaderOptions {
   return {
@@ -24,9 +24,15 @@ export function rpcResourceOptions(base: LoaderOptions, mode: RpcToolMode, hostF
       (pi) => {
         // Reload re-registers direct custom tools even without extensions.
         // Keep the host's empty-tool choice effective after that registration.
-        pi.on("session_start", () => { if (mode.disabled) pi.setActiveTools([]); });
+        pi.on("session_start", () => {
+          if (mode.disabled) pi.setActiveTools([]);
+          else if (mode.exactToolNames) pi.setActiveTools(mode.exactToolNames);
+        });
         pi.on("before_agent_start", () => {
-          if (!mode.disabled) return undefined;
+          if (!mode.disabled) {
+            if (mode.exactToolNames) pi.setActiveTools(mode.exactToolNames);
+            return undefined;
+          }
           pi.setActiveTools([]);
           return { systemPrompt: "" };
         });
