@@ -1,6 +1,6 @@
 # Core #429 与 Desktop 工作流源码配对
 
-状态：Desktop 源码 `a096aff` 对当前 Core main `7ddb573520f703bd10eb6db2bec8ae1b6cd976b3` 的隔离配对已通过；Core #430 尚在 CI，签名 Mac 安装版仍为固定旧 Core 的 `0.3.97`。本记录是源码验证，不是安装验收。
+状态：Desktop 源码 `a096aff` 对当前 Core main `7ddb573520f703bd10eb6db2bec8ae1b6cd976b3` 的隔离配对已通过；`f5fe7bb` 只把 Mac 候选版本元数据预备到 `0.3.98`，未构建或创建 Release。Core #430 尚在 CI，签名 Mac 安装版仍为固定旧 Core 的 `0.3.97`。本记录是源码验证，不是安装验收。
 
 ## 固定身份
 
@@ -19,6 +19,7 @@
 | 同一根，`node scripts/test-edupi-workflow-core-first-e2.mjs` | Core-first gate 已启用；捕获父回合的工作流经确认运行一个只读子会话，父回合结束后的直接／内部派发均被拒绝；外部网络调用 0 | 以服务端捕获方法和合成回执驱动，未代替签名安装版用户流程 |
 | `EDUPI_CORE_ROOT=<隔离 Core 根> node --test --test-concurrency=4 ...` | 3587 项，3571 通过、16 条件跳过、0 失败 | 默认高并发完整套件曾使同一 Core process 测试硬超时 1 项、取消 1 项；单文件复跑 16 通过／1 条件跳过，失败记录保留于本机诊断日志 |
 | macOS Rust 1.90，`TAURI_CONFIG='{"bundle":{"resources":[]}}' cargo check --locked --manifest-path <Desktop>/src-tauri/Cargo.toml` | 原生源码编译通过；只跳过尚未生成的包内资源目录 | 本次是 `cargo check`，不是签名包；默认 `tuna` Git 索引三分钟无进展，改用 `/tmp` 隔离 Cargo Home 与官方 sparse 源，没有修改全局 Cargo 配置 |
+| `0.3.98` 四处版本元数据和发行说明、同一隔离 Cargo Home 的 `cargo check --locked`、发布工作流定向测试 | 源码候选版本一致、Mac 原生重新检查通过、发布流程 52 通过／3 条件跳过／0 失败 | 未触发 GitHub 签名构建、未创建 tag 或安装包；Core #430 最终身份仍需替换发行说明和 pin |
 
 本机待清理的纯生成缓存：该 Desktop 工作树的 `src-tauri/target/` 约 1.1 GiB，以及 `/tmp/edupi-cargo-home-20261102.pKcWDK` 约 237 MiB。两者保留至最终 Mac 候选完成本机验证或明确放弃本轮构建；届时先核对句柄、Git 跟踪和保留证据，再按精确路径清理，不触及源码、已安装应用或真实资料。
 
