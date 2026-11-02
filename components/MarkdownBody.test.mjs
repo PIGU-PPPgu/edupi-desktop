@@ -73,6 +73,15 @@ test("keeps local file markdown links in the app", () => {
   assert.doesNotMatch(html, /target=|rel=|\snode=/);
 });
 
+test("local chat images can open the file panel while remote images remain plain images", () => {
+  const local = renderMarkdown("![示意图](figures/lesson.png)");
+  const remote = renderMarkdown("![远程图片](https://example.com/lesson.png)");
+
+  assert.match(local, /<img[^>]*role="button"[^>]*tabindex="0"/);
+  assert.match(local, /title="在侧栏查看图片"/);
+  assert.doesNotMatch(remote, /role="button"|tabindex="0"|title="在侧栏查看图片"/);
+});
+
 test("renders LaTeX parenthesis delimiters as inline math", () => {
   const html = renderMarkdown(String.raw`射线为 \(r_c = K^{-1}p\)。`);
 

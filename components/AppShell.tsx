@@ -195,6 +195,7 @@ export function AppShell() {
     return () => window.removeEventListener("edupi-open-settings", handler);
   }, []);
   const edupiChatActive = edupiEducationModule !== null && searchParams.get("view") === "chat";
+  const filePanelAvailable = !edupiEducationModule || edupiChatActive;
   const [projectTrust, setProjectTrust] = useState<ProjectTrustStatus | null>(null);
   const [projectTrustDialogOpen, setProjectTrustDialogOpen] = useState(false);
   const [projectTrustBusy, setProjectTrustBusy] = useState(false);
@@ -2224,9 +2225,9 @@ export function AppShell() {
         aria-hidden="true"
         className={`right-panel-overlay-backdrop${rightPanelOpen ? " is-open" : ""}`}
         onClick={() => setRightPanelOpen(false)}
-        style={{ display: edupiEducationModule ? "none" : undefined }}
+        style={{ display: filePanelAvailable ? undefined : "none" }}
       />
-      {!edupiEducationModule && rightPanelOpen && (
+      {filePanelAvailable && rightPanelOpen && (
         <div
           {...rightPanelResizer.separatorProps}
           aria-controls="file-panel"
@@ -2243,7 +2244,7 @@ export function AppShell() {
         className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${rightPanelResizer.isResizing ? " right-panel-resizing" : ""}`}
         style={{
           "--right-panel-width": `${rightPanelResizer.width}px`,
-          display: edupiEducationModule ? "none" : "flex",
+          display: filePanelAvailable ? "flex" : "none",
           flexDirection: "column",
           borderLeft: "1px solid var(--border)",
           background: "var(--bg)",
