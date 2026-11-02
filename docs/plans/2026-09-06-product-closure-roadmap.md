@@ -1,5 +1,9 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-02 R04／R19／R21 macOS `.99` 技术交付：Desktop [PR455](https://github.com/PIGU-PPPgu/edupi-desktop/pull/455) 合并 main `bf207ee5`，固定 Core `dfcdfaef`；源码 CI 与唯一 [Mac 签名 run41377353258](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41377353258) 成功，App/DMG 公证、Minisign/Gatekeeper、本机同轮资产和包内源码通过。唯一 `/Applications/EduPi.app` 已由 `.97` 更新 `.99`；隔离原生取消不再误报完成，双阶段 3/3、Core-first 捕获→持久 outbox→Pi 接受、冷启不重跑、TCC 重测和 WebView 恢复通过。安装和隔离后 347 项真实资料字节不变；另一次**正常资料根启动**写入提醒运行态、3 个 SQLite 文件和两条会话自定义记录，严格全程字节门失败，前后字节均封存且未覆盖当前变化。`.99` 已公开为 Mac-only 预发布，正式 feed/Latest 仍 `.70`；Windows/Linux、旧客户端原位升级及真实跨到期睡眠保留原范围。十个精确生成目录已清理，同卷可用增加 `6,897,954,816` 字节；`.97` 回退、真实资料备份和原始证据保留。[完整验收](../acceptance/2026-11-02-macos099-release-status.md)取代下方 `.98`失败与`.99`候选的当前状态。
+
+## 历史阶段记录
+
 2026-11-02 R19／R21 `.99` 源码修复候选：已将 `.98` 安装版取消后误报完成的根因定位为通用 Pi 工具图仅看 `isError=false`，忽略 `edupi_workflow` 的结构化 `details.status=declined`。最小修复使未启动／受阻工作流不画完成图，其他工具仍显示；20 项定向、真实合成 JSONL 投影、类型、目标 lint、版本核对和 Mac Rust 源码编译通过。`.99` 尚未 PR/CI、签名或安装，`.98` Draft保持不公开，唯一正常 App已回退 `.97`；[验收记录](../acceptance/2026-11-02-core429-desktop-source.md)保留真实资料变化和开发预览超时，不能以源码结果替代新包原生复验。
 
 2026-11-02 R19／R21 `.98` 原生验收失败并回退：Core #432 固定身份、签名公证和只读子会话确认执行通过，但取消确认后工具回执“工作流未启动”而顶部图误报“已完成 1/1 项”。唯一 `/Applications/EduPi.app` 已从测试 `.98` 回退原 `.97`，WebView 偏好恢复，`.98` Draft 未公开、feed仍`.70`；测试退出期间出现正常模式进程并产生 14 条通知活动／7 项重试时间变化及3个SQLite运行文件，均保留并封存，343项其他基线文件未变，真实资料全文件保护门仍按失败记录。源码最小修复已有20项定向通过，待独立新版本源码 CI、唯一 Mac 签名和原生取消／确认／冷启复验；Windows/Linux 仍后置。精确证据和边界见[配对验收](../acceptance/2026-11-02-core429-desktop-source.md)。本段取代下文 `.98`“待安装／可公开”的中间状态。
