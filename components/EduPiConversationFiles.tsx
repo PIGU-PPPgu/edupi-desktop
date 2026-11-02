@@ -62,7 +62,7 @@ export function EduPiConversationFiles({ sessionId, taskId, cwd, onOpen, open: c
       {files.map(file => {
         const fullPath = `${cwd.replace(/[\\/]$/, "")}/${file.relative_path}`;
         const revealLabel = `显示“${file.title}”所在文件夹`;
-        return <div className="edupi-conversation-files__row" key={file.artifact_id}><button className="native-button" onClick={() => onOpen?.(fullPath)}>{file.title}</button>{isTauriDesktop() ? <button type="button" className="native-button edupi-conversation-files__icon-button" aria-label={revealLabel} title={revealLabel} onClick={() => void revealItemInDirNative(fullPath).catch(() => setMessage("文件夹打开失败"))}><RevealFolderIcon /></button> : null}</div>;
+        return <div className="edupi-conversation-files__row" key={file.artifact_id}><button className="native-button" onClick={() => { onOpen?.(fullPath); setOpen(false); }}>{file.title}</button>{isTauriDesktop() ? <button type="button" className="native-button edupi-conversation-files__icon-button" aria-label={revealLabel} title={revealLabel} onClick={() => void revealItemInDirNative(fullPath).catch(() => setMessage("文件夹打开失败"))}><RevealFolderIcon /></button> : null}</div>;
       })}
       {files.length === 0 ? <p>暂无已登记文件</p> : null}
       {message ? <p role="status">{message}</p> : null}

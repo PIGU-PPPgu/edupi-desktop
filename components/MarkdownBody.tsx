@@ -86,7 +86,21 @@ function buildComponents(
         : src;
       // Dynamic local paths are served directly by the file API.
       // eslint-disable-next-line @next/next/no-img-element
-      return <img src={imageSrc} alt={alt ?? ""} loading="lazy" {...props} />;
+      return <img
+        src={imageSrc}
+        alt={alt ?? ""}
+        loading="lazy"
+        {...props}
+        role={filePath && onOpenFile ? "button" : undefined}
+        tabIndex={filePath && onOpenFile ? 0 : undefined}
+        title={filePath && onOpenFile ? "在侧栏查看图片" : undefined}
+        onClick={filePath && onOpenFile ? () => onOpenFile(filePath) : undefined}
+        onKeyDown={filePath && onOpenFile ? (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          onOpenFile(filePath);
+        } : undefined}
+      />;
     },
     table({ children }) {
       return (
