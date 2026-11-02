@@ -1,7 +1,7 @@
-EduPi Desktop 0.3.98，macOS Apple Silicon 预发布候选。
+EduPi Desktop 0.3.98，macOS Apple Silicon 预发布。
 
 AI 协作在聊天顶部显示可收起的实际执行阶段。明确请求工作流时，用户确认后可运行并行只读子任务；成功和失败分支、最多三轮重试及中断续跑都有调用上限。拟稿结果待审，不直接写入教师资料。
 
-当前源码临时配对 Core `3712197126b38399688db814ea78dd8c19815a41`。联合来源证明仍为只读，复合回答保持拦截；Core #430 中同一 Goal 多 guard 的审查问题尚未解决，不把肯定证明作为产品授权。签名包必须在来源风险复核后才构建。
+当前源码配对 Core `dfcdfaef6e0710e4064a3343453e82da571990a9`。联合来源证明仍为只读，复合回答保持拦截；同一 Goal 多条当前 guard 的歧义按整个 Goal 拒绝，不把来源证明作为产品回答授权。
 
-仅计划提供 macOS Apple Silicon 安装包；Windows/Linux 延后，正式自动更新源不切换。当前正常安装版仍是 0.3.97，本候选尚未发布或安装。
+仅提供 macOS Apple Silicon 安装包；Windows/Linux 延后，正式自动更新源不切换。
