@@ -1,5 +1,11 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-02 R04／R19／R21 最新源码配对：Desktop `codex/core429-macos-workflow-20261102` 本地候选已改固定 Core #432 合并提交 `dfcdfaef` 与精确 Runtime schema／双组件清单；Core #432 受测同 tree 的 PR CI 成功，合并后 Main CI 仍在运行。Core 同 Goal 多当前 guard 的合成拒绝与 20 来源冷进程并发本机通过，#430 原 P2 线程已解决；owner-only 证明仍不授权复合回答。Desktop Draft PR454 远端仍停在旧 #429 身份，待最终本地配对通过后一次推送；`.98` 尚未签名、安装或发布，唯一正常 App 仍 `.97`。本段取代下方 #429/#430 中间身份的当前状态；证据见[配对记录](../acceptance/2026-11-02-core429-desktop-source.md)。
+
+2026-11-02 R04／R19／R21 最新本地配对中间身份：Desktop `8a371f9` 已读 Core #430 合并提交 `37121971` 的精确 tree、schema 与双清单，并在隔离 Mac 根复核 Bridge／宿主、C1 E2 和 Core-first 工作流子会话。Core PR CI 成功，但合并后仍有同一 Goal 多 guard 的未解决 P2 审查线程，Main push CI 未终结；原 Draft PR454 远端仍固定 #429，当前本地 #430 pin 未推送以避免重复审计和签名构建。正常 `.97` App、公开 Release/feed及教师资料未改，不把 owner-only 联合证明放行成产品复合回答。历史 #429 成功证据与本轮界限见[配对记录](../acceptance/2026-11-02-core429-desktop-source.md)。
+
+2026-11-02 R04／R19／R21 配对中间状态：Desktop `a096aff`／Draft PR454 临时固定已合 Core #429 main `7ddb5735` 与精确 Runtime schema／双组件清单；`f5fe7bb` 仅预备 `.98` Mac 候选版本元数据，未构建。C1/C2/C3、私有模型宿主、三域合成 canary 与 Core-first 工作流子会话授权均在隔离 Mac 根通过。带该 Core 根的完整本地测试降并发后3571通过／16条件跳过／0失败，Rust 1.90 的 Mac 原生 `cargo check` 与 `.98` 锁定版本检查也通过；默认高并发另有同一测试的 25 秒硬超时，单文件复跑通过，失败不改写为绿。Core #430 精确 CI 已成功，但仍有同 Goal 多 guard 的未解决 P2 审查意见，尚未合并；Draft PR454 三项依赖／源码审计已通过，仍不冻结签名候选或更新正常 `.97` App。联合来源证明不授权复合回答。精确版本、操作、临时缓存及缺证见[配对记录](../acceptance/2026-11-02-core429-desktop-source.md)。
+
 2026-11-02 R19／R21 动态工作流风险修补候选 `57c2185`／[PR #453](https://github.com/PIGU-PPPgu/edupi-desktop/pull/453)：v2 私有状态在不向浏览器返回任务／结果的前提下支持显式确认续跑；成功／失败分支、有界重试与调用总上限已实现，宿主围栏限制子会话只能读取当前工作区。拟稿只产出待审文本，教师资料写入仍走主会话门禁；审查指出的日志容量、旧草稿和失败回执续跑问题已定向修复。完整本地测试3539通过／48条件跳过／0失败，合成跨进程和实际浏览器证据见[原验收记录](../acceptance/2026-11-01-dynamic-workflow.md)。当前只完成源码候选，PR/合并、Core 新主线配对与签名安装技术验收未追认，公开客户端不变。
 
 2026-11-02 AI 协作动态工作流源码交付：Desktop [PR #450](https://github.com/PIGU-PPPgu/edupi-desktop/pull/450) 已普通合 main `b2eea255e1b800f56773f7633725e1d04a428371`，tree `ef51c8ee7f72124d7551632cf9f71a20fd835ce8` 与受测 head `6f1ed346` 相同。五条审查线程经修复后解决；本轮未触发仓库路径过滤之外的付费 Actions，完整本地测试见下段。源码合并不等于签名安装、Core-first 实机捕获或公开发布，原验收边界保留。
