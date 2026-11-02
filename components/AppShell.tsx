@@ -202,6 +202,7 @@ export function AppShell() {
   const [projectTrustError, setProjectTrustError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [inlineImageSrc, setInlineImageSrc] = useState<string | null>(null);
   const [mobileSidebarReady, setMobileSidebarReady] = useState(false);
   // The desktop window has no native title bar. macOS keeps its traffic lights
   // and only needs the top bar inset for them; other platforms get the buttons
@@ -1148,6 +1149,7 @@ export function AppShell() {
     fileName: string,
     options?: { sourceSessionId?: string | null; modeHint?: "diff" },
   ) => {
+    setInlineImageSrc(null);
     const sourceSessionId = options?.sourceSessionId;
     const modeHint = options?.modeHint;
     const tabId = `file:${filePath}`;
@@ -1178,6 +1180,12 @@ export function AppShell() {
     // On mobile the file panel is full-screen; close the drawer so it shows.
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
+
+  const handleOpenInlineImage = useCallback((src: string) => {
+    if (!/^data:image\/(?:png|jpeg|webp|gif);base64,|^https?:\/\//i.test(src)) return;
+    setInlineImageSrc(src);
+    setRightPanelOpen(true);
+  }, []);
 
   const handleOpenLinkedFile = useCallback((filePath: string) => {
     handleOpenFile(filePath, getFileName(filePath), { sourceSessionId: selectedSession?.id ?? null });
@@ -1287,7 +1295,7 @@ export function AppShell() {
         initialDisplayMode: tab.initialDisplayMode,
       })),
       activeFileTabId,
-      rightPanelOpen,
+      rightPanelOpen: rightPanelOpen && !inlineImageSrc,
     } satisfies PersistedWorkspace);
   }, [
     workspaceHydrated,
@@ -1299,6 +1307,7 @@ export function AppShell() {
     fileTabs,
     activeFileTabId,
     rightPanelOpen,
+    inlineImageSrc,
   ]);
 
   useEffect(() => {
@@ -1514,6 +1523,7 @@ export function AppShell() {
       reminderDraftKey={!selectedSession && searchParams.get("task") && effectiveNewSessionCwd ? `reminder:${effectiveNewSessionCwd}:${searchParams.get("task")}` : undefined}
       onEduPiComputerAction={handleEduPiComputerAction}
       onOpenFile={handleOpenLinkedFile}
+      onOpenImage={handleOpenInlineImage}
       onProjectFilesImported={handleProjectFilesImported}
       emptyTitle="新建对话"
       emptySubtitle=""
@@ -2175,6 +2185,7 @@ export function AppShell() {
               reminderDraftKey={!selectedSession && searchParams.get("task") && effectiveNewSessionCwd ? `reminder:${effectiveNewSessionCwd}:${searchParams.get("task")}` : undefined}
               onEduPiComputerAction={handleEduPiComputerAction}
               onOpenFile={handleOpenLinkedFile}
+              onOpenImage={handleOpenInlineImage}
               onProjectFilesImported={handleProjectFilesImported}
             />
           ) : !edupiEducationModule && initialCwdStatus === "validating" ? (
@@ -2253,12 +2264,12 @@ export function AppShell() {
         {/* Right panel tab bar */}
         <div className="right-panel-tab-strip" style={{ height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)" }}>
           <div style={{ flex: 1, overflow: "hidden" }}>
-            <TabBar
+            {inlineImageSrc ? <span style={{ display: "block", padding: "8px 12px", fontSize: 13 }}>对话图片</span> : <TabBar
               tabs={fileTabs}
               activeTabId={activeFileTabId ?? ""}
               onSelectTab={setActiveFileTabId}
               onCloseTab={handleCloseFileTab}
-            />
+            />}
           </div>
           {/* Panel close — only shown while the file panel is open */}
           <button
@@ -2275,7 +2286,12 @@ export function AppShell() {
 
         {/* File content */}
         <div style={{ flex: 1, overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
-          {activeFileTab?.filePath ? (
+          {inlineImageSrc ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", overflow: "auto", padding: 16 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={inlineImageSrc} alt="对话图片" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+            </div>
+          ) : activeFileTab?.filePath ? (
             <FileViewer
               filePath={activeFileTab.filePath}
               cwd={activeCwd ?? undefined}

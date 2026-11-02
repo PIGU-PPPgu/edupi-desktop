@@ -12,15 +12,26 @@ const { MessageView, replaceUserMessageText } = await jiti.import("./MessageView
 const { createComposerContext, composeTeacherMessage } = await jiti.import("../lib/edupi-composer-context.ts");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 
-function renderMessage(message) {
+function renderMessage(message, props = {}) {
   return renderToStaticMarkup(
     React.createElement(
       I18nProvider,
       null,
-      React.createElement(MessageView, { message }),
+      React.createElement(MessageView, { message, ...props }),
     ),
   );
 }
+
+test("renders assistant image blocks and exposes the sidebar preview action", () => {
+  const html = renderMessage({
+    role: "assistant",
+    provider: "test",
+    model: "test",
+    content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: "AAAA" } }],
+  }, { onOpenImage() {} });
+  assert.match(html, /aria-label="在侧栏查看图片"/);
+  assert.match(html, /src="data:image\/png;base64,AAAA"/);
+});
 
 const COMPLETE_SKILL_EXPANSION = `<skill name="review" location="/skills/review/SKILL.md">
 References are relative to /skills/review.
