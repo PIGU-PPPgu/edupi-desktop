@@ -45,6 +45,12 @@ function toolCalls(message: AgentMessage): ToolCallContent[] {
     && typeof block.toolName === "string" && Boolean(block.toolName));
 }
 
+function workflowDidNotStart(result: ToolResultMessage | undefined): boolean {
+  if (!result || typeof result.details !== "object" || result.details === null) return false;
+  const status = (result.details as { status?: unknown }).status;
+  return status === "declined" || status === "blocked";
+}
+
 /** One station per observed Pi tool batch. No inferred agents, success or parallelism. */
 export function projectWorkflowView(messages: readonly AgentMessage[], busy: boolean, activeTools: readonly string[] = []): WorkflowView | null {
   let promptIndex = -1;
@@ -66,7 +72,8 @@ export function projectWorkflowView(messages: readonly AgentMessage[], busy: boo
   let hasFailure = false;
   let hasInterruption = false;
   for (let index = promptIndex + 1; index < messages.length; index++) {
-    const calls = toolCalls(messages[index]);
+    const calls = toolCalls(messages[index]).filter(call => call.toolName !== "edupi_workflow"
+      || !workflowDidNotStart(results.get(call.toolCallId)));
     if (!calls.length) continue;
     phaseCount++;
     const steps: WorkflowStep[] = [];
