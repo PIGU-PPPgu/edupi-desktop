@@ -40,6 +40,15 @@ test("observed Pi tools become a collapsible graph without exposing command argu
   assert.doesNotMatch(html, /\/private\/synthetic/);
 });
 
+test("cancelled workflow confirmation leaves no completed graph in the chat", () => {
+  const messages = [{ role: "user", content: "运行合成工作流" },
+    { role: "assistant", content: [{ type: "toolCall", toolCallId: "workflow-1", toolName: "edupi_workflow", input: {} }] },
+    { role: "toolResult", toolCallId: "workflow-1", toolName: "edupi_workflow", isError: false,
+      details: { status: "declined" }, content: [{ type: "text", text: "工作流未启动。" }] }];
+  const html = render({ messages });
+  assert.equal(html, "");
+});
+
 test("task cards require the current session even while a previous context remains mounted", () => {
   const info = runInfo();
   for (const sessionId of ["session-2", undefined, ""]) {

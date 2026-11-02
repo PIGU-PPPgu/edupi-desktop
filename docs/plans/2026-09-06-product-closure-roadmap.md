@@ -1,5 +1,11 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-02 R19／R21 `.99` 源码修复候选：已将 `.98` 安装版取消后误报完成的根因定位为通用 Pi 工具图仅看 `isError=false`，忽略 `edupi_workflow` 的结构化 `details.status=declined`。最小修复使未启动／受阻工作流不画完成图，其他工具仍显示；20 项定向、真实合成 JSONL 投影、类型、目标 lint、版本核对和 Mac Rust 源码编译通过。`.99` 尚未 PR/CI、签名或安装，`.98` Draft保持不公开，唯一正常 App已回退 `.97`；[验收记录](../acceptance/2026-11-02-core429-desktop-source.md)保留真实资料变化和开发预览超时，不能以源码结果替代新包原生复验。
+
+2026-11-02 R19／R21 `.98` 原生验收失败并回退：Core #432 固定身份、签名公证和只读子会话确认执行通过，但取消确认后工具回执“工作流未启动”而顶部图误报“已完成 1/1 项”。唯一 `/Applications/EduPi.app` 已从测试 `.98` 回退原 `.97`，WebView 偏好恢复，`.98` Draft 未公开、feed仍`.70`；测试退出期间出现正常模式进程并产生 14 条通知活动／7 项重试时间变化及3个SQLite运行文件，均保留并封存，343项其他基线文件未变，真实资料全文件保护门仍按失败记录。源码最小修复已有20项定向通过，待独立新版本源码 CI、唯一 Mac 签名和原生取消／确认／冷启复验；Windows/Linux 仍后置。精确证据和边界见[配对验收](../acceptance/2026-11-02-core429-desktop-source.md)。本段取代下文 `.98`“待安装／可公开”的中间状态。
+
+2026-11-02 R04／R19／R21 最新状态：Desktop [PR454](https://github.com/PIGU-PPPgu/edupi-desktop/pull/454) 已合 main `88dc3089` 并固定 Core #432 main `dfcdfaef`；双方最终源码 CI 成功，Core 来源歧义 P2 的拒绝回归及审查线程已关闭。唯一 Mac-only [签名 Draft run41366765178](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41366765178) attempt1 成功，三资产同轮摘要、Apple 公证装订、Minisign/Gatekeeper、包内固定源码均经本机核验。状态为**签名包已验、唯一安装与隔离原生流程待验**：正常 App 仍 `.97` 且运行，真实资料未动，`.98` 未公开且 feed 仍 `.70`。Windows/Linux 未构建；owner-only 来源证明仍只读，复合回答继续 held。精确资产和未完成项见[验收记录](../acceptance/2026-11-02-core429-desktop-source.md)。本段取代下面所有 #429/#430 与 `.98`“尚未构建”的中间状态。
+
 2026-11-02 R04／R19／R21 最新源码配对：Desktop `codex/core429-macos-workflow-20261102` 本地候选已改固定 Core #432 合并提交 `dfcdfaef` 与精确 Runtime schema／双组件清单；Core #432 受测同 tree 的 PR CI 成功，合并后 Main CI 仍在运行。Core 同 Goal 多当前 guard 的合成拒绝与 20 来源冷进程并发本机通过，#430 原 P2 线程已解决；owner-only 证明仍不授权复合回答。Desktop Draft PR454 远端仍停在旧 #429 身份，待最终本地配对通过后一次推送；`.98` 尚未签名、安装或发布，唯一正常 App 仍 `.97`。本段取代下方 #429/#430 中间身份的当前状态；证据见[配对记录](../acceptance/2026-11-02-core429-desktop-source.md)。
 
 2026-11-02 R04／R19／R21 最新本地配对中间身份：Desktop `8a371f9` 已读 Core #430 合并提交 `37121971` 的精确 tree、schema 与双清单，并在隔离 Mac 根复核 Bridge／宿主、C1 E2 和 Core-first 工作流子会话。Core PR CI 成功，但合并后仍有同一 Goal 多 guard 的未解决 P2 审查线程，Main push CI 未终结；原 Draft PR454 远端仍固定 #429，当前本地 #430 pin 未推送以避免重复审计和签名构建。正常 `.97` App、公开 Release/feed及教师资料未改，不把 owner-only 联合证明放行成产品复合回答。历史 #429 成功证据与本轮界限见[配对记录](../acceptance/2026-11-02-core429-desktop-source.md)。
