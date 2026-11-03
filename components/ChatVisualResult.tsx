@@ -32,9 +32,10 @@ function ScanDialog({ item, onClose }: { item: ChatVisualItem; onClose: () => vo
   </dialog>;
 }
 
-export function ChatVisualResult({ items, autoOpenQr = false, onOpenFile, onOpenImage }: {
+export function ChatVisualResult({ items, autoOpenQr = false, standalone = false, onOpenFile, onOpenImage }: {
   items: ChatVisualItem[];
   autoOpenQr?: boolean;
+  standalone?: boolean;
   onOpenFile?: (path: string) => void;
   onOpenImage?: (src: string) => void;
 }) {
@@ -67,7 +68,7 @@ export function ChatVisualResult({ items, autoOpenQr = false, onOpenFile, onOpen
 
   if (items.length === 0) return null;
   const firstQrIndex = items.findIndex(item => item.kind === "qr");
-  return <div className="edupi-chat-visual-results">
+  return <div className={`edupi-chat-visual-results${standalone ? " is-standalone" : ""}`}>
     {items.map((item, index) => {
       const itemKey = item.filePath ?? String(index);
       return <button

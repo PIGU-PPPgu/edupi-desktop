@@ -5,7 +5,8 @@ import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecuti
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
-import { MessageView } from "./MessageView";
+import { MessageView, toolVisualItems } from "./MessageView";
+import { ChatVisualResult, type ChatVisualItem } from "./ChatVisualResult";
 import { DisclosureChevron } from "./DisclosureChevron";
 import { EduPiConversationFiles } from "./EduPiConversationFiles";
 import { EduPiProactiveHub } from "./EduPiProactiveHub";
@@ -201,6 +202,15 @@ function getFinalSplit(message: AssistantMessage): FinalSplitEntry {
     finalSplitCache.set(message, cached);
   }
   return cached;
+}
+
+export function collectTurnVisualItems(messages: readonly AgentMessage[], start: number, end: number, cwd?: string, sessionId?: string): ChatVisualItem[] {
+  const items: ChatVisualItem[] = [];
+  for (let index = start; index < end; index++) {
+    const message = messages[index];
+    if (message.role === "toolResult") items.push(...toolVisualItems(message as ToolResultMessage, cwd, sessionId));
+  }
+  return items;
 }
 
 function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { messageCount: number; toolCallCount: number; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
@@ -685,12 +695,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "user") { lastUserIdx = i; break; }
     }
-    let liveAssistantIdx = -1;
-    if (sessionBusy) {
-      for (let i = messages.length - 1; i > lastUserIdx; i--) {
-        if (messages[i].role === "assistant") { liveAssistantIdx = i; break; }
-      }
-    }
     // Anchor for live-tail detection: the last user message, or a
     // compaction summary when compaction has replaced it mid-turn.
     // Computed independently from lastUserIdx (which is kept for the
@@ -709,7 +713,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       }
     }
 
-    const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean } = {}): ReactNode => {
+    const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; showToolVisuals?: boolean } = {}): ReactNode => {
       const msg = options.messageOverride ?? messages[idx];
       const prevAssistantEntryId =
         msg.role === "user" && idx > 0 && messages[idx - 1].role === "assistant"
@@ -740,7 +744,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           cwd={messageCwd}
           onOpenFile={onOpenFile}
           onOpenImage={onOpenImage}
-          autoOpenQr={idx === liveAssistantIdx}
+          showToolVisuals={options.showToolVisuals}
           entryId={entryIds[idx]}
           onFork={isNew || (idx === 0 && msg.role === "user") ? undefined : stableHandleFork}
           forking={forkingEntryId === entryIds[idx]}
@@ -797,15 +801,20 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       }
 
       const isLiveTail = (sessionBusy || streamActive) && endIdx === messages.length && userIdx === lastAnchorIdx;
+      const turnVisuals = collectTurnVisualItems(messages, userIdx + 1, endIdx, messageCwd, sessionIdForViews ?? sessionIdRef.current ?? undefined);
+      const visualGallery = turnVisuals.length > 0
+        ? <ChatVisualResult key={`turn-visuals-${entryIds[userIdx] ?? userIdx}`} items={turnVisuals} autoOpenQr={isLiveTail} standalone onOpenFile={onOpenFile} onOpenImage={onOpenImage} />
+        : null;
       if (isLiveTail) {
         for (let renderIdx = userIdx; renderIdx < endIdx; renderIdx++) {
-          rendered.push(renderMessage(renderIdx));
+          rendered.push(renderMessage(renderIdx, { showToolVisuals: false }));
         }
+        if (visualGallery) rendered.push(visualGallery);
         idx = endIdx;
         continue;
       }
 
-      rendered.push(renderMessage(userIdx));
+      rendered.push(renderMessage(userIdx, { showToolVisuals: false }));
 
       const processIndices: number[] = [];
       for (let processIdx = userIdx + 1; processIdx < finalAssistantIdx; processIdx++) {
@@ -826,19 +835,21 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             t={t}
             toolCallCount={countToolCalls(messages, visibleProcessIndices) + countToolCallBlocks(finalSplit.processBlocks)}
           >
-            {visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { attachRef: false, keyPrefix: "process" }))}
-            {finalProcessMessage && renderMessage(finalAssistantIdx, { attachRef: false, keyPrefix: "process-final", messageOverride: finalProcessMessage, showTimestamp: false })}
+            {visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { attachRef: false, keyPrefix: "process", showToolVisuals: false }))}
+            {finalProcessMessage && renderMessage(finalAssistantIdx, { attachRef: false, keyPrefix: "process-final", messageOverride: finalProcessMessage, showTimestamp: false, showToolVisuals: false })}
           </ProcessDetailsGroup>,
         );
       }
 
+      if (visualGallery) rendered.push(visualGallery);
+
       if (finalAnswerMessage) {
         const calendarResult = teacherMode ? calendarResultSummary(messages.slice(userIdx + 1, endIdx)) : null;
         if (calendarResult) rendered.push(<div key={`calendar-result-${userIdx}`} role={calendarResult.uncertain ? "alert" : "status"} style={{ marginBottom: 8, fontSize: 12, color: calendarResult.uncertain ? "var(--warning, var(--text-muted))" : "var(--text-muted)" }}>{calendarResult.text}</div>);
-        rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage }));
+        rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage, showToolVisuals: false }));
       }
       for (let renderIdx = finalAssistantIdx + 1; renderIdx < endIdx; renderIdx++) {
-        rendered.push(renderMessage(renderIdx));
+        rendered.push(renderMessage(renderIdx, { showToolVisuals: false }));
       }
       idx = endIdx;
     }

@@ -11,6 +11,7 @@
 .edupi-chat-advanced[open] > summary { color: var(--text-muted); }
 
 .edupi-chat-visual-results { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 10px 10px; border-top: 1px solid var(--border); }
+.edupi-chat-visual-results.is-standalone { margin: 4px 0 14px; padding: 0; border: 0; }
 .edupi-chat-visual-result { display: grid; gap: 6px; max-width: min(260px, 100%); padding: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-muted); font: inherit; text-align: left; cursor: pointer; }
 .edupi-chat-visual-result:hover, .edupi-chat-visual-result:focus-visible { border-color: var(--accent); color: var(--text); }
 .edupi-chat-visual-result img { display: block; max-width: 100%; width: auto; height: auto; max-height: 180px; object-fit: contain; border-radius: 4px; }
