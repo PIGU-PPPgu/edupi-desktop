@@ -33,6 +33,32 @@ test("renders assistant image blocks and exposes the sidebar preview action", ()
   assert.match(html, /src="data:image\/png;base64,AAAA"/);
 });
 
+test("tool image results stay visible when their tool call is collapsed", () => {
+  const message = { role: "assistant", provider: "test", model: "test", content: [{ type: "toolCall", toolCallId: "qr-1", toolName: "edupi_show_qr", input: {} }] };
+  const result = { role: "toolResult", toolCallId: "qr-1", content: [{ type: "text", text: "二维码已显示" }, { type: "image", data: "AAAA", mimeType: "image/png" }], details: { visual: { kind: "qr", title: "扫码" } } };
+  const html = renderMessage(message, { toolResults: new Map([["qr-1", result]]) });
+  assert.match(html, /aria-label="打开扫码窗口"/);
+  assert.match(html, /src="data:image\/png;base64,AAAA"/);
+  assert.match(html, /aria-expanded="false"/);
+});
+
+test("a tool can show a local output image without sending its bytes to the model", () => {
+  const message = { role: "assistant", provider: "test", model: "test", content: [{ type: "toolCall", toolCallId: "image-1", toolName: "edupi_show_image", input: {} }] };
+  const result = { role: "toolResult", toolCallId: "image-1", content: [{ type: "text", text: "已显示" }], details: { visual: { kind: "image", title: "示意图", path: "/tmp/workspace/.edupi/output/example.png" } } };
+  const html = renderMessage(message, { cwd: "/tmp/workspace", sessionId: "session-1", toolResults: new Map([["image-1", result]]) });
+  assert.match(html, /aria-label="在侧栏查看示意图"/);
+  assert.match(html, /src="\/api\/files\/tmp\/workspace\/\.edupi\/output\/example\.png\?type=read&amp;sessionId=session-1"/);
+  const outside = { ...result, details: { visual: { kind: "image", title: "其他会话图片", path: "/tmp/other/secret.png" } } };
+  const restricted = renderMessage(message, { cwd: "/tmp/workspace", toolResults: new Map([["image-1", outside]]) });
+  assert.doesNotMatch(restricted, /edupi-chat-visual-result/);
+});
+
+test("settled assistant diagrams open as previews instead of raw Mermaid source", () => {
+  const html = renderMessage({ role: "assistant", provider: "test", model: "test", content: [{ type: "text", text: "```mermaid\ngraph TD\nA-->B\n```" }] });
+  assert.match(html, /mermaid-block-loading/);
+  assert.doesNotMatch(html, /<pre[^>]*>graph TD/);
+});
+
 const COMPLETE_SKILL_EXPANSION = `<skill name="review" location="/skills/review/SKILL.md">
 References are relative to /skills/review.
 

@@ -685,6 +685,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "user") { lastUserIdx = i; break; }
     }
+    let liveAssistantIdx = -1;
+    if (sessionBusy) {
+      for (let i = messages.length - 1; i > lastUserIdx; i--) {
+        if (messages[i].role === "assistant") { liveAssistantIdx = i; break; }
+      }
+    }
     // Anchor for live-tail detection: the last user message, or a
     // compaction summary when compaction has replaced it mid-turn.
     // Computed independently from lastUserIdx (which is kept for the
@@ -734,6 +740,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           cwd={messageCwd}
           onOpenFile={onOpenFile}
           onOpenImage={onOpenImage}
+          autoOpenQr={idx === liveAssistantIdx}
           entryId={entryIds[idx]}
           onFork={isNew || (idx === 0 && msg.role === "user") ? undefined : stableHandleFork}
           forking={forkingEntryId === entryIds[idx]}

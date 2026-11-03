@@ -14,12 +14,14 @@ interface MarkdownBodyProps {
   isStreaming?: boolean;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
+  previewMermaid?: boolean;
 }
 
 function buildComponents(
   isStreaming: boolean | undefined,
   cwd: string | undefined,
   onOpenFile: ((filePath: string) => void) | undefined,
+  previewMermaid: boolean,
 ): Components {
   return {
     code({ className, children, ...props }) {
@@ -28,7 +30,7 @@ function buildComponents(
       const isBlock = className?.includes("language-") || raw.includes("\n");
       if (isBlock) {
         if (lang === "mermaid") {
-          return <MermaidBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} />;
+          return <MermaidBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} defaultPreview={previewMermaid && !isStreaming && raw.length <= 12_000} />;
         }
         return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} />;
       }
@@ -114,11 +116,11 @@ function buildComponents(
 
 // Memoized: markdown parsing + highlighting is the most expensive render work
 // in the app, so parent re-renders with identical props must be free.
-export const MarkdownBody = memo(function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile }: MarkdownBodyProps) {
+export const MarkdownBody = memo(function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile, previewMermaid = false }: MarkdownBodyProps) {
   const normalizedMarkdown = useMemo(() => normalizeDisplayMath(children), [children]);
   const components = useMemo(
-    () => buildComponents(isStreaming, cwd, onOpenFile),
-    [isStreaming, cwd, onOpenFile],
+    () => buildComponents(isStreaming, cwd, onOpenFile, previewMermaid),
+    [isStreaming, cwd, onOpenFile, previewMermaid],
   );
 
   return (

@@ -1,0 +1,74 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
+export interface ChatVisualItem {
+  src: string;
+  title: string;
+  kind: "image" | "qr";
+  filePath?: string;
+}
+
+function ScanDialog({ item, onClose }: { item: ChatVisualItem; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    dialog.showModal();
+    closeRef.current?.focus();
+    return () => { if (dialog.open) dialog.close(); };
+  }, []);
+
+  return <dialog ref={dialogRef} className="edupi-chat-scan-dialog" aria-modal="true" aria-label={item.title} onCancel={(event) => { event.preventDefault(); onClose(); }}>
+    <div className="edupi-chat-scan-dialog__head"><strong>{item.title}</strong><button ref={closeRef} type="button" onClick={onClose} aria-label="关闭扫码窗口">×</button></div>
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src={item.src} alt={item.title} />
+  </dialog>;
+}
+
+export function ChatVisualResult({ items, autoOpenQr = false, onOpenFile, onOpenImage }: {
+  items: ChatVisualItem[];
+  autoOpenQr?: boolean;
+  onOpenFile?: (path: string) => void;
+  onOpenImage?: (src: string) => void;
+}) {
+  const [scanItem, setScanItem] = useState<ChatVisualItem | null>(null);
+  const autoOpened = useRef(false);
+  const qrTriggerRef = useRef<HTMLButtonElement>(null);
+  const closeScan = () => {
+    setScanItem(null);
+    requestAnimationFrame(() => qrTriggerRef.current?.focus());
+  };
+
+  useEffect(() => {
+    if (!autoOpenQr || autoOpened.current) return;
+    const qr = items.find(item => item.kind === "qr");
+    if (!qr) return;
+    autoOpened.current = true;
+    setScanItem(qr);
+  }, [autoOpenQr, items]);
+
+  if (items.length === 0) return null;
+  const firstQrIndex = items.findIndex(item => item.kind === "qr");
+  return <div className="edupi-chat-visual-results">
+    {items.map((item, index) => <button
+      key={`${item.kind}:${item.filePath ?? index}`}
+      ref={index === firstQrIndex ? qrTriggerRef : undefined}
+      type="button"
+      className={`edupi-chat-visual-result${item.kind === "qr" ? " is-qr" : ""}`}
+      aria-label={item.kind === "qr" ? "打开扫码窗口" : `在侧栏查看${item.title}`}
+      onClick={(event) => {
+        if (item.kind === "qr") { qrTriggerRef.current = event.currentTarget; setScanItem(item); }
+        else if (item.filePath) onOpenFile?.(item.filePath);
+        else onOpenImage?.(item.src);
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={item.src} alt="" loading="lazy" />
+      <span>{item.title}</span>
+    </button>)}
+    {scanItem ? <ScanDialog item={scanItem} onClose={closeScan} /> : null}
+  </div>;
+}

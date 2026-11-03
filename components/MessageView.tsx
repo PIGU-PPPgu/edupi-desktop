@@ -23,6 +23,9 @@ import type {
   ThinkingContent,
 } from "@/lib/types";
 import { parseTeacherMessage } from "@/lib/edupi-composer-context";
+import { encodeFilePathForApi } from "@/lib/file-paths";
+import { isPathInside, resolveLocalFileHref } from "@/lib/file-links";
+import { ChatVisualResult, type ChatVisualItem } from "./ChatVisualResult";
 
 const MAX_THINKING_CACHE_ENTRIES = 100;
 const thinkingContentCache = new Map<string, Promise<string>>();
@@ -64,6 +67,7 @@ interface Props {
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   onOpenImage?: (src: string) => void;
+  autoOpenQr?: boolean;
   entryId?: string;
   onFork?: (entryId: string) => void;
   forking?: boolean;
@@ -127,12 +131,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenImage, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenImage, autoOpenQr, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenImage={onOpenImage} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenImage={onOpenImage} autoOpenQr={autoOpenQr} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -156,6 +160,7 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.cwd === next.cwd
     && prev.onOpenFile === next.onOpenFile
     && prev.onOpenImage === next.onOpenImage
+    && prev.autoOpenQr === next.autoOpenQr
     && prev.entryId === next.entryId
     && prev.onFork === next.onFork
     && prev.forking === next.forking
@@ -488,6 +493,7 @@ function AssistantMessageView({
   cwd,
   onOpenFile,
   onOpenImage,
+  autoOpenQr,
   showTimestamp,
   prevTimestamp,
   sessionId,
@@ -500,6 +506,7 @@ function AssistantMessageView({
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   onOpenImage?: (src: string) => void;
+  autoOpenQr?: boolean;
   showTimestamp?: boolean;
   prevTimestamp?: number;
   sessionId?: string;
@@ -675,7 +682,7 @@ function AssistantMessageView({
 
       <div className="message-assistant-content" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blockItems.map(({ block, originalIndex }) => (
-          <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} onOpenImage={onOpenImage} sessionId={sessionId} entryId={entryId} blockIndex={originalIndex} />
+          <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} autoOpenQr={autoOpenQr} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} onOpenImage={onOpenImage} sessionId={sessionId} entryId={entryId} blockIndex={originalIndex} />
         ))}
       </div>
 
@@ -739,7 +746,7 @@ function AssistantMessageView({
   );
 }
 
-function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCallDurations, cwd, onOpenFile, onOpenImage, sessionId, entryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; cwd?: string; onOpenFile?: (filePath: string) => void; onOpenImage?: (src: string) => void; sessionId?: string; entryId?: string; blockIndex: number }) {
+function BlockView({ block, toolResults, isStreaming, autoOpenQr, streamingDuration, toolCallDurations, cwd, onOpenFile, onOpenImage, sessionId, entryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; autoOpenQr?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; cwd?: string; onOpenFile?: (filePath: string) => void; onOpenImage?: (src: string) => void; sessionId?: string; entryId?: string; blockIndex: number }) {
   if (block.type === "text") {
     return <TextBlock block={block as TextContent} isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} />;
   }
@@ -750,7 +757,7 @@ function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCal
     const tc = block as ToolCallContent;
     const result = toolResults?.get(tc.toolCallId);
     const duration = toolCallDurations?.get(tc.toolCallId);
-    return <ToolCallBlock block={tc} result={result} duration={duration} />;
+    return <ToolCallBlock block={tc} result={result} duration={duration} cwd={cwd} sessionId={sessionId} autoOpenQr={autoOpenQr || isStreaming} onOpenFile={onOpenFile} onOpenImage={onOpenImage} />;
   }
   if (block.type === "image") {
     const src = imageSource(block as ImageContent);
@@ -766,7 +773,7 @@ function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCal
 }
 
 function TextBlock({ block, isStreaming, cwd, onOpenFile }: { block: TextContent; isStreaming?: boolean; cwd?: string; onOpenFile?: (filePath: string) => void }) {
-  return <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile}>{block.text}</MarkdownBody>;
+  return <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} previewMermaid>{block.text}</MarkdownBody>;
 }
 
 function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
@@ -857,7 +864,27 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
 }
 
 
-function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number }) {
+function toolVisualItems(result: ToolResultMessage | undefined, cwd?: string, sessionId?: string): ChatVisualItem[] {
+  if (!result || result.isError) return [];
+  const details = result.details as { visual?: { kind?: unknown; title?: unknown; path?: unknown } } | undefined;
+  const visual = details?.visual;
+  const kind: ChatVisualItem["kind"] = visual?.kind === "qr" ? "qr" : "image";
+  const title = typeof visual?.title === "string" && visual.title.trim() ? visual.title.trim() : kind === "qr" ? "二维码" : "图片";
+  const images = result.content.flatMap((block) => {
+    if (block.type !== "image") return [];
+    const src = imageSource(block);
+    return /^(data:image\/(?:png|jpeg|webp|gif);base64,|https?:\/\/)/i.test(src) ? [{ src, title, kind }] : [];
+  });
+  if (images.length > 0) return images;
+  if (typeof visual?.path !== "string") return [];
+  const filePath = resolveLocalFileHref(visual.path, cwd);
+  if (!filePath || (cwd && !isPathInside(filePath, cwd)) || !/\.(?:png|jpe?g|webp|gif)$/i.test(filePath)) return [];
+  const query = new URLSearchParams({ type: "read" });
+  if (sessionId) query.set("sessionId", sessionId);
+  return [{ src: `/api/files/${encodeFilePathForApi(filePath)}?${query}`, title, kind, filePath }];
+}
+
+function ToolCallBlock({ block, result, duration, cwd, sessionId, autoOpenQr, onOpenFile, onOpenImage }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; cwd?: string; sessionId?: string; autoOpenQr?: boolean; onOpenFile?: (path: string) => void; onOpenImage?: (src: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const inputStr = JSON.stringify(block.input, null, 2);
   const isEditTool = isEditToolName(block.toolName);
@@ -869,6 +896,8 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
     : null;
   const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
   const isError = result?.isError ?? false;
+  const visualItems = toolVisualItems(result, cwd, sessionId);
+  const visualToolName = ({ edupi_show_qr: "二维码", edupi_show_image: "图片", edupi_draw_diagram: "示意图", zhixue_login: "智学网登录" } as Record<string, string>)[block.toolName];
 
   return (
     <div
@@ -877,8 +906,8 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
         borderRadius: 7,
         overflow: "hidden",
         fontSize: 12,
-        border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid rgba(34,197,94,0.25)",
-        background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
+        border: isError ? "1px solid rgba(248,113,113,0.45)" : visualItems.length ? "1px solid var(--border)" : "1px solid rgba(34,197,94,0.25)",
+        background: isError ? "rgba(248,113,113,0.05)" : visualItems.length ? "var(--bg-panel)" : "rgba(34,197,94,0.04)",
       }}
     >
       {/* ── Tool call header ── */}
@@ -902,11 +931,11 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
           minWidth: 0,
         }}
       >
-        <span style={{ color: isError ? "var(--danger)" : "var(--success)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
-          {block.toolName}
+        <span style={{ color: isError ? "var(--danger)" : visualItems.length ? "var(--text)" : "var(--success)", fontFamily: visualToolName ? "inherit" : "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
+          {visualToolName ?? block.toolName}
         </span>
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-          {getToolPreview(block)}
+          {visualToolName ? "" : getToolPreview(block)}
         </span>
         {duration !== undefined && (
           <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
@@ -948,6 +977,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
           />
         )
       )}
+      <ChatVisualResult items={visualItems} autoOpenQr={Boolean(autoOpenQr && !isError)} onOpenFile={onOpenFile} onOpenImage={onOpenImage} />
     </div>
   );
 }

@@ -36,6 +36,8 @@ import { createPrepareTaskTool } from "./edupi-prepare-task-tool";
 import type { DesktopControlInput } from "./edupi-desktop-control";
 import { createEduPiComputerUseTool } from "./edupi-computer-tool";
 import { createEduPiWorkflowTool } from "./edupi-workflow-tool";
+import { createEduPiDiagramTool, createEduPiQrTool, createEduPiShowImageTool } from "./edupi-visual-tool";
+import { createZhixueLoginGuard } from "./edupi-login-guard";
 import { createWorkflowReadTools } from "./edupi-workflow-read-tools";
 import { matchingCapturedUserEntry, workflowChildPromptAllowed } from "./edupi-workflow-admission";
 import { parseComputerUseBridgeResult, type ComputerUseBridgeResult, type ComputerUseInput } from "./edupi-computer-use";
@@ -1650,6 +1652,7 @@ export async function startRpcSession(
     const toolMode: RpcToolMode = { disabled: toolNames?.length === 0,
       ...(strictToolNames ? { exactToolNames: toolNames ?? [] } : {}) };
     const memoryRecall = createEduPiMemoryRecallAccess(EDUPI_ROOT, { disabled: () => toolMode.disabled });
+    const hostExtensions = [memoryRecall.extension, createZhixueLoginGuard()];
     const host: { wrapper?: AgentSessionWrapper } = {};
     const createRuntime: CreateAgentSessionRuntimeFactory = async ({ cwd: sessionCwd, sessionManager, sessionStartEvent }) => {
       const explicitTools = sessionStartEvent?.reason === "fork" ? host.wrapper?.inner.getActiveToolNames() : toolNames;
@@ -1695,10 +1698,10 @@ export async function startRpcSession(
       const services = await createAgentSessionServices({
         cwd: sessionCwd,
         agentDir,
-        resourceLoaderOptions: rpcResourceOptions(resourceOptions, toolMode, [memoryRecall.extension]),
+        resourceLoaderOptions: rpcResourceOptions(resourceOptions, toolMode, hostExtensions),
         ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
       });
-      services.resourceLoader = createRpcResourceLoader(services.resourceLoader, { ...resourceOptions, settingsManager: services.settingsManager }, toolMode, [memoryRecall.extension]);
+      services.resourceLoader = createRpcResourceLoader(services.resourceLoader, { ...resourceOptions, settingsManager: services.settingsManager }, toolMode, hostExtensions);
       memoryRecall.bindSummarization(services, sessionManager);
       const defaultProvider = services.settingsManager.getDefaultProvider();
       const defaultModelId = services.settingsManager.getDefaultModel();
@@ -1740,7 +1743,7 @@ export async function startRpcSession(
           ...(sessionIsEduPiDataRoot && !safeMode ? [memoryRecall.tool] : []),
           defineTool(createBashToolDefinition(sessionCwd, { shellPath: services.settingsManager.getShellPath(), spawnHook: redactDesktopSpawnContext })),
           ...(!safeMode && !strictToolNames ? [createEduPiWorkflowTool()] : []),
-          ...(sessionIsEduPiDataRoot ? [...createEduPiCalendarTools({ projectRoot: EDUPI_ROOT }), createPreparationArtifactTool(EDUPI_ROOT), createEduPiDocumentTool(EDUPI_ROOT), createEduPiPresentationTool(EDUPI_ROOT), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createMemoryWriteTool(EDUPI_ROOT), createMemoryForgetTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiUpdateTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
+          ...(sessionIsEduPiDataRoot ? [...createEduPiCalendarTools({ projectRoot: EDUPI_ROOT }), createPreparationArtifactTool(EDUPI_ROOT), createEduPiDocumentTool(EDUPI_ROOT), createEduPiPresentationTool(EDUPI_ROOT), createEduPiQrTool(), createEduPiShowImageTool(EDUPI_ROOT), createEduPiDiagramTool(), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createMemoryWriteTool(EDUPI_ROOT), createMemoryForgetTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiUpdateTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
             projectRoot: EDUPI_ROOT,
             requestAction: (action, signal) => requestEduPiAppAction(action, signal),
           }), createEduPiComputerUseTool({
