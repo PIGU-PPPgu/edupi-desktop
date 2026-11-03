@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-03 R04／R18／R20 `.104` Mac-only 技术交付：Desktop PR463/PR464 已合 main `ff814494` 且对应源码 CI 成功，固定 Core `008d3e63`。同轮 Mac 签名、公证和三资产本机验签成功；唯一 App 原位安装、隔离原生 HTML/SVG 与扫码／图片右栏、冷启 Core ready 和 349 项真实资料保持通过。`.104` 已公开为 Mac-only 预发布，匿名 DMG 范围下载前缀匹配；正式 feed/Latest `.70` 不变，Windows/Linux 未构建，完整匿名重新下载未做。本轮冗余下载和工作树生成缓存已按精确路径清理，签名 DMG、回退与证据保留。[验收与边界](../acceptance/2026-11-03-chat-visuals.md#2026-11-03-104-macos-安装与预发布)。本段取代下方 `.104` 待签名、`.103` 待补验的阶段状态。
+
 2026-11-03 R04／R18／R20 `.104` 源码候选：聊天 SVG 修复 PR463 已合 main `0d02c4da` 且三项源码 CI 成功；随后固定最新 Core main `008d3e63` 的 Runtime schema／清单，Mac staged 冷启、Core 身份和 13,337 文件闭包、契约镜像与篡改拒绝通过。新 Core owner-only 自选来源查询不进入产品回答，复合回答仍 held。后续配对尚未合并、签名安装，唯一 App `.99` 已退出，正式 feed/Latest `.70`。[配对证据](../acceptance/2026-11-03-core436-desktop-pair.md)。
 
 2026-11-03 R18／R20 解锁后补验：`.103` 原生 `about:srcdoc` 已显示文字、扫码与本机图片卡片，但 SVG 数值属性被 HTML 清洗误删，右栏图形失真，故安装版失败并保持 Draft。隔离 App 退出、3 个 WebView origin 偏好恢复、当前真实资料与配置 349 项逐字节一致；唯一 App 已验签回退 `.99`。`.104` 源码候选在 Safari 实际组件中修正 SVG、仍拦截脚本和外链，类型／目标 lint／版本／生产 Web 构建通过；尚未 PR/CI、签名安装或公开。此前“`.103` 锁屏待验”的记录由本段取代。[证据](../acceptance/2026-11-03-chat-visuals.md#2026-11-03-解锁后补验与-104-候选)。
