@@ -1345,6 +1345,17 @@ fn same_origin(candidate: &Url, app_url: &Url) -> bool {
         && candidate.port_or_known_default() == app_url.port_or_known_default()
 }
 
+fn allowed_webview_navigation(candidate: &Url, app_url: &Url) -> bool {
+    // WebKit routes sandboxed iframe srcDoc through the navigation callback.
+    // Permit only its internal documents; network and data URLs stay blocked.
+    same_origin(candidate, app_url)
+        || (candidate.scheme() == "about"
+            && matches!(candidate.path(), "blank" | "srcdoc")
+            && candidate.host_str().is_none()
+            && candidate.query().is_none()
+            && candidate.fragment().is_none())
+}
+
 fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWindow> {
     let navigation_origin = app_url.clone();
     let stored_theme = read_stored_theme(app);
@@ -1358,7 +1369,7 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
         // Pi Agent already handles browser drag/drop for image attachments.
         .disable_drag_drop_handler()
         .on_navigation(move |url| {
-            if same_origin(url, &navigation_origin) {
+            if allowed_webview_navigation(url, &navigation_origin) {
                 true
             } else {
                 let _ = open_external(url);
@@ -2158,6 +2169,7 @@ fn start_packaged_server(
 #[cfg(all(test, feature = "custom-protocol"))]
 mod tests {
     use super::{
+        allowed_webview_navigation, Url,
         build_root_status, child_process_compatible_path, clear_webview_caches_for_layout,
         default_allowed_root, ensure_data_directories, is_filesystem_root, mobile_gateway_reachable,
         args_request_safe_mode, route1_desktop_state_dir, route1_isolated_canary_root, safe_mode_from_inputs, verify_route1_state_location, DesktopServer,
@@ -2177,6 +2189,34 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn navigation_allows_only_local_app_and_internal_empty_frames() {
+        let app_url = Url::parse("http://127.0.0.1:30141/").unwrap();
+        for candidate in [
+            "http://127.0.0.1:30141/api/home",
+            "about:blank",
+            "about:srcdoc",
+        ] {
+            assert!(
+                allowed_webview_navigation(&Url::parse(candidate).unwrap(), &app_url),
+                "{candidate}"
+            );
+        }
+        for candidate in [
+            "http://127.0.0.1:30142/",
+            "https://example.invalid/",
+            "data:text/html,untrusted",
+            "about:config",
+            "about:srcdoc#other",
+            "about:blank?other",
+        ] {
+            assert!(
+                !allowed_webview_navigation(&Url::parse(candidate).unwrap(), &app_url),
+                "{candidate}"
+            );
+        }
+    }
 
     #[cfg(unix)]
     #[test]
