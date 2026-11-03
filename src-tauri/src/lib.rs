@@ -775,7 +775,7 @@ fn show_openconnector_console(app: AppHandle, port: u16) -> Result<(), String> {
         .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
         .resizable(true)
         .on_navigation(move |target| {
-            if allowed_webview_navigation(target, &navigation_origin) {
+            if same_origin(target, &navigation_origin) {
                 true
             } else {
                 let _ = open_external(target);
