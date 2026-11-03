@@ -56,7 +56,7 @@ export type ComputerUseStatus = {
 export function computerUseStatusText(status: ComputerUseStatus): string {
   const permission = (value: boolean | null) => value === null ? "未知" : value ? "已授权" : "未授权";
   const summary = `桌面控制：${status.enabled ? "已开启" : "已关闭"}\n辅助功能：${permission(status.accessibility)}\n屏幕录制：${permission(status.screenRecording)}`;
-  if (status.enabled && status.accessibility === true && status.screenRecording === true) {
+  if (status.enabled && status.accessibility !== false && status.screenRecording !== false) {
     return `${summary}\n这只是权限状态，没有观察屏幕。老师要求电脑操作时，下一步调用 edupi_computer_use({"action":"observe"})；不要重复 status 或声称已操作。`;
   }
   return `${summary}\n尚不能观察桌面。请老师在 EduPi 设置中开启并授权，之后调用 observe；不要反复查询 status。`;
