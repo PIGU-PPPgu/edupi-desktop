@@ -1,5 +1,5 @@
 import { isTauriDesktop } from "./desktop-updater";
-import type { ComputerUseBridgeResult, ComputerUseInput, ComputerUseStatus, NativeComputerUseResult } from "./edupi-computer-use";
+import { computerUseStatusText, type ComputerUseBridgeResult, type ComputerUseInput, type ComputerUseStatus, type NativeComputerUseResult } from "./edupi-computer-use";
 
 async function invokeDesktop<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (!isTauriDesktop()) throw new Error("桌面控制只在 EduPi 桌面应用中可用");
@@ -32,11 +32,10 @@ export async function runComputerUseFromAgent(input: ComputerUseInput, expiresAt
     if (expiresAtMs !== undefined && expiresAtMs < Date.now()) return { ok: false, error: "桌面控制请求已过期" };
     if (input.action === "status") {
       const status = await getComputerUseStatusNative();
-      const permission = (value: boolean | null) => value === null ? "未知" : value ? "已授权" : "未授权";
       return {
         ok: true,
         result: {
-          content: `桌面控制：${status.enabled ? "已开启" : "已关闭"}\n辅助功能：${permission(status.accessibility)}\n屏幕录制：${permission(status.screenRecording)}`,
+          content: computerUseStatusText(status),
           isError: false,
           images: [],
           snapshotId: null,

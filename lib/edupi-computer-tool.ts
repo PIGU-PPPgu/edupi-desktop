@@ -62,14 +62,15 @@ export function createEduPiComputerUseTool(options: ToolOptions) {
   return defineTool<typeof parameters, ToolDetails>({
     name: "edupi_computer_use",
     label: "控制本机桌面",
-    description: "在教师明确授权后读取并控制本机桌面。先用 status 检查开关，再用 observe 获取无障碍元素、屏幕画面和 snapshot_id。任何点击、输入、按键、滚动或窗口操作都必须携带最新 snapshot_id；每次操作后快照立即失效，必须重新 observe。支持 NomiFun Computer Use 的无障碍元素、截图、鼠标、键盘、滚动、窗口、应用/文件启动和等待动作。",
+    description: "在教师明确要求电脑操作时，直接用 observe 获取无障碍元素、屏幕画面和 snapshot_id；失败时才用 status 诊断权限。任何点击、输入、按键、滚动或窗口操作都必须携带最新 snapshot_id；每次操作后快照立即失效，必须重新 observe。支持 NomiFun Computer Use 的无障碍元素、截图、鼠标、键盘、滚动、窗口、应用/文件启动和等待动作。",
     promptSnippet: "edupi_computer_use: 经教师确认后观察或控制本机桌面",
     promptGuidelines: [
-      "桌面控制默认关闭；先调用 status，若关闭请让教师在应用设置中开启",
+      "教师明确要求 computer use 时先调用 observe；status 只读权限，不会看到屏幕，不能当作已操作",
+      "observe 提示未开启或未授权时才调用 status，并请教师在应用设置中处理；不要循环查询 status",
       "优先 observe + 元素 ref，不要猜像素坐标",
       "除 status 和 wait 外每次调用都会要求教师确认",
       "每次改变桌面后必须重新 observe，并使用新的 snapshot_id",
-      "不得用 launch 打开网页；网页交互使用受管理的浏览器工具",
+      "有受管理的浏览器工具时优先用它；否则可观察和操作已打开的浏览器窗口。不得用 launch 打开网页 URL",
     ],
     parameters,
     executionMode: "sequential",
