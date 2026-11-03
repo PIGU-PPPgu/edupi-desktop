@@ -49,6 +49,7 @@ interface Props {
   onContextUsageChange?: (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => void;
   onOpenFile?: (filePath: string) => void;
   onOpenImage?: (src: string) => void;
+  onOpenPreview?: (kind: "mermaid" | "html", code: string) => void;
   emptyTitle?: string;
   emptySubtitle?: string;
   /** Fired after non-image drops are copied into the session cwd (so the explorer can refresh). */
@@ -255,7 +256,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
   );
 }
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onOpenImage, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, teacherMode = false, onEduPiProactiveTarget, onOpenEduPiReminders, proactiveOpenRequest = 0, reminderContext, reminderOpenId, onReminderContextApplied, educationContext, educationOpenId, onEducationContextApplied, teacherDraftText, teacherDraftOpenId, onTeacherDraftApplied, reminderTitle, reminderDraftKey, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onOpenImage, onOpenPreview, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, teacherMode = false, onEduPiProactiveTarget, onOpenEduPiReminders, proactiveOpenRequest = 0, reminderContext, reminderOpenId, onReminderContextApplied, educationContext, educationOpenId, onEducationContextApplied, teacherDraftText, teacherDraftOpenId, onTeacherDraftApplied, reminderTitle, reminderDraftKey, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
   const draftKey = session?.id ?? reminderDraftKey ?? (newSessionCwd ? `new:${newSessionCwd}` : null);
   const appliedReminderOpenId = useRef<string | null>(null);
   useEffect(() => {
@@ -744,6 +745,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           cwd={messageCwd}
           onOpenFile={onOpenFile}
           onOpenImage={onOpenImage}
+          onOpenPreview={onOpenPreview}
           showToolVisuals={options.showToolVisuals}
           entryId={entryIds[idx]}
           onFork={isNew || (idx === 0 && msg.role === "user") ? undefined : stableHandleFork}
@@ -866,7 +868,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     );
   }, [
     messages, entryIds, streamActive, sessionBusy, isNew, forkingEntryId,
-    modelNames, messageCwd, onOpenFile, onOpenImage, handleEditContent,
+    modelNames, messageCwd, onOpenFile, onOpenImage, onOpenPreview, handleEditContent,
     stableHandleFork, stableHandleNavigate, sessionIdForViews,
     visibleCount, t, lastUserMsgRef, sessionIdRef, teacherMode,
   ]);
@@ -1072,7 +1074,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
             {renderedMessages}
             {streamState.isStreaming && streamState.streamingMessage && (
-              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={onOpenFile} onOpenImage={onOpenImage} />
+              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={onOpenFile} onOpenImage={onOpenImage} onOpenPreview={onOpenPreview} />
             )}
 
             {agentRunning && !streamState.streamingMessage && agentPhase && (

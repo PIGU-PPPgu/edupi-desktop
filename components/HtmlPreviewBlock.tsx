@@ -26,7 +26,7 @@ function HtmlZoomDialog({ srcDoc, onClose }: { srcDoc: string; onClose: () => vo
   </dialog>;
 }
 
-export function HtmlPreviewBlock({ code, isStreaming }: { code: string; isStreaming?: boolean }) {
+export function HtmlPreviewBlock({ code, isStreaming, onOpenInPanel }: { code: string; isStreaming?: boolean; onOpenInPanel?: () => void }) {
   const [preview, setPreview] = useState(!isStreaming);
   const [zoomOpen, setZoomOpen] = useState(false);
   const [safeHtml, setSafeHtml] = useState<{ code: string; html: string } | null>(null);
@@ -53,9 +53,10 @@ export function HtmlPreviewBlock({ code, isStreaming }: { code: string; isStream
   useEffect(() => { if (!isStreaming && available) setPreview(true); }, [isStreaming, available]);
 
   const openPreview = <button type="button" className="markdown-code-action" disabled={isStreaming || !available || srcDoc === null} onClick={() => setPreview(true)}>预览</button>;
-  if (!preview || isStreaming || !available || srcDoc === null) return <CodeBlock code={code} lang="html" headerAction={openPreview} />;
+  const panelButton = onOpenInPanel ? <button type="button" className="markdown-code-action" disabled={isStreaming || !available || srcDoc === null} onClick={onOpenInPanel}>在侧栏打开</button> : null;
+  if (!preview || isStreaming || !available || srcDoc === null) return <CodeBlock code={code} lang="html" headerAction={<>{openPreview}{panelButton}</>} />;
   return <div className="markdown-code-block edupi-html-preview">
-    <div className="markdown-code-header"><span className="markdown-code-lang">HTML</span><div className="edupi-html-preview__actions"><button type="button" className="markdown-code-action" onClick={() => setPreview(false)}>源码</button><button ref={zoomTriggerRef} type="button" className="markdown-code-action" onClick={() => setZoomOpen(true)}>放大</button></div></div>
+    <div className="markdown-code-header"><span className="markdown-code-lang">HTML</span><div className="edupi-html-preview__actions"><button type="button" className="markdown-code-action" onClick={() => setPreview(false)}>源码</button>{panelButton}<button ref={zoomTriggerRef} type="button" className="markdown-code-action" onClick={() => setZoomOpen(true)}>放大</button></div></div>
     <iframe title="HTML 预览" srcDoc={srcDoc} sandbox="" referrerPolicy="no-referrer" tabIndex={0} />
     {zoomOpen ? <HtmlZoomDialog srcDoc={srcDoc} onClose={() => { setZoomOpen(false); requestAnimationFrame(() => zoomTriggerRef.current?.focus()); }} /> : null}
   </div>;

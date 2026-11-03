@@ -15,6 +15,7 @@ interface MarkdownBodyProps {
   isStreaming?: boolean;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
+  onOpenPreview?: (kind: "mermaid" | "html", code: string) => void;
   previewMermaid?: boolean;
   previewHtml?: boolean;
 }
@@ -23,6 +24,7 @@ function buildComponents(
   isStreaming: boolean | undefined,
   cwd: string | undefined,
   onOpenFile: ((filePath: string) => void) | undefined,
+  onOpenPreview: ((kind: "mermaid" | "html", code: string) => void) | undefined,
   previewMermaid: boolean,
   previewHtml: boolean,
 ): Components {
@@ -32,10 +34,14 @@ function buildComponents(
       const raw = String(children);
       const isBlock = className?.includes("language-") || raw.includes("\n");
       if (isBlock) {
-        if (lang === "mermaid") {
-          return <MermaidBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} defaultPreview={previewMermaid && !isStreaming && raw.length <= 12_000} />;
+        if (lang === "mermaid" || lang === "mmd") {
+          const code = raw.replace(/\n$/, "");
+          return <MermaidBlock code={code} isStreaming={isStreaming} defaultPreview={previewMermaid && !isStreaming && raw.length <= 12_000} onOpenInPanel={onOpenPreview ? () => onOpenPreview("mermaid", code) : undefined} />;
         }
-        if (lang === "html" && previewHtml) return <HtmlPreviewBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} />;
+        if (lang === "html" && previewHtml) {
+          const code = raw.replace(/\n$/, "");
+          return <HtmlPreviewBlock code={code} isStreaming={isStreaming} onOpenInPanel={onOpenPreview ? () => onOpenPreview("html", code) : undefined} />;
+        }
         return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} />;
       }
       return (
@@ -120,11 +126,11 @@ function buildComponents(
 
 // Memoized: markdown parsing + highlighting is the most expensive render work
 // in the app, so parent re-renders with identical props must be free.
-export const MarkdownBody = memo(function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile, previewMermaid = false, previewHtml = false }: MarkdownBodyProps) {
+export const MarkdownBody = memo(function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile, onOpenPreview, previewMermaid = false, previewHtml = false }: MarkdownBodyProps) {
   const normalizedMarkdown = useMemo(() => normalizeDisplayMath(children), [children]);
   const components = useMemo(
-    () => buildComponents(isStreaming, cwd, onOpenFile, previewMermaid, previewHtml),
-    [isStreaming, cwd, onOpenFile, previewMermaid, previewHtml],
+    () => buildComponents(isStreaming, cwd, onOpenFile, onOpenPreview, previewMermaid, previewHtml),
+    [isStreaming, cwd, onOpenFile, onOpenPreview, previewMermaid, previewHtml],
   );
 
   return (

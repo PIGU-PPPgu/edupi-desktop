@@ -22,7 +22,6 @@ const nextConfig: NextConfig = {
     ? { output: "standalone" as const, distDir: ".next-desktop" }
     : {}),
   serverExternalPackages: [
-    "@napi-rs/canvas",
     "@earendil-works/pi-coding-agent",
     "@earendil-works/pi-agent-core",
     "@earendil-works/pi-ai",

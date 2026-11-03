@@ -36,7 +36,7 @@ import { createPrepareTaskTool } from "./edupi-prepare-task-tool";
 import type { DesktopControlInput } from "./edupi-desktop-control";
 import { createEduPiComputerUseTool } from "./edupi-computer-tool";
 import { createEduPiWorkflowTool } from "./edupi-workflow-tool";
-import { createEduPiDiagramTool, createEduPiQrTool, createEduPiShowImageTool } from "./edupi-visual-tool";
+import { createEduPiQrTool, createEduPiShowImageTool } from "./edupi-visual-tool";
 import { createZhixueLoginGuard } from "./edupi-login-guard";
 import { createWorkflowReadTools } from "./edupi-workflow-read-tools";
 import { matchingCapturedUserEntry, workflowChildPromptAllowed } from "./edupi-workflow-admission";
@@ -1743,7 +1743,7 @@ export async function startRpcSession(
           ...(sessionIsEduPiDataRoot && !safeMode ? [memoryRecall.tool] : []),
           defineTool(createBashToolDefinition(sessionCwd, { shellPath: services.settingsManager.getShellPath(), spawnHook: redactDesktopSpawnContext })),
           ...(!safeMode && !strictToolNames ? [createEduPiWorkflowTool()] : []),
-          ...(sessionIsEduPiDataRoot ? [...createEduPiCalendarTools({ projectRoot: EDUPI_ROOT }), createPreparationArtifactTool(EDUPI_ROOT), createEduPiDocumentTool(EDUPI_ROOT), createEduPiPresentationTool(EDUPI_ROOT), createEduPiQrTool(), createEduPiShowImageTool(EDUPI_ROOT), createEduPiDiagramTool(), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createMemoryWriteTool(EDUPI_ROOT), createMemoryForgetTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiUpdateTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
+          ...(sessionIsEduPiDataRoot ? [...createEduPiCalendarTools({ projectRoot: EDUPI_ROOT }), createPreparationArtifactTool(EDUPI_ROOT), createEduPiDocumentTool(EDUPI_ROOT), createEduPiPresentationTool(EDUPI_ROOT), createEduPiQrTool(), createEduPiShowImageTool(EDUPI_ROOT), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createMemoryWriteTool(EDUPI_ROOT), createMemoryForgetTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiUpdateTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
             projectRoot: EDUPI_ROOT,
             requestAction: (action, signal) => requestEduPiAppAction(action, signal),
           }), createEduPiComputerUseTool({

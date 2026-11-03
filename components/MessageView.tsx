@@ -68,6 +68,7 @@ interface Props {
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   onOpenImage?: (src: string) => void;
+  onOpenPreview?: (kind: "mermaid" | "html", code: string) => void;
   autoOpenQr?: boolean;
   showToolVisuals?: boolean;
   entryId?: string;
@@ -133,12 +134,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenImage, autoOpenQr, showToolVisuals = true, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenImage, onOpenPreview, autoOpenQr, showToolVisuals = true, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenImage={onOpenImage} autoOpenQr={autoOpenQr} showToolVisuals={showToolVisuals} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenImage={onOpenImage} onOpenPreview={onOpenPreview} autoOpenQr={autoOpenQr} showToolVisuals={showToolVisuals} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -162,6 +163,7 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.cwd === next.cwd
     && prev.onOpenFile === next.onOpenFile
     && prev.onOpenImage === next.onOpenImage
+    && prev.onOpenPreview === next.onOpenPreview
     && prev.autoOpenQr === next.autoOpenQr
     && prev.showToolVisuals === next.showToolVisuals
     && prev.entryId === next.entryId
@@ -496,6 +498,7 @@ function AssistantMessageView({
   cwd,
   onOpenFile,
   onOpenImage,
+  onOpenPreview,
   autoOpenQr,
   showToolVisuals,
   showTimestamp,
@@ -510,6 +513,7 @@ function AssistantMessageView({
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   onOpenImage?: (src: string) => void;
+  onOpenPreview?: (kind: "mermaid" | "html", code: string) => void;
   autoOpenQr?: boolean;
   showToolVisuals?: boolean;
   showTimestamp?: boolean;
@@ -687,7 +691,7 @@ function AssistantMessageView({
 
       <div className="message-assistant-content" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blockItems.map(({ block, originalIndex }) => (
-          <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} autoOpenQr={autoOpenQr} showToolVisuals={showToolVisuals} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} onOpenImage={onOpenImage} sessionId={sessionId} entryId={entryId} blockIndex={originalIndex} />
+          <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} autoOpenQr={autoOpenQr} showToolVisuals={showToolVisuals} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} onOpenImage={onOpenImage} onOpenPreview={onOpenPreview} sessionId={sessionId} entryId={entryId} blockIndex={originalIndex} />
         ))}
       </div>
 
@@ -751,9 +755,9 @@ function AssistantMessageView({
   );
 }
 
-function BlockView({ block, toolResults, isStreaming, autoOpenQr, showToolVisuals, streamingDuration, toolCallDurations, cwd, onOpenFile, onOpenImage, sessionId, entryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; autoOpenQr?: boolean; showToolVisuals?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; cwd?: string; onOpenFile?: (filePath: string) => void; onOpenImage?: (src: string) => void; sessionId?: string; entryId?: string; blockIndex: number }) {
+function BlockView({ block, toolResults, isStreaming, autoOpenQr, showToolVisuals, streamingDuration, toolCallDurations, cwd, onOpenFile, onOpenImage, onOpenPreview, sessionId, entryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; autoOpenQr?: boolean; showToolVisuals?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; cwd?: string; onOpenFile?: (filePath: string) => void; onOpenImage?: (src: string) => void; onOpenPreview?: (kind: "mermaid" | "html", code: string) => void; sessionId?: string; entryId?: string; blockIndex: number }) {
   if (block.type === "text") {
-    return <TextBlock block={block as TextContent} isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} />;
+    return <TextBlock block={block as TextContent} isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} onOpenPreview={onOpenPreview} />;
   }
   if (block.type === "thinking") {
     return <ThinkingBlock block={block as ThinkingContent} duration={streamingDuration} sessionId={sessionId} entryId={entryId} blockIndex={blockIndex} />;
@@ -777,8 +781,8 @@ function BlockView({ block, toolResults, isStreaming, autoOpenQr, showToolVisual
   return null;
 }
 
-function TextBlock({ block, isStreaming, cwd, onOpenFile }: { block: TextContent; isStreaming?: boolean; cwd?: string; onOpenFile?: (filePath: string) => void }) {
-  return <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} previewMermaid previewHtml>{block.text}</MarkdownBody>;
+function TextBlock({ block, isStreaming, cwd, onOpenFile, onOpenPreview }: { block: TextContent; isStreaming?: boolean; cwd?: string; onOpenFile?: (filePath: string) => void; onOpenPreview?: (kind: "mermaid" | "html", code: string) => void }) {
+  return <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} onOpenPreview={onOpenPreview} previewMermaid previewHtml>{block.text}</MarkdownBody>;
 }
 
 function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
@@ -902,7 +906,7 @@ function ToolCallBlock({ block, result, duration, cwd, sessionId, autoOpenQr, sh
   const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
   const isError = result?.isError ?? false;
   const visualItems = showToolVisuals ? toolVisualItems(result, cwd, sessionId) : [];
-  const visualToolName = ({ edupi_show_qr: "二维码", edupi_show_image: "图片", edupi_draw_diagram: "示意图", zhixue_login: "智学网登录" } as Record<string, string>)[block.toolName];
+  const visualToolName = ({ edupi_show_qr: "二维码", edupi_show_image: "图片", zhixue_login: "智学网登录" } as Record<string, string>)[block.toolName];
 
   return (
     <div
