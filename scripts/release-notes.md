@@ -1,6 +1,8 @@
-EduPi Desktop 0.3.102，macOS Apple Silicon 预发布。
+EduPi Desktop 0.3.103，macOS Apple Silicon 预发布。
 
 工具返回的图片现在直接出现在对话中，可从右侧放大。二维码可在扫码窗口中查看；HTML 与 Mermaid 图形可在对话中预览，也可打开右侧预览栏，无需图片模型。同一条请求重复启动智学网登录窗口会被拦截。
+
+修复 macOS 安装版中 HTML/SVG 预览空白：内嵌无权限预览允许 WebKit 的内部 `about:srcdoc` 导航，外部导航仍拦截。
 
 AI 协作的本机文件和图片可从对话打开到右侧预览，选择产物后收起产物菜单。
 AI 返回的图片内容块会在对话内显示，点开后可在右侧查看。
