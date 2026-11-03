@@ -107,6 +107,10 @@ export function createEduPiDiagramTool() {
       ctx.lineJoin = "round";
       for (const item of input.elements) {
         signal?.throwIfAborted();
+        if ((item.kind === "text" && !item.text)
+          || (item.kind === "line" && (item.x2 === undefined || item.y2 === undefined))
+          || (item.kind === "rect" && (item.width === undefined || item.height === undefined))
+          || (item.kind === "circle" && item.radius === undefined)) throw new Error("示意图图元缺少必要内容");
         ctx.strokeStyle = item.color || "#263a4d";
         ctx.lineWidth = 3;
         if (item.kind === "text" && item.text) {
