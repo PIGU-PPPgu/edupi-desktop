@@ -25,6 +25,7 @@ import { runComputerUseFromAgent, setComputerUseEnabledNative } from "@/lib/desk
 import { ChatWindow } from "./ChatWindow";
 import { getDraft, resetNewSessionDraft, setDraft } from "@/lib/draft-store";
 import { TabBar, type Tab } from "./TabBar";
+import { isPreviewableImageSource } from "@/lib/chat-image-source";
 import { SafeModeBanner } from "./SafeModeBanner";
 import { EduPiForegroundProvider } from "./EduPiForeground";
 import { FOREGROUND_SETTINGS_CHANGED, readForegroundSettings, restoreForegroundSettings, writeForegroundSettings } from "@/lib/edupi-foreground-settings";
@@ -1182,7 +1183,7 @@ export function AppShell() {
   }, [isMobile]);
 
   const handleOpenInlineImage = useCallback((src: string) => {
-    if (!/^data:image\/(?:png|jpeg|webp|gif);base64,|^https?:\/\//i.test(src)) return;
+    if (!isPreviewableImageSource(src)) return;
     setInlineImageSrc(src);
     setRightPanelOpen(true);
   }, []);

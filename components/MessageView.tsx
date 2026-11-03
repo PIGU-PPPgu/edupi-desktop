@@ -25,6 +25,7 @@ import type {
 import { parseTeacherMessage } from "@/lib/edupi-composer-context";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { isPathInside, resolveLocalFileHref } from "@/lib/file-links";
+import { isPreviewableImageSource } from "@/lib/chat-image-source";
 import { ChatVisualResult, type ChatVisualItem } from "./ChatVisualResult";
 
 const MAX_THINKING_CACHE_ENTRIES = 100;
@@ -773,7 +774,7 @@ function BlockView({ block, toolResults, isStreaming, autoOpenQr, streamingDurat
 }
 
 function TextBlock({ block, isStreaming, cwd, onOpenFile }: { block: TextContent; isStreaming?: boolean; cwd?: string; onOpenFile?: (filePath: string) => void }) {
-  return <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} previewMermaid>{block.text}</MarkdownBody>;
+  return <MarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} previewMermaid previewHtml>{block.text}</MarkdownBody>;
 }
 
 function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
@@ -873,7 +874,7 @@ function toolVisualItems(result: ToolResultMessage | undefined, cwd?: string, se
   const images = result.content.flatMap((block) => {
     if (block.type !== "image") return [];
     const src = imageSource(block);
-    return /^(data:image\/(?:png|jpeg|webp|gif);base64,|https?:\/\/)/i.test(src) ? [{ src, title, kind }] : [];
+    return isPreviewableImageSource(src) ? [{ src, title, kind }] : [];
   });
   if (images.length > 0) return images;
   if (typeof visual?.path !== "string") return [];

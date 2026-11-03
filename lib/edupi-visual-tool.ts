@@ -95,7 +95,7 @@ export function createEduPiDiagramTool() {
   return defineTool<typeof diagramParameters, { visual: { kind: "image"; title: string } }>({
     name: "edupi_draw_diagram",
     label: "绘制示意图",
-    description: "直接绘制并在当前对话展示教学示意图、几何图或简单关系图，不调用图片模型。坐标为像素，颜色用 #RRGGBB；真实照片或艺术图片需要独立图片模型。",
+    description: "直接绘制并在当前对话展示教学示意图、几何图或简单关系图，不调用图片模型。坐标为像素，颜色用 #RRGGBB。复杂静态图也可在最终回复给出自包含的 ```html 或 ```mermaid 代码块，客户端会自动预览；不要声称聊天不能展示图形。真实照片或艺术图片仍需独立图片模型。",
     parameters: diagramParameters,
     execute: async (_id, input: Static<typeof diagramParameters>, signal) => {
       signal?.throwIfAborted();

@@ -6,6 +6,7 @@ import { resolveLocalFileHref } from "@/lib/file-links";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { MermaidBlock, CodeBlock } from "./MermaidBlock";
+import { HtmlPreviewBlock } from "./HtmlPreviewBlock";
 import { handleExternalLinkClick } from "@/lib/desktop-native";
 
 interface MarkdownBodyProps {
@@ -15,6 +16,7 @@ interface MarkdownBodyProps {
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   previewMermaid?: boolean;
+  previewHtml?: boolean;
 }
 
 function buildComponents(
@@ -22,6 +24,7 @@ function buildComponents(
   cwd: string | undefined,
   onOpenFile: ((filePath: string) => void) | undefined,
   previewMermaid: boolean,
+  previewHtml: boolean,
 ): Components {
   return {
     code({ className, children, ...props }) {
@@ -32,6 +35,7 @@ function buildComponents(
         if (lang === "mermaid") {
           return <MermaidBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} defaultPreview={previewMermaid && !isStreaming && raw.length <= 12_000} />;
         }
+        if (lang === "html" && previewHtml) return <HtmlPreviewBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} />;
         return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} />;
       }
       return (
@@ -116,11 +120,11 @@ function buildComponents(
 
 // Memoized: markdown parsing + highlighting is the most expensive render work
 // in the app, so parent re-renders with identical props must be free.
-export const MarkdownBody = memo(function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile, previewMermaid = false }: MarkdownBodyProps) {
+export const MarkdownBody = memo(function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile, previewMermaid = false, previewHtml = false }: MarkdownBodyProps) {
   const normalizedMarkdown = useMemo(() => normalizeDisplayMath(children), [children]);
   const components = useMemo(
-    () => buildComponents(isStreaming, cwd, onOpenFile, previewMermaid),
-    [isStreaming, cwd, onOpenFile, previewMermaid],
+    () => buildComponents(isStreaming, cwd, onOpenFile, previewMermaid, previewHtml),
+    [isStreaming, cwd, onOpenFile, previewMermaid, previewHtml],
   );
 
   return (

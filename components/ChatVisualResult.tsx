@@ -12,6 +12,7 @@ export interface ChatVisualItem {
 function ScanDialog({ item, onClose }: { item: ChatVisualItem; onClose: () => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -21,10 +22,13 @@ function ScanDialog({ item, onClose }: { item: ChatVisualItem; onClose: () => vo
     return () => { if (dialog.open) dialog.close(); };
   }, []);
 
+  useEffect(() => { setImageFailed(false); }, [item.src]);
+
   return <dialog ref={dialogRef} className="edupi-chat-scan-dialog" aria-modal="true" aria-label={item.title} onCancel={(event) => { event.preventDefault(); onClose(); }}>
     <div className="edupi-chat-scan-dialog__head"><strong>{item.title}</strong><button ref={closeRef} type="button" onClick={onClose} aria-label="关闭扫码窗口">×</button></div>
     {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img src={item.src} alt={item.title} />
+    <img src={item.src} alt={item.title} onLoad={() => setImageFailed(false)} onError={() => setImageFailed(true)} style={imageFailed ? { display: "none" } : undefined} />
+    {imageFailed ? <p role="status">二维码已失效，请重新发起扫码。</p> : null}
   </dialog>;
 }
 
@@ -37,6 +41,17 @@ export function ChatVisualResult({ items, autoOpenQr = false, onOpenFile, onOpen
   const [scanItem, setScanItem] = useState<ChatVisualItem | null>(null);
   const autoOpened = useRef(false);
   const qrTriggerRef = useRef<HTMLButtonElement>(null);
+  const [failedQr, setFailedQr] = useState<Record<string, boolean>>({});
+  const liveQrPath = items.find(item => item.kind === "qr" && item.filePath)?.filePath ?? null;
+  const [qrRefresh, setQrRefresh] = useState(0);
+  useEffect(() => {
+    if (!liveQrPath) return;
+    const timer = window.setInterval(() => setQrRefresh(value => value + 1), 30_000);
+    return () => window.clearInterval(timer);
+  }, [liveQrPath]);
+  const currentSrc = (item: ChatVisualItem) => item.kind === "qr" && item.filePath
+    ? `${item.src}${item.src.includes("?") ? "&" : "?"}qrRefresh=${qrRefresh}`
+    : item.src;
   const closeScan = () => {
     setScanItem(null);
     requestAnimationFrame(() => qrTriggerRef.current?.focus());
@@ -53,8 +68,10 @@ export function ChatVisualResult({ items, autoOpenQr = false, onOpenFile, onOpen
   if (items.length === 0) return null;
   const firstQrIndex = items.findIndex(item => item.kind === "qr");
   return <div className="edupi-chat-visual-results">
-    {items.map((item, index) => <button
-      key={`${item.kind}:${item.filePath ?? index}`}
+    {items.map((item, index) => {
+      const itemKey = item.filePath ?? String(index);
+      return <button
+      key={`${item.kind}:${itemKey}`}
       ref={index === firstQrIndex ? qrTriggerRef : undefined}
       type="button"
       className={`edupi-chat-visual-result${item.kind === "qr" ? " is-qr" : ""}`}
@@ -66,9 +83,12 @@ export function ChatVisualResult({ items, autoOpenQr = false, onOpenFile, onOpen
       }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={item.src} alt="" loading="lazy" />
-      <span>{item.title}</span>
-    </button>)}
-    {scanItem ? <ScanDialog item={scanItem} onClose={closeScan} /> : null}
+      <img src={currentSrc(item)} alt="" loading="lazy" style={failedQr[itemKey] ? { opacity: 0.25 } : undefined}
+        onError={item.kind === "qr" ? () => setFailedQr(current => ({ ...current, [itemKey]: true })) : undefined}
+        onLoad={item.kind === "qr" ? () => setFailedQr(current => current[itemKey] ? { ...current, [itemKey]: false } : current) : undefined} />
+      <span>{failedQr[itemKey] ? "二维码已失效" : item.title}</span>
+    </button>;
+    })}
+    {scanItem ? <ScanDialog item={{ ...scanItem, src: currentSrc(scanItem) }} onClose={closeScan} /> : null}
   </div>;
 }

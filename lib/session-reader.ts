@@ -247,7 +247,7 @@ function getContextSettings(
 export function buildSessionContext(
   entries: SessionEntry[],
   leafId?: string | null,
-  options: { deferThinking?: boolean; deferToolResultImages?: boolean } = {},
+  options: { deferThinking?: boolean; deferToolResultImages?: boolean; sessionId?: string } = {},
 ): SessionContext {
   const byId = new Map<string, SessionEntry>();
   for (const e of entries) byId.set(e.id, e);
@@ -309,21 +309,26 @@ function base64ImageInfo(block: unknown): { bytes: number; mime?: string } | nul
   return { bytes: Math.max(0, Math.floor(data.length * 3 / 4) - padding), mime };
 }
 
-function omitToolResultBase64Images(message: AgentMessage): AgentMessage {
+function omitToolResultBase64Images(message: AgentMessage, sessionId?: string, entryId?: string): AgentMessage {
   if (message.role !== "toolResult") return message;
 
   let omitted = 0;
+  let deferred = 0;
   let bytes = 0;
   const mimes = new Set<string>();
-  const content = message.content.filter((block) => {
+  const content = message.content.flatMap((block, blockIndex) => {
     const image = base64ImageInfo(block);
-    if (!image) return true;
+    if (!image) return [block];
+    if (sessionId && entryId && /^(image\/png|image\/jpeg|image\/webp|image\/gif)$/.test(image.mime ?? "")) {
+      deferred += 1;
+      return [{ type: "image" as const, source: { type: "url" as const, url: `/api/sessions/${encodeURIComponent(sessionId)}/entries/${encodeURIComponent(entryId)}/image?blockIndex=${blockIndex}` } }];
+    }
     omitted += 1;
     bytes += image.bytes;
     if (image.mime) mimes.add(image.mime);
-    return false;
+    return [];
   });
-  if (omitted === 0) return message;
+  if (omitted === 0) return deferred ? { ...message, content } : message;
 
   const mimeText = mimes.size > 0 ? `: ${[...mimes].join(", ")}` : "";
   content.push({
@@ -337,7 +342,7 @@ function omitToolResultBase64Images(message: AgentMessage): AgentMessage {
 // Returns null for entries that do not map to chat history (metadata, non-message types).
 function entryToUiMessage(
   entry: SessionEntry,
-  options: { deferThinking?: boolean; deferToolResultImages?: boolean },
+  options: { deferThinking?: boolean; deferToolResultImages?: boolean; sessionId?: string },
 ): AgentMessage | null {
   // Supported message roles: user, assistant, toolResult, bashExecution.
   // bashExecution messages enter the case "message" branch (entry.type === "message").
@@ -347,7 +352,7 @@ function entryToUiMessage(
   switch (entry.type) {
     case "message": {
       const message = options.deferToolResultImages
-        ? omitToolResultBase64Images(normalizeToolCalls(entry.message))
+        ? omitToolResultBase64Images(normalizeToolCalls(entry.message), options.sessionId, entry.id)
         : normalizeToolCalls(entry.message);
       if (!options.deferThinking || message.role !== "assistant") return message;
       return {
