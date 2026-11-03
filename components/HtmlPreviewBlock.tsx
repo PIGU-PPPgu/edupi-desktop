@@ -22,7 +22,7 @@ function HtmlZoomDialog({ srcDoc, onClose }: { srcDoc: string; onClose: () => vo
   }, []);
   return <dialog ref={dialogRef} className="edupi-html-zoom-dialog" aria-modal="true" aria-label="HTML 预览" onCancel={(event) => { event.preventDefault(); onClose(); }}>
     <div className="edupi-chat-scan-dialog__head"><strong>HTML 预览</strong><button ref={closeRef} type="button" onClick={onClose} aria-label="关闭 HTML 预览">×</button></div>
-    <iframe title="放大的 HTML 预览" srcDoc={srcDoc} sandbox="" referrerPolicy="no-referrer" tabIndex={-1} />
+    <iframe title="放大的 HTML 预览" srcDoc={srcDoc} sandbox="" referrerPolicy="no-referrer" tabIndex={0} />
   </dialog>;
 }
 
@@ -56,7 +56,7 @@ export function HtmlPreviewBlock({ code, isStreaming }: { code: string; isStream
   if (!preview || isStreaming || !available || srcDoc === null) return <CodeBlock code={code} lang="html" headerAction={openPreview} />;
   return <div className="markdown-code-block edupi-html-preview">
     <div className="markdown-code-header"><span className="markdown-code-lang">HTML</span><div className="edupi-html-preview__actions"><button type="button" className="markdown-code-action" onClick={() => setPreview(false)}>源码</button><button ref={zoomTriggerRef} type="button" className="markdown-code-action" onClick={() => setZoomOpen(true)}>放大</button></div></div>
-    <iframe title="HTML 预览" srcDoc={srcDoc} sandbox="" referrerPolicy="no-referrer" tabIndex={-1} />
+    <iframe title="HTML 预览" srcDoc={srcDoc} sandbox="" referrerPolicy="no-referrer" tabIndex={0} />
     {zoomOpen ? <HtmlZoomDialog srcDoc={srcDoc} onClose={() => { setZoomOpen(false); requestAnimationFrame(() => zoomTriggerRef.current?.focus()); }} /> : null}
   </div>;
 }
