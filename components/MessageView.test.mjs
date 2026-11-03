@@ -70,6 +70,16 @@ test("a tool can show a local output image without sending its bytes to the mode
   assert.doesNotMatch(restricted, /edupi-chat-visual-result/);
 });
 
+test("visual tool paths preserve literal hash and percent characters in filenames", () => {
+  const message = { role: "assistant", provider: "test", model: "test", content: [{ type: "toolCall", toolCallId: "image-1", toolName: "edupi_show_image", input: {} }] };
+  for (const [filename, encoded] of [["lesson#1.png", "lesson%231.png"], ["lesson%23.png", "lesson%2523.png"]]) {
+    const path = `/tmp/workspace/.edupi/output/${filename}`;
+    const result = { role: "toolResult", toolCallId: "image-1", content: [{ type: "text", text: "已显示" }], details: { visual: { kind: "image", title: "示意图", path } } };
+    const html = renderMessage(message, { cwd: "/tmp/workspace", sessionId: "session-1", toolResults: new Map([["image-1", result]]) });
+    assert.match(html, new RegExp(`src="/api/files/tmp/workspace/\\.edupi/output/${encoded}\\?type=read`));
+  }
+});
+
 test("settled assistant diagrams open as previews instead of raw Mermaid source", () => {
   const html = renderMessage({ role: "assistant", provider: "test", model: "test", content: [{ type: "text", text: "```mermaid\ngraph TD\nA-->B\n```" }] });
   assert.match(html, /mermaid-block-loading/);

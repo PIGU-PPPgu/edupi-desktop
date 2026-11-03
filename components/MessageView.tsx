@@ -24,7 +24,7 @@ import type {
 } from "@/lib/types";
 import { parseTeacherMessage } from "@/lib/edupi-composer-context";
 import { encodeFilePathForApi } from "@/lib/file-paths";
-import { isPathInside, resolveLocalFileHref } from "@/lib/file-links";
+import { isPathInside } from "@/lib/file-links";
 import { isPreviewableImageSource } from "@/lib/chat-image-source";
 import { ChatVisualResult, type ChatVisualItem } from "./ChatVisualResult";
 
@@ -886,8 +886,10 @@ export function toolVisualItems(result: ToolResultMessage | undefined, cwd?: str
   });
   if (images.length > 0) return images;
   if (typeof visual?.path !== "string") return [];
-  const filePath = resolveLocalFileHref(visual.path, cwd);
-  if (!filePath || (cwd && !isPathInside(filePath, cwd)) || !/\.(?:png|jpe?g|webp|gif)$/i.test(filePath)) return [];
+  // Tool metadata is a filesystem path, not a Markdown URL: decoding percent
+  // escapes or stripping # would change valid filenames before the file API.
+  const filePath = visual.path;
+  if (!cwd || !/^(?:\/|[a-zA-Z]:[\\/]|\\\\)/.test(filePath) || !isPathInside(filePath, cwd) || !/\.(?:png|jpe?g|webp|gif)$/i.test(filePath)) return [];
   const query = new URLSearchParams({ type: "read" });
   if (sessionId) query.set("sessionId", sessionId);
   return [{ src: `/api/files/${encodeFilePathForApi(filePath)}?${query}`, title, kind, filePath }];
