@@ -38,11 +38,18 @@ export function HtmlPreviewBlock({ code, isStreaming, onOpenInPanel }: { code: s
     if (!available) return;
     let cancelled = false;
     void import("dompurify").then(({ default: DOMPurify }) => {
-      const html = DOMPurify.sanitize(code, {
+      const purifier = DOMPurify(window);
+      // A global ALLOWED_URI_REGEXP also strips SVG geometry such as width and x.
+      purifier.addHook("uponSanitizeAttribute", (_node, data) => {
+        if (["src", "href", "xlink:href"].includes(data.attrName.toLowerCase())
+          && !/^(?:#|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(data.attrValue)) {
+          data.keepAttr = false;
+        }
+      });
+      const html = purifier.sanitize(code, {
         USE_PROFILES: { html: true, svg: true },
         FORBID_TAGS: ["script", "iframe", "frame", "object", "embed", "form", "meta", "link", "base"],
         FORBID_ATTR: ["srcset"],
-        ALLOWED_URI_REGEXP: /^(?:#|data:image\/(?:png|jpeg|webp|gif);base64,)/i,
         SANITIZE_NAMED_PROPS: true,
       });
       if (!cancelled) setSafeHtml({ code, html });
