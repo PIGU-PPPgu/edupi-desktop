@@ -1,5 +1,14 @@
 # AI 对话视觉输出与扫码
 
+## 2026-11-03 `.104` macOS 安装与预发布
+
+- Desktop [PR463](https://github.com/PIGU-PPPgu/edupi-desktop/pull/463) 修复 SVG 几何属性、[PR464](https://github.com/PIGU-PPPgu/edupi-desktop/pull/464) 配对 Core #436，最终 main `ff814494d5b67fb624197e71b3b51bd365e34544` 固定 Core `008d3e63cc1ab4fa2adfba4817241720408dc6fb`。PR463 三项源码 CI 成功；Core 配对同 head 的手动[源码 CI41643688657](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41643688657) 三项成功。本机完整 3561 通过／48 条条件跳过／0 失败、类型与版本检查、Mac `desktop:prepare`、13,337 文件 Core 闭包、隔离 staged 冷启动均通过。具体 Core 边界见[配对记录](2026-11-03-core436-desktop-pair.md)。
+- 唯一 [Mac-only 签名 run41645516642](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41645516642) attempt1 成功，Release `432741149` 固定上述 main；三项最终资产 DMG／更新包／签名 ID `705944616`／`705897084`／`705897612`，本机完整字节与 GitHub SHA-256 一致，Mac-only 集合指纹 `sha256:92bcaf43fdb03114696f5ae3a34b17f2372092cc57015d0f440858b484a77b58`。Minisign／篡改拒绝、App 与 DMG 公证 Accepted（`1da6f45f-513d-4e20-9418-89e6184c64d2`／`0983aba6-fe3c-43be-83e9-bfa1c2c112f7`）、装订、strict codesign、Gatekeeper、更新包／DMG 的 App 同身份与 18 项固定源码文件通过。`draft-proof` 因仅构建 Mac 按 workflow 跳过，不当作三平台证明。完整记录在 `~/edupi-install-checkpoints/v0.3.104/evidence/` 的 `mac-asset-verification.json`、`local-bundle-identity.json`。
+- 唯一 `/Applications/EduPi.app` 已从已验 `.99` 原位安装 `.104`，`.99` 回退包保留。安装前当前真实资料、Pi 会话与配置 349 项备份并固定指纹；文件安装、首次隔离退出与冷启动退出后均 349/349 逐字节一致，原 3 个 WebView origin 偏好恢复并回读一致。首次启动时把旧合成根的 Runtime 数据库**复制到新路径**，Core 正确拒绝 `runtime_root_invalid`；该测试进程已停，未触及真实根。随后用全新合成根，仅迁入合成会话与图片、不复制 Runtime 数据库；App/Core 双进程隔离身份和 Core `ready`、Runtime 清单 `f7521f45`、投影 `ready`、`externalSend=false` 通过。
+- 原生 CUA 实看：聊天内与右侧均画出完整浅蓝 SVG 矩形和文字，Mermaid 备课→上课图可见；二维码卡片在折叠处理详情外可见，扫码弹窗实际显示二维码，关闭后焦点返回按钮；文件名含 `#` 的 PNG 在右栏实际显示。正常退出再从同一全新合成根冷启，会话、Mermaid、SVG 仍可见。测试 App 已退出；唯一安装位保留 `.104` 且再经签名、公证、Gatekeeper 和二进制摘要核对。证据为 `post-native-installed-104.json`、`protected-data-after-cold-restart-exit-guarded.json`、`webview-prefs-restore-fresh.json`。本轮只用合成会话与离线模式，未调用真实模型或真实智学网扫码。
+- [v0.3.104](https://github.com/PIGU-PPPgu/edupi-desktop/releases/tag/v0.3.104) 已从 Draft 公开为 Mac-only `prerelease:true`；匿名 GitHub Release API 返回相同三项资产 ID，匿名资产 API 的 64 KiB 范围下载与本机完整 DMG 前缀逐字节一致。正式 Latest 和 `updater-feed/latest.json` 仍为 `.70`，Windows/Linux 没有构建。本机对公开浏览器直链的 HEAD 请求曾在 25 秒后超时；**未做完整匿名重新下载**，不把前缀校验写成完整下载。
+- 验收后用精确路径／忽略状态／无占用守卫清理 `.104` 的分段文件、更新包解压副本、重复 tar 包和单连接残片；该清理窗口同卷可用增加 `1,699,764 KiB`。同样检查后清理本工作树的 `.next`、`.next-desktop`、`src-tauri/target` 及四个仅生成资源目录；该窗口可用增加 `8,465,584 KiB`。两次是各自清理窗口的观测，**不当作跨时段净空闲增量**。清理后 Git 跟踪源码未变、349 项真实资料仍逐字节一致。保留签名 DMG、`.99` 回退 App、Core 固定源码 checkout、合成根和验收记录；先前 `.103` 失败证据仍保留。路径与字节记录为 `cleanup-accepted-104.json` 和 `cleanup-generated-worktree-104.json`。
+
 ## 2026-11-03 解锁后补验与 `.104` 候选
 
 - 用户解锁后，唯一安装 `.103` 重新以隔离根 `~/edupi-route1-canary-chat-103-20261103` 启动；App/Core 双进程根守卫通过。原生 WebView 的 `about:srcdoc` 已显示普通 HTML 文字，聊天里二维码及图片卡片可见；右侧 HTML/SVG 只显示裁切的文字，没有预期的 300×160 浅蓝矩形，故 `.103` 安装版视觉验收**失败**，Draft 未公开。
