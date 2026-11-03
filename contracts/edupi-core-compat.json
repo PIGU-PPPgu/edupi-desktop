@@ -6,11 +6,11 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "dfcdfaef6e0710e4064a3343453e82da571990a9",
+    "core_commit": "008d3e63cc1ab4fa2adfba4817241720408dc6fb",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
     "component_manifest_hash": "sha256:67230285d1aabc7ab730d49c1de933649d1a6bbeac777ef2754d1636988b62fb",
-    "runtime_component_manifest_hash": "sha256:1c700dfb5e93490a5ae659b5e4d54fb664bfba8b4c97b2497e0b8ad8af38e86e",
-    "runtime_schema_hash": "sha256:ffa8632b29381cf601593478d4755cf38e17b0e112b8ec0600d44108594bcb0a"
+    "runtime_component_manifest_hash": "sha256:f7521f45834605dd8bff5a7af344973216fa1134508419a8b83caf11226bac51",
+    "runtime_schema_hash": "sha256:093dc2e1348cb55f747777316a342580af4acb1be9d0a81e71aee3ba51621b41"
   },
   "contract_identities": [
     {
@@ -266,7 +266,10 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/429",
     "https://github.com/PIGU-PPPgu/edupi/pull/430",
     "https://github.com/PIGU-PPPgu/edupi/pull/431",
-    "https://github.com/PIGU-PPPgu/edupi/pull/432"
+    "https://github.com/PIGU-PPPgu/edupi/pull/432",
+    "https://github.com/PIGU-PPPgu/edupi/pull/434",
+    "https://github.com/PIGU-PPPgu/edupi/pull/435",
+    "https://github.com/PIGU-PPPgu/edupi/pull/436"
   ],
-  "change_note": "This source candidate pairs Core main dfcdfaef, the PR432 tested tree, with Runtime schema ffa8632b and both exact component manifests. Bridge v1.1, twelve supported commands and education_workspace remain unchanged. Owner-only query Goal and third-source inventory proofs remain read-only; answer_verified and question_case_verified stay false, and product compound answers remain held. The peer-Goal ambiguity case is held by whole-Goal current-guard uniqueness and a synthetic regression. No signed installer or public update includes this pairing yet."
+  "change_note": "This source candidate pairs Core main 008d3e63, including PR434 and PR435, with Runtime schema 093dc2e1 and both exact component manifests. Bridge v1.1, twelve supported commands and education_workspace remain unchanged. The new owner_recall_case_sources_read operation selects sources on the Core side but remains owner-only and read-only; answer_verified and question_case_verified stay false, and product compound answers remain held. No signed installer or public update includes this pairing yet."
 }

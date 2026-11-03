@@ -5,7 +5,7 @@
 - 用户解锁后，唯一安装 `.103` 重新以隔离根 `~/edupi-route1-canary-chat-103-20261103` 启动；App/Core 双进程根守卫通过。原生 WebView 的 `about:srcdoc` 已显示普通 HTML 文字，聊天里二维码及图片卡片可见；右侧 HTML/SVG 只显示裁切的文字，没有预期的 300×160 浅蓝矩形，故 `.103` 安装版视觉验收**失败**，Draft 未公开。
 - 根因由同一 SVG 在 Safari 与原生 WebView 的实际显示、DOMPurify 清洗前后属性核对定位：自定义 `ALLOWED_URI_REGEXP` 同时过滤了 SVG 的 `width`、`height`、`x`、`y` 与 `font-size`。`.104` 源码候选改为仅对 `src`、`href`、`xlink:href` 施加资源地址门；脚本、外链图片属性仍移除，iframe 仍无权限并带禁止网络与脚本的 CSP。隔离 Safari 实际挂载 `HtmlPreviewBlock` 后看到浅蓝矩形和文字；该组件产生的 `srcDoc` 保留上述 SVG 数值属性，外网图片 `src` 为 null、`script` 为 0、父窗口标记为 false。此为源码与 WebKit 浏览器证据，**不是 `.104` 安装版证据**。
 - `.103` 隔离进程正常退出且双进程停止后，原 3 个 WebView origin 偏好从私有备份恢复并回读一致；以解锁后安装前新固定的 349 项当前真实资料与配置为基线，退出和回退后均逐字节一致。唯一 `/Applications/EduPi.app` 已从已验 `.99` 回退包恢复，`codesign --deep --strict`、公证装订、Gatekeeper 与原二进制/签名文件摘要通过；失败的 `.103` bundle 保留在私有 checkpoint。未用旧备份覆盖真实教师资料。证据在 `~/edupi-install-checkpoints/v0.3.103/evidence/` 的 `protected-data-after-resume-native-svg-failed-guarded.json`、`webview-prefs-restore-resume.json`、`rollback-after-svg-failed.json` 与 `protected-data-after-resume-post-svg-rollback-guarded.json`。
-- `.104` 源码候选的目标测试、类型、目标 lint、`release:verify` 和本机生产 Web 构建通过；构建保留一条既有的 session export 动态依赖警告。临时 Safari 组件页已从源码移除。`.104` 尚未 PR/CI、签名、安装或公开；`.103` 的签名资产不能代替新修复验收。Windows/Linux 未构建，正式 feed/Latest 仍 `.70`。
+- `.104` 的 HTML/SVG 修复已随 [Desktop PR463](https://github.com/PIGU-PPPgu/edupi-desktop/pull/463) 合入 main `0d02c4da995802e6fe052093c98a2f62e88503fa`，三项源码 CI 均通过。目标测试、类型、目标 lint、`release:verify` 和本机生产 Web 构建通过；构建保留一条既有的 session export 动态依赖警告。临时 Safari 组件页已从源码移除。其后又独立配对最新 Core `008d3e63`，见[配对记录](2026-11-03-core436-desktop-pair.md)；这个后续候选尚未合并、签名、安装或公开。`.103` 的签名资产不能代替新修复验收。Windows/Linux 未构建，正式 feed/Latest 仍 `.70`。
 
 ## 问题证据
 
