@@ -1,5 +1,12 @@
 # AI 对话视觉输出与扫码
 
+## 2026-11-03 解锁后补验与 `.104` 候选
+
+- 用户解锁后，唯一安装 `.103` 重新以隔离根 `~/edupi-route1-canary-chat-103-20261103` 启动；App/Core 双进程根守卫通过。原生 WebView 的 `about:srcdoc` 已显示普通 HTML 文字，聊天里二维码及图片卡片可见；右侧 HTML/SVG 只显示裁切的文字，没有预期的 300×160 浅蓝矩形，故 `.103` 安装版视觉验收**失败**，Draft 未公开。
+- 根因由同一 SVG 在 Safari 与原生 WebView 的实际显示、DOMPurify 清洗前后属性核对定位：自定义 `ALLOWED_URI_REGEXP` 同时过滤了 SVG 的 `width`、`height`、`x`、`y` 与 `font-size`。`.104` 源码候选改为仅对 `src`、`href`、`xlink:href` 施加资源地址门；脚本、外链图片属性仍移除，iframe 仍无权限并带禁止网络与脚本的 CSP。隔离 Safari 实际挂载 `HtmlPreviewBlock` 后看到浅蓝矩形和文字；该组件产生的 `srcDoc` 保留上述 SVG 数值属性，外网图片 `src` 为 null、`script` 为 0、父窗口标记为 false。此为源码与 WebKit 浏览器证据，**不是 `.104` 安装版证据**。
+- `.103` 隔离进程正常退出且双进程停止后，原 3 个 WebView origin 偏好从私有备份恢复并回读一致；以解锁后安装前新固定的 349 项当前真实资料与配置为基线，退出和回退后均逐字节一致。唯一 `/Applications/EduPi.app` 已从已验 `.99` 回退包恢复，`codesign --deep --strict`、公证装订、Gatekeeper 与原二进制/签名文件摘要通过；失败的 `.103` bundle 保留在私有 checkpoint。未用旧备份覆盖真实教师资料。证据在 `~/edupi-install-checkpoints/v0.3.103/evidence/` 的 `protected-data-after-resume-native-svg-failed-guarded.json`、`webview-prefs-restore-resume.json`、`rollback-after-svg-failed.json` 与 `protected-data-after-resume-post-svg-rollback-guarded.json`。
+- `.104` 源码候选的目标测试、类型、目标 lint、`release:verify` 和本机生产 Web 构建通过；构建保留一条既有的 session export 动态依赖警告。临时 Safari 组件页已从源码移除。`.104` 尚未 PR/CI、签名、安装或公开；`.103` 的签名资产不能代替新修复验收。Windows/Linux 未构建，正式 feed/Latest 仍 `.70`。
+
 ## 问题证据
 
 - 2026-11-03 只读检查本机 EduPi 会话 `01a157f2…` 的同一条“扫码”请求：连续出现 13 次 `zhixue_login` 调用、13 次文本回执、0 个图片块。旧扩展仅报告 Chrome 进程已启动，无法据此证明窗口已出现二维码；原会话和教师资料未修改。
@@ -47,3 +54,4 @@
 - 修复源码 [PR460](https://github.com/PIGU-PPPgu/edupi-desktop/pull/460) 普通合入 main `d700a128f8cf80ef95cbda578c753401a78c3109`，与本机受测源码同 tree；[源码 CI41579743413](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41579743413) audit、rust-audit、linux-source 均成功。唯一 [Mac-only Draft run41580432507](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41580432507) attempt1 成功，Release `432290171` 仍为 Draft；最终 DMG／更新包／签名资产 ID 为 `704485550`／`704458636`／`704458967`，本机完整字节分别匹配 SHA-256 `9627d7cf…ce8ebb9`／`f302f490…14d848b`／`1e116725…321dff`，集合指纹 `sha256:6c6cad225e1599ac2e92fca52430356c4eb1c66be83d10d1fe47ca011a42cba3`。App／DMG 公证分别 Accepted `a801ebf2-5d11-48d4-b440-b0120c6550d6`／`5a9788e1-a1e7-4bae-9f34-8d930379ff43`；CI 与本机的装订、strict codesign、Gatekeeper、Minisign／篡改拒绝、三封装同身份和 17 项包内固定源码通过。私有记录在 `~/edupi-install-checkpoints/v0.3.103/evidence/`。
 - 安装前以包含 `.102` 意外新增运行文件的**当前**真实根为新基线，349 项受保护文件及配置只读指纹、回退副本和 3 个 WebView origin 偏好备份完成。唯一 `/Applications/EduPi.app` 已从已验 DMG 安装 `.103`，`.99` 签名回退包保留；文件安装后 349 项基线字节与 3 个 origin 均未变。WebView 偏好已按备份隔离用于测试；`.103` App 与 Core helper 仅在 `~/edupi-route1-canary-chat-103-20261103` 合成根启动，双进程隔离守卫通过。隔离进程运行时只读复核真实基线仍 349/349、无新文件。
 - 原生 CUA 首次及稍后重新绑定时 macOS 均锁屏，工具明确拒绝读取；尚未操作 `.103` 聊天、HTML/SVG、二维码和冷启动。已请求用户亲自解锁，未绕过锁屏或用旧 `.102` 的浏览器结果冒充 `.103` 安装版通过。为免让未验候选长期占用唯一 App，已停止隔离 App／Core helper，恢复原 3 个 WebView origin 偏好并回读一致；离开隔离进程后与回退 `.99` 后，当前 349 项基线逐字节仍一致。唯一 `/Applications/EduPi.app` 已按原签名和二进制指纹回退 `.99`，`.103` App 测试副本、三资产及私有回退资料备份保留以待解锁后继续。退出测试 App 后不得再调用 CUA 观察已退出的绑定，以免工具自动启动正常资料根；先用进程守卫确认停机。Release 继续保持 Draft，正式 feed／Latest `.70` 不变，Windows/Linux 不构建。
+- 清理待验：本机可用空间约 789 GiB；当前工作树的生成目录 `.next` 约 2.0 GiB、`.next-desktop` 约 903 MiB、`src-tauri/target` 约 4.6 GiB，私有 `.102`／`.103` checkpoint 分别约 2.9／3.0 GiB。后两者含签名资产、失败候选、资料回退和验收证据，须保留到 `.103` 原生验收及回退决定完成；之后只核对精确生成目录、忽略状态和占用，再清理可重建缓存与冗余下载，保留证据和必要回退。此前删除 `.next` 的直接命令被自动审批审查以“`rm -f` 类命令不允许，改用更安全方式”拒绝，本轮未绕过或清空其他内容。
