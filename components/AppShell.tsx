@@ -23,8 +23,11 @@ import type { ComputerUseBridgeResult, ComputerUseInput } from "@/lib/edupi-comp
 import type { KernelRunAction } from "@/lib/edupi-kernel-display";
 import { runComputerUseFromAgent, setComputerUseEnabledNative } from "@/lib/desktop-computer-use";
 import { ChatWindow } from "./ChatWindow";
+import { MermaidBlock } from "./MermaidBlock";
+import { HtmlPreviewBlock } from "./HtmlPreviewBlock";
 import { getDraft, resetNewSessionDraft, setDraft } from "@/lib/draft-store";
 import { TabBar, type Tab } from "./TabBar";
+import { isPreviewableImageSource } from "@/lib/chat-image-source";
 import { SafeModeBanner } from "./SafeModeBanner";
 import { EduPiForegroundProvider } from "./EduPiForeground";
 import { FOREGROUND_SETTINGS_CHANGED, readForegroundSettings, restoreForegroundSettings, writeForegroundSettings } from "@/lib/edupi-foreground-settings";
@@ -202,7 +205,12 @@ export function AppShell() {
   const [projectTrustError, setProjectTrustError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
-  const [inlineImageSrc, setInlineImageSrc] = useState<string | null>(null);
+  const [chatPreview, setChatPreview] = useState<
+    | { kind: "image"; src: string }
+    | { kind: "mermaid" | "html"; code: string }
+    | null
+  >(null);
+  useEffect(() => { setChatPreview(null); }, [selectedSession?.id, newSessionCwd]);
   const [mobileSidebarReady, setMobileSidebarReady] = useState(false);
   // The desktop window has no native title bar. macOS keeps its traffic lights
   // and only needs the top bar inset for them; other platforms get the buttons
@@ -1149,7 +1157,7 @@ export function AppShell() {
     fileName: string,
     options?: { sourceSessionId?: string | null; modeHint?: "diff" },
   ) => {
-    setInlineImageSrc(null);
+    setChatPreview(null);
     const sourceSessionId = options?.sourceSessionId;
     const modeHint = options?.modeHint;
     const tabId = `file:${filePath}`;
@@ -1182,9 +1190,21 @@ export function AppShell() {
   }, [isMobile]);
 
   const handleOpenInlineImage = useCallback((src: string) => {
-    if (!/^data:image\/(?:png|jpeg|webp|gif);base64,|^https?:\/\//i.test(src)) return;
-    setInlineImageSrc(src);
+    if (!isPreviewableImageSource(src)) return;
+    setChatPreview({ kind: "image", src });
     setRightPanelOpen(true);
+    if (isMobile) setSidebarOpen(false);
+  }, [isMobile]);
+
+  const handleOpenChatPreview = useCallback((kind: "mermaid" | "html", code: string) => {
+    setChatPreview({ kind, code });
+    setRightPanelOpen(true);
+    if (isMobile) setSidebarOpen(false);
+  }, [isMobile]);
+
+  const handleCloseRightPanel = useCallback(() => {
+    setRightPanelOpen(false);
+    setChatPreview(null);
   }, []);
 
   const handleOpenLinkedFile = useCallback((filePath: string) => {
@@ -1295,7 +1315,7 @@ export function AppShell() {
         initialDisplayMode: tab.initialDisplayMode,
       })),
       activeFileTabId,
-      rightPanelOpen: rightPanelOpen && !inlineImageSrc,
+      rightPanelOpen: rightPanelOpen && !chatPreview,
     } satisfies PersistedWorkspace);
   }, [
     workspaceHydrated,
@@ -1307,7 +1327,7 @@ export function AppShell() {
     fileTabs,
     activeFileTabId,
     rightPanelOpen,
-    inlineImageSrc,
+    chatPreview,
   ]);
 
   useEffect(() => {
@@ -1524,6 +1544,7 @@ export function AppShell() {
       onEduPiComputerAction={handleEduPiComputerAction}
       onOpenFile={handleOpenLinkedFile}
       onOpenImage={handleOpenInlineImage}
+      onOpenPreview={handleOpenChatPreview}
       onProjectFilesImported={handleProjectFilesImported}
       emptyTitle="新建对话"
       emptySubtitle=""
@@ -2186,6 +2207,7 @@ export function AppShell() {
               onEduPiComputerAction={handleEduPiComputerAction}
               onOpenFile={handleOpenLinkedFile}
               onOpenImage={handleOpenInlineImage}
+              onOpenPreview={handleOpenChatPreview}
               onProjectFilesImported={handleProjectFilesImported}
             />
           ) : !edupiEducationModule && initialCwdStatus === "validating" ? (
@@ -2235,7 +2257,7 @@ export function AppShell() {
       <div
         aria-hidden="true"
         className={`right-panel-overlay-backdrop${rightPanelOpen ? " is-open" : ""}`}
-        onClick={() => setRightPanelOpen(false)}
+        onClick={handleCloseRightPanel}
         style={{ display: filePanelAvailable ? undefined : "none" }}
       />
       {filePanelAvailable && rightPanelOpen && (
@@ -2264,7 +2286,7 @@ export function AppShell() {
         {/* Right panel tab bar */}
         <div className="right-panel-tab-strip" style={{ height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)" }}>
           <div style={{ flex: 1, overflow: "hidden" }}>
-            {inlineImageSrc ? <span style={{ display: "block", padding: "8px 12px", fontSize: 13 }}>对话图片</span> : <TabBar
+            {chatPreview ? <div style={{ display: "flex", alignItems: "center", minHeight: 36, gap: 8, padding: "0 12px" }}><span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>{chatPreview.kind === "image" ? "对话图片" : chatPreview.kind === "html" ? "HTML 预览" : "导图预览"}</span>{fileTabs.length > 0 ? <button type="button" className="markdown-code-action" onClick={() => setChatPreview(null)}>返回文件</button> : null}</div> : <TabBar
               tabs={fileTabs}
               activeTabId={activeFileTabId ?? ""}
               onSelectTab={setActiveFileTabId}
@@ -2274,7 +2296,7 @@ export function AppShell() {
           {/* Panel close — only shown while the file panel is open */}
           <button
             className="right-panel-close"
-            onClick={() => setRightPanelOpen(false)}
+            onClick={handleCloseRightPanel}
             title={translate("files.hidePanel")}
             aria-label={translate("files.hidePanel")}
           >
@@ -2286,11 +2308,15 @@ export function AppShell() {
 
         {/* File content */}
         <div style={{ flex: 1, overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
-          {inlineImageSrc ? (
+          {chatPreview?.kind === "image" ? (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", overflow: "auto", padding: 16 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={inlineImageSrc} alt="对话图片" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+              <img src={chatPreview.src} alt="对话图片" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
             </div>
+          ) : chatPreview?.kind === "mermaid" ? (
+            <div className="edupi-panel-chat-preview"><MermaidBlock code={chatPreview.code} defaultPreview /></div>
+          ) : chatPreview?.kind === "html" ? (
+            <div className="edupi-panel-chat-preview"><HtmlPreviewBlock code={chatPreview.code} /></div>
           ) : activeFileTab?.filePath ? (
             <FileViewer
               filePath={activeFileTab.filePath}

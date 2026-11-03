@@ -10,18 +10,29 @@ interface MermaidBlockProps {
   code: string;
   isStreaming?: boolean;
   defaultPreview?: boolean;
+  onOpenInPanel?: () => void;
 }
 
 const ZOOM_STEP = 0.25;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 3;
 
+// ZCode renders Mermaid diagrams serially because Mermaid keeps global theme state.
+// Keep the same boundary when several assistant diagrams settle at once.
+let mermaidRenderQueue = Promise.resolve();
+
+function enqueueMermaidRender<T>(render: () => Promise<T>): Promise<T> {
+  const next = mermaidRenderQueue.then(render, render);
+  mermaidRenderQueue = next.then(() => undefined, () => undefined);
+  return next;
+}
+
 type RenderState =
   | { key: string; status: "loading" }
   | { key: string; status: "error" }
   | { key: string; status: "ready"; svg: string };
 
-export function MermaidBlock({ code, isStreaming, defaultPreview = false }: MermaidBlockProps) {
+export function MermaidBlock({ code, isStreaming, defaultPreview = false, onOpenInPanel }: MermaidBlockProps) {
   const { isDark } = useTheme();
   const { t } = useI18n();
   const [showPreview, setShowPreview] = useState(defaultPreview);
@@ -31,12 +42,16 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false }: Merm
   const previewVisible = showPreview && !isStreaming;
 
   useEffect(() => {
+    if (!isStreaming && defaultPreview) setShowPreview(true);
+  }, [isStreaming, defaultPreview]);
+
+  useEffect(() => {
     if (!previewVisible) return;
 
     let cancelled = false;
     setRenderState({ key: currentKey, status: "loading" });
 
-    const render = async () => {
+    const render = () => enqueueMermaidRender(async () => {
       const { default: mermaid } = await import("mermaid");
       mermaid.initialize({
         startOnLoad: false,
@@ -56,7 +71,7 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false }: Merm
       if (!cancelled) {
         setRenderState({ key: currentKey, status: "ready", svg: result.svg });
       }
-    };
+    });
 
     render().catch(() => {
       if (!cancelled) setRenderState({ key: currentKey, status: "error" });
@@ -78,9 +93,10 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false }: Merm
       {previewVisible ? t("i18n.source") : t("i18n.preview")}
     </button>
   );
+  const panelButton = onOpenInPanel ? <button type="button" className="markdown-code-action" disabled={isStreaming} onClick={onOpenInPanel}>在侧栏打开</button> : null;
 
   if (!previewVisible) {
-    return <CodeBlock code={code} lang="mermaid" headerAction={previewButton} />;
+    return <CodeBlock code={code} lang="mermaid" headerAction={<>{previewButton}{panelButton}</>} />;
   }
 
   const body = renderState?.key === currentKey && renderState.status === "error" ? (
@@ -107,7 +123,7 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false }: Merm
     <div className="markdown-code-block">
       <div className="markdown-code-header">
         <span className="markdown-code-lang">mermaid</span>
-        {previewButton}
+        <div className="markdown-code-actions">{previewButton}{panelButton}</div>
       </div>
       {body}
     </div>

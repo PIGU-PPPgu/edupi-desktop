@@ -1,5 +1,7 @@
 # 自动下载安装
 
+2026-11-03 macOS `.102` 仅为 AI 对话视觉源码候选，尚未触发签名 run、安装或公开；它不能使用 `.101` 的三项 Mac Draft 资产验收。`.101` [Mac run41406531871](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41406531871) 成功但仍为 Draft，`.100` 取消且无资产。当前唯一已安装／公开预发布仍 `.99`，正式 feed／Latest 仍 `.70`，Windows 未构建。本轮源码与未验证登录二维码见[对话验收](../acceptance/2026-11-03-chat-visuals.md)；成功签名后须另记同轮资产和原生验证，不以源码测试替代。
+
 2026-11-02 macOS `.99` 签名安装与预发布：唯一 [run41377353258](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41377353258) attempt1 固定源码 `bf207ee5`／Core `dfcdfaef`，App/DMG Accepted、装订、strict codesign、Gatekeeper、更新包 Minisign/篡改拒绝及三封装同身份均过；三资产集合指纹 `sha256:499931aec061690ded066b4638f778132138ed07afdd8d8d286f2283dbb3af90`。唯一 `/Applications/EduPi.app` 已安装 `.99`，旧 `.97` 保留回退；隔离原生取消／双阶段并行／Core-first 持久回执与冷启、TCC、347 项资料字节保持、3 个 WebView origin 恢复均通过。正常资料根启动后严格全文件门因运行态写入失败：提醒新14事件、7重试时间、3 SQLite 文件及一份 Pi 会话新增531字节的两条自定义记录，其他342项不变，当前与旧字节均封存，未回滚用户资料。Release `431008048` 已公开为 Mac-only `prerelease`，匿名 DMG 范围下载与已验资产一致；正式 Latest/feed `.70` 不变，Windows/Linux及旧版自动升级未验。精确资产、操作、清理与保留界限见[本轮验收](../acceptance/2026-11-02-macos099-release-status.md)。本段取代下面 `.99`“待构建／待安装”和 `.98`失败的当前发布状态。
 
 ## 历史阶段记录

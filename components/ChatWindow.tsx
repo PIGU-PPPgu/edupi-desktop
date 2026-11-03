@@ -5,7 +5,8 @@ import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecuti
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
-import { MessageView } from "./MessageView";
+import { MessageView, toolVisualItems } from "./MessageView";
+import { ChatVisualResult, type ChatVisualItem } from "./ChatVisualResult";
 import { DisclosureChevron } from "./DisclosureChevron";
 import { EduPiConversationFiles } from "./EduPiConversationFiles";
 import { EduPiProactiveHub } from "./EduPiProactiveHub";
@@ -48,6 +49,7 @@ interface Props {
   onContextUsageChange?: (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => void;
   onOpenFile?: (filePath: string) => void;
   onOpenImage?: (src: string) => void;
+  onOpenPreview?: (kind: "mermaid" | "html", code: string) => void;
   emptyTitle?: string;
   emptySubtitle?: string;
   /** Fired after non-image drops are copied into the session cwd (so the explorer can refresh). */
@@ -203,6 +205,15 @@ function getFinalSplit(message: AssistantMessage): FinalSplitEntry {
   return cached;
 }
 
+export function collectTurnVisualItems(messages: readonly AgentMessage[], start: number, end: number, cwd?: string, sessionId?: string): ChatVisualItem[] {
+  const items: ChatVisualItem[] = [];
+  for (let index = start; index < end; index++) {
+    const message = messages[index];
+    if (message.role === "toolResult") items.push(...toolVisualItems(message as ToolResultMessage, cwd, sessionId));
+  }
+  return items;
+}
+
 function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { messageCount: number; toolCallCount: number; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
   const [expanded, setExpanded] = useState(false);
   const parts = [t("chat.processDetails"), `${messageCount} ${t(messageCount === 1 ? "chat.message" : "chat.messages")}`];
@@ -245,7 +256,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
   );
 }
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onOpenImage, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, teacherMode = false, onEduPiProactiveTarget, onOpenEduPiReminders, proactiveOpenRequest = 0, reminderContext, reminderOpenId, onReminderContextApplied, educationContext, educationOpenId, onEducationContextApplied, teacherDraftText, teacherDraftOpenId, onTeacherDraftApplied, reminderTitle, reminderDraftKey, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onOpenImage, onOpenPreview, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, teacherMode = false, onEduPiProactiveTarget, onOpenEduPiReminders, proactiveOpenRequest = 0, reminderContext, reminderOpenId, onReminderContextApplied, educationContext, educationOpenId, onEducationContextApplied, teacherDraftText, teacherDraftOpenId, onTeacherDraftApplied, reminderTitle, reminderDraftKey, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
   const draftKey = session?.id ?? reminderDraftKey ?? (newSessionCwd ? `new:${newSessionCwd}` : null);
   const appliedReminderOpenId = useRef<string | null>(null);
   useEffect(() => {
@@ -703,7 +714,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       }
     }
 
-    const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean } = {}): ReactNode => {
+    const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; showToolVisuals?: boolean } = {}): ReactNode => {
       const msg = options.messageOverride ?? messages[idx];
       const prevAssistantEntryId =
         msg.role === "user" && idx > 0 && messages[idx - 1].role === "assistant"
@@ -734,6 +745,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           cwd={messageCwd}
           onOpenFile={onOpenFile}
           onOpenImage={onOpenImage}
+          onOpenPreview={onOpenPreview}
+          showToolVisuals={options.showToolVisuals}
           entryId={entryIds[idx]}
           onFork={isNew || (idx === 0 && msg.role === "user") ? undefined : stableHandleFork}
           forking={forkingEntryId === entryIds[idx]}
@@ -790,15 +803,20 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       }
 
       const isLiveTail = (sessionBusy || streamActive) && endIdx === messages.length && userIdx === lastAnchorIdx;
+      const turnVisuals = collectTurnVisualItems(messages, userIdx + 1, endIdx, messageCwd, sessionIdForViews ?? sessionIdRef.current ?? undefined);
+      const visualGallery = turnVisuals.length > 0
+        ? <ChatVisualResult key={`turn-visuals-${entryIds[userIdx] ?? userIdx}`} items={turnVisuals} autoOpenQr={isLiveTail} standalone onOpenFile={onOpenFile} onOpenImage={onOpenImage} />
+        : null;
       if (isLiveTail) {
         for (let renderIdx = userIdx; renderIdx < endIdx; renderIdx++) {
-          rendered.push(renderMessage(renderIdx));
+          rendered.push(renderMessage(renderIdx, { showToolVisuals: false }));
         }
+        if (visualGallery) rendered.push(visualGallery);
         idx = endIdx;
         continue;
       }
 
-      rendered.push(renderMessage(userIdx));
+      rendered.push(renderMessage(userIdx, { showToolVisuals: false }));
 
       const processIndices: number[] = [];
       for (let processIdx = userIdx + 1; processIdx < finalAssistantIdx; processIdx++) {
@@ -819,19 +837,21 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             t={t}
             toolCallCount={countToolCalls(messages, visibleProcessIndices) + countToolCallBlocks(finalSplit.processBlocks)}
           >
-            {visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { attachRef: false, keyPrefix: "process" }))}
-            {finalProcessMessage && renderMessage(finalAssistantIdx, { attachRef: false, keyPrefix: "process-final", messageOverride: finalProcessMessage, showTimestamp: false })}
+            {visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { attachRef: false, keyPrefix: "process", showToolVisuals: false }))}
+            {finalProcessMessage && renderMessage(finalAssistantIdx, { attachRef: false, keyPrefix: "process-final", messageOverride: finalProcessMessage, showTimestamp: false, showToolVisuals: false })}
           </ProcessDetailsGroup>,
         );
       }
 
+      if (visualGallery) rendered.push(visualGallery);
+
       if (finalAnswerMessage) {
         const calendarResult = teacherMode ? calendarResultSummary(messages.slice(userIdx + 1, endIdx)) : null;
         if (calendarResult) rendered.push(<div key={`calendar-result-${userIdx}`} role={calendarResult.uncertain ? "alert" : "status"} style={{ marginBottom: 8, fontSize: 12, color: calendarResult.uncertain ? "var(--warning, var(--text-muted))" : "var(--text-muted)" }}>{calendarResult.text}</div>);
-        rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage }));
+        rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage, showToolVisuals: false }));
       }
       for (let renderIdx = finalAssistantIdx + 1; renderIdx < endIdx; renderIdx++) {
-        rendered.push(renderMessage(renderIdx));
+        rendered.push(renderMessage(renderIdx, { showToolVisuals: false }));
       }
       idx = endIdx;
     }
@@ -848,7 +868,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     );
   }, [
     messages, entryIds, streamActive, sessionBusy, isNew, forkingEntryId,
-    modelNames, messageCwd, onOpenFile, onOpenImage, handleEditContent,
+    modelNames, messageCwd, onOpenFile, onOpenImage, onOpenPreview, handleEditContent,
     stableHandleFork, stableHandleNavigate, sessionIdForViews,
     visibleCount, t, lastUserMsgRef, sessionIdRef, teacherMode,
   ]);
@@ -1054,7 +1074,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
             {renderedMessages}
             {streamState.isStreaming && streamState.streamingMessage && (
-              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={onOpenFile} onOpenImage={onOpenImage} />
+              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={onOpenFile} onOpenImage={onOpenImage} onOpenPreview={onOpenPreview} />
             )}
 
             {agentRunning && !streamState.streamingMessage && agentPhase && (

@@ -58,6 +58,13 @@ test("MermaidBlock renders empty graph without error", () => {
   assert.match(html, /mermaid-block-loading/);
 });
 
+test("MermaidBlock keeps a side-panel action beside source and preview", () => {
+  const source = renderMermaid({ code: mermaidSrc, onOpenInPanel() {} });
+  const preview = renderMermaid({ code: mermaidSrc, defaultPreview: true, onOpenInPanel() {} });
+  assert.match(source, /在侧栏打开/);
+  assert.match(preview, /在侧栏打开/);
+});
+
 test("MermaidBlock handles Chinese characters in diagram", () => {
   const chineseMermaid = `sequenceDiagram
     participant PC as PC客户端

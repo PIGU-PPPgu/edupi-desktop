@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import React from "react";
+import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createRoot } from "react-dom/client";
 import ReactMarkdown from "react-markdown";
 import { createJiti } from "jiti";
+import { parseHTML } from "linkedom";
 
 const jiti = createJiti(import.meta.url, {
   jsx: { runtime: "automatic" },
   tsconfigPaths: true,
 });
 const { MarkdownBody } = await jiti.import("./MarkdownBody.tsx");
+const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 const { normalizeDisplayMath, educationDocumentBody, markdownPreviewRemarkPlugins, markdownPreviewRehypePlugins } = await jiti.import("../lib/markdown.ts");
 
 function renderMarkdown(markdown) {
@@ -80,6 +84,26 @@ test("local chat images can open the file panel while remote images remain plain
   assert.match(local, /<img[^>]*role="button"[^>]*tabindex="0"/);
   assert.match(local, /title="在侧栏查看图片"/);
   assert.doesNotMatch(remote, /role="button"|tabindex="0"|title="在侧栏查看图片"/);
+});
+
+test("completed Mermaid from an assistant can open the existing side preview", async () => {
+  const { window } = parseHTML("<html><body><div id='root'></div></body></html>");
+  const previous = { window: globalThis.window, document: globalThis.document, HTMLElement: globalThis.HTMLElement, IS_REACT_ACT_ENVIRONMENT: globalThis.IS_REACT_ACT_ENVIRONMENT };
+  Object.assign(globalThis, { window, document: window.document, HTMLElement: window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true });
+  const root = createRoot(window.document.getElementById("root"));
+  const opened = [];
+  try {
+    await act(async () => {
+      root.render(React.createElement(I18nProvider, null, React.createElement(MarkdownBody, { onOpenPreview: (kind, code) => opened.push({ kind, code }) }, "```mmd\ngraph TD\nA-->B\n```")));
+    });
+    const button = [...window.document.querySelectorAll("button")].find(node => node.textContent === "在侧栏打开");
+    assert.ok(button, "Mermaid action is visible in the assistant code block");
+    await act(async () => button.click());
+    assert.deepEqual(opened, [{ kind: "mermaid", code: "graph TD\nA-->B" }]);
+  } finally {
+    await act(async () => root.unmount());
+    Object.assign(globalThis, previous);
+  }
 });
 
 test("renders LaTeX parenthesis delimiters as inline math", () => {

@@ -120,7 +120,8 @@ async function mount({ existing = false, durable = true, immediate = false, dela
   modules["@/hooks/useDragDrop"] = { useDragDrop: () => ({ isDragOver: false, handleDragEnter: noop, handleDragOver: noop, handleDragLeave: noop, handleDrop: noop }) };
   modules["@/lib/branding"] = { PRODUCT_NAME: "EduPi" };
   for (const name of ["DisclosureChevron", "EduPiConversationFiles", "EduPiProactiveHub", "EduPiRuntimeFlow", "ConversationNavigator"]) modules[`./${name}`] = { [name]: () => null };
-  modules["./MessageView"] = { MessageView: ({ message }) => jsx("div", { "data-message": message.role, children: typeof message.content === "string" ? message.content : "synthetic response" }) };
+  modules["./MessageView"] = { MessageView: ({ message }) => jsx("div", { "data-message": message.role, children: typeof message.content === "string" ? message.content : "synthetic response" }), toolVisualItems: () => [] };
+  modules["./ChatVisualResult"] = { ChatVisualResult: () => null };
   const { ChatWindow } = load("ChatWindow");
   const initial = existing ? session() : null;
   const origin = initial?.id ?? `new:${cwd}`;

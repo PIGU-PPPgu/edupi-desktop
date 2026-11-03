@@ -33,6 +33,68 @@ test("renders assistant image blocks and exposes the sidebar preview action", ()
   assert.match(html, /src="data:image\/png;base64,AAAA"/);
 });
 
+test("tool image results stay visible when their tool call is collapsed", () => {
+  const message = { role: "assistant", provider: "test", model: "test", content: [{ type: "toolCall", toolCallId: "qr-1", toolName: "edupi_show_qr", input: {} }] };
+  const result = { role: "toolResult", toolCallId: "qr-1", content: [{ type: "text", text: "二维码已显示" }, { type: "image", data: "AAAA", mimeType: "image/png" }], details: { visual: { kind: "qr", title: "扫码" } } };
+  const html = renderMessage(message, { toolResults: new Map([["qr-1", result]]) });
+  assert.match(html, /aria-label="打开扫码窗口"/);
+  assert.match(html, /src="data:image\/png;base64,AAAA"/);
+  assert.match(html, /aria-expanded="false"/);
+});
+
+test("a reopened QR result renders its deferred image reference", () => {
+  const message = { role: "assistant", provider: "test", model: "test", content: [{ type: "toolCall", toolCallId: "qr-1", toolName: "edupi_show_qr", input: {} }] };
+  const url = "/api/sessions/session-1/entries/tr1/image?blockIndex=1";
+  const result = { role: "toolResult", toolCallId: "qr-1", content: [{ type: "image", source: { type: "url", url } }], details: { visual: { kind: "qr", title: "扫码" } } };
+  const html = renderMessage(message, { toolResults: new Map([["qr-1", result]]) });
+  assert.match(html, /aria-label="打开扫码窗口"/);
+  assert.match(html, /src="\/api\/sessions\/session-1\/entries\/tr1\/image\?blockIndex=1"/);
+});
+
+test("a login tool can display a local QR without returning its token to the model", () => {
+  const message = { role: "assistant", provider: "test", model: "test", content: [{ type: "toolCall", toolCallId: "login-1", toolName: "zhixue_login", input: {} }] };
+  const result = { role: "toolResult", toolCallId: "login-1", content: [{ type: "text", text: "请扫码" }], details: { visual: { kind: "qr", title: "智学网登录", path: "/tmp/workspace/data/zhixue/zhixue_assets/login-qr-1.png" } } };
+  const html = renderMessage(message, { cwd: "/tmp/workspace", sessionId: "session-1", toolResults: new Map([["login-1", result]]) });
+  assert.match(html, /aria-label="打开扫码窗口"/);
+  assert.match(html, /src="\/api\/files\/tmp\/workspace\/data\/zhixue\/zhixue_assets\/login-qr-1\.png\?type=read&amp;sessionId=session-1&amp;qrRefresh=0"/);
+});
+
+test("a tool can show a local output image without sending its bytes to the model", () => {
+  const message = { role: "assistant", provider: "test", model: "test", content: [{ type: "toolCall", toolCallId: "image-1", toolName: "edupi_show_image", input: {} }] };
+  const result = { role: "toolResult", toolCallId: "image-1", content: [{ type: "text", text: "已显示" }], details: { visual: { kind: "image", title: "示意图", path: "/tmp/workspace/.edupi/output/example.png" } } };
+  const html = renderMessage(message, { cwd: "/tmp/workspace", sessionId: "session-1", toolResults: new Map([["image-1", result]]) });
+  assert.match(html, /aria-label="在侧栏查看示意图"/);
+  assert.match(html, /src="\/api\/files\/tmp\/workspace\/\.edupi\/output\/example\.png\?type=read&amp;sessionId=session-1"/);
+  const outside = { ...result, details: { visual: { kind: "image", title: "其他会话图片", path: "/tmp/other/secret.png" } } };
+  const restricted = renderMessage(message, { cwd: "/tmp/workspace", toolResults: new Map([["image-1", outside]]) });
+  assert.doesNotMatch(restricted, /edupi-chat-visual-result/);
+});
+
+test("visual tool paths preserve literal hash and percent characters in filenames", () => {
+  const message = { role: "assistant", provider: "test", model: "test", content: [{ type: "toolCall", toolCallId: "image-1", toolName: "edupi_show_image", input: {} }] };
+  for (const [filename, encoded] of [["lesson#1.png", "lesson%231.png"], ["lesson%23.png", "lesson%2523.png"]]) {
+    const path = `/tmp/workspace/.edupi/output/${filename}`;
+    const result = { role: "toolResult", toolCallId: "image-1", content: [{ type: "text", text: "已显示" }], details: { visual: { kind: "image", title: "示意图", path } } };
+    const html = renderMessage(message, { cwd: "/tmp/workspace", sessionId: "session-1", toolResults: new Map([["image-1", result]]) });
+    assert.match(html, new RegExp(`src="/api/files/tmp/workspace/\\.edupi/output/${encoded}\\?type=read`));
+  }
+});
+
+test("settled assistant diagrams open as previews instead of raw Mermaid source", () => {
+  const html = renderMessage({ role: "assistant", provider: "test", model: "test", content: [{ type: "text", text: "```mermaid\ngraph TD\nA-->B\n```" }] });
+  assert.match(html, /mermaid-block-loading/);
+  assert.doesNotMatch(html, /<pre[^>]*>graph TD/);
+});
+
+test("assistant HTML waits for sanitization before mounting a visual preview", () => {
+  const content = "```html\n<svg><circle cx=\"40\" cy=\"40\" r=\"30\"/></svg>\n```";
+  const assistant = renderMessage({ role: "assistant", provider: "test", model: "test", content: [{ type: "text", text: content }] });
+  const user = renderMessage({ role: "user", content });
+  assert.match(assistant, /markdown-code-lang[^>]*>html</i);
+  assert.doesNotMatch(assistant, /<iframe/);
+  assert.doesNotMatch(user, /<iframe/);
+});
+
 const COMPLETE_SKILL_EXPANSION = `<skill name="review" location="/skills/review/SKILL.md">
 References are relative to /skills/review.
 

@@ -139,7 +139,7 @@ export async function GET(
     const searchParams = new URL(req.url).searchParams;
     const deferThinking = searchParams.has("deferThinking");
     const deferToolResultImages = searchParams.has("deferMedia");
-    const context = buildSessionContext(entries, leafId, { deferThinking, deferToolResultImages });
+    const context = buildSessionContext(entries, leafId, { deferThinking, deferToolResultImages, sessionId: id });
 
     const header = sm.getHeader();
     let modified = header?.timestamp ?? new Date().toISOString();
