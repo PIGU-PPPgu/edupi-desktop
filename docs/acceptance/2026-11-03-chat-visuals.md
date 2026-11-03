@@ -1,5 +1,11 @@
 # AI 对话视觉输出与扫码
 
+## 2026-11-04 本机旧版安装物清理
+
+用户要求清理本机之前的版本后，先核对唯一 `/Applications/EduPi.app` 仍为 `.104`、其二进制与已验签包的 SHA-256 相同且 strict codesign 通过；应用当时正在运行，未退出或替换。按精确清单核对版本、目录内容、无打开句柄、远端 Release 资产及 6 份资料备份仍在后，只移除 13 个旧版二进制目录：`.95/.102/.103` 的本机 DMG／更新包目录，`.102/.103` 的下载分段和更新包解压副本，以及 `.96/.97/.99/.102/.103` 的旧 App 回退副本（`.103` 有两份）。这些目录逻辑占用 `10,100,520 KiB`，同卷可用空间在本次清理窗口增加 `10,260,120 KiB`；APFS 计量与其他进程并发写入可能不同，不将逻辑占用等同于物理回收。
+
+保留当前 `.104` 安装 App、`.104` 签名 DMG、所有真实资料备份、源码工作树和验收证据。`.99` 本地回退 App 已按请求清除；其公开预发布资产仍在 GitHub，`.95/.96/.102/.103` 的远端 Draft 资产也仍在。清理后复查 checkpoint 中只发现 `.104` DMG，常见应用／下载／废纸篓位置无其他旧版 EduPi 包；真实教师数据根未作为清理目标。私有证据为 `~/edupi-install-checkpoints/v0.3.104/evidence/cleanup-prior-version-binaries-20261104.json`，远端资产清单为同目录的 `prior-release-availability-20261104.json`。本段取代下文“.99 回退包保留”的当前本机保留状态。
+
 ## 2026-11-03 `.104` macOS 安装与预发布
 
 - Desktop [PR463](https://github.com/PIGU-PPPgu/edupi-desktop/pull/463) 修复 SVG 几何属性、[PR464](https://github.com/PIGU-PPPgu/edupi-desktop/pull/464) 配对 Core #436，最终 main `ff814494d5b67fb624197e71b3b51bd365e34544` 固定 Core `008d3e63cc1ab4fa2adfba4817241720408dc6fb`。PR463 三项源码 CI 成功；Core 配对同 head 的手动[源码 CI41643688657](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41643688657) 三项成功。本机完整 3561 通过／48 条条件跳过／0 失败、类型与版本检查、Mac `desktop:prepare`、13,337 文件 Core 闭包、隔离 staged 冷启动均通过。具体 Core 边界见[配对记录](2026-11-03-core436-desktop-pair.md)。
