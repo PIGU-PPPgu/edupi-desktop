@@ -19,6 +19,7 @@ use std::os::unix::fs::OpenOptionsExt as _;
 use nomi_computer::{permissions, set_host_app_label, ComputerTool};
 use nomi_config::config::ComputerConfig;
 use nomi_tools::Tool;
+use nomi_types::tool::ToolResult;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Manager, State};
@@ -420,6 +421,32 @@ fn establishes_snapshot(action: &str) -> bool {
     matches!(action, "observe" | "screenshot" | "list_windows")
 }
 
+fn needs_pixel_observe_fallback(action: &str, result: &ToolResult) -> bool {
+    action == "observe"
+        && result.is_error
+        && result
+            .content
+            .contains("AXFocusedApplication has no value: kAXErrorNoValue")
+        && result.content.contains("trusted=true")
+}
+
+fn pixel_observe_from_screenshot(
+    mut original: ToolResult,
+    mut screenshot: ToolResult,
+) -> (ToolResult, bool) {
+    if screenshot.is_error {
+        original
+            .content
+            .push_str(&format!(" 屏幕截图也失败：{}", screenshot.content));
+        return (original, false);
+    }
+    screenshot.content = format!(
+        "macOS 没有返回焦点应用的无障碍结构；已改用屏幕截图。只能依据截图坐标和本次 snapshot_id 操作，不要使用元素 ref。\n\n{}",
+        screenshot.content
+    );
+    (screenshot, true)
+}
+
 fn mutates_desktop(action: &str) -> bool {
     !matches!(
         action,
@@ -623,14 +650,21 @@ pub async fn computer_use_execute(
     });
     append_audit(&app, &started)?;
 
-    if mutates_desktop(&action) {
+    if mutates_desktop(&action) || establishes_snapshot(&action) {
         state.clear_snapshot();
     }
     let mut forwarded = input.clone();
     if let Some(object) = forwarded.as_object_mut() {
         object.remove("snapshot_id");
     }
-    let result = state.tool.execute(forwarded).await;
+    let mut result = state.tool.execute(forwarded).await;
+    let mut pixel_fallback = false;
+    if !request_expired(expires_at_ms) && needs_pixel_observe_fallback(&action, &result) {
+        (result, pixel_fallback) = pixel_observe_from_screenshot(
+            result,
+            state.tool.execute(json!({ "action": "screenshot" })).await,
+        );
+    }
 
     let snapshot_id = if !result.is_error && establishes_snapshot(&action) {
         let snapshot_id = state.next_id("snapshot");
@@ -647,6 +681,7 @@ pub async fn computer_use_execute(
         "action": action,
         "status": "completed",
         "isError": result.is_error,
+        "pixelFallback": pixel_fallback,
     });
     append_audit(&app, &completed)?;
 
@@ -716,6 +751,50 @@ mod tests {
         let launched = audit_details(&json!({"action": "launch", "target": "/private/file"}));
         assert!(!typed.to_string().contains("private answer"));
         assert!(!launched.to_string().contains("/private/file"));
+    }
+
+    #[test]
+    fn pixel_observe_fallback_only_handles_trusted_focused_app_no_value() {
+        let trusted = ToolResult::error("Accessibility observe failed: element not found: AXFocusedApplication has no value: kAXErrorNoValue (ax_error=-25212, trusted=true, host_pid=123).");
+        assert!(needs_pixel_observe_fallback("observe", &trusted));
+        assert!(!needs_pixel_observe_fallback("click_element", &trusted));
+        assert!(!needs_pixel_observe_fallback(
+            "observe",
+            &ToolResult::error(
+                "AXFocusedApplication has no value: kAXErrorNoValue (trusted=false)"
+            )
+        ));
+        assert!(!needs_pixel_observe_fallback(
+            "observe",
+            &ToolResult::error("Accessibility permission denied (trusted=true)")
+        ));
+        assert!(!needs_pixel_observe_fallback(
+            "observe",
+            &ToolResult::text(trusted.content)
+        ));
+    }
+
+    #[test]
+    fn pixel_observe_fallback_preserves_the_screenshot_or_original_error() {
+        let original = ToolResult::error("AXFocusedApplication has no value");
+        let screenshot = ToolResult::text("Screenshot captured: 1200x800").with_images(vec![
+            nomi_types::tool::ToolImage {
+                media_type: "image/png".into(),
+                data: "cG5n".into(),
+            },
+        ]);
+        let (result, used) = pixel_observe_from_screenshot(original.clone(), screenshot);
+        assert!(used);
+        assert!(!result.is_error);
+        assert!(result.content.contains("只能依据截图坐标"));
+        assert_eq!(result.images.len(), 1);
+
+        let (failed, used) =
+            pixel_observe_from_screenshot(original, ToolResult::error("screen recording denied"));
+        assert!(!used);
+        assert!(failed.is_error);
+        assert!(failed.content.contains("screen recording denied"));
+        assert!(failed.images.is_empty());
     }
 
     #[test]

@@ -68,6 +68,7 @@ export function createEduPiComputerUseTool(options: ToolOptions) {
       "教师明确要求 computer use 时先调用 observe；status 只读权限，不会看到屏幕，不能当作已操作",
       "observe 提示未开启或未授权时才调用 status，并请教师在应用设置中处理；不要循环查询 status",
       "优先 observe + 元素 ref，不要猜像素坐标",
+      "observe 若只返回截图而没有元素 ref，只能按截图坐标操作，并携带本次 snapshot_id",
       "除 status 和 wait 外每次调用都会要求教师确认",
       "每次改变桌面后必须重新 observe，并使用新的 snapshot_id",
       "有受管理的浏览器工具时优先用它；否则可观察和操作已打开的浏览器窗口。不得用 launch 打开网页 URL",
