@@ -25,7 +25,7 @@ function ScanDialog({ item, onClose, onOpenInPanel }: { item: ChatVisualItem; on
   useEffect(() => { setImageFailed(false); }, [item.src]);
 
   return <dialog ref={dialogRef} className="edupi-chat-scan-dialog" aria-modal="true" aria-label={item.title} onCancel={(event) => { event.preventDefault(); onClose(); }}>
-    <div className="edupi-chat-scan-dialog__head"><strong>{item.title}</strong>{onOpenInPanel && !imageFailed ? <button type="button" onClick={() => { onOpenInPanel(); onClose(); }}>在侧栏查看</button> : null}<button ref={closeRef} type="button" onClick={onClose} aria-label="关闭扫码窗口">×</button></div>
+    <div className="edupi-chat-scan-dialog__head"><strong>{item.title}</strong>{onOpenInPanel && !imageFailed ? <button type="button" className="edupi-chat-scan-dialog__panel-action" onClick={() => { onOpenInPanel(); onClose(); }}>在侧栏查看</button> : null}<button ref={closeRef} type="button" className="edupi-chat-scan-dialog__close" onClick={onClose} aria-label="关闭扫码窗口">×</button></div>
     {/* eslint-disable-next-line @next/next/no-img-element */}
     <img src={item.src} alt={item.title} onLoad={() => setImageFailed(false)} onError={() => setImageFailed(true)} style={imageFailed ? { display: "none" } : undefined} />
     {imageFailed ? <p role="status">二维码已失效，请重新发起扫码。</p> : null}

@@ -2027,6 +2027,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     try {
       return await interruptForPrioritySend({
         readState: () => sendAgentCommand<AgentStateResponse>(sid, { type: "get_state" }),
+        canAbort: () => promptSubmissionRunIdRef.current !== runId
+          && (!isTauriDesktop() || Boolean(draftKey))
+          && (!draftKey || !getDraft(draftKey)?.pendingPrompt),
         abort: () => sendAgentCommand<void>(sid, { type: "abort" }),
         settle: async () => {
           await waitForPromptSettlement(sid, runId);
@@ -2044,7 +2047,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       interruptSendInFlightRef.current = false;
     }
-  }, [finishPromptWithoutStream, handleSend, waitForPromptSettlement]);
+  }, [draftKey, finishPromptWithoutStream, handleSend, waitForPromptSettlement]);
 
   const handleFork = useCallback(async (entryId: string) => {
     if (bashRunningRef.current) return;
