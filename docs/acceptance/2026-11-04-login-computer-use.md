@@ -1,5 +1,17 @@
 # 智学网登录与电脑操作
 
+## 2026-11-05 `.107` Mac 安装与受控续验
+
+源码 [PR471](https://github.com/PIGU-PPPgu/edupi-desktop/pull/471) 合 main `80066ecbff5cda4e24328094add884339745228d`，固定 Core `008d3e63cc1ab4fa2adfba4817241720408dc6fb`；[Mac-only 签名 run41812467078](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41812467078) attempt1 的三项资产及指纹仍与下节相同。老师正常退出 `.106` 后，以唯一 `/Applications/EduPi.app` 原位安装验签的 `.107`；安装位版本、strict codesign、装订、Gatekeeper、二进制和 CodeResources 与已验 DMG App 一致，`.106` 原包保留在私有回退目录。安装前备份真实 `.edupi` 178 文件、Pi 会话 164 文件、4 份配置，合计受保护 346 项；**文件安装后 346/346 字节不变**，3 个 WebView 来源亦先行备份。
+
+**原始全程资料门失败，不能追认为通过。**首次测试虽把 `EDUPI_DATA_ROOT`／`EDUPI_PROJECT_ROOT` 指向合成根，却漏传 Tauri 要求的 `EDUPI_ROUTE1_ISOLATED_CANARY=1`，导致 App 使用普通桌面私有状态目录；点隔离班级试用后该目录出现两份指向合成根的 `edupi-proactivity*.json`。其后在原生 Quit 后读取旧 CUA App 绑定，工具重新启动了默认普通 App 及 DingTalk bridge。原 346 项中有 5 个真实根运行态文件变化：`dingtalk_bridge_status.json`、`runtime_events.jsonl`、`runtime_state.json`、`runtime_state.json.bak`、`core-runtime-writer-admission-v1.sqlite`；其他 341 项包括学生档案、Pi 会话和模型配置未变。事件日志仅新增 `runtime_started`、`channel_connected`、`runtime_closed` 三条，writer-admission SQLite 两张表行数与逻辑值相同；这不证明未建立过外部连接。原始和变化后的文件均私有封存，不以旧备份覆盖当前运行态。两份误落普通目录的合成配置在确认根哈希、权限和内容边界后原子移至可恢复的 `~/edupi-install-checkpoints/v0.3.107/evidence/incident-normal-state-20261105/`；普通目录现无这两份配置。安装前没有它们的独立快照，不能证明更早是否存在正常配置。本机 Time Machine 未提供可读取的旧快照。失败回执与私有事故清单保留在同一 checkpoint，原始 `allBytesPreserved=false` 不能改写。
+
+随后以事故后的当前真实资料新建 348 项续验基线，额外把普通目录两份配置的“缺席”纳入检查。两次测试均从唯一已验 `.107` App、同一明确合成根和本机回环模型启动；每次绑定原生 CUA 前实际运行 `node scripts/assert-macos-isolated-edupi.mjs before-cua <隔离根>`，确认 App／Core host 的进程与环境；原生 Quit 后不再读取旧绑定，仅运行同脚本 `stopped` 确认进程为零。首次受控运行和同根冷启动后，续验基线均 **348/348 逐字节不变，`changedFiles=[]`**；3 个 WebView 来源两轮均恢复并核对一致。合成授权已停止、普通目录两份配置仍缺席，测试 App 与假模型均已退出。
+
+受控原生聊天中，第一条合成慢回复被“停止并发送”中断，第二条合成消息与回复各出现一次；同一会话 3 个 Core-first 持久 outbox 均 `captured=true`、`pi_accepted`。本机假登录状态先返回旧回执过期，Agent 仅调用一次 `zhixue_login_status` 和一次 `zhixue_login`；合成二维码实际弹窗、可打开右栏、展开／恢复，文件在假登录进程结束后移除，冷启动重开原会话时显示“二维码已失效”。引用弹窗在右栏打开时仍位于顶层；关于页实际显示 `.107`、最新正式版 `.70`。合成过程没有调用真实智学网、真实模型凭据或外发。私有证据包括 `controlled-before-cua.json`、`controlled-stopped.json`、`controlled-cold-before-cua.json`、`controlled-cold-stopped.json`、两份 `protected-data-continuation-after-*-guarded.json`、两份 WebView 复核与 `controlled-native-acceptance.json`。**真实智学网扫码、登录和学情同步仍未验证。**
+
+此时 Release `433770628` 仍为 Draft，正式 Latest/feed 仍 `.70`，Windows/Linux 未构建；独立只读审查建议在保留上述原始失败及续验边界的条件下仅公开 Mac Apple Silicon 预发布，不走要求全平台证明的 `phase=publish`。本段取代下方 `.107`“安装待验”的阶段状态；公开与匿名下载另记，不能由本段预先宣称完成。
+
 ## 2026-11-04 `.107` Mac 签名 Draft 待安装
 
 Desktop [PR471](https://github.com/PIGU-PPPgu/edupi-desktop/pull/471) 已普通合并为 main `80066ecbff5cda4e24328094add884339745228d`，与本机受测 head `fed261365d5978935a745216e6e60754ef1e6cc4` 同 tree `a66c0d12ef00a68857d03675d1a5a535377f9ac9`；[源码 CI41811049005](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41811049005) 的 audit、rust-audit、linux-source 三项成功。唯一 [Mac-only Draft run41812467078](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41812467078) attempt1 固定上述 main 和 Core `008d3e63`，notary-preflight、release、Mac build 全成功；draft-proof、manifest、notify 因仅构建 Mac 按 workflow 跳过。Release ID `433770628`、tag `v0.3.107`、target 精确 `80066ecb`，保持 Draft。
