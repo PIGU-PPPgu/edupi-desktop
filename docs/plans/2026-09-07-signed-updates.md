@@ -1,5 +1,7 @@
 # 自动下载安装
 
+2026-11-05 `.107` **Mac-only 安装与受控续验已完成，待公开预发布**：源码 PR471／CI41811049005、固定 Core `008d3e63`、同轮签名 Draft run41812467078 与三资产指纹 `sha256:7e102c312fc8842c087a4bbc290bba5a087914c1a44d9b767b2e0830be86d233` 沿用下段精确证明。唯一 App `.107` 原位安装并验签，`.106` 保留回退；安装后原 346 项字节不变。首次隔离操作漏原生标记且旧 CUA 绑定重开普通 App，真实根 5 个运行态文件变化，**原始全程 346 项门失败**，原件与当前变化均封存；误落普通配置的两份合成状态已可逆移出。事故后 348 项新基线经两次 `before-cua`／`stopped` 守卫、实际插队／扫码／右栏与冷启操作后两次 348/348 字节不变，3 个 WebView 来源恢复，合成授权停止；真实智学网登录未验。Release `433770628` 仍 Draft、正式 Latest/feed `.70` 不变，Windows/Linux 未构建；**不可宣称原始门通过或正式自动升级可用**。[完整证据](../acceptance/2026-11-04-login-computer-use.md#2026-11-05-107-mac-安装与受控续验)。本段取代下方“`.107` 安装待验”状态。
+
 2026-11-04 `.107` **Mac-only 签名 Draft 已验、安装待验**：Desktop PR471 合 main `80066ecb`、源码 CI 三项成功；唯一 [run41812467078](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41812467078) attempt1 的三项资产 ID `709242553/709243590/709244436` 完整摘要、固定 updater 公钥验签／篡改拒绝、Apple App/DMG Accepted／装订、strict codesign、Gatekeeper、三封装同身份和 18 项包内源码本机通过，Mac 集合指纹 `sha256:7e102c312fc8842c087a4bbc290bba5a087914c1a44d9b767b2e0830be86d233`。Release `433770628` 保持 Draft；唯一正常 App `.106` 仍运行，`.107` 未安装或公开，正式 Latest/feed `.70` 不变，Windows/Linux 不构建。[完整证据](../acceptance/2026-11-04-login-computer-use.md#2026-11-04-107-mac-签名-draft-待安装)。本段取代下方“`.107` 仅源码候选”状态。
 
 2026-11-04 `.107` **仅源码候选**：修复智学网状态循环、聊天运行中的插队入口、扫码右栏及引用弹窗裁剪，版本元数据已独立升至 `.107`。当前没有 `.107` 的源码 CI、签名 Draft、资产、安装或公开发布证据；唯一安装 App 仍为运行中的 `.106`，正式 Latest/feed 仍 `.70`。Windows/Linux 不构建。[源码证据](../acceptance/2026-11-04-login-computer-use.md#2026-11-04-107-聊天扫码与插队源码候选)。
