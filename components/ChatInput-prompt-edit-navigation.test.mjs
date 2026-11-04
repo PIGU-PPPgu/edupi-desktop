@@ -38,7 +38,7 @@ function editor(store, key = "A") {
     draftKeyRef: { current: key }, editRevisionRef: { current: 0 },
     submittedDraftRef: { current: draft?.pendingPrompt ? { draftKey: key, clientRequestId: draft.pendingPrompt.clientRequestId,
       sessionId: draft.pendingPrompt.sessionId, revision: 0, acknowledged: false } : null },
-    submittingRef: { current: false }, valueRef: { current: state.value }, contextRef: { current: state.context },
+    submittingRef: { current: false }, queueSubmittingRef: { current: false }, valueRef: { current: state.value }, contextRef: { current: state.context },
     attachedImagesRef: { current: state.images }, pendingImageCountRef: { current: 0 },
     offeredContextRef: { current: null }, pendingTeacherTextRef: { current: "" }, pendingQueueMessagesRef: { current: [] },
     queueRecoveryIdRef: { current: null }, queueRecoveryPreviousRef: { current: [] }, queueReadyToAckRef: { current: false },

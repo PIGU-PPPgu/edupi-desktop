@@ -21,7 +21,9 @@
 .edupi-chat-scan-dialog::backdrop { background: rgba(0, 0, 0, .56); }
 .edupi-chat-scan-dialog__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 34px; }
 .edupi-chat-scan-dialog__head strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
-.edupi-chat-scan-dialog__head button { width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); font-size: 22px; cursor: pointer; }
+.edupi-chat-scan-dialog__head button { height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; }
+.edupi-chat-scan-dialog__head .edupi-chat-scan-dialog__panel-action { margin-left: auto; padding: 0 9px; white-space: nowrap; font-size: 12px; }
+.edupi-chat-scan-dialog__head .edupi-chat-scan-dialog__close { flex: 0 0 30px; width: 30px; font-size: 22px; }
 .edupi-chat-scan-dialog__head button:hover, .edupi-chat-scan-dialog__head button:focus-visible { background: var(--bg-hover); color: var(--text); }
 .edupi-chat-scan-dialog > img { display: block; max-width: 100%; max-height: calc(100dvh - 92px); width: auto; height: auto; margin: 8px auto 0; padding: 12px; border-radius: 6px; background: white; object-fit: contain; }
 .edupi-chat-scan-dialog > p { margin: 20px 4px 8px; color: var(--text-muted); font-size: 13px; text-align: center; }

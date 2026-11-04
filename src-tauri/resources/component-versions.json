@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "appVersion": "0.3.106",
+  "appVersion": "0.3.107",
   "components": [
     {
       "id": "pi-agent-desktop",
       "repository": "PIGU-PPPgu/edupi-desktop",
-      "version": "0.3.106"
+      "version": "0.3.107"
     },
     {
       "id": "pi",

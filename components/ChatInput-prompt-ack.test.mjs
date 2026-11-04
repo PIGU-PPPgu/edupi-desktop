@@ -14,7 +14,7 @@ function fixture({ key = "fork-session", submitting = false, revision = 0, value
   const state = { value, context: { title: "合成引用", reference: "synthetic" }, error: "消息尚未确认，草稿已保留" };
   const drafts = new Map([[key, { value, images, pendingPrompt: pending }], [identity.sessionId, { value, images, pendingPrompt: pending }]]);
   const context = {
-    draftKeyRef: { current: key }, submittingRef: { current: submitting }, valueRef: { current: value },
+    draftKeyRef: { current: key }, submittingRef: { current: submitting }, queueSubmittingRef: { current: false }, valueRef: { current: value },
     attachedImagesRef: { current: images }, pendingImageCountRef: { current: pendingImages },
     contextRef: { current: state.context }, textareaRef: { current: { style: { height: "40px" } } },
     editRevisionRef: { current: revision }, submittedDraftRef: { current: { draftKey: key, clientRequestId: boundRequest,

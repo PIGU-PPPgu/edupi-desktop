@@ -325,7 +325,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     isNew,
     sessionIdRef, messagesEndRef, scrollContainerRef,
     lastUserMsgRef, promptAnchorActive,
-    handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
+    handleSend, handleAbort, handleInterruptSend, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue, handleResumeQueueRecovery, handleAbandonPreparedQueueRecovery,
     handleBuiltinSlashCommand, retryLoad,
@@ -887,6 +887,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       teacherMode={teacherMode}
       onSend={handleSend}
       onAbort={handleAbort}
+      onInterruptSend={agentRunning ? handleInterruptSend : undefined}
       onSteer={agentRunning ? handleSteer : undefined}
       onFollowUp={agentRunning ? handleFollowUp : undefined}
       onPromptWithStreamingBehavior={agentRunning ? handlePromptWithStreamingBehavior : undefined}
