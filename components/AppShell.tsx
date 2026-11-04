@@ -205,12 +205,14 @@ export function AppShell() {
   const [projectTrustError, setProjectTrustError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [rightPanelExpanded, setRightPanelExpanded] = useState(false);
+  useEffect(() => { if (!rightPanelOpen) setRightPanelExpanded(false); }, [rightPanelOpen]);
   const [chatPreview, setChatPreview] = useState<
     | { kind: "image"; src: string }
     | { kind: "mermaid" | "html"; code: string }
     | null
   >(null);
-  useEffect(() => { setChatPreview(null); }, [selectedSession?.id, newSessionCwd]);
+  useEffect(() => { setChatPreview(null); setRightPanelExpanded(false); }, [selectedSession?.id, newSessionCwd]);
   const [mobileSidebarReady, setMobileSidebarReady] = useState(false);
   // The desktop window has no native title bar. macOS keeps its traffic lights
   // and only needs the top bar inset for them; other platforms get the buttons
@@ -1204,6 +1206,7 @@ export function AppShell() {
 
   const handleCloseRightPanel = useCallback(() => {
     setRightPanelOpen(false);
+    setRightPanelExpanded(false);
     setChatPreview(null);
   }, []);
 
@@ -2260,7 +2263,7 @@ export function AppShell() {
         onClick={handleCloseRightPanel}
         style={{ display: filePanelAvailable ? undefined : "none" }}
       />
-      {filePanelAvailable && rightPanelOpen && (
+      {filePanelAvailable && rightPanelOpen && !rightPanelExpanded && (
         <div
           {...rightPanelResizer.separatorProps}
           aria-controls="file-panel"
@@ -2274,7 +2277,7 @@ export function AppShell() {
       <div
         ref={rightPanelResizer.panelRef}
         id="file-panel"
-        className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${rightPanelResizer.isResizing ? " right-panel-resizing" : ""}`}
+        className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${rightPanelOpen && rightPanelExpanded ? " right-panel-expanded" : ""}${rightPanelResizer.isResizing ? " right-panel-resizing" : ""}`}
         style={{
           "--right-panel-width": `${rightPanelResizer.width}px`,
           display: filePanelAvailable ? "flex" : "none",
@@ -2293,6 +2296,14 @@ export function AppShell() {
               onCloseTab={handleCloseFileTab}
             />}
           </div>
+          {!isMobile && rightPanelOpen ? <button
+            type="button"
+            className="right-panel-close"
+            onClick={() => setRightPanelExpanded(value => !value)}
+            aria-label={rightPanelExpanded ? "恢复侧栏" : "展开侧栏"}
+            title={rightPanelExpanded ? "恢复侧栏" : "展开侧栏"}
+            aria-pressed={rightPanelExpanded}
+          ><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" /></svg></button> : null}
           {/* Panel close — only shown while the file panel is open */}
           <button
             className="right-panel-close"

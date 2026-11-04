@@ -88,15 +88,15 @@ test("the send action is icon-only with an accessible name", () => {
   assert.doesNotMatch(html, />Send<\/button>/);
 });
 
-test("installed streaming controls stay hidden until Core confirms queueing is allowed", () => {
+test("installed Core-first streaming exposes stop-and-send without unsafe Pi queueing", () => {
   const previous = globalThis.window;
   globalThis.window = { __TAURI_INTERNALS__: {} };
   try {
     const html = renderWithI18n(React.createElement(ChatInput, {
-      onSend() {}, onAbort() {}, onSteer() {}, onFollowUp() {}, isStreaming: true,
+      onSend() {}, onAbort() {}, onInterruptSend: async () => true, onSteer() {}, onFollowUp() {}, isStreaming: true,
     }));
-    assert.doesNotMatch(html, /aria-label="More streaming actions"/);
-    assert.doesNotMatch(html, /role="menuitem"[^>]*>.*(Steer|Follow-up)/);
+    assert.match(html, /aria-label="Stop and send"/);
+    assert.doesNotMatch(html, /aria-label="Queue"/);
   } finally { globalThis.window = previous; }
 });
 
@@ -157,14 +157,14 @@ test("Escape closes composer menus and returns focus to their surviving opener",
   const start = source.indexOf('const handler = (event: globalThis.KeyboardEvent) => {');
   const code = source.slice(start, source.indexOf('document.addEventListener("keydown", handler);', start))
     .replace('event: globalThis.KeyboardEvent', 'event').replaceAll('querySelector<HTMLButtonElement>', 'querySelector');
-  for (const name of ["queue", "attachment", "controls"]) {
+  for (const name of ["attachment", "controls"]) {
     const frames = [], state = [], focused = [];
     const opener = key => ({ current: { querySelector: () => ({ focus: () => focused.push(key) }) } });
     const handler = runInNewContext(`${code}; handler`, {
-      queueMenuOpen: name === "queue", attachmentMenuOpen: name === "attachment", controlsMenuOpen: name === "controls",
-      setQueueMenuOpen: value => state.push(["queue", value]), setAttachmentMenuOpen: value => state.push(["attachment", value]),
+      attachmentMenuOpen: name === "attachment", controlsMenuOpen: name === "controls",
+      setAttachmentMenuOpen: value => state.push(["attachment", value]),
       setControlsMenuOpen: value => state.push(["controls", value]), setToolDropdownOpen() {}, setThinkingDropdownOpen() {},
-      queueMenuRef: opener("queue"), attachmentMenuRef: opener("attachment"), controlsMenuRef: opener("controls"),
+      attachmentMenuRef: opener("attachment"), controlsMenuRef: opener("controls"),
       requestAnimationFrame: callback => frames.push(callback),
     });
     handler({ key: "Escape", preventDefault() {} });
@@ -280,7 +280,7 @@ test("a pending teacher choice disables streaming queue actions", async () => {
   try {
     const html = renderWithI18n(React.createElement(ChatInput, { onSend() {}, onAbort() {}, onFollowUp() {}, isStreaming: true, draftKey }));
     assert.match(html, /新要求：新要求/);
-    assert.match(html, /aria-label="More message actions"/);
+    assert.match(html, /class="chat-composer-stream-actions__queue" disabled="" aria-label="Queue"/);
   } finally {
     clearDraft(draftKey);
   }
@@ -360,24 +360,28 @@ test("renders compact errors above the input as a wrapping alert", () => {
   assert.ok(html.indexOf('role="alert"') < html.indexOf("<textarea"));
 });
 
-test("keeps streaming actions behind an accessible more menu", async () => {
+test("shows queue and priority actions directly while streaming", async () => {
   const source = await (await import("node:fs/promises")).readFile(new URL("./ChatInput.tsx", import.meta.url), "utf8");
-  assert.match(source, /queueMenuOpen/);
-  assert.match(source, /aria-label=\{t\("chat\.moreStreamingActions"\)\}/);
+  assert.match(source, /chat-composer-stream-actions__priority/);
+  assert.match(source, /chat-composer-stream-actions__queue/);
   assert.match(source, /t\("chat\.steer"\)/);
   assert.match(source, /t\("chat\.followUp"\)/);
-  assert.doesNotMatch(source, /\}\s*\{t\("chat\.stop"\)\}/);
+  assert.match(source, /sendInterrupt\(\)/);
 
   const withActions = renderWithI18n(React.createElement(ChatInput, {
     onSend() {}, onAbort() {}, onSteer() {}, onFollowUp() {}, isStreaming: true,
   }));
+  const withInterrupt = renderWithI18n(React.createElement(ChatInput, {
+    onSend() {}, onAbort() {}, onInterruptSend: async () => true, isStreaming: true,
+  }));
   const withoutActions = renderWithI18n(React.createElement(ChatInput, {
     onSend() {}, onAbort() {}, isStreaming: true,
   }));
-  assert.match(withActions, /aria-label="More message actions"/);
+  assert.match(withActions, /aria-label="Queue"/);
+  assert.match(withActions, /aria-label="Steer now"/);
+  assert.match(withInterrupt, /aria-label="Stop and send"/);
   assert.match(withActions, /aria-label="Stop agent"/);
-  assert.doesNotMatch(withoutActions, /aria-label="More message actions"/);
-  assert.match(source, /setQueueMenuOpen\(false\)[\s\S]*setAttachmentMenuOpen\(false\)[\s\S]*\}, \[isStreaming\]\)/);
+  assert.doesNotMatch(withoutActions, /aria-label="Stop and send"/);
 });
 
 test("queued contextual follow-ups show teacher wording instead of the wire wrapper", () => {

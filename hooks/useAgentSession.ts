@@ -24,6 +24,7 @@ import { persistEduPiPromptIntent, reconcileEduPiCapturedPrompt, resolveEduPiPro
 import { acknowledgeLocalQueueRecovery, acknowledgePendingPrompt, completeStagedQueueRecovery, getDraft, markQueueRecoveryUncertain, releasePendingPromptForNewMessage, restoreFailedMessageDraft, setDraft, stagePendingPrompt } from "@/lib/draft-store";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { recallQueueWithBackup } from "@/lib/queue-recovery";
+import { interruptForPrioritySend } from "@/lib/edupi-priority-send";
 import { emptyMessageHistory, messageHistoryReducer, type MessageHistoryAction } from "@/lib/agent-message-history";
 
 export interface SessionData {
@@ -464,6 +465,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const toolsLoadIdRef = useRef(0);
   const sessionGenerationRef = useRef(0);
   const agentRunningRef = useRef(false);
+  const interruptSendInFlightRef = useRef(false);
   const sdkAgentActiveRef = useRef(false);
   const rpcPromptPendingRef = useRef(false);
   const educationToolCallsRef = useRef<Map<string, string>>(new Map());
@@ -2015,6 +2017,35 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, []);
 
+  const handleInterruptSend = useCallback(async (message: string, images?: AttachedImage[]) => {
+    if (interruptSendInFlightRef.current) throw new Error("正在打断当前处理，请稍候");
+    const sid = sessionIdRef.current;
+    if (!sid || !agentRunningRef.current || bashRunningRef.current) return false;
+    const generation = sessionGenerationRef.current;
+    const runId = promptRunIdRef.current;
+    interruptSendInFlightRef.current = true;
+    try {
+      return await interruptForPrioritySend({
+        readState: () => sendAgentCommand<AgentStateResponse>(sid, { type: "get_state" }),
+        abort: () => sendAgentCommand<void>(sid, { type: "abort" }),
+        settle: async () => {
+          await waitForPromptSettlement(sid, runId);
+          if (sessionIdRef.current !== sid || sessionGenerationRef.current !== generation || promptRunIdRef.current !== runId) {
+            throw new Error("会话已切换，消息未发送");
+          }
+          if (agentRunningRef.current || sdkAgentActiveRef.current || rpcPromptPendingRef.current) {
+            await finishPromptWithoutStream(sid, runId);
+          }
+          if (agentRunningRef.current) throw new Error("当前回复尚未收尾，消息未发送");
+        },
+        stillCurrent: () => sessionIdRef.current === sid && sessionGenerationRef.current === generation && promptRunIdRef.current === runId,
+        send: () => handleSend(message, images),
+      });
+    } finally {
+      interruptSendInFlightRef.current = false;
+    }
+  }, [finishPromptWithoutStream, handleSend, waitForPromptSettlement]);
+
   const handleFork = useCallback(async (entryId: string) => {
     if (bashRunningRef.current) return;
     const sid = sessionIdRef.current;
@@ -2705,7 +2736,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef,
     lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef,
     // Actions
-    handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
+    handleSend, handleAbort, handleInterruptSend, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue, handleResumeQueueRecovery, handleAbandonPreparedQueueRecovery,
     handleBuiltinSlashCommand, retryLoad,

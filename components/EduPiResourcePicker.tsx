@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
 import { readEduPiWorkspace } from "@/lib/edupi-education-client";
 import { catalogChatResources, CHAT_RESOURCE_KINDS, connectorChatResources, skillChatResources, workspaceChatResources, type ChatResource, type ChatResourceKind } from "@/lib/edupi-chat-resources";
@@ -66,7 +67,8 @@ export function EduPiResourcePicker({ kind, cwd, onKind, onSelect, onClose }: {
 
   const filtered = items.filter(item => `${item.title} ${item.status}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   const projection = paginateForeground(filtered, page);
-  return <div className="edupi-resource-backdrop" onClick={onClose}>
+  if (typeof document === "undefined" || !document.body) return null;
+  return createPortal(<div className="edupi-resource-backdrop" onClick={onClose}>
     <section ref={panelRef} className="edupi-resource-picker" role="dialog" aria-modal="true" aria-labelledby="edupi-resource-title" onClick={event => event.stopPropagation()}>
       <header><h2 id="edupi-resource-title">添加引用</h2><button type="button" aria-label="关闭引用选择" onClick={onClose}>×</button></header>
       <nav aria-label="引用类型">{CHAT_RESOURCE_KINDS.map(item => <button type="button" key={item.id} aria-pressed={kind === item.id} onClick={() => onKind(item.id)}>{item.label}</button>)}</nav>
@@ -77,5 +79,5 @@ export function EduPiResourcePicker({ kind, cwd, onKind, onSelect, onClose }: {
       </div>
       {!busy && projection.pages > 1 ? <nav aria-label="引用分页"><button type="button" disabled={projection.page === 0} onClick={() => setPage(projection.page - 1)}>上一页</button><span>{projection.page + 1} / {projection.pages}</span><button type="button" disabled={projection.page === projection.pages - 1} onClick={() => setPage(projection.page + 1)}>查看更多</button></nav> : null}
     </section>
-  </div>;
+  </div>, document.body);
 }

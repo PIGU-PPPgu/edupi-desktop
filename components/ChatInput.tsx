@@ -47,6 +47,7 @@ interface Props {
   teacherMode?: boolean;
   onSend: (message: string, images?: AttachedImage[]) => boolean | void | Promise<boolean | void>;
   onAbort: () => void;
+  onInterruptSend?: (message: string, images?: AttachedImage[]) => Promise<boolean | void>;
   onSteer?: (message: string, images?: AttachedImage[]) => void | Promise<void>;
   onFollowUp?: (message: string, images?: AttachedImage[]) => void | Promise<void>;
   onPromptWithStreamingBehavior?: (message: string, behavior: "steer" | "followUp", images?: AttachedImage[]) => void | Promise<void>;
@@ -398,7 +399,7 @@ export function ModelScopeWarningBanner({ warnings }: { warnings?: string[] }) {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelError, modelScopeWarnings, onModelChange,
+  onSend, onAbort, onInterruptSend, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelError, modelScopeWarnings, onModelChange,
   onCompact, onAbortCompaction, isCompacting, compactError, compactResult, toolPreset, onToolPresetChange, permissionMode = "workspace", onPermissionModeChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo, queuedMessages, inputHistory = [], onRecallQueue, onResumeQueueRecovery, onAbandonPreparedQueueRecovery, queueRecallBusy = false, queueRecoveryRequiresReview = false,
@@ -441,7 +442,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [permissionDropdownOpen, setPermissionDropdownOpen] = useState(false);
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [controlsMenuOpen, setControlsMenuOpen] = useState(false);
-  const [queueMenuOpen, setQueueMenuOpen] = useState(false);
   const [queueSubmitting, setQueueSubmitting] = useState(false);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const [attachedImages, updateAttachedImages] = useState<AttachedImage[]>(() => (
@@ -470,7 +470,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     const timer = setInterval(() => { void check(); }, 5_000);
     return () => { active = false; clearInterval(timer); };
   }, [isStreaming]);
-  useEffect(() => { if (!streamingQueueAllowed) setQueueMenuOpen(false); }, [streamingQueueAllowed]);
   const trimmedValue = value.trimStart();
   const bashMode = attachedImages.length === 0 && trimmedValue.startsWith("!");
   const bashExcluded = bashMode && trimmedValue.startsWith("!!");
@@ -499,7 +498,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const permissionDropdownRef = useRef<HTMLDivElement>(null);
   const thinkingDropdownRef = useRef<HTMLDivElement>(null);
   const controlsMenuRef = useRef<HTMLDivElement>(null);
-  const queueMenuRef = useRef<HTMLDivElement>(null);
   const attachmentMenuRef = useRef<HTMLDivElement>(null);
   const historyMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1079,7 +1077,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, []);
 
   const handleSend = useCallback(async () => {
-    if (submittingRef.current) return;
+    if (submittingRef.current || queueSubmittingRef.current) return;
     const msg = value.trim();
     if (!msg && !attachedImages.length) return;
     if (context && !msg) return;
@@ -1167,7 +1165,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const hasInputText = Boolean(value.trim());
   const canQueueStreamingMessage = streamingQueueAllowed && hasInputText && attachedImages.length === 0 && !pendingTeacherText && !bashMode && !queueSubmitting && !queueRecoveryId && !queueUncertain;
   const hasStreamingQueueActions = streamingQueueAllowed && Boolean(onSteer || onFollowUp);
-  const canSendMessage = Boolean(hasInputText || attachedImages.length) && (!context || hasInputText) && !pendingTeacherText && !queueRecoveryId;
+  const canInterruptStreamingMessage = Boolean(onInterruptSend) && hasInputText && attachedImages.length === 0 && !pendingTeacherText && !bashMode && !queueSubmitting && !queueRecoveryId && !queueUncertain;
+  const steerPriority = streamingQueueAllowed && Boolean(onSteer);
+  const hasStreamingPriorityAction = steerPriority || Boolean(onInterruptSend);
+  const canPriorityStreamingMessage = steerPriority ? canQueueStreamingMessage : canInterruptStreamingMessage;
+  const canSendMessage = Boolean(hasInputText || attachedImages.length) && (!context || hasInputText) && !pendingTeacherText && !queueRecoveryId && !queueSubmitting;
 
   // ── @ file autocomplete ──────────────────────────────────────────────────
   // Recomputed from the text before the caret on every change/caret move.
@@ -1393,6 +1395,35 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     }
   }, [value, context, pendingTeacherText, queueRecoveryId, attachedImages, onPromptWithStreamingBehavior, onSteer, onFollowUp, clearInput, onAudioUnlock, streamingQueueAllowed]);
 
+  const sendInterrupt = useCallback(async () => {
+    if (queueSubmittingRef.current || !onInterruptSend) return;
+    const msg = value.trim();
+    if (!msg || attachedImages.length || pendingTeacherText || queueRecoveryId || queueUncertain || bashMode) return;
+    const originKey = draftKeyRef.current;
+    if (!originKey) { setAttachError("草稿尚未就绪，消息未发送"); return; }
+    const previous = getDraft(originKey) ?? { value: "", images: [] };
+    if (previous.pendingPrompt) { setAttachError("先前消息待核对，当前内容已保留"); return; }
+    const pending = { ...previous, value: valueRef.current, images: [],
+      ...(contextRef.current ? { context: contextRef.current } : {}) };
+    if (!contextRef.current && "context" in pending) delete pending.context;
+    setDraft(originKey, pending);
+    if (!flushDraftNow(originKey)) { setAttachError("草稿未能保存，消息未发送"); return; }
+    const revision = editRevisionRef.current;
+    onAudioUnlock?.();
+    queueSubmittingRef.current = true;
+    setQueueSubmitting(true);
+    try {
+      const accepted = await onInterruptSend(composeComposerMessage(context, msg));
+      if (accepted === false) { setAttachError("消息尚未确认，草稿已保留"); return; }
+      if (draftKeyRef.current === originKey && valueRef.current.trim() === msg && editRevisionRef.current === revision) clearInput(false);
+    } catch (error) {
+      setAttachError(`${error instanceof Error ? error.message : "打断发送失败"}；草稿已保留`);
+    } finally {
+      queueSubmittingRef.current = false;
+      setQueueSubmitting(false);
+    }
+  }, [onInterruptSend, value, attachedImages.length, pendingTeacherText, queueRecoveryId, queueUncertain, bashMode, onAudioUnlock, context, clearInput]);
+
   const applyPendingQueue = useCallback((replace: boolean) => {
     if (!pendingQueueMessages.length || pendingFailedMessages.length || queueRecoveryId) return;
     const restored = prepareQueueRecall(
@@ -1515,9 +1546,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         nativeEvent.isComposing ||
         nativeEvent.keyCode === 229;
 
-      if (e.key === "Escape" && !isComposing && (queueMenuOpen || attachmentMenuOpen)) {
+      if (e.key === "Escape" && !isComposing && attachmentMenuOpen) {
         e.preventDefault();
-        setQueueMenuOpen(false);
         setAttachmentMenuOpen(false);
         return;
       }
@@ -1630,12 +1660,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           // Enter defaults to the non-interrupting follow-up; steering (which
           // aborts the current run) must be an explicit button click.
           sendQueued(onFollowUp ? "followup" : "steer");
+        } else if (isStreaming && onInterruptSend) {
+          sendInterrupt();
         } else {
           handleSend();
         }
       }
     },
-    [isStreaming, hasStreamingQueueActions, onFollowUp, onAbort, slashMenuOpen, slashQuery, displayedSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, getNextSlashIndex, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value, queueMenuOpen, attachmentMenuOpen]
+    [isStreaming, hasStreamingQueueActions, onFollowUp, onInterruptSend, onAbort, slashMenuOpen, slashQuery, displayedSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, sendInterrupt, handleSend, getNextSlashIndex, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value, attachmentMenuOpen]
   );
 
   const handleInput = useCallback(() => {
@@ -1798,9 +1830,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (controlsMenuRef.current && !controlsMenuRef.current.contains(e.target as Node)) {
         setControlsMenuOpen(false);
       }
-      if (queueMenuRef.current && !queueMenuRef.current.contains(e.target as Node)) {
-        setQueueMenuOpen(false);
-      }
       if (attachmentMenuRef.current && !attachmentMenuRef.current.contains(e.target as Node)) {
         setAttachmentMenuOpen(false);
       }
@@ -1815,11 +1844,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (queueMenuOpen) {
-        event.preventDefault();
-        setQueueMenuOpen(false);
-        requestAnimationFrame(() => queueMenuRef.current?.querySelector<HTMLButtonElement>("button")?.focus());
-      }
       if (attachmentMenuOpen) {
         event.preventDefault();
         setAttachmentMenuOpen(false);
@@ -1835,14 +1859,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [attachmentMenuOpen, queueMenuOpen, controlsMenuOpen]);
+  }, [attachmentMenuOpen, controlsMenuOpen]);
 
   useEffect(() => {
     if (!compactControls) setControlsMenuOpen(false);
   }, [compactControls]);
 
   useEffect(() => {
-    setQueueMenuOpen(false);
     setAttachmentMenuOpen(false);
   }, [isStreaming]);
 
@@ -2435,7 +2458,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               gap: 8,
               alignItems: "center",
               background: "var(--bg)",
-              border: `1px solid ${bashMode ? "var(--tool-bg)" : isStreaming && hasStreamingQueueActions
+              border: `1px solid ${bashMode ? "var(--tool-bg)" : isStreaming && (hasStreamingQueueActions || hasStreamingPriorityAction)
                 ? "rgba(234,179,8,0.4)"
                 : "color-mix(in srgb, var(--border) 70%, transparent)"}`,
               borderRadius: 14,
@@ -2471,6 +2494,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             placeholder={
               isStreaming && hasStreamingQueueActions
                 ? "继续补充教学任务，EduPi 会接着处理…"
+                : isStreaming && hasStreamingPriorityAction ? "输入后停止当前回复并发送…"
                 : isStreaming ? "EduPi 正在处理任务…"
                 : context ? "说说你希望 EduPi 做什么…" : "描述教学目标，或继续当前任务…"
             }
@@ -2520,43 +2544,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6" /></svg>
           </button> : null}
 
-          {isStreaming ? (hasStreamingQueueActions ? (
-            <div ref={queueMenuRef} style={{ position: "relative", display: "flex", alignItems: "center", flexShrink: 0, alignSelf: "flex-end" }}>
-              <button
-                type="button"
-                onClick={() => setQueueMenuOpen((open) => !open)}
-                aria-label={t("chat.moreStreamingActions")}
-                aria-expanded={queueMenuOpen}
-                title={t("chat.moreStreamingActions")}
-                style={{
-                  display: "grid", placeItems: "center", width: 34, height: 34, padding: 0,
-                  background: queueMenuOpen ? "var(--bg-hover)" : "transparent",
-                  border: "1px solid color-mix(in srgb, var(--border) 80%, transparent)",
-                  borderRadius: 8, color: "var(--text-muted)", cursor: "pointer",
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" />
-                </svg>
-              </button>
-              {queueMenuOpen ? (
-                <div role="menu" className="native-popover" style={{ position: "absolute", right: 0, bottom: "calc(100% + 7px)", zIndex: 140, minWidth: 180, padding: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 9, boxShadow: "0 -6px 20px rgba(0,0,0,0.14)" }}>
-                  {onSteer ? (
-                    <button type="button" role="menuitem" onClick={() => { setQueueMenuOpen(false); sendQueued("steer"); }} disabled={!canQueueStreamingMessage} title={attachedImages.length ? t("chat.imagesCannotQueue") : t("chat.steerTitle")} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 9px", border: 0, borderRadius: 6, background: "none", color: canQueueStreamingMessage ? "var(--text)" : "var(--text-dim)", cursor: canQueueStreamingMessage ? "pointer" : "not-allowed", textAlign: "left", fontSize: 12 }}>
-                      <svg width="13" height="13" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 1 L9 5 L5 9" /><line x1="1" y1="5" x2="9" y2="5" /></svg>
-                      <span>{t("chat.steer")}</span>
-                    </button>
-                  ) : null}
-                  {onFollowUp ? (
-                    <button type="button" role="menuitem" onClick={() => { setQueueMenuOpen(false); sendQueued("followup"); }} disabled={!canQueueStreamingMessage} title={attachedImages.length ? t("chat.imagesCannotQueue") : t("chat.followUpTitle")} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 9px", border: 0, borderRadius: 6, background: "none", color: canQueueStreamingMessage ? "var(--text)" : "var(--text-dim)", cursor: canQueueStreamingMessage ? "pointer" : "not-allowed", textAlign: "left", fontSize: 12 }}>
-                      <svg width="13" height="13" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="1" x2="5" y2="6" /><polyline points="2.5 3.5 5 1 7.5 3.5" /><line x1="2" y1="9" x2="8" y2="9" /></svg>
-                      <span>{t("chat.followUp")}</span>
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
+          {isStreaming ? (
+            <div className="chat-composer-stream-actions">
+              {hasStreamingQueueActions && onFollowUp ? <button type="button" className="chat-composer-stream-actions__queue"
+                onClick={() => void sendQueued("followup")} disabled={!canQueueStreamingMessage}
+                aria-label={t("chat.followUp")} title={t("chat.followUpTitle")}>{t("chat.followUp")}</button> : null}
+              {hasStreamingPriorityAction ? <button type="button" className="chat-composer-stream-actions__priority"
+                onClick={() => { if (steerPriority) void sendQueued("steer"); else void sendInterrupt(); }}
+                disabled={!canPriorityStreamingMessage}
+                aria-label={steerPriority ? t("chat.steer") : t("chat.stopAndSend")}
+                title={steerPriority ? t("chat.steerTitle") : t("chat.stopAndSendTitle")}
+              >{steerPriority ? t("chat.steer") : t("chat.stopAndSend")}</button> : null}
             </div>
-          ) : null) : (
+          ) : (
             <button
               className="native-primary-button composer-send-button"
               onClick={handleSend}

@@ -9,7 +9,7 @@ export interface ChatVisualItem {
   filePath?: string;
 }
 
-function ScanDialog({ item, onClose }: { item: ChatVisualItem; onClose: () => void }) {
+function ScanDialog({ item, onClose, onOpenInPanel }: { item: ChatVisualItem; onClose: () => void; onOpenInPanel?: () => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [imageFailed, setImageFailed] = useState(false);
@@ -25,7 +25,7 @@ function ScanDialog({ item, onClose }: { item: ChatVisualItem; onClose: () => vo
   useEffect(() => { setImageFailed(false); }, [item.src]);
 
   return <dialog ref={dialogRef} className="edupi-chat-scan-dialog" aria-modal="true" aria-label={item.title} onCancel={(event) => { event.preventDefault(); onClose(); }}>
-    <div className="edupi-chat-scan-dialog__head"><strong>{item.title}</strong><button ref={closeRef} type="button" onClick={onClose} aria-label="关闭扫码窗口">×</button></div>
+    <div className="edupi-chat-scan-dialog__head"><strong>{item.title}</strong>{onOpenInPanel && !imageFailed ? <button type="button" onClick={() => { onOpenInPanel(); onClose(); }}>在侧栏查看</button> : null}<button ref={closeRef} type="button" onClick={onClose} aria-label="关闭扫码窗口">×</button></div>
     {/* eslint-disable-next-line @next/next/no-img-element */}
     <img src={item.src} alt={item.title} onLoad={() => setImageFailed(false)} onError={() => setImageFailed(true)} style={imageFailed ? { display: "none" } : undefined} />
     {imageFailed ? <p role="status">二维码已失效，请重新发起扫码。</p> : null}
@@ -90,6 +90,8 @@ export function ChatVisualResult({ items, autoOpenQr = false, standalone = false
       <span>{failedQr[itemKey] ? "二维码已失效" : item.title}</span>
     </button>;
     })}
-    {scanItem ? <ScanDialog item={{ ...scanItem, src: currentSrc(scanItem) }} onClose={closeScan} /> : null}
+    {scanItem ? <ScanDialog item={{ ...scanItem, src: currentSrc(scanItem) }} onClose={closeScan}
+      onOpenInPanel={scanItem.filePath && onOpenFile ? () => onOpenFile(scanItem.filePath!)
+        : !scanItem.filePath && onOpenImage ? () => onOpenImage(currentSrc(scanItem)) : undefined} /> : null}
   </div>;
 }
