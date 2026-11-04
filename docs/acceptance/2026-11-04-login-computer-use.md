@@ -1,5 +1,11 @@
 # 智学网登录与电脑操作
 
+## 2026-11-05 `.107` Mac 预发布与本机清理
+
+[v0.3.107](https://github.com/PIGU-PPPgu/edupi-desktop/releases/tag/v0.3.107) 已从 Draft 公开为 Mac Apple Silicon `prerelease:true`、非 Latest，Release ID `433770628`、target 精确 `80066ecbff5cda4e24328094add884339745228d`，同轮三项资产 ID／大小／SHA-256 和集合指纹沿用下文签名证明。公开后的匿名 Release API 返回三资产和相同 DMG 摘要；匿名资产 API 返回公开 CDN 的 64 KiB DMG 范围字节，与本机已完整验签 DMG 前缀相同。完整匿名重新下载未做。正式 Latest 仍 `v0.3.70`，`updater-feed` 仍 `7924328ee893c9527adb54e25b0023e9f2a26ff7`；Windows/Linux 未构建，旧客户端不会从正式 feed 自动发现本预发布。
+
+唯一 `/Applications/EduPi.app` 保持已验签 `.107` 并正常退出，原 `.106` App、真实资料安装前备份、合成根和事故前后证据继续保留。原始 346 项**全程**字节门因首次误启动普通 App 而失败，5 个真实运行态文件变化永久留档；受控隔离的两轮 348/348 字节续验、Core-first 插队／合成扫码／右栏与冷启动证明见下节，不能替代原始失败或真实智学网服务验收。仅在确认 GitHub 公开资产、无句柄、DMG 卸载、源码工作树干净后，精确删除本轮 `v0.3.107/segmented-assets`、`updater-extract`、`macos-assets` 及空 `mount`；目标原分配 `2,146,803,712` 字节，同卷可用实增 `2,186,973,184` 字节，未删除安装 App、`.106` 回退、资料备份、合成数据与私有验收记录。私有发布和清理证据为 `~/edupi-install-checkpoints/v0.3.107/evidence/publish-result-107.json`、`cleanup-preflight-107.json`、`cleanup-result-107.json`。本段取代下节“仍为 Draft／待公开”的阶段状态。
+
 ## 2026-11-05 `.107` Mac 安装与受控续验
 
 源码 [PR471](https://github.com/PIGU-PPPgu/edupi-desktop/pull/471) 合 main `80066ecbff5cda4e24328094add884339745228d`，固定 Core `008d3e63cc1ab4fa2adfba4817241720408dc6fb`；[Mac-only 签名 run41812467078](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41812467078) attempt1 的三项资产及指纹仍与下节相同。老师正常退出 `.106` 后，以唯一 `/Applications/EduPi.app` 原位安装验签的 `.107`；安装位版本、strict codesign、装订、Gatekeeper、二进制和 CodeResources 与已验 DMG App 一致，`.106` 原包保留在私有回退目录。安装前备份真实 `.edupi` 178 文件、Pi 会话 164 文件、4 份配置，合计受保护 346 项；**文件安装后 346/346 字节不变**，3 个 WebView 来源亦先行备份。
