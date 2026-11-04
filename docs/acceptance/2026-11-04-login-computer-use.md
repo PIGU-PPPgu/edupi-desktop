@@ -1,5 +1,21 @@
 # 智学网登录与电脑操作
 
+## 2026-11-04 `.107` Mac 签名 Draft 待安装
+
+Desktop [PR471](https://github.com/PIGU-PPPgu/edupi-desktop/pull/471) 已普通合并为 main `80066ecbff5cda4e24328094add884339745228d`，与本机受测 head `fed261365d5978935a745216e6e60754ef1e6cc4` 同 tree `a66c0d12ef00a68857d03675d1a5a535377f9ac9`；[源码 CI41811049005](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41811049005) 的 audit、rust-audit、linux-source 三项成功。唯一 [Mac-only Draft run41812467078](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41812467078) attempt1 固定上述 main 和 Core `008d3e63`，notary-preflight、release、Mac build 全成功；draft-proof、manifest、notify 因仅构建 Mac 按 workflow 跳过。Release ID `433770628`、tag `v0.3.107`、target 精确 `80066ecb`，保持 Draft。
+
+最终资产仅三项且均属同一 run，Mac 集合指纹 `sha256:7e102c312fc8842c087a4bbc290bba5a087914c1a44d9b767b2e0830be86d233`：
+
+| 资产 | ID | 字节 | SHA-256 |
+| --- | ---: | ---: | --- |
+| `EduPi_0.3.107_aarch64.dmg` | `709242553` | `238536739` | `8f2648e8923849a3c68954c918fb023ddfd794e32b952745dbb9d200cf0642b0` |
+| `EduPi_aarch64.app.tar.gz` | `709243590` | `236170178` | `e8ad74dd53b34643cd948ecd67569c20fda20b94e3b4bbf0b0fd765357ff38b9` |
+| `EduPi_aarch64.app.tar.gz.sig` | `709244436` | `404` | `67ba78ff731d2f0b3662d5e0f90ea8308ec6cd59bbd1b476a005a190beee0ee3` |
+
+CI 记录 App 公证 Accepted `ea6b7d6c-d272-4315-a602-ad602e6c7024`、DMG Accepted `65d186a4-a3db-4965-b54e-264b631cf97a`，最终 App／DMG 装订、Gatekeeper、Minisign `verified=true tamper_rejected=true` 和三封装同一签名身份通过；本轮公证后 App 重包，CI 只在同轮替换并验真最终三资产。本机完整下载摘要与远端逐项一致，保留的 updater 公钥 SHA-256 `1e4dfd5ed31ca46ee167654232980397ffbd9f0ba5ddaf03d57201e3af859de6` 验签且篡改拒绝。只读 DMG、其中 App 与解包更新 App 分别通过 strict codesign、票据和 Gatekeeper，二进制／CodeResources 身份一致，18 项固定源码逐字节匹配。私有核验记录位于 `~/edupi-install-checkpoints/v0.3.107/evidence/`；分段传输曾两次超时，最终仅在本机完整摘要通过后计为资产已验。
+
+唯一 `/Applications/EduPi.app` 目前仍为运行中的 `.106`，**未安装或公开 `.107`，未做 `.107` 冷启动、Core-first 原生插队、真实智学网扫码或资料保持验收**；正式 Latest/feed 仍 `.70`，Windows/Linux 未构建。已请老师保存并正常退出 `.106`，待进程停止后才能记录稳定资料指纹、建立回退备份和原位安装。签名 DMG、更新包、测试解包副本与分段片暂保留于上述私有 checkpoint，用于安装验收；验收或回退后按精确路径核对并清理生成副本，不碰真实资料、源码与原包。本段取代下方 `.107`“尚未源码 PR／CI／Mac 签名”的阶段状态。
+
 ## 2026-11-04 `.107` 聊天扫码与插队源码候选
 
 老师最新的真实 `.106` 会话再次出现循环：同一条请求约 64 秒内调用 `zhixue_login_status` 16 次、`zhixue_sync_status` 18 次，却没有调用 `zhixue_login`，所以没有新二维码。前者引用旧 `login_ok.json` 称“最近登录完成”，后者的当前同步状态却为 `needs_login`。本机自定义 `extensions/zhixue_bridge.ts` 在逐字节私有备份后仅修代码：以更晚的 `needs_login` 判定旧回执已失效，死 PID 锁不再阻止新登录，并明确要求发出新码后停止查询等待老师扫码。模拟根测试覆盖旧回执、新回执、死锁和临时二维码可见／进程退出失效；没有调用真实模型、打开真实登录页或写教师资料。私有备份及测试证据位于 `~/edupi-install-checkpoints/zhixue-chat-20261104/`，该自定义扩展仍是本机未跟踪代码，不进入 Desktop 签名包。
