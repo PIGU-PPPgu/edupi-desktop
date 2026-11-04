@@ -1,4 +1,5 @@
 import type { TaskSessionBinding } from "./edupi-task-sessions";
+import { parseTeacherRecurringMaterials, type TeacherRecurringMaterialsInput } from "./edupi-teacher-task-form";
 import { normalizeL4Preparation, type L4Preparation } from "./edupi-l4-preparation.ts";
 
 export type CalendarConfidence = "confirmed" | "teacher_confirmed" | "inferred" | "unknown";
@@ -38,6 +39,7 @@ export type TeacherTask = {
   sourceEventDate: string | null;
   triggerDate: string | null;
   dueDate: string | null;
+  recurrence?: TeacherRecurringMaterialsInput | null;
   deliverables: string[];
   audience: string[];
   requiresTeacherReview: boolean;
@@ -1743,6 +1745,10 @@ function normalizeTimetable(value: unknown): Array<Record<string, unknown>> {
 function normalizeTask(value: unknown): TeacherTask {
   const source = record(value);
   const rawExternalSend = source.external_send === true;
+  const recurrence = record(source.recurrence);
+  const parsedRecurrence = recurrence ? parseTeacherRecurringMaterials({ kind: recurrence.kind,
+    cadence: recurrence.cadence, untilDate: recurrence.until_date, leadDays: recurrence.lead_days,
+    deliverables: recurrence.deliverables }, isoDateStatus(source.due_date).date, false).value : null;
   return {
     id: text(source.id) || text(source.task_id),
     title: text(source.title) || text(source.source_event_name) || "教师内部准备任务",
@@ -1755,6 +1761,7 @@ function normalizeTask(value: unknown): TeacherTask {
     sourceEventDate: isoDateStatus(source.source_event_date).date,
     triggerDate: isoDateStatus(source.trigger_date).date,
     dueDate: isoDateStatus(source.due_date).date,
+    recurrence: parsedRecurrence,
     deliverables: stringArray(source.deliverables),
     audience: stringArray(source.audience),
     // A missing review flag is treated as requiring review at this boundary.

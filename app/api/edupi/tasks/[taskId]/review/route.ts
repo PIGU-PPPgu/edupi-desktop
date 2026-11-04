@@ -35,7 +35,7 @@ function validPatch(value: unknown, decision: TaskReviewDecision): value is Task
 }
 
 function statusFor(code: string): number {
-  if (code === "invalid_envelope") return 400;
+  if (code === "invalid_envelope" || code === "invalid_recurrence") return 400;
   if (code === "task_missing") return 404;
   if (["stale_snapshot", "stale_revision", "task_owned_by_work_review"].includes(code)) return 409;
   return 503;

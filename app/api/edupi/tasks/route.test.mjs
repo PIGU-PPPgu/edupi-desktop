@@ -40,6 +40,22 @@ test("a valid task creation request reaches the Core boundary", async () => {
   assert.equal((await managed.json()).code, "unavailable");
 });
 
+test("recurring internal materials require a valid bounded definition before dispatch", async () => {
+  const recurrence = { kind: "teacher_internal_materials", cadence: "weekly", untilDate: "2026-11-26", leadDays: 2, deliverables: ["周报"] };
+  const base = { clientRequestId, title: "每周整理材料", dueDate: "2026-11-12" };
+  for (const invalid of [
+    { ...base, dueDate: null, recurrence },
+    { ...base, dueDate: "2026-11-12", recurrence: { ...recurrence, untilDate: "2026-11-11" } },
+    { ...base, dueDate: "2026-11-12", recurrence: { ...recurrence, untilDate: "2027-11-14" } },
+    { ...base, dueDate: "2026-11-12", recurrence: { ...recurrence, cadence: "monthly", leadDays: 8 } },
+    { ...base, dueDate: "2026-11-29", recurrence: { ...recurrence, cadence: "monthly" } },
+    { ...base, dueDate: "2026-11-12", recurrence: { ...recurrence, deliverables: [] } },
+    { ...base, dueDate: "2026-11-12", recurrence, preparationSource: { kind: "teaching_before_class", timetableSlotId: "slot-1", lessonDate: "2026-11-12", materialIds: ["material-1"], deliverables: ["教案"] } },
+  ]) assert.equal((await POST(request(invalid))).status, 400);
+  const acceptedShape = await POST(request({ ...base, dueDate: "2026-11-12", recurrence }));
+  assert.equal(acceptedShape.status, 503, "valid input reaches the currently unavailable Core boundary");
+});
+
 test("a post-commit refresh gap returns accepted-pending instead of a false creation failure", async () => {
   const source = await readFile(new URL("./route.ts", import.meta.url), "utf8");
   assert.match(source, /refreshPending: refreshed === null/);

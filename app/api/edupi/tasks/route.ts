@@ -3,13 +3,14 @@ import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-fo
 import { issueTaskBoardCommand, taskBoardContentHash, TaskBoardCommandError, type TeacherCreatedPreparationSource } from "@/lib/edupi-task-board-command";
 import { readEducationContract } from "@/lib/edupi-education-server";
 import { startPreparation } from "@/lib/edupi-preparation-runtime";
+import { parseTeacherRecurringMaterials } from "@/lib/edupi-teacher-task-form";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 32 * 1024;
-const BODY_KEYS = new Set(["clientRequestId", "title", "dueDate", "note", "preparationSource"]);
+const BODY_KEYS = new Set(["clientRequestId", "title", "dueDate", "note", "preparationSource", "recurrence"]);
 const PREPARATION_KEYS = new Set(["kind", "timetableSlotId", "lessonDate", "materialIds", "deliverables"]);
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -51,8 +52,8 @@ function preparationSource(value: unknown): TeacherCreatedPreparationSource | nu
 }
 
 function statusFor(code: string): number {
-  if (code === "invalid_envelope") return 400;
-  if (["stale_snapshot", "stale_revision", "task_conflict", "idempotency_conflict", "invalid_preparation_context", "invalid_transition", "stage_unchanged"].includes(code)) return 409;
+  if (code === "invalid_envelope" || code === "invalid_recurrence") return 400;
+  if (["stale_snapshot", "stale_revision", "task_conflict", "idempotency_conflict", "invalid_preparation_context", "invalid_transition", "stage_unchanged", "template_capacity"].includes(code)) return 409;
   return 503;
 }
 
@@ -67,7 +68,13 @@ export async function POST(request: Request) {
       throw new TaskBoardCommandError("invalid_envelope", "任务字段无效。");
     }
     const taskId = `teacher-task-${body.clientRequestId.toLowerCase()}`;
-    const task = { task_id: taskId, title: body.title.trim(), due_date: dateOnly(body.dueDate), note: note(body.note), preparation_source: preparationSource(body.preparationSource) };
+    const due = dateOnly(body.dueDate);
+    const preparationSourceValue = preparationSource(body.preparationSource);
+    const recurring = parseTeacherRecurringMaterials(body.recurrence, due, preparationSourceValue !== null);
+    if (recurring.error) throw new TaskBoardCommandError("invalid_envelope", recurring.error);
+    const task = { task_id: taskId, title: body.title.trim(), due_date: due, note: note(body.note), preparation_source: preparationSourceValue,
+      ...(recurring.value ? { recurrence: { kind: recurring.value.kind, cadence: recurring.value.cadence,
+        until_date: recurring.value.untilDate, lead_days: recurring.value.leadDays, deliverables: recurring.value.deliverables } } : {}) };
     const sourceId = `desktop-task-create-${taskId.slice("teacher-task-".length)}`;
     const commandResult = await issueTaskBoardCommand({
       command_type: "create_task",

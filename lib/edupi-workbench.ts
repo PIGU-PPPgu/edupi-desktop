@@ -223,6 +223,7 @@ export function groupEducationInsights(insights: EducationInsight[]): Array<{ to
 }
 
 export function taskSourceLabel(task: TeacherTask): string {
+  if (task.recurrence) return "教师周期材料";
   return task.sourceEventName || task.topic || task.student || (task.trigger === "teacher_created" ? "教师创建" : "来源待核对");
 }
 

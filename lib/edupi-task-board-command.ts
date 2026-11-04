@@ -3,15 +3,16 @@ import { validateCoreEnvelopeSchema } from "./edupi-bridge-contract";
 import { activeBridgeIdentity } from "./edupi-bridge-manifest";
 import { callEduPiCore } from "./edupi-core-process-client";
 import { readEduPiEducationSnapshot, type CoreEducationSnapshotPayload, type EduPiBridgeRoots } from "./edupi-core-snapshot";
+import type { TeacherRecurringMaterialsInput } from "./edupi-teacher-task-form";
 
 type RawRecord = Record<string, unknown>;
 export type TaskBoardStage = "todo" | "progress" | "review" | "done";
 export type TaskBoardSource = { source_id: string; source_kind: "teacher_message"; source_hash: string; evidence_ids: string[] };
 export type TeacherCreatedPreparationSource = { kind: "teaching_before_class"; timetable_slot_id: string; lesson_date: string; material_ids: string[]; deliverables: string[] };
 export type TeacherCreatedPreparationInput = { kind: "teaching_before_class"; timetableSlotId: string; lessonDate: string; materialIds: string[]; deliverables: string[] };
-export type CreateTeacherTaskInput = { clientRequestId: string; title: string; dueDate: string | null; note: string | null; preparationSource: TeacherCreatedPreparationInput | null };
+export type CreateTeacherTaskInput = { clientRequestId: string; title: string; dueDate: string | null; note: string | null; preparationSource: TeacherCreatedPreparationInput | null; recurrence?: TeacherRecurringMaterialsInput | null };
 export type CreateTeacherTaskOutcome = { preparationState: "running" | "ready" | "error" | null; preparationError: string | null };
-export type CreateTaskCommand = { command_type: "create_task"; source: TaskBoardSource; task: { task_id: string; title: string; due_date: string | null; note: string | null; preparation_source?: TeacherCreatedPreparationSource | null } };
+export type CreateTaskCommand = { command_type: "create_task"; source: TaskBoardSource; task: { task_id: string; title: string; due_date: string | null; note: string | null; preparation_source?: TeacherCreatedPreparationSource | null; recurrence?: { kind: "teacher_internal_materials"; cadence: "weekly" | "monthly"; until_date: string; lead_days: number; deliverables: string[] } | null } };
 export type MoveTaskStageCommand = { command_type: "move_task_stage"; source: TaskBoardSource; task_id: string; expected_revision: number; to_stage: TaskBoardStage; note: string | null };
 export type TaskBoardCommand = CreateTaskCommand | MoveTaskStageCommand;
 
@@ -150,6 +151,10 @@ export async function issueTaskBoardCommand(command: TaskBoardCommand, dependenc
       ? "任务数据已更新，请刷新后重试。"
       : reasonCode === "invalid_preparation_context"
         ? "上课日期与所选课次不一致，请重新选择。"
+        : reasonCode === "template_capacity"
+          ? "周期任务已达 40 项上限，请先删除不再使用的任务。"
+          : reasonCode === "invalid_recurrence"
+            ? "周期任务定义与 Core 约束不一致，请检查日期和产物。"
         : "Core 未接受这次任务板操作。");
   }
   if (!((command.command_type === "create_task" && status === "accepted") || (command.command_type === "move_task_stage" && status === "modified"))

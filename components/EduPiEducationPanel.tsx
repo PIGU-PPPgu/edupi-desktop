@@ -1135,6 +1135,18 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     commitEducationSnapshot(result.data);
   }, [commitEducationSnapshot]);
 
+  const updateRecurringTask = useCallback(async (task: TeacherTask, patch: { title: string; dueDate: string; deliverables: string[] }) => {
+    if (!task.id || !task.recurrence) throw new Error("周期任务不可用。");
+    const response = await fetch(`/api/edupi/tasks/${encodeURIComponent(task.id)}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision: "modify", expectedRevision: task.revision, patch, note: null }),
+    });
+    const result = await response.json() as { error?: string; data?: EducationContract };
+    if (!response.ok || !result.data) throw new Error(result.error || `修改失败（HTTP ${response.status}）`);
+    commitEducationSnapshot(result.data);
+  }, [commitEducationSnapshot]);
+
   const deleteEntity = useCallback(async (kind: EducationEntityDeleteKind, id: string, label: string): Promise<boolean> => {
     const key = `${kind}:${id}`;
     if (deleteBusy || !education?.capabilities.entityDelete.enabled || !education.capabilities.entityDelete.targetKinds.includes(kind)) return false;
@@ -1363,7 +1375,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
           </div>
           </EduPiChatSidebarFrame>
           {inspectorAvailable ? <EduPiInspector open={inspectorOpen} data={education} task={activeTask} onClose={toggleInspector} onOpenAgent={openAgent} onStage={selectStage} /> : null}
-      {taskDetail ? <EduPiTaskDetailDrawer task={taskDetail} workCase={workCaseForTask(education, taskDetail.id)} files={education.generatedArtifacts} workspace={education.workspace} docked={dockedDetails} unavailable={Boolean(loadError)} artifactsUnavailable={education.workspaceResourcesUnavailable} onClose={closeTaskDetail} onOpenFile={openTaskFile} onOpenTask={selectTask} onReview={detailReviewable ? () => selectTask(taskDetail, "review") : undefined} onOpenAgent={openAgentForTask} onDelete={(task) => { if (task.id) void deleteEntity("task", task.id, task.title).catch(() => {}); }} deleteBusy={deleteBusy === `task:${taskDetail.id}`} agentBusy={taskSessionBusy} agentError={taskSessionError ? "会话暂不可用，请重试" : null} /> : null}
+      {taskDetail ? <EduPiTaskDetailDrawer task={taskDetail} workCase={workCaseForTask(education, taskDetail.id)} files={education.generatedArtifacts} workspace={education.workspace} docked={dockedDetails} unavailable={Boolean(loadError)} artifactsUnavailable={education.workspaceResourcesUnavailable} onClose={closeTaskDetail} onOpenFile={openTaskFile} onOpenTask={selectTask} onReview={detailReviewable ? () => selectTask(taskDetail, "review") : undefined} onOpenAgent={openAgentForTask} onDelete={(task) => { if (task.id) void deleteEntity("task", task.id, task.title).catch(() => {}); }} onRecurringStage={moveBoardTask} onUpdateRecurring={updateRecurringTask} deleteBusy={deleteBusy === `task:${taskDetail.id}`} agentBusy={taskSessionBusy} agentError={taskSessionError ? "会话暂不可用，请重试" : null} /> : null}
       {drawer === "file" ? <FileWorkspaceDrawer kind="file" docked={dockedDetails} onBack={fileReturnTaskKey ? () => closeDrawer(true) : undefined} task={activeView === "tasks" || activeView === "review" ? activeTask : undefined} filePath={previewPath} fileTitle={education?.generatedArtifacts?.find(file => file.artifact_id === previewArtifactId || previewPath?.replaceAll("\\", "/").endsWith(`/${file.relative_path.replaceAll("\\", "/")}`))?.title || previewArtifact?.title || education?.teacherMaterials?.find(file => previewPath?.replaceAll("\\", "/").endsWith(`/${file.relative_path.replaceAll("\\", "/")}`))?.title} filePanel={previewPath ? <EduPiArtifactUsageContext.Provider value={previewUsageTarget ? { target: previewUsageTarget, filePath: previewPath } : null}>{previewArtifactId ? <EduPiPreparationArtifactEditor
         key={previewArtifactId}
         artifactId={previewArtifactId}
