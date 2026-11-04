@@ -608,9 +608,9 @@ export class AgentSessionWrapper {
   requestEduPiComputerAction(action: ComputerUseInput, signal?: AbortSignal): Promise<ComputerUseBridgeResult> {
     return this.requestExtensionUi(
       { method: "edupi_computer_action", action },
-      { ok: false, error: "EduPi 桌面窗口未连接" } as ComputerUseBridgeResult,
+      { ok: false, error: "桌面控制请求已超时或窗口连接已断开" } as ComputerUseBridgeResult,
       (response) => "value" in response ? parseComputerUseBridgeResult(response.value) : { ok: false, error: "桌面控制未返回结果" },
-      45_000,
+      action.action === "observe" || action.action === "screenshot" ? 90_000 : 45_000,
       signal,
     );
   }
