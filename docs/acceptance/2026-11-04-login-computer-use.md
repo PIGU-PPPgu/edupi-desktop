@@ -1,5 +1,13 @@
 # 智学网登录与电脑操作
 
+## 2026-11-04 `.106` macOS 安装与预发布
+
+Desktop [PR469](https://github.com/PIGU-PPPgu/edupi-desktop/pull/469) 已普通合并为 main `d0e44750db1ca344dcde3970ab23c57518fe258a`，与受测 head `31d0e9303c8eda532e91c5b7927f9ce178583cfa` 文件树相同；[源码 CI41770386535](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41770386535) 的 audit、rust-audit、linux-source 三项成功。唯一 [Mac-only 签名 run41771302378](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41771302378) attempt1 成功，固定 Core `008d3e63cc1ab4fa2adfba4817241720408dc6fb`；同轮 DMG／更新包／签名资产 ID `708327092/708299455/708299713` 的本机完整 SHA-256、Minisign／篡改拒绝和集合指纹 `sha256:2b34496400ba832384c97225085ea636a489d542d8729989f939a1237c58d9af` 通过。App/DMG 公证 Accepted ID `0b50edac-3cc1-4015-8e51-650395b8bcec`／`17bd4d31-78a9-4767-98e3-22c7880fda81`，本机只读 DMG 与更新包 App 严格签名、装订、Gatekeeper、二进制身份和 18 项冻结源码一致；`draft-proof` 因只构建 Mac 按 workflow 跳过。
+
+用户正常退出后，唯一 `/Applications/EduPi.app` 从已验签 `.104` 原位安装 `.106`。安装前做真实资料和 Pi 配置备份；安装后、隔离首次运行、同根冷重启及清理后，346 个受保护文件逐字节摘要均与安装前一致，3 个 WebView 来源恢复原值。`.106` 设置页实际显示桌面总开关、辅助功能、屏幕录制均已开启／授权。隔离本机合成模型在可见对话中调用 `observe`，由老师亲自允许后，原生审计 `isError:false`、`pixelFallback:true`；Pi 工具结果有一张 1568×882 PNG（271,179 字节）和新的 `snapshot_id`，图片在聊天与右侧面板可见。同一快照的第一次无点击 `mouse_move` 等待人工确认超过 45 秒而超时，审计无执行；第二次老师及时允许后，原生移动成功并报告截图坐标 `(900,400)` 对应屏幕 `(1470,653)`，没有点击或输入。退出隔离 App 后以同根冷启动，原会话自动恢复，原图片再次在右侧打开；最终隔离 App 已退出，真实资料和界面偏好复核不变。私有操作证据保存在 `~/edupi-install-checkpoints/v0.3.106/evidence/`，截图内容和认证值未写进仓库。
+
+[v0.3.106](https://github.com/PIGU-PPPgu/edupi-desktop/releases/tag/v0.3.106) 已由 Draft 公开为 Mac-only `prerelease:true`、非 Latest；匿名 API 可见 3 资产，公开 DMG 的 64 KiB 范围下载与本机验签包前缀一致。正式 Latest 仍 `v0.3.70`，`updater-feed` 的提交 `7924328e` 与 `latest.json` blob `ea4b91ba` 均未变；Windows/Linux 安装包未构建，旧客户端不会从正式 feed 自动发现 `.106`。`.105` 保持失败 Draft。清理前核对挂载、进程、Git 跟踪和回退身份后，仅移除 16 处旧版 App／下载分段／解压副本与本工作树生成缓存，清单原分配 `10,215,988 KiB`，同卷可用实增 `11,261,272,064` 字节；保留唯一安装 App、`.106` 签名 DMG、`.104` 回退 App／DMG、两次真实资料备份、源码和证据。真实智学网旧登录快照已过期，本轮没有新扫码或真实学情同步；本机自定义登录修复代码不属于 `.106` 签名源码，不能凭本次 Mac 发布声称其他机器的智学网登录已验收。此段取代下方“`.106` 源码候选”状态。
+
 ## 2026-11-04 `.105` 原生观察失败并回退，`.106` 修复候选
 
 用户正常退出 `.104` 后，以唯一 `/Applications/EduPi.app` 原位安装同轮验签的 `.105` Mac 包；安装位的 strict codesign、Apple 装订和 Gatekeeper 通过。安装前备份真实资料及 Pi 配置，记录 346 个受保护文件与 3 个 WebView 来源；安装后 346 项逐字节摘要不变。隔离根 `edupi-route1-canary-computer-105-20261104-489b0f` 与实际 App/Core 双进程环境守卫通过，独立本机合成模型在可见 AI 对话中真实调用 `edupi_computer_use({"action":"observe"})`，原生逐次确认窗实际出现。
