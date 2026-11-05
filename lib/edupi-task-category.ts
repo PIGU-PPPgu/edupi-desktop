@@ -24,9 +24,11 @@ type TaskCategoryInput = {
   materialId?: string | null;
   materialKind?: string | null;
   topic?: string | null;
+  evidence?: Record<string, unknown> | null;
 };
 
 export function taskCategory(task: TaskCategoryInput): TaskCategoryId {
+  if (task.trigger === "capability_package" && task.evidence?.rule === "capability:calendar_administration_evidence_package") return "calendar";
   if (task.trigger === "student_follow_up" || task.student) return "student";
   if (TEACHING_TRIGGERS.has(task.trigger || "")) return "teaching";
   if (CALENDAR_TRIGGERS.has(task.trigger || "")) return "calendar";

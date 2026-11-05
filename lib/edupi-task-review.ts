@@ -308,7 +308,7 @@ function verifyRefreshedTask(payload: CoreEducationSnapshotPayload, beforeTask: 
   return task;
 }
 
-export async function issueTaskReview(input: TaskReviewInput, dependencies: TaskReviewDependencies = {}): Promise<{ receipt: RawRecord; data: CoreEducationSnapshotPayload; task: RawRecord }> {
+export async function issueTaskReview(input: TaskReviewInput, dependencies: TaskReviewDependencies = {}): Promise<{ receipt: RawRecord; data: CoreEducationSnapshotPayload | null; task: RawRecord | null; refreshPending: boolean }> {
   const supportedCommands = dependencies.supportedCommands || activeBridgeIdentity().contract.supported_commands;
   if (!supportedCommands.includes("review_task")) throw new TaskReviewError("unsupported_command", "Core 尚未启用任务审核。");
   const initial = await (dependencies.readSnapshot || productionSnapshot)();
@@ -327,7 +327,12 @@ export async function issueTaskReview(input: TaskReviewInput, dependencies: Task
   }
   const receipt = receiptForCommand(rawResponse, envelope, supportedCommands, beforeTask);
   const refresh = dependencies.refreshSnapshot || (async (roots) => (await readEduPiEducationSnapshot({ roots })).payload);
-  const data = await refresh(initial.roots);
+  let data: CoreEducationSnapshotPayload;
+  try { data = await refresh(initial.roots); }
+  catch { return { receipt, data: null, task: null, refreshPending: true }; }
+  if (data.snapshot_id !== receipt.after_snapshot_id || data.state_hash !== receipt.after_state_hash) {
+    return { receipt, data: null, task: null, refreshPending: true };
+  }
   const task = verifyRefreshedTask(data, beforeTask, envelope, receipt);
-  return { receipt, data, task };
+  return { receipt, data, task, refreshPending: false };
 }

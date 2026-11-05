@@ -67,7 +67,7 @@ import type { MaterialIntakeMetadata } from "@/lib/edupi-material-rows";
 import { normalizeKernelState, readEduPiKernel, type EduPiKernelState } from "@/lib/edupi-kernel-client";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
 import type { CreateTeacherTaskInput, CreateTeacherTaskOutcome } from "@/lib/edupi-task-board-command";
-import { hasEveryTrackedTask, refreshUntilTaskVisible } from "@/lib/edupi-task-refresh";
+import { hasEveryTrackedTask, mergeTaskRefreshRequirement, refreshUntilTaskVisible, type TaskRefreshRequirement } from "@/lib/edupi-task-refresh";
 import { isTerminalPreparationRead, workspaceHasReadyPreparation } from "@/lib/edupi-preparation-status";
 import type { EduPiMaterialLessonProposal, EduPiMaterialScheduleProposal } from "@/lib/edupi-core-process-client";
 
@@ -207,6 +207,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const activationRequestsRef = useRef(createActivationRequestTracker());
   const preparationPollsRef = useRef(new Map<string, AbortController>());
   const taskRefreshesRef = useRef(new Map<string, AbortController>());
+  const taskRefreshRequirementsRef = useRef(new Map<string, TaskRefreshRequirement>());
   const durableTaskIdsRef = useRef(new Set<string>());
   const workspaceLoadSequenceRef = useRef(0);
   const workspaceMinimumApplySequenceRef = useRef(0);
@@ -329,6 +330,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     preparationPollsRef.current.delete(taskId);
     taskRefreshesRef.current.get(taskId)?.abort();
     taskRefreshesRef.current.delete(taskId);
+    taskRefreshRequirementsRef.current.delete(taskId);
     durableTaskIdsRef.current.delete(taskId);
   }, []);
 
@@ -364,13 +366,22 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     void poll();
   }, [loadWorkspace, stopTaskTracking]);
 
-  const refreshCommittedTask = useCallback((taskId: string) => {
-    if (taskRefreshesRef.current.has(taskId)) return;
+  const refreshCommittedTask = useCallback((taskId: string, minBoardRevision?: number, minTaskRevision?: number) => {
+    const previous = taskRefreshRequirementsRef.current.get(taskId) ?? null;
+    const next = mergeTaskRefreshRequirement(previous, minBoardRevision, minTaskRevision);
+    if (previous && previous.boardRevision === next.boardRevision && previous.taskRevision === next.taskRevision
+      && taskRefreshesRef.current.has(taskId)) return;
+    taskRefreshesRef.current.get(taskId)?.abort();
+    taskRefreshRequirementsRef.current.set(taskId, next);
     const controller = new AbortController();
     taskRefreshesRef.current.set(taskId, controller);
-    void refreshUntilTaskVisible({ taskId, signal: controller.signal, read: async (signal) => await loadWorkspace(signal) ?? { tasks: [] } })
+    void refreshUntilTaskVisible({ taskId, minBoardRevision: next.boardRevision, minTaskRevision: next.taskRevision,
+      signal: controller.signal, read: async (signal) => await loadWorkspace(signal) ?? { tasks: [] } })
       .finally(() => {
-        if (taskRefreshesRef.current.get(taskId) === controller) taskRefreshesRef.current.delete(taskId);
+        if (taskRefreshesRef.current.get(taskId) === controller) {
+          taskRefreshesRef.current.delete(taskId);
+          taskRefreshRequirementsRef.current.delete(taskId);
+        }
       });
   }, [loadWorkspace]);
 
@@ -379,6 +390,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     preparationPollsRef.current.clear();
     for (const controller of taskRefreshesRef.current.values()) controller.abort();
     taskRefreshesRef.current.clear();
+    taskRefreshRequirementsRef.current.clear();
   }, []);
 
   const retryLoadWorkspace = useCallback(() => {
@@ -914,11 +926,14 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
           note: payload.note ?? null,
         }),
       });
-      const result = await response.json() as { error?: string; data?: EducationContract };
-      if (!response.ok || !result.data) throw new Error(result.error || `审核失败（HTTP ${response.status}）`);
-      commitEducationSnapshot(result.data);
-      const nextTask = result.data.tasks.find((task) => task.id === activeTask.id);
-      if (nextTask) setSelectedTaskKey(taskKey(nextTask));
+      const result = await response.json() as { error?: string; data?: EducationContract | null; receipt?: { status?: string }; refreshPending?: boolean };
+      if (!response.ok) throw new Error(result.error || `审核失败（HTTP ${response.status}）`);
+      if (result.data) {
+        commitEducationSnapshot(result.data);
+        const nextTask = result.data.tasks.find((task) => task.id === activeTask.id);
+        if (nextTask) setSelectedTaskKey(taskKey(nextTask));
+      } else if (result.refreshPending && result.receipt?.status) refreshCommittedTask(activeTask.id, undefined, activeTask.revision + 1);
+      else throw new Error(result.error || "审核结果回读未确认。");
       setReviewMessage(reviewLabels[action]);
     } catch (error) {
       if (error instanceof TodayWorkReviewError && error.data) commitEducationSnapshot(error.data);
@@ -926,7 +941,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     } finally {
       setReviewBusy(null);
     }
-  }, [activeTask, commitEducationSnapshot, education]);
+  }, [activeTask, commitEducationSnapshot, education, refreshCommittedTask]);
 
   const rememberStaged = useCallback((items: MaterialStagingDescriptor[]) => {
     setStagedMaterials((current) => {
@@ -1130,10 +1145,12 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const moveBoardTask = useCallback(async (task: TeacherTask, stage: TaskBoardLaneId) => {
     if (!task.id) throw new Error("任务缺少可写标识。");
     const response = await fetch(`/api/edupi/tasks/${encodeURIComponent(task.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stage, expectedRevision: task.boardRevision, note: null }) });
-    const result = await response.json() as { error?: string; data?: EducationContract };
-    if (!response.ok || !result.data) throw new Error(result.error || `任务移动失败（HTTP ${response.status}）`);
-    commitEducationSnapshot(result.data);
-  }, [commitEducationSnapshot]);
+    const result = await response.json() as { error?: string; data?: EducationContract | null; receipt?: { status?: string }; refreshPending?: boolean };
+    if (!response.ok) throw new Error(result.error || `任务移动失败（HTTP ${response.status}）`);
+    if (result.data) commitEducationSnapshot(result.data);
+    else if (result.refreshPending && result.receipt?.status === "modified") refreshCommittedTask(task.id, task.boardRevision + 1);
+    else throw new Error(result.error || "任务阶段回读未确认。");
+  }, [commitEducationSnapshot, refreshCommittedTask]);
 
   const updateRecurringTask = useCallback(async (task: TeacherTask, patch: { title: string; dueDate: string; deliverables: string[] }) => {
     if (!task.id || !task.recurrence) throw new Error("周期任务不可用。");
@@ -1142,10 +1159,26 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ decision: "modify", expectedRevision: task.revision, patch, note: null }),
     });
-    const result = await response.json() as { error?: string; data?: EducationContract };
-    if (!response.ok || !result.data) throw new Error(result.error || `修改失败（HTTP ${response.status}）`);
-    commitEducationSnapshot(result.data);
-  }, [commitEducationSnapshot]);
+    const result = await response.json() as { error?: string; data?: EducationContract | null; receipt?: { status?: string }; refreshPending?: boolean };
+    if (!response.ok) throw new Error(result.error || `修改失败（HTTP ${response.status}）`);
+    if (result.data) commitEducationSnapshot(result.data);
+    else if (result.refreshPending && result.receipt?.status === "modified") refreshCommittedTask(task.id, undefined, task.revision + 1);
+    else throw new Error(result.error || "修改结果回读未确认。");
+  }, [commitEducationSnapshot, refreshCommittedTask]);
+
+  const reactivateRecurringTask = useCallback(async (task: TeacherTask) => {
+    if (!task.id || !task.recurrence || (task.status !== "hold" && task.status !== "rejected")) throw new Error("周期任务不可恢复。");
+    const response = await fetch(`/api/edupi/tasks/${encodeURIComponent(task.id)}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision: "accept", expectedRevision: task.revision, note: null }),
+    });
+    const result = await response.json() as { error?: string; data?: EducationContract | null; receipt?: { status?: string }; refreshPending?: boolean };
+    if (!response.ok) throw new Error(result.error || `重新接受失败（HTTP ${response.status}）`);
+    if (result.data) commitEducationSnapshot(result.data);
+    else if (result.refreshPending && result.receipt?.status === "accepted") refreshCommittedTask(task.id, undefined, task.revision + 1);
+    else throw new Error(result.error || "重新接受结果回读未确认。");
+  }, [commitEducationSnapshot, refreshCommittedTask]);
 
   const deleteEntity = useCallback(async (kind: EducationEntityDeleteKind, id: string, label: string): Promise<boolean> => {
     const key = `${kind}:${id}`;
@@ -1375,7 +1408,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
           </div>
           </EduPiChatSidebarFrame>
           {inspectorAvailable ? <EduPiInspector open={inspectorOpen} data={education} task={activeTask} onClose={toggleInspector} onOpenAgent={openAgent} onStage={selectStage} /> : null}
-      {taskDetail ? <EduPiTaskDetailDrawer task={taskDetail} workCase={workCaseForTask(education, taskDetail.id)} files={education.generatedArtifacts} workspace={education.workspace} docked={dockedDetails} unavailable={Boolean(loadError)} artifactsUnavailable={education.workspaceResourcesUnavailable} onClose={closeTaskDetail} onOpenFile={openTaskFile} onOpenTask={selectTask} onReview={detailReviewable ? () => selectTask(taskDetail, "review") : undefined} onOpenAgent={openAgentForTask} onDelete={(task) => { if (task.id) void deleteEntity("task", task.id, task.title).catch(() => {}); }} onRecurringStage={moveBoardTask} onUpdateRecurring={updateRecurringTask} deleteBusy={deleteBusy === `task:${taskDetail.id}`} agentBusy={taskSessionBusy} agentError={taskSessionError ? "会话暂不可用，请重试" : null} /> : null}
+      {taskDetail ? <EduPiTaskDetailDrawer task={taskDetail} workCase={workCaseForTask(education, taskDetail.id)} files={education.generatedArtifacts} workspace={education.workspace} docked={dockedDetails} unavailable={Boolean(loadError)} artifactsUnavailable={education.workspaceResourcesUnavailable} onClose={closeTaskDetail} onOpenFile={openTaskFile} onOpenTask={selectTask} onReview={detailReviewable ? () => selectTask(taskDetail, "review") : undefined} onOpenAgent={openAgentForTask} onDelete={(task) => { if (task.id) void deleteEntity("task", task.id, task.title).catch(() => {}); }} onRecurringStage={moveBoardTask} onUpdateRecurring={updateRecurringTask} onReactivateRecurring={reactivateRecurringTask} deleteBusy={deleteBusy === `task:${taskDetail.id}`} agentBusy={taskSessionBusy} agentError={taskSessionError ? "会话暂不可用，请重试" : null} /> : null}
       {drawer === "file" ? <FileWorkspaceDrawer kind="file" docked={dockedDetails} onBack={fileReturnTaskKey ? () => closeDrawer(true) : undefined} task={activeView === "tasks" || activeView === "review" ? activeTask : undefined} filePath={previewPath} fileTitle={education?.generatedArtifacts?.find(file => file.artifact_id === previewArtifactId || previewPath?.replaceAll("\\", "/").endsWith(`/${file.relative_path.replaceAll("\\", "/")}`))?.title || previewArtifact?.title || education?.teacherMaterials?.find(file => previewPath?.replaceAll("\\", "/").endsWith(`/${file.relative_path.replaceAll("\\", "/")}`))?.title} filePanel={previewPath ? <EduPiArtifactUsageContext.Provider value={previewUsageTarget ? { target: previewUsageTarget, filePath: previewPath } : null}>{previewArtifactId ? <EduPiPreparationArtifactEditor
         key={previewArtifactId}
         artifactId={previewArtifactId}

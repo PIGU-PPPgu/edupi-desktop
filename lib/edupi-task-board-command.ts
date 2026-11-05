@@ -167,15 +167,18 @@ export async function issueTaskBoardCommand(command: TaskBoardCommand, dependenc
   try {
     data = await refresh(initial.roots);
   } catch {
-    if (command.command_type === "create_task") return { receipt, data: null, task: null, replayed, refreshPending: true };
-    throw new TaskBoardCommandError("unavailable", "Core 任务板结果暂不可读。");
+    return { receipt, data: null, task: null, replayed, refreshPending: true };
   }
   const task = taskFromPayload(data as unknown as RawRecord, taskId);
   if (replayed) {
     if (!task) throw new TaskBoardCommandError("invalid_envelope", "Core 重放后的任务不可用。");
     return { receipt, data, task, replayed: true, refreshPending: false };
   }
-  if (data.snapshot_id !== receipt.after_snapshot_id || data.state_hash !== receipt.after_state_hash) throw new TaskBoardCommandError("invalid_envelope", "Core 任务板快照与回执不一致。");
+  if (data.snapshot_id !== receipt.after_snapshot_id || data.state_hash !== receipt.after_state_hash) {
+    // A resident Core tick can advance the projection after a valid mutation
+    // receipt. Keep the receipt, then let the caller reread the current state.
+    return { receipt, data: null, task: null, replayed: false, refreshPending: true };
+  }
   const expectedStage = command.command_type === "create_task" ? "todo" : command.to_stage;
   const expectedRevision = command.command_type === "create_task" ? 0 : command.expected_revision + 1;
   if (!task || task.board_stage !== expectedStage || task.board_revision !== expectedRevision) throw new TaskBoardCommandError("invalid_envelope", "Core 刷新后的任务阶段与回执不一致。");

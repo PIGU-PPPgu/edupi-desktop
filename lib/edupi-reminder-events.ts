@@ -3,7 +3,7 @@ import { completionSnapshot } from "./edupi-completion-monitor";
 import { isReminderForeground, type ForegroundPolicy } from "./edupi-foreground";
 import type { Reminder } from "./edupi-reminder-store";
 
-export type ReminderEvent = { taskId: string; title: string; completion: "ready" | "failed" | "due" | "brief" | null; identity: string; nativeSource?: "teacher_created" | "core_g1" };
+export type ReminderEvent = { taskId: string; title: string; completion: "ready" | "failed" | "due" | "brief" | null; identity: string; nativeSource?: "teacher_created" | "core_g1" | "core_g3" };
 const TEACHER_CREATED_TASK_ID = /^teacher-task-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 export function selectForegroundReminders(items: readonly Reminder[], data: EducationContract, policy: ForegroundPolicy): Reminder[] {
@@ -22,6 +22,18 @@ function currentCoreG1Completion(task: TeacherTask, workCases: EducationWorkCase
       && workCase.artifactIds.every(id => availableArtifacts.has(`${task.id}\u0000${id}`))));
 }
 
+function currentCoreG3AdministrationCompletion(task: TeacherTask, workCases: EducationWorkCase[]): boolean {
+  if (!task.id || !/^capability_task_[a-f0-9]{32}$/u.test(task.id) || task.trigger !== "capability_package"
+    || task.evidence.rule !== "capability:calendar_administration_evidence_package" || task.contentStatus !== "draft_ready"
+    || !task.sourceEventId || task.scope !== "teacher_internal" || !task.requiresTeacherReview || task.externalSend !== false) return false;
+  const matches = workCases.filter(workCase => workCase.taskId === task.id && workCase.kind === "capability_package"
+    && workCase.triggerId === task.sourceEventId && workCase.currentState === "draft_ready" && workCase.externalSend === false
+    && workCase.artifactIds.length === 3 && new Set(workCase.artifactIds).size === 3
+    && workCase.artifacts.length === 3 && workCase.artifacts.every(artifact => workCase.artifactIds.includes(artifact.id)
+      && /^sha256:[a-f0-9]{64}$/u.test(artifact.sha256) && artifact.externalSend === false));
+  return matches.length === 1;
+}
+
 export function reminderEvents(tasks: TeacherTask[], workspace: string, now = new Date(), documents: EducationDocument[] = [],
   workCases?: EducationWorkCase[], generatedArtifacts: EducationContract["generatedArtifacts"] = []): Record<string, ReminderEvent> {
   const activeTasks = tasks.filter(task => !["rejected", "hold", "accepted"].includes(task.status) && task.boardStage !== "done");
@@ -31,9 +43,11 @@ export function reminderEvents(tasks: TeacherTask[], workspace: string, now = ne
   const standalone = new Set(workCases ? activeTasks.filter(task => task.id && TEACHER_CREATED_TASK_ID.test(task.id) && task.trigger === "teacher_created" && task.sourceEventId === null
     && !workCases.some(workCase => workCase.id === task.id || workCase.taskId === task.id)).map(task => task.id) : []);
   const coreG1 = new Set(workCases ? activeTasks.filter(task => currentCoreG1Completion(task, workCases, availableArtifacts)).map(task => task.id) : []);
+  const coreG3 = new Set(workCases ? activeTasks.filter(task => currentCoreG3AdministrationCompletion(task, workCases)).map(task => task.id) : []);
   const result: Record<string, ReminderEvent> = completionSnapshot(activeTasks, workspace);
   for (const event of Object.values(result)) if (standalone.has(event.taskId)) event.nativeSource = "teacher_created";
   for (const event of Object.values(result)) if (coreG1.has(event.taskId) && (event.completion === "ready" || event.completion === "failed")) event.nativeSource = "core_g1";
+  for (const event of Object.values(result)) if (coreG3.has(event.taskId) && event.completion === "ready") event.nativeSource = "core_g3";
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
   for (const task of activeTasks) {
     if (!task.id || !task.dueDate || task.dueDate > today || ["rejected", "hold", "accepted"].includes(task.status) || task.contentStatus === "draft_ready") continue;

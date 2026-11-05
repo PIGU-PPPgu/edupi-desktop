@@ -42,6 +42,13 @@ export function hasCurrentExplicitBoardStage(task: Pick<TeacherTask, "boardStage
 }
 
 export function taskBoardLane(task: TeacherTask, session: TaskSessionBinding | null | undefined, candidate?: Pick<EducationWorkCandidate, "status"> | null): TaskBoardLaneId {
+  // Core projects recurring templates from their durable stage override;
+  // reviewing the definition must not turn an active template into "done".
+  if (task.recurrence) {
+    if (task.status === "rejected") return "done";
+    if (task.status === "hold") return "review";
+    if (task.boardStage) return task.boardStage;
+  }
   // A later explicit move can reopen reviewed work. Initial stages and older
   // moves must not hide a subsequent review or generated draft.
   if (task.boardStage && hasCurrentExplicitBoardStage(task)) return task.boardStage;

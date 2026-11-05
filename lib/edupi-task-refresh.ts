@@ -1,5 +1,15 @@
 import type { EducationContract } from "./edupi-education-contract";
 
+export type TaskRefreshRequirement = { boardRevision: number; taskRevision: number };
+
+export function mergeTaskRefreshRequirement(previous: TaskRefreshRequirement | null, boardRevision = 0, taskRevision = 0): TaskRefreshRequirement {
+  return { boardRevision: Math.max(previous?.boardRevision ?? 0, boardRevision), taskRevision: Math.max(previous?.taskRevision ?? 0, taskRevision) };
+}
+
+export function hasCommittedTaskStage(data: Pick<EducationContract, "tasks"> | null, taskId: string, minBoardRevision: number, stage: string): boolean {
+  return Boolean(data?.tasks.some((task) => task.id === taskId && task.boardRevision >= minBoardRevision && task.boardStage === stage));
+}
+
 export const TASK_REFRESH_DELAYS_MS = [0, 250, 750, 1_500, 3_000] as const;
 
 export function hasEveryTrackedTask(data: Pick<EducationContract, "tasks">, taskIds: ReadonlySet<string>): boolean {
@@ -9,12 +19,16 @@ export function hasEveryTrackedTask(data: Pick<EducationContract, "tasks">, task
 
 export async function refreshUntilTaskVisible({
   taskId,
+  minBoardRevision,
+  minTaskRevision,
   read,
   signal,
   delays = TASK_REFRESH_DELAYS_MS,
   wait = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)),
 }: {
   taskId: string;
+  minBoardRevision?: number;
+  minTaskRevision?: number;
   read: (signal: AbortSignal) => Promise<Pick<EducationContract, "tasks">>;
   signal: AbortSignal;
   delays?: readonly number[];
@@ -29,7 +43,9 @@ export async function refreshUntilTaskVisible({
     if (signal.aborted) return false;
     try {
       const data = await read(signal);
-      if (data.tasks.some((task) => task.id === taskId)) return true;
+      if (data.tasks.some((task) => task.id === taskId
+        && (minBoardRevision === undefined || task.boardRevision >= minBoardRevision)
+        && (minTaskRevision === undefined || task.revision >= minTaskRevision))) return true;
     } catch (error) {
       if (signal.aborted || error instanceof DOMException && error.name === "AbortError") return false;
     }

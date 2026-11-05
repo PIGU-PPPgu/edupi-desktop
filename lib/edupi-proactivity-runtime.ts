@@ -253,10 +253,10 @@ export async function readProactivityOwnerContext(
   rootRef: string,
   grantId: string,
   now = Date.now(),
-): Promise<{ ownerId: string; grantId: string; grantVersion: number; status: EffectiveGrantStatus } | null> {
+): Promise<{ ownerId: string; grantId: string; grantVersion: number; status: EffectiveGrantStatus; endsAt: string } | null> {
   const state = await readOwner(host, rootRef);
   const grant = state.grants.find((item) => item.id === grantId);
-  return state.owner && grant ? { ownerId: state.owner.id, grantId, grantVersion: grant.version,
+  return state.owner && grant ? { ownerId: state.owner.id, grantId, grantVersion: grant.version, endsAt: grant.ends_at,
     status: grant.status === "active" && Date.parse(grant.ends_at) <= now ? "expired" : grant.status } : null;
 }
 

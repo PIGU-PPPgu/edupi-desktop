@@ -1,5 +1,5 @@
 import type { TaskSessionBinding } from "./edupi-task-sessions";
-import { parseTeacherRecurringMaterials, type TeacherRecurringMaterialsInput } from "./edupi-teacher-task-form";
+import { parseTeacherRecurringMaterials, type TeacherRecurringMaterialsInput } from "./edupi-teacher-task-form.ts";
 import { normalizeL4Preparation, type L4Preparation } from "./edupi-l4-preparation.ts";
 
 export type CalendarConfidence = "confirmed" | "teacher_confirmed" | "inferred" | "unknown";

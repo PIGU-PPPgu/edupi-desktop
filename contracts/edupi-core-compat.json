@@ -6,19 +6,19 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "008d3e63cc1ab4fa2adfba4817241720408dc6fb",
+    "core_commit": "5339f04de91aaa7b96a70f9678ce063b9821d48c",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:67230285d1aabc7ab730d49c1de933649d1a6bbeac777ef2754d1636988b62fb",
-    "runtime_component_manifest_hash": "sha256:f7521f45834605dd8bff5a7af344973216fa1134508419a8b83caf11226bac51",
+    "component_manifest_hash": "sha256:f15b55c2619dd3842eba83a3f55567366b2db0150a980ef2821462daa31fdfb0",
+    "runtime_component_manifest_hash": "sha256:ca94a1ec414c49a0d4f13516984bf3a14b1bbe4d81f8de9a2ab269203e8a1d6b",
     "runtime_schema_hash": "sha256:093dc2e1348cb55f747777316a342580af4acb1be9d0a81e71aee3ba51621b41"
   },
   "contract_identities": [
     {
       "contract_id": "edupi-bridge-v1.1",
       "contract_version": "1.1",
-      "schema_hash": "sha256:2749b1208b47bf475bd30d266b5ca1b213aa78c6c8b4dcd53059c524400565c8",
+      "schema_hash": "sha256:a6510b54f557960bd037563971aac32ad66bd819e97c771cce79d54db6eae0f4",
       "fixture_manifest_path": "fixtures/bridge/v1.1/fixture-manifest.json",
-      "fixture_manifest_hash": "sha256:807f27fd5ebb13e9eb40055aba5825d85df4b2bc04dbe92a3a5dc830534ebc91",
+      "fixture_manifest_hash": "sha256:f6080ae728ac8acd783e4f46f79bdc7f3bfd35cc714f7dcce1285e58b5ee636f",
       "supported_commands": [
         "review_observation",
         "review_memory_candidate",
@@ -269,7 +269,15 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/432",
     "https://github.com/PIGU-PPPgu/edupi/pull/434",
     "https://github.com/PIGU-PPPgu/edupi/pull/435",
-    "https://github.com/PIGU-PPPgu/edupi/pull/436"
+    "https://github.com/PIGU-PPPgu/edupi/pull/436",
+    "https://github.com/PIGU-PPPgu/edupi/pull/437",
+    "https://github.com/PIGU-PPPgu/edupi/pull/438",
+    "https://github.com/PIGU-PPPgu/edupi/pull/439",
+    "https://github.com/PIGU-PPPgu/edupi/pull/440",
+    "https://github.com/PIGU-PPPgu/edupi/pull/441",
+    "https://github.com/PIGU-PPPgu/edupi/pull/442",
+    "https://github.com/PIGU-PPPgu/edupi/pull/443",
+    "https://github.com/PIGU-PPPgu/edupi/pull/444"
   ],
-  "change_note": "This source candidate pairs Core main 008d3e63, including PR434 and PR435, with Runtime schema 093dc2e1 and both exact component manifests. Bridge v1.1, twelve supported commands and education_workspace remain unchanged. The new owner_recall_case_sources_read operation selects sources on the Core side but remains owner-only and read-only; answer_verified and question_case_verified stay false, and product compound answers remain held. No signed installer or public update includes this pairing yet."
+  "change_note": "This source candidate pairs Core main 5339f04d, including PR437 through PR444, with the exact Bridge v1.1 schema, five fixtures and both component manifests. Teacher-confirmed weekly and monthly internal material templates run in Core's resident timer without external send. Core also adds a source-driven internal calendar-administration path behind the current owner grant and exact G3 binding; Desktop does not enable it by default. This is not yet a signed installed Desktop pairing or a public update."
 }

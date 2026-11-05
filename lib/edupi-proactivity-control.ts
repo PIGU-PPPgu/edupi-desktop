@@ -53,7 +53,7 @@ export type EduPiProactivityScopeCandidate = {
 };
 
 export class EduPiProactivityControlError extends Error {
-  constructor(public readonly code: "proactivity_scope_unavailable" | "proactivity_scope_conflict" | "proactivity_response_invalid") {
+  constructor(public readonly code: "proactivity_scope_unavailable" | "proactivity_scope_conflict" | "proactivity_source_capacity" | "proactivity_response_invalid") {
     super(code); this.name = "EduPiProactivityControlError";
   }
 }
@@ -151,7 +151,9 @@ export function buildCapabilityScopeCandidates(domain: EduPiCapabilityDomain, wo
     .map((item) => [String(item.entity_id), item]));
   const observations = new Map(spine.observations.slice(0, 500).map(record).filter((item): item is RawRecord => Boolean(item?.status === "active"))
     .map((item) => [String(item.observation_id), item]));
-  const conflicts = new Set((Array.isArray(spine.conflicts) ? spine.conflicts : []).map(record).map((item) => item?.conflict_id));
+  const conflicts = new Map((Array.isArray(spine.conflicts) ? spine.conflicts : []).map(record)
+    .filter((item): item is RawRecord => Boolean(item?.conflict_id))
+    .map((item) => [String(item.conflict_id), item.status]));
   const required = domain === "calendar_administration" ? ["class", "term"]
     : domain === "lesson_reflection" ? ["class", "term", "lesson_occurrence"] : ["class", "term", "student", "parent"];
   type Group = { classId: string; className: string | null; subject: string; factIds: Set<string>; recipients: number; body: number };
@@ -161,7 +163,8 @@ export function buildCapabilityScopeCandidates(domain: EduPiCapabilityDomain, wo
     const fact = record(raw);
     if (!fact || fact.status !== "accepted" || !["evidence", "general", "academic"].includes(String(fact.fact_kind))
       || !CAPABILITY_PREDICATES[domain].includes(String(fact.predicate)) || !Array.isArray(fact.observation_ids) || fact.observation_ids.length === 0
-      || !Array.isArray(fact.source_ids) || !Array.isArray(fact.conflict_ids) || fact.conflict_ids.some((id) => conflicts.has(id))) continue;
+      || !Array.isArray(fact.source_ids) || !Array.isArray(fact.conflict_ids)
+      || fact.conflict_ids.some((id) => conflicts.get(String(id)) !== "resolved")) continue;
     const sources = fact.observation_ids.map((id) => observations.get(String(id)));
     if (sources.some((item) => !item || !Array.isArray(item.entity_ids))) continue;
     const targets = sources.map((item) => required.map((kind) => {
@@ -173,7 +176,13 @@ export function buildCapabilityScopeCandidates(domain: EduPiCapabilityDomain, wo
     const [classId, , studentOrLesson, parentId] = targets[0] as string[];
     if (!ID.test(classId)) continue;
     const recipient = domain === "parent_communication" && fact.predicate === "communication.recipient_confirmed";
-    if (fact.entity_id !== (domain === "parent_communication" ? recipient ? parentId : studentOrLesson : classId)) continue;
+    const calendarEvents = domain === "calendar_administration" ? sources.map(item =>
+      (item!.entity_ids as unknown[]).filter(id => entities.get(String(id))?.entity_kind === "calendar_event")) : [];
+    const calendarEventId = calendarEvents.length > 0 && calendarEvents.every(ids => ids.length === 1 && ids[0] === calendarEvents[0][0])
+      ? calendarEvents[0][0] : null;
+    if (domain === "calendar_administration"
+      ? fact.entity_id !== classId && fact.entity_id !== calendarEventId
+      : fact.entity_id !== (domain === "parent_communication" ? recipient ? parentId : studentOrLesson : classId)) continue;
     const targetKey = JSON.stringify(targets[0]);
     if (recipient) {
       if (fact.fact_kind === "evidence" && record(fact.confidence)?.basis === "explicit"
@@ -198,6 +207,55 @@ export function buildCapabilityScopeCandidates(domain: EduPiCapabilityDomain, wo
   return [...scopes.values()].sort((left, right) => `${left.classId}\0${left.subject}`.localeCompare(`${right.classId}\0${right.subject}`)).slice(0, 50);
 }
 
+/** Bind only current accepted calendar deadline sources to the selected admin grant. */
+export function calendarAdministrativeSourceIds(scope: EduPiProactivityScope, workspace: unknown): string[] {
+  if (scope.subject !== "administration") return [];
+  const spine = record(record(workspace)?.fact_spine);
+  if (spine?.projection_kind !== "education_fact_v1" || spine.external_send !== false
+    || !Array.isArray(spine.entities) || !Array.isArray(spine.observations) || !Array.isArray(spine.accepted_facts)) return [];
+  const active = spine.entities.map(record).filter((item): item is RawRecord => Boolean(item?.status === "active"));
+  const entities = new Map(active.map(item => [String(item.entity_id), item]));
+  const terms = active.filter(item => item.entity_kind === "term");
+  if (terms.length !== 1 || entities.get(scope.classId)?.entity_kind !== "class") return [];
+  const observations = new Map(spine.observations.map(record).filter((item): item is RawRecord => Boolean(item?.status === "active"))
+    .map(item => [String(item.observation_id), item]));
+  const candidates: Array<{ key: string; sourceIds: string[] }> = [];
+  const conflicts = Array.isArray(spine.conflicts) ? spine.conflicts.map(record) : [];
+  const timestamp = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/gu;
+  for (const raw of spine.accepted_facts) {
+    const fact = record(raw);
+    if (!fact || fact.status !== "accepted" || fact.fact_kind !== "evidence" || fact.predicate !== "admin.deadline"
+      || typeof fact.value !== "string" || fact.value.length > 1000
+      || !Array.isArray(fact.source_ids) || !Array.isArray(fact.observation_ids) || fact.observation_ids.length === 0
+      || !Array.isArray(fact.conflict_ids) || fact.conflict_ids.some(id => conflicts.find(item => item?.conflict_id === id)?.status !== "resolved")) continue;
+    const dates = [...fact.value.matchAll(timestamp)].map(match => match[0]);
+    const parsedDate = dates.length === 1 ? new Date(dates[0]) : null;
+    if (!parsedDate || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString() !== dates[0]) continue;
+    const observed = fact.observation_ids.map(id => observations.get(String(id)));
+    if (observed.some(item => !item || item.source_kind !== "calendar" || !Array.isArray(item.entity_ids))) continue;
+    const observedDays = new Set(observed.map(item => typeof item?.observed_at === "string" ? item.observed_at.slice(0, 10) : null));
+    if (observedDays.size !== 1 || observedDays.has(null)) continue;
+    const sourceIds = observed.map(item => text(item?.source_id, 160));
+    const factSources = fact.source_ids as unknown[];
+    if (sourceIds.some(id => !id || !ID.test(id)) || new Set(sourceIds).size !== factSources.length
+      || sourceIds.some(id => !factSources.includes(id))) continue;
+    const eventIds = new Set<string>();
+    if (observed.some(item => {
+      const ids = (kind: string) => (item!.entity_ids as unknown[]).filter(id => entities.get(String(id))?.entity_kind === kind);
+      const classes = ids("class"), matchedTerms = ids("term"), events = ids("calendar_event");
+      if (classes.length !== 1 || classes[0] !== scope.classId || matchedTerms.length !== 1
+        || matchedTerms[0] !== terms[0].entity_id || events.length !== 1) return true;
+      eventIds.add(String(events[0])); return false;
+    }) || eventIds.size !== 1 || (fact.entity_id !== scope.classId && fact.entity_id !== [...eventIds][0])) continue;
+    candidates.push({ key: `${scope.classId}\0${terms[0].entity_id}\0${[...eventIds][0]}`, sourceIds: sourceIds as string[] });
+  }
+  if (candidates.length > 128) throw new EduPiProactivityControlError("proactivity_source_capacity");
+  const counts = new Map<string, number>();
+  for (const candidate of candidates) counts.set(candidate.key, (counts.get(candidate.key) ?? 0) + 1);
+  return [...new Set(candidates.filter(candidate => counts.get(candidate.key) === 1)
+    .flatMap(candidate => candidate.sourceIds))].sort();
+}
+
 export function buildCapabilityGrantBinding(domain: EduPiCapabilityDomain, scope: EduPiProactivityScope,
   workspace: unknown, now = new Date().toISOString()): EduPiProactivityGrantBinding {
   const instant = new Date(now);
@@ -205,9 +263,14 @@ export function buildCapabilityGrantBinding(domain: EduPiCapabilityDomain, scope
     || !Number.isFinite(instant.getTime()) || instant.toISOString() !== now) throw new EduPiProactivityControlError("proactivity_scope_unavailable");
   const token = crypto.createHash("sha256").update(`${domain}\0${scope.classId}\0${scope.subject}`, "utf8").digest("hex").slice(0, 32);
   const endsAt = new Date(instant.getTime() + EDUPI_PROACTIVITY_DURATION_DAYS * 86_400_000).toISOString();
+  const sourceIds = domain === "calendar_administration" ? calendarAdministrativeSourceIds(scope, workspace) : [];
+  if (sourceIds.length > 127) throw new EduPiProactivityControlError("proactivity_source_capacity");
+  const conversationSource = opaqueSource("conversation", proactivityConversationId(domain));
+  // Preserve the manual conversation source inside Core's 128-source limit.
+  const grantedSources = [conversationSource, ...sourceIds];
   return { grantId: `desktop_${domain}_v1_${token}`, endsAt, spec: {
     scope: { class_id: scope.classId, subject: scope.subject }, domains: [domain], actions: ["update"],
-    source_ids: [opaqueSource("conversation", proactivityConversationId(domain))], starts_at: new Date(instant.getTime() - 60_000).toISOString(),
+    source_ids: grantedSources, starts_at: new Date(instant.getTime() - 60_000).toISOString(),
     ends_at: endsAt, budget: { id: `capability_budget_v1_${token}`, max_calls: 4 },
   } };
 }

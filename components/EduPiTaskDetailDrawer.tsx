@@ -29,6 +29,7 @@ type Props = {
   onDelete: (task: TeacherTask) => void;
   onRecurringStage?: (task: TeacherTask, stage: "done" | "progress") => Promise<void>;
   onUpdateRecurring?: (task: TeacherTask, patch: { title: string; dueDate: string; deliverables: string[] }) => Promise<void>;
+  onReactivateRecurring?: (task: TeacherTask) => Promise<void>;
   deleteBusy?: boolean;
   agentBusy?: boolean;
   agentError?: string | null;
@@ -47,7 +48,7 @@ function flowTime(value: string): string {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
-function RecurringTaskControls({ task, onStage, onUpdate }: { task: TeacherTask; onStage: NonNullable<Props["onRecurringStage"]>; onUpdate: NonNullable<Props["onUpdateRecurring"]> }) {
+function RecurringTaskControls({ task, onStage, onUpdate, onReactivate }: { task: TeacherTask; onStage: NonNullable<Props["onRecurringStage"]>; onUpdate: NonNullable<Props["onUpdateRecurring"]>; onReactivate: NonNullable<Props["onReactivateRecurring"]> }) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +57,7 @@ function RecurringTaskControls({ task, onStage, onUpdate }: { task: TeacherTask;
   const [deliverables, setDeliverables] = useState(task.deliverables.join("\n"));
   const items = preparationDeliverables(deliverables);
   const validation = parseTeacherRecurringMaterials(task.recurrence && { ...task.recurrence, deliverables: items.items }, dueDate || null, false);
+  const blocked = task.status === "hold" || task.status === "rejected";
   const paused = task.boardStage === "done";
   const unchanged = title.trim() === task.title && dueDate === task.dueDate
     && JSON.stringify(items.items) === JSON.stringify(task.deliverables);
@@ -63,6 +65,12 @@ function RecurringTaskControls({ task, onStage, onUpdate }: { task: TeacherTask;
     setBusy(true); setError(null);
     try { await onStage(task, paused ? "progress" : "done"); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "操作失败"); }
+    finally { setBusy(false); }
+  }
+  async function reactivate() {
+    setBusy(true); setError(null);
+    try { await onReactivate(task); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "重新接受失败"); }
     finally { setBusy(false); }
   }
   async function save() {
@@ -73,8 +81,8 @@ function RecurringTaskControls({ task, onStage, onUpdate }: { task: TeacherTask;
     finally { setBusy(false); }
   }
   return <section className="edupi-task-detail-section" aria-label="周期材料">
-    <header><h3>周期材料</h3><span>{paused ? "已暂停" : "已启用"}</span></header>
-    {editing ? <div className="edupi-task-board-create__source">
+    <header><h3>周期材料</h3><span>{task.status === "hold" ? "已暂缓" : task.status === "rejected" ? "已拒绝" : paused ? "已暂停" : "已启用"}</span></header>
+    {blocked ? <div className="edupi-task-board-create__actions"><button type="button" className="native-button" disabled={busy} onClick={() => void reactivate()}>重新接受</button></div> : editing ? <div className="edupi-task-board-create__source">
       <label><span>任务</span><input className="native-input" maxLength={240} value={title} onChange={event => setTitle(event.target.value)} disabled={busy} /></label>
       <label><span>下期日期</span><input className="native-input" type="date" value={dueDate} onChange={event => setDueDate(event.target.value)} disabled={busy} /></label>
       <label><span>产物</span><textarea className="native-input" rows={3} value={deliverables} onChange={event => setDeliverables(event.target.value)} disabled={busy} /></label>
@@ -85,7 +93,7 @@ function RecurringTaskControls({ task, onStage, onUpdate }: { task: TeacherTask;
   </section>;
 }
 
-export function EduPiTaskDetailDrawer({ task, workCase, files = [], workspace, onClose, onOpenFile, onOpenTask, onOpenAgent, onDelete, onRecurringStage, onUpdateRecurring, deleteBusy = false, agentBusy = false, agentError = null, docked = false, unavailable = false, artifactsUnavailable = false, onReview }: Props) {
+export function EduPiTaskDetailDrawer({ task, workCase, files = [], workspace, onClose, onOpenFile, onOpenTask, onOpenAgent, onDelete, onRecurringStage, onUpdateRecurring, onReactivateRecurring, deleteBusy = false, agentBusy = false, agentError = null, docked = false, unavailable = false, artifactsUnavailable = false, onReview }: Props) {
   const drawerRef = usePanelDismiss<HTMLElement>(onClose, docked);
   const title = taskDisplayTitle(task);
   const source = taskSourceLabel(task);
@@ -124,7 +132,7 @@ export function EduPiTaskDetailDrawer({ task, workCase, files = [], workspace, o
             </dl>
           </section>
 
-          {task.recurrence && onRecurringStage && onUpdateRecurring && !unavailable ? <RecurringTaskControls key={`${task.id}:${task.revision}:${task.boardRevision}`} task={task} onStage={onRecurringStage} onUpdate={onUpdateRecurring} /> : null}
+          {task.recurrence && onRecurringStage && onUpdateRecurring && onReactivateRecurring && !unavailable ? <RecurringTaskControls key={`${task.id}:${task.revision}:${task.boardRevision}`} task={task} onStage={onRecurringStage} onUpdate={onUpdateRecurring} onReactivate={onReactivateRecurring} /> : null}
 
           <section className="edupi-task-detail-section" aria-labelledby="edupi-task-detail-ready">
             <header><h3 id="edupi-task-detail-ready">产物</h3>{!artifactsUnavailable && !unavailable ? <span>{preparedFiles.length} 份文件</span> : null}</header>

@@ -32,8 +32,17 @@ test("G3 forwards a frozen exact grant snapshot without reading model configurat
   const adminHost = await startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: adminBindings } }, channel);
   assert.deepEqual(daemonModule.received.g3Live.allowedBindings, adminBindings);
   assert.equal(daemonModule.received.g3Live.durableCalendarAdministration, true, "exact selected admin grant enables Durable only in the isolated canary");
+  assert.equal(daemonModule.received.g3Live.sourceAdministrativeGoals, undefined, "existing admin bindings do not silently enable source goals");
   assert.deepEqual(sent, [], "G3 Durable cannot request model configuration");
   await adminHost.close();
+  const sourceHost = await startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: adminBindings, sourceAdministrativeGoals: true } }, channel);
+  assert.equal(daemonModule.received.g3Live.sourceAdministrativeGoals, true);
+  assert.equal(daemonModule.received.g3Live.durableCalendarAdministration, true, "manual admin cases retain Durable while Core routes source drafts to its zero-model path");
+  assert.deepEqual(sent, [], "source-driven administrative drafts do not request a model");
+  await sourceHost.close();
+  for (const unsafe of [[{ ...adminBindings[0], ownerId: undefined }], [{ ...adminBindings[0], scope: { ...adminBindings[0].scope, subject: "数学" } }]]) {
+    await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: unsafe, sourceAdministrativeGoals: true } }, channel), /Invalid runtime bootstrap/);
+  }
   let getterCalled = false;
   const getter = { domain: "lesson_reflection", grantId: "selected-grant", get scope() { getterCalled = true; return bindings[0].scope; } };
   for (const g3Bindings of [[getter], [{ domain: "lesson_reflection" }], [{ ...bindings[0], allowedDomains: ["lesson_reflection"] }], [bindings[0], bindings[0]]]) {
@@ -42,6 +51,7 @@ test("G3 forwards a frozen exact grant snapshot without reading model configurat
   assert.equal(getterCalled, false);
   delete process.env.EDUPI_DESKTOP_ISOLATED_CANARY;
   await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: bindings } }, channel), /Invalid runtime bootstrap/);
+  await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: adminBindings, sourceAdministrativeGoals: true } }, channel), /Invalid runtime bootstrap/);
 });
 
 test("runtime startup errors expose only bounded operational categories", () => {

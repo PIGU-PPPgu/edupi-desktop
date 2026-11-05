@@ -14,6 +14,8 @@ import { getRunningRpcSessionIds } from "./rpc-manager";
 import { readServerForegroundPolicy } from "./edupi-foreground-server";
 import { isReminderForeground, shanghaiDate } from "./edupi-foreground";
 import { reminderEvents } from "./edupi-reminder-events";
+import { currentSourceAdminNotificationActivation, readCurrentSourceAdminNotificationAuthority } from "./edupi-admin-notification-authority";
+import { validateContainedRegularFile } from "./edupi-core-root";
 import { NOTIFICATION_CORE_READ_DEADLINE_MS, NOTIFICATION_PROOF_DEADLINE_MS } from "./edupi-reminder-proof-deadlines";
 import type { Reminder } from "./edupi-reminder-store";
 
@@ -57,6 +59,13 @@ export function reminderNotificationSourceFingerprint(item: Reminder, data: Educ
       requiresTeacherReview: task.requiresTeacherReview, externalSend: task.externalSend,
       reviewedAt: task.reviewedAt, boardStage: task.boardStage, boardRevision: task.boardRevision, boardUpdatedAt: task.boardUpdatedAt,
       evidence: task.evidence } : null, source: source || null, candidate: candidate || null, document: document || null,
+    ...(item.nativeSource === "core_g3" ? { adminActivation: currentSourceAdminNotificationActivation(data.workspace), capabilityCase: workCase ? {
+      id: workCase.id, state: workCase.currentState, triggerId: workCase.triggerId,
+      artifactIds: workCase.artifactIds, transitionRevision: workCase.transitionRevision,
+    } : null, capabilityArtifacts: workCase?.artifacts.map(artifact => ({ id: artifact.id, sha256: artifact.sha256,
+      revision: artifact.revision, available: data.generatedArtifacts?.some(file => file.task_id === item.taskId
+        && file.artifact_id === artifact.id && file.available === true) === true }))
+      .sort((left, right) => left.id.localeCompare(right.id)) } : {}),
     occurrences: data.l4Preparation?.opportunities.filter(opportunity => opportunity.workCaseId === (workCase?.id || item.taskId))
       .map(opportunity => ({ logicalOccurrenceKey: opportunity.logicalOccurrenceKey, sourceRevision: opportunity.sourceRevision })) || [],
   })).digest("hex");
@@ -141,17 +150,63 @@ async function readReminderItems(file: string): Promise<Reminder[]> {
   } finally { await handle.close(); }
 }
 
+async function readLiveAdminNotificationAuthority(dataRoot: string, now: number, signal: AbortSignal): Promise<boolean> {
+  const host = getActiveEduPiRuntime(dataRoot);
+  if (!host || signal.aborted) return false;
+  try {
+    const health = await host.call("health", null, signal);
+    const rootRef = (health.result as { data_root_fingerprint?: unknown } | undefined)?.data_root_fingerprint;
+    if (health.ok !== true || typeof rootRef !== "string" || !/^sha256:[a-f0-9]{64}$/u.test(rootRef)) return false;
+    return await readCurrentSourceAdminNotificationAuthority({ call: (operation, payload) => host.call(operation, payload, signal) },
+      rootRef, dataRoot, now) !== null && !signal.aborted;
+  } catch { return false; }
+}
+
+async function currentCapabilityFiles(data: EducationContract, taskId: string, signal: AbortSignal): Promise<boolean> {
+  const cases = data.workCases.filter(item => item.taskId === taskId && item.kind === "capability_package"
+    && item.currentState === "draft_ready" && item.externalSend === false);
+  const workCase = cases.length === 1 ? cases[0] : null;
+  if (!workCase || workCase.artifactIds.length !== 3 || workCase.artifacts.length !== 3) return false;
+  const outputRoot = path.join(data.workspace, ".edupi", "output");
+  for (const artifact of workCase.artifacts) {
+    if (signal.aborted || !workCase.artifactIds.includes(artifact.id) || artifact.externalSend !== false
+      || !/^sha256:[a-f0-9]{64}$/u.test(artifact.sha256)) return false;
+    const relativePath = artifact.relativePath.replaceAll("\\", "/");
+    if (!relativePath.startsWith(".edupi/output/") || relativePath.split("/").some(part => !part || part === "." || part === "..")) return false;
+    let handle;
+    try {
+      const candidate = path.join(data.workspace, relativePath);
+      const file = validateContainedRegularFile({ allowedRoot: outputRoot, candidate });
+      handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+      const before = await handle.stat();
+      if (!before.isFile() || before.size > 8 * 1024 * 1024) return false;
+      const bytes = await handle.readFile();
+      const after = await handle.stat();
+      if (signal.aborted || bytes.length !== before.size || before.dev !== after.dev || before.ino !== after.ino
+        || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs
+        || `sha256:${createHash("sha256").update(bytes).digest("hex")}` !== artifact.sha256) return false;
+    } catch { return false; }
+    finally { await handle?.close(); }
+  }
+  return true;
+}
+
 export async function notificationClaimsAreCurrent(claims: readonly NotificationClaim[], {
   signal = AbortSignal.timeout(NOTIFICATION_PROOF_DEADLINE_MS), readData = readCurrentReminderEducation,
-  readPolicy = readServerForegroundPolicy, now = () => new Date(),
+  readPolicy = readServerForegroundPolicy, readAdminAuthority = readLiveAdminNotificationAuthority, now = () => new Date(),
 }: { signal?: AbortSignal; readData?: (signal: AbortSignal) => Promise<EducationContract>;
-  readPolicy?: typeof readServerForegroundPolicy; now?: () => Date } = {}): Promise<boolean> {
+  readPolicy?: typeof readServerForegroundPolicy; readAdminAuthority?: typeof readLiveAdminNotificationAuthority; now?: () => Date } = {}): Promise<boolean> {
   const data = await readData(signal);
   const policy = await readPolicy(now());
   const items = await readReminderItems(path.join(data.workspace, ".edupi", "desktop", "reminders.json"));
   if (signal.aborted) throw new Error("提醒校验暂不可用");
   const currentTime = now();
   if (shanghaiDate(currentTime) !== policy.today) return false;
+  const adminAuthority = items.some(item => item.attentionRoute === "g3_local" && claims.some(claim => claim.id === item.id))
+    ? await readAdminAuthority(data.workspace, currentTime.getTime(), signal) : false;
+  const verifiedCapabilityTasks = new Set<string>();
+  if (adminAuthority) for (const item of items) if (item.attentionRoute === "g3_local"
+    && claims.some(claim => claim.id === item.id) && await currentCapabilityFiles(data, item.taskId, signal)) verifiedCapabilityTasks.add(item.taskId);
   const currentEvents = Object.values(reminderEvents(data.tasks, data.workspace, currentTime, data.continuity.documents, data.workCases, data.generatedArtifacts));
   return claims.every(claim => {
     const matches = items.filter(item => item?.id === claim.id);
@@ -168,6 +223,9 @@ export async function notificationClaimsAreCurrent(claims: readonly Notification
       && (delivery.status === "queued" || delivery.status === "retry")) === true;
     return item.attentionRoute === "teacher_local" && event.nativeSource === "teacher_created"
       || item.attentionRoute === "g1_local" && event.nativeSource === "core_g1" && !data.l4Preparation?.attentionIntents.some(intent => intent.workCaseId === item.taskId)
+      || item.attentionRoute === "g3_local" && event.nativeSource === "core_g3" && adminAuthority
+        && verifiedCapabilityTasks.has(item.taskId)
+        && !data.l4Preparation?.attentionIntents.some(intent => intent.workCaseId === item.taskId)
       || item.attentionRoute === "legacy_local" && item.kind === "brief";
   });
 }

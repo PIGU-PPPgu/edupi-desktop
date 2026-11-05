@@ -5,7 +5,7 @@ import { reminderEvents, selectForegroundReminders } from "@/lib/edupi-reminder-
 import { readServerForegroundPolicy } from "@/lib/edupi-foreground-server";
 import { reminderNotificationSourceFingerprint } from "@/lib/edupi-reminder-notification-proof";
 import { pendingReminderAttentionOutcomes, updateReminderStore } from "@/lib/edupi-reminder-store";
-import { revalidateG1LocalClaims, syncReminderAttention } from "@/lib/edupi-attention-delivery";
+import { revalidateCoreLocalClaims, syncReminderAttention } from "@/lib/edupi-attention-delivery";
 import { nativeAttentionRoute, persistNativeAttentionRouteMarks, reconcileReminderAttentionOutboxWithin } from "@/lib/edupi-attention-outbox";
 import { DESKTOP_INSTANCE_ID_ENV } from "@/lib/desktop-api";
 import { isApiRequestAllowed, hasJsonContentType } from "@/lib/request-security";
@@ -38,7 +38,7 @@ async function result(action?: ReminderAction) {
   const claimed = action?.type === "claim_notifications" ? state.notifications || [] : [];
   const blockedIds = new Set([...recovery.pendingIds, ...pendingReminderAttentionOutcomes(state).map((item) => item.reminderId)]);
   let notifications = [] as typeof claimed;
-  let routeMarks = [] as { reminderId: string; attemptedAt: string; attemptId?: string; route: "core_linked" | "g1_local" | "teacher_local" | "legacy_local"; instanceId?: string }[];
+  let routeMarks = [] as { reminderId: string; attemptedAt: string; attemptId?: string; route: "core_linked" | "g1_local" | "g3_local" | "teacher_local" | "legacy_local"; instanceId?: string }[];
   const markDeferredIds = new Set<string>();
   let attention: { status: "synced" | "unsupported" | "unavailable"; recorded: number; pendingCount?: number; blocked?: typeof recovery.blocked } = recovery;
   if (action?.type === "claim_notifications") {
@@ -58,13 +58,13 @@ async function result(action?: ReminderAction) {
       routeMarks.push({ reminderId: item.id, attemptedAt: item.notificationAttemptedAt, attemptId: item.notificationAttemptId, route,
         ...(route === "core_linked" ? { instanceId } : {}) });
     }
-    const g1LocalIds = new Set(routeMarks.filter((mark) => mark.route === "g1_local").map((mark) => mark.reminderId));
-    if (g1LocalIds.size) {
-      const current = await revalidateG1LocalClaims(notifications.filter((item) => g1LocalIds.has(item.id)),
+    const coreLocalIds = new Set(routeMarks.filter((mark) => mark.route === "g1_local" || mark.route === "g3_local").map((mark) => mark.reminderId));
+    if (coreLocalIds.size) {
+      const current = await revalidateCoreLocalClaims(notifications.filter((item) => coreLocalIds.has(item.id)),
         async () => (await readEducationWorkspaceBundle()).data);
       const currentIds = new Set(current.map((item) => item.id));
-      notifications = notifications.filter((item) => !g1LocalIds.has(item.id) || currentIds.has(item.id));
-      routeMarks = routeMarks.filter((mark) => mark.route !== "g1_local" || currentIds.has(mark.reminderId));
+      notifications = notifications.filter((item) => !coreLocalIds.has(item.id) || currentIds.has(item.id));
+      routeMarks = routeMarks.filter((mark) => mark.route !== "g1_local" && mark.route !== "g3_local" || currentIds.has(mark.reminderId));
     }
     if (routeMarks.length) {
       const marked = await persistNativeAttentionRouteMarks(file, events, routeMarks);

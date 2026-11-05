@@ -20,6 +20,7 @@ export function nativeAttentionRoute(item: Reminder, attention: Awaited<ReturnTy
   if (item.attentionRoute === "core_linked") return null;
   if (item.nativeSource === "teacher_created") return "teacher_local";
   if (item.nativeSource === "core_g1" && attention.g1LocalFallback === true) return "g1_local";
+  if (item.nativeSource === "core_g3" && attention.g3LocalFallback === true) return "g3_local";
   if (item.kind === "brief" && item.taskId.startsWith("document:")) return "legacy_local";
   return null;
 }
