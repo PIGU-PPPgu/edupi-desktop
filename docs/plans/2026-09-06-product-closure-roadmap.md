@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-05 R04／L4 `.108` G3 通知证据更正：隔离安装版两条 `core_g3` 提醒已在北京时间 13:37 持久记录原生 `submitted`／送达回执及同一 dispatch；下段“无发送回执”取代为**原生提交已验、系统实际显示与点击跳转未验**。复测结束时授权已停、App 已退出，3 个 WebView 来源恢复，真实资料／配置 346/346 字节不变；签名 Draft 与正式 feed 均未改。[精确回执](2026-09-07-signed-updates.md)见发布账本顶部。
+
 2026-11-05 R04／L4 `.108` Mac 安装版技术验收：固定 Desktop `b92393ba`／Core `5419e302` 的签名 Draft 三资产、本机完整验签、唯一安装位、原生每周／每月任务、周期暂停／恢复／修改、合成 G3 三产物和右侧预览、同根冷启动回读均通过；安装及两轮隔离退出后真实资料／配置 346/346 字节不变，3 个 WebView 来源复原。第二次 G3 系统通知补验被 Mac 锁屏中断，收件箱已有两项但无原生发送回执，系统通知点击不计通过；暂停状态的泛用概览文案误写“已完成”，实际周期区显示“已暂停”且恢复有效，列为后续 UI 修正。精确清理 8 处可重建产物，实增可用 `3,826,812 KiB`，保留 `.107` 回退、真实资料备份和私有证据。`.108` Release 仍 Draft，正式 feed `.70`，Windows 暂缓。[资产与验收详情](2026-09-07-signed-updates.md)取代下方 `.108` 待原生续验的阶段状态。
 
 2026-11-05 R04／L4 `.108` 当前 Mac 安装进度：Core [PR446](https://github.com/PIGU-PPPgu/edupi/pull/446) 与 Desktop [PR475](https://github.com/PIGU-PPPgu/edupi-desktop/pull/475) 均已合；Desktop Main `b92393ba`／Core `5419e302` 的唯一 [签名 Mac run41959805505](https://github.com/PIGU-PPPgu/edupi-desktop/actions/runs/41959805505)/attempt1 成功，本机同轮三资产、Minisign、Apple Accepted／装订／严格签名／Gatekeeper和包内18份源码通过。唯一 `.108` 已原位安装，`.107` 回退完整；安装后真实资料与配置 346/346 字节不变。隔离安装版已实际创建并重读每周／每月任务，固定 Core ready，外发关闭。**原生 CUA 因当前 Mac 锁屏待续；UI、冷启动资料门、WebView 偏好恢复和生成物清理未完成**。Draft 未公开，正式 feed `.70`，Windows 暂缓。完整资产 ID、摘要、指纹和阻塞见[发布验收账本](2026-09-07-signed-updates.md)。本段取代下方 `.108` 待签名安装的阶段状态。
