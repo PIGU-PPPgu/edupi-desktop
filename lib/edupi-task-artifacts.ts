@@ -68,7 +68,8 @@ export function taskPreparedArtifacts(
       if (!relativePath) continue;
       const path = `${root}/${relativePath}`;
       const revision = Number.isSafeInteger(file.revision) && file.revision > 0 ? file.revision : undefined;
-      add({ id: file.id || path, title: fileTitle(file.title, path), path, available: true, readOnly: false, ...(revision !== undefined ? { revision } : {}) }, false);
+      add({ id: file.id || path, title: fileTitle(file.title, path), path, available: true,
+        readOnly: workCase.kind === "capability_package", ...(revision !== undefined ? { revision } : {}) }, false);
     }
   }
 

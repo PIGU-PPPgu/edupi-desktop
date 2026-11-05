@@ -3874,6 +3874,101 @@
                           }
                         ]
                       },
+                      "recurrence": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "cadence": {
+                                    "const": "weekly",
+                                    "type": "string"
+                                  },
+                                  "deliverables": {
+                                    "items": {
+                                      "maxLength": 240,
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "maxItems": 20,
+                                    "minItems": 1,
+                                    "type": "array"
+                                  },
+                                  "kind": {
+                                    "const": "teacher_internal_materials",
+                                    "type": "string"
+                                  },
+                                  "lead_days": {
+                                    "maximum": 6,
+                                    "minimum": 0,
+                                    "type": "integer"
+                                  },
+                                  "until_date": {
+                                    "maxLength": 10,
+                                    "minLength": 10,
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "cadence",
+                                  "until_date",
+                                  "lead_days",
+                                  "deliverables"
+                                ],
+                                "type": "object"
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "cadence": {
+                                    "const": "monthly",
+                                    "type": "string"
+                                  },
+                                  "deliverables": {
+                                    "items": {
+                                      "maxLength": 240,
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "maxItems": 20,
+                                    "minItems": 1,
+                                    "type": "array"
+                                  },
+                                  "kind": {
+                                    "const": "teacher_internal_materials",
+                                    "type": "string"
+                                  },
+                                  "lead_days": {
+                                    "maximum": 7,
+                                    "minimum": 0,
+                                    "type": "integer"
+                                  },
+                                  "until_date": {
+                                    "maxLength": 10,
+                                    "minLength": 10,
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "cadence",
+                                  "until_date",
+                                  "lead_days",
+                                  "deliverables"
+                                ],
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "requires_teacher_review": {
                         "const": true,
                         "type": "boolean"
@@ -14355,6 +14450,101 @@
                             }
                           ]
                         },
+                        "recurrence": {
+                          "anyOf": [
+                            {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "cadence": {
+                                      "const": "weekly",
+                                      "type": "string"
+                                    },
+                                    "deliverables": {
+                                      "items": {
+                                        "maxLength": 240,
+                                        "minLength": 1,
+                                        "type": "string"
+                                      },
+                                      "maxItems": 20,
+                                      "minItems": 1,
+                                      "type": "array"
+                                    },
+                                    "kind": {
+                                      "const": "teacher_internal_materials",
+                                      "type": "string"
+                                    },
+                                    "lead_days": {
+                                      "maximum": 6,
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "until_date": {
+                                      "maxLength": 10,
+                                      "minLength": 10,
+                                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "cadence",
+                                    "until_date",
+                                    "lead_days",
+                                    "deliverables"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "cadence": {
+                                      "const": "monthly",
+                                      "type": "string"
+                                    },
+                                    "deliverables": {
+                                      "items": {
+                                        "maxLength": 240,
+                                        "minLength": 1,
+                                        "type": "string"
+                                      },
+                                      "maxItems": 20,
+                                      "minItems": 1,
+                                      "type": "array"
+                                    },
+                                    "kind": {
+                                      "const": "teacher_internal_materials",
+                                      "type": "string"
+                                    },
+                                    "lead_days": {
+                                      "maximum": 7,
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "until_date": {
+                                      "maxLength": 10,
+                                      "minLength": 10,
+                                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "cadence",
+                                    "until_date",
+                                    "lead_days",
+                                    "deliverables"
+                                  ],
+                                  "type": "object"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "task_id": {
                           "maxLength": 160,
                           "minLength": 1,
@@ -16341,6 +16531,11 @@
                     "revision"
                   ],
                   "type": "object"
+                },
+                "template_definition_hash": {
+                  "maxLength": 160,
+                  "pattern": "^sha256:[A-Za-z0-9_-]+$",
+                  "type": "string"
                 }
               },
               "required": [

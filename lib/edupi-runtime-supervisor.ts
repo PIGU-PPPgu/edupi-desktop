@@ -64,6 +64,11 @@ export function g3BindingForActivation(domain: EduPiCapabilityDomain, activation
     ...(activation.ownerId ? { ownerId: activation.ownerId } : {}) });
 }
 
+export function sourceAdministrativeGoalsForBindings(bindings: readonly EduPiCapabilityBinding[]): boolean {
+  return canStartEduPiCapabilityDrafts() && bindings.some(binding => binding.domain === "calendar_administration"
+    && binding.scope.subject === "administration" && Boolean(binding.ownerId));
+}
+
 export function describeEduPiRuntimeStartupFailure(error: unknown): string | null {
   const code = startupFailureCode(error);
   return code === "runtime_unavailable" ? null : STARTUP_FAILURE_REASONS[code];
@@ -156,6 +161,7 @@ async function start(runtime: ResolvedEduPiCore, dataRoot: ResolvedEduPiDataRoot
   const bootstrap = fs.existsSync(packaged) ? packaged : path.join(process.cwd(), "desktop/core-runtime-host.mjs");
   const configuredStateDir = process.env.PI_DESKTOP_STATE_DIR?.trim();
   const ambientPlanning = activation.enabled && executionAllowed || g2Scope !== null || g3Bindings.length > 0;
+  const sourceAdministrativeGoals = sourceAdministrativeGoalsForBindings(g3Bindings);
   const ownerControlAvailable = ambientPlanning || Boolean(configuredStateDir && path.isAbsolute(configuredStateDir));
   const ownerControlToken = ownerControlAvailable
     ? loadRuntimeOwnerControlToken(configuredStateDir, dataRoot.root, { required: ambientPlanning })
@@ -219,6 +225,7 @@ async function start(runtime: ResolvedEduPiCore, dataRoot: ResolvedEduPiDataRoot
         ...(g1Scope ? { g1Scope } : {}),
         ...(g2Scope ? { g2Scope } : {}),
         ...(g3Bindings.length > 0 ? { g3Bindings } : {}),
+        ...(sourceAdministrativeGoals ? { sourceAdministrativeGoals: true } : {}),
       } }, error => { if (error) failed(); });
     });
   } catch (error) { await close(); throw unavailable(startupFailureCode(error)); }

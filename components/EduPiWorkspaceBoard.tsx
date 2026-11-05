@@ -8,7 +8,7 @@ import { taskCategory, TASK_CATEGORY_CONFIG, type TaskCategoryId } from "@/lib/e
 import type { TaskSessionBinding } from "@/lib/edupi-task-sessions";
 import { isTaskActionable, taskContentStatusLabel, taskDisplayTitle, taskPresentation, taskStatusLabel, taskTypeLabel } from "@/lib/edupi-workbench";
 import type { CreateTeacherTaskInput, CreateTeacherTaskOutcome } from "@/lib/edupi-task-board-command";
-import { dateBefore, lessonDateMatchesSlot, MAX_PREPARATION_MATERIALS, preparationDeliverables, timetableDayOfWeek, timetableSlotId as slotId } from "@/lib/edupi-teacher-task-form";
+import { dateBefore, lessonDateMatchesSlot, MAX_PREPARATION_MATERIALS, parseTeacherRecurringMaterials, preparationDeliverables, timetableDayOfWeek, timetableSlotId as slotId } from "@/lib/edupi-teacher-task-form";
 import { isTaskForeground, paginateForeground, shanghaiDate, taskCompletionTime, taskReferenceDate } from "@/lib/edupi-foreground";
 import { EduPiPagedRows, useEduPiForegroundPolicy } from "./EduPiForeground";
 import { SegmentedControl } from "./AffectSegmentedControl";
@@ -44,6 +44,7 @@ function taskDate(task: TeacherTask): string {
 }
 
 function taskSource(task: TeacherTask): string {
+  if (task.recurrence) return task.recurrence.cadence === "weekly" ? "每周内部材料" : "每月内部材料";
   return task.student || task.topic || task.sourceEventName || "教师内部";
 }
 
@@ -125,6 +126,11 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   const [dueDate, setDueDate] = useState("");
   const [note, setNote] = useState("");
   const [managedPreparation, setManagedPreparation] = useState(false);
+  const [recurring, setRecurring] = useState(false);
+  const [cadence, setCadence] = useState<"weekly" | "monthly">("weekly");
+  const [untilDate, setUntilDate] = useState("");
+  const [leadDays, setLeadDays] = useState(2);
+  const [recurringDeliverables, setRecurringDeliverables] = useState("");
   const [timetableSlotId, setTimetableSlotId] = useState("");
   const [lessonDate, setLessonDate] = useState("");
   const [materialIds, setMaterialIds] = useState<string[]>([]);
@@ -192,11 +198,16 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   }), [compatibleMaterialIds]);
   const deliverableValidation = preparationDeliverables(deliverables);
   const requestedDeliverables = deliverableValidation.items;
+  const recurringItems = preparationDeliverables(recurringDeliverables);
+  const recurringValidation = parseTeacherRecurringMaterials(recurring ? {
+    kind: "teacher_internal_materials", cadence, untilDate, leadDays, deliverables: recurringItems.items,
+  } : null, dueDate || null, managedPreparation);
   const lessonDateValid = Boolean(activeSlot && lessonDateMatchesSlot(lessonDate, activeSlot));
   const lessonDateError = activeSlot && lessonDate && !lessonDateValid
     ? `请选择${weekdayLabels[timetableDayOfWeek(activeSlot) || 0]}对应的上课日期。`
     : null;
-  const canCreate = Boolean(title.trim()) && (!managedPreparation || Boolean(activeSlot && lessonDateValid
+  const canCreate = Boolean(title.trim()) && (!recurring || Boolean(recurringValidation.value && !recurringItems.error))
+    && (!managedPreparation || Boolean(activeSlot && lessonDateValid
     && materialIds.length > 0 && materialIds.length <= MAX_PREPARATION_MATERIALS
     && materialIds.every((id) => compatibleMaterialIds.has(id))
     && requestedDeliverables.length > 0 && !deliverableValidation.error));
@@ -207,7 +218,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
     // A failed projection read must not discard the same directory's draft.
     if (createScope.workspace) {
       if (draftWorkspaceRef.current && draftWorkspaceRef.current !== createScope.workspace) {
-        setTitle(""); setDueDate(""); setNote(""); setManagedPreparation(false); setTimetableSlotId(""); setLessonDate(""); setMaterialIds([]);
+        setTitle(""); setDueDate(""); setNote(""); setManagedPreparation(false); setRecurring(false); setCadence("weekly"); setUntilDate(""); setLeadDays(2); setRecurringDeliverables(""); setTimetableSlotId(""); setLessonDate(""); setMaterialIds([]);
         setDeliverables(DEFAULT_PREPARATION_DELIVERABLES.join("\n")); dueDateManuallyEditedRef.current = false; pendingCreateRef.current = null;
       }
       draftWorkspaceRef.current = createScope.workspace;
@@ -315,6 +326,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
       dueDate: dueDate || null,
       note: note.trim() || null,
       preparationSource: managedPreparation ? { kind: "teaching_before_class", timetableSlotId: activeSlotId, lessonDate, materialIds: [...materialIds], deliverables: [...requestedDeliverables] } : null,
+      ...(recurring ? { recurrence: recurringValidation.value } : {}),
     };
     createScope.submitting = true;
     const sequence = ++createScope.sequence;
@@ -334,6 +346,11 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
       dueDateManuallyEditedRef.current = false;
       setNote("");
       setManagedPreparation(false);
+      setRecurring(false);
+      setCadence("weekly");
+      setUntilDate("");
+      setLeadDays(2);
+      setRecurringDeliverables("");
       setTimetableSlotId("");
       setLessonDate("");
       setMaterialIds([]);
@@ -342,7 +359,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
       if (focus) focus.target = "trigger";
       setMessage(result.preparationState === "error"
         ? { tone: "error", text: `任务已创建；自动准备尚未启动：${result.preparationError || "请打开任务后重试"}`, preparationTaskId: `teacher-task-${clientRequestId.toLowerCase()}` }
-        : { tone: "success", text: result.preparationState ? "任务已创建，正在准备教学产物。" : "任务已创建到“待处理”。" });
+        : { tone: "success", text: recurring ? "周期任务已创建。" : result.preparationState ? "任务已创建，正在准备教学产物。" : "任务已创建到“待处理”。" });
     } catch (error) {
       if (current()) setMessage({ tone: "error", text: error instanceof Error ? error.message : "任务创建失败。" });
     } finally {
@@ -383,9 +400,17 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
       {createOpen ? <form ref={createFormRef} aria-label="新建任务" onSubmit={submitCreate} onKeyDown={event => { if (event.key === "Escape" && !event.nativeEvent.isComposing && !createScope.submitting) { event.preventDefault(); event.stopPropagation(); cancelCreate(); } }}>
         <fieldset className="edupi-task-board-create" disabled={creating} style={{ marginInline: 0 }}>
         <label><span>任务</span><input ref={titleRef} className="native-input" required maxLength={240} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：准备第一次单元检测" /></label>
-        <label><span>截止日期</span><input className="native-input" type="date" value={dueDate} onInput={(event) => { dueDateManuallyEditedRef.current = true; setDueDate(event.currentTarget.value); }} /></label>
+        <label><span>{recurring ? "首期日期" : "截止日期"}</span><input className="native-input" type="date" value={dueDate} onInput={(event) => { dueDateManuallyEditedRef.current = true; setDueDate(event.currentTarget.value); }} /></label>
         <label><span>备注</span><input className="native-input" maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="可选" /></label>
-        <label className="edupi-task-board-create__managed"><input type="checkbox" checked={managedPreparation} onChange={(event) => { setManagedPreparation(event.target.checked); if (event.target.checked && !timetableSlotId) setTimetableSlotId(slotId(usableSlots[0] || {})); }} /><span>自动准备教学产物</span></label>
+        <label className="edupi-task-board-create__managed"><input type="checkbox" checked={managedPreparation} onChange={(event) => { setManagedPreparation(event.target.checked); if (event.target.checked) { setRecurring(false); if (!timetableSlotId) setTimetableSlotId(slotId(usableSlots[0] || {})); } }} /><span>自动准备教学产物</span></label>
+        <label className="edupi-task-board-create__managed"><input type="checkbox" checked={recurring} onChange={(event) => { setRecurring(event.target.checked); if (event.target.checked) setManagedPreparation(false); }} /><span>周期材料</span></label>
+        {recurring ? <div className="edupi-task-board-create__source">
+          <label><span>周期</span><select className="native-select" value={cadence} onChange={(event) => { setCadence(event.target.value as "weekly" | "monthly"); setLeadDays(Math.min(leadDays, event.target.value === "weekly" ? 6 : 7)); }}><option value="weekly">每周</option><option value="monthly">每月</option></select></label>
+          <label><span>结束日期</span><input className="native-input" type="date" min={dueDate || undefined} value={untilDate} onChange={(event) => setUntilDate(event.target.value)} /></label>
+          <label><span>提前天数</span><input className="native-input" type="number" min={0} max={cadence === "weekly" ? 6 : 7} value={leadDays} onChange={(event) => setLeadDays(Number(event.target.value))} /></label>
+          <label><span>产物</span><textarea className="native-input" rows={3} maxLength={4800} value={recurringDeliverables} onChange={(event) => setRecurringDeliverables(event.target.value)} /></label>
+          {recurringValidation.error || recurringItems.error ? <p role="alert">{recurringItems.error || recurringValidation.error}</p> : null}
+        </div> : null}
         {managedPreparation ? <div className="edupi-task-board-create__source">
           <label><span>课次</span><select className="native-select" value={activeSlotId} onChange={(event) => { setTimetableSlotId(event.target.value); setMaterialIds([]); }}><option value="">选择课次</option>{usableSlots.map((slot) => <option key={slotId(slot)} value={slotId(slot)}>{weekdayLabels[timetableDayOfWeek(slot) || 0]} · {rawText(slot.subject)} · {rawText(slot.class_name)} · 第 {String(slot.period ?? "?")} 节</option>)}</select></label>
           <label><span>上课日期</span><input className="native-input" type="date" value={lessonDate} onChange={(event) => { const nextDate = event.target.value; setLessonDate(nextDate); if (!dueDateManuallyEditedRef.current) setDueDate(dateBefore(nextDate)); }} /></label>
@@ -394,7 +419,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
           <label><span>产物</span><textarea className="native-input" rows={4} maxLength={4800} value={deliverables} onChange={(event) => setDeliverables(event.target.value)} /></label>
           {deliverableValidation.error ? <p role="alert">{deliverableValidation.error}</p> : null}
         </div> : null}
-        <div className="edupi-task-board-create__actions"><button type="button" className="native-button" disabled={creating} onClick={cancelCreate}>取消</button><button type="submit" className="native-button native-button-primary is-primary" disabled={creating || !canCreate}>{creating ? "创建中…" : managedPreparation ? "创建并准备" : "创建任务"}</button></div>
+        <div className="edupi-task-board-create__actions"><button type="button" className="native-button" disabled={creating} onClick={cancelCreate}>取消</button><button type="submit" className="native-button native-button-primary is-primary" disabled={creating || !canCreate}>{creating ? "创建中…" : recurring ? "创建周期任务" : managedPreparation ? "创建并准备" : "创建任务"}</button></div>
         </fieldset>
       </form> : null}
       {message ? <p className={`edupi-task-board-message is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p> : null}

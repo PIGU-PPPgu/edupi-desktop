@@ -214,7 +214,7 @@ export async function reviewFollowUpCandidate(
 export async function reviewEducationTask(
   input: TaskReviewInput,
   deps?: TaskReviewDependencies,
-): Promise<{ receipt: Record<string, unknown>; data: EducationContract }> {
+): Promise<{ receipt: Record<string, unknown>; data: EducationContract | null; refreshPending: boolean }> {
   const snapshot = await readEduPiEducationSnapshot();
   const result = await issueTaskReview(input, {
     ...deps,
@@ -223,8 +223,15 @@ export async function reviewEducationTask(
       roots: { runtime: snapshot.runtime, dataRoot: snapshot.dataRoot },
     })),
   });
-  const data = await refreshEducationContractAfterMutation(snapshot, result.data);
-  return { receipt: result.receipt, data };
+  let data: EducationContract | null = null;
+  try {
+    data = result.data ? await refreshEducationContractAfterMutation(snapshot, result.data) : await readEducationContract();
+  } catch { /* The Core review receipt is already durable. */ }
+  const receiptReview = result.receipt.teacher_review as { revision?: unknown } | undefined;
+  const revision = receiptReview?.revision;
+  const task = data?.tasks.find((item) => item.id === input.taskId);
+  if (!Number.isInteger(revision) || !task || task.revision < Number(revision)) data = null;
+  return { receipt: result.receipt, data, refreshPending: data === null };
 }
 
 /** Update one active memory through Core and project the current occurrence-aware snapshot. */

@@ -2,6 +2,7 @@ import { DESKTOP_INSTANCE_ID_ENV } from "./desktop-api";
 import { resolveEduPiBridgeRoots } from "./edupi-core-snapshot";
 import { ensureEduPiRuntime } from "./edupi-runtime-supervisor";
 import { reminderEvents } from "./edupi-reminder-events";
+import { currentSourceAdminNotificationActivation, readCurrentSourceAdminNotificationAuthority } from "./edupi-admin-notification-authority";
 import type { EducationContract } from "./edupi-education-contract";
 import type { Reminder } from "./edupi-reminder-store";
 
@@ -14,7 +15,7 @@ type AttentionAction = {
 type AttentionTransition = "queued" | "delivered" | "failed" | "retry" | "opened";
 
 type SyncResult = { status: "synced" | "unsupported" | "unavailable"; recorded: number;
-  linkedNotificationIds?: string[]; currentNotificationIds?: string[]; g1LocalFallback?: boolean };
+  linkedNotificationIds?: string[]; currentNotificationIds?: string[]; g1LocalFallback?: boolean; g3LocalFallback?: boolean };
 type RuntimeHost = { call(operation: string, payload: unknown): Promise<Record<string, unknown>> };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -61,23 +62,26 @@ export function selectNativeReminderNotifications(claimed: readonly Reminder[], 
     if (attention.status === "synced" && current.has(item.id)) return true;
     return !linked.has(item.id) && (item.nativeSource === "teacher_created" || item.nativeSource === "core_g1"
       && item.kind === "ready" && attention.g1LocalFallback === true
+      || item.nativeSource === "core_g3" && item.kind === "ready" && attention.g3LocalFallback === true
       || item.kind === "brief" && item.taskId.startsWith("document:"));
   });
 }
 
-export async function revalidateG1LocalClaims(claimed: readonly Reminder[], readCurrent: () => Promise<EducationContract>): Promise<Reminder[]> {
-  if (!claimed.some(item => item.nativeSource === "core_g1")) return [...claimed];
+export async function revalidateCoreLocalClaims(claimed: readonly Reminder[], readCurrent: () => Promise<EducationContract>): Promise<Reminder[]> {
+  const local = (item: Reminder) => item.nativeSource === "core_g1" || item.nativeSource === "core_g3";
+  if (!claimed.some(local)) return [...claimed];
   let current: EducationContract;
   try { current = await readCurrent(); }
-  catch { return claimed.filter(item => item.nativeSource !== "core_g1"); }
+  catch { return claimed.filter(item => !local(item)); }
   if (current.scope !== "teacher_internal" || current.externalSend !== false || current.requiresTeacherReview !== true) {
-    return claimed.filter(item => item.nativeSource !== "core_g1");
+    return claimed.filter(item => !local(item));
   }
   const events = Object.values(reminderEvents(current.tasks, current.workspace, new Date(),
     current.continuity.documents, current.workCases, current.generatedArtifacts));
-  return claimed.filter(item => item.nativeSource !== "core_g1" || (item.kind === "ready" && !intentFor(current, item)
+  return claimed.filter(item => !local(item) || (item.kind === "ready" && !intentFor(current, item)
+    && (item.nativeSource !== "core_g3" || currentSourceAdminNotificationActivation(current.workspace) !== null)
     && !current.l4Preparation?.attentionDeliveries.some(delivery => delivery.deliveryId === item.id)
-    && events.some(event => event.nativeSource === "core_g1"
+    && events.some(event => event.nativeSource === item.nativeSource
       && event.taskId === item.taskId && event.identity === item.identity && event.completion === item.kind)));
 }
 
@@ -97,9 +101,9 @@ export async function syncReminderAttention({ data, items, action, now = new Dat
   const claiming = action.type === "claim_notifications";
   const linked = targets.filter((item) => intentFor(data, item) || data.l4Preparation?.attentionDeliveries.some((delivery) => delivery.deliveryId === item.id));
   const linkedNotificationIds = linked.map((item) => item.id);
-  const claimResult = (status: SyncResult["status"], recorded = 0, currentNotificationIds: string[] = [], g1LocalFallback = false): SyncResult =>
+  const claimResult = (status: SyncResult["status"], recorded = 0, currentNotificationIds: string[] = [], g1LocalFallback = false, g3LocalFallback = false): SyncResult =>
     ({ status, recorded, ...(claiming ? { linkedNotificationIds, currentNotificationIds } : {}),
-      ...(g1LocalFallback ? { g1LocalFallback: true } : {}) });
+      ...(g1LocalFallback ? { g1LocalFallback: true } : {}), ...(g3LocalFallback ? { g3LocalFallback: true } : {}) });
   if (!claiming && !data.l4Preparation?.attentionIntents.length) return claimResult("unsupported");
   const carrierInstanceId = instanceId === undefined ? process.env[DESKTOP_INSTANCE_ID_ENV]?.trim() || "desktop-dev" : instanceId;
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(carrierInstanceId)) return claimResult("unavailable");
@@ -122,6 +126,14 @@ export async function syncReminderAttention({ data, items, action, now = new Dat
       || claiming && !supported.includes("attention_delivery_read")) {
       return claimResult("unsupported");
     }
+    const g3Authority = targets.some(item => item.nativeSource === "core_g3")
+      ? await readCurrentSourceAdminNotificationAuthority(host, fingerprint, data.workspace, now.getTime()) : null;
+    const g3LocalEligible = g3Authority !== null && data.scope === "teacher_internal" && data.externalSend === false
+      && data.requiresTeacherReview === true && capabilities?.g3_processor === "active"
+      && targets.some(item => item.nativeSource === "core_g3" && item.kind === "ready" && !linkedNotificationIds.includes(item.id)
+        && Object.values(reminderEvents(data.tasks, data.workspace, now, data.continuity.documents,
+          data.workCases, data.generatedArtifacts)).some(event => event.nativeSource === "core_g3"
+          && event.taskId === item.taskId && event.identity === item.identity && event.completion === item.kind));
     let recorded = 0;
     for (const item of targets) {
       const intent = intentFor(data, item);
@@ -164,9 +176,10 @@ export async function syncReminderAttention({ data, items, action, now = new Dat
       carrier: { kind: "desktop", instance_id: carrierInstanceId },
     }));
     if (response?.ok === false && response.error_code === "activation_pending" && data.l4Preparation === null
-      && linkedNotificationIds.length === 0 && capabilities?.g1_processor === "active"
-      && capabilities.ambient_planning === "activation_pending" && capabilities.attention_delivery === "activation_pending") {
-      return claimResult("unsupported", recorded, [], true);
+      && linkedNotificationIds.length === 0 && capabilities?.attention_delivery === "activation_pending"
+      && (capabilities.g1_processor === "active" && capabilities.ambient_planning === "activation_pending" || g3LocalEligible)) {
+      return claimResult("unsupported", recorded, [], capabilities.g1_processor === "active"
+        && capabilities.ambient_planning === "activation_pending", g3LocalEligible);
     }
     const snapshot = asRecord(response?.result);
     if (response?.ok !== true || snapshot?.root_ref !== fingerprint || snapshot?.apply !== false
@@ -192,7 +205,7 @@ export async function syncReminderAttention({ data, items, action, now = new Dat
       && data.requiresTeacherReview === true && capabilities?.g1_processor === "active"
       && targets.some(item => item.nativeSource === "core_g1" && item.kind === "ready"
         && !linkedNotificationIds.includes(item.id));
-    return claimResult("synced", recorded, currentNotificationIds, g1LocalFallback);
+    return claimResult("synced", recorded, currentNotificationIds, g1LocalFallback, g3LocalEligible);
   } catch {
     return claimResult("unavailable");
   }

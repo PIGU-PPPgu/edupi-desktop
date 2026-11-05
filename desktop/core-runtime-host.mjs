@@ -130,19 +130,23 @@ function snapshotG3Bindings(bindings) {
 
 export async function startCoreRuntimeHost({ coreRoot, options }, channel = process) {
   const hasModelScope = options?.g1Scope !== undefined || options?.g2Scope !== undefined;
-  if (!options || Object.keys(options).some(key => !["dataRoot", "token", "supervisorSessionId", "coreCommit", "componentManifestHash", "port", "ambientPlanning", "ownerControlToken", "ownerMessageRegistration", "g1Scope", "g2Scope", "g3Bindings"].includes(key))
+  if (!options || Object.keys(options).some(key => !["dataRoot", "token", "supervisorSessionId", "coreCommit", "componentManifestHash", "port", "ambientPlanning", "ownerControlToken", "ownerMessageRegistration", "g1Scope", "g2Scope", "g3Bindings", "sourceAdministrativeGoals"].includes(key))
     || (options.ambientPlanning !== undefined && typeof options.ambientPlanning !== "boolean")
     || (options.ownerMessageRegistration !== undefined && (options.ownerMessageRegistration !== true
       || options.ambientPlanning !== true || typeof options.ownerControlToken !== "string"))
+    || (options.sourceAdministrativeGoals !== undefined && options.sourceAdministrativeGoals !== true)
     || (hasModelScope || options.g3Bindings !== undefined) && (options.ambientPlanning !== true || typeof options.ownerControlToken !== "string")
     || options.g1Scope !== undefined && !validScope(options.g1Scope)
     || options.g2Scope !== undefined && (!validScope(options.g2Scope) || options.g2Scope.subject !== "数学")) throw new Error("Invalid runtime bootstrap.");
   const g3Bindings = options.g3Bindings === undefined ? null : snapshotG3Bindings(options.g3Bindings);
+  if (options.sourceAdministrativeGoals === true && !g3Bindings?.some(binding => binding.domain === "calendar_administration"
+    && binding.scope.subject === "administration" && binding.ownerId)) throw new Error("Invalid runtime bootstrap.");
   const hostExecutor = hasModelScope || options.ownerMessageRegistration ? createParentModelExecutor(channel) : null;
   try {
     const { createCoreRuntimeDaemon } = await import(pathToFileURL(path.join(coreRoot, "scripts/core_runtime_daemon.mjs")).href);
     const { g1Scope, g2Scope, ...daemonOptions } = options;
     delete daemonOptions.g3Bindings;
+    delete daemonOptions.sourceAdministrativeGoals;
     let recallSupport;
     if (options.ownerMessageRegistration) {
       const { createRecallSupportAssessor } = await import(pathToFileURL(path.join(coreRoot, "scripts/recall_source_support.mjs")).href);
@@ -184,10 +188,11 @@ export async function startCoreRuntimeHost({ coreRoot, options }, channel = proc
     const daemon = await createCoreRuntimeDaemon({ ...daemonOptions,
       ...(recallSupport ? { recallSupport } : {}),
       ...(g1Runner || g2Live || g3Bindings ? { ownerMessageContinuation: true } : {}),
-      // Only a selected exact admin grant in the isolated canary can open the
-      // Durable calendar adapter; Core rechecks every unfinished checkpoint.
+      // Core selects the deterministic path for source-derived drafts and
+      // retains Durable checkpoints for manual administration cases.
       ...(g3Bindings ? { g3Live: Object.freeze({ allowedBindings: g3Bindings,
-        durableCalendarAdministration: g3Bindings.some(binding => binding.domain === "calendar_administration") }) } : {}),
+        durableCalendarAdministration: g3Bindings.some(binding => binding.domain === "calendar_administration"),
+        ...(options.sourceAdministrativeGoals === true ? { sourceAdministrativeGoals: true } : {}) }) } : {}),
       ...(g2Live ? { g2Live } : {}),
       ...(g1Runner ? { g1Live: { modelRunner: g1Runner, leaseMs: 300000,
         scope: { classId: g1Scope.classId, subject: g1Scope.subject }, grantId: g1Scope.grantId } } : {}) });

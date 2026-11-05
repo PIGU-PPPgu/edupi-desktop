@@ -18,7 +18,7 @@ export type TaskReviewInput = {
   reviewerId?: string | null;
   issuedAt?: string;
 };
-export type TaskReviewErrorCode = "invalid_envelope" | "unsupported_command" | "stale_snapshot" | "stale_revision" | "task_missing" | "task_owned_by_work_review" | "unavailable";
+export type TaskReviewErrorCode = "invalid_envelope" | "invalid_recurrence" | "unsupported_command" | "stale_snapshot" | "stale_revision" | "task_missing" | "task_owned_by_work_review" | "unavailable";
 
 export class TaskReviewError extends Error {
   constructor(public readonly code: TaskReviewErrorCode, message: string) {
@@ -237,6 +237,7 @@ function receiptForCommand(value: unknown, envelope: RawRecord, supportedCommand
     if (reason === "stale_revision") throw new TaskReviewError("stale_revision", "任务审核版本已更新，请刷新后重试。");
     if (reason === "task_missing") throw new TaskReviewError("task_missing", "任务不存在。");
     if (reason === "task_owned_by_work_review") throw new TaskReviewError("task_owned_by_work_review", "该任务由 Today 待办审核管理。");
+    if (reason === "invalid_recurrence") throw new TaskReviewError("invalid_recurrence", "周期任务日期或产物不符合约束，请重新检查。");
     if (reason === "unsupported_command") throw new TaskReviewError("unsupported_command", "Core 尚未启用任务审核。");
     if (["provenance_mismatch", "source_mismatch", "invalid_patch", "invalid_rollback"].includes(reason)) throw new TaskReviewError("invalid_envelope", "Core 拒绝了任务审核绑定。");
     throw new TaskReviewError("unavailable", "Core 未执行任务审核。");
@@ -307,7 +308,7 @@ function verifyRefreshedTask(payload: CoreEducationSnapshotPayload, beforeTask: 
   return task;
 }
 
-export async function issueTaskReview(input: TaskReviewInput, dependencies: TaskReviewDependencies = {}): Promise<{ receipt: RawRecord; data: CoreEducationSnapshotPayload; task: RawRecord }> {
+export async function issueTaskReview(input: TaskReviewInput, dependencies: TaskReviewDependencies = {}): Promise<{ receipt: RawRecord; data: CoreEducationSnapshotPayload | null; task: RawRecord | null; refreshPending: boolean }> {
   const supportedCommands = dependencies.supportedCommands || activeBridgeIdentity().contract.supported_commands;
   if (!supportedCommands.includes("review_task")) throw new TaskReviewError("unsupported_command", "Core 尚未启用任务审核。");
   const initial = await (dependencies.readSnapshot || productionSnapshot)();
@@ -326,7 +327,12 @@ export async function issueTaskReview(input: TaskReviewInput, dependencies: Task
   }
   const receipt = receiptForCommand(rawResponse, envelope, supportedCommands, beforeTask);
   const refresh = dependencies.refreshSnapshot || (async (roots) => (await readEduPiEducationSnapshot({ roots })).payload);
-  const data = await refresh(initial.roots);
+  let data: CoreEducationSnapshotPayload;
+  try { data = await refresh(initial.roots); }
+  catch { return { receipt, data: null, task: null, refreshPending: true }; }
+  if (data.snapshot_id !== receipt.after_snapshot_id || data.state_hash !== receipt.after_state_hash) {
+    return { receipt, data: null, task: null, refreshPending: true };
+  }
   const task = verifyRefreshedTask(data, beforeTask, envelope, receipt);
-  return { receipt, data, task };
+  return { receipt, data, task, refreshPending: false };
 }

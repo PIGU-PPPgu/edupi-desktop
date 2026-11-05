@@ -51,3 +51,25 @@ test("the available review action is the sole primary action", () => {
   assert.doesNotMatch(html, />继续协作</);
   assert.equal((html.match(/class="is-primary"/g) || []).length, 1);
 });
+
+test("recurring templates expose their bounded definition and pause state", () => {
+  const recurring = buildEducationContract({ tasks: [{ id: "task-recurring", title: "每周整理材料", status: "planned", due_date: "2026-11-12",
+    deliverables: ["周报"], board_stage: "done", board_revision: 1,
+    recurrence: { kind: "teacher_internal_materials", cadence: "weekly", until_date: "2026-11-26", lead_days: 2, deliverables: ["周报"] } }] }).tasks[0];
+  const controls = { onRecurringStage: async () => {}, onUpdateRecurring: async () => {}, onReactivateRecurring: async () => {} };
+  const html = render({ task: recurring, ...controls });
+  assert.match(html, /每周 · 提前 2 天 · 至 2026-11-26/);
+  assert.match(html, /已暂停/);
+  assert.match(html, />恢复</);
+  assert.match(html, />修改</);
+  assert.doesNotMatch(render({ task: recurring }), />恢复</);
+  const held = render({ task: { ...recurring, status: "hold", boardStage: "todo" }, ...controls });
+  assert.match(held, /已暂缓/);
+  assert.match(held, />重新接受</);
+  assert.doesNotMatch(held, />暂停</);
+  assert.doesNotMatch(held, />恢复</);
+  const rejected = render({ task: { ...recurring, status: "rejected" }, ...controls });
+  assert.match(rejected, /已拒绝/);
+  assert.match(rejected, />重新接受</);
+  assert.doesNotMatch(rejected, />恢复</);
+});

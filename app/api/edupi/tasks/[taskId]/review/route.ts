@@ -35,7 +35,7 @@ function validPatch(value: unknown, decision: TaskReviewDecision): value is Task
 }
 
 function statusFor(code: string): number {
-  if (code === "invalid_envelope") return 400;
+  if (code === "invalid_envelope" || code === "invalid_recurrence") return 400;
   if (code === "task_missing") return 404;
   if (["stale_snapshot", "stale_revision", "task_owned_by_work_review"].includes(code)) return 409;
   return 503;
@@ -63,7 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tas
       note: typeof body.note === "string" ? body.note.trim() || null : null,
       reviewerId: "teacher",
     });
-    return NextResponse.json({ receipt: result.receipt, data: result.data }, { status: 200 });
+    return NextResponse.json({ receipt: result.receipt, data: result.data, refreshPending: result.refreshPending }, { status: result.refreshPending ? 202 : 200 });
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) return NextResponse.json({ error: "Task review request is too large", code: "too_large" }, { status: 413 });
     const code = error instanceof TaskReviewError ? error.code : "unavailable";

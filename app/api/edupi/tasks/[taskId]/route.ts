@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
 import { issueTaskBoardCommand, taskBoardContentHash, TaskBoardCommandError, type TaskBoardStage } from "@/lib/edupi-task-board-command";
 import { readEducationContract } from "@/lib/edupi-education-server";
+import { hasCommittedTaskStage } from "@/lib/edupi-task-refresh";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
 export const runtime = "nodejs";
@@ -47,7 +48,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
       source: { source_id: sourceId, source_kind: "teacher_message", source_hash: taskBoardContentHash(sourcePayload), evidence_ids: [`evidence-${sourceId}`] },
       ...sourcePayload,
     });
-    return NextResponse.json({ receipt: result.receipt, data: await readEducationContract() }, { status: 200 });
+    let refreshed = null;
+    try { refreshed = await readEducationContract(); } catch { /* The stage receipt is already durable. */ }
+    const confirmed = hasCommittedTaskStage(refreshed, id, Number(body.expectedRevision) + 1, stage);
+    return NextResponse.json({ receipt: result.receipt, data: confirmed ? refreshed : null, refreshPending: !confirmed }, { status: confirmed ? 200 : 202 });
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) return NextResponse.json({ error: "Task stage request is too large", code: "too_large" }, { status: 413 });
     const code = error instanceof TaskBoardCommandError ? error.code : "unavailable";

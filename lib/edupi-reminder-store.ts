@@ -5,10 +5,10 @@ import lockfile from "proper-lockfile";
 import type { ReminderEvent } from "./edupi-reminder-events";
 import { NOTIFICATION_CLAIM_LEASE_MS, notificationRearmAt } from "./edupi-reminder-attempt";
 
-export type ReminderAttentionRoute = "core_linked" | "g1_local" | "teacher_local" | "legacy_local";
+export type ReminderAttentionRoute = "core_linked" | "g1_local" | "g3_local" | "teacher_local" | "legacy_local";
 export type ReminderAttentionOutcome = { id: string; reminderId: string; taskId: string; type: "notification_delivered" | "notification_failed" | "notification_opened"; attemptedAt?: string; occurredAt: string; route: "core_linked" | "unknown"; instanceId?: string };
 export type ReminderAttentionRouteMark = { reminderId: string; attemptedAt: string; attemptId?: string; route: ReminderAttentionRoute; instanceId?: string };
-export type Reminder = { id: string; taskId: string; title: string; kind: "ready" | "failed" | "due" | "brief"; identity: string; createdAt: string; read: boolean; handled: boolean; snoozedUntil: string | null; nativeSource?: "teacher_created" | "core_g1"; notificationAttemptedAt?: string; notificationAttemptId?: string; notificationClaimExpiresAt?: string; notificationAttemptInstanceId?: string; notificationSendState?: "claimed" | "send_started" | "submitted" | "unknown"; notificationDispatchId?: string; notificationSendStartedAt?: string; notificationSourceFingerprint?: string; notificationDeliveredAt?: string; notificationOpenedAt?: string; notificationFailureAt?: string; notificationFailureCount?: number; notificationRetryAt?: string; attentionRoute?: ReminderAttentionRoute; attentionCarrierInstanceId?: string; withdrawn?: boolean };
+export type Reminder = { id: string; taskId: string; title: string; kind: "ready" | "failed" | "due" | "brief"; identity: string; createdAt: string; read: boolean; handled: boolean; snoozedUntil: string | null; nativeSource?: "teacher_created" | "core_g1" | "core_g3"; notificationAttemptedAt?: string; notificationAttemptId?: string; notificationClaimExpiresAt?: string; notificationAttemptInstanceId?: string; notificationSendState?: "claimed" | "send_started" | "submitted" | "unknown"; notificationDispatchId?: string; notificationSendStartedAt?: string; notificationSourceFingerprint?: string; notificationDeliveredAt?: string; notificationOpenedAt?: string; notificationFailureAt?: string; notificationFailureCount?: number; notificationRetryAt?: string; attentionRoute?: ReminderAttentionRoute; attentionCarrierInstanceId?: string; withdrawn?: boolean };
 export type ReminderActivityType = "candidate_created" | "candidate_withdrawn" | "notification_claimed" | "notification_delivered" | "notification_released" | "notification_rearmed" | "notification_unknown" | "notification_deferred" | "notification_failed" | "notification_opened" | "read" | "handled" | "snoozed";
 export type ReminderActivity = { type: ReminderActivityType; reminderId: string; taskId: string; at: string; latencyMs?: number };
 export type ReminderMetrics = {
@@ -198,7 +198,7 @@ export async function updateReminderStore(file: string, snapshot: Record<string,
       for (const mark of action.routes ?? []) {
         const item = state.items.find((candidate) => candidate.id === mark.reminderId && candidate.notificationAttemptedAt === mark.attemptedAt
           && (candidate.notificationAttemptId ? candidate.notificationAttemptId === mark.attemptId : mark.attemptId === undefined));
-        if (!item || !["core_linked", "g1_local", "teacher_local", "legacy_local"].includes(mark.route)
+        if (!item || !["core_linked", "g1_local", "g3_local", "teacher_local", "legacy_local"].includes(mark.route)
           || mark.route === "core_linked" && (!mark.instanceId || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(mark.instanceId))
           || item.attentionRoute && (item.attentionRoute !== mark.route
             && !(item.attentionRoute !== "core_linked" && mark.route === "core_linked")

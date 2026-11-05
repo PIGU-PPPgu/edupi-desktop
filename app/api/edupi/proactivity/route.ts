@@ -378,10 +378,11 @@ export async function POST(request: Request) {
       } catch (error) {
         const cause = proactivityRuntimeError(error);
         const conflict = cause instanceof EduPiProactivityControlError
-          && ["proactivity_scope_unavailable", "proactivity_scope_conflict"].includes(cause.code);
+          && ["proactivity_scope_unavailable", "proactivity_scope_conflict", "proactivity_source_capacity"].includes(cause.code);
         const blocked = ["proactivity_budget_exhausted", "proactivity_grant_denied", "proactivity_preparation_blocked"].includes(cause.code);
         return NextResponse.json({ ok: false, code: cause.code,
           error: cause.code === "proactivity_scope_conflict" ? "请先完成当前主动运行的停止恢复"
+            : cause.code === "proactivity_source_capacity" ? "当前校历来源超过 127 项；为保留对话行政权限，请先缩小来源范围"
             : cause.code === "proactivity_budget_exhausted" ? "本次模型调用额度已用完"
               : cause.code === "proactivity_grant_denied" ? domain === "student_followup" ? "学生跟进授权范围已变化，请停止后重试" : "授权或材料范围已变化，请停止后重试"
                 : cause.code === "proactivity_preparation_blocked" ? "课前任务需要先核对材料或课程"

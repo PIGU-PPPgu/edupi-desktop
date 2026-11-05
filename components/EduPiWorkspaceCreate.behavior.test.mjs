@@ -138,6 +138,23 @@ test("same-tick submit creates one immutable request and locks every field", () 
   assert.equal(f.escape(), false); assert.equal(f.requests.length, 1);
 });
 
+test("weekly internal materials submit one explicit recurrence without starting lesson preparation", () => {
+  const f = mount(); f.open(); f.change("周期材料", true);
+  f.change("任务", "年级组内部材料");
+  f.change("首期日期", "2026-11-06");
+  f.change("结束日期", "2026-12-04");
+  f.change("产物", "内部议程\n材料清单");
+  assert.equal(f.elements.get("submit").disabled, false);
+  f.submit({ render: false }); f.submit({ render: false }); f.render();
+  assert.equal(f.requests.length, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.requests[0].input)), {
+    clientRequestId: "ui-create-1", title: "年级组内部材料", dueDate: "2026-11-06", note: null,
+    preparationSource: null,
+    recurrence: { kind: "teacher_internal_materials", cadence: "weekly", untilDate: "2026-12-04", leadDays: 2,
+      deliverables: ["内部议程", "材料清单"] },
+  });
+});
+
 test("accepted creation waits for its enabled closing DOM before focus return", async () => {
   const f = mount(); f.fill(); f.submit(); f.finish(); await tick();
   assert.deepEqual(f.focused, []); f.render(); assert.equal(f.document.activeElement, f.elements.get("create"));
