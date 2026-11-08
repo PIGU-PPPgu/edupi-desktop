@@ -38,7 +38,8 @@ const useV3 = process.argv.includes("--v3") || sourceCandidate || useMain4, desk
 const coreRoot = fs.realpathSync(process.env.EDUPI_CORE_ROOT);
 const coreCommit = execFileSync("git", ["-C", coreRoot, "rev-parse", "HEAD"], { encoding: "utf8", timeout: 15_000 }).trim();
 const desktopCommit = execFileSync("git", ["-C", desktopRoot, "rev-parse", "HEAD"], { encoding: "utf8", timeout: 15_000 }).trim();
-if (useMain4 && !sourceCandidate) assert.equal(execFileSync("git", ["-C", desktopRoot, "status", "--porcelain"],
+if (useMain4 && !sourceCandidate) assert.equal(execFileSync("git", ["-C", desktopRoot, "status", "--porcelain", "--untracked-files=all", "--",
+  ".", ":(exclude).edupi-core-runtime", ":(exclude).edupi-core-host-test-tmp"],
   { encoding: "utf8", timeout: 15_000 }).trim(), "", "release canary requires clean Desktop source");
 if (sourceCandidate || useMain4) {
   const expected = JSON.parse(fs.readFileSync(path.join(desktopRoot, "contracts/edupi-core-compat.json"), "utf8")).core_runtime;
