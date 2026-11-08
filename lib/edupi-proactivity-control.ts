@@ -182,7 +182,8 @@ export function buildCapabilityScopeCandidates(domain: EduPiCapabilityDomain, wo
       ? calendarEvents[0][0] : null;
     if (domain === "calendar_administration"
       ? fact.entity_id !== classId && fact.entity_id !== calendarEventId
-      : fact.entity_id !== (domain === "parent_communication" ? recipient ? parentId : studentOrLesson : classId)) continue;
+      : domain === "lesson_reflection" ? fact.entity_id !== classId && fact.entity_id !== studentOrLesson
+        : fact.entity_id !== (recipient ? parentId : studentOrLesson)) continue;
     const targetKey = JSON.stringify(targets[0]);
     if (recipient) {
       if (fact.fact_kind === "evidence" && record(fact.confidence)?.basis === "explicit"
