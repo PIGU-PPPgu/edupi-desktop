@@ -199,7 +199,10 @@ async function selectedQuestion(host: Awaited<ReturnType<typeof runtimeContext>>
   let selection = readInput(rootRef, ownerId, grantId, factId, revision, generation);
   let read = checkedRead(await host.callOwnerControl("owner_parent_question_recipient_read", selection), factId, revision);
   const previous = related.find(item => item.sourceBasisHash === read.candidate?.source_basis_hash
-    && ["prepared", "registered", "captured"].includes(item.stage));
+    && (read.status === "confirmed"
+      ? ["captured", "cancel_pending"].includes(item.stage) && item.messageRef === read.candidate?.message_ref
+        && item.planId === read.candidate?.confirmation_plan_id
+      : ["prepared", "registered", "captured"].includes(item.stage)));
   if (previous) {
     generation = previous.generation;
     selection = readInput(rootRef, ownerId, grantId, factId, revision, generation);
