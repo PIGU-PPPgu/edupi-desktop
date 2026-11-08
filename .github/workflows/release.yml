@@ -286,6 +286,7 @@ jobs:
           node --test lib/edupi-memory-recall-access.test.mjs lib/edupi-teacher-usage-runtime.test.mjs
           node --test lib/edupi-core-process-client.test.mjs lib/edupi-reminder-notification-proof.test.mjs 'app/api/edupi/tasks/[taskId]/execution/route.test.mjs'
           node scripts/test-edupi-capability-canary-e2.mjs --require-recipient-confirmation
+          node scripts/test-edupi-capability-canary-e2.mjs --main4 --require-recipient-confirmation
 
       - name: Configure updater public key
         env:

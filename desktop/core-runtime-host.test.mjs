@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { fork, execFileSync } from "node:child_process";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
@@ -17,6 +18,17 @@ test("G3 forwards a frozen exact grant snapshot without reading model configurat
   fs.mkdirSync(path.join(root, "scripts"));
   fs.writeFileSync(path.join(root, "scripts/core_runtime_daemon.mjs"), "export let received; export async function createCoreRuntimeDaemon(options) { received = options; return { async close() {} }; }");
   fs.writeFileSync(path.join(root, "scripts/recall_source_support.mjs"), "export function createRecallSupportAssessor({runModel}) { return {assess:runModel,waitForIdle:async()=>{}}; }");
+  fs.writeFileSync(path.join(root, "scripts/core_runtime_root.mjs"), "export function prepareCoreRuntimeRoot(dataRoot) { return { ok: true, dataRoot }; }");
+  fs.writeFileSync(path.join(root, "scripts/ambient_planning_store.mjs"), `
+    let version = 1;
+    export function setVersion(value) { version = value; }
+    export const AMBIENT_PLANNING_STORE_FILE = "ambient-planning-v1.json";
+    export function readAmbientPlanningMigrationFile() { return { bytes: Buffer.from(JSON.stringify({storage_version: version})) }; }
+    export function readAmbientPlanningV1Tombstone() {
+      if (version !== 2) throw new Error("invalid tombstone");
+      return { tombstone: {storage_version: 2, kind: "planning-v1-retired"} };
+    }
+  `);
   const channel = new EventEmitter(); channel.connected = true; const sent = []; channel.send = value => sent.push(value);
   const options = { dataRoot: root, token: "token", supervisorSessionId: "g3", coreCommit: "a".repeat(40), componentManifestHash: `sha256:${"b".repeat(64)}`,
     port: 0, ambientPlanning: true, ownerControlToken: "control", ownerMessageRegistration: true };
@@ -40,6 +52,67 @@ test("G3 forwards a frozen exact grant snapshot without reading model configurat
   assert.equal(daemonModule.received.g3Live.durableCalendarAdministration, true, "manual admin cases retain Durable while Core routes source drafts to its zero-model path");
   assert.deepEqual(sent, [], "source-driven administrative drafts do not request a model");
   await sourceHost.close();
+  const parentBindings = [{ domain: "parent_communication", grantId: "parent-grant", ownerId: "selected-owner",
+    scope: { class_id: "selected-class", subject: "math" } }];
+  const parentHost = await startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: parentBindings, sourceParentQuestionGoals: true } }, channel);
+  assert.equal(daemonModule.received.g3Live.sourceParentQuestionGoals, true);
+  assert.deepEqual(daemonModule.received.g3Live.allowedBindings, parentBindings);
+  assert.deepEqual(sent, [], "source parent drafts do not request model configuration");
+  await parentHost.close();
+  const reflectionBindings = [{ domain: "lesson_reflection", grantId: "reflection-grant", ownerId: "selected-owner",
+    scope: { class_id: "selected-class", subject: "math" } }];
+  for (let boot = 0; boot < 2; boot++) {
+    const reflectionHost = await startCoreRuntimeHost({ coreRoot: root,
+      options: { ...options, g3Bindings: reflectionBindings, sourceReflectionGoals: true } }, channel);
+    assert.equal(daemonModule.received.g3Live.sourceReflectionGoals, true);
+    assert.equal(daemonModule.received.sourceReflectionGoals, undefined);
+    assert.equal(daemonModule.received.g3Live.sourceParentQuestionGoals, undefined);
+    assert.equal(daemonModule.received.g3Live.sourceAdministrativeGoals, undefined);
+    assert.equal(daemonModule.received.g3Live.durableCalendarAdministration, false);
+    assert.deepEqual(daemonModule.received.g3Live.allowedBindings, reflectionBindings);
+    assert.ok(Object.isFrozen(daemonModule.received.g3Live));
+    assert.ok(Object.isFrozen(daemonModule.received.g3Live.allowedBindings[0].scope));
+    assert.deepEqual(sent, [], "reflection source startup and cold reopen never request model configuration");
+    await reflectionHost.close();
+  }
+  const planningModule = await import(pathToFileURL(path.join(root, "scripts/ambient_planning_store.mjs")).href);
+  for (const version of [1, 2]) {
+    planningModule.setVersion(version);
+    for (const [extraBindings, sourceFlag] of [[reflectionBindings, "sourceReflectionGoals"], [parentBindings, "sourceParentQuestionGoals"]]) {
+      for (let boot = 0; boot < 2; boot++) {
+        const combination = [...adminBindings, ...extraBindings];
+        const combinedChannel = new EventEmitter(); combinedChannel.connected = true; combinedChannel.send = channel.send;
+        const combinedHost = await startCoreRuntimeHost({ coreRoot: root, options: { ...options,
+          g3Bindings: combination, sourceAdministrativeGoals: true, [sourceFlag]: true } }, combinedChannel);
+        assert.equal(daemonModule.received.g3Live.durableCalendarAdministration, version === 1 ? true : undefined,
+          "Main4 source combinations must omit the legacy Durable switch while old planning retains it");
+        assert.deepEqual(daemonModule.received.g3Live.allowedBindings, combination);
+        assert.equal(daemonModule.received.g3Live.sourceAdministrativeGoals, true);
+        assert.equal(daemonModule.received.g3Live[sourceFlag], true);
+        assert.deepEqual(sent, [], "combined startup and cold reopen never request a model");
+        await combinedHost.close();
+      }
+      const sourceChannel = new EventEmitter(); sourceChannel.connected = true; sourceChannel.send = channel.send;
+      const sourceOnly = await startCoreRuntimeHost({ coreRoot: root, options: { ...options,
+        g3Bindings: extraBindings, [sourceFlag]: true } }, sourceChannel);
+      assert.equal(daemonModule.received.g3Live.durableCalendarAdministration, version === 1 ? false : undefined);
+      await sourceOnly.close();
+    }
+  }
+  planningModule.setVersion(1);
+  for (const unsafe of [undefined, [], [{ domain: "lesson_reflection", grantId: "reflection-grant", scope: reflectionBindings[0].scope }],
+    [reflectionBindings[0], { ...reflectionBindings[0], grantId: "second-reflection-grant" }], parentBindings]) {
+    await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: unsafe, sourceReflectionGoals: true } }, channel), /Invalid runtime bootstrap/);
+  }
+  for (const override of [{ ownerMessageRegistration: undefined }, { sourceReflectionGoals: false }, { sourceReflectionGoals: "true" }]) {
+    await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: reflectionBindings,
+      sourceReflectionGoals: true, ...override } }, channel), /Invalid runtime bootstrap/);
+  }
+  for (const unsafe of [[], [{ ...parentBindings[0], ownerId: undefined }], adminBindings]) {
+    await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: unsafe, sourceParentQuestionGoals: true } }, channel), /Invalid runtime bootstrap/);
+  }
+  await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, ownerMessageRegistration: undefined,
+    g3Bindings: parentBindings, sourceParentQuestionGoals: true } }, channel), /Invalid runtime bootstrap/);
   for (const unsafe of [[{ ...adminBindings[0], ownerId: undefined }], [{ ...adminBindings[0], scope: { ...adminBindings[0].scope, subject: "数学" } }]]) {
     await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: unsafe, sourceAdministrativeGoals: true } }, channel), /Invalid runtime bootstrap/);
   }
@@ -52,6 +125,8 @@ test("G3 forwards a frozen exact grant snapshot without reading model configurat
   delete process.env.EDUPI_DESKTOP_ISOLATED_CANARY;
   await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: bindings } }, channel), /Invalid runtime bootstrap/);
   await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: adminBindings, sourceAdministrativeGoals: true } }, channel), /Invalid runtime bootstrap/);
+  await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: parentBindings, sourceParentQuestionGoals: true } }, channel), /Invalid runtime bootstrap/);
+  await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, g3Bindings: reflectionBindings, sourceReflectionGoals: true } }, channel), /Invalid runtime bootstrap/);
 });
 
 test("runtime startup errors expose only bounded operational categories", () => {
@@ -308,6 +383,134 @@ test("paired Core accepts only the real isolated G2 adapter brand", { skip: !pro
   const generic = createStudentFollowUpModelAdapter({ runModel: async () => ({ output: "{}" }) });
   assert.throws(() => validateStudentFollowUpExecutionLiveOptions({ modelAdapter: generic }), /invalid G2 live options/);
   await isolated.waitForIdle();
+});
+
+test("Main4 admin source combinations activate the real Core processor across cold starts without models", {
+  skip: process.platform !== "darwin" || !process.env.EDUPI_CORE_ROOT, timeout: 120_000,
+}, async context => {
+  const coreRoot = fs.realpathSync(process.env.EDUPI_CORE_ROOT);
+  const from = name => import(pathToFileURL(path.join(coreRoot, "scripts", name)).href);
+  const { DatabaseSync } = await import("node:sqlite");
+  const { prepareCoreRuntimeRoot } = await from("core_runtime_root.mjs");
+  const store = await from("core_runtime_store.mjs");
+  const admission = await from("core_runtime_writer_admission.mjs");
+  const { activateCoreOwnerHistoryV3 } = await from("core_owner_history_v3_store.mjs");
+  const { createCoreRuntimeMigrationQuiescenceProof } = await from("core_runtime_migration_quiescence.mjs");
+  const { createAmbientAuthorizationStore } = await from("ambient_authorization_store.mjs");
+  const protocol = await from("core_runtime_protocol.mjs");
+  const coreCommit = execFileSync("git", ["-C", coreRoot, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  const ownerControlToken = createHash("sha256").update("r03-v3-persist-isolated-token").digest("base64url");
+  const bounded = async (promise, label) => {
+    let timer;
+    try { return await Promise.race([promise, new Promise((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error(label)), 15_000);
+    })]); } finally { clearTimeout(timer); }
+  };
+  for (const [domain, sourceFlag] of [["lesson_reflection", "sourceReflectionGoals"], ["parent_communication", "sourceParentQuestionGoals"]]) {
+    await context.test(domain, async () => {
+      const fixture = JSON.parse(execFileSync(process.execPath, ["--disable-warning=ExperimentalWarning",
+        path.join(coreRoot, "scripts/test_core_owner_history_v3_persist_plan.mjs"),
+        "--create-candidate-publish-root", "desktop-main4-combination", "2", "none"],
+      { encoding: "utf8", timeout: 60_000, stdio: ["ignore", "pipe", "pipe"] }));
+      const { dataRoot, ownerId } = fixture;
+      assert.equal(path.dirname(dataRoot), fs.realpathSync(os.tmpdir()));
+      assert.match(path.basename(dataRoot), /^edupi-r03-v3-persist-desktop-main4-combination-/u);
+      const environment = { EDUPI_PROJECT_ROOT: dataRoot, EDUPI_DATA_ROOT: dataRoot,
+        EDUPI_HOME: path.join(dataRoot, ".edupi"), EDUPI_MEMORY_DIR: path.join(dataRoot, ".edupi/memory"),
+        EDUPI_OUTPUT_DIR: path.join(dataRoot, ".edupi/output"), EDUPI_LOCK_DIR: path.join(dataRoot, ".edupi/locks") };
+      const previous = new Map(Object.keys(environment).map(key => [key, process.env[key]]));
+      Object.assign(process.env, environment);
+      let lease;
+      try {
+        const root = prepareCoreRuntimeRoot(dataRoot);
+        assert.equal(root.ok, true);
+        lease = await admission.acquireCoreRuntimeWriterAdmissionV2Migration({ root });
+        await store.publishCoreOwnerHistoryV3SQLiteCandidate({ root, admissionLease: lease, ownerControlToken });
+        await activateCoreOwnerHistoryV3({ root, admissionLease: lease, ownerControlToken });
+        await lease.release();
+        lease = await admission.acquireCoreRuntimeWriterAdmissionV3Runtime({ root, kind: "daemon", ownerControlToken });
+        const authorization = createAmbientAuthorizationStore({ root,
+          verifyControl: value => value === ownerControlToken,
+          macKey: createHmac("sha256", Buffer.from(ownerControlToken, "base64url"))
+            .update(`edupi.owner.authorization.mac-key.v1\0${root.dataRootFingerprint}`).digest() });
+        const g3Bindings = ["calendar_administration", domain].map(selected => ({ domain: selected,
+          grantId: `isolated-${selected}`, ownerId, scope: { class_id: "isolated-combination-class",
+            subject: selected === "calendar_administration" ? "administration" : "math" } }));
+        for (const binding of g3Bindings) authorization.control({
+          root_ref: root.dataRootFingerprint, expected_owner_id: ownerId, command_id: `create-${binding.domain}`,
+          action: "create", grant_id: binding.grantId, expected_version: 0,
+          spec: { scope: binding.scope, domains: [binding.domain], actions: ["update"], source_ids: ["synthetic-source"],
+            starts_at: new Date(Date.now() - 86_400_000).toISOString(),
+            ends_at: new Date(Date.now() + 86_400_000).toISOString(),
+            budget: { id: `budget-${binding.domain}`, max_calls: 4 } },
+        }, authorization.authorizeControl(ownerControlToken));
+        const snapshot = () => {
+          const database = new DatabaseSync(root.databasePath, { readOnly: true });
+          try {
+            const authority = { ...database.prepare("SELECT * FROM authority WHERE singleton=1").get() };
+            return { root_ref: root.dataRootFingerprint, fencing_generation: authority.fencing_generation, authority };
+          } finally { database.close(); }
+        };
+        const before = snapshot();
+        const proof = createCoreRuntimeMigrationQuiescenceProof({ rootRef: before.root_ref,
+          generation: before.fencing_generation, authority: before.authority, admissionLease: lease, checkCurrent: snapshot });
+        admission.prepareCoreRuntimeWriterAdmissionV3Transition(lease, proof).commit();
+        lease = await admission.acquireCoreRuntimeWriterAdmissionV3Migration({ root });
+        assert.equal((await store.migrateCoreRuntimePlanningV4({ root, admissionLease: lease, ownerControlToken })).schema_version, 4);
+        await lease.release(); lease = null;
+        let generation = before.fencing_generation;
+        for (let boot = 0; boot < 2; boot++) {
+          const token = randomBytes(32).toString("base64url");
+          const messages = [];
+          const child = fork(fileURLToPath(new URL("./core-runtime-host.mjs", import.meta.url)), [], {
+            execArgv: ["--disable-warning=ExperimentalWarning"], stdio: ["ignore", "ignore", "ignore", "ipc"],
+            env: { PATH: process.env.PATH, LANG: "C.UTF-8", TZ: "Asia/Shanghai",
+              ...environment, EDUPI_DESKTOP_ISOLATED_CANARY: "1" },
+          });
+          const exited = new Promise(resolve => child.once("exit", code => resolve(code)));
+          const ready = new Promise((resolve, reject) => {
+            child.once("error", reject);
+            child.on("message", value => {
+              messages.push(value.type);
+              if (value.type === "runtime-ready") resolve(value);
+              if (value.type === "runtime-error") reject(new Error(value.code));
+              if (value.type.startsWith("model-")) reject(new Error("source startup requested a model"));
+            });
+          });
+          try {
+            child.send({ type: "runtime-start", coreRoot, options: { dataRoot, token, ownerControlToken,
+              coreCommit, componentManifestHash: protocol.CORE_RUNTIME_SCHEMA_HASH, supervisorSessionId: `combination-${boot}`,
+              port: 0, ambientPlanning: true, ownerMessageRegistration: true, g3Bindings,
+              sourceAdministrativeGoals: true, [sourceFlag]: true } });
+            const metadata = await bounded(ready, "Main4 combination startup timed out");
+            const response = await fetch(metadata.endpoint, { method: "POST", signal: AbortSignal.timeout(5000),
+              headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+              body: JSON.stringify({ protocol: protocol.CORE_RUNTIME_PROTOCOL,
+                protocol_version: protocol.CORE_RUNTIME_PROTOCOL_VERSION, schema_hash: protocol.CORE_RUNTIME_SCHEMA_HASH,
+                request_id: `health-${domain}-${boot}`, operation: "health", payload: null }) });
+            const health = await response.json();
+            assert.equal(health.ok, true);
+            assert.equal(health.result.capabilities.g3_processor, "active");
+            assert.equal(health.result.capabilities.ambient_planning, "active");
+            assert.ok(health.result.fencing_generation > generation);
+            generation = health.result.fencing_generation;
+            child.send({ type: "runtime-stop" });
+            assert.equal(await bounded(exited, "Main4 combination shutdown timed out"), 0);
+            assert.deepEqual(messages, ["runtime-ready"]);
+          } finally {
+            if (child.exitCode === null) child.kill("SIGKILL");
+            await exited;
+          }
+        }
+      } finally {
+        if (lease?.status === "held") await lease.release();
+        for (const [key, value] of previous) {
+          if (value === undefined) delete process.env[key]; else process.env[key] = value;
+        }
+        fs.rmSync(dataRoot, { recursive: true, force: true });
+      }
+    });
+  }
 });
 
 test("real Core host uses private configuration for default Durable math, preserves reserves on restart and reaps on disconnect", { skip: !process.env.EDUPI_CORE_ROOT, timeout: 60_000 }, async () => {

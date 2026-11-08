@@ -2043,6 +2043,14 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-review-fact { display: grid; gap: 5px; padding: 10px; border: 1px solid var(--ep-border); border-radius: 7px; }
 .edupi-review-fact > strong { font-size: 11px; line-height: 1.45; }
 .edupi-review-fact > span { color: var(--ep-muted); font-size: 9px; }
+.edupi-parent-question-confirmation { margin-top: 24px; padding: 16px; border: 1px solid var(--ep-border); border-radius: var(--radius-lg); background: var(--ep-surface); }
+.edupi-parent-question-confirmation > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.edupi-parent-question-confirmation h2 { margin: 0; font-size: 14px; }
+.edupi-parent-question-confirmation ul { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.edupi-parent-question-confirmation li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 10px; border: 1px solid var(--ep-border); border-radius: 7px; }
+.edupi-parent-question-confirmation li p { flex: 1 1 100%; margin: 0; white-space: pre-wrap; }
+.edupi-parent-question-confirmation li span { flex: 1; color: var(--ep-muted); font-size: 12px; }
+.edupi-parent-question-confirmation > p { color: var(--ep-muted); font-size: 12px; }
 .edupi-context-modal { animation: edupi-backdrop-in .16s ease-out both; }
 .edupi-context-modal__panel { animation: edupi-panel-in .2s cubic-bezier(.2, .7, .3, 1) both; }
 .edupi-material-staging-toast,

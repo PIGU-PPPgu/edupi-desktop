@@ -182,7 +182,8 @@ export function buildCapabilityScopeCandidates(domain: EduPiCapabilityDomain, wo
       ? calendarEvents[0][0] : null;
     if (domain === "calendar_administration"
       ? fact.entity_id !== classId && fact.entity_id !== calendarEventId
-      : fact.entity_id !== (domain === "parent_communication" ? recipient ? parentId : studentOrLesson : classId)) continue;
+      : domain === "lesson_reflection" ? fact.entity_id !== classId && fact.entity_id !== studentOrLesson
+        : fact.entity_id !== (recipient ? parentId : studentOrLesson)) continue;
     const targetKey = JSON.stringify(targets[0]);
     if (recipient) {
       if (fact.fact_kind === "evidence" && record(fact.confidence)?.basis === "explicit"
@@ -256,6 +257,44 @@ export function calendarAdministrativeSourceIds(scope: EduPiProactivityScope, wo
     .flatMap(candidate => candidate.sourceIds))].sort();
 }
 
+export function parentQuestionSourceIds(scope: EduPiProactivityScope, workspace: unknown): string[] {
+  const spine = record(record(workspace)?.fact_spine);
+  if (spine?.projection_kind !== "education_fact_v1" || spine.external_send !== false
+    || !Array.isArray(spine.entities) || !Array.isArray(spine.observations) || !Array.isArray(spine.accepted_facts)) return [];
+  const entities = new Map(spine.entities.map(record).filter((item): item is RawRecord => Boolean(item?.status === "active"))
+    .map(item => [String(item.entity_id), item]));
+  if (entities.get(scope.classId)?.entity_kind !== "class"
+    || [...entities.values()].filter(item => item.entity_kind === "term").length !== 1) return [];
+  const observations = new Map(spine.observations.map(record).filter((item): item is RawRecord => Boolean(item?.status === "active"))
+    .map(item => [String(item.observation_id), item]));
+  const conflicts = new Map((Array.isArray(spine.conflicts) ? spine.conflicts : []).map(record)
+    .filter((item): item is RawRecord => Boolean(item?.conflict_id)).map(item => [String(item.conflict_id), item.status]));
+  const sources = new Set<string>();
+  for (const raw of spine.accepted_facts) {
+    const fact = record(raw);
+    if (!fact || fact.status !== "accepted" || fact.predicate !== "communication.parent_question"
+      || !["evidence", "general", "academic"].includes(String(fact.fact_kind))
+      || fact.subject_ref !== scope.subject || !Array.isArray(fact.source_ids)
+      || !Array.isArray(fact.observation_ids) || fact.observation_ids.length === 0
+      || !Array.isArray(fact.conflict_ids) || fact.conflict_ids.some(id => conflicts.get(String(id)) !== "resolved")) continue;
+    const observed = fact.observation_ids.map(id => observations.get(String(id)));
+    if (observed.some(item => !item || !Array.isArray(item.entity_ids))) continue;
+    const targets = observed.map(item => ["class", "term", "student", "parent"].map(kind => {
+      const ids = (item!.entity_ids as unknown[]).filter(id => entities.get(String(id))?.entity_kind === kind);
+      return ids.length === 1 ? String(ids[0]) : null;
+    }));
+    if (targets.some(target => target.includes(null) || JSON.stringify(target) !== JSON.stringify(targets[0]))
+      || targets[0][0] !== scope.classId || fact.entity_id !== targets[0][2]) continue;
+    const observedSources = observed.map(item => text(item?.source_id, 160));
+    const factSourceIds = fact.source_ids as unknown[];
+    if (observedSources.some(id => !id || !ID.test(id))
+      || new Set(observedSources).size !== factSourceIds.length
+      || observedSources.some(id => !factSourceIds.includes(id))) continue;
+    for (const id of observedSources) sources.add(id!);
+  }
+  return [...sources].sort();
+}
+
 export function buildCapabilityGrantBinding(domain: EduPiCapabilityDomain, scope: EduPiProactivityScope,
   workspace: unknown, now = new Date().toISOString()): EduPiProactivityGrantBinding {
   const instant = new Date(now);
@@ -263,7 +302,8 @@ export function buildCapabilityGrantBinding(domain: EduPiCapabilityDomain, scope
     || !Number.isFinite(instant.getTime()) || instant.toISOString() !== now) throw new EduPiProactivityControlError("proactivity_scope_unavailable");
   const token = crypto.createHash("sha256").update(`${domain}\0${scope.classId}\0${scope.subject}`, "utf8").digest("hex").slice(0, 32);
   const endsAt = new Date(instant.getTime() + EDUPI_PROACTIVITY_DURATION_DAYS * 86_400_000).toISOString();
-  const sourceIds = domain === "calendar_administration" ? calendarAdministrativeSourceIds(scope, workspace) : [];
+  const sourceIds = domain === "calendar_administration" ? calendarAdministrativeSourceIds(scope, workspace)
+    : domain === "parent_communication" ? parentQuestionSourceIds(scope, workspace) : [];
   if (sourceIds.length > 127) throw new EduPiProactivityControlError("proactivity_source_capacity");
   const conversationSource = opaqueSource("conversation", proactivityConversationId(domain));
   // Preserve the manual conversation source inside Core's 128-source limit.

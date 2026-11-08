@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { isDeepStrictEqual } from "node:util";
 import fs from "node:fs";
 import test from "node:test";
 import ts from "typescript";
@@ -64,6 +65,7 @@ test("failed enable orders stop marker and quarantine before rollback retries", 
     target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
   const route = { exports: {} };
   new Function("require", "module", "exports", compiled)(name => {
+    if (name === "node:util") return { isDeepStrictEqual };
     if (!Object.hasOwn(modules, name)) throw new Error(`unexpected dependency ${name}`);
     return modules[name];
   }, route, route.exports);
@@ -101,6 +103,7 @@ test("Windows normal mode refuses G1 enable before reading or mutating Core", as
     target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
   const route = { exports: {} };
   new Function("require", "module", "exports", compiled)(name => {
+    if (name === "node:util") return { isDeepStrictEqual };
     if (!Object.hasOwn(modules, name)) throw new Error(`unexpected dependency ${name}`);
     return modules[name];
   }, route, route.exports);

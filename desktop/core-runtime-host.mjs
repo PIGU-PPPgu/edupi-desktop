@@ -128,25 +128,45 @@ function snapshotG3Bindings(bindings) {
   return Object.freeze(snapshot);
 }
 
+async function usesPlanningV2(coreRoot, dataRoot) {
+  const planning = await import(pathToFileURL(path.join(coreRoot, "scripts/ambient_planning_store.mjs")).href);
+  if (typeof planning.readAmbientPlanningMigrationFile !== "function") return false;
+  const { prepareCoreRuntimeRoot } = await import(pathToFileURL(path.join(coreRoot, "scripts/core_runtime_root.mjs")).href);
+  const root = prepareCoreRuntimeRoot(dataRoot);
+  if (!root.ok) throw Object.assign(new Error("Invalid runtime root."), { code: root.code });
+  const source = planning.readAmbientPlanningMigrationFile({ root, fileName: planning.AMBIENT_PLANNING_STORE_FILE });
+  if (!source || JSON.parse(source.bytes.toString("utf8")).storage_version !== 2) return false;
+  planning.readAmbientPlanningV1Tombstone({ root });
+  return true;
+}
+
 export async function startCoreRuntimeHost({ coreRoot, options }, channel = process) {
   const hasModelScope = options?.g1Scope !== undefined || options?.g2Scope !== undefined;
-  if (!options || Object.keys(options).some(key => !["dataRoot", "token", "supervisorSessionId", "coreCommit", "componentManifestHash", "port", "ambientPlanning", "ownerControlToken", "ownerMessageRegistration", "g1Scope", "g2Scope", "g3Bindings", "sourceAdministrativeGoals"].includes(key))
+  if (!options || Object.keys(options).some(key => !["dataRoot", "token", "supervisorSessionId", "coreCommit", "componentManifestHash", "port", "ambientPlanning", "ownerControlToken", "ownerMessageRegistration", "g1Scope", "g2Scope", "g3Bindings", "sourceAdministrativeGoals", "sourceParentQuestionGoals", "sourceReflectionGoals"].includes(key))
     || (options.ambientPlanning !== undefined && typeof options.ambientPlanning !== "boolean")
     || (options.ownerMessageRegistration !== undefined && (options.ownerMessageRegistration !== true
       || options.ambientPlanning !== true || typeof options.ownerControlToken !== "string"))
     || (options.sourceAdministrativeGoals !== undefined && options.sourceAdministrativeGoals !== true)
+    || (options.sourceParentQuestionGoals !== undefined && (options.sourceParentQuestionGoals !== true || options.ownerMessageRegistration !== true))
+    || (options.sourceReflectionGoals !== undefined && (options.sourceReflectionGoals !== true || options.ownerMessageRegistration !== true))
     || (hasModelScope || options.g3Bindings !== undefined) && (options.ambientPlanning !== true || typeof options.ownerControlToken !== "string")
     || options.g1Scope !== undefined && !validScope(options.g1Scope)
     || options.g2Scope !== undefined && (!validScope(options.g2Scope) || options.g2Scope.subject !== "数学")) throw new Error("Invalid runtime bootstrap.");
   const g3Bindings = options.g3Bindings === undefined ? null : snapshotG3Bindings(options.g3Bindings);
   if (options.sourceAdministrativeGoals === true && !g3Bindings?.some(binding => binding.domain === "calendar_administration"
     && binding.scope.subject === "administration" && binding.ownerId)) throw new Error("Invalid runtime bootstrap.");
+  if (options.sourceParentQuestionGoals === true && g3Bindings?.filter(binding => binding.domain === "parent_communication" && binding.ownerId).length !== 1) throw new Error("Invalid runtime bootstrap.");
+  if (options.sourceReflectionGoals === true && g3Bindings?.filter(binding => binding.domain === "lesson_reflection" && binding.ownerId).length !== 1) throw new Error("Invalid runtime bootstrap.");
   const hostExecutor = hasModelScope || options.ownerMessageRegistration ? createParentModelExecutor(channel) : null;
   try {
     const { createCoreRuntimeDaemon } = await import(pathToFileURL(path.join(coreRoot, "scripts/core_runtime_daemon.mjs")).href);
+    const sourcePlanningV2 = (options.sourceAdministrativeGoals === true || options.sourceParentQuestionGoals === true
+      || options.sourceReflectionGoals === true) && await usesPlanningV2(coreRoot, options.dataRoot);
     const { g1Scope, g2Scope, ...daemonOptions } = options;
     delete daemonOptions.g3Bindings;
     delete daemonOptions.sourceAdministrativeGoals;
+    delete daemonOptions.sourceParentQuestionGoals;
+    delete daemonOptions.sourceReflectionGoals;
     let recallSupport;
     if (options.ownerMessageRegistration) {
       const { createRecallSupportAssessor } = await import(pathToFileURL(path.join(coreRoot, "scripts/recall_source_support.mjs")).href);
@@ -188,11 +208,11 @@ export async function startCoreRuntimeHost({ coreRoot, options }, channel = proc
     const daemon = await createCoreRuntimeDaemon({ ...daemonOptions,
       ...(recallSupport ? { recallSupport } : {}),
       ...(g1Runner || g2Live || g3Bindings ? { ownerMessageContinuation: true } : {}),
-      // Core selects the deterministic path for source-derived drafts and
-      // retains Durable checkpoints for manual administration cases.
       ...(g3Bindings ? { g3Live: Object.freeze({ allowedBindings: g3Bindings,
-        durableCalendarAdministration: g3Bindings.some(binding => binding.domain === "calendar_administration"),
-        ...(options.sourceAdministrativeGoals === true ? { sourceAdministrativeGoals: true } : {}) }) } : {}),
+        ...(!sourcePlanningV2 ? { durableCalendarAdministration: g3Bindings.some(binding => binding.domain === "calendar_administration") } : {}),
+        ...(options.sourceAdministrativeGoals === true ? { sourceAdministrativeGoals: true } : {}),
+        ...(options.sourceParentQuestionGoals === true ? { sourceParentQuestionGoals: true } : {}),
+        ...(options.sourceReflectionGoals === true ? { sourceReflectionGoals: true } : {}) }) } : {}),
       ...(g2Live ? { g2Live } : {}),
       ...(g1Runner ? { g1Live: { modelRunner: g1Runner, leaseMs: 300000,
         scope: { classId: g1Scope.classId, subject: g1Scope.subject }, grantId: g1Scope.grantId } } : {}) });

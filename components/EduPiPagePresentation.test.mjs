@@ -17,10 +17,11 @@ const review = (data, query = "", selectedObjectId = "review:board") => render(E
   data, query, selectedObjectId, reviewer: "synthetic-teacher", onTask: noop, onReviewTarget: noop, onEducation: noop, onObject: noop,
 });
 
-test("an empty review page has one status instead of five empty groups", () => {
+test("an empty review page omits empty groups and keeps parent question confirmation", () => {
   const html = review(buildEducationContract());
-  assert.match(html, /role="status">暂无待确认事项/);
-  assert.doesNotMatch(html, /edupi-review-mini-board|<h2>/);
+  assert.match(html, /role="status">暂无其他待确认事项/);
+  assert.doesNotMatch(html, /edupi-review-mini-board/);
+  assert.match(html, /id="parent-question-title">家长问题收件人/);
   assert.doesNotMatch(review(buildEducationContract(), "", "review:list:facts"), /列表分页|上一页|下一页/);
 });
 
@@ -43,7 +44,7 @@ test("review groups contain only available work and search keeps a distinct empt
   assert.match(html, /<h2>观察确认<\/h2>/);
   assert.match(html, /合成课堂观察/);
   assert.doesNotMatch(html, /<h2>任务审核|<h2>事实确认|<h2>记忆确认/);
-  assert.match(review(data, "不存在"), /未找到待确认事项/);
+  assert.match(review(data, "不存在"), /未找到其他待确认事项/);
 });
 
 test("reviewed follow-ups remain reachable when no pending group exists", () => {

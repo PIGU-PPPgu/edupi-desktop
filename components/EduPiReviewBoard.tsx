@@ -9,6 +9,7 @@ import { FACT_KIND_LABELS, factStatusLabel } from "@/lib/edupi-fact-lifecycle-mo
 import { EduPiFactActions } from "./EduPiFactActions";
 import { compareForegroundDates, isTaskForeground, taskReferenceDate } from "@/lib/edupi-foreground";
 import { EduPiListPreview, EduPiPagedRows, useEduPiForegroundPolicy } from "./EduPiForeground";
+import { EduPiParentQuestionConfirmation } from "./EduPiParentQuestionConfirmation";
 
 const TITLES = { tasks: "任务审核", facts: "事实确认", followups: "学生跟进", "followups-history": "跟进历史", observations: "观察确认", memories: "记忆确认", content: "审核内容" };
 type ReviewList = keyof typeof TITLES;
@@ -45,9 +46,10 @@ export function EduPiReviewBoard({ data, query, onTask, onReviewTarget, onEducat
   const groups = (["tasks", "facts", "followups", "observations", "memories"] as const).filter(group => nodes[group].length > 0);
   if (list) return <main className="edupi-module-workspace edupi-review-board-workspace"><header className="edupi-module-heading"><div><button type="button" className="edupi-back-link" onClick={() => { setLocalList(null); onObject?.("review:board"); }}>← 待我确认</button><h1>{TITLES[list]}</h1></div></header><EduPiPagedRows rows={nodes[list]} memoryKey={`review:${list}:${query}`} renderRow={row => row} /></main>;
   return <main className="edupi-module-workspace edupi-review-board-workspace">
-    <header className="edupi-module-heading"><div><h1>待我确认</h1><p>{tasks.length + observations.length + memories.length + facts.length + pendingFollowUps.length} 项</p></div>{reviewedFollowUps.length > 0 ? <button type="button" onClick={() => openList("followups-history")}>跟进历史 <span>{reviewedFollowUps.length}</span></button> : null}</header>
+    <header className="edupi-module-heading"><div><h1>待我确认</h1></div>{reviewedFollowUps.length > 0 ? <button type="button" onClick={() => openList("followups-history")}>跟进历史 <span>{reviewedFollowUps.length}</span></button> : null}</header>
     {groups.length > 0 ? <div className="edupi-review-mini-board">
       {groups.map(group => <section key={group}><header><h2>{TITLES[group]}</h2><em>{nodes[group].length}</em></header><div>{preview(group)}</div></section>)}
-    </div> : <p className="edupi-module-empty" role="status">{query.trim() ? "未找到待确认事项" : "暂无待确认事项"}</p>}
+    </div> : <p className="edupi-module-empty" role="status">{query.trim() ? "未找到其他待确认事项" : "暂无其他待确认事项"}</p>}
+    <EduPiParentQuestionConfirmation query={query} />
   </main>;
 }
