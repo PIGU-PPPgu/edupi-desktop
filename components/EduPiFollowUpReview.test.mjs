@@ -63,6 +63,7 @@ function componentHarness(file, exportName, initialProps, fetcher = async () => 
     "./EduPiFollowUpFeedback": { EduPiFollowUpFeedback: value => ({ type: "follow-up-feedback", props: value }) },
     "./EduPiTodayWork": { EduPiTeacherValueForm: value => ({ type: "teacher-value-form", props: value }) },
     "./EduPiUsageObservation": { EduPiUsageVisibility: value => ({ type: "usage-visibility", props: value }) },
+    "./EduPiParentQuestionConfirmation": { EduPiParentQuestionConfirmation: value => ({ type: "parent-question-confirmation", props: value }) },
     "@/lib/desktop-updater": { isTauriDesktop: () => true },
     "@/lib/desktop-native": { desktopApiHeaders: async extra => extra || {} },
     "@/lib/edupi-teacher-feedback": { ...feedback,

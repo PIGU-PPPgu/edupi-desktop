@@ -6,7 +6,7 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "690092a653c4170b901df3d717db318b22b2e4d6",
+    "core_commit": "be80d52f95cf4ff1bf0e3fd8ed4cd4780fa5cb26",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
     "component_manifest_hash": "sha256:58e38899e25449643b717d2d079468b77c5720a8db1a0b78d7f998b19bd8fb5c",
     "runtime_component_manifest_hash": "sha256:67512cbffd43f928386fb1315558110f3102f2988c236338e6dbf0a4c207f9ae",
@@ -281,5 +281,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/446",
     "https://github.com/PIGU-PPPgu/edupi/pull/458"
   ],
-  "change_note": "This source candidate pairs the exact Core PR458 head 690092a6 with both component manifests and the runtime schema. Isolated Main4 fixtures use SQLite planning storage without rewriting the retired V1 planning tombstone. Source-derived parent questions require an exact owner grant and explicit recipient confirmation; review, cancellation and cold restart are verified without external send. Production root migration, signed installed pairing and public updates are not enabled by this change."
+  "change_note": "This source candidate pins the merged Core PR458 commit be80d52f with both component manifests and the runtime schema. Isolated Main4 fixtures use SQLite planning storage without rewriting the retired V1 planning tombstone. Source-derived parent questions require an exact owner grant and explicit recipient confirmation; review, cancellation and cold restart are verified without external send. Production root migration, signed installed pairing and public updates are not enabled by this change."
 }

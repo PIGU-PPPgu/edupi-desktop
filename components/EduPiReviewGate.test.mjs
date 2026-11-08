@@ -148,9 +148,10 @@ test("an uncertain post-write result offers reread without claiming the decision
 test("review board excludes a task whose Core work case has no artifacts", () => {
   const html = renderBoard(workCase([]));
   assert.equal(isTaskReviewable(task, workCase([])), false);
-  assert.match(html, /<p>0 项<\/p>/);
+  assert.doesNotMatch(html, /edupi-review-mini-board/);
   assert.doesNotMatch(html, /审核门禁测试任务/);
-  assert.match(html, /暂无待确认事项/);
+  assert.match(html, /暂无其他待确认事项/);
+  assert.match(html, /id="parent-question-title">家长问题收件人/);
 });
 
 test("review board includes a task with Core and projected artifacts", () => {
