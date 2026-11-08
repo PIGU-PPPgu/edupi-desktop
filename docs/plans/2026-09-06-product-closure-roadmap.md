@@ -1,5 +1,9 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-08 R04／L4 Main4 清洁源码配对**已实现待完整验收**：Desktop `090896d2b5d5af1cc18a7f32f7be6bb59668ebb1` 与 Core [PR458](https://github.com/PIGU-PPPgu/edupi/pull/458) head `4bc48998de7f337a7a7c57ea95b0f41deb5bacc7` 在 macOS arm64／Node `v22.23.1` 的清洁隔离工作树运行 `EDUPI_CORE_ROOT=/tmp/edupi-core-l4-integration-20261108 node scripts/test-edupi-capability-canary-e2.mjs --main4 --require-recipient-confirmation`，预期与实际均为通过。临时合成根完成 V3→V4 迁移、真实 Core 进程重启、G5 来源刷新及确认／审核／撤销回读；SQLite `user_version=4`，规划 generation `1→4`、history tip `27→40`，V1 tombstone 摘要全程不变。G5 零模型调用、无外发；三次聊天使用仅监听本机的合成服务。日志 `/tmp/edupi-desktop-main4-e2-final-20261108.log`，SHA-256 `23d20c3e4d4ea3ca66eacb6ba11ed1d34091852ddd96a0cea36b39d1459a1b26`。此前首次运行因旧课次范围筛选失败，已在 `80c9d218` 修复并补测；`090896d2` 又修正发布 CI 临时目录的清洁检查。
+
+该结果只验证临时合成数据的源码配对，不证明生产根迁移、教师界面、安装版或发布通过。Core PR458 尚待合并，Desktop [Draft PR479](https://github.com/PIGU-PPPgu/edupi-desktop/pull/479) 待独立审查和 CI；本项不勾选完整 L4。原型家长问题确认组件未并入本配对，教师界面仍需接入及实际操作验收。
+
 2026-11-05 R04／L4 `.108` Release 已改为[Mac-only 公开预发布](https://github.com/PIGU-PPPgu/edupi-desktop/releases/tag/v0.3.108)：资产身份与已验安装包相同，匿名 API／DMG CDN Range 可达，正式 Latest/feed `.70` 不变，Windows/Linux 未构建。固定 Core `5419e302` 的周／月内部材料与隔离行政来源链已验；当前 Core Main `f9449462` 的 G5 家长问题来源链尚未接入 Desktop，不能称为“全部集成完”。周期暂停的通用状态文案和系统通知实际显示／点击仍待补验，原生发送提交回执已有证据。完整身份与边界见[发布账本](2026-09-07-signed-updates.md)。本段取代下方 `.108` 仍为 Draft 的阶段状态。
 
 2026-11-05 R04／L4 `.108` G3 通知证据更正：隔离安装版两条 `core_g3` 提醒已在北京时间 13:37 持久记录原生 `submitted`／送达回执及同一 dispatch；下段“无发送回执”取代为**原生提交已验、系统实际显示与点击跳转未验**。复测结束时授权已停、App 已退出，3 个 WebView 来源恢复，真实资料／配置 346/346 字节不变；签名 Draft 与正式 feed 均未改。[精确回执](2026-09-07-signed-updates.md)见发布账本顶部。
