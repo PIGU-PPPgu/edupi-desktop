@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { isDeepStrictEqual } from "node:util";
 import fs from "node:fs";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
@@ -73,6 +74,7 @@ function fixture({ isolated = true, g1Enabled = false, g2Processor = true, force
   };
   const root = `/synthetic-proactivity-unit-${randomUUID()}`;
   const modules = {
+    "node:util": { isDeepStrictEqual },
     "next/server": { NextResponse: { json: (body, options = {}) => Response.json(body, { status: options.status || 200 }) } },
     "@/lib/bounded-form-data": { parseJsonWithinLimit: request => request.json(), RequestBodyTooLargeError: class extends Error {} },
     "@/lib/desktop-api-auth": { isDesktopApiRequestAllowed: () => true },

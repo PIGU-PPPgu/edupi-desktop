@@ -90,7 +90,31 @@ test("the Mac candidate exercises new host contracts against its exact pinned Co
   assert.match(step, /lib\/edupi-reminder-notification-proof\.test\.mjs/u);
   assert.match(step, /app\/api\/edupi\/tasks\/\[taskId\]\/execution\/route\.test\.mjs/u);
   assert.match(step, /test-edupi-capability-canary-e2\.mjs --require-recipient-confirmation/u);
+  assert.match(step, /test-edupi-capability-canary-e2\.mjs --main4 --require-recipient-confirmation/u);
+  assert.doesNotMatch(step, /--source-candidate|continue-on-error/u);
   assert.ok(start < release.indexOf("name: Prepare packaged Next.js server"));
+});
+
+test("Main4 source canary migrates only its stopped fixture and proves storage across G5 review restarts", async () => {
+  const source = await readFile(join(root, "scripts", "test-edupi-capability-canary-e2.mjs"), "utf8");
+  assert.match(source, /const useMain4 = process\.argv\.includes\("--main4"\)/u);
+  assert.match(source, /"Desktop must pin the exact candidate Core HEAD"/u);
+  assert.match(source, /"release canary requires clean Core source"/u);
+  assert.match(source, /"release canary requires clean Desktop source"/u);
+  assert.match(source, /coreProtocol\.CORE_RUNTIME_SCHEMA_HASH/u);
+  assert.match(source, /"all real Core hosts must exit before Main4 fixture migration"/u);
+  assert.match(source, /createCoreRuntimeMigrationQuiescenceProof\(\{ rootRef: before\.root_ref/u);
+  assert.match(source, /prepareCoreRuntimeWriterAdmissionV3Transition\(lease, proof\)\.commit\(\)/u);
+  assert.match(source, /migrateCoreRuntimePlanningV4\(\{ root, admissionLease: lease, ownerControlToken \}\)/u);
+  assert.match(source, /prepare\("PRAGMA user_version"\)\.get\(\)\.user_version, 4/u);
+  assert.match(source, /tombstone\.kind, "planning-v1-retired"/u);
+  assert.match(source, /"Main4 must never rewrite the retired V1 planning file"/u);
+  assert.match(source, /useMain4 \? admissionModule\.acquireCoreRuntimeWriterAdmissionV4Runtime/u);
+  assert.match(source, /previousLaunch\.exited, true/u);
+  assert.match(source, /assert\.notEqual\(launches\.at\(-1\)\.pid, previousLaunch\.pid/u);
+  assert.match(source, /assertMain4Storage\("after-g5-restart"\)/u);
+  assert.match(source, /main4Checks\.at\(-1\)\.historyTipSequence > main4Checks\[0\]\.historyTipSequence/u);
+  assert.match(source, /parentQuestionE2\?\.reviewedRestartReadback && parentQuestionE2\?\.cancelledRestartReadback/u);
 });
 
 test("staged schedule test warms its authenticated read route after server identity", async () => {

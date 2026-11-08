@@ -6,11 +6,11 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "5419e30289048c3e3d416cfd02805db9f462882e",
+    "core_commit": "4bc48998de7f337a7a7c57ea95b0f41deb5bacc7",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:f15b55c2619dd3842eba83a3f55567366b2db0150a980ef2821462daa31fdfb0",
-    "runtime_component_manifest_hash": "sha256:59afff76683bdb80f3beaee049e02dedc0902e260f34bf5fc4fd3bfade800e18",
-    "runtime_schema_hash": "sha256:093dc2e1348cb55f747777316a342580af4acb1be9d0a81e71aee3ba51621b41"
+    "component_manifest_hash": "sha256:58e38899e25449643b717d2d079468b77c5720a8db1a0b78d7f998b19bd8fb5c",
+    "runtime_component_manifest_hash": "sha256:67512cbffd43f928386fb1315558110f3102f2988c236338e6dbf0a4c207f9ae",
+    "runtime_schema_hash": "sha256:710fae1ed7b41c09e74d235bc481a3f73b23dced847de176dc3ec78002aa1a2e"
   },
   "contract_identities": [
     {
@@ -278,7 +278,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/442",
     "https://github.com/PIGU-PPPgu/edupi/pull/443",
     "https://github.com/PIGU-PPPgu/edupi/pull/444",
-    "https://github.com/PIGU-PPPgu/edupi/pull/446"
+    "https://github.com/PIGU-PPPgu/edupi/pull/446",
+    "https://github.com/PIGU-PPPgu/edupi/pull/458"
   ],
-  "change_note": "This source candidate pairs Core main 5419e302, including PR437 through PR444 and PR446, with the exact Bridge v1.1 schema, five fixtures and both component manifests. Teacher-confirmed weekly and monthly internal material templates run in Core's resident timer without external send. Core also adds a source-driven internal calendar-administration path behind the current owner grant and exact G3 binding; Desktop does not enable it by default. This is not yet a signed installed Desktop pairing or a public update."
+  "change_note": "This source candidate pairs the exact Core PR458 head 4bc48998 with both component manifests and the runtime schema. Isolated Main4 fixtures use SQLite planning storage without rewriting the retired V1 planning tombstone. Source-derived parent questions require an exact owner grant and explicit recipient confirmation; review, cancellation and cold restart are verified without external send. Production root migration, signed installed pairing and public updates are not enabled by this change."
 }

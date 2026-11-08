@@ -6,6 +6,7 @@ import { issueTeacherContextReview, type TeacherContextReviewDependencies, type 
 import { issueWorkCandidateReview, type WorkCandidateReviewDependencies, type WorkCandidateReviewInput } from "./edupi-work-candidate-review";
 import { issueFollowUpReview, type FollowUpReviewDependencies, type FollowUpReviewInput } from "./edupi-follow-up-review";
 import { issueTaskReview, type TaskReviewDependencies, type TaskReviewInput } from "./edupi-task-review";
+import { hasCommittedTaskReview } from "./edupi-task-refresh";
 import { issueMemoryUpdate, type MemoryUpdateDependencies, type MemoryUpdateInput } from "./edupi-memory-update";
 import { EntityDeleteError, issueEntityDelete, issueEntityRestore, parseEntityDeletionSummary, type EntityDeleteKind } from "./edupi-entity-delete";
 import { projectTeacherContextSnapshot } from "./edupi-onboarding-server";
@@ -225,12 +226,9 @@ export async function reviewEducationTask(
   });
   let data: EducationContract | null = null;
   try {
-    data = result.data ? await refreshEducationContractAfterMutation(snapshot, result.data) : await readEducationContract();
+    data = result.data ? await refreshEducationContractAfterMutation(snapshot, result.data) : null;
   } catch { /* The Core review receipt is already durable. */ }
-  const receiptReview = result.receipt.teacher_review as { revision?: unknown } | undefined;
-  const revision = receiptReview?.revision;
-  const task = data?.tasks.find((item) => item.id === input.taskId);
-  if (!Number.isInteger(revision) || !task || task.revision < Number(revision)) data = null;
+  if (data && !hasCommittedTaskReview(data, result.refreshRequirement)) data = null;
   return { receipt: result.receipt, data, refreshPending: data === null };
 }
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isDeepStrictEqual } from "node:util";
 import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
 import { isDesktopApiRequestAllowed } from "@/lib/desktop-api-auth";
 import { readEduPiEducationSnapshot, resolveEduPiBridgeRoots, type EduPiBridgeRoots } from "@/lib/edupi-core-snapshot";
@@ -168,6 +169,57 @@ function sameScope(left: EduPiProactivityScope | null, right: EduPiProactivitySc
   return left?.classId === right.classId && left.subject === right.subject;
 }
 
+function sameSources(left: unknown, right: string[]): boolean {
+  return Array.isArray(left) && left.length === right.length && left.every(item => typeof item === "string")
+    && JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
+}
+
+async function refreshParentQuestionSources(roots: EduPiBridgeRoots, activation: EduPiProactivityActivation,
+  scope: EduPiProactivityScope, context: Awaited<ReturnType<typeof readScopeContext>>) {
+  if (!activation.enabled || !activation.ownerId || !activation.grantId || !sameScope(activation.scope, scope)) {
+    throw new EduPiProactivityControlError("proactivity_scope_conflict");
+  }
+  const domain = "parent_communication";
+  const binding = buildCapabilityGrantBinding(domain, scope, context.workspace);
+  if (binding.grantId !== activation.grantId) throw new EduPiProactivityControlError("proactivity_scope_conflict");
+  const host = await ensureEduPiRuntime(roots);
+  const { rootRef } = runtimeHealth(await host.call("health", null));
+  const read = await host.callOwnerControl("owner_read", { root_ref: rootRef, expected_owner_id: activation.ownerId });
+  const ownerState = record(read.result), owner = record(ownerState?.owner);
+  const grant = Array.isArray(ownerState?.grants) ? ownerState.grants.map(record).find(item => item?.id === activation.grantId) : null;
+  if (read.ok !== true || owner?.id !== activation.ownerId || !grant || grant.status !== "active"
+    || !Number.isSafeInteger(grant.version) || Number(grant.version) < 1
+    || typeof grant.starts_at !== "string" || typeof grant.ends_at !== "string"
+    || !Number.isFinite(Date.parse(grant.starts_at)) || Date.parse(grant.starts_at) > Date.now()
+    || !Number.isFinite(Date.parse(grant.ends_at)) || Date.parse(grant.ends_at) <= Date.now() || !Array.isArray(grant.source_ids)
+    || !Array.isArray(grant.domains) || grant.domains.length !== 1 || grant.domains[0] !== domain
+    || !Array.isArray(grant.actions) || grant.actions.length !== 1 || grant.actions[0] !== "update"
+    || record(grant.scope)?.class_id !== scope.classId || record(grant.scope)?.subject !== scope.subject
+    || !record(grant.budget)) throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
+  const sourceIds = binding.spec.source_ids;
+  if (sameSources(grant.source_ids, sourceIds)) return currentState(roots, activation, domain, context);
+  const updated = await host.callOwnerControl("owner_control", {
+    command_id: `desktop-parent-sources-${crypto.randomUUID()}`, root_ref: rootRef,
+    expected_owner_id: activation.ownerId, action: "update", grant_id: activation.grantId,
+    expected_version: grant.version,
+    spec: { scope: grant.scope, domains: grant.domains, actions: grant.actions,
+      source_ids: sourceIds, starts_at: grant.starts_at, ends_at: grant.ends_at, budget: grant.budget },
+  });
+  if (updated.ok !== true || record(updated.result)?.grant_version !== Number(grant.version) + 1) {
+    throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
+  }
+  const after = await host.callOwnerControl("owner_read", { root_ref: rootRef, expected_owner_id: activation.ownerId });
+  const next = Array.isArray(record(after.result)?.grants) ? (record(after.result)!.grants as unknown[]).map(record)
+    .find(item => item?.id === activation.grantId) : null;
+  if (after.ok !== true || next?.status !== "active" || next.version !== Number(grant.version) + 1
+    || record(record(after.result)?.owner)?.id !== activation.ownerId
+    || ["scope", "domains", "actions", "starts_at", "ends_at", "budget"].some(key => !isDeepStrictEqual(next[key], grant[key]))
+    || !sameSources(next.source_ids, sourceIds)) {
+    throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
+  }
+  return currentState(roots, activation, domain, context);
+}
+
 function requireActiveCapabilities(capabilities: RawRecord, domain: EduPiProactivityDomain): void {
   for (const key of [processorKey(domain), "internal_timer", "ambient_planning", "owner_authorization", "owner_conversation", "owner_intent", "attention_delivery", "teacher_feedback"]) {
     if (capabilities[key] !== "active") throw new Error("proactivity_activation_incomplete");
@@ -217,7 +269,8 @@ async function enableCanary(roots: EduPiBridgeRoots, activation: EduPiProactivit
   if (activation.scope && (!sameScope(activation.scope, scope) || activation.grantId !== binding.grantId)) {
     throw new EduPiProactivityControlError("proactivity_scope_conflict");
   }
-  if (activation.enabled) return currentState(roots, activation, domain, context);
+  if (activation.enabled) return domain === "parent_communication"
+    ? refreshParentQuestionSources(roots, activation, scope, context) : currentState(roots, activation, domain, context);
   if (capabilityDomain(domain)) {
     // Establish the exact current owner grant while this domain is still
     // disabled, then persist its owner binding before admitting execution.
@@ -382,7 +435,7 @@ export async function POST(request: Request) {
         const blocked = ["proactivity_budget_exhausted", "proactivity_grant_denied", "proactivity_preparation_blocked"].includes(cause.code);
         return NextResponse.json({ ok: false, code: cause.code,
           error: cause.code === "proactivity_scope_conflict" ? "请先完成当前主动运行的停止恢复"
-            : cause.code === "proactivity_source_capacity" ? "当前校历来源超过 127 项；为保留对话行政权限，请先缩小来源范围"
+            : cause.code === "proactivity_source_capacity" ? "当前来源超过 127 项，请先缩小来源范围"
             : cause.code === "proactivity_budget_exhausted" ? "本次模型调用额度已用完"
               : cause.code === "proactivity_grant_denied" ? domain === "student_followup" ? "学生跟进授权范围已变化，请停止后重试" : "授权或材料范围已变化，请停止后重试"
                 : cause.code === "proactivity_preparation_blocked" ? "课前任务需要先核对材料或课程"

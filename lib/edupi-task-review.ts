@@ -3,6 +3,8 @@ import { validateCoreEnvelopeSchema, validateReceiptSemantics } from "./edupi-br
 import { activeBridgeIdentity } from "./edupi-bridge-manifest";
 import { callEduPiCore } from "./edupi-core-process-client";
 import { readEduPiEducationSnapshot, type CoreEducationSnapshotPayload, type EduPiBridgeRoots } from "./edupi-core-snapshot";
+import { buildEducationContractFromWorkspace, type TeacherTaskStatus } from "./edupi-education-contract";
+import { hasCommittedTaskReview, type TaskReviewRefreshRequirement } from "./edupi-task-refresh";
 
 type RawRecord = Record<string, unknown>;
 
@@ -79,6 +81,11 @@ function taskFromPayload(payload: RawRecord, taskId: string): RawRecord {
     throw new TaskReviewError("invalid_envelope", "任务不满足教师内部审核边界。");
   }
   return task;
+}
+
+function taskStatus(value: unknown): TeacherTaskStatus {
+  if (value === "planned" || value === "accepted" || value === "modified" || value === "rejected" || value === "hold") return value;
+  throw new TaskReviewError("invalid_envelope", "任务审核状态无效。");
 }
 
 function evidenceForTask(task: RawRecord): string[] {
@@ -203,7 +210,6 @@ async function productionSnapshot(): Promise<SnapshotResult> {
 }
 
 const expectedStatus: Record<TaskReviewDecision, string> = { accept: "accepted", modify: "modified", reject: "rejected", hold: "held", rollback: "modified" };
-const expectedTaskStatus: Record<TaskReviewDecision, string> = { accept: "accepted", modify: "modified", reject: "rejected", hold: "hold", rollback: "" };
 
 function receiptForCommand(value: unknown, envelope: RawRecord, supportedCommands: readonly string[], beforeTask: RawRecord): RawRecord {
   const response = record(value);
@@ -224,14 +230,26 @@ function receiptForCommand(value: unknown, envelope: RawRecord, supportedCommand
     || receipt.command_type !== "review_task" || receipt.receipt_phase !== "review"
     || !sameRecord(receipt.target, { target_kind: "task", target_id: command.task_id, command_type: "review_task" })
     || receipt.decision !== command.decision || receipt.before_snapshot_id !== envelope.snapshot_id
-    || receipt.before_state_hash !== record(command.source)?.source_hash || receipt.external_send !== false
+    || receipt.external_send !== false
     || receipt.created_at !== envelope.issued_at || !sameRecord(receiptEnvelope.provenance, envelope.provenance)
     || !sameRecord(receiptEnvelope.teacher_review, receipt.teacher_review)
     || !exactList(receipt.evidence_ids, Array.isArray(record(command.source)?.evidence_ids) ? record(command.source)?.evidence_ids as string[] : [])) {
     throw new TaskReviewError("invalid_envelope", "Core 任务审核回执绑定无效。");
   }
   const status = String(receipt.status || "");
-  if (status === "stale_snapshot" || receipt.reason_code === "stale_snapshot") throw new TaskReviewError("stale_snapshot", "任务数据已更新，请刷新后重试。");
+  if (status === "stale_snapshot" || receipt.reason_code === "stale_snapshot") {
+    if (status !== "stale_snapshot" || receipt.reason_code !== "stale_snapshot"
+      || !exactList(receipt.applied_ids, []) || !exactList(receipt.rejected_ids, [])
+      || receipt.after_snapshot_id !== null || receipt.after_state_hash !== null
+      || receiptEnvelope.snapshot_id !== envelope.snapshot_id
+      || !sameRecord(receipt.rollback, { available: false, rollback_id: null, expires_at: null })) {
+      throw new TaskReviewError("invalid_envelope", "Core 过期快照回执无效。");
+    }
+    throw new TaskReviewError("stale_snapshot", "任务数据已更新，请刷新后重试。");
+  }
+  if (receipt.before_state_hash !== record(command.source)?.source_hash) {
+    throw new TaskReviewError("invalid_envelope", "Core 任务审核回执来源哈希无效。");
+  }
   if (status === "failed") {
     const reason = String(receipt.reason_code || "");
     if (reason === "stale_revision") throw new TaskReviewError("stale_revision", "任务审核版本已更新，请刷新后重试。");
@@ -270,45 +288,29 @@ function receiptForCommand(value: unknown, envelope: RawRecord, supportedCommand
   return receipt;
 }
 
-function verifyRefreshedTask(payload: CoreEducationSnapshotPayload, beforeTask: RawRecord, envelope: RawRecord, receipt: RawRecord): RawRecord {
-  if (payload.snapshot_id !== receipt.after_snapshot_id || payload.state_hash !== receipt.after_state_hash) throw new TaskReviewError("invalid_envelope", "Core 任务审核快照与回执不一致。");
+function verifyRefreshedTask(payload: CoreEducationSnapshotPayload, beforeTask: RawRecord, envelope: RawRecord, requirement: TaskReviewRefreshRequirement): RawRecord | null {
   const command = record(envelope.command);
   if (!command) throw new TaskReviewError("invalid_envelope", "任务审核命令不可用。");
-  const task = taskFromPayload(payload as unknown as RawRecord, String(command.task_id));
-  const decision = command.decision as TaskReviewDecision;
+  let task: RawRecord;
+  try { task = taskFromPayload(payload as unknown as RawRecord, String(command.task_id)); }
+  catch (error) {
+    if (error instanceof TaskReviewError && error.code === "task_missing") return null;
+    throw error;
+  }
+  if (task.source_event_id !== beforeTask.source_event_id || task.trigger !== beforeTask.trigger
+    || record(task.evidence)?.source_entry_id !== record(beforeTask.evidence)?.source_entry_id
+    || record(task.evidence)?.material_kind !== record(beforeTask.evidence)?.material_kind) {
+    throw new TaskReviewError("invalid_envelope", "Core 刷新后的任务来源不一致。");
+  }
   const expectedRevision = Number(command.expected_revision) + 1;
-  const beforeHistory = reviewHistory(beforeTask);
-  const afterHistory = reviewHistory(task);
-  const latest = afterHistory.at(-1);
-  const receiptReview = record(receipt.teacher_review);
-  const taskReviewState = task.status === "planned" ? "pending_review" : task.status === "hold" ? "held" : task.status;
-  if (isCapabilityTask(beforeTask) && !isCapabilityTask(task)
-    || task.revision !== expectedRevision || afterHistory.length !== beforeHistory.length + 1
-    || !sameRecord(afterHistory.slice(0, beforeHistory.length), beforeHistory) || !latest
-    || latest.action !== decision || latest.reviewed_at !== envelope.issued_at
-    || latest.reviewer !== record(envelope.teacher_review)?.reviewer_id || latest.note !== command.note
-    || task.reviewed_at !== envelope.issued_at || task.reviewer !== record(envelope.teacher_review)?.reviewer_id
-    || task.review_note !== command.note || !receiptReview || receiptReview.state !== taskReviewState
-    || receiptReview.revision !== task.revision || receiptReview.reviewer_id !== task.reviewer
-    || receiptReview.reviewed_at !== task.reviewed_at || receiptReview.note !== task.review_note) {
-    throw new TaskReviewError("invalid_envelope", "Core 刷新后的任务审核历史无效。");
-  }
-  if (decision === "rollback") {
-    if (latest.rollback_of !== command.rollback_id || record(latest.after)?.status !== task.status) throw new TaskReviewError("invalid_envelope", "Core 刷新后的回滚记录无效。");
-  } else {
-    const expectedReviewId = isCapabilityTask(beforeTask) ? receipt.receipt_id : record(receipt.rollback)?.rollback_id;
-    if (task.status !== expectedTaskStatus[decision] || latest.review_id !== expectedReviewId) throw new TaskReviewError("invalid_envelope", "Core 刷新后的任务状态无效。");
-  }
-  const patch = record(command.patch);
-  if (decision === "modify" && patch) {
-    if (Object.hasOwn(patch, "title") && task.title !== patch.title) throw new TaskReviewError("invalid_envelope", "任务标题未按回执更新。");
-    if (Object.hasOwn(patch, "due_date") && task.due_date !== patch.due_date) throw new TaskReviewError("invalid_envelope", "任务日期未按回执更新。");
-    if (Object.hasOwn(patch, "deliverables") && !exactList(task.deliverables, patch.deliverables as string[])) throw new TaskReviewError("invalid_envelope", "任务产物未按回执更新。");
-  }
+  if (Number.isInteger(task.revision) && Number(task.revision) >= 0 && Number(task.revision) < expectedRevision) return null;
+  const workspace = record(payload.education_workspace);
+  const contract = buildEducationContractFromWorkspace(workspace ?? {}, { workspacePath: "", snapshotPayload: payload as RawRecord });
+  if (!hasCommittedTaskReview(contract, requirement)) throw new TaskReviewError("invalid_envelope", "Core 刷新后的任务审核历史无效。");
   return task;
 }
 
-export async function issueTaskReview(input: TaskReviewInput, dependencies: TaskReviewDependencies = {}): Promise<{ receipt: RawRecord; data: CoreEducationSnapshotPayload | null; task: RawRecord | null; refreshPending: boolean }> {
+export async function issueTaskReview(input: TaskReviewInput, dependencies: TaskReviewDependencies = {}): Promise<{ receipt: RawRecord; data: CoreEducationSnapshotPayload | null; task: RawRecord | null; refreshPending: boolean; refreshRequirement: TaskReviewRefreshRequirement }> {
   const supportedCommands = dependencies.supportedCommands || activeBridgeIdentity().contract.supported_commands;
   if (!supportedCommands.includes("review_task")) throw new TaskReviewError("unsupported_command", "Core 尚未启用任务审核。");
   const initial = await (dependencies.readSnapshot || productionSnapshot)();
@@ -316,6 +318,7 @@ export async function issueTaskReview(input: TaskReviewInput, dependencies: Task
   const snapshotCommands = record(payload.capabilities)?.supported_commands;
   if (!exactList(snapshotCommands, supportedCommands) || !supportedCommands.includes("review_task")) throw new TaskReviewError("unsupported_command", "Core 快照尚未启用任务审核。");
   const beforeTask = taskFromPayload(payload, requiredText(input.taskId, "taskId"));
+  const beforeStatus = taskStatus(beforeTask.status);
   const envelope = buildTaskReviewCommandEnvelope({ ...input, payload });
   const dispatch = dependencies.dispatch || ((nextEnvelope, roots) => callEduPiCore({ operation: "command", requestId: String(nextEnvelope.request_id), runtime: roots.runtime, dataRoot: roots.dataRoot, envelope: nextEnvelope }));
   let rawResponse: unknown;
@@ -326,13 +329,36 @@ export async function issueTaskReview(input: TaskReviewInput, dependencies: Task
     throw new TaskReviewError("unavailable", "Core 任务审核暂不可用。");
   }
   const receipt = receiptForCommand(rawResponse, envelope, supportedCommands, beforeTask);
+  const patch = record(record(envelope.command)?.patch);
+  const refreshRequirement: TaskReviewRefreshRequirement = {
+    before: {
+      id: String(beforeTask.task_id),
+      trigger: typeof beforeTask.trigger === "string" ? beforeTask.trigger : null,
+      sourceEventId: typeof beforeTask.source_event_id === "string" ? beforeTask.source_event_id : null,
+      evidence: record(beforeTask.evidence) ?? {},
+      reviewHistory: reviewHistory(beforeTask),
+      revision: Number(beforeTask.revision),
+      status: beforeStatus,
+      title: String(beforeTask.title),
+      dueDate: typeof beforeTask.due_date === "string" ? beforeTask.due_date : null,
+      deliverables: Array.isArray(beforeTask.deliverables) ? beforeTask.deliverables as string[] : [],
+      reviewedAt: typeof beforeTask.reviewed_at === "string" ? beforeTask.reviewed_at : null,
+      reviewer: typeof beforeTask.reviewer === "string" ? beforeTask.reviewer : null,
+      reviewNote: typeof beforeTask.review_note === "string" ? beforeTask.review_note : null,
+    },
+    decision: input.decision,
+    receipt,
+    patch: patch ? {
+      ...(Object.hasOwn(patch, "title") ? { title: patch.title as string } : {}),
+      ...(Object.hasOwn(patch, "due_date") ? { dueDate: patch.due_date as string | null } : {}),
+      ...(Object.hasOwn(patch, "deliverables") ? { deliverables: patch.deliverables as string[] } : {}),
+    } : null,
+  };
   const refresh = dependencies.refreshSnapshot || (async (roots) => (await readEduPiEducationSnapshot({ roots })).payload);
   let data: CoreEducationSnapshotPayload;
   try { data = await refresh(initial.roots); }
-  catch { return { receipt, data: null, task: null, refreshPending: true }; }
-  if (data.snapshot_id !== receipt.after_snapshot_id || data.state_hash !== receipt.after_state_hash) {
-    return { receipt, data: null, task: null, refreshPending: true };
-  }
-  const task = verifyRefreshedTask(data, beforeTask, envelope, receipt);
-  return { receipt, data, task, refreshPending: false };
+  catch { return { receipt, data: null, task: null, refreshPending: true, refreshRequirement }; }
+  const task = verifyRefreshedTask(data, beforeTask, envelope, refreshRequirement);
+  if (!task) return { receipt, data: null, task: null, refreshPending: true, refreshRequirement };
+  return { receipt, data, task, refreshPending: false, refreshRequirement };
 }
