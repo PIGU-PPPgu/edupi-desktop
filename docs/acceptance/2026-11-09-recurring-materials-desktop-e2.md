@@ -1,6 +1,24 @@
 # R04／L4 周期内部材料两期验收
 
-状态：隔离合成环境中的两期跨入口验收通过；完整 R04／L4 产品验收未完成。本记录附属于 `docs/plans/2026-09-06-product-closure-roadmap.md` 的 R04／L4，不替代唯一账本，也不将周期流程勾选完成。
+状态：隔离合成环境中的两期脚本跨入口验收通过；2026-11-10 新建的每周内部材料候选完成源码预览的任务／文件／材料跨入口回读，同一合成根恢复运行后 API、执行记录和文件回读一致，计划检查已返回四条合成候选。此前另一候选无产物、计划检查未完成的失败仍保留，完整 R04／L4 产品验收未完成。本记录附属于 `docs/plans/2026-09-06-product-closure-roadmap.md` 的 R04／L4，不替代唯一账本，也不将周期流程勾选完成。
+
+2026-11-10 05:34 CST 同根恢复后的独立只读复核：受测仍为 Desktop `d9e1baba431209dfbddbe9e596e796c00239c16c` 加未提交修改、Core `01fcdcf3d45dfaa45c350c1ec88cc551bb4652df`，地址 `http://127.0.0.1:30373`，合成根 `/Users/iguppp/edupi-desktop-p0p2-canary-C5AWS9`。该根 `runner.log` 保留旧 runner `79037` 的 ready 与 stopped 记录；`fixture.json` 现记录同根 runner `87587`、Next `87629`，`ps` 显示新进程于 05:09:06 CST 启动，`next.log` 亦有新的 Ready 段。这些是同根停止后恢复运行的日志与进程证据；本次独立复核没有自行停止或重启服务，也未重新操作浏览器。
+
+预期恢复后新候选不重复执行、原文件仍可读。用 Node 内置 `fetch`、`assert`、`fs` 和 `crypto` 对 `/api/edupi/preparation?taskId=teacher_recurring_113eba987994cd315ebed9085490a14e_2026-11-09`、`/api/edupi/education` 及两份 `/api/files/<绝对路径>?type=read` 做只读检查，均为 HTTP 200；preparation 为 `state=ready`、`prepared=1`，education 中同任务为 `contentStatus=draft_ready`，关联两份 `available=true` 的产物。持久执行仍为 `calendar_work_execution_8d84efec1f2e5d823541f48c12e129b4`、`draft_ready`、attempt 1；两份文件各 456 bytes，HTTP 正文与磁盘逐字一致，磁盘 SHA-256 与下段已记录的持久哈希完全相同，断言退出 0。证据位置为该根 `.edupi` 文件所在的 `teacher-data/.edupi/output/calendar_work_execution_state.json` 及其 `calendar-work-artifacts/ef85a75fb84749c3bddca26f0e7a382f/`；本次没有新建证据文件。
+
+同轮 `GET /api/edupi/plan-overlaps` 返回 HTTP 200、`needsScan=false`、`pairs=4`、`remaining=0`、四条 `pending` 建议且没有 error，版本为 `35793fad16f68cc53e425dbb811a4e953ae4e64a1483aac428a84aa5edb8db38`；`teacher-data/.edupi/desktop/plan-overlaps.json` 保存同版本、同四条建议与四个 checkedIds。源码夹具的 `syntheticPlanOverlapReply` 提供协议形状的确定性合成回复，不能证明真实模型的冲突判定质量；本次仅回读扫描结果，没有重新发起扫描或审核建议。本段取代当前合成夹具“计划检查仍未完成”的状态，不追认此前失败，也不改变旧候选无产物的结果。
+
+修复前元数据观察：上述 education 的两份产物都报告 `size_bytes=0`，但对应磁盘文件和 HTTP 正文各为 456 bytes。因此文件可读和哈希一致通过，大小元数据不一致另记。Core 独立分支的代码候选 `7a67db51a35f33f60acbce9feec5c7196fe91fc2` 修改了准备产物大小计算并增加相关测试；此服务仍使用上述 Core 旧版本，候选尚待 Desktop 配对验证，不能计为已发布或安装版已通过。另一合成课前准备执行仍为 `failed`／`model_error`，不纳入本次通过范围。
+
+2026-11-10 隔离页面新候选验收：在 macOS arm64 的 Desktop 隔离工作树 `d9e1baba431209dfbddbe9e596e796c00239c16c` 加本轮未提交修改、Core `01fcdcf3d45dfaa45c350c1ec88cc551bb4652df` 的源码预览 `http://127.0.0.1:30373`，使用独立 Playwright Chromium 操作合成根 `/Users/iguppp/edupi-desktop-p0p2-canary-C5AWS9/teacher-data`。预期本期每周内部材料任务产生两份可读文件，材料索引能打开并返回同一任务，刷新后状态保持；实际任务 `teacher_recurring_113eba987994cd315ebed9085490a14e_2026-11-09` 显示“已准备”和 2 份文件，从任务分别打开“合成内部议程”和“合成材料清单”，两份预览正文均有标题、本期截止 `2026-11-10` 及“待教师核对与补充”。离开任务后在“材料”索引分别重新打开两项，点击各自“打开关联任务”均返回同一任务的“材料与证据”；刷新后仍显示“已准备”，切到“教学产物”仍有两份文件，材料索引也仍有两项。首次和刷新加载会重现欢迎层，点“稍后再说”后继续；页面操作为现场观察，未保存快照。
+
+隔离持久记录 `.edupi/output/calendar_work_execution_state.json` 中该任务为 `draft_ready`，两份文件的 SHA-256 分别为 `a7bf7ec2f6e264a30cd5eff5e2dab2352f9d94c5ba99060dce74f843a4b357c4`、`d0955d1c943224bcdd76a8d16cd22ec78e09b6b5e31eaaebad2e135cc634fc53`；本轮磁盘复算与记录相同。此前页面预览的两个文件 route 均返回 HTTP 200，正文与磁盘文件相同。此证据仅覆盖新候选的隔离源码页面及占位内部材料，没有在本次页面操作中重启 Core，也没有证明签名安装版、真实内容质量或全进程零外发。另一合成课前准备任务在同一状态文件中为 `failed`／`model_error`，不计入这项每周材料的通过范围。下文旧候选 `teacher_recurring_2d56c0dd0d148e4e94fa11263f3238e7_2026-11-09` 的 0 产物与计划检查失败仍是独立失败观察，未被新候选追认通过。
+
+2026-11-10 隔离两期重验：在 Desktop 隔离工作树运行 `EDUPI_CORE_ROOT=/private/tmp/edupi-core-main-pair-20261109 node scripts/test-edupi-recurring-materials-e2.mjs`，退出 0；Core HEAD 和 Desktop 合同 pin 同为 `01fcdcf3d45dfaa45c350c1ec88cc551bb4652df`。合成时钟的 2026-11-10 与 2026-11-17 两期各产生 2 份内部材料，attempt 均为 1；Desktop 文件 route 回读哈希与持久记录相同，Core 子进程重启后记录保持，`projectionFailures=[]`，共启动 5 次。父进程观测 49 次 loopback fetch、配置模型端点 0 次调用；Core 子进程网络没有监测。脚本清理了自建临时根。这次重验只覆盖隔离脚本和确定性内部材料，不能覆盖下述浏览器候选无产物、真实自然跨期或内容质量。
+
+2026-11-10 隔离源码预览补验：在 `http://127.0.0.1:30373` 打开合成本期候选 `teacher_recurring_2d56c0dd0d148e4e94fa11263f3238e7_2026-11-09`。详情显示“待你确认”、计划交付“合成周期教案”，但产物为 0 份文件、暂无已生成文件，执行记录为空；材料页仅看到两份“每日简报”，没有本期教案。因此候选详情可打开，本期从候选到文件打开及任务／材料跨入口回读未通过。`GET /api/edupi/plan-overlaps` 返回 HTTP 200，但业务体为 `needsScan=true`、`pairs=4`、`remaining=4`、`suggestions=[]`、`error="计划检查未完成，请重试。"`；本轮不把空建议解释为无冲突。受测为隔离源码预览及带未提交修改的工作树，不能把当前 HEAD 单独当作该浏览器受测版本，也不能用它替代签名安装版证据。此观察与下文两期合成时钟脚本通过分开记录，未调用真实模型。
+
+2026-11-10 staged 资源就绪诊断：`EDUPI_STAGED_STATUS_DIAGNOSTIC=1 node scripts/test-staged-desktop-runtime.mjs` 退出 0、`status=passed`；隔离副本的首次 `/api/edupi/status?summary=1` 返回 HTTP 200，`core=ready`、`coreLifecycle=ready`、`projection=ready`、`kernel=ready`，Core 身份为 `01fcdcf3d45dfaa45c350c1ec88cc551bb4652df`、occurrence contract `1.2`、`externalSend=false`。这只验证 staged 资源副本的 HTTP 就绪与兼容身份，不证明浏览器本期材料生成、真实 OS 睡眠或安装版。
 
 2026-11-09 隔离浏览器补验：受测 Desktop 为 `6ccf12f6ad43bc2460f20d07104f299a3f65856c` 加本轮未提交工作树修改，在源码预览 `http://127.0.0.1:30149/` 操作合成周期任务 `teacher-task-49328dcd-e98b-4896-832d-075cd95da3d9`。任务详情点击“暂停”后，任务、周期材料和执行记录均显示已暂停，首页本期待处理候选消失；刷新后仍保持。点击“恢复”后，任务和执行记录显示进行中，周期材料显示已启用，首页本期候选重新出现；刷新后仍保持。首页对本期候选点击“暂缓”，成功回执出现，候选移至“稍后处理”，刷新后仍为已暂缓。再点击“修改决定→拒绝”，成功回执出现，候选移至“已记录”，刷新后仍为已拒绝；周期模板本身仍进行中。上述点击和刷新回读是现场观察，未保存本轮页面快照；隔离持久数据可独立核对模板最终进行中、候选最终拒绝以及暂缓到拒绝的决定历史，不能独立证明每一步刷新后的页面。此轮不证明自然到期调度、安装版或真实教师体验。预览启用了 Desktop token，普通浏览器加载时 `/api/edupi/materials/staging` 两次和 `/api/models` 一次返回 403；控制台不干净，不能视为正常安装版环境。详情页每次刷新还重新显示新手教程第 3/8 步，需另行排查。
 
@@ -82,4 +100,4 @@ git diff --check
 
 各轮脚本 finally 实际关闭自有 Core 和 loopback server，恢复父进程 Date、fetch、fork 与环境变量，删除该轮新建的精确合成临时根。没有生成 Next、Cargo 或安装包产物；复用中的 node_modules 链接保留供同 worktree 主任务使用。
 
-浏览器暂停／恢复／暂缓／拒绝及刷新回读已按顶部记录补验；两期脚本仍未经过 Next HTTP server，浏览器也未验证自然到期生成。签名安装版、自然七天计时、真实模型与教学内容质量未验证，全进程无外发亦未验证；Core 子进程及其他网络 API 没有网络监测。两份产物是确定性内部清单，不能作为教学质量证据。Core 来源校验修复和 manifest 已合入实际 main，Desktop 隔离树已更新 pin 并完成实际 main 复验；签名安装版配对尚未执行。本记录只证明所列合成两期跨入口闭环和隔离浏览器操作。
+浏览器暂停／恢复／暂缓／拒绝及刷新回读已按顶部历史记录补验；2026-11-10 旧本期候选没有文件或执行记录，新建的每周内部材料候选已完成任务、两份文件、材料索引和关联任务的页面回读。同一合成根恢复运行后的 API、执行记录、文件和计划检查结果已独立回读；计划检查的此前失败保留，当前四条确定性合成建议不证明真实模型判断或审核交互通过。两期脚本仍未经过 Next HTTP server，新候选的浏览器操作未验证自然到期生成，恢复运行后亦未重新操作浏览器；`size_bytes=0` 的修复配对未验。签名安装版、自然七天计时、真实 OS 睡眠、系统通知点击、真实模型与教学内容质量、连续教师使用均未验证；全进程无外发亦未验证，Core 子进程及其他网络 API 没有网络监测。两期脚本及新候选的产物是确定性内部材料，不能作为教学质量证据。Core 来源校验修复和 manifest 已合入实际 main，Desktop 隔离树已更新 pin 并完成实际 main 复验；签名安装版配对尚未执行。完整周期产品流程与 L4 不能据此标为通过。
