@@ -1143,11 +1143,12 @@ html.dark .edupi-teacher-shell {
 .edupi-task-board-message { margin: 0 0 10px; padding: 7px 10px; border: 1px solid var(--ep-border); border-radius: 6px; background: var(--ep-surface); color: var(--ep-green); font-size: 11px; }
 .edupi-task-board-message.is-error { border-color: color-mix(in srgb, var(--ep-red) 35%, var(--ep-border)); background: var(--ep-red-soft); color: var(--ep-red); }
 .edupi-task-board-scroll { min-width: 0; min-height: 0; flex: 1; overflow: auto; scrollbar-width: thin; }
-.edupi-task-board { display: grid; min-width: 1040px; min-height: 100%; grid-template-columns: repeat(4, minmax(250px, 1fr)); gap: 12px; }
+.edupi-task-board { display: grid; min-width: 1300px; min-height: 100%; grid-template-columns: repeat(5, minmax(250px, 1fr)); gap: 12px; }
 .edupi-task-board-column { display: flex; min-width: 0; min-height: 420px; flex-direction: column; border: 1px solid var(--ep-border); border-top: 3px solid var(--ep-border-strong); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--ep-surface) 74%, var(--ep-canvas)); transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease; }
 .edupi-task-board-column.is-progress { border-top-color: var(--ep-orange); background: color-mix(in srgb, var(--ep-orange-soft) 12%, color-mix(in srgb, var(--ep-surface) 74%, var(--ep-canvas))); }
 .edupi-task-board-column.is-review { border-top-color: var(--ep-green); background: color-mix(in srgb, var(--ep-green-soft) 12%, color-mix(in srgb, var(--ep-surface) 74%, var(--ep-canvas))); }
 .edupi-task-board-column.is-done { border-top-color: color-mix(in srgb, var(--ep-red) 32%, var(--ep-border-strong)); }
+.edupi-task-board-column.is-paused { border-top-color: var(--ep-border-strong); }
 .edupi-task-board-column.is-drop-target { border-color: var(--ep-blue); box-shadow: inset 0 0 0 1px var(--ep-blue); }
 .edupi-task-board-column > header { display: grid; min-height: 42px; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 0 13px; border-bottom: 1px solid var(--ep-border); }
 .edupi-task-board-column > header h2 { margin: 0; font-size: 13px; letter-spacing: -.01em; }
@@ -1156,6 +1157,7 @@ html.dark .edupi-teacher-shell {
 .is-progress .edupi-task-board-column__mark { border-color: var(--ep-orange); box-shadow: inset 0 0 0 2px var(--ep-surface); background: var(--ep-orange); }
 .is-review .edupi-task-board-column__mark { border-color: var(--ep-green); }
 .is-done .edupi-task-board-column__mark { border-color: var(--ep-green); background: var(--ep-green); box-shadow: inset 0 0 0 2px var(--ep-surface); }
+.is-paused .edupi-task-board-column__mark { border-color: var(--ep-muted); background: var(--ep-muted); }
 .edupi-task-board-column__cards { display: flex; min-height: 0; padding: 9px; flex-direction: column; gap: 7px; }
 .edupi-task-board-column__cards > div[role="listitem"] { display: contents; }
 .edupi-task-board-card { display: flex; width: 100%; min-height: 100px; flex-direction: column; border: 1px solid var(--ep-border); border-radius: var(--radius-lg); background: var(--ep-surface); color: var(--ep-text); box-shadow: var(--shadow-control); transition: border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, transform var(--motion-fast) ease, opacity var(--motion-fast) ease; user-select: none; }
@@ -2228,7 +2230,7 @@ details[open] > .edupi-disclosure-detail { animation: edupi-expand-in .17s ease-
   .edupi-workspace-board__heading { min-height: 58px; }
   .edupi-task-board-create { max-height: calc(100vh - 150px); grid-template-columns: minmax(0, 1fr); min-width: 0; align-items: stretch; overflow-y: auto; }
   .edupi-task-board-create__source { grid-template-columns: minmax(0, 1fr); }
-  .edupi-task-board { min-width: 980px; }
+  .edupi-task-board { min-width: 1300px; }
   .edupi-today-work__groups { grid-template-columns: 1fr; }
   .edupi-today-work__group + .edupi-today-work__group { border-top: 1px solid var(--ep-border); border-left: 0; }
   .edupi-today-l4__groups { grid-template-columns: 1fr; }

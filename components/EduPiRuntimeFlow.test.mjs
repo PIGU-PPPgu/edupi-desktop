@@ -98,9 +98,12 @@ test("raw tool names appear only in the current activity tooltip", () => {
 
 test("teacher hold and rejection survive stale execution and board snapshots", () => {
   for (const [status, label] of [["hold", "已暂缓"], ["rejected", "已拒绝"]]) {
-    const html = render({ sessionId: "session-1" }, runInfo({ task: { ...task, status, boardStage: "done" } }));
-    assert.ok(html.includes(label));
-    assert.doesNotMatch(html, /待你确认|已准备|已完成/);
+    for (const recurrence of [undefined, { cadence: "weekly" }]) {
+      const reviewed = recurrence ? { boardRevision: 2, boardUpdatedAt: "2026-11-09T10:00:00Z", reviewedAt: "2026-11-09T09:00:00Z" } : {};
+      const html = render({ sessionId: "session-1" }, runInfo({ task: { ...task, status, boardStage: "done", recurrence, ...reviewed } }));
+      assert.ok(html.includes(label));
+      assert.doesNotMatch(html, /待你确认|已准备|已完成/);
+    }
   }
   const unrelatedCase = render({ sessionId: "session-1" }, runInfo({ workCase: { ...workCase, taskId: "task-2", currentState: "failed" } }));
   assert.match(unrelatedCase, /待你确认/);
@@ -133,6 +136,14 @@ test("newer teacher board moves supersede historical review and execution state"
   const heldLater = render({ sessionId: "session-1" }, runInfo({ task: { ...moved, status: "hold", boardStage: "done", reviewedAt: "2026-10-06T11:00:00Z" } }));
   assert.match(heldLater, /已暂缓/);
   assert.doesNotMatch(heldLater, /已完成/);
+});
+
+test("a paused recurring template stays paused after its definition is modified", () => {
+  const paused = { ...task, recurrence: { cadence: "weekly" }, boardStage: "done", boardRevision: 2,
+    boardUpdatedAt: "2026-11-09T09:00:00Z", reviewedAt: "2026-11-09T10:00:00Z", status: "modified" };
+  const html = render({ sessionId: "session-1" }, runInfo({ task: paused }));
+  assert.match(html, /已暂停/);
+  assert.doesNotMatch(html, /修改后接受|已完成/);
 });
 
 test("the count uses deduplicated real file projection rather than expected deliverables", () => {

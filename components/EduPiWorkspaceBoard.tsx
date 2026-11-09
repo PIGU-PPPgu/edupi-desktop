@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { EducationContract, EducationWorkCandidate, EducationWorkCase, TeacherTask } from "@/lib/edupi-education-contract";
 import { workCaseForTask, workCaseStateLabel } from "@/lib/edupi-work-case";
-import { hasCurrentExplicitBoardStage, projectTaskBoard, taskBoardLane, taskBoardTargets, type TaskBoardLaneId } from "@/lib/edupi-task-board";
+import { hasCurrentExplicitBoardStage, projectTaskBoard, taskBoardLane, taskBoardTargets, taskBoardStageForCore, type CoreTaskBoardStage, type TaskBoardLaneId } from "@/lib/edupi-task-board";
 import { taskCategory, TASK_CATEGORY_CONFIG, type TaskCategoryId } from "@/lib/edupi-task-category";
 import type { TaskSessionBinding } from "@/lib/edupi-task-sessions";
 import { isTaskActionable, taskContentStatusLabel, taskDisplayTitle, taskPresentation, taskStatusLabel, taskTypeLabel } from "@/lib/edupi-workbench";
@@ -18,13 +18,13 @@ type Props = {
   query: string;
   onTaskDetail: (task: TeacherTask) => void;
   onCreateTask: (input: CreateTeacherTaskInput) => Promise<CreateTeacherTaskOutcome>;
-  onMoveTask: (task: TeacherTask, stage: TaskBoardLaneId) => Promise<void>;
+  onMoveTask: (task: TeacherTask, stage: CoreTaskBoardStage) => Promise<void>;
   mergeSuggestions?: ReactNode;
   selectedObjectId?: string | null;
   onObject?: (id: string) => void;
 };
 
-const stageLabels: Record<TaskBoardLaneId, string> = { todo: "待处理", progress: "进行中", review: "待我确认", done: "已完成" };
+const stageLabels: Record<TaskBoardLaneId, string> = { todo: "待处理", progress: "进行中", review: "待我确认", done: "已完成", paused: "已暂停" };
 const DEFAULT_PREPARATION_DELIVERABLES = ["本节教案", "学生学案", "练习与参考答案", "材料准备清单"];
 const weekdayLabels = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 type CreateScope = { workspace: string; alive: boolean; submitting: boolean; sequence: number };
@@ -49,6 +49,8 @@ function taskSource(task: TeacherTask): string {
 }
 
 function taskState(task: TeacherTask, session: TaskSessionBinding | null, lane: TaskBoardLaneId, candidate: EducationWorkCandidate | null, workCase: EducationWorkCase | null): string {
+  if (task.recurrence && (task.status === "hold" || task.status === "rejected")) return taskPresentation(task).label;
+  if (lane === "paused") return stageLabels.paused;
   if (hasCurrentExplicitBoardStage(task)) return stageLabels[lane];
   if (workCase && ["queued", "running", "draft_ready", "failed"].includes(workCase.currentState)) return workCaseStateLabel(workCase.currentState);
   if (workCase && (workCase.currentState !== "planned" || !task.boardStage || task.boardStage === "todo")) return workCaseStateLabel(workCase.currentState);
@@ -69,7 +71,7 @@ function taskState(task: TeacherTask, session: TaskSessionBinding | null, lane: 
 
 function stageAtPoint(x: number, y: number): TaskBoardLaneId | null {
   const stage = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-board-stage]")?.dataset.boardStage;
-  return stage === "todo" || stage === "progress" || stage === "review" || stage === "done" ? stage : null;
+  return stage === "todo" || stage === "progress" || stage === "review" || stage === "done" || stage === "paused" ? stage : null;
 }
 
 function TaskCard({ task, session, lane, candidate, workCase, busy, selected, dragSource, onOpen, onCardPointerDown, onHandlePointerDown, onMove }: {
@@ -89,7 +91,9 @@ function TaskCard({ task, session, lane, candidate, workCase, busy, selected, dr
   const title = taskDisplayTitle(task);
   const sourceCaption = taskSource(task);
   const completion = taskCompletionTime(task, { workCandidates: candidate ? [candidate] : [], workCases: workCase ? [workCase] : [] });
-  const visibleFlowState = workCase?.currentState === "planned" && task.boardStage && task.boardStage !== "todo" ? task.boardStage : workCase?.currentState || lane;
+  const targets = taskBoardTargets(lane, task);
+  const blockedRecurring = Boolean(task.recurrence && (task.status === "hold" || task.status === "rejected"));
+  const visibleFlowState = blockedRecurring || lane === "paused" ? lane : workCase?.currentState === "planned" && task.boardStage && task.boardStage !== "todo" ? task.boardStage : workCase?.currentState || lane;
   const selectId = `edupi-task-move-${String(task.id || title).replace(/[^A-Za-z0-9_-]/g, "-")}`;
   return (
     <article className={`edupi-task-board-card${workCase ? " has-flow" : ""}${busy ? " is-moving" : ""}${selected ? " is-selected" : ""}${dragSource ? " is-drag-source" : ""}`} aria-busy={busy || undefined} onPointerDown={onCardPointerDown}>
@@ -99,13 +103,13 @@ function TaskCard({ task, session, lane, candidate, workCase, busy, selected, dr
         {sourceCaption !== "教师内部" ? <span className="edupi-task-board-card__source">{sourceCaption}</span> : null}
       </button>
       <footer className="edupi-task-board-card__footer">
-        <span className="edupi-task-board-card__handle" onPointerDown={(event) => { event.stopPropagation(); onHandlePointerDown(event); }} title="拖动任务" aria-hidden="true">⠿</span>
+        {targets.length > 0 ? <span className="edupi-task-board-card__handle" onPointerDown={(event) => { event.stopPropagation(); onHandlePointerDown(event); }} title="拖动任务" aria-hidden="true">⠿</span> : null}
         <span><i className={`edupi-flow-state is-${visibleFlowState}`} aria-hidden="true" />{busy ? "正在移动" : taskState(task, session, lane, candidate, workCase)}</span>
-        <label className="edupi-visually-hidden" htmlFor={selectId}>移动到</label>
-        <select id={selectId} value="" disabled={busy} onChange={(event) => { const value = event.target.value as TaskBoardLaneId; if (value) onMove(value); }}>
-          <option value="">移动到</option>
-          {taskBoardTargets(lane).map((stage) => <option key={stage} value={stage}>{stageLabels[stage]}</option>)}
-        </select>
+        {targets.length > 0 ? <><label className="edupi-visually-hidden" htmlFor={selectId}>移动到</label>
+          <select id={selectId} value="" disabled={busy} onChange={(event) => { const value = event.target.value as TaskBoardLaneId; if (value) onMove(value); }}>
+            <option value="">移动到</option>
+            {targets.map((stage) => <option key={stage} value={stage}>{stageLabels[stage]}</option>)}
+          </select></> : null}
       </footer>
     </article>
   );
@@ -296,19 +300,19 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
     if (!task) return null;
     const source = taskBoardLane(task, task.id ? data.taskSessions[task.id] ?? null : null, task.id ? candidateByTask.get(task.id) : null);
     const stage = stageAtPoint(event.clientX, event.clientY);
-    return stage && taskBoardTargets(source).includes(stage) ? { task, stage } : null;
+    return stage && taskBoardTargets(source, task).includes(stage) ? { task, stage } : null;
   };
 
   const move = async (task: TeacherTask, stage: TaskBoardLaneId) => {
     const current = taskBoardLane(task, task.id ? data.taskSessions[task.id] : null, task.id ? candidateByTask.get(task.id) : null);
-    if (!taskBoardTargets(current).includes(stage)) {
+    if (!taskBoardTargets(current, task).includes(stage)) {
       setMessage({ tone: "error", text: `不能从“${stageLabels[current]}”直接移动到“${stageLabels[stage]}”。` });
       return;
     }
     setMovingTaskId(task.id);
     setMessage(null);
     try {
-      await onMoveTask(task, stage);
+      await onMoveTask(task, taskBoardStageForCore(task, stage));
       setMessage({ tone: "success", text: `已移动到“${stageLabels[stage]}”。` });
     } catch (error) {
       setMessage({ tone: "error", text: error instanceof Error ? error.message : "任务移动失败。" });
@@ -428,7 +432,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
           {columns.map((column) => {
             const draggedTask = draggedTaskId ? taskById.get(draggedTaskId) : null;
             const sourceStage = draggedTask?.id ? taskBoardLane(draggedTask, data.taskSessions[draggedTask.id] ?? null, candidateByTask.get(draggedTask.id)) : null;
-            const canDrop = Boolean(sourceStage && taskBoardTargets(sourceStage).includes(column.id));
+            const canDrop = Boolean(sourceStage && taskBoardTargets(sourceStage, draggedTask ?? undefined).includes(column.id));
             return <section data-board-stage={column.id} className={`edupi-task-board-column is-${column.id}${dropTarget === column.id && canDrop ? " is-drop-target" : ""}`} key={column.id} aria-labelledby={`edupi-task-board-${column.id}`}>
               <header><span className="edupi-task-board-column__mark" aria-hidden="true" /><h2 id={`edupi-task-board-${column.id}`}>{column.label}</h2><em>{column.tasks.length}</em></header>
               <div className="edupi-task-board-column__cards" role="list">
@@ -436,7 +440,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
                   const session = task.id ? data.taskSessions[task.id] ?? null : null;
                   const candidate = task.id ? candidateByTask.get(task.id) ?? null : null;
                   const workCase = workCaseForTask(data, task.id);
-                  return <div role="listitem" key={task.id || `${task.trigger}:${task.title}`}><TaskCard task={task} session={session} lane={column.id} candidate={candidate} workCase={workCase} busy={movingTaskId === task.id} selected={Boolean(task.id) && selectedCardId === task.id} dragSource={draggedTaskId === task.id} onOpen={(keyboard) => { if (suppressClickRef.current && !keyboard) { suppressClickRef.current = false; return; } suppressClickRef.current = false; setSelectedCardId(task.id ?? null); onTaskDetail(task); }} onCardPointerDown={(event) => { suppressClickRef.current = false; if (!task.id || movingTaskId) return; if ((event.target as HTMLElement).closest("select")) return; const rect = event.currentTarget.getBoundingClientRect(); dragStartRef.current = { id: task.id, x: event.clientX, y: event.clientY, offX: event.clientX - rect.x, offY: event.clientY - rect.y, width: rect.width }; }} onHandlePointerDown={(event) => { if (!task.id || movingTaskId) return; suppressClickRef.current = true; event.preventDefault(); const card = event.currentTarget.closest<HTMLElement>(".edupi-task-board-card"); const rect = card?.getBoundingClientRect(); beginDrag({ id: task.id, offX: rect ? event.clientX - rect.x : 14, offY: rect ? event.clientY - rect.y : 14, width: rect?.width ?? 240 }, event.clientX, event.clientY); }} onMove={(stage) => void move(task, stage)} /></div>;
+                  return <div role="listitem" key={task.id || `${task.trigger}:${task.title}`}><TaskCard task={task} session={session} lane={column.id} candidate={candidate} workCase={workCase} busy={movingTaskId === task.id} selected={Boolean(task.id) && selectedCardId === task.id} dragSource={draggedTaskId === task.id} onOpen={(keyboard) => { if (suppressClickRef.current && !keyboard) { suppressClickRef.current = false; return; } suppressClickRef.current = false; setSelectedCardId(task.id ?? null); onTaskDetail(task); }} onCardPointerDown={(event) => { suppressClickRef.current = false; if (!task.id || movingTaskId || taskBoardTargets(column.id, task).length === 0) return; if ((event.target as HTMLElement).closest("select")) return; const rect = event.currentTarget.getBoundingClientRect(); dragStartRef.current = { id: task.id, x: event.clientX, y: event.clientY, offX: event.clientX - rect.x, offY: event.clientY - rect.y, width: rect.width }; }} onHandlePointerDown={(event) => { if (!task.id || movingTaskId || taskBoardTargets(column.id, task).length === 0) return; suppressClickRef.current = true; event.preventDefault(); const card = event.currentTarget.closest<HTMLElement>(".edupi-task-board-card"); const rect = card?.getBoundingClientRect(); beginDrag({ id: task.id, offX: rect ? event.clientX - rect.x : 14, offY: rect ? event.clientY - rect.y : 14, width: rect?.width ?? 240 }, event.clientX, event.clientY); }} onMove={(stage) => void move(task, stage)} /></div>;
                 })}
                 {column.tasks.length === 0 ? <div className="edupi-task-board-column__empty" role="status">暂无任务</div> : null}
                 {column.tasks.length > 10 ? <button type="button" className="edupi-list-more" onClick={() => openList(column.id)}>查看更多 <span>{column.tasks.length} 项</span></button> : null}

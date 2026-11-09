@@ -3,8 +3,10 @@ import type { TaskSessionBinding } from "./edupi-task-sessions";
 import { taskContentReady, taskKey } from "./edupi-workbench.ts";
 import { matchesTaskQuery } from "./edupi-task-category.ts";
 import { compareCompletionTimes, compareForegroundDates, isTaskForeground, taskCompletionTime, taskReferenceDate, type ForegroundContext, type ForegroundPolicy } from "./edupi-foreground.ts";
+import { isPausedRecurringTask } from "./edupi-recurring-status.ts";
 
-export type TaskBoardLaneId = "todo" | "progress" | "review" | "done";
+export type CoreTaskBoardStage = "todo" | "progress" | "review" | "done";
+export type TaskBoardLaneId = CoreTaskBoardStage | "paused";
 
 export type TaskBoardColumn = {
   id: TaskBoardLaneId;
@@ -17,6 +19,7 @@ const columns: Array<{ id: TaskBoardLaneId; label: string }> = [
   { id: "progress", label: "进行中" },
   { id: "review", label: "待我确认" },
   { id: "done", label: "已完成" },
+  { id: "paused", label: "已暂停" },
 ];
 
 const laneLabels: Record<TaskBoardLaneId, string> = Object.fromEntries(columns.map((column) => [column.id, column.label])) as Record<TaskBoardLaneId, string>;
@@ -26,10 +29,23 @@ const transitions: Record<TaskBoardLaneId, TaskBoardLaneId[]> = {
   progress: ["todo", "review", "done"],
   review: ["progress", "done"],
   done: ["progress"],
+  paused: ["progress"],
 };
 
-export function taskBoardTargets(stage: TaskBoardLaneId): TaskBoardLaneId[] {
+export function taskBoardTargets(stage: TaskBoardLaneId, task?: TeacherTask): TaskBoardLaneId[] {
+  if (task?.recurrence) {
+    if (task.status === "rejected" || task.status === "hold") return [];
+    return transitions[stage].map(target => target === "done" ? "paused" : target);
+  }
   return [...transitions[stage]];
+}
+
+export function taskBoardStageForCore(task: TeacherTask, stage: TaskBoardLaneId): CoreTaskBoardStage {
+  if (stage === "paused") {
+    if (!task.recurrence) throw new Error("普通任务不能暂停周期模板。");
+    return "done";
+  }
+  return stage;
 }
 
 export function taskBoardLaneLabel(stage: TaskBoardLaneId): string {
@@ -47,6 +63,7 @@ export function taskBoardLane(task: TeacherTask, session: TaskSessionBinding | n
   if (task.recurrence) {
     if (task.status === "rejected") return "done";
     if (task.status === "hold") return "review";
+    if (isPausedRecurringTask(task)) return "paused";
     if (task.boardStage) return task.boardStage;
   }
   // A later explicit move can reopen reviewed work. Initial stages and older

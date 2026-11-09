@@ -28,7 +28,7 @@ import { EduPiHomeLaunchpad } from "./EduPiHomeLaunchpad";
 import { EduPiWorkspaceBoard } from "./EduPiWorkspaceBoard";
 import { EduPiPlanMergeSuggestions } from "./EduPiPlanMergeSuggestions";
 import type { MaterialStagingDescriptor } from "@/lib/edupi-material-staging-client";
-import type { TaskBoardLaneId } from "@/lib/edupi-task-board";
+import type { CoreTaskBoardStage } from "@/lib/edupi-task-board";
 import type { EducationMemoryScopeProjection } from "@/lib/edupi-memory-scopes";
 import type { EduPiTeachingSkillLifecycle } from "@/lib/edupi-platform-client";
 import type { CreateTeacherTaskInput, CreateTeacherTaskOutcome } from "@/lib/edupi-task-board-command";
@@ -72,7 +72,7 @@ type Props = {
   onStartAgent: (prompt: string, mode?: "insert" | "replace") => void;
   onTeachingSkills: (lifecycle: EduPiTeachingSkillLifecycle) => void;
   onCreateTask: (input: CreateTeacherTaskInput) => Promise<CreateTeacherTaskOutcome>;
-  onMoveTask: (task: TeacherTask, stage: TaskBoardLaneId) => Promise<void>;
+  onMoveTask: (task: TeacherTask, stage: CoreTaskBoardStage) => Promise<void>;
   onDeleteEntity: (kind: EducationEntityDeleteKind, id: string, label: string) => Promise<boolean>;
   onReviewTarget?: (target: { kind: "observation" | "memory_candidate"; id: string }) => void;
 };
@@ -118,7 +118,7 @@ export function DashboardView({ data, context, kernelState, onEducation, onTaskD
   const policy = useEduPiForegroundPolicy();
   const today = policy.today;
   const homeTasks = projectTaskBoard(data.tasks, data.taskSessions, data.workCandidates, "", { ...policy, ...data })
-    .filter(column => column.id !== "done").flatMap(column => column.tasks)
+    .filter(column => column.id !== "done" && column.id !== "paused").flatMap(column => column.tasks)
     .sort((left, right) => compareForegroundDates(taskReferenceDate(left, data), taskReferenceDate(right, data), today) || taskKey(left).localeCompare(taskKey(right)));
   const currentWeek = data.calendar.find((event) => Boolean(event.date && event.date <= today && (event.endDate || event.date) >= today && /第\d+周/.test(event.name)));
   const upcoming = data.calendar.filter(event => event !== currentWeek && isForegroundDate(calendarReferenceDate(event), policy))

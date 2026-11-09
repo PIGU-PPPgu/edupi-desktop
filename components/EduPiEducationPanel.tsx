@@ -50,7 +50,7 @@ import { shouldShowBlockingEducationLoad } from "@/lib/edupi-workspace-load-stat
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { listDesktopStagedMaterials, removeDesktopStagedMaterial, selectFilesNative, stageDesktopMaterialFiles, stageDesktopMaterialPaths } from "@/lib/desktop-native";
 import { loadStagedMaterials, removeStagedMaterial, stageBrowserMaterialFiles, type MaterialStagingDescriptor } from "@/lib/edupi-material-staging-client";
-import type { TaskBoardLaneId } from "@/lib/edupi-task-board";
+import type { CoreTaskBoardStage } from "@/lib/edupi-task-board";
 import { calendarQuickEntryKey, calendarQuickEntryStatusLabel, type EduPiQuickEntryItem } from "@/lib/edupi-quick-entry";
 import { isTaskReviewable, workCaseForTask } from "@/lib/edupi-work-case";
 import { studentRecordKey } from "@/lib/edupi-student-roster-model";
@@ -1142,7 +1142,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     return { preparationState: result.preparation.state as "running" | "ready", preparationError: null };
   }, [commitEducationSnapshot, pollBoardPreparation, refreshCommittedTask]);
 
-  const moveBoardTask = useCallback(async (task: TeacherTask, stage: TaskBoardLaneId) => {
+  const moveBoardTask = useCallback(async (task: TeacherTask, stage: CoreTaskBoardStage) => {
     if (!task.id) throw new Error("任务缺少可写标识。");
     const response = await fetch(`/api/edupi/tasks/${encodeURIComponent(task.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stage, expectedRevision: task.boardRevision, note: null }) });
     const result = await response.json() as { error?: string; data?: EducationContract | null; receipt?: { status?: string }; refreshPending?: boolean };

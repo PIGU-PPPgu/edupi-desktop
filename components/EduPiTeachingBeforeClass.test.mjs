@@ -37,7 +37,7 @@ test("teaching home is driven by Core before-class tasks and work cases", () => 
 
 test("teaching task detail uses the same Core work case and distinguishes class date from deadline", () => {
   assert.match(panel, /workCase=\{workCaseForTask\(education, activeTask\.id\)\}/);
-  assert.match(taskWorkspace, /workCaseStateLabel\(props\.workCase\.currentState\)/);
+  assert.match(taskWorkspace, /statusLabel = useTaskStatus \|\| !workCase \? taskStatusLabel\(props\.task\) : workCaseStateLabel\(workCase\.currentState\)/);
   assert.match(taskWorkspace, /`上课 \$\{props\.task\.sourceEventDate\}/);
   assert.match(taskWorkspace, /` · 截止 \$\{props\.task\.dueDate\}`/);
   assert.match(taskWorkspace, /isTaskReviewable\(props\.task, props\.workCase\)/);
@@ -150,6 +150,7 @@ test("blocks review navigation and teacher actions until Core and projected arti
 test("enables review navigation and teacher actions only for a fully evidenced work case", () => {
   const html = renderTaskWorkspace(workCase(["artifact-1"]));
   assert.equal(isTaskReviewable(task, workCase(["artifact-1"])), true);
+  assert.match(html, /edupi-task-status is-warning">已准备/);
   assert.doesNotMatch(html, /data-stage="review"[^>]*disabled/);
   assert.match(html, /aria-label="教师审核动作"/);
   assert.match(html, />接受<\/button>/);
