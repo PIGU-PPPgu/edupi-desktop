@@ -12,8 +12,14 @@ const FINGERPRINT_RE = /^sha256:[a-f0-9]{64}$/u;
 const OPAQUE_RE = /^[A-Za-z0-9][A-Za-z0-9._:@/+~=-]*$/u;
 const LEASE_KIND_RE = /^(?:daemon|legacy_[a-z0-9][a-z0-9_]{0,47})$/u;
 const RECOVERY_BUSY_TIMEOUT_MS = 1_000;
-const RUNTIME_SCHEMA_HASH = "sha256:9c8102dbe07242944b86693bc125d068ab90af632f84a7d0739d32c7e698c048";
-const ADMISSION_SCHEMA_HASH = "sha256:67793e028ea8bee40542f071ae4f91194b83ba070c0dfabb2ab853b4695dc3f5";
+const RUNTIME_SCHEMA_HASHES: Record<number, string> = {
+  1: "sha256:9c8102dbe07242944b86693bc125d068ab90af632f84a7d0739d32c7e698c048",
+  4: "sha256:ca90991e8c32b74ff60752063bb69f6d9b954889cfd36ea8c5d7cbfa97c380c1",
+};
+const ADMISSION_SCHEMA_HASHES: Record<number, string> = {
+  1: "sha256:67793e028ea8bee40542f071ae4f91194b83ba070c0dfabb2ab853b4695dc3f5",
+  3: "sha256:54f6d0ef12485c489702d43fe87913d183d4d8dfa2c962a99861c57c3f19c175",
+};
 const REPAIR_INTENT = "core-runtime-root-repair-v1.json";
 
 export type RuntimeRecoveryStatus = "clean" | "stale" | "blocked" | "unavailable";
@@ -101,10 +107,11 @@ function schemaHash(db: DatabaseSync): string {
   return `sha256:${createHash("sha256").update(JSON.stringify(inventory), "utf8").digest("hex")}`;
 }
 
-function validatePinnedSchema(db: DatabaseSync, kind: "runtime" | "admission"): void {
+function validatePinnedSchema(db: DatabaseSync, kind: "runtime" | "admission"): number {
   const version = Number(db.prepare("PRAGMA user_version").get()?.user_version ?? -1);
-  const expected = kind === "runtime" ? RUNTIME_SCHEMA_HASH : ADMISSION_SCHEMA_HASH;
-  if (version !== 1 || schemaHash(db) !== expected) throw new Error("Core Runtime schema is incompatible");
+  const expected = (kind === "runtime" ? RUNTIME_SCHEMA_HASHES : ADMISSION_SCHEMA_HASHES)[version];
+  if (!expected || schemaHash(db) !== expected) throw new Error("Core Runtime schema is incompatible");
+  return version;
 }
 
 function readRepairIntent(dataRoot: ResolvedEduPiDataRoot): RepairIntent | null {
@@ -138,8 +145,9 @@ function validateIntentBackups(dataRoot: ResolvedEduPiDataRoot, intent: RepairIn
     if (stat.isSymbolicLink() || !stat.isFile()) throw new Error("Core Runtime repair backup is invalid");
     const db = new DatabaseSync(file, { readOnly: true });
     try {
-      validatePinnedSchema(db, kind);
-      const fingerprint = kind === "runtime" ? runtimeMetadata(db).fingerprint : admissionMetadata(db).fingerprint;
+      const version = validatePinnedSchema(db, kind);
+      if (version !== 1) throw new Error("Core Runtime repair backup is incompatible");
+      const fingerprint = kind === "runtime" ? runtimeMetadata(db, version).fingerprint : admissionMetadata(db, version).fingerprint;
       if (fingerprint !== intent.sourceFingerprint) throw new Error("Core Runtime repair backup is invalid");
     } finally {
       db.close();
@@ -167,14 +175,15 @@ function isLive(pid: number): boolean {
   }
 }
 
-function exactMetadata(db: DatabaseSync, table: "runtime_meta" | "admission_meta", versionKey: "schema_version" | "admission_version"): Record<string, string> {
+function exactMetadata(db: DatabaseSync, table: "runtime_meta" | "admission_meta", versionKey: "schema_version" | "admission_version", version: number): Record<string, string> {
   const rows = db.prepare(`SELECT key, value FROM ${table} ORDER BY key`).all() as Array<{ key?: unknown; value?: unknown }>;
   const expectedKeys = [versionKey, "root_fingerprint"].sort();
-  if (rows.length !== 2 || rows.some((row, index) => row.key !== expectedKeys[index] || typeof row.value !== "string")) {
+  if (rows.some((row) => typeof row.key !== "string" || typeof row.value !== "string")
+    || (table !== "runtime_meta" || version === 1) && (rows.length !== 2 || rows.some((row, index) => row.key !== expectedKeys[index]))) {
     throw new Error("Core Runtime metadata is incompatible");
   }
   const metadata = Object.fromEntries(rows.map((row) => [row.key as string, row.value as string]));
-  if (metadata[versionKey] !== "1" || !FINGERPRINT_RE.test(metadata.root_fingerprint)) {
+  if (metadata[versionKey] !== String(version) || !FINGERPRINT_RE.test(metadata.root_fingerprint)) {
     throw new Error("Core Runtime metadata is incompatible");
   }
   return metadata;
@@ -190,11 +199,11 @@ function validOpaque(value: unknown): boolean {
   return typeof value === "string" && Buffer.byteLength(value, "utf8") <= 512 && OPAQUE_RE.test(value);
 }
 
-function runtimeMetadata(db: DatabaseSync) {
-  const metadata = exactMetadata(db, "runtime_meta", "schema_version");
+function runtimeMetadata(db: DatabaseSync, version: number) {
+  const metadata = exactMetadata(db, "runtime_meta", "schema_version", version);
   const rows = db.prepare("SELECT * FROM authority").all() as Array<Record<string, unknown>>;
   const authority = rows[0];
-  if (rows.length !== 1 || Number(authority?.singleton) !== 1 || Number(authority?.schema_version) !== 1
+  if (rows.length !== 1 || Number(authority?.singleton) !== 1 || Number(authority?.schema_version) !== version
     || authority.root_fingerprint !== metadata.root_fingerprint
     || !Number.isSafeInteger(Number(authority.fencing_generation)) || Number(authority.fencing_generation) < 1
     || !Number.isSafeInteger(Number(authority.owner_pid)) || Number(authority.owner_pid) < 1
@@ -206,13 +215,13 @@ function runtimeMetadata(db: DatabaseSync) {
   return { fingerprint: metadata.root_fingerprint, authority };
 }
 
-function admissionMetadata(db: DatabaseSync) {
-  const metadata = exactMetadata(db, "admission_meta", "admission_version");
+function admissionMetadata(db: DatabaseSync, version: number) {
+  const metadata = exactMetadata(db, "admission_meta", "admission_version", version);
   const rows = db.prepare("SELECT * FROM admission_lease ORDER BY singleton").all() as Array<Record<string, unknown>>;
   const lease = rows[0] ?? null;
   if (rows.length > 1 || lease && (
     Number(lease.singleton) !== 1
-    || Number(lease.admission_version) !== 1
+    || Number(lease.admission_version) !== version
     || lease.root_fingerprint !== metadata.root_fingerprint
     || !LEASE_KIND_RE.test(String(lease.lease_kind))
     || !Number.isSafeInteger(Number(lease.owner_pid))
@@ -226,26 +235,26 @@ function admissionMetadata(db: DatabaseSync) {
   return { fingerprint: metadata.root_fingerprint, lease };
 }
 
-function inspectDatabase(file: string, kind: "runtime" | "admission"): { fingerprint: string | null; blocked: boolean; needsRepair: boolean; reason: string | null } {
-  if (!fs.existsSync(file)) return { fingerprint: null, blocked: false, needsRepair: false, reason: null };
+function inspectDatabase(file: string, kind: "runtime" | "admission"): { version: number | null; fingerprint: string | null; blocked: boolean; needsRepair: boolean; reason: string | null } {
+  if (!fs.existsSync(file)) return { version: null, fingerprint: null, blocked: false, needsRepair: false, reason: null };
   const stat = fs.lstatSync(file);
-  if (stat.isSymbolicLink() || !stat.isFile()) return { fingerprint: null, blocked: true, needsRepair: false, reason: "运行状态文件不是普通文件" };
+  if (stat.isSymbolicLink() || !stat.isFile()) return { version: null, fingerprint: null, blocked: true, needsRepair: false, reason: "运行状态文件不是普通文件" };
   const db = new DatabaseSync(file, { readOnly: true });
   try {
-    validatePinnedSchema(db, kind);
+    const version = validatePinnedSchema(db, kind);
     if (kind === "admission") {
-      const state = admissionMetadata(db);
+      const state = admissionMetadata(db, version);
       const fingerprint = state.fingerprint;
       if (state.lease && isLive(Number(state.lease.owner_pid))) {
-        return { fingerprint, blocked: true, needsRepair: true, reason: "Core 正在持有 writer admission" };
+        return { version, fingerprint, blocked: true, needsRepair: true, reason: "Core 正在持有 writer admission" };
       }
-      return { fingerprint, blocked: false, needsRepair: Boolean(state.lease), reason: null };
+      return { version, fingerprint, blocked: false, needsRepair: Boolean(state.lease), reason: null };
     } else {
-      const state = runtimeMetadata(db);
+      const state = runtimeMetadata(db, version);
       if (isLive(Number(state.authority.owner_pid))) {
-        return { fingerprint: state.fingerprint, blocked: true, needsRepair: false, reason: "Core Runtime owner 进程仍存在" };
+        return { version, fingerprint: state.fingerprint, blocked: true, needsRepair: false, reason: "Core Runtime owner 进程仍存在" };
       }
-      return { fingerprint: state.fingerprint, blocked: false, needsRepair: false, reason: null };
+      return { version, fingerprint: state.fingerprint, blocked: false, needsRepair: false, reason: null };
     }
   } finally {
     db.close();
@@ -271,15 +280,18 @@ export function inspectEduPiRuntimeRecovery(
   try {
     const runtime = inspectDatabase(runtimePath(dataRoot, RUNTIME_DB), "runtime");
     const admission = inspectDatabase(runtimePath(dataRoot, ADMISSION_DB), "admission");
+    if (!((runtime.version === 1 && admission.version === 1) || (runtime.version === 4 && admission.version === 3))) {
+      throw new Error("Core Runtime database versions are incompatible");
+    }
     const fingerprints = [runtime.fingerprint, admission.fingerprint].filter((value): value is string => Boolean(value));
     const stale = runtime.needsRepair || admission.needsRepair || fingerprints.some((value) => value !== currentFingerprint);
-    const blocked = stale && (runtime.blocked || admission.blocked);
+    const blocked = stale && (runtime.version === 4 || runtime.blocked || admission.blocked);
     return {
       status: !stale ? "clean" : blocked ? "blocked" : "stale",
       runtimeFingerprint: runtime.fingerprint,
       admissionFingerprint: admission.fingerprint,
       currentFingerprint,
-      reason: stale ? runtime.reason || admission.reason || null : null,
+      reason: stale ? runtime.reason || admission.reason || (runtime.version === 4 ? "Core Runtime v4 requires owner-managed recovery" : null) : null,
       files,
     };
   } catch (error) {
@@ -320,6 +332,18 @@ export async function repairEduPiRuntimeState(
   if (priorIntent && priorIntent.targetFingerprint !== currentFingerprint) throw new Error("Core Runtime repair target changed");
   const priorBackups = priorIntent ? validateIntentBackups(dataRoot, priorIntent) : null;
   const inspection = inspectEduPiRuntimeRecovery(dataRoot, currentFingerprint);
+  // The v1 repair path writes root fingerprints and clears its intent. Never apply it to v4.
+  const runtimeFileForVersion = runtimePath(dataRoot, RUNTIME_DB);
+  if (fs.existsSync(runtimeFileForVersion)) {
+    const versionDb = new DatabaseSync(runtimeFileForVersion, { readOnly: true });
+    try {
+      if (Number(versionDb.prepare("PRAGMA user_version").get()?.user_version) !== 1) {
+        if (priorIntent) throw new Error("Core Runtime v4 cannot consume a v1 repair intent");
+        if (inspection.status === "clean") return { ...inspection, repaired: false, backups: [] };
+        throw new Error(inspection.reason || "Core Runtime v4 requires owner-managed recovery");
+      }
+    } finally { versionDb.close(); }
+  }
   if (inspection.status === "clean") {
     if (priorIntent) clearRepairIntent(dataRoot);
     return { ...inspection, repaired: Boolean(priorIntent), backups: priorBackups ?? [] };
@@ -349,14 +373,14 @@ export async function repairEduPiRuntimeState(
     admissionDb = new DatabaseSync(admissionFile);
     admissionDb.exec(`PRAGMA busy_timeout = ${RECOVERY_BUSY_TIMEOUT_MS}; BEGIN IMMEDIATE`);
     admissionTransaction = true;
-    validatePinnedSchema(admissionDb, "admission");
+    if (validatePinnedSchema(admissionDb, "admission") !== 1) throw new Error("Core Runtime repair schema is incompatible");
 
     runtimeDb = new DatabaseSync(runtimeFile);
     runtimeDb.exec(`PRAGMA busy_timeout = ${RECOVERY_BUSY_TIMEOUT_MS}; BEGIN IMMEDIATE`);
     runtimeTransaction = true;
-    validatePinnedSchema(runtimeDb, "runtime");
-    const runtimeState = runtimeMetadata(runtimeDb);
-    const admissionState = admissionMetadata(admissionDb);
+    if (validatePinnedSchema(runtimeDb, "runtime") !== 1) throw new Error("Core Runtime repair schema is incompatible");
+    const runtimeState = runtimeMetadata(runtimeDb, 1);
+    const admissionState = admissionMetadata(admissionDb, 1);
     if (isLive(Number(runtimeState.authority.owner_pid))) throw new Error("Core Runtime owner is active");
     if (admissionState.lease && isLive(Number(admissionState.lease.owner_pid))) throw new Error("Core writer admission is active");
 

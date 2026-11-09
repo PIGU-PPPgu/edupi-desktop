@@ -34,7 +34,7 @@ test("one settings workspace provides grouped navigation and preserves real capa
   assert.match(admin, /modelSettingsDirty && !window.confirm/);
   assert.match(admin, /if \(settingsBusy\) return/);
   for (const endpoint of ["/api/edupi/workspace", "/api/edupi/status", "/api/models"]) assert.ok(admin.includes(endpoint));
-  for (const operation of ["reconnectEduPiCore", "repairEduPiCore", "readEducationEntityDeletions", "restoreEducationEntity", "kernelRunTitle", "kernelRunDetail", "kernelRunAction", "formatCoreSchedulerStatus"]) assert.ok(admin.includes(operation));
+  for (const operation of ["reconnectEduPiCore", "readEducationEntityDeletions", "restoreEducationEntity", "kernelRunTitle", "kernelRunDetail", "kernelRunAction", "formatCoreSchedulerStatus"]) assert.ok(admin.includes(operation));
   assert.match(admin, /window.dispatchEvent\(new Event\("edupi-education-refresh"\)\)/);
   assert.match(admin, /<summary>技术信息<\/summary>/);
   assert.match(admin, /<summary>教育数据<\/summary>/);
@@ -54,12 +54,14 @@ test("one settings workspace provides grouped navigation and preserves real capa
   assert.match(admin, /nativeIdentity\.host\.appVersion/);
   assert.match(admin, /void nativeIdentity\.refresh\(\)/);
   assert.match(admin, />刷新状态<\/button>/);
-  assert.match(admin, /runtime_root_invalid/);
-  assert.match(admin, /runtime_state_invalid/);
-  assert.match(admin, /runtime_writer_unavailable/);
+  assert.match(admin, /inspectEduPiCoreRepair\(controller\.signal\)/);
+  assert.match(admin, /coreRepairStatus === "stale" \? \(\) => void repairCore\(\)/);
+  assert.match(admin, /await repairEduPiCore\(\)/);
+  assert.match(admin, /coreReconnectMessage === "Core 已重新连接" && !coreConnected \? null : coreReconnectMessage/);
+  assert.match(admin, /readableRuntimeReason\(coreStatusMessage\)/);
   assert.match(admin, /desktopChrome\.isDesktop/);
-  assert.match(admin, /onClick=\{coreConnected \? refresh : \(\) => void reconnectCore\(\)\}/);
-  assert.match(admin, /coreConnected \? "已连接" : "重新连接"/);
+  assert.match(admin, /coreConnected \? refresh : coreRepairStatus === "stale"/);
+  assert.match(admin, /coreRepairStatus === "stale" \? "修复 Core" : "重新连接"/);
   assert.match(admin, /aria-current=\{activeSection === section\.id \? "page" : undefined\}/);
   assert.match(admin, /has-desktop-drag-region/);
   assert.match(admin, /startWindowDragging/);

@@ -10,6 +10,18 @@ import { readEduPiProactivityActivation } from "@/lib/edupi-proactivity-config";
 
 export const dynamic = "force-dynamic";
 
+export async function GET(request: Request) {
+  if (!isDesktopApiRequestAllowed(request)) return NextResponse.json({ ok: false, error: "Core Runtime 状态请求被拒绝" }, { status: 403 });
+  try {
+    const roots = resolveEduPiBridgeRoots();
+    const fingerprint = await coreRuntimeFingerprint(roots.runtime, roots.dataRoot);
+    const inspection = inspectEduPiRuntimeRecovery(roots.dataRoot, fingerprint);
+    return NextResponse.json({ ok: true, status: inspection.status });
+  } catch {
+    return NextResponse.json({ ok: false, status: "unavailable" }, { status: 503 });
+  }
+}
+
 function publicRecovery(value: RuntimeRecoveryResult) {
   return {
     status: value.status,
@@ -26,6 +38,7 @@ export async function POST(request: Request) {
     const roots = resolveEduPiBridgeRoots();
     const fingerprint = await coreRuntimeFingerprint(roots.runtime, roots.dataRoot);
     const before = inspectEduPiRuntimeRecovery(roots.dataRoot, fingerprint);
+    if (before.status === "blocked") return NextResponse.json({ ok: false, code: "runtime_repair_blocked", error: "当前 Core Runtime 状态需要由 Core 恢复，桌面端无法修复", before: { status: "blocked" } }, { status: 409 });
     const repaired = await repairEduPiRuntimeState(roots.dataRoot, fingerprint);
     const identity = activeBridgeIdentity();
     const host = repaired.repaired ? await restartEduPiRuntime(roots) : await ensureEduPiRuntime(roots);

@@ -36,7 +36,8 @@ async function fixture(options = {}) {
   let getStatus = () => options.statusError ? Promise.reject(new Error("synthetic IPC failure")) : Promise.resolve(status);
   let requestPermission = () => Promise.resolve(status);
   let mutateControl = enabled => Promise.resolve({ ...status, enabled });
-  const calls = { reads: 0, requests: [], enable: [], restart: 0, preferences: [], announcements: [], connectionDetails: 0, upgrades: 0 };
+  const calls = { reads: 0, requests: [], enable: [], restart: 0, preferences: [], announcements: [], connectionDetails: 0, upgrades: 0,
+    inspectCore: 0, repairCore: 0, reconnectCore: 0, coreStatusReads: 0 };
   const preferences = new Map([["computerUseEnabled", options.enabledPreference ?? false]]);
   const savedGlobals = Object.fromEntries(["window", "document", "HTMLElement", "IS_REACT_ACT_ENVIRONMENT"].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   const window = new EventTarget();
@@ -79,6 +80,15 @@ async function fixture(options = {}) {
       setPrefBool: (key, value) => { calls.preferences.push([key, value]); preferences.set(key, value); } },
     "@/hooks/useTheme": { useTheme: () => ({ theme: "light", setTheme() {} }) },
     "@/lib/edupi-foreground-settings": { readForegroundSettings: () => ({ graceDays: 3 }), writeForegroundSettings: async () => {} },
+    "@/lib/edupi-runtime-client": {
+      inspectEduPiCoreRepair: async () => { calls.inspectCore++; return options.repairStatus ?? "unavailable"; },
+      repairEduPiCore: async () => {
+        calls.repairCore++;
+        if (options.repairError) throw new Error(options.repairError);
+        return { ok: true, status: "ready" };
+      },
+      reconnectEduPiCore: async () => { calls.reconnectCore++; return { ok: true, status: "ready", reason: null }; },
+    },
     "./EduPiComputerUseStop": { COMPUTER_USE_CHANGED_EVENT: "synthetic-control-changed", announceComputerUseChanged(enabled) {
       calls.announcements.push(enabled);
       window.dispatchEvent(new CustomEvent("synthetic-control-changed", { detail: enabled }));
@@ -106,6 +116,10 @@ async function fixture(options = {}) {
     };
     const fetch = async url => {
       if (url.startsWith("/api/updates") && options.updateError) throw new Error("synthetic release API failure");
+      if (url === "/api/edupi/status" && options.coreStatus) {
+        calls.coreStatusReads++;
+        return { ok: true, json: async () => ({ core: { status: options.coreStatus } }) };
+      }
       return { ok: true, json: async () => url.startsWith("/api/updates")
       ? { components: [{ project: "edupi-desktop", currentVersion: "0.3.78", latestVersion: "0.3.78", updateAvailable: false,
         releaseStatus: "available", releaseUrl: "https://example.invalid/releases", ...options.releaseInfo }] }
@@ -150,6 +164,71 @@ async function fixture(options = {}) {
     },
   };
 }
+
+test("desktop stale Core offers repair and reports success after clicking", async () => {
+  const ui = await fixture({ coreStatus: "failed", repairStatus: "stale" });
+  try {
+    await ui.mount("admin");
+    assert.ok(ui.button("修复 Core"));
+    const previousReads = ui.calls.coreStatusReads;
+    await ui.click("修复 Core");
+    assert.equal(ui.calls.repairCore, 1);
+    assert.equal(ui.calls.reconnectCore, 0);
+    assert.ok(ui.calls.coreStatusReads > previousReads);
+    assert.match(ui.content(), /Core 已修复/);
+  } finally { await ui.cleanup(); }
+});
+
+test("desktop stale Core shows a repair failure without refreshing", async () => {
+  const ui = await fixture({ coreStatus: "failed", repairStatus: "stale", repairError: "合成修复失败" });
+  try {
+    await ui.mount("admin");
+    const previousReads = ui.calls.coreStatusReads;
+    await ui.click("修复 Core");
+    assert.equal(ui.calls.repairCore, 1);
+    assert.equal(ui.calls.reconnectCore, 0);
+    assert.equal(ui.calls.coreStatusReads, previousReads);
+    assert.match(ui.content(), /合成修复失败/);
+  } finally { await ui.cleanup(); }
+});
+
+for (const repairStatus of ["blocked", "clean", "unavailable"]) {
+  test(`desktop ${repairStatus} Core reconnects without repair`, async () => {
+    const ui = await fixture({ coreStatus: "failed", repairStatus });
+    try {
+      await ui.mount("admin");
+      assert.ok(ui.calls.inspectCore > 0);
+      assert.equal(ui.button("修复 Core"), undefined);
+      await ui.click("重新连接 Core");
+      assert.equal(ui.calls.repairCore, 0);
+      assert.equal(ui.calls.reconnectCore, 1);
+    } finally { await ui.cleanup(); }
+  });
+}
+
+test("web Core reconnects without inspecting or repairing desktop runtime state", async () => {
+  const ui = await fixture({ desktop: false, coreStatus: "failed", repairStatus: "stale" });
+  try {
+    await ui.mount("admin");
+    assert.equal(ui.calls.inspectCore, 0);
+    assert.equal(ui.button("修复 Core"), undefined);
+    await ui.click("重新连接 Core");
+    assert.equal(ui.calls.repairCore, 0);
+    assert.equal(ui.calls.reconnectCore, 1);
+  } finally { await ui.cleanup(); }
+});
+
+test("connected Core checks status without reconnecting or repairing", async () => {
+  const ui = await fixture({ coreStatus: "ready", repairStatus: "stale" });
+  try {
+    await ui.mount("admin");
+    const previousReads = ui.calls.coreStatusReads;
+    await ui.click("检查 Core 状态");
+    assert.ok(ui.calls.coreStatusReads > previousReads);
+    assert.equal(ui.calls.repairCore, 0);
+    assert.equal(ui.calls.reconnectCore, 0);
+  } finally { await ui.cleanup(); }
+});
 
 test("settings compares the running native .77 with .78 even when the source update API reports .78 current", async () => {
   const ui = await fixture();
