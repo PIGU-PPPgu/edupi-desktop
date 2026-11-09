@@ -257,14 +257,60 @@ export function calendarAdministrativeSourceIds(scope: EduPiProactivityScope, wo
     .flatMap(candidate => candidate.sourceIds))].sort();
 }
 
+const PARENT_QUESTION_SUBJECT_KEYS = new Map([
+  ["math", "mathematics", "数学"], ["chinese", "语文"], ["english", "英语"], ["physics", "物理"],
+  ["chemistry", "化学"], ["biology", "生物"], ["history", "历史"], ["geography", "地理"],
+  ["politics", "政治"], ["science", "科学"], ["music", "音乐"], ["art", "美术"], ["pe", "体育"],
+].flatMap(group => group.map(alias => [alias, group[0]] as const)));
+
+type ParentQuestionSubjectProof = { key: string; entityId: string | null };
+
+function parentQuestionSubjectProof(value: unknown, entities: Map<string, RawRecord>): ParentQuestionSubjectProof | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const subjectKey = (label: unknown) => typeof label === "string"
+    ? PARENT_QUESTION_SUBJECT_KEYS.get(label.normalize("NFKC").trim().toLowerCase()) : undefined;
+  const entity = entities.get(value);
+  if (!entity) {
+    const key = subjectKey(value);
+    return key ? { key, entityId: null } : null;
+  }
+  if (entity.entity_kind !== "subject" || entity.status !== "active" || entity.entity_id !== value) return null;
+  const labels = [entity.canonical_name, ...(Array.isArray(entity.aliases) ? entity.aliases.map(alias => record(alias)?.value) : [])];
+  const keys = new Set(labels.map(subjectKey).filter((key): key is string => Boolean(key)));
+  return keys.size === 1 ? { key: [...keys][0], entityId: value } : null;
+}
+
+function parentQuestionSubjectMatches(fact: RawRecord, observations: Array<RawRecord | undefined>,
+  entities: Map<string, RawRecord>, subject: string): boolean {
+  const authorized = parentQuestionSubjectProof(subject, entities);
+  const factSubject = parentQuestionSubjectProof(fact.subject_ref, entities);
+  const sameSubject = (left: ParentQuestionSubjectProof | null, right: ParentQuestionSubjectProof | null) =>
+    left !== null && right !== null && left.key === right.key
+      && (!left.entityId || !right.entityId || left.entityId === right.entityId);
+  if (!sameSubject(factSubject, authorized)) return false;
+  let taggedSubjectId: string | null = null;
+  for (const observation of observations) {
+    if (!observation || observation.status !== "active" || !Array.isArray(observation.entity_ids)
+      || observation.entity_ids.some(id => typeof id !== "string" || !entities.has(id))) return false;
+    const tagged = observation.entity_ids.filter(id => entities.get(id)?.entity_kind === "subject") as string[];
+    if (tagged.length > 1) return false;
+    if (tagged.length === 0) continue;
+    const taggedSubject = parentQuestionSubjectProof(tagged[0], entities);
+    if (!sameSubject(taggedSubject, authorized) || !sameSubject(taggedSubject, factSubject)
+      || taggedSubjectId !== null && taggedSubjectId !== tagged[0]) return false;
+    taggedSubjectId = tagged[0];
+  }
+  return true;
+}
+
 export function parentQuestionSourceIds(scope: EduPiProactivityScope, workspace: unknown): string[] {
   const spine = record(record(workspace)?.fact_spine);
   if (spine?.projection_kind !== "education_fact_v1" || spine.external_send !== false
     || !Array.isArray(spine.entities) || !Array.isArray(spine.observations) || !Array.isArray(spine.accepted_facts)) return [];
-  const entities = new Map(spine.entities.map(record).filter((item): item is RawRecord => Boolean(item?.status === "active"))
+  const entities = new Map(spine.entities.map(record).filter((item): item is RawRecord => Boolean(item))
     .map(item => [String(item.entity_id), item]));
-  if (entities.get(scope.classId)?.entity_kind !== "class"
-    || [...entities.values()].filter(item => item.entity_kind === "term").length !== 1) return [];
+  if (entities.get(scope.classId)?.entity_kind !== "class" || entities.get(scope.classId)?.status !== "active"
+    || [...entities.values()].filter(item => item.entity_kind === "term" && item.status === "active").length !== 1) return [];
   const observations = new Map(spine.observations.map(record).filter((item): item is RawRecord => Boolean(item?.status === "active"))
     .map(item => [String(item.observation_id), item]));
   const conflicts = new Map((Array.isArray(spine.conflicts) ? spine.conflicts : []).map(record)
@@ -274,14 +320,14 @@ export function parentQuestionSourceIds(scope: EduPiProactivityScope, workspace:
     const fact = record(raw);
     if (!fact || fact.status !== "accepted" || fact.predicate !== "communication.parent_question"
       || !["evidence", "general", "academic"].includes(String(fact.fact_kind))
-      || fact.subject_ref !== scope.subject || !Array.isArray(fact.source_ids)
+      || !Array.isArray(fact.source_ids)
       || !Array.isArray(fact.observation_ids) || fact.observation_ids.length === 0
       || !Array.isArray(fact.conflict_ids) || fact.conflict_ids.some(id => conflicts.get(String(id)) !== "resolved")) continue;
     const observed = fact.observation_ids.map(id => observations.get(String(id)));
-    if (observed.some(item => !item || !Array.isArray(item.entity_ids))) continue;
+    if (!parentQuestionSubjectMatches(fact, observed, entities, scope.subject)) continue;
     const targets = observed.map(item => ["class", "term", "student", "parent"].map(kind => {
       const ids = (item!.entity_ids as unknown[]).filter(id => entities.get(String(id))?.entity_kind === kind);
-      return ids.length === 1 ? String(ids[0]) : null;
+      return ids.length === 1 && entities.get(String(ids[0]))?.status === "active" ? String(ids[0]) : null;
     }));
     if (targets.some(target => target.includes(null) || JSON.stringify(target) !== JSON.stringify(targets[0]))
       || targets[0][0] !== scope.classId || fact.entity_id !== targets[0][2]) continue;
@@ -304,10 +350,10 @@ export function buildCapabilityGrantBinding(domain: EduPiCapabilityDomain, scope
   const endsAt = new Date(instant.getTime() + EDUPI_PROACTIVITY_DURATION_DAYS * 86_400_000).toISOString();
   const sourceIds = domain === "calendar_administration" ? calendarAdministrativeSourceIds(scope, workspace)
     : domain === "parent_communication" ? parentQuestionSourceIds(scope, workspace) : [];
-  if (sourceIds.length > 127) throw new EduPiProactivityControlError("proactivity_source_capacity");
   const conversationSource = opaqueSource("conversation", proactivityConversationId(domain));
   // Preserve the manual conversation source inside Core's 128-source limit.
-  const grantedSources = [conversationSource, ...sourceIds];
+  const grantedSources = [...new Set([conversationSource, ...sourceIds])];
+  if (grantedSources.length > 128) throw new EduPiProactivityControlError("proactivity_source_capacity");
   return { grantId: `desktop_${domain}_v1_${token}`, endsAt, spec: {
     scope: { class_id: scope.classId, subject: scope.subject }, domains: [domain], actions: ["update"],
     source_ids: grantedSources, starts_at: new Date(instant.getTime() - 60_000).toISOString(),
