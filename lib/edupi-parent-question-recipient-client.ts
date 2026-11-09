@@ -55,14 +55,20 @@ export async function readParentQuestionRecipientEntries(signal?: AbortSignal): 
   return parseParentQuestionRecipientEntries(body);
 }
 
-export async function updateParentQuestionRecipient(entry: ParentQuestionRecipientEntry, action: "confirm" | "cancel"): Promise<void> {
+export const comparableParentQuestionConfirmation = (value: string) => value.normalize("NFKC").replace(/\s+/gu, "");
+
+export async function updateParentQuestionRecipient(entry: ParentQuestionRecipientEntry, action: "confirm" | "cancel", confirmationText?: string): Promise<void> {
   if (action === "confirm" && entry.status !== "needs_confirmation" || action === "cancel" && !["confirmed", "stale_confirmed"].includes(entry.status)) {
     throw new Error("确认依据已变化，请刷新");
+  }
+  if (action === "confirm" && (typeof confirmationText !== "string" || !confirmationText.trim() || confirmationText.length > 500
+    || comparableParentQuestionConfirmation(confirmationText) !== comparableParentQuestionConfirmation(entry.candidate.confirmation_text))) {
+    throw new Error("请输入与待确认内容一致的文字");
   }
   const response = await fetchDesktopApi("/api/edupi/proactivity/parent-question-recipient", { method: "POST", cache: "no-store",
     headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, questionFactId: entry.questionFactId,
       questionRevision: entry.questionRevision, messageGeneration: entry.messageGeneration, sourceBasisHash: entry.candidate.source_basis_hash,
-      confirmationPlanId: entry.candidate.confirmation_plan_id }) });
+      confirmationPlanId: entry.candidate.confirmation_plan_id, ...(action === "confirm" ? { confirmationText } : {}) }) });
   const body = object(await response.json());
   if (!response.ok || body?.ok !== true || body.externalSend !== false || body.readbackConfirmed !== true
     || body.status !== (action === "confirm" ? "confirmed" : "cancelled")) {

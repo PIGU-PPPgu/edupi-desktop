@@ -2052,6 +2052,9 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-parent-question-confirmation li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 10px; border: 1px solid var(--ep-border); border-radius: 7px; }
 .edupi-parent-question-confirmation li p { flex: 1 1 100%; margin: 0; white-space: pre-wrap; }
 .edupi-parent-question-confirmation li span { flex: 1; color: var(--ep-muted); font-size: 12px; }
+.edupi-parent-question-confirmation li label { display: grid; flex: 1 1 100%; min-width: 0; gap: 6px; }
+.edupi-parent-question-confirmation textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px; border: 1px solid var(--ep-border); border-radius: 6px; color: var(--ep-text); background: var(--ep-surface); font: inherit; font-size: 13px; resize: vertical; }
+.edupi-parent-question-confirmation button:disabled { opacity: 0.5; cursor: not-allowed; }
 .edupi-parent-question-confirmation > p { color: var(--ep-muted); font-size: 12px; }
 .edupi-context-modal { animation: edupi-backdrop-in .16s ease-out both; }
 .edupi-context-modal__panel { animation: edupi-panel-in .2s cubic-bezier(.2, .7, .3, 1) both; }
