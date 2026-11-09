@@ -21,7 +21,7 @@ const temporaryRoot = requestedDataRoot
 fs.mkdirSync(temporaryRoot, { recursive: true });
 const dataRootPath = path.join(temporaryRoot, "data");
 for (const directory of [".edupi/memory", ".edupi/output", ".edupi/locks"]) {
-  fs.mkdirSync(path.join(dataRootPath, directory), { recursive: true });
+  fs.mkdirSync(path.join(dataRootPath, directory), { recursive: true, mode: 0o700 });
 }
 
 const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
