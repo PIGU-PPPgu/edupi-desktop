@@ -16,7 +16,7 @@ import { startWindowDragging } from "@/lib/desktop-window";
 import { formatCoreSchedulerStatus } from "@/lib/edupi-schedule-display";
 import { coreExecutionReadinessLabel, type CoreRuntimeHealth, type CoreRuntimeScheduler } from "@/lib/edupi-runtime-health";
 import { EduPiCoreCompatibility, type CoreCompatibilitySnapshot } from "./EduPiCoreCompatibility";
-import { reconnectEduPiCore, repairEduPiCore } from "@/lib/edupi-runtime-client";
+import { inspectEduPiCoreRepair, reconnectEduPiCore, repairEduPiCore, type EduPiRuntimeRepairStatus } from "@/lib/edupi-runtime-client";
 import { kernelRunAction, kernelRunDetail, kernelRunTitle, type KernelRunDisplayInput } from "@/lib/edupi-kernel-display";
 import { EduPiDeletedEntities } from "./EduPiDeletedEntities";
 import { readEducationEntityDeletions, restoreEducationEntity } from "@/lib/edupi-entity-delete-client";
@@ -145,7 +145,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
   const [refreshKey, setRefreshKey] = useState(0);
   const [coreReconnecting, setCoreReconnecting] = useState(false);
   const [coreReconnectMessage, setCoreReconnectMessage] = useState<string | null>(null);
-  const [coreRepairing, setCoreRepairing] = useState(false);
+  const [coreRepairStatus, setCoreRepairStatus] = useState<EduPiRuntimeRepairStatus>("unavailable");
   const activeNavRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -253,6 +253,18 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
 
   const checklist = useMemo(() => snapshot.context?.checklist ?? FALLBACK_CHECKLIST, [snapshot.context?.checklist]);
   const coreConnected = snapshot.status?.core?.status === "ready";
+  useEffect(() => {
+    if (activeSection !== "system" || !desktopChrome.isDesktop || coreConnected) {
+      return;
+    }
+    const controller = new AbortController();
+    setCoreRepairStatus("unavailable");
+    void inspectEduPiCoreRepair(controller.signal)
+      .then((status) => { if (!controller.signal.aborted) setCoreRepairStatus(status); })
+      .catch(() => { if (!controller.signal.aborted) setCoreRepairStatus("unavailable"); });
+    return () => controller.abort();
+  }, [activeSection, desktopChrome.isDesktop, coreConnected, refreshKey, refreshToken]);
+  const coreStatusMessage = coreReconnectMessage === "Core 已重新连接" && !coreConnected ? null : coreReconnectMessage;
   const projectionConnected = snapshot.status?.projection?.status === "ready";
   const coreReady = coreConnected && projectionConnected;
   const modelReady = Boolean(snapshot.models?.defaultModel && (snapshot.models.modelList?.length || 0) > 0);
@@ -301,17 +313,17 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
     }
   };
   const repairCore = async () => {
-    if (coreRepairing || !window.confirm("只修复 Core Runtime 状态库，教师记忆、校历和课表不会改动。继续？")) return;
-    setCoreRepairing(true);
+    if (coreReconnecting || coreRepairStatus !== "stale") return;
+    setCoreReconnecting(true);
     setCoreReconnectMessage(null);
     try {
       await repairEduPiCore();
-      setCoreReconnectMessage("Core Runtime 已修复并重新连接");
+      setCoreReconnectMessage("Core 已修复");
       refresh();
     } catch (error) {
-      setCoreReconnectMessage(error instanceof Error ? error.message : "Core Runtime 修复失败");
+      setCoreReconnectMessage(error instanceof Error ? error.message : "Core 修复失败");
     } finally {
-      setCoreRepairing(false);
+      setCoreReconnecting(false);
     }
   };
   return <section className={`edupi-admin-panel${desktopChrome.isDesktop ? " has-desktop-drag-region" : ""}`} aria-label="EduPi 设置">
@@ -401,8 +413,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
         <AdminSectionHeader title="诊断" onRefresh={refresh} /><div data-setting-id="runtime-status" />
         <div className="edupi-admin-list">
           <div><span><strong>{desktopChrome.isDesktop ? "EduPi Desktop" : "EduPi Web"}</strong><small>{desktopChrome.isDesktop ? "当前运行版本" : "网页版本"}</small></span><em>{desktopChrome.isDesktop ? nativeIdentity.host ? `v${nativeIdentity.host.appVersion}` : nativeIdentity.loading ? "检测中" : "无法检测" : `v${APP_VERSION_DISPLAY}`}</em></div>
-          <button type="button" disabled={coreReconnecting || coreRepairing} onClick={coreConnected ? refresh : () => void reconnectCore()} aria-label={coreConnected ? "检查 Core 状态" : "重新连接 Core"}><span><strong>EduPi Core</strong><small aria-live="polite">{readableRuntimeReason(coreReconnectMessage) || readableRuntimeReason(snapshot.status?.core?.reason) || systemStatusLabel(snapshot.status?.core?.lifecycle || snapshot.status?.core?.status)}</small></span><em className={coreConnected ? "is-ready" : ""}>{coreReconnecting ? "连接中" : coreRepairing ? "修复中" : loading ? "检查中" : coreConnected ? "已连接" : "重新连接"}</em></button>
-          {desktopChrome.isDesktop && ["runtime_root_invalid", "runtime_state_invalid", "runtime_writer_unavailable"].some((code) => snapshot.status?.core?.reason?.includes(code)) ? <button type="button" disabled={coreRepairing || coreReconnecting} onClick={() => void repairCore()}><span><strong>修复 Core Runtime</strong><small>只清理运行状态绑定，保留教师数据</small></span><em>{coreRepairing ? "处理中" : "修复"}</em></button> : null}
+          <button type="button" disabled={coreReconnecting} onClick={coreConnected ? refresh : coreRepairStatus === "stale" ? () => void repairCore() : () => void reconnectCore()} aria-label={coreConnected ? "检查 Core 状态" : coreRepairStatus === "stale" ? "修复 Core" : "重新连接 Core"}><span><strong>EduPi Core</strong><small aria-live="polite">{readableRuntimeReason(coreStatusMessage) || readableRuntimeReason(snapshot.status?.core?.reason) || systemStatusLabel(snapshot.status?.core?.lifecycle || snapshot.status?.core?.status)}</small></span><em className={coreConnected ? "is-ready" : ""}>{coreReconnecting ? coreRepairStatus === "stale" ? "修复中" : "连接中" : loading ? "检查中" : coreConnected ? "已连接" : coreRepairStatus === "stale" ? "修复 Core" : "重新连接"}</em></button>
           <div><span><strong>教育投影</strong><small>{readableRuntimeReason(snapshot.status?.projection?.reason) || systemStatusLabel(snapshot.status?.projection?.status)}</small></span><em className={projectionConnected ? "is-ready" : ""}>{projectionConnected ? "已连接" : "检查"}</em></div>
           <div><span><strong>自动运行内核</strong><small>{automationStatus}</small></span><em>{kernelSummary?.running ? `${kernelSummary.running} 项运行中` : "空闲"}</em></div>
         </div>

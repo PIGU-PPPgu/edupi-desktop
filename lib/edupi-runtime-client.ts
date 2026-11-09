@@ -14,6 +14,15 @@ export type EduPiRuntimeRepairResult = {
 };
 
 type ErrorBody = { error?: unknown };
+export type EduPiRuntimeRepairStatus = "clean" | "stale" | "blocked" | "unavailable";
+
+export async function inspectEduPiCoreRepair(signal?: AbortSignal): Promise<EduPiRuntimeRepairStatus> {
+  const response = await fetchDesktopApi("/api/edupi/runtime/repair", { cache: "no-store", signal });
+  const body = await response.json().catch(() => null) as unknown;
+  if (!response.ok || !body || typeof body !== "object" || Array.isArray(body)) return "unavailable";
+  const status = (body as Record<string, unknown>).status;
+  return status === "clean" || status === "stale" || status === "blocked" ? status : "unavailable";
+}
 
 function isReconnectResult(value: unknown): value is EduPiRuntimeReconnectResult {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
