@@ -607,7 +607,8 @@ try {
     };
     const questionInput = (entry, action) => ({ action, questionFactId: entry.questionFactId,
       questionRevision: entry.questionRevision, messageGeneration: entry.messageGeneration,
-      sourceBasisHash: entry.candidate.source_basis_hash, confirmationPlanId: entry.candidate.confirmation_plan_id });
+      sourceBasisHash: entry.candidate.source_basis_hash, confirmationPlanId: entry.candidate.confirmation_plan_id,
+      ...(action === "confirm" ? { confirmationText: entry.candidate.confirmation_text } : {}) });
     const questionWrite = async (input, status = 200) => {
       const response = await questionRoute.POST(request(questionUrl, "POST", input)), body = await response.json();
       assert.equal(response.status, status, JSON.stringify(body));
@@ -679,6 +680,13 @@ try {
     assert.deepEqual(await questionEntries(), entries);
     const beforeConfirm = (await bridge("snapshot")).envelope.payload;
     assert.equal(beforeConfirm.work_cases.some(item => item.trigger_id === pending.candidate.case_id), false);
+    const confirmationInput = questionInput(pending, "confirm");
+    assert.equal(Object.keys(confirmationInput).length, 7);
+    const { confirmationText, ...missingConfirmationText } = confirmationInput;
+    await questionWrite(missingConfirmationText, 400);
+    const wrongText = await questionWrite({ ...confirmationInput, confirmationText: "确认另一位家长" }, 409);
+    assert.equal(wrongText.code, "confirmation_text_mismatch");
+    assert.equal(confirmationText, pending.candidate.confirmation_text);
     const denied = await questionWrite({ ...questionInput(pending, "confirm"), sourceBasisHash: `sha256:${"0".repeat(64)}` }, 409);
     assert.equal(denied.code, "stale_source");
     assert.deepEqual((await bridge("snapshot")).envelope.payload.education_workspace.fact_spine.accepted_facts,
@@ -694,9 +702,27 @@ try {
     const confirmationSource = confirmedSpine.observations.find(item => confirmationFact.observation_ids.includes(item.observation_id));
     assert.equal(confirmationSource.actor_ref, owner.id);
     assert.equal(JSON.parse(confirmationSource.raw_text).message_ref, confirmed.candidate.message_ref);
-    await questionWrite(questionInput(pending, "confirm"), 409);
-    assert.deepEqual((await bridge("snapshot")).envelope.payload.education_workspace.fact_spine.accepted_facts,
-      confirmedSpine.accepted_facts, "a repeated UI confirmation cannot duplicate a fact");
+    const callQuestionConfirm = host.callOwnerControl, repeatedOperations = [];
+    host.callOwnerControl = async function (operation, input, signal) {
+      const response = await callQuestionConfirm.call(this, operation, input, signal);
+      repeatedOperations.push({ operation, input: structuredClone(input), response });
+      return response;
+    };
+    try {
+      await questionWrite(questionInput(pending, "confirm"));
+      const repeated = repeatedOperations.filter(item => item.operation === "owner_parent_question_recipient_confirm");
+      assert.equal(repeated.length, 1, "a repeated confirmation must use one Core command");
+      assert.equal(repeated[0].response.result.status, "replayed");
+      assert.equal(repeated[0].response.result.fact_id, confirmationFact.fact_id);
+      assert.equal(repeated[0].input.message_ref, confirmed.candidate.message_ref);
+      assert.equal(repeatedOperations.some(item => ["owner_message_register", "owner_message", "owner_message_settle"].includes(item.operation)), false,
+        "a repeated confirmation must not capture another owner message");
+    } finally {
+      host.callOwnerControl = callQuestionConfirm;
+    }
+    assert.deepEqual((await bridge("snapshot")).envelope.payload.education_workspace.fact_spine,
+      confirmedSpine, "a repeated UI confirmation cannot duplicate an observation or fact");
+    assert.equal(chatCalls, questionChatCalls, "a repeated confirmation cannot dispatch Pi");
     const questionDeadline = Date.now() + 70_000;
     let questionSnapshot, questionCase, questionTask;
     do {
@@ -840,7 +866,53 @@ try {
     const restartedQuestion = assertQuestionProjection((await bridge("snapshot")).envelope.payload, pending.candidate.case_id);
     assert.deepEqual(restartedQuestion.workCase, acceptedQuestionCase, "the unique G5 source case must survive real Core restart");
     assert.deepEqual(restartedQuestion.task, acceptedQuestionTask, "reviewed G5 source task must survive real Core restart");
-    await questionWrite(questionInput(confirmed, "cancel"));
+    const cancellationInput = questionInput(confirmed, "cancel");
+    assert.equal(Object.keys(cancellationInput).length, 6);
+    await questionWrite({ ...cancellationInput, confirmationText: confirmed.candidate.confirmation_text }, 400);
+    const callQuestionOwnerControl = host.callOwnerControl, cancellationCommands = [];
+    const cancellationTampering = [
+      ["question_fact_id", "foreign-question"],
+      ["message_ref", `owner_message:${"f".repeat(64)}`],
+      ["fact_id", "foreign-fact"],
+      ["source_basis_hash", `sha256:${"f".repeat(64)}`],
+      ["version", 2],
+      ["ok", false],
+    ];
+    let cancellationMutation;
+    host.callOwnerControl = async function (operation, input, signal) {
+      const response = await callQuestionOwnerControl.call(this, operation, input, signal);
+      if (operation !== "owner_parent_question_recipient_cancel") return response;
+      cancellationCommands.push(structuredClone(input));
+      assert.equal(response.ok, true);
+      assert.equal(response.result.version, 1);
+      assert.equal(response.result.question_fact_id, pending.questionFactId);
+      assert.equal(response.result.message_ref, confirmed.candidate.message_ref);
+      assert.equal(response.result.fact_id, confirmationFact.fact_id);
+      assert.equal(response.result.source_basis_hash, confirmed.candidate.source_basis_hash);
+      assert.equal(response.result.fact_revision, confirmationFact.revision + 1);
+      assert.equal(response.result.status, cancellationCommands.length === 1 ? "cancelled" : "replayed");
+      assert.equal(response.result.fact_write, true);
+      const [field, value] = cancellationMutation ?? [];
+      if (!field) return response;
+      return field === "ok" ? { ...response, ok: value }
+        : { ...response, result: { ...response.result, [field]: value } };
+    };
+    try {
+      for (const mutation of cancellationTampering) {
+        cancellationMutation = mutation;
+        const rejected = await questionWrite(cancellationInput, 503);
+        assert.notEqual(rejected.readbackConfirmed, true);
+        assert.equal((await bridge("snapshot")).envelope.payload.education_workspace.fact_spine.accepted_facts
+          .some(item => item.fact_id === confirmationFact.fact_id), false,
+        "absence of the committed fact cannot make a tampered cancellation receipt valid");
+      }
+      cancellationMutation = undefined;
+      await questionWrite(cancellationInput);
+      assert.equal(cancellationCommands.length, cancellationTampering.length + 1);
+      for (const command of cancellationCommands) assert.deepEqual(command, cancellationCommands[0]);
+    } finally {
+      host.callOwnerControl = callQuestionOwnerControl;
+    }
     const assertQuestionCancelled = async () => {
       const currentEntries = await questionEntries(), current = (await bridge("snapshot")).envelope.payload;
       assert.equal(currentEntries.some(item => item.status === "confirmed" || item.status === "stale_confirmed"), false);
@@ -864,10 +936,12 @@ try {
     assert.equal(chatCalls, questionChatCalls, "source refresh, confirmation, review, cancellation and restart cannot dispatch Pi");
     parentQuestionE2 = { questionFactId: pending.questionFactId, caseId: pending.candidate.case_id,
       taskId: questionTask.task_id, sourceRefresh: true, unchangedRefreshIdempotent: true, foreignSourceExcluded: true,
-      staleConfirmationRejected: true, confirmationReadback: true, duplicateConfirmationRejected: true,
+      explicitConfirmationText: true, wrongConfirmationTextRejected: true, exactRequestFields: true,
+      staleConfirmationRejected: true, confirmationReadback: true, duplicateConfirmationIdempotent: true,
       artifactHashReadback: true, reviewReadback: true, reviewPosts, reviewCommands, staleReviewReads, boundedReviewReads,
       exactReviewReceiptReadback: true, uniqueCaseAndTask: true, taskSourceProvenance: true, reviewedRestartReadback: true, cancellationReadback: true,
-      cancelledRestartReadback: true, syntheticChatCalls: chatCalls - questionChatCalls, externalSend: false };
+      cancelledRestartReadback: true, cancellationReceiptTamperingRejected: cancellationTampering.map(([field]) => field),
+      exactCancellationReplay: true, syntheticChatCalls: chatCalls - questionChatCalls, externalSend: false };
   }
   if (useMain4) {
     assert.ok(parentQuestionE2?.reviewedRestartReadback && parentQuestionE2?.cancelledRestartReadback);
