@@ -1,5 +1,6 @@
 import type { EducationContract, EducationWorkCase, EducationWorkCaseState, EducationWorkTransition, TeacherTask } from "./edupi-education-contract";
 import { hasCurrentExplicitBoardStage, taskBoardLane, taskBoardLaneLabel } from "./edupi-task-board.ts";
+import { isPausedRecurringTask } from "./edupi-recurring-status.ts";
 import { taskArtifacts, taskDisplayTitle, taskStatusLabel } from "./edupi-workbench.ts";
 import { compareForegroundDates, isTaskForeground, taskReferenceDate, type ForegroundPolicy } from "./edupi-foreground.ts";
 
@@ -56,7 +57,9 @@ export function workCaseTransitionLabel(transition: EducationWorkTransition): st
 }
 
 export function taskWorkStatusLabel(task: TeacherTask, workCase: EducationWorkCase | null): string {
-  if (task.boardStage && hasCurrentExplicitBoardStage(task)) return taskBoardLaneLabel(task.boardStage);
+  if (task.recurrence && (task.status === "hold" || task.status === "rejected")) return taskStatusLabel(task);
+  if (isPausedRecurringTask(task)) return "已暂停";
+  if (task.boardStage && hasCurrentExplicitBoardStage(task)) return taskBoardLaneLabel(taskBoardLane(task, null));
   if (workCase && ["queued", "running", "draft_ready", "failed"].includes(workCase.currentState)) return workCaseStateLabel(workCase.currentState);
   return taskStatusLabel(task);
 }
@@ -85,7 +88,9 @@ export function todayActiveTasks(data: Pick<EducationContract, "tasks" | "taskSe
   const candidateByTask = new Map(data.workCandidates.map((candidate) => [candidate.taskId, candidate]));
   const activeRows = active.flatMap((workCase) => {
     const task = taskById.get(workCase.taskId);
-    return task ? [{ task, workCase, title: taskDisplayTitle(task), dueDate: task.dueDate || workCase.dueDate, state: workCase.currentState, stateLabel: workCaseStateLabel(workCase.currentState) } satisfies TodayActiveTask] : [];
+    return task && !(task.recurrence && (task.status === "hold" || task.status === "rejected"))
+      && taskBoardLane(task, data.taskSessions[task.id!] ?? null, candidateByTask.get(task.id!)) !== "paused"
+      ? [{ task, workCase, title: taskDisplayTitle(task), dueDate: task.dueDate || workCase.dueDate, state: workCase.currentState, stateLabel: workCaseStateLabel(workCase.currentState) } satisfies TodayActiveTask] : [];
   });
   const activeTaskIds = new Set(activeRows.map((row) => row.task.id));
   const manuallyActive = data.tasks.flatMap((task) => {

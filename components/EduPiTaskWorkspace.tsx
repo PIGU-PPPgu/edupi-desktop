@@ -5,6 +5,7 @@ import type { TaskSessionBinding } from "@/lib/edupi-task-sessions";
 import type { TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import { taskDisplayTitle, taskStatusLabel, taskStatusTone, taskTypeLabel, type TaskStage } from "@/lib/edupi-workbench";
 import { isTaskReviewable, workCaseStateLabel } from "@/lib/edupi-work-case";
+import { isPausedRecurringTask } from "@/lib/edupi-recurring-status";
 import { EduPiTaskStage, type ReviewPayload } from "./EduPiTaskStage";
 import type { GeneratedArtifact } from "@/lib/edupi-generated-artifacts";
 
@@ -49,8 +50,10 @@ export function EduPiTaskWorkspace(props: Props) {
       : props.workCase?.currentState === "accepted" || props.workCase?.currentState === "modified" || props.workCase?.currentState === "completed"
         ? "success"
         : "neutral";
-  const statusLabel = props.task.status !== "planned" || !props.workCase ? taskStatusLabel(props.task) : workCaseStateLabel(props.workCase.currentState);
-  const statusTone = props.task.status !== "planned" || !props.workCase ? taskStatusTone(props.task) : workCaseTone;
+  const workCase = props.workCase;
+  const useTaskStatus = props.task.status !== "planned" || !workCase || isPausedRecurringTask(props.task);
+  const statusLabel = useTaskStatus || !workCase ? taskStatusLabel(props.task) : workCaseStateLabel(workCase.currentState);
+  const statusTone = useTaskStatus ? taskStatusTone(props.task) : workCaseTone;
   const dateLabel = props.task.trigger === "teaching_before_class" && props.task.sourceEventDate
     ? `上课 ${props.task.sourceEventDate}${props.task.dueDate ? ` · 截止 ${props.task.dueDate}` : ""}`
     : props.task.dueDate || "日期待确认";

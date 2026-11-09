@@ -2,11 +2,15 @@
 
 状态：隔离合成环境中的两期跨入口验收通过；完整 R04／L4 产品验收未完成。本记录附属于 `docs/plans/2026-09-06-product-closure-roadmap.md` 的 R04／L4，不替代唯一账本，也不将周期流程勾选完成。
 
-2026-11-09 实际 Core main 配对复验：Core PR #459 已合入 main `01fcdcf3d45dfaa45c350c1ec88cc551bb4652df`；Desktop 隔离树把兼容身份固定到该 SHA 及其两份组件清单后，运行 `EDUPI_CORE_ROOT=/private/tmp/edupi-core-main-pair-20261109 node scripts/test-edupi-recurring-materials-e2.mjs`，退出 0，`status=passed`、`projectionFailures=[]`。两期分别为 11 月 9 日与 16 日，各生成两份内部材料；五次 Core 子进程启动覆盖关闭、重启和持久回读，首期文件在次期仍保持原哈希。Desktop 合同检查 `EDUPI_CORE_ROOT=/private/tmp/edupi-core-main-pair-20261109 node --test lib/edupi-bridge-contract.test.mjs` 为 12/12 通过。首次合同测试因新 Core 工作树缺少 `typebox` 依赖失败 3 项，确认 Core lockfile 相同并复用已有依赖后重跑通过；这次环境失败保留，不作为行为通过。下文旧 PR head 的验收与首次投影失败是历史过程；此段记录实际 main 的最新配对结果。父进程观测 49 次 loopback fetch、配置的模型端点调用 0；Core 子进程网络未监测。浏览器、签名安装版、自然七天、教学内容质量及全进程无外发仍未验证。
+2026-11-09 隔离浏览器补验：受测 Desktop 为 `6ccf12f6ad43bc2460f20d07104f299a3f65856c` 加本轮未提交工作树修改，在源码预览 `http://127.0.0.1:30149/` 操作合成周期任务 `teacher-task-49328dcd-e98b-4896-832d-075cd95da3d9`。任务详情点击“暂停”后，任务、周期材料和执行记录均显示已暂停，首页本期待处理候选消失；刷新后仍保持。点击“恢复”后，任务和执行记录显示进行中，周期材料显示已启用，首页本期候选重新出现；刷新后仍保持。首页对本期候选点击“暂缓”，成功回执出现，候选移至“稍后处理”，刷新后仍为已暂缓。再点击“修改决定→拒绝”，成功回执出现，候选移至“已记录”，刷新后仍为已拒绝；周期模板本身仍进行中。上述点击和刷新回读是现场观察，未保存本轮页面快照；隔离持久数据可独立核对模板最终进行中、候选最终拒绝以及暂缓到拒绝的决定历史，不能独立证明每一步刷新后的页面。此轮不证明自然到期调度、安装版或真实教师体验。预览启用了 Desktop token，普通浏览器加载时 `/api/edupi/materials/staging` 两次和 `/api/models` 一次返回 403；控制台不干净，不能视为正常安装版环境。详情页每次刷新还重新显示新手教程第 3/8 步，需另行排查。
+
+2026-11-09 实际 Core main 配对复验：Core PR #459 已合入 main `01fcdcf3d45dfaa45c350c1ec88cc551bb4652df`；Desktop 隔离树把兼容身份固定到该 SHA 及其两份组件清单后，运行 `EDUPI_CORE_ROOT=/private/tmp/edupi-core-main-pair-20261109 node scripts/test-edupi-recurring-materials-e2.mjs`，退出 0，`status=passed`、`projectionFailures=[]`。两期分别为 11 月 9 日与 16 日，各生成两份内部材料；五次 Core 子进程启动覆盖关闭、重启和持久回读，首期文件在次期仍保持原哈希。Desktop 合同检查 `EDUPI_CORE_ROOT=/private/tmp/edupi-core-main-pair-20261109 node --test lib/edupi-bridge-contract.test.mjs` 为 12/12 通过。首次合同测试因新 Core 工作树缺少 `typebox` 依赖失败 3 项，确认 Core lockfile 相同并复用已有依赖后重跑通过；这次环境失败保留，不作为行为通过。下文旧 PR head 的验收与首次投影失败是历史过程；此段记录实际 main 的最新配对结果。父进程观测 49 次 loopback fetch、配置的模型端点调用 0；Core 子进程网络未监测。浏览器的部分操作补验见上段；签名安装版、自然七天、教学内容质量及全进程无外发仍未验证。
+
+隔离持久数据位置：`/private/tmp/edupi-l4-browser-20261109.DC87YK/data/.edupi/output/` 中的 `task_board_state.json` 与 `teacher_review_state.json`。这份合成数据仅供本轮复核；隔离验收结束并记录必要结果后可清理，清理后不能独立回读该数据。
 
 ## 版本与环境
 
-- Desktop：`45d0968785f14b0e49320081aa452cc59546a041`，隔离分支 `codex/desktop-runtime-recovery-v4-20261109`，另含本次新增验收脚本。
+- Desktop：最初两期脚本的旧测试基线为 `45d0968785f14b0e49320081aa452cc59546a041` 加本轮脚本；本次 Core main 复验与浏览器预览使用隔离分支 `codex/desktop-runtime-recovery-v4-20261109` 的 `6ccf12f6ad43bc2460f20d07104f299a3f65856c` 加未提交修改。提交后的精确版本以交付 PR 为准。
 - Core：首次重验使用隔离树 HEAD `7a760af824eb19ace02c066af41eef4a4861c0f9`，目录 `/private/tmp/edupi-core-l4-integration-20261108`；先前通过的版本是基线 HEAD `be80d52f95cf4ff1bf0e3fd8ed4cd4780fa5cb26` 加未提交来源校验修复，不可用该旧 HEAD 单独复现。随后 PR #459 合入 main，实际 main 的复验结果见顶部。
 - macOS arm64，Node `v22.23.1`。验收运行于 `/private/tmp/edupi-desktop-runtime-recovery-v4-20261109`。
 - 隔离工作树最初无依赖；先复用原 Desktop 依赖时缺少 `qrcode`，随后改为链接已存在的 `/private/tmp/edupi-desktop-main4-integration-20261108/node_modules`。未安装或改动被复用的依赖。
@@ -78,4 +82,4 @@ git diff --check
 
 各轮脚本 finally 实际关闭自有 Core 和 loopback server，恢复父进程 Date、fetch、fork 与环境变量，删除该轮新建的精确合成临时根。没有生成 Next、Cargo 或安装包产物；复用中的 node_modules 链接保留供同 worktree 主任务使用。
 
-未验证浏览器点击、Next HTTP server、签名安装版、自然七天计时、真实模型与教学内容质量，也未验证全进程无外发；Core 子进程及其他网络 API 没有网络监测。两份产物是确定性内部清单，不能作为教学质量证据。Core 来源校验修复和 manifest 已合入实际 main，Desktop 隔离树已更新 pin 并完成顶部的实际 main 复验；签名安装版配对尚未执行。本记录只证明该源码树上的合成两期跨入口闭环。
+浏览器暂停／恢复／暂缓／拒绝及刷新回读已按顶部记录补验；两期脚本仍未经过 Next HTTP server，浏览器也未验证自然到期生成。签名安装版、自然七天计时、真实模型与教学内容质量未验证，全进程无外发亦未验证；Core 子进程及其他网络 API 没有网络监测。两份产物是确定性内部清单，不能作为教学质量证据。Core 来源校验修复和 manifest 已合入实际 main，Desktop 隔离树已更新 pin 并完成实际 main 复验；签名安装版配对尚未执行。本记录只证明所列合成两期跨入口闭环和隔离浏览器操作。

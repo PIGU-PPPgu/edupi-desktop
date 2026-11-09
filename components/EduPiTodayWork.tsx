@@ -18,13 +18,12 @@ import {
   TodayWorkReviewError,
 } from "@/lib/edupi-today-work";
 import { summarizeL4Preparation, type L4PreparationSummaryItem } from "@/lib/edupi-l4-preparation";
-import { groupWorkCandidates, workCandidateReasonLabel, type WorkCandidateGroups } from "@/lib/edupi-workbench";
+import { groupWorkCandidates, taskDisplayTitle, taskStatusLabel, workCandidateReasonLabel, type WorkCandidateGroups } from "@/lib/edupi-workbench";
 import { todayActiveTasks } from "@/lib/edupi-work-case";
 import { canRetryFeedbackEligibility, prepareTeacherFeedbackCapture, recordTeacherFeedback, TeacherFeedbackError, type TeacherFeedbackCapture, type TeacherFeedbackDecision, type TeacherFeedbackUsefulness } from "@/lib/edupi-teacher-feedback";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { isCandidateForeground, isForegroundDate, isTaskForeground, shanghaiDate } from "@/lib/edupi-foreground";
 import { EduPiListPreview, EduPiPagedRows, useEduPiForegroundPolicy } from "./EduPiForeground";
-import { taskDisplayTitle } from "@/lib/edupi-workbench";
 import { taskBoardLane } from "@/lib/edupi-task-board";
 import type { CalendarItemSelection } from "@/lib/edupi-calendar-model";
 import { observeTeacherUsage } from "@/lib/edupi-usage-observation";
@@ -276,10 +275,12 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
   const candidateByTask = new Map(data.workCandidates.map(candidate => [candidate.taskId, candidate]));
   const historyTasks = data.tasks.filter(task => !isTaskForeground(task, policy, data) && (!task.id || !candidateByTask.has(task.id)));
   const staleHolidayTasks = data.tasks.filter(task => {
+    if (!task.id) return false;
     const source = data.calendar.find(event => event.id && event.id === task.sourceEventId);
     const holiday = /festival|holiday/.test(task.trigger || "") || /festival|holiday/.test(String(task.evidence.source_event_type || source?.type || ""));
+    const lane = taskBoardLane(task, data.taskSessions[task.id], candidateByTask.get(task.id));
     return task.id && holiday && !policy.dismissedStaleTaskIds?.includes(task.id)
-      && taskBoardLane(task, data.taskSessions[task.id], candidateByTask.get(task.id)) !== "done"
+      && lane !== "done" && lane !== "paused"
       && !isTaskForeground(task, policy, data);
   });
   const dismissStaleWork = () => policy.onDismissStaleTasks?.(staleHolidayTasks.map(task => task.id!));
@@ -732,7 +733,7 @@ export function EduPiTodayWork({ data, onEducation, onTaskDetail, selectedObject
   const renderHistoricalTask = (task: TeacherTask) => {
     const source = data.calendar.find(event => event.id && event.id === task.sourceEventId);
     return <div className="edupi-task-history-row" key={task.id || task.title}>
-      <button type="button" onClick={() => onTaskDetail(task)}><strong>{taskDisplayTitle(task)}</strong><small>{task.sourceEventDate || task.dueDate || "日期待确认"}</small></button>
+      <button type="button" onClick={() => onTaskDetail(task)}><strong>{taskDisplayTitle(task)}</strong><small>{taskStatusLabel(task)} · {task.sourceEventDate || task.dueDate || "日期待确认"}</small></button>
       <div className="edupi-foreground-controls">{task.id && policy.onPinTask ? <button type="button" onClick={() => policy.onPinTask!(task.id!, true)}>保留显示</button> : null}
         {source?.id && onCalendarSelection ? <button type="button" disabled={!data.capabilities.calendar.enabled} title={!data.capabilities.calendar.enabled ? data.capabilities.calendar.reason : undefined} onClick={() => onCalendarSelection({ kind: "calendar", sourceId: source.id, date: source.date, title: source.name, detail: source.notes, sourceLabel: "校历", statusLabel: source.preparationStatus === "read_only" ? "已确认" : "待确认", editRequested: true })}>改期</button> : null}
       </div>

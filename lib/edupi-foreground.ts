@@ -87,6 +87,9 @@ export function isTaskRunning(task: TeacherTask, context: ForegroundContext = {}
 
 export function isTaskForeground(task: TeacherTask, policy: ForegroundPolicy, context: ForegroundContext = {}): boolean {
   if (task.id && policy.pinnedTaskIds?.includes(task.id) || isTaskRunning(task, context)) return true;
+  // Recurring definitions stay discoverable through their last occurrence.
+  // Their first due date and definition review are not completion dates.
+  if (task.recurrence && task.status !== "rejected") return isForegroundDate(dateOnly(task.recurrence.untilDate), policy);
   if (isRecordedTaskDone(task, context)) {
     const completion = taskCompletionTime(task, context);
     return isForegroundDate(completion === null ? null : shanghaiDate(new Date(completion)), policy);
@@ -148,6 +151,7 @@ export function compareForegroundReminders(left: Reminder, right: Reminder, poli
 }
 
 function isRecordedTaskDone(task: TeacherTask, context: ForegroundContext): boolean {
+  if (task.recurrence && task.status !== "rejected") return false;
   const review = timestamp(task.reviewedAt);
   const board = timestamp(task.boardUpdatedAt);
   if (task.boardStage && task.boardRevision > 0 && (review === null || board !== null && board >= review)) return task.boardStage === "done";
@@ -158,6 +162,7 @@ function isRecordedTaskDone(task: TeacherTask, context: ForegroundContext): bool
 }
 
 export function taskCompletionTime(task: TeacherTask, context: ForegroundContext = {}): number | null {
+  if (task.recurrence && task.status !== "rejected") return null;
   const times = [timestamp(task.evidence?.completed_at), timestamp(task.reviewedAt)];
   const candidate = context.workCandidates?.find(item => item.taskId === task.id);
   if (candidate && ["accepted", "modified", "rejected", "suppressed"].includes(candidate.status)) times.push(timestamp(candidate.teacherReview?.reviewedAt));

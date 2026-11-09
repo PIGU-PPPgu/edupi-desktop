@@ -72,3 +72,20 @@ test("the task workspace renders a real file count and passes index failures thr
   const missingIndex = renderToStaticMarkup(createElement(EduPiTaskWorkspace, { ...props, files: undefined }));
   assert.match(missingIndex, /文件列表暂不可用/);
 });
+
+test("a paused recurring template keeps its own status over a stale work case", () => {
+  const task = buildEducationContract({ tasks: [{ id: "task-recurring", title: "每周整理材料", status: "planned", due_date: "2026-11-12", board_stage: "done", board_revision: 1,
+    recurrence: { kind: "teacher_internal_materials", cadence: "weekly", until_date: "2026-11-26", lead_days: 2, deliverables: ["周报"] } }] }).tasks[0];
+  assert.ok(task.recurrence, "the fixture must be a valid recurring template");
+  const props = { task, workCase: null, files: [], stage: "brief", workspace: "/workspace", context: null, reviewEnabled: false, reviewReason: "", reviewBusy: null, reviewMessage: null, agentSession: null, taskSessionBusy: false, taskSessionError: null, onStage() {}, onReview: async () => {}, onOpenAgent() {}, onOpenFile() {} };
+  const status = (selectedTask, workCase) => {
+    const html = renderToStaticMarkup(createElement(EduPiTaskWorkspace, { ...props, task: selectedTask, workCase }));
+    return html.match(/<span class="edupi-task-status is-[^"]+">[^<]+<\/span>/)?.[0];
+  };
+  for (const state of ["running", "queued", "draft_ready", "failed", "completed"]) {
+    assert.equal(status(task, { taskId: task.id, currentState: state, artifactIds: [], transitions: [], artifacts: [] }), '<span class="edupi-task-status is-neutral">已暂停</span>', state);
+  }
+  assert.equal(status({ ...task, boardStage: "progress" }, { taskId: task.id, currentState: "running", artifactIds: [], transitions: [], artifacts: [] }), '<span class="edupi-task-status is-warning">正在准备</span>');
+  assert.equal(status({ ...task, status: "hold" }, { taskId: task.id, currentState: "running", artifactIds: [], transitions: [], artifacts: [] }), '<span class="edupi-task-status is-neutral">已暂缓</span>');
+  assert.equal(status({ ...task, status: "rejected" }, { taskId: task.id, currentState: "running", artifactIds: [], transitions: [], artifacts: [] }), '<span class="edupi-task-status is-danger">已拒绝</span>');
+});

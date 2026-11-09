@@ -111,3 +111,33 @@ test("preparation progress preserves a newer generic failure and an unrelated cr
     assert.equal(f.field("任务").value, "失败的第二项"); assert.equal(f.field("备注").value, "保留新的草稿备注");
   } finally { await f.close(); }
 });
+
+test("blocked recurring templates show their review state and cannot be moved until accepted", async () => {
+  const f = await mount();
+  try {
+    const raw = { id: "recurring-review", title: "每周材料", status: "hold", trigger: "calendar_event_internal", due_date: "2026-10-28", board_stage: "progress", board_revision: 2,
+      recurrence: { kind: "teacher_internal_materials", cadence: "weekly", until_date: "2026-11-26", lead_days: 2, deliverables: ["周报"] }, evidence: {} };
+    assert.ok(buildEducationContract({ tasks: [raw] }).tasks[0].recurrence);
+    const renderTask = async status => f.update(data => {
+      data.tasks = buildEducationContract({ tasks: [{ ...raw, status }] }).tasks;
+      data.workCases = [{ id: "older-running-case", taskId: raw.id, kind: "teacher_internal_materials", title: raw.title,
+        currentState: "running", artifactIds: [], artifacts: [], transitions: [], dueDate: raw.due_date }];
+    });
+    const card = () => f.document.querySelector(".edupi-task-board-card");
+    await renderTask("hold");
+    assert.match(card().textContent, /已暂缓/);
+    assert.equal(card().querySelector(".edupi-task-board-card__handle, select"), null);
+    await renderTask("rejected");
+    assert.match(card().textContent, /已拒绝/);
+    assert.equal(card().querySelector(".edupi-task-board-card__handle, select"), null);
+    await renderTask("accepted");
+    assert.ok(card().querySelector(".edupi-task-board-card__handle"));
+    assert.ok(card().querySelector("select"));
+    const moved = [];
+    f.props.onMoveTask = async (task, stage) => { moved.push({ id: task.id, stage }); throw new Error("合成暂停失败"); };
+    await f.update(() => {});
+    await act(async () => { propsOf(card().querySelector("select")).onChange({ target: { value: "paused" } }); await tick(); });
+    assert.deepEqual(moved, [{ id: raw.id, stage: "done" }]);
+    assert.match(f.message, /合成暂停失败/);
+  } finally { await f.close(); }
+});

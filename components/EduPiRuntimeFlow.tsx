@@ -7,7 +7,8 @@ import type { PublicDynamicWorkflowRun } from "@/lib/edupi-dynamic-workflow";
 import type { AgentMessage } from "@/lib/types";
 import { taskDisplayTitle, taskStatusLabel } from "@/lib/edupi-workbench";
 import { workCaseStateLabel } from "@/lib/edupi-work-case";
-import { hasCurrentExplicitBoardStage, taskBoardLaneLabel } from "@/lib/edupi-task-board";
+import { hasCurrentExplicitBoardStage, taskBoardLane, taskBoardLaneLabel } from "@/lib/edupi-task-board";
+import { isPausedRecurringTask } from "@/lib/edupi-recurring-status";
 import { EduPiTaskRunContext, type EduPiTaskRunInfo } from "./EduPiTaskRunContext";
 
 type Props = {
@@ -29,7 +30,9 @@ const stepStatus: Record<WorkflowStepStatus, string> = {
 };
 
 function taskRunStatus({ task, workCase }: EduPiTaskRunInfo): string {
-  if (task.boardStage && hasCurrentExplicitBoardStage(task)) return taskBoardLaneLabel(task.boardStage);
+  if (task.recurrence && (task.status === "hold" || task.status === "rejected")) return taskStatusLabel(task);
+  if (isPausedRecurringTask(task)) return "已暂停";
+  if (task.boardStage && hasCurrentExplicitBoardStage(task)) return taskBoardLaneLabel(taskBoardLane(task, null));
   // A previous execution snapshot must not erase a teacher's later decision.
   if (task.status === "hold") return "已暂缓";
   if (task.status === "rejected") return "已拒绝";
