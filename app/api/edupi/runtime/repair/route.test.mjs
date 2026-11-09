@@ -50,12 +50,12 @@ test("Core repair route rejects blocked v4 before writing or starting Core and p
     "@/lib/edupi-runtime-health": { projectCoreRuntimeHealth: () => ({ status: "ready" }) },
     "@/lib/edupi-proactivity-config": { readEduPiProactivityActivation: () => ({}) },
   };
-  const module = { exports: {} };
+  const routeModule = { exports: {} };
   new Function("require", "module", "exports", ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText)((name) => modules[name] || require(name), module, module.exports);
-  const post = () => module.exports.POST(new Request("http://localhost/api/edupi/runtime/repair", { method: "POST" }));
-  const get = () => module.exports.GET(new Request("http://localhost/api/edupi/runtime/repair"));
+  }).outputText)((name) => modules[name] || require(name), routeModule, routeModule.exports);
+  const post = () => routeModule.exports.POST(new Request("http://localhost/api/edupi/runtime/repair", { method: "POST" }));
+  const get = () => routeModule.exports.GET(new Request("http://localhost/api/edupi/runtime/repair"));
 
   authorized = false;
   assert.equal((await get()).status, 403);
