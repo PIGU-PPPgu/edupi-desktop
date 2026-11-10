@@ -177,12 +177,14 @@ try {
         const projected = data.generatedArtifacts.filter(item => item.task_id === task.id && item.available);
         const files = await Promise.all(artifacts.map(readFile));
         try {
+          assert.equal(execution.attempt, 1, `single execution attempt for ${date}`);
           assert.equal(task.contentStatus, "draft_ready");
           assert.equal(workCase?.currentState, "draft_ready");
           assert.deepEqual([...workCase.artifactIds].sort(), artifacts.map(item => item.artifact_id).sort());
           assert.deepEqual(projected.map(item => item.artifact_id).sort(), artifacts.map(item => item.artifact_id).sort());
           for (const file of files) {
             const projection = projected.find(item => item.artifact_id === file.artifactId);
+            assert.equal(projection?.relative_path, file.relativePath, `education relative_path for ${file.artifactId}`);
             assert.equal(projection?.size_bytes, file.sizeBytes, `education size_bytes for ${file.artifactId}`);
           }
         } catch (error) {
@@ -268,7 +270,7 @@ try {
     responseFlags: { taskReceiptExternalSend: created.receipt.external_send, proactivityExternalSend: enabled.externalSend },
     clock: "test-only Date offset in parent and real Core child; second period +7 days",
     passed: ["Desktop task POST accepted and exact replay", "G1 timer first and second periods",
-      "file route bytes and education size_bytes match disk and durable SHA256",
+      ...(projectionFailures.length ? [] : ["file route bytes and education path/size_bytes match disk and durable SHA256"]),
       "real Core child exit/relaunch preserves execution/attempt/artifacts", "first-period files retained"],
     projectionFailures,
     unverified: ["browser interaction", "signed installed application", "natural seven-day elapsed time", "teaching content quality",
