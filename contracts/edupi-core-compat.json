@@ -279,7 +279,8 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/443",
     "https://github.com/PIGU-PPPgu/edupi/pull/444",
     "https://github.com/PIGU-PPPgu/edupi/pull/446",
-    "https://github.com/PIGU-PPPgu/edupi/pull/458"
+    "https://github.com/PIGU-PPPgu/edupi/pull/458",
+    "https://github.com/PIGU-PPPgu/edupi/pull/462"
   ],
   "change_note": "This source candidate pins Core 8f205869 with both component manifests and the runtime schema, including G4 reflection source writes and history reads. Isolated Main4 fixtures use SQLite planning storage without rewriting the retired V1 planning tombstone. Source-derived parent questions require an exact owner grant and explicit recipient confirmation. Production root migration, signed installed pairing and public updates are not enabled by this change."
 }

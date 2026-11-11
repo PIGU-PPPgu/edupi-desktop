@@ -146,11 +146,15 @@ try {
     const request = new NextRequest(`http://localhost/api/files/${absolute.split("/").filter(Boolean).join("/")}?type=read`);
     const result = await json(await fileRoute.GET(request, { params: Promise.resolve({ path: absolute.split("/").filter(Boolean) }) }));
     const actual = hash(Buffer.from(result.content));
-    assert.equal(actual, hash(fs.readFileSync(absolute)));
+    const diskBytes = fs.readFileSync(absolute);
+    const sizeBytes = Buffer.byteLength(result.content, "utf8");
+    assert.ok(sizeBytes > 0);
+    assert.equal(sizeBytes, diskBytes.length);
+    assert.equal(actual, hash(diskBytes));
     const durable = executionRows().flatMap(item => item.artifacts).find(item => item.artifact_id === artifact.artifact_id);
     assert.ok(durable);
     assert.equal(actual, durable.sha256);
-    return { artifactId: artifact.artifact_id, hash: actual, relativePath: artifact.relative_path };
+    return { artifactId: artifact.artifact_id, hash: actual, sizeBytes, relativePath: artifact.relative_path };
   };
   const waitPeriod = async date => {
     const deadline = performance.now() + 25_000;
@@ -171,11 +175,18 @@ try {
         assert.deepEqual(artifacts.map(item => item.title).sort(), [...taskInput.recurrence.deliverables].sort());
         assert.equal(executionRows().filter(item => item.task_id === task.id).length, 1);
         const projected = data.generatedArtifacts.filter(item => item.task_id === task.id && item.available);
+        const files = await Promise.all(artifacts.map(readFile));
         try {
+          assert.equal(execution.attempt, 1, `single execution attempt for ${date}`);
           assert.equal(task.contentStatus, "draft_ready");
           assert.equal(workCase?.currentState, "draft_ready");
           assert.deepEqual([...workCase.artifactIds].sort(), artifacts.map(item => item.artifact_id).sort());
           assert.deepEqual(projected.map(item => item.artifact_id).sort(), artifacts.map(item => item.artifact_id).sort());
+          for (const file of files) {
+            const projection = projected.find(item => item.artifact_id === file.artifactId);
+            assert.equal(projection?.relative_path, file.relativePath, `education relative_path for ${file.artifactId}`);
+            assert.equal(projection?.size_bytes, file.sizeBytes, `education size_bytes for ${file.artifactId}`);
+          }
         } catch (error) {
           if (!projectionFailures.some(item => item.taskId === task.id)) projectionFailures.push({
             date, taskId: task.id, expected: "draft_ready with two matching readable artifacts",
@@ -186,7 +197,7 @@ try {
           });
         }
         return { taskId: task.id, workCaseId: workCase?.id, executionId: execution.execution_id,
-          attempt: execution.attempt, date, files: await Promise.all(artifacts.map(readFile)) };
+          attempt: execution.attempt, date, files };
       }
       await new Promise(resolve => setTimeout(resolve, 150));
     }
@@ -259,7 +270,7 @@ try {
     responseFlags: { taskReceiptExternalSend: created.receipt.external_send, proactivityExternalSend: enabled.externalSend },
     clock: "test-only Date offset in parent and real Core child; second period +7 days",
     passed: ["Desktop task POST accepted and exact replay", "G1 timer first and second periods",
-      "file route bytes match durable SHA256",
+      ...(projectionFailures.length ? [] : ["file route bytes and education path/size_bytes match disk and durable SHA256"]),
       "real Core child exit/relaunch preserves execution/attempt/artifacts", "first-period files retained"],
     projectionFailures,
     unverified: ["browser interaction", "signed installed application", "natural seven-day elapsed time", "teaching content quality",
