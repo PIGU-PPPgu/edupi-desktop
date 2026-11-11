@@ -1,11 +1,13 @@
 # G4 课后反思来源接线
 
-本轮承接崩溃前的 G4 工作树，完成课堂内容来源登记、教师录入和历史回读的开发验收。状态为**已实现，隔离开发验收通过，待主线集成与安装验收**；不代表完整 L4 放行。
+本轮承接崩溃前的 G4 工作树，完成课堂内容来源登记、教师录入和历史回读的开发验收。状态为**已实现并完成本地源码集成，隔离开发验收通过，待 Core 主线合并与安装验收**；不代表完整 L4 放行。
 
 ## 版本与环境
 
 - Desktop 起点：`5b3cc20a369149503f179e4841a2be264c08f92b`，分支 `codex/g4-reflection-source-20261110`，包含前轮未提交的 G4 接线；本轮保留并继续完成这些文件。
 - 固定 Core：`8f2058696371d9a10ffeb3dae9ce06a0a78b6d03`，受测 checkout tracked clean。该提交包含当时本地 `origin/main` `509082bd937890309013ca84b37a82fade89ed9a`，另有五条 G4 增量提交；尚不能称已合并的 Core 主线。
+- G4 源码提交 `08b19e7`；随后以 `e327efb75919ed4d95fa85faa16c2cdcd6f40ca6` 将 Desktop main `381060055769430cab8ef89f64a4d2c6f272564c` 普通合入本 G4 分支。四处合并冲突仅涉及 Core 身份与账本：保留已验证的 G4 pin 和双方证据，兼容清单补入 Core PR462。实际 G4 路由、客户端、组件和联合脚本与受测源码逐字一致；G4 分支尚未合入 Desktop main。
+- Core 依赖为现有 Draft `PIGU-PPPgu/edupi#463`，远端 head 与固定版本一致，尚未合并。
 - 环境：macOS arm64、Node `v22.23.1`。仅隔离合成资料；未使用教师数据或真实模型，未打包、安装或执行 Windows 验收。
 
 ## 实现
@@ -50,6 +52,10 @@ EDUPI_E2_KEEP=1 node scripts/test-edupi-reflection-source-joint.mjs
 最终报告及源码逐文件哈希在 `/tmp/edupi-g4-joint-20261111-final.log`。保留合成根 `/private/tmp/edupi-g4-joint-Tgfqqe` 和 `/private/tmp/edupi-g4-control-cTFK3l` 供复核。
 
 另执行 `node_modules/.bin/tsc --noEmit --incremental false`、七个本轮实现文件的 ESLint 和 `git diff --check`，均通过。独立只读审查发现联合脚本遗漏课堂内容历史来源的 P2，修复后上述真实联合流程通过。
+
+合入 Desktop main 后，使用同一 G4 Core 根执行 G5 recipient route、确认组件、proactivity control 和 bridge contract 四组测试，实际 **89 passed、0 failed、0 skipped**，日志 `/tmp/edupi-g4-g5-pair-20261111.log`。又执行 `node scripts/test-edupi-recurring-materials-e2.mjs`，实际 `status=passed`：两期各两份 507 bytes 文件、单次 attempt、文件路由与教育投影大小及 SHA256 一致，五次真实 Core 启动后仍保留产物。日志 `/tmp/edupi-g4-recurring-pair-20261111.log`；第二期使用合成的七天时钟偏移，Core 子进程网络未监测，不能算自然七天或全进程无外发证据。
+
+同一配对另运行 `EDUPI_E2_KEEP=1 EDUPI_CORE_ROOT=/private/tmp/edupi-core-g4-incremental-20261110 node scripts/test-edupi-capability-canary-e2.mjs --source-candidate --main4 --require-recipient-confirmation`，实际 `status=passed`：G5 显式确认、错文本和旧确认拒绝、重复确认幂等、审核回执、重启回读、撤销及篡改拒绝均通过；三个领域各三份合成产物和审核状态保持。`capabilityModelCalls=0`、合成 SDK 聊天调用 3、`externalSend=false`，未连接真实模型。日志 `/tmp/edupi-g4-g5-main4-20261111.log`，保留合成根 `/private/tmp/edupi-capability-canary-e2-NSQE9N` 和 `/private/tmp/edupi-capability-canary-v3-e3ORUS`。报告 `dirty=true` 对应运行期间仅验收文档增量，生产文件与 `e327efb7` 一致；不是生产资料迁移或安装版证明。
 
 ## 页面证据
 
