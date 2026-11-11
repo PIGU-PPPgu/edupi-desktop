@@ -11,10 +11,14 @@ import {
   buildStudentFollowupScopeCandidates,
   buildCapabilityGrantBinding,
   buildCapabilityScopeCandidates,
+  capabilityGrantSourceIds,
+  readLessonReflectionHistorySourceIds,
+  capabilityGrantId,
   EDUPI_PROACTIVITY_DURATION_DAYS,
   EDUPI_PROACTIVITY_MAX_CALLS,
   EDUPI_STUDENT_FOLLOWUP_MAX_CALLS,
   EduPiProactivityControlError,
+  type EduPiProactivityGrantBinding,
   type EduPiProactivityScopeCandidate,
 } from "@/lib/edupi-proactivity-control";
 import { clearEduPiProactivityStopIntent, readEduPiProactivityActivation, writeEduPiProactivityConfig,
@@ -174,14 +178,62 @@ function sameSources(left: unknown, right: string[]): boolean {
     && JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
 }
 
-async function refreshParentQuestionSources(roots: EduPiBridgeRoots, activation: EduPiProactivityActivation,
-  scope: EduPiProactivityScope, context: Awaited<ReturnType<typeof readScopeContext>>) {
+async function preflightReflectionReenable(roots: EduPiBridgeRoots, activation: EduPiProactivityActivation,
+  scope: EduPiProactivityScope, binding: EduPiProactivityGrantBinding) {
+  const history = activation.historyBinding;
+  const validId = (value: unknown): value is string => typeof value === "string"
+    && /^[A-Za-z0-9][A-Za-z0-9._:@/+~=-]{0,159}$/u.test(value);
+  const validTime = (value: unknown): value is string => typeof value === "string"
+    && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+  if (!history || !validId(history.ownerId) || history.grantId !== binding.grantId || !sameScope(history.scope, scope)) {
+    throw new EduPiProactivityControlError("proactivity_scope_conflict");
+  }
+  const host = await ensureEduPiRuntime(roots);
+  const { rootRef } = runtimeHealth(await host.call("health", null));
+  const readGrant = async () => {
+    const read = await host.callOwnerControl("owner_read", { root_ref: rootRef, expected_owner_id: history.ownerId });
+    const state = record(read.result);
+    const grants = Array.isArray(state?.grants) ? state.grants.map(record).filter(item => item?.id === binding.grantId) : [];
+    if (read.ok !== true || state?.root_ref !== rootRef || record(state.owner)?.id !== history.ownerId || grants.length !== 1) {
+      throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
+    }
+    return grants[0]!;
+  };
+  const grant = await readGrant();
+  const grantScope = record(grant.scope), budget = record(grant.budget);
+  if (grant.status !== "paused" || !Number.isSafeInteger(grant.version) || Number(grant.version) < 1
+    || !grantScope || !exact(grantScope, ["class_id", "subject"])
+    || grantScope.class_id !== scope.classId || grantScope.subject !== scope.subject
+    || !sameSources(grant.domains, ["lesson_reflection"]) || !sameSources(grant.actions, ["update"])
+    || !validTime(grant.starts_at) || !validTime(grant.ends_at) || Date.parse(grant.ends_at) <= Date.parse(grant.starts_at)
+    || !Array.isArray(grant.source_ids) || grant.source_ids.length === 0 || grant.source_ids.length > 128
+    || !grant.source_ids.every(validId) || new Set(grant.source_ids).size !== grant.source_ids.length
+    || !budget || !exact(budget, ["id", "max_calls"]) || !validId(budget.id)
+    || !Number.isSafeInteger(budget.max_calls) || Number(budget.max_calls) < 0 || Number(budget.max_calls) > 4) {
+    throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
+  }
+  const historicalSources = await readLessonReflectionHistorySourceIds({
+    coreRoot: roots.runtime.root, memoryDir: roots.dataRoot.memoryDir, rootRef, ownerId: history.ownerId, scope, grant,
+  });
+  const previousSourceIds = grant.source_ids;
+  if (!Array.isArray(historicalSources) || historicalSources.some(source => !validId(source) || !previousSourceIds.includes(source))) {
+    throw new EduPiProactivityControlError("proactivity_response_invalid");
+  }
+  const sourceIds = [...new Set([...binding.spec.source_ids, ...historicalSources])];
+  if (sourceIds.length > 128) throw new EduPiProactivityControlError("proactivity_source_capacity");
+  const nextBinding = { ...binding, spec: { ...binding.spec, source_ids: sourceIds } };
+  if (!isDeepStrictEqual(await readGrant(), grant)) throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
+  return { host, rootRef, binding: nextBinding, expected: { ownerId: history.ownerId, grantVersion: Number(grant.version) } };
+}
+
+async function refreshCapabilitySources(roots: EduPiBridgeRoots, activation: EduPiProactivityActivation,
+  scope: EduPiProactivityScope, context: Awaited<ReturnType<typeof readScopeContext>>,
+  domain: "parent_communication" | "lesson_reflection") {
   if (!activation.enabled || !activation.ownerId || !activation.grantId || !sameScope(activation.scope, scope)) {
     throw new EduPiProactivityControlError("proactivity_scope_conflict");
   }
-  const domain = "parent_communication";
-  const binding = buildCapabilityGrantBinding(domain, scope, context.workspace);
-  if (binding.grantId !== activation.grantId) throw new EduPiProactivityControlError("proactivity_scope_conflict");
+  const expectedGrantId = capabilityGrantId(domain, scope);
+  if (expectedGrantId !== activation.grantId) throw new EduPiProactivityControlError("proactivity_scope_conflict");
   const host = await ensureEduPiRuntime(roots);
   const { rootRef } = runtimeHealth(await host.call("health", null));
   const read = await host.callOwnerControl("owner_read", { root_ref: rootRef, expected_owner_id: activation.ownerId });
@@ -196,10 +248,14 @@ async function refreshParentQuestionSources(roots: EduPiBridgeRoots, activation:
     || !Array.isArray(grant.actions) || grant.actions.length !== 1 || grant.actions[0] !== "update"
     || record(grant.scope)?.class_id !== scope.classId || record(grant.scope)?.subject !== scope.subject
     || !record(grant.budget)) throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
-  const sourceIds = binding.spec.source_ids;
+  const historicalSources = domain === "lesson_reflection" ? await readLessonReflectionHistorySourceIds({
+    coreRoot: roots.runtime.root, memoryDir: roots.dataRoot.memoryDir, rootRef, ownerId: activation.ownerId, scope, grant,
+  }) : [];
+  const sourceIds = [...new Set([...capabilityGrantSourceIds(domain, scope, context.workspace), ...historicalSources])];
+  if (sourceIds.length > 128) throw new EduPiProactivityControlError("proactivity_source_capacity");
   if (sameSources(grant.source_ids, sourceIds)) return currentState(roots, activation, domain, context);
   const updated = await host.callOwnerControl("owner_control", {
-    command_id: `desktop-parent-sources-${crypto.randomUUID()}`, root_ref: rootRef,
+    command_id: `desktop-${domain}-sources-${crypto.randomUUID()}`, root_ref: rootRef,
     expected_owner_id: activation.ownerId, action: "update", grant_id: activation.grantId,
     expected_version: grant.version,
     spec: { scope: grant.scope, domains: grant.domains, actions: grant.actions,
@@ -221,13 +277,16 @@ async function refreshParentQuestionSources(roots: EduPiBridgeRoots, activation:
 }
 
 function requireActiveCapabilities(capabilities: RawRecord, domain: EduPiProactivityDomain): void {
-  for (const key of [processorKey(domain), "internal_timer", "ambient_planning", "owner_authorization", "owner_conversation", "owner_intent", "attention_delivery", "teacher_feedback"]) {
+  const required = [processorKey(domain), "internal_timer", "ambient_planning", "owner_authorization", "owner_conversation", "owner_intent"];
+  if (domain !== "lesson_reflection") required.push("attention_delivery", "teacher_feedback");
+  for (const key of required) {
     if (capabilities[key] !== "active") throw new Error("proactivity_activation_incomplete");
   }
 }
 
 async function recoverFailedEnable(roots: EduPiBridgeRoots, previous: EduPiProactivityActivation,
-  target: { scope: EduPiProactivityScope; grantId: string }, domain: EduPiProactivityDomain): Promise<boolean> {
+  target: { scope: EduPiProactivityScope; grantId: string }, domain: EduPiProactivityDomain,
+  committed?: { ownerId: string; grantVersion: number }): Promise<boolean> {
   try {
     writeEduPiProactivityStopIntent(target, { dataRoot: roots.dataRoot.root, now: mutationTime(previous.updatedAt), domain });
   } catch {
@@ -240,7 +299,7 @@ async function recoverFailedEnable(roots: EduPiBridgeRoots, previous: EduPiProac
   try {
     const host = await ensureEduPiRuntime(roots);
     const health = runtimeHealth(await host.call("health", null));
-    await pauseProactivityGrant(host, health.rootRef, target.grantId);
+    await pauseProactivityGrant(host, health.rootRef, target.grantId, committed);
     cleanupSafe = true;
   } catch { await quarantineEduPiRuntime(roots.dataRoot.root); }
   const fallback = cleanupSafe
@@ -249,19 +308,34 @@ async function recoverFailedEnable(roots: EduPiBridgeRoots, previous: EduPiProac
       : { enabled: false, scope: null, grantId: null }
     : { enabled: false, scope: target.scope, grantId: target.grantId };
   try {
-    writeEduPiProactivityConfig(fallback, { dataRoot: roots.dataRoot.root, now: mutationTime(previous.updatedAt), domain });
-    if (cleanupSafe) clearEduPiProactivityStopIntent({ dataRoot: roots.dataRoot.root, grantId: target.grantId, domain });
+    writeEduPiProactivityConfig({ ...fallback, ...(domain === "lesson_reflection"
+      ? { historyBinding: previous.historyBinding ?? null } : {}) },
+    { dataRoot: roots.dataRoot.root, now: mutationTime(previous.updatedAt), domain });
+    if (!cleanupSafe) return false;
+    clearEduPiProactivityStopIntent({ dataRoot: roots.dataRoot.root, grantId: target.grantId, domain });
     clearEduPiRuntimeQuarantine(roots.dataRoot.root);
     await restartEduPiRuntime(roots);
-    return cleanupSafe;
+    return true;
   } catch {
     await quarantineEduPiRuntime(roots.dataRoot.root);
     return false;
   }
 }
 
+async function fenceUncertainEnable(roots: EduPiBridgeRoots,
+  target: { scope: EduPiProactivityScope; grantId: string }, domain: EduPiProactivityDomain): Promise<void> {
+  try {
+    writeEduPiProactivityStopIntent(target, { dataRoot: roots.dataRoot.root, domain });
+  } finally {
+    await quarantineEduPiRuntime(roots.dataRoot.root);
+  }
+}
+
 async function enableCanary(roots: EduPiBridgeRoots, activation: EduPiProactivityActivation, scope: EduPiProactivityScope, domain: EduPiProactivityDomain) {
   const context = await readScopeContext(roots, domain);
+  if (activation.enabled && (domain === "parent_communication" || domain === "lesson_reflection")) {
+    return refreshCapabilitySources(roots, activation, scope, context, domain);
+  }
   const binding = domain === "student_followup" ? buildStudentFollowupGrantBinding(scope, context.workspace)
     : capabilityDomain(domain) ? buildCapabilityGrantBinding(domain, scope, context.workspace)
       : buildProactivityGrantBinding(scope, context.workspace, context.teacherMaterials);
@@ -269,22 +343,43 @@ async function enableCanary(roots: EduPiBridgeRoots, activation: EduPiProactivit
   if (activation.scope && (!sameScope(activation.scope, scope) || activation.grantId !== binding.grantId)) {
     throw new EduPiProactivityControlError("proactivity_scope_conflict");
   }
-  if (activation.enabled) return domain === "parent_communication"
-    ? refreshParentQuestionSources(roots, activation, scope, context) : currentState(roots, activation, domain, context);
+  if (activation.enabled) return currentState(roots, activation, domain, context);
   if (capabilityDomain(domain)) {
-    // Establish the exact current owner grant while this domain is still
-    // disabled, then persist its owner binding before admitting execution.
-    const dormantHost = await ensureEduPiRuntime(roots);
-    const dormantHealth = runtimeHealth(await dormantHost.call("health", null));
-    const owner = await ensureProactivityGrant(dormantHost, dormantHealth.rootRef, binding);
+    const preflight = domain === "lesson_reflection" && activation.historyBinding
+      ? await preflightReflectionReenable(roots, activation, scope, binding) : null;
+    let mutationStarted = preflight === null;
+    let pendingOwnerMutation = false;
+    let committedGrant: { ownerId: string; grantVersion: number } | undefined;
     try {
+      // Establish the exact current owner grant while this domain is still
+      // disabled, then persist its owner binding before admitting execution.
+      const dormantHost = preflight?.host ?? await ensureEduPiRuntime(roots);
+      const rootRef = preflight?.rootRef ?? runtimeHealth(await dormantHost.call("health", null)).rootRef;
+      const grantHost = preflight ? {
+        call: dormantHost.call.bind(dormantHost),
+        callOwnerControl: async (...args: Parameters<typeof dormantHost.callOwnerControl>) => {
+          if (args[0] === "owner_control") pendingOwnerMutation = true;
+          const response = await dormantHost.callOwnerControl(...args);
+          if (record(response)?.ok === false) pendingOwnerMutation = false;
+          return response;
+        },
+      } : dormantHost;
+      const owner = await ensureProactivityGrant(grantHost, rootRef, preflight?.binding ?? binding,
+        preflight?.expected, preflight ? commit => { committedGrant = commit; pendingOwnerMutation = false; mutationStarted = true; } : undefined);
       writeEduPiProactivityConfig({ enabled: true, scope, grantId: binding.grantId, ownerId: owner.ownerId },
         { dataRoot: roots.dataRoot.root, now: mutationTime(activation.updatedAt), domain });
       const host = await restartEduPiRuntime(roots);
       requireActiveCapabilities(runtimeHealth(await host.call("health", null)).capabilities, domain);
       return await currentState(roots, readEduPiProactivityActivation({ dataRoot: roots.dataRoot.root, domain }), domain, context);
     } catch (error) {
-      if (!await recoverFailedEnable(roots, activation, { scope, grantId: binding.grantId }, domain)) {
+      if (preflight && pendingOwnerMutation) {
+        try { await fenceUncertainEnable(roots, { scope, grantId: binding.grantId }, domain); }
+        catch { /* Quarantine remains the fallback if the stop marker cannot be persisted. */ }
+        throw new EduPiProactivityRuntimeError("proactivity_stop_uncertain");
+      }
+      if (preflight && !committedGrant) throw error;
+      if (!mutationStarted) throw error;
+      if (!await recoverFailedEnable(roots, activation, { scope, grantId: binding.grantId }, domain, committedGrant)) {
         throw new EduPiProactivityRuntimeError("proactivity_stop_uncertain");
       }
       throw error;
@@ -343,8 +438,12 @@ async function disableCanary(roots: EduPiBridgeRoots, activation: EduPiProactivi
   }
   const cleanupSafe = stopState !== "uncertain";
   try {
+    const historyBinding = activation.historyBinding ?? (activation.ownerId && activation.grantId && activation.scope
+      ? { ownerId: activation.ownerId, grantId: activation.grantId, scope: activation.scope } : undefined);
     writeEduPiProactivityConfig({ enabled: false, scope: cleanupSafe ? null : activation.scope,
-      grantId: cleanupSafe ? null : activation.grantId }, { dataRoot: roots.dataRoot.root, now: mutationTime(activation.updatedAt), domain });
+      grantId: cleanupSafe ? null : activation.grantId,
+      ...(domain === "lesson_reflection" && historyBinding !== undefined ? { historyBinding } : {}) },
+    { dataRoot: roots.dataRoot.root, now: mutationTime(activation.updatedAt), domain });
   } catch {
     await quarantineEduPiRuntime(roots.dataRoot.root);
     throw new EduPiProactivityRuntimeError("proactivity_stop_uncertain");

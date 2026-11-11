@@ -9,6 +9,7 @@ const HASH = /^sha256:[a-f0-9]{64}$/u;
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:@/+~=-]{0,159}$/u;
 
 export type EduPiProactivityScope = { classId: string; subject: string };
+export type EduPiReflectionHistoryBinding = { ownerId: string; grantId: string; scope: EduPiProactivityScope };
 export const EDUPI_CAPABILITY_DOMAINS = ["calendar_administration", "lesson_reflection", "parent_communication"] as const;
 export type EduPiCapabilityDomain = typeof EDUPI_CAPABILITY_DOMAINS[number];
 export type EduPiProactivityDomain = "teaching_preparation" | "student_followup" | EduPiCapabilityDomain;
@@ -22,17 +23,19 @@ export type EduPiProactivityActivation = {
   scope: EduPiProactivityScope | null;
   grantId: string | null;
   ownerId?: string;
+  historyBinding?: EduPiReflectionHistoryBinding | null;
   updatedAt: string | null;
 };
 
 type StoredConfig = {
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4;
   data_root_hash: string;
   enabled: boolean;
   scope: { class_id: string; subject: string } | null;
   grant_id: string | null;
   updated_at: string;
   owner_id?: string;
+  history_binding?: { owner_id: string; grant_id: string; scope: { class_id: string; subject: string } } | null;
 };
 type StoredStopIntent = {
   version: 1;
@@ -72,15 +75,43 @@ function exactKeys(value: unknown, keys: string[]): value is Record<string, unkn
     && Object.keys(value).length === keys.length && Object.keys(value).every((key) => keys.includes(key)));
 }
 
-function validStored(value: unknown): value is StoredConfig {
-  if (!exactKeys(value, ["version", "data_root_hash", "enabled", "scope", "grant_id", "updated_at", ...(value && typeof value === "object" && Object.hasOwn(value, "owner_id") ? ["owner_id"] : [])])) return false;
+function validHistoryBinding(value: unknown): boolean {
+  if (value === null) return true;
+  if (!exactKeys(value, ["owner_id", "grant_id", "scope"])) return false;
+  return typeof value.owner_id === "string" && OWNER_ID.test(value.owner_id)
+    && typeof value.grant_id === "string" && ID.test(value.grant_id) && validScope(value.scope);
+}
+
+function validPublicHistoryBinding(value: unknown): value is EduPiReflectionHistoryBinding {
+  if (!exactKeys(value, ["ownerId", "grantId", "scope"])) return false;
+  const scope = value.scope;
+  return typeof value.ownerId === "string" && OWNER_ID.test(value.ownerId)
+    && typeof value.grantId === "string" && ID.test(value.grantId)
+    && exactKeys(scope, ["classId", "subject"])
+    && typeof scope.classId === "string" && ID.test(scope.classId) && validSubject(scope.subject);
+}
+
+const OWNER_ID = /^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$/u;
+
+function validStored(value: unknown, domain: EduPiProactivityDomain): value is StoredConfig {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const hasHistory = Object.hasOwn(value, "history_binding");
+  if (!exactKeys(value, ["version", "data_root_hash", "enabled", "scope", "grant_id", "updated_at",
+    ...(Object.hasOwn(value, "owner_id") ? ["owner_id"] : []), ...(hasHistory ? ["history_binding"] : [])])) return false;
   const scope = value.scope;
   const grantId = value.grant_id;
-  return (value.version === 1 || value.version === 2 || value.version === 3) && HASH.test(String(value.data_root_hash || "")) && typeof value.enabled === "boolean"
-    && (value.owner_id === undefined || value.version === 3 && typeof value.owner_id === "string" && /^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$/u.test(value.owner_id))
+  const historyBinding = value.history_binding as StoredConfig["history_binding"];
+  try { return (value.version === 1 || value.version === 2 || value.version === 3 || value.version === 4 && domain === "lesson_reflection")
+    && (value.version === 4) === hasHistory && (!hasHistory || validHistoryBinding(historyBinding))
+    && HASH.test(String(value.data_root_hash || "")) && typeof value.enabled === "boolean"
+    && (value.owner_id === undefined || (value.version === 3 || value.version === 4) && typeof value.owner_id === "string" && OWNER_ID.test(value.owner_id))
     && (scope === null && grantId === null || validScope(scope) && typeof grantId === "string" && ID.test(grantId))
     && (!value.enabled || scope !== null)
+    && (value.version !== 4 || !value.enabled || value.owner_id === historyBinding?.owner_id
+      && value.grant_id === historyBinding?.grant_id && scope?.class_id === historyBinding?.scope.class_id
+      && scope?.subject === historyBinding?.scope.subject)
     && typeof value.updated_at === "string" && new Date(value.updated_at).toISOString() === value.updated_at;
+  } catch { return false; }
 }
 
 function validStopIntent(value: unknown): value is StoredStopIntent {
@@ -140,7 +171,7 @@ function readStored(stateDir: string | undefined, domain: EduPiProactivityDomain
     let parsed: unknown;
     try { parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); }
     catch { return { status: "invalid", value: null }; }
-    return validStored(parsed) ? { status: "ready", value: parsed } : { status: "invalid", value: null };
+    return validStored(parsed, domain) ? { status: "ready", value: parsed } : { status: "invalid", value: null };
   } catch { return { status: "invalid", value: null }; }
   finally { if (descriptor !== undefined) try { fs.closeSync(descriptor); } catch { /* read-only cleanup */ } }
 }
@@ -219,6 +250,10 @@ function publicActivation(value: StoredConfig, source: EduPiProactivityActivatio
     scope: value.scope ? { classId: value.scope.class_id, subject: value.scope.subject } : null,
     grantId: value.grant_id,
     ...(value.owner_id ? { ownerId: value.owner_id } : {}),
+    ...(value.version === 4 ? { historyBinding: value.history_binding ? {
+      ownerId: value.history_binding.owner_id, grantId: value.history_binding.grant_id,
+      scope: { classId: value.history_binding.scope.class_id, subject: value.history_binding.scope.subject },
+    } : null } : {}),
     updatedAt: value.updated_at,
   };
 }
@@ -247,7 +282,8 @@ export function readEduPiProactivityActivation({
 }
 
 export function writeEduPiProactivityConfig(
-  input: { enabled: boolean; scope: EduPiProactivityScope | null; grantId: string | null; ownerId?: string },
+  input: { enabled: boolean; scope: EduPiProactivityScope | null; grantId: string | null; ownerId?: string;
+    historyBinding?: EduPiReflectionHistoryBinding | null },
   { stateDir = process.env.PI_DESKTOP_STATE_DIR, dataRoot, now = new Date().toISOString(), domain = "teaching_preparation" }:
     { stateDir?: string; dataRoot: string; now?: string; domain?: EduPiProactivityDomain },
 ): EduPiProactivityActivation {
@@ -256,18 +292,37 @@ export function writeEduPiProactivityConfig(
   if (typeof input.enabled !== "boolean" || canonicalNow !== now || input.enabled && input.scope === null
     || (input.scope === null) !== (input.grantId === null)
     || input.scope !== null && (!ID.test(input.scope.classId) || !validSubject(input.scope.subject))
-    || input.grantId !== null && !ID.test(input.grantId)) fail();
+    || input.grantId !== null && !ID.test(input.grantId)
+    || domain !== "lesson_reflection" && input.historyBinding !== undefined
+    || input.historyBinding !== undefined && input.historyBinding !== null && !validPublicHistoryBinding(input.historyBinding)) fail();
   const root = secureRoot(stateDir);
+  let historyBinding: EduPiReflectionHistoryBinding | null = null;
+  if (domain === "lesson_reflection") {
+    if (input.historyBinding !== undefined) historyBinding = input.historyBinding;
+    else if (input.enabled && input.ownerId && input.grantId && input.scope) {
+      historyBinding = { ownerId: input.ownerId, grantId: input.grantId, scope: input.scope };
+    } else if (!input.enabled) {
+      const previous = readStored(root, domain);
+      if (previous.status === "invalid") fail();
+      if (previous.value?.data_root_hash === dataRootHash(dataRoot) && previous.value.version === 4) {
+        historyBinding = publicActivation(previous.value, "desktop_canary").historyBinding ?? null;
+      }
+    }
+  }
   const value: StoredConfig = {
-    version: isEduPiCapabilityDomain(domain) ? 3 : 2,
+    version: domain === "lesson_reflection" ? 4 : isEduPiCapabilityDomain(domain) ? 3 : 2,
     data_root_hash: dataRootHash(dataRoot),
     enabled: input.enabled,
     scope: input.scope ? { class_id: input.scope.classId, subject: input.scope.subject.trim() } : null,
     grant_id: input.grantId,
     updated_at: canonicalNow,
     ...(input.ownerId ? { owner_id: input.ownerId } : {}),
+    ...(domain === "lesson_reflection" ? { history_binding: historyBinding ? {
+      owner_id: historyBinding.ownerId, grant_id: historyBinding.grantId,
+      scope: { class_id: historyBinding.scope.classId, subject: historyBinding.scope.subject.trim() },
+    } : null } : {}),
   };
-  if (!validStored(value)) fail();
+  if (!validStored(value, domain)) fail();
   const file = path.join(root, fileName(domain));
   const temporary = path.join(root, `.${fileName(domain)}.${crypto.randomUUID()}.tmp`);
   let descriptor: number | undefined;

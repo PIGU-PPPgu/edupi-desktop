@@ -136,6 +136,9 @@ async function readOwner(host: Pick<EduPiRuntimeHandle, "call">, rootRef: string
 }
 
 function receipt(value: unknown, ownerId: string, grantId: string | null): { grantVersion: number | null } {
+  if (value && typeof value === "object" && !Array.isArray(value) && (value as Record<string, unknown>).ok === false) {
+    throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
+  }
   if (!value || typeof value !== "object" || Array.isArray(value) || (value as Record<string, unknown>).ok !== true) invalid();
   const result = (value as Record<string, unknown>).result;
   if (!result || typeof result !== "object" || Array.isArray(result)) invalid();
@@ -149,9 +152,16 @@ export async function ensureProactivityGrant(
   host: Pick<EduPiRuntimeHandle, "call" | "callOwnerControl">,
   rootRef: string,
   binding: EduPiProactivityGrantBinding,
+  preflight?: { ownerId: string; grantVersion: number },
+  onCommitted?: (commit: { ownerId: string; grantVersion: number }) => void,
 ): Promise<{ ownerId: string; grantId: string; grantVersion: number; status: "active"; endsAt: string }> {
   let state = await readOwner(host, rootRef);
   let ownerId = state.owner?.id || null;
+  let grant = state.grants.find((item) => item.id === binding.grantId) || null;
+  if (preflight && (ownerId !== preflight.ownerId || !grant || grant.status !== "paused"
+    || grant.version !== preflight.grantVersion)) {
+    throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
+  }
   if (!ownerId) {
     const boot = await host.callOwnerControl("owner_control", {
       command_id: `desktop-bootstrap-${randomUUID()}`, root_ref: rootRef, expected_owner_id: null, action: "bootstrap",
@@ -164,8 +174,9 @@ export async function ensureProactivityGrant(
     state = await readOwner(host, rootRef);
     if (state.owner?.id !== ownerId) invalid();
   }
-  let grant = state.grants.find((item) => item.id === binding.grantId) || null;
+  grant = state.grants.find((item) => item.id === binding.grantId) || null;
   if (grant?.status === "revoked") throw new EduPiProactivityRuntimeError("proactivity_grant_revoked");
+  const shouldResume = grant?.status === "paused";
   const action = grant ? "update" : "create";
   const applied = receipt(await host.callOwnerControl("owner_control", {
     command_id: `desktop-grant-${randomUUID()}`,
@@ -176,15 +187,21 @@ export async function ensureProactivityGrant(
     expected_version: grant?.version || 0,
     spec: binding.spec,
   }), ownerId, binding.grantId);
-  if (!applied.grantVersion) invalid();
+  if (applied.grantVersion !== (grant?.version || 0) + 1) invalid();
   let version = applied.grantVersion;
-  if (grant?.status === "paused") {
+  onCommitted?.({ ownerId, grantVersion: version });
+  if (shouldResume) {
+    state = await readOwner(host, rootRef);
+    grant = state.grants.find((item) => item.id === binding.grantId) || null;
+    if (state.owner?.id !== ownerId || !grant || grant.status !== "paused"
+      || grant.version !== version || grant.ends_at !== binding.endsAt) invalid();
     const resumed = receipt(await host.callOwnerControl("owner_control", {
       command_id: `desktop-resume-${randomUUID()}`, root_ref: rootRef, expected_owner_id: ownerId,
       action: "resume", grant_id: binding.grantId, expected_version: version,
     }), ownerId, binding.grantId);
-    if (!resumed.grantVersion) invalid();
+    if (resumed.grantVersion !== version + 1) invalid();
     version = resumed.grantVersion;
+    onCommitted?.({ ownerId, grantVersion: version });
   }
   const verified = await readOwner(host, rootRef);
   grant = verified.grants.find((item) => item.id === binding.grantId) || null;
@@ -196,10 +213,14 @@ export async function pauseProactivityGrant(
   host: Pick<EduPiRuntimeHandle, "call" | "callOwnerControl">,
   rootRef: string,
   grantId: string,
+  expected?: { ownerId: string; grantVersion: number },
 ): Promise<{ state: "paused" | "missing" | "revoked"; grantVersion: number | null }> {
   const state = await readOwner(host, rootRef);
   const ownerId = state.owner?.id;
   const grant = state.grants.find((item) => item.id === grantId);
+  if (expected && (ownerId !== expected.ownerId || grant?.version !== expected.grantVersion)) {
+    throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
+  }
   if (!ownerId || !grant) return { state: "missing", grantVersion: null };
   if (grant.status === "revoked") return { state: "revoked", grantVersion: grant.version };
   if (grant.status === "paused") return { state: "paused", grantVersion: grant.version };
@@ -208,6 +229,10 @@ export async function pauseProactivityGrant(
     action: "pause", grant_id: grantId, expected_version: grant.version,
   }), ownerId, grantId);
   if (!paused.grantVersion) invalid();
+  const verified = await readOwner(host, rootRef);
+  const persisted = verified.grants.find((item) => item.id === grantId);
+  if (verified.owner?.id !== ownerId || !persisted || persisted.status !== "paused"
+    || persisted.version !== paused.grantVersion) invalid();
   return { state: "paused", grantVersion: paused.grantVersion };
 }
 
