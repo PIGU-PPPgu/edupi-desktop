@@ -1,0 +1,79 @@
+name: Desktop Core pairing
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+  workflow_dispatch:
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-pairing-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pairing:
+    name: Desktop Core pairing
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Require ready internal source before private runtime access
+        env:
+          EVENT: ${{ github.event_name }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import os
+          if os.environ["EVENT"] == "pull_request":
+              if os.environ["DRAFT"] == "true" or os.environ["HEAD_REPOSITORY"] != os.environ["REPOSITORY"]:
+                  raise SystemExit("Private runtime pairing requires a ready internal reviewed branch; no secret checkout was attempted.")
+          elif os.environ["EVENT"] == "workflow_dispatch" and os.environ["REF"] != "refs/heads/main":
+              raise SystemExit("Manual pairing checks run only from trusted main.")
+          elif os.environ["EVENT"] not in ("pull_request", "workflow_dispatch"):
+              raise SystemExit("Private runtime access is blocked until every merge-group source is independently verified.")
+          PY
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22.19.0
+          cache: npm
+      - name: Read immutable runtime identity
+        id: core
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          const sha = JSON.parse(fs.readFileSync('contracts/edupi-core-compat.json')).core_runtime.core_commit;
+          if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error('Exact Core commit required');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `commit=${sha}\n`);
+          JS
+      - name: Checkout the locked private runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: PIGU-PPPgu/edupi
+          ref: ${{ steps.core.outputs.commit }}
+          path: .edupi-core-runtime
+          fetch-depth: 1
+          ssh-key: ${{ secrets.EDUPI_CORE_READ_TOKEN == '' && secrets.EDUPI_CORE_DEPLOY_KEY || '' }}
+          token: ${{ secrets.EDUPI_CORE_READ_TOKEN || github.token }}
+          persist-credentials: false
+      - name: Install locked dependencies
+        run: |
+          npm ci
+          npm ci --ignore-scripts --prefix .edupi-core-runtime
+      - name: Verify pairing and published identity
+        env:
+          CORE_COMMIT: ${{ steps.core.outputs.commit }}
+          EDUPI_CORE_ROOT: ${{ github.workspace }}/.edupi-core-runtime
+        run: |
+          node scripts/pair-edupi-core.mjs --core-root "$EDUPI_CORE_ROOT" --core-commit "$CORE_COMMIT" --check
+          node scripts/write-component-versions.mjs --check
+          node --test scripts/core-pairing-workflow.test.mjs scripts/pair-edupi-core.test.mjs scripts/packaged-core-bundle.test.mjs scripts/release-components.test.mjs scripts/pi-packages.test.mjs scripts/release-workflows.test.mjs lib/edupi-core-root.test.mjs lib/edupi-bridge-contract.test.mjs
+          node_modules/.bin/tsc --noEmit --incremental false

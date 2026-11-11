@@ -406,7 +406,8 @@ test("signed draft builds and manifest publication require separate dispatches",
   assert.match(manifestJob, /parents: \[\]/);
   assert.match(manifestJob, /force=false/);
   assert.doesNotMatch(manifestJob, /contents\/latest\.json/);
-  assert.doesNotMatch(manifestJob, /npm (?:ci|run release:manifest)/);
+  assert.doesNotMatch(manifestJob, /npm run release:manifest/);
+  assert.match(manifestJob, /npm ci --ignore-scripts/);
   assert.match(manifestJob, /Committed component manifest does not match the release version/);
   assert.match(manifestJob, /-F draft=false/);
   assert.match(manifestJob, /-f make_latest=true/);
@@ -793,4 +794,29 @@ test("a signed Draft Windows asset is read with push-capable credentials but nev
   assert.match(source, /Get-FileHash \$file -Algorithm SHA256/u);
   assert.match(source, /test-windows-route1-preview\.ps1/u);
   assert.doesNotMatch(source, /tauri build|release upload|gh api --method|gh release (create|edit|upload)|EDUPI_CORE_READ_TOKEN/u);
+});
+
+
+test("signed release validates the immutable Core pairing after dependency install and before packaging", async () => {
+  const workflow = await readFile(join(root, ".github/workflows/release.yml"), "utf8");
+  const install = workflow.indexOf("run: npm ci --ignore-scripts --prefix .edupi-core-runtime");
+  const check = workflow.indexOf("name: Check the immutable Core compatibility pairing");
+  const bundle = workflow.indexOf("name: Prepare packaged Next.js server");
+  assert.ok(install > 0 && check > install && bundle > check);
+  const block = workflow.slice(check, workflow.indexOf("# Core's crash-released", check));
+  assert.match(block, /EDUPI_CORE_COMMIT: \$\{\{ steps\.core\.outputs\.commit \}\}/);
+  assert.match(block, /pair-edupi-core\.mjs --core-root "\$EDUPI_CORE_ROOT" --core-commit "\$EDUPI_CORE_COMMIT" --check/);
+  assert.doesNotMatch(block, /if:.*Windows/);
+});
+
+test("draft and publish reject stale committed Core identities before generating or uploading manifests", async () => {
+  const workflow = await readFile(join(root, ".github/workflows/release.yml"), "utf8");
+  const build = workflow.slice(workflow.indexOf("\n  build:"), workflow.indexOf("\n  draft-proof:"));
+  const publish = workflow.slice(workflow.indexOf("\n  manifest:"), workflow.indexOf("\n  notify:"));
+  const command = "node scripts/write-component-versions.mjs --check";
+  assert.ok(build.indexOf(command) > 0 && build.indexOf(command) < build.indexOf("npm run release:manifest"));
+  assert.ok(publish.indexOf("npm ci --ignore-scripts") > 0);
+  assert.ok(publish.indexOf(command) > publish.indexOf("npm ci --ignore-scripts"));
+  assert.ok(publish.indexOf(command) < publish.indexOf("name: Upload component manifest"));
+  assert.doesNotMatch(publish, /npm run release:manifest|node scripts\/write-component-versions\.mjs\s*\n/);
 });

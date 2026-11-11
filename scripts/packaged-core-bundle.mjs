@@ -186,6 +186,7 @@ export async function buildPackagedCoreBundle({
   coreRoot = process.env.EDUPI_CORE_ROOT,
   desktopRoot: requestedDesktopRoot = desktopRoot,
   destinationRoot,
+  compatManifest,
 } = {}) {
   const configuredCoreRoot = requireAbsolute(coreRoot, "EDUPI_CORE_ROOT");
   const resolvedDesktopRoot = fs.realpathSync(requireAbsolute(requestedDesktopRoot, "Desktop root"));
@@ -195,7 +196,7 @@ export async function buildPackagedCoreBundle({
   if (!isInside(resolvedDesktopRoot, destination)) throw new Error("Bundled Core destination must be inside Desktop root");
 
   const { loadEduPiCompatManifest, resolveEduPiCoreRoot } = await loadSharedResolvers();
-  const identity = loadEduPiCompatManifest();
+  const identity = loadEduPiCompatManifest(compatManifest);
   const runtimeIdentity = identity.core_runtime;
   const contractIdentity = identity.contract_identities.find(item => item.contract_id === "edupi-bridge-v1.1");
   const occurrenceIdentity = identity.contract_identities.find(item => item.contract_id === "edupi-schedule-occurrence-v1.2");

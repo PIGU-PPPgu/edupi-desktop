@@ -236,6 +236,13 @@ jobs:
       - name: Install Core runtime dependencies
         run: npm ci --ignore-scripts --prefix .edupi-core-runtime
 
+      - name: Check the immutable Core compatibility pairing
+        shell: bash
+        env:
+          EDUPI_CORE_ROOT: ${{ github.workspace }}/.edupi-core-runtime
+          EDUPI_CORE_COMMIT: ${{ steps.core.outputs.commit }}
+        run: node scripts/pair-edupi-core.mjs --core-root "$EDUPI_CORE_ROOT" --core-commit "$EDUPI_CORE_COMMIT" --check
+
       # Core's crash-released writer admission intentionally requires native
       # attestation on Windows. A hosted-runner temporary directory cannot
       # provide that evidence, so Windows verifies the exact paired bundle
@@ -318,6 +325,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          node scripts/write-component-versions.mjs --check
           npm run release:manifest
           npm run release:verify
 
@@ -576,6 +584,18 @@ jobs:
     steps:
       - name: Check out EduPi Desktop
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install manifest verification dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Check the committed component and Core release identity
+        run: node scripts/write-component-versions.mjs --check
 
       - name: Verify accepted signed draft and unchanged assets
         env:

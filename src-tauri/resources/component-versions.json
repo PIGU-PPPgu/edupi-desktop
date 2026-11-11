@@ -1,6 +1,15 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.3.109",
+  "core": {
+    "repository": "edupi",
+    "core_commit": "509082bd937890309013ca84b37a82fade89ed9a",
+    "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
+    "component_manifest_hash": "sha256:853d4e96a196e9ffb82bc0a94150e837686c32b0170aa6ba3bfe0535d46c691b",
+    "runtime_component_manifest_hash": "sha256:08bd17bd46a2439ee69e8bc2e5dd7b7d3cf02c92264b2f659b0160e1b0ebca29",
+    "runtime_schema_hash": "sha256:710fae1ed7b41c09e74d235bc481a3f73b23dced847de176dc3ec78002aa1a2e",
+    "compat_manifest_hash": "sha256:766398bd4cff45926cd985bf6842cdb3c382af0e6f176f8cea10d821cfb4b3e6"
+  },
   "components": [
     {
       "id": "pi-agent-desktop",

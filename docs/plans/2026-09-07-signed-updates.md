@@ -1,5 +1,10 @@
 # 自动下载安装
 
+2026-11-11 R15 独立审查三项修复：Core 隐藏 index 标志及原始 tree/blob 核验、身份 JSON 固定 LF、draft 生成前与 publish 上传前完整身份检查均已修复；本机定向 98/98、tsc、ESLint 通过。原 15 个未提交路径保留，未提交、推送或发布。主 Agent 新增 `core-pairing-checks.yml`，其 actionlint 与只读 secrets 由主 Agent 确认，远端 CI 待主 Agent 推送 PR 后观测；跨平台与 L4 不标通过。[拒绝证据及清理](../acceptance/2026-11-11-manifest-pairing.md)。
+
+2026-11-11 R15 manifest 单一配对入口：源码已实现，本机定向验证通过，远端 CI／跨平台待验。Desktop `381060055…` 上的 `codex/manifest-pairing-20261111` 固定只读 Core `509082bd…`，生成／检查 compat、验证双组件和 schema／闭包、保留实际 root／bundle 门，发布清单携带 Core 身份，Pi／pi-web 版本例外不变。未发布、未改已安装应用、未推送或合并；L4 不标通过。[命令、结果与清理](../acceptance/2026-11-11-manifest-pairing.md)。
+
+
 2026-11-05 `.108` **Mac-only 已公开预发布，正式自动更新不变**：Release [v0.3.108](https://github.com/PIGU-PPPgu/edupi-desktop/releases/tag/v0.3.108) ID `434739123` 已由 Draft 改为 `draft:false`、`prerelease:true`、非 Latest；目标仍是已安装验收的 Desktop `b92393ba47615bc9b75f2956d68528c66b52c5dc`／固定 Core `5419e30289048c3e3d416cfd02805db9f462882e`。同轮三资产 ID `712028469/711997497/711997840`、大小、SHA-256 和集合指纹 `sha256:01ed4e791ed3c35e5835535078d0ba5bbfbf0bcfc2fdc33e49a1be4274e26b56` 与签名安装证据逐项相同；匿名 Release API 返回 200，匿名 DMG 资产经 API 跳转到公开 CDN 后 Range 返回 206／65536 字节，GitHub HTML 页面本机直连超时，故不把页面可达性计为已验。正式 Latest `v0.3.70`、`updater-feed` `7924328ee893c9527adb54e25b0023e9f2a26ff7` 均未动，旧客户端不会自动发现本版；Windows/Linux 未构建。Release 说明明确本版**未包含当前 Core Main `f9449462` 新增的 G5 家长问题接收人确认与来源驱动草稿链**，因此不能宣称已完全匹配最新 Core；暂停任务的通用“已完成”文案和 G3 通知实际显示／点击跳转仍是已知缺口。唯一 `/Applications/EduPi.app` 保持签名 `.108` 且已退出，真实资料／配置 346/346 字节不变，3 个 WebView 来源已恢复，`.107` 回退与私有证据保留。`publication.json`为本机私有文件。本段取代下方 `.108` 仍为 Draft 的阶段状态。
 
 2026-11-05 `.108` G3 系统通知证据更正：上一轮账本所写“无原生发送回执”是过早读取。私有 `g3-native-reminders-before-stop.json` 在首次隔离 App 停止前已持久记录两条 `core_g3` 提醒的 `notificationSendState=submitted`、`notificationDeliveredAt=2026-11-05T05:37:27.180Z/05:37:28.183Z`，同属 dispatch `26fbda04-0f6f-489f-a4f6-39de48a77ffc`；因此**安装版原生发送器提交已验**。这些回执仅证明本机通知接口接受，不证明老师实际看见或点击跳转；旧通知不要求点击，以免隔离进程退出后误启普通数据根。后续同根复测确认应用内“后台任务完成时发送系统通知”为开启、系统权限显示“已开启”，随后在隔离窗口停用行政授权并正常退出；3 个 WebView 来源再次恢复并复核，真实资料／配置仍 346/346 字节不变。`.108` Draft、正式 `.70` feed、唯一安装版和已清理范围未变化。此段仅修正下段通知回执判断，保留系统显示与点击路径未验。

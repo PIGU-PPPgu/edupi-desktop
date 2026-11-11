@@ -1,2 +1,5 @@
 desktop/open-connector-console-assets/* -text whitespace=-blank-at-eol
 desktop/open-connector-console-assets/assets/* -text whitespace=-blank-at-eol
+# These raw bytes participate in the Desktop/Core release identity.
+contracts/edupi-core-compat.json text eol=lf
+src-tauri/resources/component-versions.json text eol=lf

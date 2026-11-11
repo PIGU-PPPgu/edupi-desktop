@@ -6,6 +6,7 @@ import {
   createComponentManifest,
   isReleasePinValid,
   readLocalComponentVersions,
+  readPairedCoreIdentity,
   readRemoteComponentVersions,
   rootDir,
 } from "./release-components.mjs";
@@ -39,7 +40,7 @@ if (
   );
 }
 
-const expectedManifest = createComponentManifest(local);
+const expectedManifest = createComponentManifest(local, await readPairedCoreIdentity());
 const actualManifest = JSON.parse(await readFile(
   join(rootDir, "src-tauri", "resources", "component-versions.json"),
   "utf8",

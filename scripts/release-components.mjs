@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+import { createJiti } from "jiti";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -124,10 +126,27 @@ export async function readRemoteComponentVersions() {
   return { "pi-agent-desktop": piAgentDesktop, pi, "pi-web": piWeb };
 }
 
-export function createComponentManifest(versions) {
+export async function readPairedCoreIdentity() {
+  const bytes = await readFile(join(rootDir, "contracts/edupi-core-compat.json"));
+  const { loadEduPiCompatManifest } = await createJiti(import.meta.url).import(join(rootDir, "lib/edupi-bridge-manifest.ts"));
+  const compat = loadEduPiCompatManifest(JSON.parse(bytes.toString("utf8")));
+  return {
+    repository: compat.core_repository,
+    ...compat.core_runtime,
+    compat_manifest_hash: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`,
+  };
+}
+
+export function createComponentManifest(versions, coreIdentity) {
+  if (!coreIdentity || coreIdentity.repository !== "edupi"
+    || !/^[a-f0-9]{40}$/.test(coreIdentity.core_commit)
+    || coreIdentity.component_manifest_path !== "contracts/edupi-desktop-component-manifest.json"
+    || ["component_manifest_hash", "runtime_component_manifest_hash", "runtime_schema_hash", "compat_manifest_hash"]
+      .some(key => !/^sha256:[a-f0-9]{64}$/.test(coreIdentity[key]))) throw new Error("Missing valid paired Core release identity");
   return {
     schemaVersion: 1,
     appVersion: versions["pi-agent-desktop"],
+    core: coreIdentity,
     components: ["pi-agent-desktop", "pi", "pi-web"].map((id) => ({
       id,
       repository: componentRepositories[id],
