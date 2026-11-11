@@ -13,6 +13,7 @@ import {
   readPairedCoreIdentity,
   rootDir,
 } from "./release-components.mjs";
+import { verifyFixtureMirrors } from "./pair-edupi-core.mjs";
 
 test("normalizes GitHub release tags", () => {
   assert.equal(normalizeVersion("v0.81.1"), "0.81.1");
@@ -63,6 +64,15 @@ test("Git autocrlf checkouts retain identical raw pairing identity and committed
     }
     const result = runManifestCheck(checkout);
     assert.equal(result.status, 0, result.stderr);
+    await verifyFixtureMirrors(source, checkout);
+    if (autocrlf === "true") {
+      const fixturePath = path.join(checkout, "fixtures/bridge/v1.1/command-unsupported.json");
+      const before = await fs.readFile(fixturePath);
+      await fs.writeFile(fixturePath, before.toString().replace(/\r?\n/g, "\r\n"));
+      await assert.rejects(verifyFixtureMirrors(source, checkout), /Desktop fixture mirror/);
+      await fs.writeFile(fixturePath, before);
+      await verifyFixtureMirrors(source, checkout);
+    }
     identities.push(JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e",
       'import { readPairedCoreIdentity } from "./scripts/release-components.mjs"; console.log(JSON.stringify(await readPairedCoreIdentity()));',
     ], { cwd: checkout, encoding: "utf8" })));

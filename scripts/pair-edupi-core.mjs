@@ -75,18 +75,7 @@ async function verifySchema(coreRoot, desktopRoot, stem) {
   return identity;
 }
 
-export async function pairEduPiCore({ coreRoot, coreCommit, check = false, desktopRoot = root }) {
-  assertImmutableCoreCheckout(coreRoot, coreCommit);
-  coreRoot = await fs.realpath(coreRoot);
-  desktopRoot = await fs.realpath(desktopRoot);
-  const base = await readJson(path.join(desktopRoot, compatPath));
-  const desktopManifest = await readJson(path.join(coreRoot, desktopManifestPath));
-  const runtimeManifest = await readJson(path.join(coreRoot, runtimeManifestPath));
-  assertComponentManifestIdentity(desktopManifest, "scripts/desktop_bridge_port.mjs");
-  assertComponentManifestIdentity(runtimeManifest, "scripts/core_runtime_daemon.mjs");
-  const bridge = await verifySchema(coreRoot, desktopRoot, "edupi-bridge-v1.1");
-  const occurrence = await verifySchema(coreRoot, desktopRoot, "edupi-schedule-occurrence-v1.2");
-  const runtime = await verifySchema(coreRoot, desktopRoot, "edupi-core-runtime-v1");
+export async function verifyFixtureMirrors(coreRoot, desktopRoot) {
   const fixturePath = "fixtures/bridge/v1.1/fixture-manifest.json";
   const fixture = await readJson(path.join(coreRoot, fixturePath));
   assert.equal(fixture.algorithm, "sha256-raw-files-canonical-list-v1");
@@ -99,6 +88,23 @@ export async function pairEduPiCore({ coreRoot, coreCommit, check = false, deskt
     assert.equal(hash(bytes), entry.sha256, `fixture hash: ${entry.path}`);
     assert.deepEqual(await fs.readFile(path.join(desktopRoot, "fixtures/bridge/v1.1", entry.path)), bytes, `Desktop fixture mirror: ${entry.path}`);
   }
+  return fixture;
+}
+
+export async function pairEduPiCore({ coreRoot, coreCommit, check = false, desktopRoot = root }) {
+  assertImmutableCoreCheckout(coreRoot, coreCommit);
+  coreRoot = await fs.realpath(coreRoot);
+  desktopRoot = await fs.realpath(desktopRoot);
+  const base = await readJson(path.join(desktopRoot, compatPath));
+  const desktopManifest = await readJson(path.join(coreRoot, desktopManifestPath));
+  const runtimeManifest = await readJson(path.join(coreRoot, runtimeManifestPath));
+  assertComponentManifestIdentity(desktopManifest, "scripts/desktop_bridge_port.mjs");
+  assertComponentManifestIdentity(runtimeManifest, "scripts/core_runtime_daemon.mjs");
+  const bridge = await verifySchema(coreRoot, desktopRoot, "edupi-bridge-v1.1");
+  const occurrence = await verifySchema(coreRoot, desktopRoot, "edupi-schedule-occurrence-v1.2");
+  const runtime = await verifySchema(coreRoot, desktopRoot, "edupi-core-runtime-v1");
+  const fixture = await verifyFixtureMirrors(coreRoot, desktopRoot);
+  const fixturePath = "fixtures/bridge/v1.1/fixture-manifest.json";
   const corePackage = await readJson(path.join(coreRoot, "package.json"));
   const candidate = {
     ...base,
