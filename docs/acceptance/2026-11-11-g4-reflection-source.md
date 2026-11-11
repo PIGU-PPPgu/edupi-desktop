@@ -8,6 +8,7 @@
 - 固定 Core：`8f2058696371d9a10ffeb3dae9ce06a0a78b6d03`，受测 checkout tracked clean。该提交包含当时本地 `origin/main` `509082bd937890309013ca84b37a82fade89ed9a`，另有五条 G4 增量提交；尚不能称已合并的 Core 主线。
 - G4 源码提交 `08b19e7`；随后以 `e327efb75919ed4d95fa85faa16c2cdcd6f40ca6` 将 Desktop main `381060055769430cab8ef89f64a4d2c6f272564c` 普通合入本 G4 分支。四处合并冲突仅涉及 Core 身份与账本：保留已验证的 G4 pin 和双方证据，兼容清单补入 Core PR462。实际 G4 路由、客户端、组件和联合脚本与受测源码逐字一致；G4 分支尚未合入 Desktop main。
 - Core 依赖为现有 Draft `PIGU-PPPgu/edupi#463`，远端 head 与固定版本一致，尚未合并。
+- Desktop 分支已推送并创建 Draft `PIGU-PPPgu/edupi-desktop#489`，用于审查这批 G4 源码与配对证据；未合并、发布或切换正式更新。
 - 环境：macOS arm64、Node `v22.23.1`。仅隔离合成资料；未使用教师数据或真实模型，未打包、安装或执行 Windows 验收。
 
 ## 实现
