@@ -23,7 +23,10 @@ const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{1
 const HASH = /^sha256:[a-f0-9]{64}$/u;
 const NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
 const MAX_RECORDS = 1024;
-const MAX_BYTES = 65_536;
+// The 20 KB request is stored with result + readback (each with up to 128
+// 160-unit source IDs) and an entry projection. JSON can use six bytes per
+// UTF-16 unit; the combined bounded fields can exceed 256 KiB.
+const MAX_BYTES = 512 * 1024;
 
 export class ReflectionOperationError extends Error {
   constructor(readonly code: string, readonly status = 503) { super(code); }

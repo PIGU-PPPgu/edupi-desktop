@@ -494,7 +494,7 @@ try {
   const contentSourceIds = [];
   const contentEvidence = entries.map((_entry, index) => ({
     predicate: index === 0 ? "lesson.feedback" : "lesson.outcome",
-    rawText: ` 合成课堂内容 ${index + 1}：学生解释等式变形。\n保留原始换行。 `,
+    rawText: index === 1 ? "数".repeat(4000) : ` 合成课堂内容 ${index + 1}：学生解释等式变形。\n保留原始换行。 `,
   }));
   for (let index = 0; index < entries.length; index++) {
     const current = entries[index];
@@ -656,6 +656,8 @@ try {
   checks.push("synthetic-owner-granted-content-capture-read-review-cas-and-two-lesson-isolation");
   checks.push("content-lost-capture-and-reject-receipt-readonly-recovery-after-real-core-restart");
   checks.push("accepted-and-rejected-content-history-pagination-replay-and-restart-readback");
+  assert.equal(contentEntries[1].content.rawText.length, 4000);
+  checks.push("maximum-chinese-content-durable-receipt-review-and-cold-history");
   const historyBeforeRemoval = await historyReadback(entries);
   const filteredHistory = await historyPage(undefined, `&date=${date}&slotId=${encodeURIComponent(entries[0].slotId)}`);
   assert.deepEqual(filteredHistory.entries.map(item => item.fact_id), [entries[0].completion.factId]);

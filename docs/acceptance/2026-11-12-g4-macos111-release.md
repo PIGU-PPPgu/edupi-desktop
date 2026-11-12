@@ -11,6 +11,10 @@
 - 后续审查 `PRRT_kwDOUJaiYs62e4AG` 发现执行授权过期时 initial current-list 失败会阻止历史恢复。已新增实际红灯并修复：只在 v2 pending 时捕获当前列表失败，仍通过匹配的终态回执及 scope-bound 历史核验后清原 pending；unknown 不读历史、不清 pending，非 pending/v1 不放宽。两次当前列表均失败、卸载迟到及 pending 替换等边界经独立复核，客户端/组件 **65 passed、0 skipped**。新精确提交的整合与远端检查仍待执行。
 - Desktop package、Cargo manifest/lock 和组件版本清单已同步 `.111`；Rustix 保持已验证的 `1.1.6`，未改其他依赖或审计策略。
 
+随后冻结预检拦下 `PRRT_kwDOUJaiYs62fCHZ`：4000 汉字合法请求为 12,875 bytes，但重复内容使持久回执达到 80,950 bytes，旧 65,536-byte 上限在 Core 提交后阻断回执落盘与恢复。回执读写共同上限现为有限 **512 KiB**，按已校验的内容、metadata 和来源数组预算为 449,376 bytes；实测最坏合法样本 380,473 bytes。格式、unknown、1024 条容量、权限、root/owner、原子性和链接防护不变，超出新上限 1 byte 仍拒绝。
+
+旧上限新增回归 6 项均因容量红，修后 operation/route 合组 **90 passed、0 skipped**，正常、丢回执、terminal persist 失败后冷进程 resolve 与缓存 replay 均只写 Core 一次。独立审查无新增 P0–P2；真实 Core 联合改用第二条 4000 汉字，**19 项流程通过**，含提交、驳回、回执与冷历史，52 次 Core 启动、模型调用 0。证据为 `desktop-large-receipt-{red,green,measurements}.log` 与 `desktop-large-receipt-real-core-joint.log`。所有待审项修复与提交后，须重新冻结 `.111`，不能沿用先前未成功的冻结预检。
+
 私有证据目录沿用 `~/edupi-install-checkpoints/g4-release-20261112/evidence/`，本版安装证明位于 `~/edupi-install-checkpoints/v0.3.111/evidence/`。不得将未运行的签名、安装、原生 UI 或公开下载计为通过。
 
 ## 真实资料保护
