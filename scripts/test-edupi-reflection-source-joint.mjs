@@ -795,6 +795,26 @@ try {
   } finally { await lease.release(); }
   assert.ok(intake.loadEducationIntakeState().timetable_slots.every(slot => !entries.some(entry => entry.slotId === slot.slot_id)));
   assert.deepEqual((await historyReadback(entries)).entries, stoppedHistory.entries);
+  const beforeScopeSwitch = await parse(await activationRoute.GET(request("/api/edupi/proactivity?domain=lesson_reflection")));
+  const enabledOtherScope = await parse(await activationRoute.POST(request("/api/edupi/proactivity", "POST", {
+    domain: "lesson_reflection", enabled: true, classId: foreign.entity_id, subject: "math",
+    expectedUpdatedAt: beforeScopeSwitch.activation.updatedAt,
+  })));
+  assert.equal(enabledOtherScope.activation.scope.classId, foreign.entity_id);
+  const archivedHistory = await parse(await route.GET(request(`/api/edupi/proactivity/reflection?history=true&date=${date}&classId=${encodeURIComponent(classroom.entity_id)}&subject=math`)));
+  assert.equal(archivedHistory.classId, classroom.entity_id);
+  assert.deepEqual(archivedHistory.entries, stoppedHistory.entries);
+  const archivedReceipt = await parse(await route.PATCH(request("/api/edupi/proactivity/reflection", "PATCH", {
+    operationId: contentPrepared.body.operation.id, operationFingerprint: contentPrepared.body.operation.fingerprint,
+    classId: classroom.entity_id, subject: "math",
+  })));
+  assert.equal(archivedReceipt.operation.status, "committed");
+  assert.equal(archivedReceipt.entry.classId, classroom.entity_id);
+  const stoppedOtherScope = await parse(await activationRoute.POST(request("/api/edupi/proactivity", "POST", {
+    domain: "lesson_reflection", enabled: false, classId: null, subject: null,
+    expectedUpdatedAt: enabledOtherScope.activation.updatedAt,
+  })));
+  assert.equal(stoppedOtherScope.activation.enabled, false);
   const factsBeforeResume = factStateHash();
   await activate();
   assert.equal(factStateHash(), factsBeforeResume, "reenabling must not rewrite historical facts");
@@ -823,6 +843,7 @@ try {
   assert.equal(replacementEntries[0].grantVersion, activeGrant.version);
   assert.deepEqual((await historyReadback(entries)).entries, stoppedHistory.entries);
   assert.deepEqual(await contentHistory(), savedContent);
+  checks.push("stop-a-enable-b-read-a-history-and-terminal-receipt-stop-b-resume-a");
   for (const body of desktopWrites) {
     const beforeFacts = factStateHash();
     const result = await post({ ...body, expectedGrantVersion: activeGrant.version }, 409);

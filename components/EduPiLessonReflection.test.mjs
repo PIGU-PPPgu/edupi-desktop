@@ -315,6 +315,97 @@ test("recovery on a later date uses the persisted operation identity without rep
   } finally { await unmount(renderer); }
 });
 
+test("committed recovery uses bound history after its timetable disappears and unlocks the current date", async () => {
+  const id = randomUUID();
+  const pending = { version: 2, classId: entry.classId, subject: entry.subject, date: entry.date,
+    slotId: entry.slotId, lessonId: entry.lessonId, action: "capture", sourceId: completion.sourceId,
+    sourceRevision: completion.sourceRevision, completedAt: completion.completedAt,
+    contentHash: createHash("sha256").update(completion.rawText).digest("hex"),
+    operationId: id, fingerprint: hash("d") };
+  stored.set(pendingKey, JSON.stringify(pending));
+  const current = { ...entry, classId: "class-2", lessonId: "lesson-2", slotId: "slot-2" };
+  const { service, state } = fixture([current]);
+  const saved = { ...registered, completion };
+  state.operations.set(id, outcome(id, "committed", saved));
+  const verified = [];
+  service.verifyHistory = async (receiptEntry, kind, signal) => {
+    verified.push({ receiptEntry, kind, signal });
+    return true;
+  };
+  const renderer = await mount(service);
+  try {
+    assert.equal(verified.length, 1, "missing current timetable rows must fall back to a historical read");
+    assert.equal(verified[0].receiptEntry, saved);
+    assert.equal(verified[0].kind, "completion");
+    assert.equal(verified[0].signal.aborted, false);
+    assert.equal(stored.has(pendingKey), false);
+    assert.equal(button(renderer.root, "登记课次").props.disabled, false);
+    assert.equal(state.commits.length, 0);
+    assert.equal(text(renderer.root).includes("已核对操作结果"), true);
+  } finally { await unmount(renderer); }
+});
+
+test("inconclusive or failed historical recovery keeps pending and never repeats the write", async () => {
+  for (const verify of [async () => false, async () => { throw new Error("history unavailable"); }]) {
+    stored.clear();
+    const id = randomUUID();
+    stored.set(pendingKey, JSON.stringify({ version: 2, classId: entry.classId, subject: entry.subject,
+      date: entry.date, slotId: entry.slotId, lessonId: entry.lessonId, action: "register",
+      operationId: id, fingerprint: hash("d") }));
+    const { service, state } = fixture([]);
+    state.operations.set(id, outcome(id, "committed", registered));
+    service.verifyHistory = verify;
+    const renderer = await mount(service);
+    try {
+      assert.equal(stored.has(pendingKey), true);
+      assert.equal(state.commits.length, 0);
+      assert.equal(renderer.root.findAllByProps({ role: "alert" }).length > 0, true);
+    } finally { await unmount(renderer); }
+  }
+});
+
+test("production client recovers a removed timetable through the receipt's historical scope", async () => {
+  const id = randomUUID(), saved = { ...registered, completion }, requests = [];
+  stored.set(pendingKey, JSON.stringify({ version: 2, classId: entry.classId, subject: entry.subject,
+    date: entry.date, slotId: entry.slotId, lessonId: entry.lessonId, action: "capture",
+    sourceId: completion.sourceId, sourceRevision: completion.sourceRevision, completedAt: completion.completedAt,
+    contentHash: createHash("sha256").update(completion.rawText).digest("hex"),
+    operationId: id, fingerprint: hash("d") }));
+  const current = { ...entry, classId: "class-2", lessonId: "lesson-2", slotId: "slot-2" };
+  fetchHandler = async (url, init = {}) => {
+    requests.push({ url, method: init.method || "GET" });
+    if (init.method === "PATCH") {
+      assert.deepEqual(JSON.parse(init.body), { operationId: id, operationFingerprint: hash("d"),
+        classId: entry.classId, subject: entry.subject });
+      return response({ ok: true, readbackConfirmed: true, externalSend: false,
+        operation: receipt(id, "committed"), entry: saved });
+    }
+    const query = new URL(url, "http://localhost").searchParams;
+    if (query.get("history") === "true") {
+      assert.equal(query.get("classId"), entry.classId);
+      assert.equal(query.get("subject"), entry.subject);
+      assert.equal(query.get("slotId"), entry.slotId);
+      return response({ ok: true, enabled: true, history: true, readOnly: true, externalSend: false,
+        classId: entry.classId, subject: entry.subject, nextCursor: null, snapshotHash: hash("a"), entries: [{
+          lesson_id: entry.lessonId, date: entry.date, slot_id: entry.slotId, term_id: "term-1",
+          fact_id: completion.factId, revision: completion.revision, status: completion.status,
+          source_id: completion.sourceId, source_revision: completion.sourceRevision,
+          observation_id: "observation-1", raw_text: completion.rawText, completed_at: completion.completedAt,
+          created_at: completion.completedAt, updated_at: completion.completedAt, last_review: null,
+        }] });
+    }
+    return response(list([current]));
+  };
+  const renderer = await mount();
+  try {
+    assert.equal(stored.has(pendingKey), false);
+    assert.equal(button(renderer.root, "登记课次").props.disabled, false);
+    assert.equal(requests.filter(item => item.method === "PATCH").length, 1);
+    assert.equal(requests.some(item => item.url.includes("history=true")), true);
+    assert.equal(requests.some(item => ["POST", "PUT"].includes(item.method)), false);
+  } finally { await unmount(renderer); }
+});
+
 test("not_committed recovery unlocks a new operation only after terminal proof", async () => {
   const { service, state } = uncertainFixture();
   const renderer = await mount(service);

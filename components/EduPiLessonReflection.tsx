@@ -3,13 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { APP_PREF_KEYS } from "@/lib/app-prefs";
 import { readReflection, reflectionReadbackMatches, reflectionReason, reflectionRequest, refreshReflectionSources,
-  prepareReflectionOperation, commitReflectionOperation, recoverReflectionOperation, registerReflectionContentSource, verifyReflectionContentSource, ReflectionActionError,
+  prepareReflectionOperation, commitReflectionOperation, recoverReflectionOperation, verifyReflectionRecoveryHistory,
+  registerReflectionContentSource, verifyReflectionContentSource, ReflectionActionError,
   type ReflectionAction, type ReflectionEntry } from "@/lib/edupi-reflection-client";
 import { EduPiReflectionHistory } from "./EduPiReflectionHistory";
 
 const api = { read: readReflection, prepare: prepareReflectionOperation, commit: commitReflectionOperation,
-  recover: recoverReflectionOperation, refreshSources: refreshReflectionSources, registerContentSource: registerReflectionContentSource };
-type ReflectionApi = Omit<typeof api, "registerContentSource"> & Partial<Pick<typeof api, "registerContentSource">>;
+  recover: recoverReflectionOperation, verifyHistory: verifyReflectionRecoveryHistory,
+  refreshSources: refreshReflectionSources, registerContentSource: registerReflectionContentSource };
+type ReflectionApi = Omit<typeof api, "registerContentSource" | "verifyHistory">
+  & Partial<Pick<typeof api, "registerContentSource" | "verifyHistory">>;
 type ReflectionInput = Exclude<ReflectionAction, { action: "contentCapture" }>
   | { action: "contentCapture"; predicate: ContentPredicate; rawText: string };
 
@@ -285,7 +288,8 @@ export function EduPiLessonReflection({ today, query, service = api }: { today: 
       readCompleted = true;
       setEnabled(result.enabled); setEntries(result.entries); setTruncated(result.truncated); setNeedsRefresh(false);
       if (pending?.version === 2) {
-        const outcome = await service.recover(pending.operationId, pending.fingerprint, controller.signal);
+        const outcome = await service.recover(pending.operationId, pending.fingerprint, controller.signal,
+          { classId: pending.classId, subject: pending.subject });
         if (controller.signal.aborted) return;
         if (outcome.operation.id !== pending.operationId || outcome.operation.fingerprint !== pending.fingerprint) {
           throw new Error("操作回执不匹配，请核对记录");
@@ -295,7 +299,13 @@ export function EduPiLessonReflection({ today, query, service = api }: { today: 
           const readback = pending.date === date ? await service.read(date, controller.signal)
             : await service.read(pending.date, controller.signal);
           if (controller.signal.aborted) return;
-          if (readback.enabled && await operationMatches(pending, readback.entries)) {
+          const currentMatches = readback.enabled && await operationMatches(pending, readback.entries);
+          const historicalMatches = !currentMatches && service.verifyHistory
+            ? await service.verifyHistory(outcome.entry, pending.action === "register" ? "registration"
+              : pending.action === "contentCapture" || pending.action === "contentReview" ? "content" : "completion", controller.signal)
+            : false;
+          if (controller.signal.aborted) return;
+          if (currentMatches || historicalMatches) {
             clearPendingOperation(pending);
             setUncertain(false);
             setMessage("已核对操作结果");
@@ -370,7 +380,13 @@ export function EduPiLessonReflection({ today, query, service = api }: { today: 
       if (!active() || JSON.stringify(readPendingOperation()) !== JSON.stringify(pending)) return false;
       const readback = await service.read(entry.date);
       if (!active() || JSON.stringify(readPendingOperation()) !== JSON.stringify(pending)) return false;
-      if (!readback.enabled || !await operationMatches(pending, readback.entries)) {
+      const currentMatches = readback.enabled && await operationMatches(pending, readback.entries);
+      const historicalMatches = !currentMatches && service.verifyHistory
+        ? await service.verifyHistory(outcome.entry, action.action === "register" ? "registration"
+          : action.action === "contentCapture" || action.action === "contentReview" ? "content" : "completion")
+        : false;
+      if (!active() || JSON.stringify(readPendingOperation()) !== JSON.stringify(pending)) return false;
+      if (!currentMatches && !historicalMatches) {
         throw new ReflectionActionError("操作回读尚未确认，请刷新核对", true);
       }
       if (!active() || JSON.stringify(readPendingOperation()) !== JSON.stringify(pending)) return false;

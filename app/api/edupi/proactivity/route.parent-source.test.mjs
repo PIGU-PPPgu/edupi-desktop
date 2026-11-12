@@ -42,7 +42,8 @@ function fixture({ initialSources = [], sources = initialSources, ownerId = "own
     ends_at: "2099-11-05T00:00:00.000Z", source_ids: [...binding.spec.source_ids].sort(),
     scope: { class_id: scope.classId, subject: scope.subject }, domains: [domain], actions: ["update"],
     budget: { id: "budget-original", max_calls: 4 }, ...grantOverride };
-  const ownerState = () => ({ ok: true, result: { root_ref: ownerRootRef, owner: ownerId ? { id: ownerId } : null,
+  const ownerState = () => ({ ok: true, result: { root_ref: ownerRootRef,
+    owner: ownerId ? { id: ownerId, root_ref: ownerRootRef } : null,
     grants: grantMissing ? [] : [{ ...structuredClone(grant), ...(grant.version > 3 ? readbackOverride : {}) }] } });
   const host = {
     async call(operation, payload) {

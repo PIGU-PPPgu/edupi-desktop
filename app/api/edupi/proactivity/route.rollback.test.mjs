@@ -13,12 +13,13 @@ const runtime = await createJiti(import.meta.url, { tsconfigPaths: true }).impor
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "reflection-activation-"));
 after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
 
-function reflectionActivationFixture() {
+function reflectionActivationFixture({ scopeSwitch = false, initialEnabled = true } = {}) {
   const dataRoot = fs.mkdtempSync(path.join(testRoot, "fixture-"));
   const stateDir = path.join(dataRoot, "state");
   fs.mkdirSync(stateDir, { mode: 0o700 });
   const storage = { stateDir, dataRoot, domain: "lesson_reflection" };
   const scope = { classId: "class-1", subject: "math" };
+  const otherScope = { classId: "class-2", subject: "english" };
   const original = { scope, grantId: control.capabilityGrantId("lesson_reflection", scope), ownerId: "owner-original" };
   const workspace = { timetable: [{ slot_id: "slot-1", class_id: scope.classId, subject: scope.subject,
     kind: "class", start_time: "08:00", time_zone: "Asia/Shanghai", source_ids: ["source-current"] }],
@@ -26,21 +27,36 @@ function reflectionActivationFixture() {
     { entity_id: scope.classId, entity_kind: "class", status: "active" },
     { entity_id: "term-1", entity_kind: "term", status: "active" },
   ], observations: [], accepted_facts: [], conflicts: [] } };
+  if (scopeSwitch) {
+    workspace.timetable.push({ ...workspace.timetable[0], slot_id: "slot-2",
+      class_id: otherScope.classId, subject: otherScope.subject, source_ids: ["source-b"] });
+    workspace.fact_spine.entities.push({ entity_id: otherScope.classId, entity_kind: "class", status: "active" });
+  }
   const binding = control.buildCapabilityGrantBinding("lesson_reflection", scope, workspace);
-  const grant = { id: original.grantId, version: 3, status: "active", ...binding.spec,
+  let grant = { id: original.grantId, version: 3, status: "active", ...binding.spec,
     source_ids: [...binding.spec.source_ids, "source-history"] };
+  const grants = new Map(initialEnabled ? [[grant.id, grant]] : []);
+  const histories = new Map([[original.grantId, ["source-history"]]]);
   const rootRef = `sha256:${"a".repeat(64)}`;
-  config.writeEduPiProactivityConfig({ enabled: true, ...original }, storage);
+  config.writeEduPiProactivityConfig(initialEnabled ? { enabled: true, ...original }
+    : { enabled: false, scope: null, grantId: null, historyBinding: null }, storage);
   const events = [];
   const settings = { restartFailure: false, ensureFailure: false, ensureReadFailure: false, pauseFailure: false,
     staleUpdate: false, staleResume: false, lostUpdateReceipt: false, competitorBeforePause: false,
-    g3Pending: false, auxiliaryPending: false };
+    g3Pending: false, auxiliaryPending: false, ownerId: original.ownerId, ownerRootRef: rootRef,
+    ownerIdentityRootRef: rootRef,
+    lostCreateReceipt: false, configFailure: false, beforeEnsure: null, afterCreate: null };
   const read = () => config.readEduPiProactivityActivation({ ...storage, env: {} });
-  const ownerState = () => ({ ok: true, result: { root_ref: rootRef, owner: { id: original.ownerId },
-    grants: [structuredClone(grant)] } });
+  const ownerState = () => ({ ok: true, result: { root_ref: settings.ownerRootRef,
+    owner: { id: settings.ownerId, root_ref: settings.ownerIdentityRootRef },
+    grants: [...grants.values()].map(item => structuredClone(item)) } });
   const host = { async call(operation, payload) {
     events.push({ operation, payload });
-    if (operation === "owner_read") return ownerState();
+    if (operation === "owner_read") {
+      settings.beforeEnsure?.();
+      settings.beforeEnsure = null;
+      return ownerState();
+    }
     assert.equal(operation, "health");
     return { ok: true, result: { data_root_fingerprint: rootRef, capabilities: {
       g3_processor: read().enabled && !settings.g3Pending ? "active" : "activation_pending",
@@ -54,19 +70,27 @@ function reflectionActivationFixture() {
     if (operation === "owner_read") return ownerState();
     assert.equal(operation, "owner_control");
     assert.equal(payload.expected_owner_id, original.ownerId);
-    assert.equal(payload.grant_id, original.grantId);
-    assert.equal(payload.expected_version, grant.version);
-    assert.ok(["update", "resume", "pause"].includes(payload.action));
+    let target = grants.get(payload.grant_id);
+    assert.equal(payload.expected_version, target?.version ?? 0);
+    assert.ok(["create", "update", "resume", "pause"].includes(payload.action));
+    if (!target) {
+      assert.equal(payload.action, "create");
+      target = { id: payload.grant_id, version: 0, status: "active" };
+      grants.set(target.id, target);
+      if (target.id === original.grantId) grant = target;
+    }
     if (payload.action === "update" && settings.staleUpdate || payload.action === "resume" && settings.staleResume) {
-      grant.version++;
+      target.version++;
       return { ok: false, error: "stale_version" };
     }
-    grant.version++;
-    if (payload.spec) Object.assign(grant, structuredClone(payload.spec));
-    if (payload.action === "resume") grant.status = "active";
-    if (payload.action === "pause") grant.status = "paused";
+    target.version++;
+    if (payload.spec) Object.assign(target, structuredClone(payload.spec));
+    if (payload.action === "resume") target.status = "active";
+    if (payload.action === "pause") target.status = "paused";
     if (payload.action === "update" && settings.lostUpdateReceipt) throw new Error("synthetic_lost_receipt");
-    return { ok: true, result: { owner_id: original.ownerId, grant_id: original.grantId, grant_version: grant.version } };
+    if (payload.action === "create" && settings.lostCreateReceipt) throw new Error("synthetic_lost_receipt");
+    if (payload.action === "create") settings.afterCreate?.(target);
+    return { ok: true, result: { owner_id: original.ownerId, grant_id: target.id, grant_version: target.version } };
   } };
   class RuntimeError extends Error { constructor(code) { super(code); this.code = code; } }
   const modules = {
@@ -84,17 +108,18 @@ function reflectionActivationFixture() {
       readLessonReflectionHistorySourceIds: async input => {
         events.push({ operation: "history", input: structuredClone(input) });
         assert.equal(input.ownerId, original.ownerId);
-        assert.equal(input.grant.id, original.grantId);
-        assert.deepEqual(input.scope, original.scope);
+        assert.equal(input.grant.id, control.capabilityGrantId("lesson_reflection", input.scope));
         assert.equal(input.grant.status, "paused");
-        assert.ok(input.grant.source_ids.includes("source-history"));
-        return ["source-history"];
+        const sources = histories.get(input.grant.id) ?? [];
+        assert.ok(sources.every(source => input.grant.source_ids.includes(source)));
+        return sources;
       },
     },
     "@/lib/edupi-proactivity-config": {
       readEduPiProactivityActivation: options => config.readEduPiProactivityActivation({ ...options, stateDir, env: {} }),
       writeEduPiProactivityConfig: (input, options) => {
         events.push({ operation: "config", input: structuredClone(input) });
+        if (settings.configFailure && !input.enabled) throw new Error("synthetic_config_failure");
         return config.writeEduPiProactivityConfig(input, { ...options, stateDir });
       },
       writeEduPiProactivityStopIntent: (input, options) => config.writeEduPiProactivityStopIntent(input, { ...options, stateDir }),
@@ -143,11 +168,181 @@ function reflectionActivationFixture() {
     assert.ok(Object.hasOwn(modules, name), `unexpected dependency ${name}`);
     return modules[name];
   }, route, route.exports);
-  return { original, storage, read, settings, events, grant, post: (enabled, scope = original.scope) => route.exports.POST(new Request(
+  return { original, otherScope, workspace, grants, histories, storage, read, settings, events,
+    get grant() { return grant; }, post: (enabled, scope = original.scope, expectedUpdatedAt = read().updatedAt) => route.exports.POST(new Request(
     "http://localhost/api/edupi/proactivity", { method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ enabled, domain: "lesson_reflection", classId: enabled ? scope.classId : null,
-        subject: enabled ? scope.subject : null, expectedUpdatedAt: read().updatedAt }) })) };
+        subject: enabled ? scope.subject : null, expectedUpdatedAt }) })) };
 }
+
+test("reflection handler enables A, stops, enables B, stops and restores A with exact historical source union", async () => {
+  const current = reflectionActivationFixture({ scopeSwitch: true, initialEnabled: false });
+  assert.equal((await current.post(true)).status, 200);
+  const a = current.grant;
+  const activeA = structuredClone(a);
+  const activationA = current.read();
+  const eventStart = current.events.length;
+  assert.equal((await current.post(true, current.otherScope)).status, 409);
+  assert.deepEqual(a, activeA);
+  assert.deepEqual(current.read(), activationA);
+  assert.equal(current.events.slice(eventStart).some(event => ["owner_control", "config", "restart"].includes(event.operation)), false);
+  const history = ["source-accepted", "source-pending", "source-rejected"];
+  current.histories.set(a.id, history);
+  a.source_ids.push(...history, "source-withdrawn");
+  assert.equal((await current.post(false)).status, 200);
+  const pausedA = structuredClone(a);
+  const responseB = await current.post(true, current.otherScope);
+  assert.equal(responseB.status, 200, JSON.stringify(await responseB.json()));
+  const bId = control.capabilityGrantId("lesson_reflection", current.otherScope);
+  const b = current.grants.get(bId);
+  assert.deepEqual(a, pausedA, "switching scope cannot rewrite A authority");
+  assert.equal(b.status, "active");
+  assert.deepEqual(b.scope, { class_id: current.otherScope.classId, subject: current.otherScope.subject });
+  assert.deepEqual([...b.source_ids].sort(),
+    control.capabilityGrantSourceIds("lesson_reflection", current.otherScope, current.workspace).sort());
+  assert.deepEqual(current.read().historyBinding, { ...current.original, scope: current.otherScope, grantId: bId });
+  assert.equal([...current.grants.values()].filter(item => item.status === "active").length, 1);
+  assert.equal((await current.post(false)).status, 200);
+  const pausedB = structuredClone(b);
+  current.workspace.timetable[0].source_ids = ["source-a-new"];
+  assert.equal((await current.post(true)).status, 200);
+  assert.deepEqual(b, pausedB);
+  assert.equal(a.status, "active");
+  assert.deepEqual([...a.source_ids].sort(), [
+    ...control.capabilityGrantSourceIds("lesson_reflection", current.original.scope, current.workspace), ...history,
+  ].sort());
+  assert.deepEqual(current.read().historyBinding, current.original);
+  assert.equal(current.grants.size, 2);
+  assert.equal([...current.grants.values()].filter(item => item.status === "active").length, 1);
+  const writes = current.events.filter(event => event.operation === "owner_control");
+  assert.deepEqual(writes.filter(event => event.payload.action === "create").map(event => event.payload.grant_id),
+    [a.id, b.id]);
+});
+
+test("reflection scope switch rejects foreign roots, owners and unsafe prior grants without writes", async context => {
+  for (const [name, change] of [
+    ["foreign root", current => { current.settings.ownerRootRef = `sha256:${"b".repeat(64)}`; }],
+    ["owner root missing", current => { current.settings.ownerIdentityRootRef = undefined; }],
+    ["owner root differs", current => { current.settings.ownerIdentityRootRef = `sha256:${"b".repeat(64)}`; }],
+    ["foreign owner", current => { current.settings.ownerId = "owner-other"; }],
+    ["prior grant active", current => { current.grant.status = "active"; }],
+    ["prior grant revoked", current => { current.grant.status = "revoked"; }],
+    ["prior grant missing", current => { current.grants.clear(); }],
+    ["prior scope expanded", current => { current.grant.scope.student_id = "student-other"; }],
+    ["prior grant sources invalid", current => { current.grant.source_ids = ["invalid source"]; }],
+  ]) {
+    await context.test(name, async () => {
+      const current = reflectionActivationFixture({ scopeSwitch: true });
+      assert.equal((await current.post(false)).status, 200);
+      const previous = current.read();
+      change(current);
+      current.events.length = 0;
+      const response = await current.post(true, current.otherScope);
+      assert.equal(response.status, 409);
+      assert.equal((await response.json()).code, "proactivity_grant_denied");
+      assert.deepEqual(current.read(), previous);
+      assert.equal(current.events.some(event => ["owner_control", "config", "restart", "quarantine"].includes(event.operation)), false);
+    });
+  }
+});
+
+test("reflection scope switch fences races before a new grant can be created", async context => {
+  for (const [name, change] of [
+    ["owner changed", current => { current.settings.ownerId = "owner-raced"; }],
+    ["root changed", current => { current.settings.ownerRootRef = `sha256:${"b".repeat(64)}`; }],
+    ["owner root disappeared", current => { current.settings.ownerIdentityRootRef = undefined; }],
+    ["owner root changed", current => { current.settings.ownerIdentityRootRef = `sha256:${"b".repeat(64)}`; }],
+    ["prior grant resumed", current => { current.grant.status = "active"; current.grant.version++; }],
+    ["selected grant appeared", current => {
+      const binding = control.buildCapabilityGrantBinding("lesson_reflection", current.otherScope, current.workspace);
+      current.grants.set(binding.grantId, { id: binding.grantId, status: "paused", version: 1, ...binding.spec });
+    }],
+  ]) {
+    await context.test(name, async () => {
+      const current = reflectionActivationFixture({ scopeSwitch: true });
+      assert.equal((await current.post(false)).status, 200);
+      const previous = current.read();
+      current.events.length = 0;
+      current.settings.beforeEnsure = () => change(current);
+      const response = await current.post(true, current.otherScope);
+      assert.equal(response.status, 409);
+      assert.equal((await response.json()).code, "proactivity_grant_denied");
+      assert.deepEqual(current.read(), previous);
+      assert.equal(current.events.some(event => ["owner_control", "config", "restart", "quarantine"].includes(event.operation)), false);
+    });
+  }
+});
+
+test("reflection scope switch rollback restores A history and pauses only the attempted B grant", async context => {
+  for (const [name, change] of [
+    ["restart failed", current => { current.settings.restartFailure = true; }],
+    ["source readback differs", current => { current.settings.afterCreate = grant => { grant.source_ids.push("source-forged"); }; }],
+    ["scope readback differs", current => { current.settings.afterCreate = grant => { grant.scope.subject = "forged"; }; }],
+  ]) {
+    await context.test(name, async () => {
+      const current = reflectionActivationFixture({ scopeSwitch: true });
+      assert.equal((await current.post(false)).status, 200);
+      const previous = current.read();
+      const pausedA = structuredClone(current.grant);
+      change(current);
+      current.events.length = 0;
+      const response = await current.post(true, current.otherScope);
+      assert.ok(response.status >= 400);
+      assert.equal(current.read().enabled, false);
+      assert.equal(current.read().scope, null);
+      assert.equal(current.read().configurationStatus, "ready");
+      assert.deepEqual(current.read().historyBinding, previous.historyBinding);
+      assert.deepEqual(current.grant, pausedA);
+      const b = current.grants.get(control.capabilityGrantId("lesson_reflection", current.otherScope));
+      assert.equal(b.status, "paused");
+      assert.deepEqual(current.events.filter(event => event.operation === "pause").map(event => event.grantId), [b.id]);
+    });
+  }
+});
+
+test("reflection scope switch uncertain creation and rollback never report enabled", async context => {
+  for (const [name, change] of [
+    ["lost create receipt", current => { current.settings.lostCreateReceipt = true; }],
+    ["rollback pause failed", current => { current.settings.restartFailure = true; current.settings.pauseFailure = true; }],
+    ["rollback persistence failed", current => { current.settings.restartFailure = true; current.settings.configFailure = true; }],
+  ]) {
+    await context.test(name, async () => {
+      const current = reflectionActivationFixture({ scopeSwitch: true });
+      assert.equal((await current.post(false)).status, 200);
+      const pausedA = structuredClone(current.grant);
+      change(current);
+      const response = await current.post(true, current.otherScope);
+      assert.equal(response.status, 503);
+      assert.equal((await response.json()).code, "proactivity_stop_uncertain");
+      assert.equal(current.read().enabled, false);
+      assert.equal(current.read().configurationStatus, "stop_pending");
+      assert.deepEqual(current.grant, pausedA);
+      assert.equal(fs.existsSync(path.join(current.storage.stateDir, "edupi-lesson-reflection-stop.json")), true);
+      current.events.length = 0;
+      assert.equal((await current.post(true, current.otherScope)).status, 409);
+      assert.deepEqual(current.events, []);
+    });
+  }
+});
+
+test("reflection scope switch requires a completed stop and a current configuration token", async () => {
+  const current = reflectionActivationFixture({ scopeSwitch: true });
+  const staleToken = current.read().updatedAt;
+  current.settings.pauseFailure = true;
+  assert.equal((await current.post(false)).status, 503);
+  assert.equal((await current.post(true, current.otherScope)).status, 409);
+  assert.equal(current.grants.size, 1);
+  current.settings.pauseFailure = false;
+  assert.equal((await current.post(false)).status, 200);
+  const previous = current.read();
+  current.events.length = 0;
+  const stale = await current.post(true, current.otherScope, staleToken);
+  assert.equal(stale.status, 409);
+  assert.equal((await stale.json()).code, "proactivity_configuration_stale");
+  assert.deepEqual(current.events, []);
+  assert.deepEqual(current.read(), previous);
+  assert.equal((await current.post(true, current.otherScope)).status, 200);
+});
 
 function assertReenablePreflight(current) {
   const historyIndex = current.events.findIndex(event => event.operation === "history");

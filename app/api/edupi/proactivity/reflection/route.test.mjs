@@ -180,6 +180,12 @@ function fixture(options = {}) {
           ...(options.readbackMismatch && writeCount ? { revision: completion.revision + 1 } : {}) } } };
       }
       if (operation === "owner_reflection_content_read") {
+        const historical = options.contentReadEntries?.find(item => item.fact_id === payload.fact_id);
+        if (historical) {
+          const fact = Object.fromEntries(["fact_id", "revision", "status", "source_id", "source_revision",
+            "observation_id", "raw_text", "predicate", "value"].map(key => [key, historical[key]]));
+          return { ok: true, result: { ...ready("ready"), content: { ...fact, source_basis_hash: completionHash } } };
+        }
         if (!content || payload.fact_id !== content.fact_id) return { ok: true, result: { ...held, reason_code: "content_source_unavailable" } };
         return { ok: true, result: { ...ready("ready"), content: { ...content,
           ...(options.readbackMismatch && writeCount ? { revision: content.revision + 1 } : {}) } } };
@@ -193,7 +199,9 @@ function fixture(options = {}) {
     "node:util": { isDeepStrictEqual },
     "node:crypto": { createHash },
     "@/lib/edupi-proactivity-control": { lessonReflectionCompletionSourceId: ({ classId, subject }, lessonId) =>
-      `lesson-completion:${createHash("sha256").update(JSON.stringify([classId, subject, lessonId])).digest("hex")}` },
+      `lesson-completion:${createHash("sha256").update(JSON.stringify([classId, subject, lessonId])).digest("hex")}`,
+      capabilityGrantId: (_domain, scope) => scope.classId === "class-1" && scope.subject === "math"
+        ? "grant-reflection" : `grant-${scope.classId}-${scope.subject}` },
     "@/lib/edupi-reflection-index": {
       appendEduPiReflectionIndex: (scope, entry, readback) => {
         if (options.indexWriteFail) throw new Error("index unavailable");
@@ -1167,4 +1175,238 @@ test("content history supports bounded pagination and rejects cursor snapshot mi
   const result = await (await bounded.get()).json();
   assert.equal(result.code, "content_limit");
   assert.equal(pages, 10);
+});
+
+test("history optional scope pair is validated before any history dispatch", async () => {
+  for (const content of [false, true]) {
+    const kind = content ? "&content=true" : "";
+    for (const scope of ["classId=class-1", "subject=math", "classId=&subject=math",
+      "classId=class%201&subject=math", "classId=class-1&subject=%20math",
+      "classId=class-1&subject=", "classId=class-1&subject=math&subject=math",
+      `classId=${"a".repeat(129)}&subject=math`, `classId=class-1&subject=${"a".repeat(129)}`]) {
+      const current = fixture();
+      assert.equal((await current.get(`history=true${kind}&${scope}`)).status, 400, scope);
+      assert.deepEqual(current.calls, [], scope);
+    }
+    for (const scope of ["classId=other&subject=math", "classId=class-1&subject=other"]) {
+      const current = fixture();
+      const response = await current.get(`history=true${kind}&${scope}`);
+      assert.equal(response.status, 409, scope);
+      assert.equal((await response.json()).code, "scope_mismatch");
+      assert.deepEqual(current.calls.map(call => call.operation), ["health", "owner_read"]);
+    }
+  }
+});
+
+test("history returns scope only for an explicit matching pair, including stopped history", async () => {
+  for (const content of [false, true]) for (const stopped of [false, true]) {
+    const current = fixture({ completion: {}, content: {}, ...(stopped ? {
+      enabled: false, isolated: false, processor: "inactive", activation: { historyBinding }, grant: { status: "paused" },
+    } : {}) });
+    const query = `history=true&date=${date}&slotId=slot-1&pageSize=1${content ? "&content=true" : ""}`;
+    const legacy = await (await current.get(query)).json();
+    assert.equal(Object.hasOwn(legacy, "classId"), false);
+    assert.equal(Object.hasOwn(legacy, "subject"), false);
+    const response = await current.get(`${query}&classId=class-1&subject=math`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ...legacy, classId: "class-1", subject: "math" });
+    assert.equal(current.calls.some(call => writes.includes(call.operation)), false);
+  }
+});
+
+function capacityHistory(count = 20) {
+  return Array.from({ length: count }, (_, i) => contentHistoryEntry({
+    fact_id: `fact-content-${String(i).padStart(2, "0")}`, raw_text: `隔离容量记录 ${i}`,
+    value: `隔离容量记录 ${i}`, source_id: sourceFor(`隔离容量记录 ${i}`),
+  }));
+}
+
+function capacityFixture(entries, options = {}) {
+  return fixture({ registered: true, ...options,
+    grant: { source_ids: ["timetable-source", completionSourceId, contentSourceId, ...new Set(entries.map(item => item.source_id))] },
+    contentReadEntries: entries,
+    contentHistoryResponse: options.contentHistoryResponse ?? historyResponse(entries) });
+}
+
+test("twenty current content facts reject the twenty-first before Core write and terminate its receipt", async () => {
+  const current = capacityFixture(capacityHistory());
+  const readable = await current.get(), listing = await readable.json();
+  assert.equal(readable.status, 200);
+  assert.equal(listing.entries.filter(item => item.content !== null).length, 20);
+  const operationId = randomUUID();
+  const prepared = await (await current.raw("PUT", { operationId, mutation: contentCapture })).json();
+  const envelope = { ...contentCapture, operationId, operationFingerprint: prepared.operation.fingerprint };
+  const response = await current.raw("POST", envelope), body = await response.json();
+  assert.equal(response.status, 409);
+  assert.equal(body.code, "content_limit");
+  assert.equal(body.noCommitConfirmed, true);
+  assert.equal(body.operation.status, "not_committed");
+  assert.equal(body.operation.terminal, true);
+  assert.equal(current.calls.filter(call => writes.includes(call.operation)).length, 0);
+  assert.deepEqual(await (await current.raw("POST", envelope)).json(), body);
+  assert.deepEqual(await (await current.raw("PATCH", { operationId, operationFingerprint: prepared.operation.fingerprint })).json(), body);
+  assert.deepEqual(await (await current.get()).json(), listing);
+});
+
+test("capacity permits the exact twentieth capture and receipt replay, but rejects changed identity", async () => {
+  const entries = capacityHistory(19).concat(contentHistoryEntry()).sort((a, b) => a.fact_id.localeCompare(b.fact_id));
+  const current = capacityFixture(entries, { content: {} });
+  const operationId = randomUUID();
+  const prepared = await (await current.raw("PUT", { operationId, mutation: contentCapture })).json();
+  const envelope = { ...contentCapture, operationId, operationFingerprint: prepared.operation.fingerprint };
+  const response = await current.raw("POST", envelope), body = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(body));
+  assert.equal(body.operation.status, "committed");
+  assert.deepEqual(await (await current.raw("POST", envelope)).json(), body);
+  assert.equal(current.calls.filter(call => writes.includes(call.operation)).length, 1);
+  for (const changes of [{ source_id: sourceFor("其他来源") }, { source_revision: "other" },
+    { raw_text: "其他原文", value: "其他原文" }, { predicate: "lesson.feedback" }]) {
+    const mismatched = entries.map(item => item.fact_id === "fact-content" ? { ...item, ...changes } : item);
+    const denied = capacityFixture(mismatched);
+    const result = await (await denied.post(contentCapture)).json();
+    assert.equal(result.code, "content_limit", JSON.stringify(changes));
+    assert.equal(result.operation.status, "not_committed");
+    assert.equal(denied.calls.some(call => writes.includes(call.operation)), false);
+  }
+});
+
+test("capture counts only current content and never treats oversized or changing history as empty", async () => {
+  const historical = capacityHistory(20).map((item, index) => ({ ...item, status: index % 2 ? "stale" : "superseded" }));
+  assert.equal((await capacityFixture(historical).post(contentCapture)).status, 200);
+  for (const entries of [capacityHistory(21), capacityHistory(20)]) {
+    const current = capacityFixture(entries);
+    const result = await (await current.post(contentCapture)).json();
+    assert.equal(result.code, "content_limit");
+    assert.equal(result.operation.status, "not_committed");
+    assert.equal(current.calls.some(call => writes.includes(call.operation)), false);
+  }
+  let pages = 0;
+  const current = capacityFixture([], { contentHistoryResponse: () => {
+    const item = contentHistoryEntry({ fact_id: `fact-page-${++pages}`, status: "superseded" });
+    return historyResponse([item], { next_cursor: Buffer.from(JSON.stringify({
+      version: 1, snapshot_hash: sourceBasisHash, after: item.fact_id })).toString("base64url") });
+  } });
+  const body = await (await current.post(contentCapture)).json();
+  assert.equal(body.code, "content_limit");
+  assert.equal(pages, 10);
+  assert.equal(current.calls.some(call => writes.includes(call.operation)), false);
+});
+
+test("explicit history scope preserves root, owner and grant authorization for both fact kinds", async () => {
+  for (const content of [false, true]) for (const options of [
+    { allowed: false }, { ownerRoot: sourceBasisHash }, { ownerIdentityRoot: sourceBasisHash }, { ownerId: "other" },
+    { grant: { id: "foreign" } }, { grant: { scope: { class_id: "other", subject: "math" } } },
+    { grant: { domains: ["parent_communication"] } }, { activation: { configurationStatus: "stop_pending" } },
+  ]) {
+    const current = fixture(options);
+    assert.equal((await current.get(`history=true&classId=class-1&subject=math${content ? "&content=true" : ""}`)).ok, false);
+    assert.equal(current.calls.some(call => call.operation.endsWith("history_read")), false, JSON.stringify(options));
+    assert.equal(current.calls.some(call => writes.includes(call.operation)), false);
+  }
+});
+
+test("scoped history preserves safe cursor forwarding and rejects cursor snapshot mismatch", async () => {
+  for (const content of [false, true]) {
+    const item = content ? contentHistoryEntry() : historyEntry();
+    const cursor = Buffer.from(JSON.stringify({ version: 1, snapshot_hash: sourceBasisHash, after: item.fact_id })).toString("base64url");
+    const option = content ? "contentHistoryResponse" : "historyResponse";
+    const options = { [option]: payload => payload.cursor ? historyResponse([]) : historyResponse([item], { next_cursor: cursor }) };
+    const current = fixture(options);
+    const query = `history=true&date=${date}&slotId=slot-1&pageSize=1&classId=class-1&subject=math${content ? "&content=true" : ""}`;
+    const first = await (await current.get(query)).json();
+    assert.equal(first.nextCursor, cursor);
+    const second = await current.get(`${query}&cursor=${cursor}`);
+    assert.equal(second.status, 200);
+    assert.deepEqual((await second.json()).entries, []);
+    const operation = content ? "owner_reflection_content_history_read" : "owner_reflection_history_read";
+    assert.equal(current.calls.filter(call => call.operation === operation).at(-1).payload.cursor, cursor);
+    options[option] = historyResponse([item], { next_cursor: Buffer.from(JSON.stringify({
+      version: 1, snapshot_hash: rootRef, after: item.fact_id })).toString("base64url") });
+    assert.equal((await current.get(query)).status, 503);
+  }
+});
+
+test("capture fails closed before dispatch when paginated content history changes", async () => {
+  let pages = 0;
+  const current = capacityFixture([], { contentHistoryResponse: () => {
+    const item = contentHistoryEntry({ fact_id: `fact-${++pages}`, status: "stale" });
+    const snapshot = pages === 1 ? sourceBasisHash : rootRef;
+    return historyResponse([item], { snapshot_hash: snapshot, next_cursor: Buffer.from(JSON.stringify({
+      version: 1, snapshot_hash: snapshot, after: item.fact_id })).toString("base64url") });
+  } });
+  const body = await (await current.post(contentCapture)).json();
+  assert.equal(body.code, "history_changed");
+  assert.equal(body.operation.status, "not_committed");
+  assert.equal(pages, 2);
+  assert.equal(current.calls.some(call => writes.includes(call.operation)), false);
+});
+
+test("explicit history selects an existing stopped A grant while activation and history binding select B", async () => {
+  for (const content of [false, true]) {
+    const current = fixture({ completion: {}, content: {}, grant: { status: "paused" }, activation: {
+      scope: { classId: "class-B", subject: "other" }, grantId: "grant-B",
+      historyBinding: { ownerId: "owner-1", grantId: "grant-B", scope: { classId: "class-B", subject: "other" } },
+    } });
+    const response = await current.get(`history=true&classId=class-1&subject=math${content ? "&content=true" : ""}`);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.classId, "class-1"); assert.equal(body.subject, "math");
+    assert.equal(body.entries[0].fact_id, content ? "fact-content" : "fact-completion");
+    assert.equal(current.calls.some(call => writes.includes(call.operation) || call.operation === "owner_control"), false);
+  }
+});
+
+test("scoped PATCH locates A's existing receipt after switching to B without granting writes", async () => {
+  for (const terminal of [false, true]) {
+    const options = { registered: true, ...(terminal ? {} : { writeThrow: true }) };
+    const current = fixture(options), operationId = randomUUID();
+    const prepared = await (await current.raw("PUT", { operationId, mutation: capture })).json();
+    const identity = { operationId, operationFingerprint: prepared.operation.fingerprint };
+    const response = await (await current.raw("POST", { ...capture, ...identity })).json();
+    assert.equal(response.operation.status, terminal ? "committed" : "unknown");
+    Object.assign(options, { grant: { status: "paused" }, activation: {
+      scope: { classId: "class-B", subject: "other" }, grantId: "grant-B",
+      historyBinding: { ownerId: "owner-1", grantId: "grant-B", scope: { classId: "class-B", subject: "other" } },
+    } });
+    const before = current.calls.filter(call => writes.includes(call.operation)).length;
+    const resolved = await current.raw("PATCH", { ...identity, classId: "class-1", subject: "math" });
+    assert.equal(resolved.status, terminal ? 200 : 409);
+    const body = await resolved.json();
+    assert.equal(body.operation.status, terminal ? "committed" : "unknown");
+    assert.equal(current.calls.filter(call => writes.includes(call.operation)).length, before);
+    assert.equal(current.calls.some(call => call.operation === "owner_control"), false);
+    assert.notEqual((await current.raw("PATCH", { ...identity, classId: "ungranted", subject: "math" })).status, 200);
+  }
+});
+
+test("scoped PATCH validates its pair and refuses foreign owner and root before reading receipts", async () => {
+  const identity = { operationId: randomUUID(), operationFingerprint: sourceBasisHash };
+  for (const pair of [ { classId: "class-1" }, { subject: "math" }, { classId: "class 1", subject: "math" },
+    { classId: "class-1", subject: "" }, { classId: "class-1", subject: "math", ownerId: "owner-1" } ]) {
+    const current = fixture();
+    assert.equal((await current.raw("PATCH", { ...identity, ...pair })).status, 400);
+    assert.deepEqual(current.calls, []);
+  }
+  for (const options of [{ ownerId: "other" }, { ownerRoot: sourceBasisHash }, { ownerIdentityRoot: sourceBasisHash },
+    { grant: { id: "foreign" } }, { grant: { source_ids: ["duplicate", "duplicate"] } }]) {
+    const current = fixture(options);
+    const response = await current.raw("PATCH", { ...identity, classId: "class-1", subject: "math" });
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).operation, undefined);
+    assert.equal(current.calls.some(call => call.operation.startsWith("owner_reflection_")), false);
+  }
+});
+
+test("scoped recovery rechecks A rather than B after a lost acknowledgement", async () => {
+  const options = { registered: true, writeThrowAfter: true };
+  const current = fixture(options), identity = await lostWrite(current, capture);
+  options.activation = { scope: { classId: "class-B", subject: "other" }, grantId: "grant-B",
+    historyBinding: { ownerId: "owner-1", grantId: "grant-B", scope: { classId: "class-B", subject: "other" } } };
+  const response = await current.raw("PATCH", { ...identity, classId: "class-1", subject: "math" });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.operation.status, "committed");
+  assert.equal(body.entry.classId, "class-1");
+  assert.equal(body.entry.subject, "math");
+  assert.equal(current.calls.filter(call => writes.includes(call.operation)).length, 1);
 });

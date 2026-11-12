@@ -8,7 +8,7 @@ import { readEduPiProactivityActivation } from "@/lib/edupi-proactivity-config";
 import { ensureEduPiRuntime } from "@/lib/edupi-runtime-supervisor";
 import { canStartEduPiCapabilityDrafts } from "@/lib/safe-mode";
 import { withEduPiAmbientSessionLock } from "@/lib/edupi-ambient-session-lock";
-import { lessonReflectionCompletionSourceId } from "@/lib/edupi-proactivity-control";
+import { capabilityGrantId, lessonReflectionCompletionSourceId } from "@/lib/edupi-proactivity-control";
 import { appendEduPiReflectionIndex, readEduPiReflectionIndex } from "@/lib/edupi-reflection-index";
 import { prepareReflectionOperation, runReflectionOperation, resolveReflectionOperation, ReflectionOperationError,
   type ReflectionOperationReceipt, type ReflectionOperationResponse } from "@/lib/edupi-reflection-operation";
@@ -50,15 +50,20 @@ class ReflectionError extends Error {
   constructor(readonly code: string, readonly status = 409) { super(code); }
 }
 
-async function context(mode: "current" | "history" = "current") {
+type ReflectionScope = { classId: string; subject: string };
+
+async function context(mode: "current" | "history" = "current", expectedScope?: ReflectionScope) {
   const historyRead = mode === "history";
+  if (expectedScope && !historyRead) throw new ReflectionError("scope_mismatch");
   if (!historyRead && !canStartEduPiCapabilityDrafts()) throw new ReflectionError("activation_pending");
   const roots = resolveEduPiBridgeRoots();
   const activation = readEduPiProactivityActivation({ dataRoot: roots.dataRoot.root, domain: "lesson_reflection" });
   const executionBinding = activation.enabled && activation.grantId && activation.ownerId && activation.scope
     ? { ownerId: activation.ownerId, grantId: activation.grantId, scope: activation.scope } : null;
-  const selectedBinding = historyRead ? activation.historyBinding ?? executionBinding : executionBinding;
-  if (activation.configurationStatus !== "ready" || !selectedBinding) throw new ReflectionError("activation_pending");
+  const trustedBinding = historyRead ? activation.historyBinding ?? executionBinding : executionBinding;
+  if (activation.configurationStatus !== "ready" || !trustedBinding) throw new ReflectionError("activation_pending");
+  const selectedBinding = expectedScope ? { ownerId: trustedBinding.ownerId,
+    grantId: capabilityGrantId("lesson_reflection", expectedScope), scope: expectedScope } : trustedBinding;
   const host = await ensureEduPiRuntime(roots);
   const healthResponse = await host.call("health", null), health = object(healthResponse.result);
   const rootRef = health?.data_root_fingerprint;
@@ -66,13 +71,19 @@ async function context(mode: "current" | "history" = "current") {
     || !historyRead && object(health?.capabilities)?.g3_processor !== "active") throw new ReflectionError("activation_pending");
   const ownerResponse = await host.callOwnerControl("owner_read", { root_ref: rootRef, expected_owner_id: selectedBinding.ownerId });
   const state = object(ownerResponse.result), owner = object(state?.owner);
-  const grant = records(state?.grants).find(item => item.id === selectedBinding.grantId), scope = object(grant?.scope);
+  const grants = records(state?.grants).filter(item => item.id === selectedBinding.grantId);
+  const grant = grants.length === 1 ? grants[0] : undefined, scope = object(grant?.scope);
   const now = new Date().toISOString();
   if (ownerResponse.ok !== true || state?.root_ref !== rootRef || owner?.root_ref !== rootRef
-    || owner.id !== selectedBinding.ownerId || !grant || !integer(grant.version)
+    || owner.id !== selectedBinding.ownerId) throw new ReflectionError("owner_unavailable");
+  if (!grant) throw new ReflectionError(expectedScope ? "scope_mismatch" : "owner_unavailable");
+  if (!integer(grant.version)
     || scope?.class_id !== selectedBinding.scope.classId || scope?.subject !== selectedBinding.scope.subject
     || !Array.isArray(grant.domains) || !grant.domains.includes("lesson_reflection")
-    || !Array.isArray(grant.source_ids) || !grant.source_ids.every(item => text(item))) throw new ReflectionError("owner_unavailable");
+    || !Array.isArray(grant.source_ids) || !grant.source_ids.every(item => text(item))
+    || expectedScope && (!scope || !exactKeys(scope, ["class_id", "subject"]) || grant.domains.length !== 1
+      || !grant.source_ids.length || grant.source_ids.length > 128
+      || new Set(grant.source_ids).size !== grant.source_ids.length)) throw new ReflectionError("owner_unavailable");
   if (!historyRead && (grant.status !== "active" || !Array.isArray(grant.actions) || !grant.actions.includes("update")
     || !timestamp(grant.starts_at) || !timestamp(grant.ends_at) || now < grant.starts_at || now >= grant.ends_at))
     throw new ReflectionError("owner_unavailable");
@@ -217,20 +228,25 @@ export async function GET(request: Request) {
 }
 
 async function history(query: URLSearchParams) {
-  if ([...query.keys()].some(key => !["history", "date", "slotId", "pageSize", "cursor", "content"].includes(key) || query.getAll(key).length !== 1)
+  if ([...query.keys()].some(key => !["history", "date", "slotId", "pageSize", "cursor", "content", "classId", "subject"].includes(key) || query.getAll(key).length !== 1)
     || query.has("content") && query.get("content") !== "true")
     return reply({ ok: false }, 400);
   const date = query.get("date"), slotId = query.get("slotId"), pageSize = query.get("pageSize"), cursor = query.get("cursor");
+  const classId = query.get("classId"), subject = query.get("subject");
+  const scoped = classId !== null || subject !== null;
   if (date !== null && !dateOnly(date) || slotId !== null && !text(slotId)
+    || scoped && (!text(classId, 128) || !OWNER_ID.test(classId) || !text(subject, 128))
     || pageSize !== null && (!/^[1-9]\d?$/u.test(pageSize) || Number(pageSize) > 50)
     || cursor !== null && !CURSOR.test(cursor)) return reply({ ok: false }, 400);
-  const current = await context("history"), kind = query.get("content") === "true" ? "content" : "completion";
+  const current = await context("history", scoped ? { classId: classId!, subject: subject! } : undefined);
+  const kind = query.get("content") === "true" ? "content" : "completion";
   const result = await readHistory(current, {
     ...(date === null ? {} : { date }), ...(slotId === null ? {} : { slot_id: slotId }),
     ...(pageSize === null ? {} : { page_size: Number(pageSize) }), ...(cursor === null ? {} : { cursor }),
   }, kind);
   if (result.status === "held") return reply({ ok: false, code: result.reason_code, result }, 409);
   return reply({ ok: true, enabled: true, history: true, entries: result.entries,
+    ...(scoped ? { classId: current.binding.class_id, subject: current.binding.subject } : {}),
     nextCursor: result.next_cursor, snapshotHash: result.snapshot_hash, readOnly: true, ...(kind === "content" ? { content: true } : {}) });
 }
 
@@ -299,7 +315,11 @@ async function readHistory(current: Context, query: HistoryQuery, kind: FactKind
 }
 
 async function currentContentFacts(current: Context, binding: RecordValue, lessonId: unknown): Promise<string[]> {
-  const facts = new Set<string>();
+  return (await currentContentEntries(current, binding, lessonId)).map(item => item.fact_id as string);
+}
+
+async function currentContentEntries(current: Context, binding: RecordValue, lessonId: unknown): Promise<RecordValue[]> {
+  const facts = new Map<string, RecordValue>();
   let cursor: string | undefined, snapshot: unknown;
   for (let page = 0; page < 10; page++) {
     const result = await readHistory(current, { date: binding.date as string, slot_id: binding.slot_id as string,
@@ -308,10 +328,10 @@ async function currentContentFacts(current: Context, binding: RecordValue, lesso
     if (snapshot !== undefined && snapshot !== result.snapshot_hash) throw new ReflectionError("history_changed");
     snapshot = result.snapshot_hash;
     for (const item of records(result.entries)) {
-      if (item.lesson_id === lessonId && !["stale", "superseded"].includes(String(item.status))) facts.add(item.fact_id as string);
+      if (item.lesson_id === lessonId && !["stale", "superseded"].includes(String(item.status))) facts.set(item.fact_id as string, item);
     }
     if (facts.size > 20) throw new ReflectionError("content_limit", 503);
-    if (result.next_cursor === null) return [...facts];
+    if (result.next_cursor === null) return [...facts.values()];
     cursor = result.next_cursor as string;
   }
   throw new ReflectionError("content_limit", 503);
@@ -451,14 +471,19 @@ export async function PATCH(request: Request) {
   if (!isDesktopApiRequestAllowed(request)) return reply({ ok: false }, 403);
   try {
     const body = object(await parseJsonWithinLimit(request, 2000));
-    if (!body || Object.keys(body).length !== 2 || typeof body.operationId !== "string" || !hash(body.operationFingerprint)) return reply({ ok: false }, 400);
-    const current = await context("history");
+    const scoped = body !== null && (Object.hasOwn(body, "classId") || Object.hasOwn(body, "subject"));
+    if (!body || !exactKeys(body, ["operationId", "operationFingerprint", ...(scoped ? ["classId", "subject"] : [])])
+      || typeof body.operationId !== "string" || !hash(body.operationFingerprint)
+      || scoped && (!text(body.classId, 128) || !OWNER_ID.test(body.classId) || !text(body.subject, 128)))
+      return reply({ ok: false }, 400);
+    const expectedScope = scoped ? { classId: body.classId as string, subject: body.subject as string } : undefined;
+    const current = await context("history", expectedScope);
     return operationReply(await resolveReflectionOperation(reflectionIndexScope(current), body.operationId, body.operationFingerprint,
-      mutation => recoverMutation(current, mutation)));
+      mutation => recoverMutation(current, mutation, expectedScope)));
   } catch (error) { return failure(error); }
 }
 
-async function recoverMutation(current: Context, mutation: RecordValue): Promise<ReflectionOperationResponse | null> {
+async function recoverMutation(current: Context, mutation: RecordValue, expectedScope?: ReflectionScope): Promise<ReflectionOperationResponse | null> {
   const body = inputBody(mutation);
   if (!body || body.classId !== current.binding.class_id || body.subject !== current.binding.subject
     || Number(body.expectedGrantVersion) > Number(current.grant.version)) return null;
@@ -536,7 +561,7 @@ async function recoverMutation(current: Context, mutation: RecordValue): Promise
     const finalHistory = await readHistory(current, { date: body.date as string, page_size: 50 }, kind);
     if (finalHistory.status !== "ready" || finalHistory.snapshot_hash !== historySnapshotHash) return null;
   }
-  const finalContext = await context("history");
+  const finalContext = await context("history", expectedScope);
   if (!isDeepStrictEqual(finalContext.binding, current.binding) || !isDeepStrictEqual(finalContext.grant, current.grant)
     || finalContext.roots.dataRoot.root !== current.roots.dataRoot.root) return null;
   if (body.action !== "register" && kind === "completion") appendEduPiReflectionIndex(reflectionIndexScope(current), { date: body.date as string,
@@ -568,6 +593,12 @@ async function performMutation(body: RecordValue, dispatch: () => void, operatio
         || (occurrence?.source_ids as unknown[]).includes(body.sourceId))) return reply({ ok: false, code: "permission_denied" }, 409);
       if (body.action === "contentCapture" && !isBoundContentSource(body, before, current.grant.source_ids as unknown[]))
         return reply({ ok: false, code: "permission_denied" }, 409);
+      if (body.action === "contentCapture") {
+        const content = await currentContentEntries(current, binding, before.entity_id);
+        if (content.length >= 20 && !content.some(item => item.source_id === body.sourceId
+          && item.source_revision === body.sourceRevision && item.raw_text === body.rawText && item.predicate === body.predicate))
+          return reply({ ok: false, code: "content_limit", noCommitConfirmed: true }, 409);
+      }
       const operation = body.action === "register" ? "owner_reflection_lesson_register"
         : `owner_reflection_${kind}_${isCapture(body) ? "capture" : "review"}`;
       const payload = { ...binding, expected_source_basis_hash: body.expectedSourceBasisHash, expected_grant_version: body.expectedGrantVersion,

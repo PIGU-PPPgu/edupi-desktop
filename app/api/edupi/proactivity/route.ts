@@ -185,45 +185,82 @@ async function preflightReflectionReenable(roots: EduPiBridgeRoots, activation: 
     && /^[A-Za-z0-9][A-Za-z0-9._:@/+~=-]{0,159}$/u.test(value);
   const validTime = (value: unknown): value is string => typeof value === "string"
     && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
-  if (!history || !validId(history.ownerId) || history.grantId !== binding.grantId || !sameScope(history.scope, scope)) {
+  if (!history || !validId(history.ownerId)
+    || history.grantId !== capabilityGrantId("lesson_reflection", history.scope)) {
     throw new EduPiProactivityControlError("proactivity_scope_conflict");
   }
   const host = await ensureEduPiRuntime(roots);
   const { rootRef } = runtimeHealth(await host.call("health", null));
-  const readGrant = async () => {
+  const readGrants = async () => {
     const read = await host.callOwnerControl("owner_read", { root_ref: rootRef, expected_owner_id: history.ownerId });
     const state = record(read.result);
-    const grants = Array.isArray(state?.grants) ? state.grants.map(record).filter(item => item?.id === binding.grantId) : [];
-    if (read.ok !== true || state?.root_ref !== rootRef || record(state.owner)?.id !== history.ownerId || grants.length !== 1) {
+    const grants = Array.isArray(state?.grants) ? state.grants.map(record) : null;
+    if (read.ok !== true || state?.root_ref !== rootRef || record(state.owner)?.id !== history.ownerId
+      || record(state.owner)?.root_ref !== rootRef
+      || !grants || grants.some(item => !item)) {
       throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
     }
-    return grants[0]!;
+    return grants as RawRecord[];
   };
-  const grant = await readGrant();
-  const grantScope = record(grant.scope), budget = record(grant.budget);
-  if (grant.status !== "paused" || !Number.isSafeInteger(grant.version) || Number(grant.version) < 1
-    || !grantScope || !exact(grantScope, ["class_id", "subject"])
-    || grantScope.class_id !== scope.classId || grantScope.subject !== scope.subject
-    || !sameSources(grant.domains, ["lesson_reflection"]) || !sameSources(grant.actions, ["update"])
-    || !validTime(grant.starts_at) || !validTime(grant.ends_at) || Date.parse(grant.ends_at) <= Date.parse(grant.starts_at)
-    || !Array.isArray(grant.source_ids) || grant.source_ids.length === 0 || grant.source_ids.length > 128
-    || !grant.source_ids.every(validId) || new Set(grant.source_ids).size !== grant.source_ids.length
-    || !budget || !exact(budget, ["id", "max_calls"]) || !validId(budget.id)
-    || !Number.isSafeInteger(budget.max_calls) || Number(budget.max_calls) < 0 || Number(budget.max_calls) > 4) {
+  const grants = await readGrants();
+  const validatePausedGrant = (grant: RawRecord, expectedScope: EduPiProactivityScope) => {
+    const grantScope = record(grant.scope), budget = record(grant.budget);
+    if (grant.status !== "paused" || !Number.isSafeInteger(grant.version) || Number(grant.version) < 1
+      || !grantScope || !exact(grantScope, ["class_id", "subject"])
+      || grantScope.class_id !== expectedScope.classId || grantScope.subject !== expectedScope.subject
+      || !sameSources(grant.domains, ["lesson_reflection"]) || !sameSources(grant.actions, ["update"])
+      || !validTime(grant.starts_at) || !validTime(grant.ends_at) || Date.parse(grant.ends_at) <= Date.parse(grant.starts_at)
+      || !Array.isArray(grant.source_ids) || grant.source_ids.length === 0 || grant.source_ids.length > 128
+      || !grant.source_ids.every(validId) || new Set(grant.source_ids).size !== grant.source_ids.length
+      || !budget || !exact(budget, ["id", "max_calls"]) || !validId(budget.id)
+      || !Number.isSafeInteger(budget.max_calls) || Number(budget.max_calls) < 0 || Number(budget.max_calls) > 4) {
+      throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
+    }
+  };
+  // The config keeps only the currently selected history. Core retains all
+  // scoped grants, so returning to an older scope must recover its own grant.
+  const previous = grants.filter(item => item.id === history.grantId);
+  const selected = grants.filter(item => item.id === binding.grantId);
+  if (previous.length !== 1 || selected.length > 1
+    || grants.some(item => Array.isArray(item.domains) && item.domains.includes("lesson_reflection") && item.status === "active")) {
     throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
   }
-  const historicalSources = await readLessonReflectionHistorySourceIds({
+  validatePausedGrant(previous[0], history.scope);
+  const grant = selected[0];
+  if (grant) validatePausedGrant(grant, scope);
+  const historicalSources = grant ? await readLessonReflectionHistorySourceIds({
     coreRoot: roots.runtime.root, memoryDir: roots.dataRoot.memoryDir, rootRef, ownerId: history.ownerId, scope, grant,
-  });
-  const previousSourceIds = grant.source_ids;
-  if (!Array.isArray(historicalSources) || historicalSources.some(source => !validId(source) || !previousSourceIds.includes(source))) {
+  }) : [];
+  const previousSourceIds = grant?.source_ids as string[] | undefined;
+  if (!Array.isArray(historicalSources) || historicalSources.some(source => !validId(source) || !previousSourceIds?.includes(source))) {
     throw new EduPiProactivityControlError("proactivity_response_invalid");
   }
   const sourceIds = [...new Set([...binding.spec.source_ids, ...historicalSources])];
   if (sourceIds.length > 128) throw new EduPiProactivityControlError("proactivity_source_capacity");
   const nextBinding = { ...binding, spec: { ...binding.spec, source_ids: sourceIds } };
-  if (!isDeepStrictEqual(await readGrant(), grant)) throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
-  return { host, rootRef, binding: nextBinding, expected: { ownerId: history.ownerId, grantVersion: Number(grant.version) } };
+  if (!isDeepStrictEqual(await readGrants(), grants)) throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
+  return { host, rootRef, binding: nextBinding,
+    expected: grant ? { ownerId: history.ownerId, grantVersion: Number(grant.version) } : undefined,
+    verifyBeforeMutation(read: unknown) {
+      const response = record(read), state = record(response?.result);
+      if (response?.ok !== true || state?.root_ref !== rootRef || record(state.owner)?.id !== history.ownerId
+        || record(state.owner)?.root_ref !== rootRef
+        || !isDeepStrictEqual(state.grants, grants)) {
+        throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
+      }
+    },
+    async verifyCommitted(commit: { ownerId: string; grantVersion: number }) {
+      const after = await readGrants();
+      const selected = after.filter(item => item.id === binding.grantId);
+      const next = selected[0];
+      if (commit.ownerId !== history.ownerId || selected.length !== 1 || next.status !== "active"
+        || next.version !== commit.grantVersion || !sameSources(next.source_ids, sourceIds)
+        || Object.entries(nextBinding.spec).some(([key, value]) => key !== "source_ids" && !isDeepStrictEqual(next[key], value))
+        || !isDeepStrictEqual(after.filter(item => item.id !== binding.grantId), grants.filter(item => item.id !== binding.grantId))) {
+        throw new EduPiProactivityRuntimeError("proactivity_grant_denied");
+      }
+    },
+  };
 }
 
 async function refreshCapabilitySources(roots: EduPiBridgeRoots, activation: EduPiProactivityActivation,
@@ -355,8 +392,16 @@ async function enableCanary(roots: EduPiBridgeRoots, activation: EduPiProactivit
       // disabled, then persist its owner binding before admitting execution.
       const dormantHost = preflight?.host ?? await ensureEduPiRuntime(roots);
       const rootRef = preflight?.rootRef ?? runtimeHealth(await dormantHost.call("health", null)).rootRef;
+      let initialOwnerRead = true;
       const grantHost = preflight ? {
-        call: dormantHost.call.bind(dormantHost),
+        call: async (...args: Parameters<typeof dormantHost.call>) => {
+          const response = await dormantHost.call(...args);
+          if (args[0] === "owner_read" && initialOwnerRead) {
+            preflight.verifyBeforeMutation(response);
+            initialOwnerRead = false;
+          }
+          return response;
+        },
         callOwnerControl: async (...args: Parameters<typeof dormantHost.callOwnerControl>) => {
           if (args[0] === "owner_control") pendingOwnerMutation = true;
           const response = await dormantHost.callOwnerControl(...args);
@@ -366,6 +411,7 @@ async function enableCanary(roots: EduPiBridgeRoots, activation: EduPiProactivit
       } : dormantHost;
       const owner = await ensureProactivityGrant(grantHost, rootRef, preflight?.binding ?? binding,
         preflight?.expected, preflight ? commit => { committedGrant = commit; pendingOwnerMutation = false; mutationStarted = true; } : undefined);
+      await preflight?.verifyCommitted(owner);
       writeEduPiProactivityConfig({ enabled: true, scope, grantId: binding.grantId, ownerId: owner.ownerId },
         { dataRoot: roots.dataRoot.root, now: mutationTime(activation.updatedAt), domain });
       const host = await restartEduPiRuntime(roots);

@@ -77,6 +77,8 @@ export type ReflectionContentHistoryEntry = Omit<ReflectionHistoryEntry, "comple
   value: string;
 };
 export type ReflectionContentHistory = { entries: ReflectionContentHistoryEntry[]; nextCursor: string | null; snapshotHash: string };
+export type ReflectionRecoveryScope = Pick<ReflectionEntry, "classId" | "subject">;
+export type ReflectionRecoveryKind = "registration" | "completion" | "content";
 export type ReflectionAction =
   | { action: "register" }
   | { action: "capture"; sourceId: string; sourceRevision: string; rawText: string; completedAt: string }
@@ -117,6 +119,7 @@ const reasonLabels: Record<string, string> = {
   content_source_unavailable: "课堂内容依据暂不可用",
   content_source_unverified: "课堂内容来源尚未确认，请刷新后重试",
   content_source_capacity: "课堂内容来源已达上限",
+  content_limit: "本课课堂内容已达上限",
   scope_mismatch: "课次授权范围已变化，请刷新",
   lesson_unregistered: "请先登记课次",
   content_exists: "已有不同的课堂内容记录",
@@ -355,6 +358,53 @@ export async function readReflectionContentHistory(cursor?: string, signal?: Abo
   return parseReflectionContentHistory(body, cursor);
 }
 
+export async function verifyReflectionRecoveryHistory(entry: ReflectionEntry, kind: ReflectionRecoveryKind,
+  signal?: AbortSignal): Promise<boolean> {
+  parseEntry(entry);
+  if (entry.status !== "ready" || entry.registrationStatus !== "registered" || !entry.slotId || !entry.lessonId
+    || !["registration", "completion", "content"].includes(kind)
+    || kind === "completion" && !entry.completion || kind === "content" && !entry.content) {
+    throw new ReflectionActionError("操作回执无效，请核对记录", true, "invalid_response");
+  }
+  let cursor: string | undefined, snapshot: string | undefined;
+  const cursors = new Set<string>();
+  for (let page = 0; page < 10; page++) {
+    const query = new URLSearchParams({ history: "true", classId: entry.classId, subject: entry.subject,
+      date: entry.date, slotId: entry.slotId, pageSize: "50",
+      ...(kind === "content" ? { content: "true" } : {}), ...(cursor ? { cursor } : {}) });
+    const response = await fetch(`/api/edupi/proactivity/reflection?${query}`, { cache: "no-store", signal,
+      headers: await desktopApiHeaders() });
+    const body = record(await response.json());
+    if (!response.ok || body?.ok !== true || body.classId !== entry.classId || body.subject !== entry.subject) {
+      const code = typeof body?.code === "string" ? body.code : "invalid_response";
+      throw new ReflectionActionError(reflectionReason(code), true, code);
+    }
+    const history = kind === "content" ? parseReflectionContentHistory(body, cursor) : parseReflectionHistory(body, cursor);
+    if (snapshot !== undefined && snapshot !== history.snapshotHash) {
+      throw new ReflectionActionError(reflectionReason("history_changed"), true, "history_changed");
+    }
+    snapshot = history.snapshotHash;
+    // Registration has no fact yet. Its terminal receipt already proves the
+    // persisted registration; this read verifies the receipt's historical scope.
+    if (kind === "registration") return true;
+    const expected = kind === "content" ? entry.content! : entry.completion!;
+    if (history.entries.some(item => item.lesson_id === entry.lessonId && item.date === entry.date
+      && item.slot_id === entry.slotId && item.fact_id === expected.factId
+      && item.revision === expected.revision && item.status === expected.status
+      && item.raw_text === expected.rawText && item.source_id === expected.sourceId
+      && item.source_revision === expected.sourceRevision
+      && (kind === "content" ? "predicate" in item && item.predicate === entry.content!.predicate
+        : "completed_at" in item && item.completed_at === entry.completion!.completedAt))) return true;
+    if (history.nextCursor === null) return false;
+    if (cursors.has(history.nextCursor)) {
+      throw new ReflectionActionError("历史记录游标无效，请重新读取", true, "invalid_response");
+    }
+    cursors.add(history.nextCursor);
+    cursor = history.nextCursor;
+  }
+  throw new ReflectionActionError("历史记录核对未完成，请重新读取", true, "history_limit");
+}
+
 export function reflectionReadbackMatches(entry: ReflectionEntry, action: ReflectionAction, entries: ReflectionEntry[]): boolean {
   return entries.some(saved => {
     if (saved.classId !== entry.classId || saved.subject !== entry.subject || saved.date !== entry.date
@@ -549,9 +599,14 @@ export async function commitReflectionOperation(operationId: string, fingerprint
 }
 
 export async function recoverReflectionOperation(operationId: string, fingerprint: string,
-  signal?: AbortSignal): Promise<ReflectionRecovery> {
+  signal?: AbortSignal, scope?: ReflectionRecoveryScope): Promise<ReflectionRecovery> {
   const operation = operationIdentity(operationId, fingerprint);
-  const { response, body } = await operationRequest("PATCH", { operationId, operationFingerprint: fingerprint }, signal);
+  if (scope && (!sourceText(scope.classId) || !/^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$/u.test(scope.classId)
+    || !sourceText(scope.subject) || Object.keys(scope).length !== 2)) {
+    throw new ReflectionActionError(reflectionReason("scope_mismatch"), true, "scope_mismatch");
+  }
+  const { response, body } = await operationRequest("PATCH", { operationId, operationFingerprint: fingerprint,
+    ...(scope ? { classId: scope.classId, subject: scope.subject } : {}) }, signal);
   return operationOutcome(response, body, operation);
 }
 

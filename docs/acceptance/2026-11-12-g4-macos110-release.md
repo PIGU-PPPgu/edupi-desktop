@@ -34,6 +34,18 @@ Core matrix 修复仅两文件，已独立审查并在隔离检出目录提交�
 
 Desktop 候选随即对齐新 Core；对应合同和历史来源检查 48 项通过。允许在分支上并行构建不可公开的签名 Draft，但正式安装与公开发布仍须等 Core 和 Desktop 普通合并、精确源版本质量门及同轮资产验签。若 Release 使用被正常合入 main 的候选提交，须另外证明其可达性与 main 的受测源码树一致，不能将候选、合并和安装状态混为一项。
 
+## Desktop 边界收口
+
+`e5c53e03` 的远端源码/安全检查 `43155117706` 三个 job 全过，但最终审查给出三项 P2，原冻结记录保留为 `frozen-source-e5c53e03-before-boundaries.json`；当时尚未触发签名 workflow、创建 `.110` Release 或替换 App。
+
+- 停用 A 后切到 B、再回 A：预检分别验证旧授权已暂停与新 scope 的独立授权；恢复 A 时保留其历史来源。新旧授权在提交前后严格核对 root/owner、source、版本和范围，不将 A grant 改写成 B。独立审查补出的 `owner.root_ref` 缺失校验已在两个预检边界补齐，缺失、错误及提交前变化均拒绝且零授权写入。
+- 丢回执且课表已移除：PATCH 与有界历史 GET 可显式选择同 root/owner 下已存在的历史 scope grant，不能创建或激活授权；客户端先匹配终态回执，再在当前列表缺行时验证历史 scope、snapshot/cursor、fact、课次、版本、原文和来源，不重复 POST。未知或不完整证据保持未确认；界面继续展示当前 GET 的数据，不把历史数据冒充当前课表。
+- 20 条课堂内容上限：新的第 21 条在 dispatch 前拒绝为终态未提交；已有精确 capture 的幂等重放仍可用，已有 20 条的列表保持可读，不在写入后才把整日读坏。
+
+修后五组组合检查 **225 passed、0 failed、0 skipped**，客户端/组件 **63 passed**；三个 handler 边界、22 项 Core 隐式绑定内存检查及上述 owner Root 四个拒绝场景经独立复核。新增真实 Core 联合 **18 项流程检查通过**，包含 A→停止→B 活动时读取 A 历史与终态回执→停止 B→恢复 A，模型调用 0；第 21 条零 dispatch 与 20 条可读也由另一个真实 Core 夹具验证。原红灯、夹具缺失 owner Root 的修正及首轮跨课计数断言失败均保留，不改安全断言。
+
+对应日志为 `desktop-historical-recovery-red.log`、`desktop-historical-recovery-full.log`、`desktop-owner-root-red.log`、`desktop-boundaries-combined.log`、`desktop-boundaries-joint.log` 与 `desktop-reflection-api-boundaries-real-core-v2.log`。Core 新一轮 `43154016436` 尚未放行：模板到期用例期望修改成功，实际收到 `stale_snapshot`，失败日志保留，正在限定范围定位；未降低 CAS 或跳过用例。
+
 ## 待验收
 
 Core 修复后的完整质量门、普通合并及 Desktop 精确配对；真实标准 staging；同一冻结提交的 Mac-only 签名、公证与三资产验签；唯一安装位升级、隔离原生 G4 流程、冷启动及真实资料/偏好恢复；公开预发布与匿名下载回读均未完成。
