@@ -139,9 +139,10 @@ const contentLabels: Record<string, string> = {
   candidate: "待审核", pending_review: "待审核", held: "待处理", accepted: "内容已接受", rejected: "内容已驳回",
 };
 
-function ReflectionContent({ entry, disabled, run }: {
+function ReflectionContent({ entry, disabled, canCapture, run }: {
   entry: ReflectionEntry;
   disabled: boolean;
+  canCapture: boolean;
   run: (entry: ReflectionEntry, action: ReflectionInput) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -154,11 +155,11 @@ function ReflectionContent({ entry, disabled, run }: {
       setError("请填写课堂内容"); return;
     }
     setError(null);
-    if (await run(entry, { action: "contentCapture", predicate, rawText })) {
+    if (await run(entry.content ? { ...entry, content: null } : entry, { action: "contentCapture", predicate, rawText })) {
       setRawText(""); setEditing(false);
     }
   };
-  if (content) return <div className="edupi-reflection-completion" aria-label="课堂内容">
+  const savedContent = content ? <div className="edupi-reflection-completion" aria-label="课堂内容">
     <strong>{contentPredicates[content.predicate]}</strong>
     <p>{content.rawText}</p><span>{contentLabels[content.status]}</span>
     {["candidate", "pending_review", "held"].includes(content.status) ? <div className="edupi-reflection-actions">
@@ -169,11 +170,12 @@ function ReflectionContent({ entry, disabled, run }: {
         factId: content.factId, expectedFactRevision: content.revision,
         expectedContentBasisHash: content.sourceBasisHash, decision: "reject" })}>驳回内容</button>
     </div> : null}
-  </div>;
-  if (!editing) return <div className="edupi-reflection-actions">
+  </div> : null;
+  if (!canCapture) return savedContent;
+  if (!editing) return <>{savedContent}<div className="edupi-reflection-actions">
     <button type="button" disabled={disabled} onClick={() => setEditing(true)}>添加课堂内容</button>
-  </div>;
-  return <div className="edupi-reflection-form" aria-label="课堂内容记录">
+  </div></>;
+  return <>{savedContent}<div className="edupi-reflection-form" aria-label="课堂内容记录">
     <label>内容类型<select value={predicate} disabled={disabled} onChange={event => setPredicate(event.target.value as ContentPredicate)}>
       {Object.entries(contentPredicates).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
     </select></label>
@@ -183,7 +185,7 @@ function ReflectionContent({ entry, disabled, run }: {
       <button type="button" disabled={disabled} onClick={capture}>提交课堂内容</button>
       <button type="button" disabled={disabled} onClick={() => { setEditing(false); setError(null); }}>收起</button>
     </div>
-  </div>;
+  </div></>;
 }
 
 function displayTime(value: string | null) {
@@ -191,10 +193,11 @@ function displayTime(value: string | null) {
   return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
 }
 
-function ReflectionRow({ entry, busy, locked, run, refreshSources }: {
+function ReflectionRow({ entry, busy, locked, canCaptureContent, run, refreshSources }: {
   entry: ReflectionEntry;
   busy: boolean;
   locked: boolean;
+  canCaptureContent: boolean;
   run: (entry: ReflectionEntry, action: ReflectionInput) => Promise<boolean>;
   refreshSources: (entry: ReflectionEntry) => Promise<void>;
 }) {
@@ -253,7 +256,7 @@ function ReflectionRow({ entry, busy, locked, run, refreshSources }: {
       </div>
     </div> : null}
     {entry.status === "ready" && entry.registrationStatus === "registered"
-      ? <ReflectionContent entry={entry} disabled={disabled} run={run} /> : null}
+      ? <ReflectionContent entry={entry} disabled={disabled} canCapture={canCaptureContent} run={run} /> : null}
   </li>;
 }
 
@@ -456,6 +459,10 @@ export function EduPiLessonReflection({ today, query, service = api }: { today: 
     {loading ? <p role="status">加载课次中…</p> : message && !enabled ? null : !enabled ? <p>课后反思未启用</p>
       : visible.length === 0 ? <p>{search ? "未找到相关课次" : "当天没有可用课次"}</p>
         : <ul>{visible.map((entry, index) => <ReflectionRow key={`${entry.date}:${entry.slotId}:${entry.completion?.factId ?? "lesson"}:${index}`}
+          canCaptureContent={!visible.some((prior, priorIndex) => priorIndex < index
+            && prior.status === "ready" && prior.registrationStatus === "registered"
+            && prior.classId === entry.classId && prior.subject === entry.subject && prior.date === entry.date
+            && prior.slotId === entry.slotId && prior.lessonId === entry.lessonId)}
           entry={entry} busy={busy} locked={uncertain || needsRefresh} run={run} refreshSources={refreshSources} />)}</ul>}
     {truncated ? <p role="status">当天课次较多，当前仅显示前 20 个</p> : null}
     {uncertain ? <p role="alert">操作结果尚未确认，请核对记录后再处理</p> : null}
