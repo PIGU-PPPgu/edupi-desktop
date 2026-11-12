@@ -345,6 +345,47 @@ test("committed recovery uses bound history after its timetable disappears and u
   } finally { await unmount(renderer); }
 });
 
+test("expired current-list reads cannot prevent terminal historical recovery", async () => {
+  const id = randomUUID();
+  stored.set(pendingKey, JSON.stringify({ version: 2, classId: entry.classId, subject: entry.subject,
+    date: entry.date, slotId: entry.slotId, lessonId: entry.lessonId, action: "register",
+    operationId: id, fingerprint: hash("d") }));
+  const { service, state } = fixture([]);
+  state.operations.set(id, outcome(id, "committed", registered));
+  let reads = 0, historicalReads = 0;
+  service.read = async () => { reads++; throw new client.ReflectionActionError("教师授权暂不可用", false, "owner_unavailable"); };
+  service.verifyHistory = async () => { historicalReads++; return true; };
+  const renderer = await mount(service);
+  try {
+    assert.equal(state.recoveries.length, 1, "an expired execution grant must not block receipt recovery");
+    assert.equal(historicalReads, 1);
+    assert.equal(reads, 2);
+    assert.equal(stored.has(pendingKey), false);
+    assert.equal(state.commits.length, 0);
+    assert.equal(text(renderer.root).includes("已核对操作结果"), true);
+    assert.equal(renderer.root.findAllByProps({ role: "alert" }).length, 0);
+  } finally { await unmount(renderer); }
+});
+
+test("an expired execution read never makes unknown receipt history sufficient proof", async () => {
+  const id = randomUUID();
+  stored.set(pendingKey, JSON.stringify({ version: 2, classId: entry.classId, subject: entry.subject,
+    date: entry.date, slotId: entry.slotId, lessonId: entry.lessonId, action: "register",
+    operationId: id, fingerprint: hash("d") }));
+  const { service, state } = fixture([]);
+  state.operations.set(id, outcome(id, "unknown"));
+  let historicalReads = 0;
+  service.read = async () => { throw new Error("execution grant expired"); };
+  service.verifyHistory = async () => { historicalReads++; return true; };
+  const renderer = await mount(service);
+  try {
+    assert.equal(state.recoveries.length, 1);
+    assert.equal(historicalReads, 0);
+    assert.equal(stored.has(pendingKey), true);
+    assert.equal(state.commits.length, 0);
+  } finally { await unmount(renderer); }
+});
+
 test("inconclusive or failed historical recovery keeps pending and never repeats the write", async () => {
   for (const verify of [async () => false, async () => { throw new Error("history unavailable"); }]) {
     stored.clear();

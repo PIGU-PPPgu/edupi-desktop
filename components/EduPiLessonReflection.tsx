@@ -5,7 +5,7 @@ import { APP_PREF_KEYS } from "@/lib/app-prefs";
 import { readReflection, reflectionReadbackMatches, reflectionReason, reflectionRequest, refreshReflectionSources,
   prepareReflectionOperation, commitReflectionOperation, recoverReflectionOperation, verifyReflectionRecoveryHistory,
   registerReflectionContentSource, verifyReflectionContentSource, ReflectionActionError,
-  type ReflectionAction, type ReflectionEntry } from "@/lib/edupi-reflection-client";
+  type ReflectionAction, type ReflectionEntry, type ReflectionList } from "@/lib/edupi-reflection-client";
 import { EduPiReflectionHistory } from "./EduPiReflectionHistory";
 
 const api = { read: readReflection, prepare: prepareReflectionOperation, commit: commitReflectionOperation,
@@ -283,10 +283,19 @@ export function EduPiLessonReflection({ today, query, service = api }: { today: 
     void (async () => {
       const pending = readPendingOperation();
       setUncertain(Boolean(pending));
-      const result = await service.read(date, controller.signal);
+      let currentReadFailure: unknown;
+      const readCurrent = async (selectedDate: string): Promise<ReflectionList | null> => {
+        try { return await service.read(selectedDate, controller.signal); }
+        catch (error) {
+          if (pending?.version !== 2) throw error;
+          currentReadFailure = error;
+          return null;
+        }
+      };
+      const result = await readCurrent(date);
       if (controller.signal.aborted) return;
       readCompleted = true;
-      setEnabled(result.enabled); setEntries(result.entries); setTruncated(result.truncated); setNeedsRefresh(false);
+      setEnabled(result?.enabled ?? false); setEntries(result?.entries ?? []); setTruncated(result?.truncated ?? false); setNeedsRefresh(false);
       if (pending?.version === 2) {
         const outcome = await service.recover(pending.operationId, pending.fingerprint, controller.signal,
           { classId: pending.classId, subject: pending.subject });
@@ -296,10 +305,9 @@ export function EduPiLessonReflection({ today, query, service = api }: { today: 
         }
         if (outcome.operation.status === "committed" && outcome.operation.terminal && outcome.entry
           && await operationMatches(pending, [outcome.entry])) {
-          const readback = pending.date === date ? await service.read(date, controller.signal)
-            : await service.read(pending.date, controller.signal);
+          const readback = await readCurrent(pending.date);
           if (controller.signal.aborted) return;
-          const currentMatches = readback.enabled && await operationMatches(pending, readback.entries);
+          const currentMatches = !!readback?.enabled && await operationMatches(pending, readback.entries);
           const historicalMatches = !currentMatches && service.verifyHistory
             ? await service.verifyHistory(outcome.entry, pending.action === "register" ? "registration"
               : pending.action === "contentCapture" || pending.action === "contentReview" ? "content" : "completion", controller.signal)
@@ -310,7 +318,7 @@ export function EduPiLessonReflection({ today, query, service = api }: { today: 
             setUncertain(false);
             setMessage("已核对操作结果");
             setHistoryRefresh(value => value + 1);
-            if (pending.date === date) {
+            if (pending.date === date && readback) {
               setEnabled(readback.enabled); setEntries(readback.entries); setTruncated(readback.truncated);
             }
           }
@@ -319,6 +327,7 @@ export function EduPiLessonReflection({ today, query, service = api }: { today: 
           setUncertain(false);
           setMessage("操作未提交，请核对后重试");
         }
+        if (currentReadFailure && readPendingOperation()) throw currentReadFailure;
       }
     })().catch(error => {
       if (!controller.signal.aborted) {
