@@ -217,7 +217,7 @@ export async function GET(request: Request) {
       } else entries.push(entry(binding, lesson, registered ? "registered" : "unregistered", current.grant.source_ids as unknown[]));
       if (lesson.status === "ready" && (factId === null || contentOnly)) {
         const contentFacts = contentOnly && factId !== null ? [factId] : await currentContentFacts(current, binding, lesson.entity_id);
-        if (contentOnly && contentFacts.length) entries.pop();
+        if (!facts.length && contentFacts.length) entries.pop();
         for (const fact of contentFacts) entries.push(entry(binding, await read(current, binding, fact, "content"),
           registered ? "registered" : "unregistered", current.grant.source_ids as unknown[]));
       }
