@@ -22,6 +22,12 @@
 
 对应日志：`desktop-full-source.log`、`desktop-full-source-fixed.log`、`desktop-source-gates-fixed.log`、`desktop-security-audit.log`、`desktop-full-lint.log`、`desktop-typecheck.log`、`desktop-release-version-tests.log`、`desktop-release-component-verify.log`。原失败保留，不以新的通过覆盖。
 
+## 新审计与 Core 质量修复
+
+Desktop `751e9d68` 的远端审计 `43143666777`：应用兼容和 Linux 源码检查成功，Rust 审计唯一失败为新公布的 `RUSTSEC-2026-0486`，`rustix 1.1.4` 的 xattr 初始化问题。定向修复为 `1.1.6`，保留 `0.38.44`，仅更新对应 checksum 和 15 处引用；未调整审计豁免、Cargo.toml 或其他包版本。官方 crate、官方/TUNA 索引、缓存和锁的 SHA256 均为 `e5e76742e5294153d4dde1207dbec5bdd81eef6fabdc0d2118babadabfd858aa`。新增回归旧锁红、修后安全合组 13 项通过，macOS normal/build 闭包与锁定 metadata 通过；本机没有 `cargo-audit`，完整 RustSec 门仍待远端复跑，不能将本机缺工具计为通过。
+
+Core matrix 修复仅两文件，已独立审查并在隔离检出目录提交为 `547880af`，推送到 PR463；协议、type、双闭包只读重算、七个 G4 脚本和研究回归 70 项无跳过均通过。原工作树的完整 `npm test` 首次在 pretest 因依赖符号链接被拒绝，主测试链单独通过不作替代；保留原依赖后改用任务自有真实目录正式重跑，尚未完成。精确 head 的 Mac CI `43146848050` 正在执行；先启动的手动 `43146841846` 被稍后同一分支的自动任务按 concurrency 取消，不是测试失败。Core 尚未合并。
+
 ## 待验收
 
 Core 修复后的完整质量门、普通合并及 Desktop 精确配对；真实标准 staging；同一冻结提交的 Mac-only 签名、公证与三资产验签；唯一安装位升级、隔离原生 G4 流程、冷启动及真实资料/偏好恢复；公开预发布与匿名下载回读均未完成。

@@ -17,6 +17,14 @@ for (const [name, minimum] of [["zip", "9.0.5"], ["glib", "0.22.0"], ["chacha20"
   });
 }
 
+test("rustix resolutions exclude RUSTSEC-2026-0486", () => {
+  const found = packages.filter(entry => entry.name === "rustix");
+  assert.ok(found.length, "rustix must not be removed to hide an advisory");
+  for (const entry of found) {
+    assert.ok(semver.satisfies(entry.version, "<1.0.0 || >=1.1.6"), `rustix ${entry.version}`);
+  }
+});
+
 test("retired GLib macro and split D-Bus type crates are absent", () => {
   for (const name of ["proc-macro-error", "zbus_names", "zvariant", "zvariant_derive", "async-std", "paste"]) {
     assert.equal(packages.some(entry => entry.name === name), false, `${name} restores a retired dependency`);
