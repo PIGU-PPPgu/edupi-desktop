@@ -1228,6 +1228,98 @@ function capacityFixture(entries, options = {}) {
     contentHistoryResponse: options.contentHistoryResponse ?? historyResponse(entries) });
 }
 
+test("ordinary GET replaces the registered lesson placeholder after content submission", async () => {
+  const current = fixture({ registered: true });
+  const beforeResponse = await current.get(), before = await beforeResponse.json();
+  assert.equal(beforeResponse.status, 200);
+  assert.equal(before.entries.length, 1);
+  assert.equal(before.entries[0].registrationStatus, "registered");
+  assert.equal(before.entries[0].completion, null);
+  assert.equal(before.entries[0].content, null);
+
+  const capturedResponse = await current.post(contentCapture), captured = await capturedResponse.json();
+  assert.equal(capturedResponse.status, 200, JSON.stringify(captured));
+  const afterResponse = await current.get(), after = await afterResponse.json();
+  assert.equal(afterResponse.status, 200, JSON.stringify(after));
+  assert.deepEqual(after, { ...before, entries: [captured.entry] });
+  assert.deepEqual(after.entries[0], { ...before.entries[0], content: captured.entry.content });
+  assert.equal(after.entries[0].content.rawText, contentCapture.rawText);
+  assert.equal(after.entries[0].content.predicate, contentCapture.predicate);
+  assert.equal(after.entries[0].content.status, "pending_review");
+  assert.equal(current.calls.filter(call => writes.includes(call.operation)).length, 1);
+});
+
+test("ordinary GET retains every content fact without an empty lesson placeholder", async () => {
+  const contents = capacityHistory(2);
+  const current = capacityFixture(contents);
+  const response = await current.get(), body = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(body));
+  assert.equal(body.entries.length, 2);
+  assert.deepEqual(body.entries.map(item => item.content.factId), contents.map(item => item.fact_id));
+  for (const [index, item] of body.entries.entries()) {
+    assert.equal(item.lessonId, "lesson-1");
+    assert.equal(item.slotId, "slot-1");
+    assert.equal(item.registrationStatus, "registered");
+    assert.equal(item.completion, null);
+    assert.equal(item.content.rawText, contents[index].raw_text);
+    assert.equal(item.content.sourceId, contents[index].source_id);
+  }
+  assert.equal(current.calls.some(call => writes.includes(call.operation)), false);
+});
+
+test("ordinary GET preserves real completion rows alongside all content rows", async () => {
+  for (const status of ["pending_review", "accepted"]) {
+    const contents = capacityHistory(2);
+    const current = capacityFixture(contents, { completion: { status } });
+    const response = await current.get(), body = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(body));
+    assert.equal(body.entries.length, 3);
+    assert.equal(body.entries[0].completion.factId, "fact-completion");
+    assert.equal(body.entries[0].completion.status, status);
+    assert.equal(body.entries[0].completion.rawText, capture.rawText);
+    assert.equal(body.entries[0].content, null);
+    assert.deepEqual(body.entries.slice(1).map(item => item.content.factId), contents.map(item => item.fact_id));
+    assert.ok(body.entries.slice(1).every(item => item.completion === null));
+    assert.ok(body.entries.every(item => item.lessonId === "lesson-1" && item.slotId === "slot-1"));
+    assert.equal(current.calls.some(call => writes.includes(call.operation)), false);
+  }
+});
+
+test("content-only GET keeps all content rows, selects a fact, and omits real completions", async () => {
+  for (const completion of [undefined, { status: "accepted" }]) {
+    const contents = capacityHistory(2);
+    const current = capacityFixture(contents, { completion });
+    const ordinary = await (await current.get()).json();
+    const response = await current.get(`date=${date}&content=true`), body = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(body));
+    assert.equal(body.entries.length, 2);
+    assert.deepEqual(body, { ...ordinary, entries: ordinary.entries.filter(item => item.content !== null) });
+    const selectedResponse = await current.get(`date=${date}&slotId=slot-1&content=true&factId=${contents[1].fact_id}`);
+    const selected = await selectedResponse.json();
+    assert.equal(selectedResponse.status, 200, JSON.stringify(selected));
+    assert.deepEqual(selected.entries, [body.entries[1]]);
+    assert.equal(current.calls.some(call => writes.includes(call.operation)), false);
+  }
+});
+
+test("GET retains one lesson placeholder when there is neither content nor completion", async () => {
+  for (const registered of [false, true]) {
+    const current = fixture({ registered });
+    const response = await current.get(), body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.entries.length, 1);
+    assert.equal(body.entries[0].lessonId, "lesson-1");
+    assert.equal(body.entries[0].slotId, "slot-1");
+    assert.equal(body.entries[0].registrationStatus, registered ? "registered" : "unregistered");
+    assert.equal(body.entries[0].completion, null);
+    assert.equal(body.entries[0].content, null);
+    const contentResponse = await current.get(`date=${date}&content=true`), contentBody = await contentResponse.json();
+    assert.equal(contentResponse.status, 200);
+    assert.deepEqual(contentBody.entries, body.entries);
+    assert.equal(current.calls.some(call => writes.includes(call.operation)), false);
+  }
+});
+
 test("twenty current content facts reject the twenty-first before Core write and terminate its receipt", async () => {
   const current = capacityFixture(capacityHistory());
   const readable = await current.get(), listing = await readable.json();
