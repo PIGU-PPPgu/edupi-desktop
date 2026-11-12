@@ -262,10 +262,12 @@ try {
   }
   const owner = (await host.call("owner_read", { root_ref: rootRef })).result.owner;
   const foreignBefore = [];
+  let foreignReflectionGrant;
   for (const domain of domains) {
     const scope = { classId: foreign.classroom.entity_id, subject: domain === "calendar_administration" ? "administration" : "math" };
     const binding = control.buildCapabilityGrantBinding(domain, scope, (await rootsModule.readEduPiEducationSnapshot({ roots })).workspace);
-    await grantRuntime.ensureProactivityGrant(host, rootRef, binding);
+    const grant = await grantRuntime.ensureProactivityGrant(host, rootRef, binding);
+    if (domain === "lesson_reflection") foreignReflectionGrant = grant;
     const proof = await registered.registerAndCapturePrompt(host, { rootRef, grantId: binding.grantId, sessionId: "foreign-canary",
       messageId: `foreign-${domain}`, text: foreign.requests[domain], occurredAt: new Date().toISOString(), domain,
       carrierId: `edupi.synthetic.foreign.${domain}`, planId: `foreign.${domain}` }, { onBound() {}, onRegistered() {}, onCaptured() {} });
@@ -546,8 +548,67 @@ try {
   await supervisor.closeAllEduPiRuntimes(); host = await supervisor.ensureEduPiRuntime(roots);
   assert.equal((await host.call("health", null)).result.capabilities.g3_processor, "activation_pending");
   await assertPreserved(stoppedPreserved, stoppedProjection);
+  const readFixtureOwner = async () => {
+    const response = await host.callOwnerControl("owner_read", { root_ref: rootRef, expected_owner_id: owner.id });
+    assert.equal(response.ok, true, JSON.stringify(response));
+    assert.equal(response.result.root_ref, rootRef);
+    assert.equal(response.result.owner.id, owner.id);
+    assert.equal(response.result.owner.root_ref, rootRef);
+    return response.result;
+  };
+  const readActivations = () => domains.map(domain => config.readEduPiProactivityActivation({ dataRoot, domain }));
+  const beforeForeignCleanup = await readFixtureOwner(), activationsBeforeCleanup = readActivations();
+  assert.ok(foreignReflectionGrant);
+  assert.equal(foreignReflectionGrant.ownerId, owner.id);
+  const foreignGrant = beforeForeignCleanup.grants.find(item => item.id === foreignReflectionGrant.grantId);
+  assert.ok(foreignGrant);
+  assert.equal(foreignGrant.status, "active");
+  assert.equal(foreignGrant.version, 1);
+  assert.equal(foreignGrant.version, foreignReflectionGrant.grantVersion);
+  assert.deepEqual(foreignGrant.scope, { class_id: foreign.classroom.entity_id, subject: "math" });
+  assert.deepEqual(foreignGrant.domains, ["lesson_reflection"]);
+  const reflectionState = await get("lesson_reflection");
+  assert.equal(reflectionState.activation.enabled, false);
+  const selectedGrant = beforeForeignCleanup.grants.find(item =>
+    item.id === activationsBeforeCleanup[domains.indexOf("lesson_reflection")].historyBinding?.grantId);
+  assert.ok(selectedGrant);
+  assert.equal(selectedGrant.status, "paused");
+  assert.deepEqual(selectedGrant.scope, { class_id: selected.classroom.entity_id, subject: "math" });
+  const deniedResume = await route.POST(request("http://localhost/api/edupi/proactivity", "POST", {
+    domain: "lesson_reflection", enabled: true, classId: selected.classroom.entity_id, subject: "math",
+    expectedUpdatedAt: reflectionState.activation.updatedAt,
+  }));
+  const deniedResumeBody = await deniedResume.json();
+  assert.equal(deniedResume.status, 409, JSON.stringify(deniedResumeBody));
+  assert.equal(deniedResumeBody.code, "proactivity_grant_denied");
+  const afterDeniedResume = await readFixtureOwner();
+  assert.deepEqual(afterDeniedResume.owner, beforeForeignCleanup.owner, "foreign-active resume denial cannot change the owner");
+  assert.deepEqual(afterDeniedResume.grants, beforeForeignCleanup.grants, "foreign-active resume denial cannot change any grant");
+  assert.deepEqual(readActivations(), activationsBeforeCleanup, "foreign-active resume denial cannot change any activation");
+  // This synthetic cross-class refusal grant must be paused through Core CAS before selected-class resume.
+  const foreignPause = await grantRuntime.pauseProactivityGrant(host, rootRef, foreignGrant.id,
+    { ownerId: owner.id, grantVersion: foreignGrant.version });
+  assert.deepEqual(foreignPause, { state: "paused", grantVersion: foreignGrant.version + 1 });
+  const afterForeignCleanup = await readFixtureOwner();
+  const pausedForeign = afterForeignCleanup.grants.find(item => item.id === foreignGrant.id);
+  assert.ok(pausedForeign);
+  assert.equal(pausedForeign.id, foreignReflectionGrant.grantId);
+  assert.equal(pausedForeign.status, "paused");
+  assert.equal(pausedForeign.version, foreignGrant.version + 1);
+  assert.deepEqual(pausedForeign.scope, foreignGrant.scope);
+  assert.deepEqual(pausedForeign.domains, foreignGrant.domains);
+  assert.deepEqual(afterForeignCleanup.owner, beforeForeignCleanup.owner, "fixture cleanup cannot change the owner");
+  assert.deepEqual(afterForeignCleanup.grants.filter(item => item.id !== foreignGrant.id),
+    beforeForeignCleanup.grants.filter(item => item.id !== foreignGrant.id), "fixture cleanup must preserve every other grant");
+  assert.deepEqual(readActivations(), activationsBeforeCleanup, "fixture cleanup cannot change any activation");
+  const foreignReflectionCleanup = { rootRef, ownerId: owner.id, grantId: foreignGrant.id, scope: pausedForeign.scope,
+    before: { status: foreignGrant.status, version: foreignGrant.version },
+    after: { status: pausedForeign.status, version: pausedForeign.version },
+    deniedResumeStatus: deniedResume.status, deniedResumeCode: deniedResumeBody.code,
+    deniedResumeNoMutation: true, otherGrantsUnchanged: true, activationsUnchanged: true };
+  console.log(JSON.stringify({ status: "foreign-reflection-fixture-paused", ...foreignReflectionCleanup }));
   const resumeHealth = (await host.call("health", null)).result;
-  for (const domain of domains) await toggle(domain, true);
+  for (const domain of domains) assert.equal((await toggle(domain, true)).activation.enabled, true);
   host = await supervisor.ensureEduPiRuntime(roots);
   await assertPreserved(stoppedPreserved, stoppedProjection);
   const resumedStages = launches.findLastIndex(launch => launch.options?.sourceParentQuestionGoals);
@@ -955,7 +1016,7 @@ try {
     dirty: sourceCandidate, testFixtureMigration: useV3, productionMigration: false, restartChecks, parentQuestionE2, domains: summaries, defaultOff: true, exactGrantFence: true, productionOutbox: true,
     registeredContinuation: true, artifactHashReadback: true, reviewReadback: true, syntheticFeedback: true, recipientRefusal: true,
     recipientPublicConfirmation: publicRecipientConfirmation, threeDomainSettlement: true, durableAdmin: true,
-    crossStudentRefusal: true, unsafeRefusal: true, stopRestartResume: true,
+    crossStudentRefusal: true, unsafeRefusal: true, stopRestartResume: true, foreignReflectionCleanup,
     capabilityModelCalls: 0, syntheticChatCalls: chatCalls, assistantChecks, sseNewlineDelimited: sseFrames.every(frame => frame.newlineDelimited), externalSend: false }));
   if (keep) console.log(JSON.stringify({ status: "retained", temporaryRoot: temp, dataRoot, stateDir, agentDir, requests: selected.requests, recipientFactId: recipientReference.fact_id, publicRecipientConfirmation }));
 } finally {

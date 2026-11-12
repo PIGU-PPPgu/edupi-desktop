@@ -1,6 +1,8 @@
 # G4 macOS 0.3.111 发布验收
 
-状态：**发布准备中，未安装、未公开**。本轮仍为用户授权的 macOS 部署与 Release 更新，Windows/Linux 构建安装继续暂缓，正式 Latest `.70` 与 `updater-feed` 不切换。
+本记录最终状态：**签名 Draft 构建失败，未生成安装包、未安装、未公开**。`43167121336` 固定 `1b983400`、Core `98e4f7cd`，Draft ID `442563734` 资产为空；失败在 `Verify macOS Core host wiring` 的 canary 恢复授权。保留失败结果，不换 SHA 复用，当前入口改为 [`.112` 验收](2026-11-12-g4-macos112-release.md)。
+
+以下保留本阶段事实。本轮仍为用户授权的 macOS 部署与 Release 更新，Windows/Linux 构建安装继续暂缓，正式 Latest `.70` 与 `updater-feed` 不切换。
 
 `.110` 因命令未在冻结预检失败时中断而误触发私有 Draft，已经取消，Draft `442539630` 固定 `eca31346` 且资产为空，保留失败记录，不换 SHA 复用；本版独立使用 `.111`。签名 workflow 必须在全部预检成功后以单独命令调用。
 
