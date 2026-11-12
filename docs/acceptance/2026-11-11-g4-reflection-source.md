@@ -64,7 +64,7 @@ EDUPI_E2_KEEP=1 node scripts/test-edupi-reflection-source-joint.mjs
 
 实际操作：选择教学反思 → 输入带首尾空格和换行的合成文本 → 提交 → 待审核 → 接受内容 → 刷新 → 从课堂内容历史回读；随后关闭预览和 Core，重新启动并从页面再读同一记录。第二课次输入后收起，确认未产生来源登记或观察记录。
 
-持久化回读确认原文完全相同、仅一条对应 observation 和 accepted fact、取消文本不存在。页面所有业务请求为 200，来源登记仅一次；成功不以 HTTP 状态单独判定。截图保存在本机 `/Users/iguppp/.playwright-mcp/edupi-g4-accepted-history-20261111.png`，请求和事实身份回执在 `/tmp/edupi-g4-browser-20261111/evidence.json`。
+持久化回读确认原文完全相同、仅一条对应 observation 和 accepted fact、取消文本不存在。页面所有业务请求为 200，来源登记仅一次；成功不以 HTTP 状态单独判定。截图文件为本机 Playwright 证据目录中的 `edupi-g4-accepted-history-20261111.png`，请求和事实身份回执在 `/tmp/edupi-g4-browser-20261111/evidence.json`。
 
 本机预览夹具及合成根保留供复核，预览页、服务和 Core 已停止。开始预览前同卷可用约 715 GiB；本轮未做清理或删除旧产物。保留路径仅用于本轮证据复核，后续明确清理范围后再处置。
 
