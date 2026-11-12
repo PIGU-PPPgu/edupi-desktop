@@ -6,11 +6,11 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "509082bd937890309013ca84b37a82fade89ed9a",
+    "core_commit": "98e4f7cd0c31dd30954574d2040bb1b948cdd954",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:853d4e96a196e9ffb82bc0a94150e837686c32b0170aa6ba3bfe0535d46c691b",
-    "runtime_component_manifest_hash": "sha256:08bd17bd46a2439ee69e8bc2e5dd7b7d3cf02c92264b2f659b0160e1b0ebca29",
-    "runtime_schema_hash": "sha256:710fae1ed7b41c09e74d235bc481a3f73b23dced847de176dc3ec78002aa1a2e"
+    "component_manifest_hash": "sha256:e8d0cdf0196ae84a3d5bb5b9552934bcfefc5111ba3ba4882b99ff4b4abfb770",
+    "runtime_component_manifest_hash": "sha256:46252d3917be4035a8bc9bf4b779b6d6621db0a3caadb71a38bd2da63ffa0bc2",
+    "runtime_schema_hash": "sha256:99a62fa3d2b45864c717a5c35cfb08aea48fa1c09dd0cfcf099ed87877497608"
   },
   "contract_identities": [
     {
@@ -282,5 +282,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/458",
     "https://github.com/PIGU-PPPgu/edupi/pull/462"
   ],
-  "change_note": "This source candidate pins Core main 509082bd with both component manifests and the runtime schema. Isolated Main4 fixtures use SQLite planning storage without rewriting the retired V1 planning tombstone. Source-derived parent questions require an exact owner grant and explicit recipient confirmation; review, cancellation and cold restart are verified without external send. Production root migration, signed installed pairing and public updates are not enabled by this change."
+  "change_note": "This source candidate pins Core 98e4f7cd with both component manifests and the runtime schema, including G4 reflection source writes and history reads. Isolated Main4 fixtures use SQLite planning storage without rewriting the retired V1 planning tombstone. Source-derived parent questions require an exact owner grant and explicit recipient confirmation. Production root migration, signed installed pairing and public updates are not enabled by this change."
 }

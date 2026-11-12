@@ -7,6 +7,7 @@ import path from "node:path";
 import net from "node:net";
 import { spawn } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { stagedReadinessDiagnostic, waitForStagedRuntime } from "./staged-runtime-readiness.mjs";
 
 const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const compat = JSON.parse(fs.readFileSync(path.join(root, "contracts/edupi-core-compat.json"), "utf8"));
@@ -18,6 +19,7 @@ const nodeBinary = process.platform === "darwin"
 const stagedCoreRoot = path.join(resources, "edupi-core");
 const identityOnly = process.env.EDUPI_STAGED_IDENTITY_ONLY === "1";
 const headlessBoot = process.env.EDUPI_STAGED_HEADLESS_BOOT === "1";
+const statusDiagnostic = process.env.EDUPI_STAGED_STATUS_DIAGNOSTIC === "1";
 const sourceAdminE2 = process.env.EDUPI_STAGED_SOURCE_ADMIN_E2 === "1";
 const sourceAdminReview = process.env.EDUPI_STAGED_SOURCE_ADMIN_REVIEW || "hold";
 if (sourceAdminE2 && !["accept", "modify", "reject", "hold"].includes(sourceAdminReview)) throw new Error("invalid staged admin review decision");
@@ -51,7 +53,7 @@ let sourceAdminFact = null;
 fs.mkdirSync(isolatedResources, { recursive: true });
 fs.cpSync(stagedServerDir, serverDir, { recursive: true, verbatimSymlinks: true });
 fs.cpSync(stagedCoreRoot, coreRoot, { recursive: true, verbatimSymlinks: true });
-for (const directory of [path.join(dataRoot, ".edupi/memory"), path.join(dataRoot, ".edupi/output"), path.join(dataRoot, ".edupi/locks"), stateRoot]) fs.mkdirSync(directory, { recursive: true });
+for (const directory of [path.join(dataRoot, ".edupi/memory"), path.join(dataRoot, ".edupi/output"), path.join(dataRoot, ".edupi/locks"), stateRoot]) fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
 
 if (sourceAdminE2) {
   const values = { EDUPI_PROJECT_ROOT: dataRoot, EDUPI_HOME: path.join(dataRoot, ".edupi"),
@@ -142,34 +144,25 @@ async function stop() {
 }
 
 try {
-  let identityReady = false;
-  let status = null;
-  let runtimeStoreSeenBeforeStatus = false;
-  const deadline = Date.now() + (headlessBoot ? 20_000 : 45_000);
-  while (Date.now() < deadline && !(identityReady && (identityOnly || status))) {
-    if (child.exitCode !== null) throw new Error(`staged server exited: ${logs.slice(-4000)}`);
-    try {
-      const identity = await fetch(`${baseUrl}/api/desktop/identity`, { signal: AbortSignal.timeout(2000) });
-      if (identity.status === 204) {
-        identityReady = true;
-        if (identityOnly) break;
-        if (!headlessBoot || fs.existsSync(runtimeDatabase)) {
-          if (headlessBoot) runtimeStoreSeenBeforeStatus = true;
-          const response = await fetch(`${baseUrl}/api/edupi/status?summary=1`, { signal: AbortSignal.timeout(10_000) });
-          status = await response.json();
-        }
-      }
-    } catch {
-      // Keep polling while the staged server completes its cold start.
-    }
-    if (!(identityReady && (identityOnly || status))) await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-  assert.equal(identityReady, true, `staged server identity did not become ready: ${logs.slice(-4000)}`);
+  const deadline = Date.now() + (statusDiagnostic ? 60_000 : headlessBoot ? 20_000 : 45_000);
+  const readiness = await waitForStagedRuntime({
+    deadline, identityOnly, headlessBoot,
+    ...(statusDiagnostic ? { statusRequestTimeoutMs: 45_000, maxStatusAttempts: 1 } : {}),
+    runtimeDatabaseExists: () => fs.existsSync(runtimeDatabase),
+    readIdentity: timeout => fetch(`${baseUrl}/api/desktop/identity`, { signal: AbortSignal.timeout(timeout) }),
+    readStatus: timeout => fetch(`${baseUrl}/api/edupi/status?summary=1`, { signal: AbortSignal.timeout(timeout) }),
+    serverExited: () => {
+      if (child.exitCode !== null) throw new Error(`staged server exited: ${logs.slice(-4000)}`);
+    },
+  });
+  const { identityReady, status, runtimeStoreSeenBeforeStatus } = readiness;
+  if (statusDiagnostic) console.log(`staged status diagnostic: ${stagedReadinessDiagnostic(readiness)}`);
+  assert.equal(identityReady, true, `staged server identity did not become ready: ${stagedReadinessDiagnostic(readiness)} ${logs.slice(-4000)}`);
   if (identityOnly) {
     console.log(JSON.stringify({ status: "passed", identityOnly: true }, null, 2));
   } else {
     if (headlessBoot) assert.equal(runtimeStoreSeenBeforeStatus, true, `Core did not start before any education API request: ${logs.slice(-4000)}`);
-    assert.ok(status, `staged server did not become ready: ${logs.slice(-4000)}`);
+    assert.ok(status, `staged server did not become ready: ${stagedReadinessDiagnostic(readiness)} ${logs.slice(-4000)}`);
     assert.equal(status.compatibility.actual.coreCommit, compat.core_runtime.core_commit);
     assert.equal(status.compatibility.actual.componentManifestHash, compat.core_runtime.component_manifest_hash);
     assert.equal(status.core.runtimeComponentManifestHash, compat.core_runtime.runtime_component_manifest_hash);

@@ -10,6 +10,7 @@ import { EduPiFactActions } from "./EduPiFactActions";
 import { compareForegroundDates, isTaskForeground, taskReferenceDate } from "@/lib/edupi-foreground";
 import { EduPiListPreview, EduPiPagedRows, useEduPiForegroundPolicy } from "./EduPiForeground";
 import { EduPiParentQuestionConfirmation } from "./EduPiParentQuestionConfirmation";
+import { EduPiLessonReflection } from "./EduPiLessonReflection";
 
 const TITLES = { tasks: "任务审核", facts: "事实确认", followups: "学生跟进", "followups-history": "跟进历史", observations: "观察确认", memories: "记忆确认", content: "审核内容" };
 type ReviewList = keyof typeof TITLES;
@@ -25,7 +26,7 @@ export function EduPiReviewBoard({ data, query, onTask, onReviewTarget, onEducat
     .sort((left, right) => compareForegroundDates(taskReferenceDate(left, data), taskReferenceDate(right, data), policy.today) || taskKey(left).localeCompare(taskKey(right)));
   const observations = data.observations.filter((item) => (item.teacherReview.state === "pending_review" || item.teacherReview.state === "held") && match(`${item.text} ${item.observationId} ${item.evidenceIds.join(" ")}`, query));
   const memories = data.memoryCandidates.filter((item) => item.teacherReview.state !== "rejected" && (item.teacherReview.state === "pending_review" || item.teacherReview.state === "held") && match(`${item.proposedContent} ${item.candidateId} ${item.tags.join(" ")}`, query));
-  const facts = (data.factSpine?.factCandidates || []).filter((item) => (item.status === "candidate" || item.status === "pending_review" || item.status === "held") && match(`${item.value} ${item.predicate} ${item.subjectRef || ""} ${item.topicRef || ""}`, query));
+  const facts = (data.factSpine?.factCandidates || []).filter((item) => item.predicate !== "lesson.completed" && (item.status === "candidate" || item.status === "pending_review" || item.status === "held") && match(`${item.value} ${item.predicate} ${item.subjectRef || ""} ${item.topicRef || ""}`, query));
   const followUps = (data.followUps || []).filter(item => match(`${item.title} ${item.internalDraftSummary} ${item.followUpId}`, query));
   const pendingFollowUps = followUps.filter(item => item.teacherReview.state === "pending_review" || item.teacherReview.state === "held");
   const reviewedFollowUps = followUps.filter(item => ["accepted", "modified", "rejected"].includes(item.teacherReview.state));
@@ -50,6 +51,7 @@ export function EduPiReviewBoard({ data, query, onTask, onReviewTarget, onEducat
     {groups.length > 0 ? <div className="edupi-review-mini-board">
       {groups.map(group => <section key={group}><header><h2>{TITLES[group]}</h2><em>{nodes[group].length}</em></header><div>{preview(group)}</div></section>)}
     </div> : <p className="edupi-module-empty" role="status">{query.trim() ? "未找到其他待确认事项" : "暂无其他待确认事项"}</p>}
+    <EduPiLessonReflection today={policy.today} query={query} />
     <EduPiParentQuestionConfirmation query={query} />
   </main>;
 }

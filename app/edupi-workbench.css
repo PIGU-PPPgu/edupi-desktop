@@ -2045,6 +2045,41 @@ html.dark .edupi-page-section { box-shadow: 0 1px 3px rgba(0, 0, 0, .35); }
 .edupi-review-fact { display: grid; gap: 5px; padding: 10px; border: 1px solid var(--ep-border); border-radius: 7px; }
 .edupi-review-fact > strong { font-size: 11px; line-height: 1.45; }
 .edupi-review-fact > span { color: var(--ep-muted); font-size: 9px; }
+.edupi-lesson-reflection { margin-top: 24px; padding: 16px; border: 1px solid var(--ep-border); border-radius: 12px; }
+.edupi-lesson-reflection > header, .edupi-lesson-reflection > header > div { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.edupi-lesson-reflection > header { justify-content: space-between; }
+.edupi-lesson-reflection h2 { margin: 0; font-size: 14px; }
+.edupi-lesson-reflection label { display: grid; gap: 4px; min-width: 0; color: var(--ep-muted); font-size: 12px; }
+.edupi-lesson-reflection input, .edupi-lesson-reflection textarea, .edupi-lesson-reflection select { box-sizing: border-box; min-width: 0; max-width: 100%; padding: 6px 8px; color: var(--ep-text); background: var(--ep-surface); border: 1px solid var(--ep-border); border-radius: 6px; font: inherit; }
+.edupi-lesson-reflection ul { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.edupi-reflection-row { display: grid; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--ep-border); border-radius: 8px; }
+.edupi-reflection-row-heading { display: flex; align-items: baseline; gap: 8px 16px; flex-wrap: wrap; }
+.edupi-reflection-row-heading span, .edupi-reflection-completion > span { color: var(--ep-muted); font-size: 12px; overflow-wrap: anywhere; }
+.edupi-reflection-form { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); }
+.edupi-reflection-form label:has(textarea) { grid-column: 1 / -1; }
+.edupi-reflection-form p, .edupi-reflection-completion p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.edupi-reflection-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.edupi-reflection-form .edupi-reflection-actions { grid-column: 1 / -1; }
+.edupi-reflection-completion { display: grid; gap: 8px; }
+.edupi-reflection-history { min-width: 0; margin-top: 16px; border-top: 1px solid var(--ep-border); }
+.edupi-reflection-history > .edupi-reflection-history__toggle { display: flex; width: 100%; min-height: 40px; align-items: center; justify-content: space-between; padding: 8px 0; border: 0; border-radius: 0; background: transparent; color: var(--ep-text); text-align: left; font-weight: 500; }
+.edupi-reflection-history__content { display: grid; gap: 12px; padding-block: 4px 12px; }
+.edupi-reflection-history__content > ol { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.edupi-reflection-history__content > p { margin: 0; color: var(--ep-muted); font-size: 12px; }
+.edupi-reflection-history__content > button { justify-self: start; }
+.edupi-reflection-history__entry { display: grid; min-width: 0; gap: 8px; padding: 12px; border: 1px solid var(--ep-border); border-radius: 8px; }
+.edupi-reflection-history__entry > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
+.edupi-reflection-history__entry > header > strong { font-size: 12px; overflow-wrap: anywhere; }
+.edupi-reflection-history__entry > header > span,
+.edupi-reflection-history__entry summary { color: var(--ep-muted); font-size: 12px; }
+.edupi-reflection-history__entry > p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.edupi-reflection-history__entry summary { width: fit-content; cursor: pointer; }
+.edupi-reflection-history__entry dl { display: grid; gap: 6px; margin: 10px 0 0; font-size: 12px; }
+.edupi-reflection-history__entry dl > div { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; }
+.edupi-reflection-history__entry dt { color: var(--ep-muted); }
+.edupi-reflection-history__entry dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.edupi-reflection-history__error { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.edupi-reflection-history__error > p { margin: 0; color: var(--ep-red); font-size: 12px; }
 .edupi-parent-question-confirmation { margin-top: 24px; padding: 16px; border: 1px solid var(--ep-border); border-radius: var(--radius-lg); background: var(--ep-surface); }
 .edupi-parent-question-confirmation > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .edupi-parent-question-confirmation h2 { margin: 0; font-size: 14px; }

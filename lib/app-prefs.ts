@@ -29,6 +29,7 @@ export const APP_PREF_KEYS = {
   edupiDismissedStaleTaskIds: "edupi-dismissed-stale-task-ids",
   edupiListPositions: "edupi-list-positions",
   edupiWorkflowExpanded: "edupi-workflow-expanded",
+  edupiReflectionPendingOperation: "edupi-reflection-pending-operation-v1",
 } as const;
 
 export type AppPrefKey = (typeof APP_PREF_KEYS)[keyof typeof APP_PREF_KEYS];
