@@ -756,6 +756,90 @@ const fillContent = async (renderer, rawText = content.rawText) => {
   });
 };
 
+test("an existing content row keeps a cancellable editor without changing its record", async () => {
+  const saved = { ...registered, content: { ...content, status: "accepted", revision: 1 } };
+  const { service, state } = fixture([saved]);
+  const renderer = await mount(service);
+  try {
+    assert.equal(renderer.root.findAllByType("button").filter(item => text(item) === "添加课堂内容").length, 1);
+    await fillContent(renderer, "后续草稿不应入库");
+    assert.ok(text(renderer.root).includes(content.rawText));
+    await click(renderer, "收起");
+    assert.deepEqual(state.entries, [saved]);
+    assert.equal(state.registrations.length, 0);
+    assert.equal(state.prepares.length, 0);
+    assert.equal(state.commits.length, 0);
+    assert.equal(stored.has(pendingKey), false);
+    assert.equal(renderer.root.findAllByType("button").filter(item => text(item) === "添加课堂内容").length, 1);
+  } finally { await unmount(renderer); }
+});
+
+test("a teacher can add and accept another content record while the first is preserved", async () => {
+  const first = { ...registered, content: { ...content, status: "accepted", revision: 1 } };
+  const { service, state } = fixture([first]);
+  const registerSource = service.registerContentSource;
+  service.registerContentSource = async (target, input) => {
+    const result = await registerSource(target, input);
+    state.entries = state.entries.map(item => ({ ...item, grantVersion: result.entry.grantVersion,
+      contentSourceIds: result.entry.contentSourceIds }));
+    return result;
+  };
+  const commit = service.commit;
+  service.commit = async (id, fingerprint, mutation) => {
+    const before = [...state.entries];
+    const result = await commit(id, fingerprint, mutation);
+    if (mutation.action !== "contentCapture") return result;
+    const saved = { ...result.entry, content: { ...result.entry.content, factId: "content-fact-2" } };
+    state.entries = [...before, saved];
+    const appended = outcome(id, "committed", saved);
+    state.operations.set(id, appended);
+    return appended;
+  };
+  const renderer = await mount(service);
+  const rawText = "  第二条教学反思\n保留首尾与换行。  ";
+  try {
+    await fillContent(renderer, rawText);
+    const form = renderer.root.findByProps({ "aria-label": "课堂内容记录" });
+    await act(async () => form.findByType("select").props.onChange({ target: { value: "lesson.review" } }));
+    await click(renderer, "提交课堂内容");
+    assert.equal(state.registrations[0].entry.content, null);
+    assert.equal(state.entries.length, 2);
+    assert.deepEqual(state.entries[0].content, first.content);
+    assert.equal(state.entries[1].content.rawText, rawText);
+    assert.equal(state.entries[1].content.predicate, "lesson.review");
+    assert.notEqual(state.entries[1].content.sourceId, first.content.sourceId);
+    assert.ok(text(renderer.root).includes(first.content.rawText));
+    assert.ok(text(renderer.root).includes(rawText));
+    assert.equal(renderer.root.findAllByType("button").filter(item => text(item) === "添加课堂内容").length, 1);
+    await click(renderer, "接受内容");
+    assert.equal(state.entries[0].content.status, "accepted");
+    assert.equal(state.entries[0].content.revision, 1);
+    assert.equal(state.entries[1].content.status, "accepted");
+    assert.equal(state.entries[1].content.revision, 1);
+    assert.deepEqual(state.commits.map(item => item.mutation.action), ["contentCapture", "contentReview"]);
+    assert.equal(state.commits[1].mutation.factId, "content-fact-2");
+    assert.equal(stored.has(pendingKey), false);
+  } finally { await unmount(renderer); }
+});
+
+test("content capture has one entry point per lesson without hiding another class or subject", async () => {
+  const rows = [
+    { ...registered, status: "held", reasonCode: "source_not_found" },
+    { ...registered, content },
+    { ...registered, content: { ...content, factId: "content-fact-2" } },
+    { ...registered, classId: "class-2", content: { ...content, factId: "class-2-fact" } },
+    { ...registered, subject: "英语", content: { ...content, factId: "english-fact" } },
+  ];
+  const { service, state } = fixture(rows);
+  const renderer = await mount(service);
+  try {
+    assert.equal(renderer.root.findAllByType("button").filter(item => text(item) === "添加课堂内容").length, 3);
+    assert.equal(renderer.root.findAllByProps({ "aria-label": "课堂内容" }).length, 4);
+    assert.equal(state.prepares.length, 0);
+    assert.equal(state.commits.length, 0);
+  } finally { await unmount(renderer); }
+});
+
 test("classroom content is captured and owner-reviewed without completing the lesson", async () => {
   const { service, state } = fixture([registered]);
   const renderer = await mount(service);
