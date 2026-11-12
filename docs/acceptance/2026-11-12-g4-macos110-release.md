@@ -46,6 +46,10 @@ Desktop 候选随即对齐新 Core；对应合同和历史来源检查 48 项通
 
 对应日志为 `desktop-historical-recovery-red.log`、`desktop-historical-recovery-full.log`、`desktop-owner-root-red.log`、`desktop-boundaries-combined.log`、`desktop-boundaries-joint.log` 与 `desktop-reflection-api-boundaries-real-core-v2.log`。Core 新一轮 `43154016436` 尚未放行：模板到期用例期望修改成功，实际收到 `stale_snapshot`，失败日志保留，正在限定范围定位；未降低 CAS 或跳过用例。
 
+此后 Desktop `1a34f342` 的 `43160922411` 三个远端质量 job 全部成功，本机完整源码为 **4155 passed、16 conditional skipped、0 failed**。真实浏览器另外完成“capture 已提交但响应正文截断 → 移除隔离课表 → 刷新 → 按原 scope 历史核对 → 清除 pending”流程，提交 POST 仅一次、恢复后没有重新提交，历史记录仍可见；唯一 console 网络错误为主动截断，未计为普通页面零错误。截图为本机 Playwright 目录内 `edupi-g4-history-recovery-20261112.png`，请求和事务证据为本机 `edupi-g4-browser-boundaries-20261112/recovery-evidence.json`。这是开发浏览器证据，不代替 Tauri 安装版。
+
+Core CI 失败的限定诊断已确定：真实 G1 tick 仅更新 `rhythm_plan.generated_at`，即可令 snapshot→command 边界上的全局快照过期；CAS 拒绝符合安全契约。`98e4f7cd0c31dd30954574d2040bb1b948cdd954` 仅修改测试夹具，让 `moveTemplate` 最多尝试 3 次且只对 `stale_snapshot` 重读快照；revision、目标、来源及 idempotency key 固定，最终仍必须 `modified`，持续 stale 或其他失败仍报错。完整脚本含 offline 子进程两次通过，确定性真实 tick 对照 `stale → stale → modified`、后续 draft 恢复、writer-c3/type 和独立审查通过。production、CAS、matrix、两份 manifest、schema 及依赖均未改变；新精确 SHA 的 Mac CI 仍待通过。
+
 ## 待验收
 
 Core 修复后的完整质量门、普通合并及 Desktop 精确配对；真实标准 staging；同一冻结提交的 Mac-only 签名、公证与三资产验签；唯一安装位升级、隔离原生 G4 流程、冷启动及真实资料/偏好恢复；公开预发布与匿名下载回读均未完成。
