@@ -6,10 +6,10 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "8f2058696371d9a10ffeb3dae9ce06a0a78b6d03",
+    "core_commit": "e5aac37153cca988053efd24713371f18852aac0",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
     "component_manifest_hash": "sha256:e8d0cdf0196ae84a3d5bb5b9552934bcfefc5111ba3ba4882b99ff4b4abfb770",
-    "runtime_component_manifest_hash": "sha256:d7bf88327eafc9d16399780a241616dd28653d8772d4f56c3fdb9a44317c89de",
+    "runtime_component_manifest_hash": "sha256:46252d3917be4035a8bc9bf4b779b6d6621db0a3caadb71a38bd2da63ffa0bc2",
     "runtime_schema_hash": "sha256:99a62fa3d2b45864c717a5c35cfb08aea48fa1c09dd0cfcf099ed87877497608"
   },
   "contract_identities": [
@@ -282,5 +282,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/458",
     "https://github.com/PIGU-PPPgu/edupi/pull/462"
   ],
-  "change_note": "This source candidate pins Core 8f205869 with both component manifests and the runtime schema, including G4 reflection source writes and history reads. Isolated Main4 fixtures use SQLite planning storage without rewriting the retired V1 planning tombstone. Source-derived parent questions require an exact owner grant and explicit recipient confirmation. Production root migration, signed installed pairing and public updates are not enabled by this change."
+  "change_note": "This source candidate pins Core e5aac371 with both component manifests and the runtime schema, including G4 reflection source writes and history reads. Isolated Main4 fixtures use SQLite planning storage without rewriting the retired V1 planning tombstone. Source-derived parent questions require an exact owner grant and explicit recipient confirmation. Production root migration, signed installed pairing and public updates are not enabled by this change."
 }

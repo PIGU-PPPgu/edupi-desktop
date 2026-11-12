@@ -28,6 +28,12 @@ Desktop `751e9d68` 的远端审计 `43143666777`：应用兼容和 Linux 源码�
 
 Core matrix 修复仅两文件，已独立审查并在隔离检出目录提交为 `547880af`，推送到 PR463；协议、type、双闭包只读重算、七个 G4 脚本和研究回归 70 项无跳过均通过。原工作树的完整 `npm test` 首次在 pretest 因依赖符号链接被拒绝，主测试链单独通过不作替代；保留原依赖后改用任务自有真实目录正式重跑，尚未完成。精确 head 的 Mac CI `43146848050` 正在执行；先启动的手动 `43146841846` 被稍后同一分支的自动任务按 concurrency 取消，不是测试失败。Core 尚未合并。
 
+上述阶段已更新：`547880af` 的本机完整 `npm test` 含 pretest、远端 Mac CI `43146848050` 全部通过；Desktop 修复 Rustix 后的 `9a022055` 也在 `43148222744` 的三个审计 job 全部通过。本机按 `547880af` 构建的 13,361 文件 Core 包、标准 45 秒 staging、20 秒无页面请求启动、OCR、DOCX、OpenConnector、日程冲突/occurrence/上传校历/反馈均实际通过。第一次本机构建因任务依赖符号链接跨出 build boundary 被拒绝，已将同一任务依赖实目录移入本工作树，保留原共享依赖；OpenConnector 首次调用遗漏资源路径变量的环境失败也保留，补齐参数后通过。
+
+最终合并审查发现 `PRRT_kwDOTjI4ds62c5vm`：隐式登记持久化的课次 binding 未用于 completion history，按实际课次筛选会漏记录。本轮真实回归在旧代码得到 `null !== history-slot`；生产代码仅删除 fallback 的 `content &&` 限制，保留显式 selector 优先、完整授权/作用域/来源校验及无 binding 的 legacy `slot_id:null` 兼容。三组回归 6 项、独立纯内存边界 22 项通过，官方 matrix/双 manifest 重新生成及只读重算、七个 G4 脚本、协议/type、研究回归 70 项均通过。新提交为 `e5aac37153cca988053efd24713371f18852aac0`，线程已按实际修复 resolved；新 Mac CI 为 `43154016436`，尚待收口。Runtime component 更新为 `sha256:46252d3917be4035a8bc9bf4b779b6d6621db0a3caadb71a38bd2da63ffa0bc2`，Desktop component 和 14 个 schema/hash 文件未变。
+
+Desktop 候选随即对齐新 Core；对应合同和历史来源检查 48 项通过。允许在分支上并行构建不可公开的签名 Draft，但正式安装与公开发布仍须等 Core 和 Desktop 普通合并、精确源版本质量门及同轮资产验签。若 Release 使用被正常合入 main 的候选提交，须另外证明其可达性与 main 的受测源码树一致，不能将候选、合并和安装状态混为一项。
+
 ## 待验收
 
 Core 修复后的完整质量门、普通合并及 Desktop 精确配对；真实标准 staging；同一冻结提交的 Mac-only 签名、公证与三资产验签；唯一安装位升级、隔离原生 G4 流程、冷启动及真实资料/偏好恢复；公开预发布与匿名下载回读均未完成。
