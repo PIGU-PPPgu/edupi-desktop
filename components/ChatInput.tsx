@@ -2746,11 +2746,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   const vh = typeof window !== "undefined" ? window.visualViewport?.height ?? window.innerHeight : 800;
                   const maxH = Math.max(120, vh * 0.6);
                   return (
-                  <div className="native-popover" style={{
-                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
+                  <div className="native-popover chat-composer-tool-presets" style={{
+                    position: "absolute", bottom: "calc(100% + 6px)",
+                    ...(compactControls ? { left: 0 } : { right: 0 }),
                     zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
                     borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
-                    overflow: "hidden", minWidth: 120,
+                    overflow: "hidden", minWidth: 120, maxWidth: "calc(100vw - 32px)",
                     maxHeight: maxH, display: "flex", flexDirection: "column",
                   }}>
                     <div style={{ minHeight: 0, overflowY: "auto" }}>

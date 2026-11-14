@@ -104,8 +104,9 @@ test("streaming keeps priority send and stop directly in the visible model toolb
 
 test("compact controls stay in a bounded wrapping popover with every action usable", async t => {
   let compacts = 0, sounds = 0;
+  const toolChanges = [];
   const f = await mount(t, { onCompact: () => compacts++, onSoundToggle: () => sounds++, soundEnabled: true,
-    onToolPresetChange: () => {}, toolPreset: "default" });
+    onToolPresetChange: value => toolChanges.push(value), toolPreset: "default" });
   await f.edit("[UI TEST] 更多控件草稿");
   await f.click("More controls");
   const popup = f.region("chat-composer-extra-controls");
@@ -113,6 +114,14 @@ test("compact controls stay in a bounded wrapping popover with every action usab
   assert.equal(popup.props.style.right, undefined);
   assert.equal(popup.props.style.flexWrap, "wrap");
   assert.equal(popup.props.style.maxWidth, "min(100%, calc(100vw - 32px))");
+  await f.click("Change tool preset");
+  const presets = f.region("native-popover chat-composer-tool-presets");
+  assert.equal(presets.props.style.left, 0);
+  assert.equal(presets.props.style.right, undefined);
+  assert.equal(presets.props.style.maxWidth, "calc(100vw - 32px)");
+  await f.run(() => presets.findAllByType("button")[0].props.onClick());
+  assert.equal(toolChanges.length, 1);
+  assert.equal(f.root().findAllByProps({ className: "native-popover chat-composer-tool-presets" }).length, 0);
   await f.click("Compact context");
   await f.click("Disable completion sound");
   assert.equal(compacts, 1);
