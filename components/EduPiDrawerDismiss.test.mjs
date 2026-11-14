@@ -11,9 +11,9 @@ test("workspace, chat, material, and calendar drawers share Escape and focus res
     read("./EduPiMaterialsWorkspace.tsx"),
     read("./EduPiCalendarWorkspace.tsx"),
   ]);
-  assert.match(workspace, /usePanelDismiss<HTMLElement>\(onClose, docked, Boolean\(kind\)\)/);
+  assert.match(workspace, /usePanelDismiss<HTMLElement>\(onClose, docked, Boolean\(kind\), focusSuspended\)/);
   const adaptive = await read("../hooks/usePanelDismiss.ts");
-  assert.match(adaptive, /useModalDismiss<T>\(onClose, enabled && !docked\)/);
+  assert.match(adaptive, /useModalDismiss<T>\(onClose, enabled && !docked && !focusSuspended,/);
   for (const source of [chat, materials, calendar]) {
     assert.match(source, /useModalDismiss<HTMLElement>/);
     assert.match(source, /"dialog"/);
@@ -28,7 +28,7 @@ test("student profiles use full-page navigation while task drawers retain modal 
   assert.match(students, /ref=\{detailHeadingRef\} tabIndex=\{-1\}/);
   assert.doesNotMatch(students, /useModalDismiss<HTMLElement>/);
   const tasks = await read("./EduPiTaskDetailDrawer.tsx");
-  assert.match(tasks, /usePanelDismiss<HTMLElement>\(onClose, docked\)/);
+  assert.match(tasks, /usePanelDismiss<HTMLElement>\(onClose, docked, true, focusSuspended\)/);
   assert.match(tasks, /docked \? "complementary" : "dialog"/);
   assert.doesNotMatch(tasks, /addEventListener\("keydown"/);
 });

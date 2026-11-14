@@ -1868,10 +1868,10 @@ html.dark .sidebar-view-switcher-thumb {
 
 .chat-composer {
   overflow: visible;
-  padding: 8px 9px 6px;
+  padding: 12px 12px 10px;
   background: var(--surface) !important;
   border: 1px solid var(--border) !important;
-  border-radius: var(--radius-xl) !important;
+  border-radius: 20px !important;
   box-shadow: var(--shadow-composer) !important;
   transition:
     border-color 160ms ease,
@@ -1927,7 +1927,9 @@ html.dark .sidebar-view-switcher-thumb {
 .message-user-context pre { max-height: 180px; margin: 7px 0 0; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
 
 .chat-composer-editor {
-  padding: 4px 3px 6px 5px !important;
+  display: flex;
+  min-width: 0;
+  padding: 2px 3px 8px !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
@@ -1945,10 +1947,25 @@ html.dark .sidebar-view-switcher-thumb {
 }
 
 .chat-composer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
   margin-top: 0 !important;
   min-height: 32px;
   padding: 0 3px;
 }
+.chat-composer-primary-tools,
+.chat-composer-model-tools {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 3px;
+}
+.chat-composer-primary-tools { flex: 0 1 auto; }
+.chat-composer-model-tools { flex: 0 1 auto; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+.chat-composer-model-tools > * { min-width: 0; }
 
 .chat-composer-controls button {
   font-size: 12px !important;
@@ -1960,10 +1977,11 @@ html.dark .sidebar-view-switcher-thumb {
 }
 
 .composer-send-button {
-  min-width: 72px;
-  height: 32px;
+  width: 34px !important;
+  min-width: 34px;
+  height: 34px;
   justify-content: center;
-  border-radius: 9px !important;
+  border-radius: 50% !important;
 }
 
 .chat-input-shell {

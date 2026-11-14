@@ -34,6 +34,7 @@ type Props = {
   agentBusy?: boolean;
   agentError?: string | null;
   docked?: boolean;
+  focusSuspended?: boolean;
   unavailable?: boolean;
   artifactsUnavailable?: boolean;
   onReview?: () => void;
@@ -93,8 +94,8 @@ function RecurringTaskControls({ task, onStage, onUpdate, onReactivate }: { task
   </section>;
 }
 
-export function EduPiTaskDetailDrawer({ task, workCase, files = [], workspace, onClose, onOpenFile, onOpenTask, onOpenAgent, onDelete, onRecurringStage, onUpdateRecurring, onReactivateRecurring, deleteBusy = false, agentBusy = false, agentError = null, docked = false, unavailable = false, artifactsUnavailable = false, onReview }: Props) {
-  const drawerRef = usePanelDismiss<HTMLElement>(onClose, docked);
+export function EduPiTaskDetailDrawer({ task, workCase, files = [], workspace, onClose, onOpenFile, onOpenTask, onOpenAgent, onDelete, onRecurringStage, onUpdateRecurring, onReactivateRecurring, deleteBusy = false, agentBusy = false, agentError = null, docked = false, focusSuspended = false, unavailable = false, artifactsUnavailable = false, onReview }: Props) {
+  const drawerRef = usePanelDismiss<HTMLElement>(onClose, docked, true, focusSuspended);
   const title = taskDisplayTitle(task);
   const source = taskSourceLabel(task);
   const status = taskStatusLabel(task);
@@ -116,7 +117,7 @@ export function EduPiTaskDetailDrawer({ task, workCase, files = [], workspace, o
   const flowStatus = taskWorkStatusLabel(task, matchedCase);
   return (
     <div className={`edupi-task-detail-layer${docked ? " is-docked" : ""}`} onMouseDown={(event) => { if (!docked && event.target === event.currentTarget) onClose(); }}>
-      <aside ref={drawerRef} className="edupi-task-detail-drawer" data-task-id={task.id ?? undefined} role={docked ? "complementary" : "dialog"} aria-modal={docked ? undefined : true} aria-labelledby="edupi-task-detail-title" tabIndex={-1}>
+      <aside ref={drawerRef} className="edupi-task-detail-drawer" data-task-id={task.id ?? undefined} role={docked ? "complementary" : "dialog"} aria-modal={!docked && !focusSuspended ? true : undefined} aria-labelledby="edupi-task-detail-title" tabIndex={-1}>
         <header className="edupi-task-detail-drawer__header">
           <div><h2 id="edupi-task-detail-title">{title}</h2></div>
           <EduPiIconButton data-autofocus type="button" icon="close" label="关闭任务详情" className="edupi-task-detail-drawer__close" onClick={onClose}/>

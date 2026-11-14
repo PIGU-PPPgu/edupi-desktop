@@ -1,5 +1,8 @@
 export const MOBILE_MAX_WIDTH = 640;
 export const SPLIT_PANEL_MIN_WIDTH = 960;
+export const TEACHER_NARROW_MAX_WIDTH = 820;
+export const TEACHER_SPLIT_PANEL_MIN_WIDTH = 1280;
+export const TEACHER_TASK_PANEL_WIDTH = 380;
 
 export const SIDEBAR_DEFAULT_WIDTH = 260;
 export const SIDEBAR_MIN_WIDTH = 180;
@@ -10,7 +13,7 @@ export const RIGHT_PANEL_MIN_WIDTH = 300;
 export const RIGHT_PANEL_MAX_WIDTH = 1200;
 
 const COMPACT_CHAT_MIN_WIDTH = 320;
-const DESKTOP_CHAT_MIN_WIDTH = 420;
+export const DESKTOP_CHAT_MIN_WIDTH = 420;
 
 export function clampPanelWidth(width: number, minWidth: number, maxWidth: number): number {
   const finiteWidth = Number.isFinite(width) ? width : minWidth;
@@ -26,27 +29,30 @@ export function getSidebarMaxWidth(options: {
   viewportWidth: number;
   rightPanelOpen: boolean;
   rightPanelWidth: number;
+  reservedWidth?: number;
+  chatMinWidth?: number;
 }): number {
-  const { viewportWidth, rightPanelOpen, rightPanelWidth } = options;
+  const { viewportWidth, rightPanelOpen, rightPanelWidth, reservedWidth = 0, chatMinWidth } = options;
   if (viewportWidth <= MOBILE_MAX_WIDTH) return SIDEBAR_MAX_WIDTH;
 
   const compact = viewportWidth < SPLIT_PANEL_MIN_WIDTH;
-  const chatWidth = compact ? COMPACT_CHAT_MIN_WIDTH : DESKTOP_CHAT_MIN_WIDTH;
+  const chatWidth = chatMinWidth ?? (compact ? COMPACT_CHAT_MIN_WIDTH : DESKTOP_CHAT_MIN_WIDTH);
   const visibleRightPanelWidth = !compact && rightPanelOpen ? rightPanelWidth : 0;
-  return Math.min(SIDEBAR_MAX_WIDTH, viewportWidth - chatWidth - visibleRightPanelWidth);
+  return Math.min(SIDEBAR_MAX_WIDTH, viewportWidth - chatWidth - visibleRightPanelWidth - reservedWidth);
 }
 
 export function getRightPanelMaxWidth(options: {
   viewportWidth: number;
   sidebarOpen: boolean;
   sidebarWidth: number;
+  reservedWidth?: number;
 }): number {
-  const { viewportWidth, sidebarOpen, sidebarWidth } = options;
+  const { viewportWidth, sidebarOpen, sidebarWidth, reservedWidth = 0 } = options;
   if (viewportWidth < SPLIT_PANEL_MIN_WIDTH) return RIGHT_PANEL_MAX_WIDTH;
 
   const visibleSidebarWidth = sidebarOpen ? sidebarWidth : 0;
   return Math.min(
     RIGHT_PANEL_MAX_WIDTH,
-    viewportWidth - DESKTOP_CHAT_MIN_WIDTH - visibleSidebarWidth,
+    viewportWidth - DESKTOP_CHAT_MIN_WIDTH - visibleSidebarWidth - reservedWidth,
   );
 }

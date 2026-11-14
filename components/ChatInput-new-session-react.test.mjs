@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -40,7 +39,6 @@ async function fixture(t, { slowCreation = false, slowAck = false, outcome = "ac
   for (const directory of [isolatedEnvironment.EDUPI_DATA_ROOT, isolatedEnvironment.EDUPI_CORE_ROOT, isolatedEnvironment.PI_DESKTOP_STATE_DIR]) fs.mkdirSync(directory);
   Object.assign(process.env, isolatedEnvironment);
   const originalGlobals = Object.fromEntries(["window", "document", "EventSource", "fetch", "requestAnimationFrame", "cancelAnimationFrame", "IS_REACT_ACT_ENVIRONMENT"].map(key => [key, globalThis[key]]));
-  const realFetch = globalThis.fetch;
   const storage = new Map();
   const window = Object.assign(new EventTarget(), {
     localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
@@ -51,17 +49,16 @@ async function fixture(t, { slowCreation = false, slowAck = false, outcome = "ac
     requestAnimationFrame: () => 0, cancelAnimationFrame: noop, IS_REACT_ACT_ENVIRONMENT: true });
   let calls = 0, wrapper, renderer;
   const gate = deferred(), created = deferred(), creationGate = deferred(), submitted = deferred(), finished = deferred(), reconciling = deferred();
-  const server = http.createServer(async (request, response) => {
-    for await (const chunk of request) { void chunk; /* Consume only the synthetic SDK request. */ }
+  // Exercise the real SDK without opening a port or contacting a provider.
+  const providerOrigin = "http://synthetic-provider.invalid";
+  const providerResponse = () => {
     calls++;
-    response.writeHead(200, { "content-type": "text/event-stream" });
     const base = { id: "synthetic", object: "chat.completion.chunk", created: 1, model: "local" };
-    response.end(`data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: { role: "assistant", content: "SYNTHETIC_FIRST_REPLY" }, finish_reason: null }] })}\n\ndata: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n`);
-  });
-  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
-  const providerPort = server.address().port;
+    return new Response(`data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: { role: "assistant", content: "SYNTHETIC_FIRST_REPLY" }, finish_reason: null }] })}\n\ndata: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n`,
+      { headers: { "content-type": "text/event-stream" } });
+  };
   fs.writeFileSync(path.join(agentDir, "models.json"), JSON.stringify({ providers: { local: {
-    api: "openai-completions", baseUrl: `http://127.0.0.1:${server.address().port}/v1`, apiKey: "synthetic-only",
+    api: "openai-completions", baseUrl: `${providerOrigin}/v1`, apiKey: "synthetic-only",
     models: [{ id: "local", name: "local", input: ["text", "image"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32000, maxTokens: 128 }],
   } } }));
   const { startRpcSession } = await jiti.import("../lib/rpc-manager.ts");
@@ -85,8 +82,8 @@ async function fixture(t, { slowCreation = false, slowAck = false, outcome = "ac
   let requestCommand;
   globalThis.fetch = async (url, options = {}) => {
     if (!String(url).startsWith("/")) {
-      assert.equal(new URL(String(url)).origin, `http://127.0.0.1:${providerPort}`, "only this fixture's provider may receive a real request");
-      return realFetch(url, options);
+      assert.equal(new URL(String(url)).origin, providerOrigin, "only this fixture's in-memory provider may receive a request");
+      return providerResponse();
     }
     const pathname = String(url).split("?")[0];
     const input = options.body ? JSON.parse(options.body) : null;
@@ -170,8 +167,7 @@ async function fixture(t, { slowCreation = false, slowAck = false, outcome = "ac
     gate.resolve(); creationGate.resolve();
     if (renderer) await act(async () => renderer.unmount());
     for (const stream of streams) stream.close();
-    wrapper?.destroy(); server.closeAllConnections();
-    await new Promise(resolve => server.close(resolve));
+    wrapper?.destroy();
     for (const key of [`new:${cwd}`, wrapper?.sessionId, `${cwd}:other`]) if (key) {
       const pending = drafts.getDraft(key)?.pendingPrompt;
       if (pending) drafts.releasePendingPromptForNewMessage(key, pending.clientRequestId);
@@ -186,8 +182,7 @@ async function fixture(t, { slowCreation = false, slowAck = false, outcome = "ac
     }
     fs.rmSync(root, { recursive: true, force: true });
     assert.equal(fs.existsSync(root), false);
-    assert.equal(server.listening, false);
-    t.diagnostic(JSON.stringify({ fixtureRoot: root, providerPort, providerCalls: calls, rootRemoved: true, providerStopped: true }));
+    t.diagnostic(JSON.stringify({ fixtureRoot: root, providerTransport: "in-memory", providerCalls: calls, rootRemoved: true }));
   });
   await act(async () => { renderer = create(React.createElement(I18nProvider, { initialLocale: "zh-CN" }, React.createElement(App)),
     { createNodeMock: element => element.type === "textarea" ? { style: {}, value: "", focus: noop, setSelectionRange: noop, scrollHeight: 24 } : null }); });

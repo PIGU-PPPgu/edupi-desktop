@@ -24,7 +24,17 @@ function findSidebarOwners(node) {
 findSidebarOwners(shellAst);
 assert.ok(fallback && embedded);
 const ownershipExports = {};
-vm.runInNewContext(compileText(`exports.project = (edupiEducationModule, initialSessionRestored, sidebarContent, renderSessionSidebar) => ({ fallback: ${fallback.getText(shellAst)}, embedded: ${embedded.getText(shellAst)} });`), { exports: ownershipExports });
+function projectSidebarOwner(node) {
+  if (ts.isParenthesizedExpression(node)) return projectSidebarOwner(node.expression);
+  if (ts.isConditionalExpression(node)) return `(${node.condition.getText(shellAst)} ? ${projectSidebarOwner(node.whenTrue)} : ${projectSidebarOwner(node.whenFalse)})`;
+  if (ts.isJsxElement(node)) {
+    const content = node.children.find(child => ts.isJsxExpression(child) && child.expression?.getText(shellAst) === "sidebarContent");
+    assert.ok(content, "project only the actual owned sidebar, ignoring its layout/bootstrap wrapper");
+    return content.expression.getText(shellAst);
+  }
+  return node.getText(shellAst);
+}
+vm.runInNewContext(compileText(`exports.project = (edupiEducationModule, initialSessionRestored, sidebarContent, renderSessionSidebar) => ({ fallback: ${projectSidebarOwner(fallback)}, embedded: ${embedded.getText(shellAst)} });`), { exports: ownershipExports });
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
 async function mount(initial = {}) {
@@ -55,6 +65,7 @@ async function mount(initial = {}) {
   window.innerWidth = 800; window.innerHeight = 800;
   window.HTMLElement.prototype.getBoundingClientRect = function () { return { top: 100, bottom: 128, left: 40, right: 260, width: 220, height: 28 }; };
   const modules = { react: React, "react/jsx-runtime": { jsx, jsxs, Fragment }, "react-dom": { createPortal },
+    "./ElasticPanelHandle": { ElasticPanelHandle: ({ resizer, controls, name }) => jsx("div", { ...resizer.separatorProps, "aria-controls": controls, "data-resize-handle": name }) },
     "@/hooks/useI18n": { useI18n: () => ({ t: key => key }) },
     "./FileExplorer": {}, "./ProjectPicker": {}, "./DisclosureChevron": { DisclosureChevron: () => null },
     "./path-ui": {}, "@/lib/app-prefs": {}, "@/lib/desktop-notify": {}, "@/lib/desktop-updater": {},
@@ -470,7 +481,32 @@ test("teacher caller keeps one stable frame and the narrow CSS removes the old s
   const shell = fs.readFileSync(new URL("./AppShell.tsx", import.meta.url), "utf8");
   const css = fs.readFileSync(new URL("../app/edupi-workbench.css", import.meta.url), "utf8");
   assert.equal((panel.match(/<EduPiChatSidebarFrame /g) || []).length, 1);
-  assert.match(shell, /\{edupiEducationModule && initialSessionRestored \? null : sidebarContent\}/);
+  assert.match(shell, /\{!edupiEducationModule \? \(/);
+  assert.match(shell, /!initialSessionRestored \? <div hidden inert>\{sidebarContent\}<\/div> : null/);
+  assert.match(shell, /chatSidebarResizer=\{sidebarResizer\}/);
+  assert.match(panel, /resizer=\{chatSidebarResizer\}/);
   assert.doesNotMatch(css, /\.edupi-teacher-body\.is-chat\s*\{[^}]*grid-template-rows:\s*210px/);
   assert.match(css, /\.edupi-chat-session-sidebar\[hidden\][\s\S]*?display:\s*none !important/);
+});
+
+test("the wide teacher list uses the shared resizer and the original narrow overlay has no resize control", async () => {
+  const resizer = { separatorProps: { role: "separator", "aria-valuenow": 312, tabIndex: 0 } };
+  const f = await mount({ narrow: false, resizer });
+  try {
+    const composer = f.composer(), sidebar = f.aside();
+    const handle = () => f.document.querySelector('[data-resize-handle="teacher-sidebar"]');
+    assert.equal(handle().getAttribute("aria-controls"), "edupi-chat-sidebar");
+    assert.equal(handle().getAttribute("aria-valuenow"), "312");
+    await f.type("[UI TEST] 弹性宽度草稿");
+    await f.render({ narrow: true });
+    assert.equal(handle(), null);
+    await f.click("显示对话与文件");
+    assert.equal(handle(), null);
+    await f.render({ narrow: false });
+    assert.ok(handle());
+    assert.equal(f.composer(), composer);
+    assert.equal(f.aside(), sidebar);
+    assert.equal(composer.value, "[UI TEST] 弹性宽度草稿");
+    assert.equal(f.host.sidebarMounts, 1);
+  } finally { await f.close(); }
 });

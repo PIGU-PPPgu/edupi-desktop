@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createJiti } from "jiti";
+import ts from "typescript";
 
 const jiti = createJiti(import.meta.url, {
   jsx: { runtime: "automatic" },
@@ -19,16 +20,18 @@ test("native clipboard image fallback handles an unreadable image without interc
 
 test("thinking and tool popovers keep the upstream 60vh internal scroll boundary", async () => {
   const source = await readFile(new URL("./ChatInput.tsx", import.meta.url), "utf8");
-  const thinking = source.slice(
-    source.indexOf("{thinkingDropdownOpen && (() =>"),
-    source.indexOf("{!isStreaming && onToolPresetChange"),
-  );
-  const tools = source.slice(
-    source.indexOf("{toolDropdownOpen && (() =>"),
-    source.indexOf("{!isStreaming && onCompact"),
-  );
-
-  for (const menu of [thinking, tools]) {
+  const ast = ts.createSourceFile("ChatInput.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const menus = new Map();
+  function visit(node) {
+    if (ts.isJsxExpression(node) && node.expression && ts.isBinaryExpression(node.expression)
+      && ["thinkingDropdownOpen", "toolDropdownOpen"].includes(node.expression.left.getText(ast))) {
+      menus.set(node.expression.left.getText(ast), node.expression.getText(ast));
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  assert.equal(menus.size, 2, "both real popup nodes must be present regardless of toolbar order");
+  for (const menu of menus.values()) {
     assert.match(menu, /vh \* 0\.6/);
     assert.match(menu, /maxHeight: maxH/);
     assert.match(menu, /minHeight: 0, overflowY: "auto"/);

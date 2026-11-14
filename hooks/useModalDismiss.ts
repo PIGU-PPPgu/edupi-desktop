@@ -26,12 +26,19 @@ function isHiddenByClosedDetails(element: Element): boolean {
 // one layer at a time.
 const modalStack: symbol[] = [];
 
+type ModalFocusOptions = {
+  autoFocus?: boolean;
+  restoreFocus?: () => boolean;
+};
+
 /**
  * Dialog dismissal + focus management shared by all modals:
  * - Escape calls `onDismiss` (topmost modal only)
  * - Tab is trapped inside the returned container
  * - focus moves into the dialog on mount and back to the opener on unmount
  *   unless the caller owns return focus with `restoreFocus = false`
+ * - optional focus controls suppress autofocus or guard cleanup using the
+ *   latest foreground state, including when `enabled` becomes false
  * - opt-in owned portals join the Tab cycle and handle their own Escape;
  *   an expanded control inside the panel must explicitly reference their id
  * - portal owners may synchronously query the registered topmost modal before
@@ -45,11 +52,14 @@ export function useModalDismiss<T extends HTMLElement = HTMLDivElement>(
   externalContainerRef?: RefObject<T | null>,
   restoreFocus = true,
   ownedPopupSelector?: string,
+  focusOptions?: ModalFocusOptions,
 ) {
   const internalContainerRef = useRef<T | null>(null);
   const containerRef = externalContainerRef ?? internalContainerRef;
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
+  const focusOptionsRef = useRef(focusOptions);
+  focusOptionsRef.current = focusOptions;
 
   useEffect(() => {
     if (!enabled) return;
@@ -59,7 +69,7 @@ export function useModalDismiss<T extends HTMLElement = HTMLDivElement>(
     const container = containerRef.current;
     const previouslyFocused = document.activeElement as HTMLElement | null;
 
-    if (container && !container.contains(document.activeElement)) {
+    if (focusOptionsRef.current?.autoFocus !== false && container && !container.contains(document.activeElement)) {
       const target = container.querySelector<HTMLElement>("[data-autofocus]")
         ?? container.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
         ?? container;
@@ -125,7 +135,7 @@ export function useModalDismiss<T extends HTMLElement = HTMLDivElement>(
       document.removeEventListener("edupi-modal-keyboard-owner", handleKeyboardOwner);
       const idx = modalStack.indexOf(id);
       if (idx !== -1) modalStack.splice(idx, 1);
-      if (restoreFocus) previouslyFocused?.focus?.({ preventScroll: true });
+      if (restoreFocus && focusOptionsRef.current?.restoreFocus?.() !== false) previouslyFocused?.focus?.({ preventScroll: true });
     };
   }, [enabled, containerRef, restoreFocus, ownedPopupSelector]);
 
