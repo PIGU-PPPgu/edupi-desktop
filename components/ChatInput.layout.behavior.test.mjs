@@ -102,6 +102,26 @@ test("streaming keeps priority send and stop directly in the visible model toolb
   assert.equal(f.field().props.value, "[UI TEST] 流式补充");
 });
 
+test("compact controls stay in a bounded wrapping popover with every action usable", async t => {
+  let compacts = 0, sounds = 0;
+  const f = await mount(t, { onCompact: () => compacts++, onSoundToggle: () => sounds++, soundEnabled: true,
+    onToolPresetChange: () => {}, toolPreset: "default" });
+  await f.edit("[UI TEST] 更多控件草稿");
+  await f.click("More controls");
+  const popup = f.region("chat-composer-extra-controls");
+  assert.equal(popup.props.style.left, 0);
+  assert.equal(popup.props.style.right, undefined);
+  assert.equal(popup.props.style.flexWrap, "wrap");
+  assert.equal(popup.props.style.maxWidth, "min(100%, calc(100vw - 32px))");
+  await f.click("Compact context");
+  await f.click("Disable completion sound");
+  assert.equal(compacts, 1);
+  assert.equal(sounds, 1);
+  assert.equal(f.field().props.value, "[UI TEST] 更多控件草稿");
+  await f.click("Collapse controls");
+  assert.equal(f.region("chat-composer-extra-controls").props.style.display, "none");
+});
+
 test("IME composition and its trailing Enter cannot submit the moved native editor", async t => {
   const f = await mount(t);
   await f.edit("[UI TEST] 合成输入");

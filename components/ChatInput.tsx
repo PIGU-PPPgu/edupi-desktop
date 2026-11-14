@@ -2638,7 +2638,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             flex: "0 0 auto",
             display: "flex",
             alignItems: "center",
-            position: "relative",
           }}>
             {compactControls && (
               <button
@@ -2685,20 +2684,20 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" /></svg>
               </button>
             )}
-            <div style={{
+            <div className="chat-composer-extra-controls" style={{
               display: compactControls ? (controlsMenuOpen ? "flex" : "none") : "flex",
               alignItems: "center",
               gap: compactControls ? 1 : 2,
               ...(compactControls ? {
                 position: "absolute",
-                right: 0,
+                left: 0,
                 bottom: "calc(100% + 6px)",
                 zIndex: 60,
                 padding: 1,
                 width: "max-content",
-                maxWidth: "calc(100vw - 32px)",
-                flexWrap: "nowrap",
-                justifyContent: "flex-end",
+                maxWidth: "min(100%, calc(100vw - 32px))",
+                flexWrap: "wrap",
+                justifyContent: "flex-start",
                 border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
                 borderRadius: 10,
                 background: "color-mix(in srgb, var(--bg-panel) 92%, var(--bg))",
