@@ -1,6 +1,6 @@
 # 对话侧栏与输入区验收
 
-当前状态：R18／R20 源码已实现，隔离开发页面交互与独立审查通过；`.115` 签名构建、安装与公开下载尚未验收。此记录不放行完整 L4。Core 继续固定 `98e4f7cd0c31dd30954574d2040bb1b948cdd954`。
+当前状态：**R18／R20 源码已正常合并，隔离页面交互、生产前端构建和独立审查通过；`.115` 被 Apple 公证服务的协议状态阻塞，尚无签名安装包、安装或公开发布验收。** 本机保持已公开验收的 `.114`，完整 L4 保持未放行。Core 继续固定 `98e4f7cd0c31dd30954574d2040bb1b948cdd954`。
 
 左右侧栏沿用原宽度偏好，由同一 resize hook 管理合法布局宽度。把手空闲时隐藏，悬停、聚焦和拖动时显示；SVG 根据速度弯曲，越界时产生阻尼反馈，释放后归位。取消拖动恢复起始宽度。教师对话、通用对话与右侧文件预览分别接线，窄屏沿用浮层。
 
@@ -29,6 +29,18 @@
 GitHub 自动审查发现窄屏“更多控件”沿旧方向定位，导致前部控件越出屏幕。弹层改为相对整行控件区左对齐，以容器和视口共同限宽并允许换行。320px 的实际 Chrome 中，弹层位于 `x=43…222`，全部4个控件位于 `x=45…220`；提示音切换、收起均实际操作成功。证据为 `more-controls-mobile-acceptance.json`，未将仅有限宽而位置越界的旧实现计为通过。
 
 同一复验还展开内层工具预设菜单，compact 模式同样左对齐并限宽；320px 时菜单位于 `x=46.37…226.63`，三个选项全部可见，实际选择“关闭”后菜单收起。证据为 `more-controls-nested-mobile-acceptance.json`。
+
+## 冻结与外部阻塞
+
+PR494正常合入 `6d14dbba928db133b87aa10d947214b5ba062089`，第二父提交为受测UI `2b193957a59c892ac767a76c10f8f509249afa0c`，完整tree同为 `39759b15f9e25ee93efb1e16f47403108efd907a`。源码CI43627036466的audit、rust-audit、linux-source均通过。早期4504的旧结构断言失败日志保留，修复后完整CI通过。签名专用分支 `codex/elastic-chat-115-signed-20261115` 固定合并提交，不随Main后续文档更新移动。
+
+Mac-only `phase=draft/platform=macos` run43629706865 attempt1，于北京时间2026-11-15 03:00:56在 `Check Apple notary status route before packaging` 失败。Apple实际返回HTTP403：`A required agreement is missing or has expired`。日志不足以确定是哪份协议或会员状态，需由Apple Developer账户持有人检查账户与团队状态。release及build均未执行，本轮未创建115tag、Draft或签名资产；未改凭证、切换账户、绕过公证或盲目重试。原始日志为 `~/edupi-install-checkpoints/v0.3.115/evidence/signed-attempt1-failure.log`。
+
+独立生产工作树使用冻结合并提交与精确锁文件，Next16.4.3、React19.2.4，`PI_WEB_DESKTOP_BUILD=1 next build --webpack`退出0；输出位于独立`.next-desktop`，没有污染在用开发目录。此检查证明前端生产编译通过，不构成Mac签名、安装或启动通过。
+
+浏览器capture已绑定14个实际生产UI文件。初次完整页面验收后变更的两个文件，另有More及内层工具菜单实测；其余12文件与原受测字节一致，最终14文件逐个匹配冻结合并提交。完整App中另实测任务详情→预览展开→恢复→关闭预览→Task Escape，Tab留在预览、真正关闭回原opener，输入节点与草稿保持；空间不足时任务详情浮层覆盖聊天，返回编辑前先收起预览。
+
+恢复入口：`~/edupi-install-checkpoints/v0.3.115/evidence/continuation.json`。仅在账户协议／服务状态已改变后，对同一冻结run重跑；读取真实attempt、release ID及资产后再独占创建candidate，不预填成功证据。
 
 ## 待验收
 

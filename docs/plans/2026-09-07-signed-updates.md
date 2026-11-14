@@ -1,5 +1,7 @@
 # 自动下载安装
 
+2026-11-15 R18／R20 弹性侧栏与输入区：**源码及生产前端编译通过，Mac115公证外部阻塞**。PR494正常合`6d14dbba`，source CI43627036466三项全通过。Mac-only run43629706865 attempt1的Apple预检返回HTTP403“required agreement missing or expired”，release/build跳过，115无tag／Draft／签名资产、未安装未公开；需账户持有人检查协议或会员状态后恢复同一冻结分支。本机114、正式70／feed保持。此记录取代115“仅待验收”状态；见[对话侧栏验收](../acceptance/2026-11-15-elastic-chat-panels.md)。
+
 2026-11-15 R04／L4 G4 `.114` **Mac-only公开预发布与公开DMG重装冷启验收通过**：冻结Desktop `febea954`、Core `98e4f7cd`，Release443426142三资产匿名完整摘要一致；实际原生取消0→首条1→续录取消1→第二条2，审核、两条历史、真实Quit／cold、公版重装后同记录回读及About`.114`／正式`.70`均通过。最后受控350项逐字节保持、3WebView恢复、global prefs未回写，跨日旧保护失败另存未改绿。正式Latest／feed不变，Windows/Linux暂缓，R04/R15/完整L4仍不勾选；此记录取代下方13日锁屏状态，详见[`.114`验收](../acceptance/2026-11-13-g4-macos114-release.md)。
 
 2026-11-13 R04／L4 G4 当前状态：**`.114` 源码合并、Mac签名构建和本机安装校验通过；原生两条内容验收因Mac锁屏外部阻塞，Release保持Draft，未公开。** Desktop `febea954`／PR491正常合 `2feec5e6` 同树，Core固定 `98e4f7cd`；source CI43290926327三项、109项交互及route、clean legacy/Main4均通过。Mac-only run43292901925 attempt1成功，Draft443426142的三资产完整摘要、验签／篡改拒绝、App/DMG公证、Gatekeeper、双App全树及31份冻结源码均通过；唯一App已为退出的`.114`。隔离进程因锁屏未操作任何UI，已停止并恢复3个WebView来源；350项资料与配置严格字节保持，`.112/.108`回退及失败证据保留。Draft说明已更新，正式`.70`／feed不变。实际两条录入／接受／历史／冷启、公开匿名下载及公版安装启动待解锁后继续；R04/R15/完整L4均不勾选。此段是当前状态，阶段记录保留；详见 [`.114`验收](../acceptance/2026-11-13-g4-macos114-release.md)。
