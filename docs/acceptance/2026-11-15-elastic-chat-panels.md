@@ -42,6 +42,8 @@ Mac-only `phase=draft/platform=macos` run43629706865 attempt1，于北京时间2
 
 恢复入口：`~/edupi-install-checkpoints/v0.3.115/evidence/continuation.json`。仅在账户协议／服务状态已改变后，对同一冻结run重跑；读取真实attempt、release ID及资产后再独占创建candidate，不预填成功证据。
 
+编译检查完成后，已删除独立生产工作树的`.next-desktop`与重复`node_modules`，以及已停止开发预览的`.next`；路径报告分配量3,201,728,512字节，实际可用空间增加3,259,437,056字节，见`generated115-cleanup-blocked.json`。临时唤醒断言已结束，源码、锁文件、截图、实际日志与资料回退继续保留。
+
 ## 待验收
 
 `.115` 的签名 CI、三资产身份、安装版交互、公开下载与公开安装启动必须另附实际证据。`.114` G4 Mac 已公开为预发布，公开资产复验独立记录；正式 Latest 和 updater-feed 保持原值，Windows/Linux 安装暂缓。生产资料迁移、真实模型与教学内容质量、自然跨期、系统睡眠及通知点击仍不在本次已验收范围内。
