@@ -1088,24 +1088,71 @@ span.linenumber {
   touch-action: none;
   outline: none;
 }
-.panel-resize-handle::after {
+.elastic-panel-handle svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 80px;
+  height: 160px;
+  overflow: visible;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: var(--elastic-reveal, 0);
+}
+.elastic-panel-handle path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.elastic-panel-handle__ink {
+  stroke: var(--text-dim);
+  stroke-width: var(--elastic-thickness, 0);
+}
+.elastic-panel-handle__outline {
+  stroke: var(--bg);
+  stroke-width: calc(var(--elastic-thickness, 0) + 2 * var(--elastic-reveal, 0));
+}
+.elastic-panel-handle:focus-visible::after {
   content: "";
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 5px;
-  width: 2px;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 104px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--accent);
+  border-radius: 12px;
   pointer-events: none;
-  background: transparent;
-  transition: background 0.12s ease;
-}
-.panel-resize-handle:hover::after,
-.panel-resize-handle:focus-visible::after,
-.panel-resize-handle.is-resizing::after {
-  background: color-mix(in srgb, var(--text-muted) 70%, var(--border));
 }
 .right-panel-overlay-backdrop {
   display: none;
+}
+
+/* The teacher navigation also consumes horizontal space. Keep the file viewer
+   overlaid until the navigation, both minimum panels and chat fit together. */
+@media (min-width: 960px) and (max-width: 1279px) {
+  .app-shell.is-education .right-panel-resize-handle { display: none; }
+  .app-shell.is-education .right-panel-overlay-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 240;
+    display: block;
+    background: rgba(0, 0, 0, .24);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .app-shell.is-education .right-panel-overlay-backdrop.is-open { opacity: 1; pointer-events: auto; }
+  .app-shell.is-education .right-panel-container {
+    position: fixed;
+    top: 0;
+    right: env(safe-area-inset-right);
+    bottom: 0;
+    z-index: 250;
+    width: min(560px, calc(100vw - 48px));
+    min-width: 300px;
+    overflow: hidden;
+    transform: translateX(100%);
+    pointer-events: none;
+    transition: transform .2s ease;
+  }
+  .app-shell.is-education .right-panel-container.right-panel-open { transform: translateX(0); pointer-events: auto; }
+  .app-shell.is-education .right-panel-container > * { width: 100%; min-width: 0; }
 }
 
 /* Desktop sidebar: animate width */

@@ -462,7 +462,7 @@ test("board and calendar task entries share a mounted task peek drawer", async (
   assert.match(drawer, /onOpenAgent\(task\)/);
   assert.doesNotMatch(drawer, /onClose\(\); onOpenFile/);
   assert.doesNotMatch(drawer, /onStartAgent/);
-  assert.match(drawer, /usePanelDismiss<HTMLElement>\(onClose, docked\)/);
+  assert.match(drawer, /usePanelDismiss<HTMLElement>\(onClose, docked, true, focusSuspended\)/);
   assert.match(drawer, /data-autofocus/);
   assert.match(drawer, /event\.target === event\.currentTarget/);
   assert.doesNotMatch(drawer, /addEventListener\("keydown"/);

@@ -335,7 +335,7 @@ function QueuedMessageRow({ kind, label, text }: { kind: "steer" | "follow-up"; 
   );
 }
 
-function ModelNoticeBanner({ tone, title, body }: { tone: "error" | "warning"; title: string; body: string }) {
+function ModelNoticeBanner({ tone, title, body }: { tone: "error" | "warning"; title: string; body?: string }) {
   const color = tone === "error" ? "239,68,68" : "234,179,8";
   return (
     <div
@@ -374,7 +374,7 @@ function ModelNoticeBanner({ tone, title, body }: { tone: "error" | "warning"; t
       </svg>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontWeight: 600 }}>{title}</div>
-        <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{body}</div>
+        {body ? <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{body}</div> : null}
       </div>
     </div>
   );
@@ -1911,7 +1911,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       ) : null}
       <div className="chat-composer-wrap" style={{ maxWidth: 820, margin: "0 auto" }}>
         <ModelErrorBanner error={modelError} />
-        {attachError && <ModelNoticeBanner tone="error" title={t("chat.attachmentError")} body={attachError} />}
+        {attachError && <ModelNoticeBanner tone="error" title={attachError} />}
         {dictation.error && <ModelNoticeBanner tone="error" title={t("chat.dictationError")} body={dictation.error === "not-allowed" || dictation.error === "service-not-allowed" ? t("chat.dictationPermissionDenied") : t("chat.dictationTryAgain")} />}
         <ModelScopeWarningBanner warnings={modelScopeWarnings} />
         {/* Queued steering / follow-up messages (delivered by pi on upcoming turns) */}
@@ -2032,37 +2032,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {compactError}
           </div>
         )}
-        {/* Image previews */}
-        {attachedImages.length > 0 && (
-          <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
-            {attachedImages.map((img, i) => (
-              <div key={i} style={{ position: "relative", flexShrink: 0 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={img.previewUrl}
-                  alt=""
-                  style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", display: "block" }}
-                />
-                <button
-                  onClick={() => removeImage(i)}
-                  aria-label={`移除图片 ${i + 1}`}
-                  style={{
-                    position: "absolute", top: -4, right: -4,
-                    width: 16, height: 16, borderRadius: "50%",
-                    background: "var(--bg-panel)", border: "1px solid var(--border)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    cursor: "pointer", padding: 0, color: "var(--text-muted)",
-                  }}
-                >
-                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* Main input */}
         <div style={{ position: "relative", minWidth: 0 }}>
           {historyMenuOpen && inputHistory.length > 0 && (
@@ -2394,6 +2363,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </div>
             );
           })()}
+          {/* Layout reference: user-supplied “Deep Agent Composer — React”,
+              Original Deep Agent desktop UI, with platform adapters. Only its
+              layout is referenced; its demo, assets and dependencies are unused. */}
           <div className="chat-composer">
           {draftSaveFailed ? <div className="chat-composer-save-error" role="alert">草稿暂未保存到本机，刷新前请复制内容。</div> : null}
           {pendingPrompt && !isStreaming ? <div className="chat-composer-teacher-offer" role="status">
@@ -2450,22 +2422,40 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             <details><summary>{resource.title}</summary><pre>{resource.reference}</pre></details>
             <button type="button" aria-label={`移除${resource.title}引用`} onClick={() => setContext(current => current ? removeComposerResource(current, resource.id) : null)}>×</button>
           </div>)}</div> : null}
+        {/* Image previews */}
+        {attachedImages.length > 0 && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+            {attachedImages.map((img, i) => (
+              <div key={i} style={{ position: "relative", flexShrink: 0 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={img.previewUrl}
+                  alt=""
+                  style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", display: "block" }}
+                />
+                <button
+                  onClick={() => removeImage(i)}
+                  aria-label={`移除图片 ${i + 1}`}
+                  style={{
+                    position: "absolute", top: -4, right: -4,
+                    width: 16, height: 16, borderRadius: "50%",
+                    background: "var(--bg-panel)", border: "1px solid var(--border)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", padding: 0, color: "var(--text-muted)",
+                  }}
+                >
+                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
           <div
             className="chat-composer-editor"
-            style={{
-              minWidth: 0,
-              display: "flex",
-              gap: 8,
-              alignItems: "center",
-              background: "var(--bg)",
-              border: `1px solid ${bashMode ? "var(--tool-bg)" : isStreaming && (hasStreamingQueueActions || hasStreamingPriorityAction)
-                ? "rgba(234,179,8,0.4)"
-                : "color-mix(in srgb, var(--border) 70%, transparent)"}`,
-              borderRadius: 14,
-              padding: "10px 10px 10px 14px",
-              boxShadow: "0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.10)",
-              transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
-            } as React.CSSProperties}
+
           >
           <textarea
             ref={textareaRef}
@@ -2499,6 +2489,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 : context ? "说说你希望 EduPi 做什么…" : "描述教学目标，或继续当前任务…"
             }
             rows={1}
+            aria-label={locale === "zh-CN" ? "消息" : "Message"}
             style={{
               flex: 1,
               minWidth: 0,
@@ -2511,80 +2502,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               fontSize: 14,
               lineHeight: 1.6,
               fontFamily: "inherit",
-              minHeight: 24,
+              minHeight: 60,
               maxHeight: 200,
               overflow: "auto",
             }}
           />
 
-          {dictation.supported ? <button
-            type="button"
-            className="native-toolbar-button"
-            onClick={dictation.toggle}
-            disabled={isStreaming}
-            title={dictation.listening ? t("chat.stopDictation") : t("chat.startDictation")}
-            aria-label={dictation.listening ? t("chat.stopDictation") : t("chat.startDictation")}
-            aria-pressed={dictation.listening}
-            style={{
-              display: "grid",
-              width: 32,
-              height: 32,
-              flex: "0 0 32px",
-              placeItems: "center",
-              alignSelf: "flex-end",
-              padding: 0,
-              border: 0,
-              borderRadius: 8,
-              background: dictation.listening ? "var(--bg-hover)" : "transparent",
-              color: dictation.listening ? "var(--accent)" : "var(--text-muted)",
-              cursor: isStreaming ? "not-allowed" : "pointer",
-              opacity: isStreaming ? 0.45 : 1,
-            }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6" /></svg>
-          </button> : null}
-
-          {isStreaming ? (
-            <div className="chat-composer-stream-actions">
-              {hasStreamingQueueActions && onFollowUp ? <button type="button" className="chat-composer-stream-actions__queue"
-                onClick={() => void sendQueued("followup")} disabled={!canQueueStreamingMessage}
-                aria-label={t("chat.followUp")} title={t("chat.followUpTitle")}>{t("chat.followUp")}</button> : null}
-              {hasStreamingPriorityAction ? <button type="button" className="chat-composer-stream-actions__priority"
-                onClick={() => { if (steerPriority) void sendQueued("steer"); else void sendInterrupt(); }}
-                disabled={!canPriorityStreamingMessage}
-                aria-label={steerPriority ? t("chat.steer") : t("chat.stopAndSend")}
-                title={steerPriority ? t("chat.steerTitle") : t("chat.stopAndSendTitle")}
-              >{steerPriority ? t("chat.steer") : t("chat.stopAndSend")}</button> : null}
-            </div>
-          ) : (
-            <button
-              className="native-primary-button composer-send-button"
-              onClick={handleSend}
-              disabled={!canSendMessage}
-              aria-label={t("chat.send")}
-              title={t("chat.send")}
-              style={{
-                flexShrink: 0,
-                alignSelf: "flex-end",
-                display: "flex", width: 38, height: 34, padding: 0, alignItems: "center", justifyContent: "center",
-                background: canSendMessage ? "var(--accent)" : "var(--bg-panel)",
-                border: "none",
-                borderRadius: 8,
-                color: canSendMessage ? "var(--accent-contrast)" : "var(--text-dim)",
-                cursor: canSendMessage ? "pointer" : "not-allowed",
-                fontSize: 13,
-                fontWeight: 600,
-                letterSpacing: "-0.01em",
-                boxShadow: canSendMessage ? "0 1px 3px var(--focus-ring)" : "none",
-                transition: "background 0.15s, box-shadow 0.15s",
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="2" y1="7" x2="11" y2="7" />
-                <polyline points="7.5 3 12 7 7.5 11" />
-              </svg>
-            </button>
-          )}
           </div>
 
         {/* Bash mode status label */}
@@ -2594,17 +2517,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           </div>
         )}
 
-        {/* Bottom bar: left | center (context) | right */}
-        <div className="chat-composer-controls" style={{
-          marginTop: 8,
-          display: isMobile ? "grid" : "flex",
-          gridTemplateColumns: isMobile ? "minmax(0, 1fr) auto" : undefined,
-          alignItems: "center",
-          gap: 6,
-        }}>
+        {/* Attachments and permissions on the left; model, reasoning and send on the right. */}
+        <div className="chat-composer-controls">
 
-          {/* LEFT: attach + model selector (idle) or steer/followup toggle (streaming) */}
-          <div style={{ flex: isMobile ? "1 1 auto" : "0 0 auto", minWidth: 0, display: "flex", alignItems: "center", gap: 2 }}>
+          <div className="chat-composer-primary-tools">
             <div ref={attachmentMenuRef} style={{ position: "relative", flexShrink: 0 }}>
               <button
                 type="button"
@@ -2690,6 +2606,335 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 ) : null}
               </div>
             )}
+            {!teacherMode ? <ExtensionStatusBar statuses={extensionStatuses} /> : null}
+          {dictation.supported ? <button
+            type="button"
+            className="native-toolbar-button"
+            onClick={dictation.toggle}
+            disabled={isStreaming}
+            title={dictation.listening ? t("chat.stopDictation") : t("chat.startDictation")}
+            aria-label={dictation.listening ? t("chat.stopDictation") : t("chat.startDictation")}
+            aria-pressed={dictation.listening}
+            style={{
+              display: "grid",
+              width: 32,
+              height: 32,
+              flex: "0 0 32px",
+              placeItems: "center",
+              alignSelf: "flex-end",
+              padding: 0,
+              border: 0,
+              borderRadius: 8,
+              background: dictation.listening ? "var(--bg-hover)" : "transparent",
+              color: dictation.listening ? "var(--accent)" : "var(--text-muted)",
+              cursor: isStreaming ? "not-allowed" : "pointer",
+              opacity: isStreaming ? 0.45 : 1,
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6" /></svg>
+          </button> : null}
+
+          <div ref={controlsMenuRef} style={{
+            flex: "0 0 auto",
+            display: "flex",
+            alignItems: "center",
+          }}>
+            {compactControls && (
+              <button
+                type="button"
+                 title={controlsMenuOpen ? undefined : t("chat.moreControls")}
+                 aria-label={t("chat.moreControls")}
+                aria-expanded={controlsMenuOpen}
+                aria-hidden={controlsMenuOpen || undefined}
+                tabIndex={controlsMenuOpen ? -1 : undefined}
+                onClick={() => {
+                  setModelDropdownOpen(false);
+                  setModelFilter("");
+                  setControlsMenuOpen(true);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "100%",
+                  height: 32,
+                  padding: "8px 10px",
+                  background: "none",
+                  border: "none",
+                  borderRadius: 9,
+                  color: "var(--text-muted)",
+                  cursor: controlsMenuOpen ? "default" : "pointer",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  visibility: controlsMenuOpen ? "hidden" : "visible",
+                  pointerEvents: controlsMenuOpen ? "none" : "auto",
+                  transition: "background 0.12s, color 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  if (controlsMenuOpen) return;
+                  e.currentTarget.style.background = "var(--bg-hover)";
+                  e.currentTarget.style.color = "var(--text)";
+                }}
+                onMouseLeave={(e) => {
+                  if (controlsMenuOpen) return;
+                  e.currentTarget.style.background = "none";
+                  e.currentTarget.style.color = "var(--text-muted)";
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" /></svg>
+              </button>
+            )}
+            <div className="chat-composer-extra-controls" style={{
+              display: compactControls ? (controlsMenuOpen ? "flex" : "none") : "flex",
+              alignItems: "center",
+              gap: compactControls ? 1 : 2,
+              ...(compactControls ? {
+                position: "absolute",
+                left: 0,
+                bottom: "calc(100% + 6px)",
+                zIndex: 60,
+                padding: 1,
+                width: "max-content",
+                maxWidth: "min(100%, calc(100vw - 32px))",
+                flexWrap: "wrap",
+                justifyContent: "flex-start",
+                border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
+                borderRadius: 10,
+                background: "color-mix(in srgb, var(--bg-panel) 92%, var(--bg))",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+                backdropFilter: "blur(10px)",
+              } : null),
+            }}>
+            {!isStreaming && onToolPresetChange && (
+              <div ref={toolDropdownRef} style={{ position: "relative" }}>
+                <button
+                  className="native-toolbar-button"
+                  onClick={() => !isStreaming && setToolDropdownOpen((v) => !v)}
+                  disabled={isStreaming}
+                   title={t("chat.changeToolPreset") + `: ${toolPresetLabel}`}
+                   aria-label={t("chat.changeToolPreset")}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                    padding: isMobile ? "0 6px" : "8px 12px",
+                    width: isMobile ? "auto" : undefined,
+                    height: 32,
+                    background: toolDropdownOpen ? "var(--bg-hover)" : "none",
+                    border: "none",
+                    borderRadius: 9,
+                    color: "var(--text-muted)",
+                    cursor: isStreaming ? "not-allowed" : "pointer",
+                    fontSize: 12,
+                    opacity: isStreaming ? 0.5 : 1,
+                    transition: "background 0.12s, color 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isStreaming) return;
+                    e.currentTarget.style.background = "var(--bg-hover)";
+                    e.currentTarget.style.color = "var(--text)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = toolDropdownOpen ? "var(--bg-hover)" : "none";
+                    e.currentTarget.style.color = "var(--text-muted)";
+                  }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                  </svg>
+                  {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
+                </button>
+                {toolDropdownOpen && (() => {
+                  const vh = typeof window !== "undefined" ? window.visualViewport?.height ?? window.innerHeight : 800;
+                  const maxH = Math.max(120, vh * 0.6);
+                  return (
+                  <div className="native-popover chat-composer-tool-presets" style={{
+                    position: "absolute", bottom: "calc(100% + 6px)",
+                    ...(compactControls ? { left: 0 } : { right: 0 }),
+                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
+                    borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
+                    overflow: "hidden", minWidth: 120, maxWidth: "calc(100vw - 32px)",
+                    maxHeight: maxH, display: "flex", flexDirection: "column",
+                  }}>
+                    <div style={{ minHeight: 0, overflowY: "auto" }}>
+                    {TOOL_PRESETS.map((lvl) => {
+                      const preset = TOOL_PRESET_MAP[lvl];
+                      const isActive = (toolPreset ?? "default") === preset;
+                       const desc = lvl === "off" ? t("chat.noTools") : lvl === "default" ? t("chat.builtInTools", { count: 4 }) : t("chat.allBuiltInTools");
+                      return (
+                        <button
+                          key={lvl}
+                          onClick={() => { setToolDropdownOpen(false); if (!isActive) onToolPresetChange(preset); }}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            width: "100%", padding: "7px 12px",
+                            background: isActive ? "var(--bg-selected)" : "none",
+                            border: "none",
+                            color: isActive ? "var(--text)" : "var(--text-muted)",
+                            cursor: "pointer", fontSize: 12, textAlign: "left",
+                            fontWeight: isActive ? 600 : 400,
+                            whiteSpace: "nowrap",
+                          }}
+                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
+                        >
+                          {isActive
+                            ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
+                            : <span style={{ width: 10, flexShrink: 0 }} />}
+                          <span style={{ flex: 1 }}>{locale === "zh-CN" ? ({ off: "关闭", default: "默认", full: "完整" } as const)[lvl] : lvl}</span>
+                          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
+                        </button>
+                      );
+                    })}
+                    </div>
+                  </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {!isStreaming && onCompact && (
+              <div style={{ position: "relative" }}>
+                {compactError && (
+                  <div style={{
+                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
+                    background: "#1f2937", color: "var(--danger)",
+                    fontSize: 11, padding: "4px 8px", borderRadius: 5,
+                    whiteSpace: "nowrap", pointerEvents: "none",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.2)", zIndex: 50,
+                  }}>
+                    {compactError}
+                  </div>
+                )}
+                <button
+                  className="native-toolbar-button"
+                  onClick={isCompacting ? onAbortCompaction : onCompact}
+                  disabled={isStreaming && !isCompacting}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                    padding: isMobile ? "0 6px" : "8px 12px",
+                    width: isMobile ? "auto" : undefined,
+                    height: 32,
+                    background: isCompacting ? "color-mix(in srgb, var(--danger) 8%, transparent)" : "none",
+                    border: "none",
+                    borderRadius: 9,
+                    color: isCompacting ? "var(--danger)" : "var(--text-muted)",
+                    cursor: (isStreaming && !isCompacting) ? "not-allowed" : "pointer",
+                    fontSize: 12, opacity: (isStreaming && !isCompacting) ? 0.5 : 1,
+                    transition: "background 0.12s, color 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isStreaming && !isCompacting) return;
+                    e.currentTarget.style.background = isCompacting ? "color-mix(in srgb, var(--danger) 16%, transparent)" : "var(--bg-hover)";
+                    e.currentTarget.style.color = isCompacting ? "var(--danger)" : "var(--text)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = isCompacting ? "color-mix(in srgb, var(--danger) 8%, transparent)" : "none";
+                    e.currentTarget.style.color = isCompacting ? "var(--danger)" : "var(--text-muted)";
+                  }}
+                   title={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
+                   aria-label={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
+                >
+                  {isCompacting ? (
+                    <><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" /></svg>{(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{t("chat.compacting")}</span>}</>
+                  ) : (
+                    <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
+                      <line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" />
+                    </svg>{(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{t("chat.compact")}</span>}</>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {onSoundToggle !== undefined && (
+              <button
+                className="native-toolbar-button"
+                onClick={onSoundToggle}
+                 title={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
+                 aria-label={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                  width: isMobile ? 32 : 32,
+                  height: 32,
+                  padding: 0,
+                  background: "none",
+                  border: "none",
+                  borderRadius: 9,
+                  color: soundEnabled ? "var(--text-muted)" : "var(--text-dim)",
+                  cursor: "pointer",
+                  opacity: soundEnabled ? 1 : 0.55,
+                  transition: "background 0.12s, color 0.12s, opacity 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--bg-hover)";
+                  e.currentTarget.style.color = "var(--text)";
+                  e.currentTarget.style.opacity = "1";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "none";
+                  e.currentTarget.style.color = soundEnabled ? "var(--text-muted)" : "var(--text-dim)";
+                  e.currentTarget.style.opacity = soundEnabled ? "1" : "0.55";
+                }}
+              >
+                {soundEnabled ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                  </svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <line x1="23" y1="9" x2="17" y2="15" />
+                    <line x1="17" y1="9" x2="23" y2="15" />
+                  </svg>
+                )}
+              </button>
+            )}
+            {teacherMode && extensionStatuses.length ? <details><summary style={{ fontSize: 12, padding: "6px 8px", cursor: "pointer", whiteSpace: "nowrap" }}>运行详情</summary><ExtensionStatusBar statuses={extensionStatuses} /></details> : null}
+            {compactControls && controlsMenuOpen && (
+              <button
+                type="button"
+                 title={t("chat.collapseControls")}
+                 aria-label={t("chat.collapseControls")}
+                aria-expanded={true}
+                onClick={() => {
+                  setToolDropdownOpen(false);
+                  setThinkingDropdownOpen(false);
+                  setControlsMenuOpen(false);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 36,
+                  height: 32,
+                  padding: 0,
+                  marginLeft: 0,
+                  background: "var(--bg-hover)",
+                  border: "none",
+                  borderLeft: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
+                  borderRadius: "0 9px 9px 0",
+                  color: "var(--text)",
+                  cursor: "pointer",
+                  transition: "background 0.12s, color 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--bg-selected)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "var(--bg-hover)";
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            )}
+            </div>
+          </div>
+          </div>
+          <div className="chat-composer-model-tools">
             {/* Model selector — visible always, disabled during streaming */}
             {(modelOptions.length > 0 || currentName || modelError) && onModelChange && (
                 <div ref={dropdownRef} style={{ position: "relative", flex: isMobile ? "1 1 auto" : undefined, minWidth: 0 }}>
@@ -2752,7 +2997,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     // viewport so long model names never push the panel off-screen.
                     const panelPos: React.CSSProperties = isMobile
                       ? { left: 8, right: 8, maxWidth: "calc(100vw - 16px)" }
-                      : { left: modelDropdownRect.left, width: "max-content", minWidth: modelDropdownRect.width };
+                      : { right: Math.max(8, window.innerWidth - modelDropdownRect.left - modelDropdownRect.width), width: "max-content", maxWidth: "calc(100vw - 16px)", minWidth: Math.min(modelDropdownRect.width, window.innerWidth - 16) };
                     return (
                       <div ref={modelDropdownPanelRef} className="native-popover" style={{
                       position: "fixed",
@@ -2849,87 +3094,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   })()}
                 </div>
             )}
-            {!teacherMode ? <ExtensionStatusBar statuses={extensionStatuses} /> : null}
-          </div>
-
-          {/* spacer */}
-          {!isMobile && <div style={{ flex: 1 }} />}
-
-          {/* RIGHT: thinking + tools preset + compact + sound (idle) | Stop + sound (streaming) */}
-          <div ref={controlsMenuRef} style={{
-            flex: "0 0 auto",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            position: "relative",
-            marginLeft: isMobile ? 0 : "auto",
-          }}>
-            {compactControls && (
-              <button
-                type="button"
-                 title={controlsMenuOpen ? undefined : t("chat.moreControls")}
-                 aria-label={t("chat.moreControls")}
-                aria-expanded={controlsMenuOpen}
-                aria-hidden={controlsMenuOpen || undefined}
-                tabIndex={controlsMenuOpen ? -1 : undefined}
-                onClick={() => {
-                  setModelDropdownOpen(false);
-                  setModelFilter("");
-                  setControlsMenuOpen(true);
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: "100%",
-                  height: 32,
-                  padding: "8px 10px",
-                  background: "none",
-                  border: "none",
-                  borderRadius: 9,
-                  color: "var(--text-muted)",
-                  cursor: controlsMenuOpen ? "default" : "pointer",
-                  fontSize: 12,
-                  fontWeight: 500,
-                  visibility: controlsMenuOpen ? "hidden" : "visible",
-                  pointerEvents: controlsMenuOpen ? "none" : "auto",
-                  transition: "background 0.12s, color 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  if (controlsMenuOpen) return;
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text)";
-                }}
-                onMouseLeave={(e) => {
-                  if (controlsMenuOpen) return;
-                  e.currentTarget.style.background = "none";
-                  e.currentTarget.style.color = "var(--text-muted)";
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" /></svg>
-              </button>
-            )}
-            <div style={{
-              display: compactControls ? (controlsMenuOpen ? "flex" : "none") : "flex",
-              alignItems: "center",
-              gap: compactControls ? 1 : 2,
-              ...(compactControls ? {
-                position: "absolute",
-                right: 0,
-                bottom: "calc(100% + 6px)",
-                zIndex: 60,
-                padding: 1,
-                width: "max-content",
-                maxWidth: "calc(100vw - 32px)",
-                flexWrap: "nowrap",
-                justifyContent: "flex-end",
-                border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
-                borderRadius: 10,
-                background: "color-mix(in srgb, var(--bg-panel) 92%, var(--bg))",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
-                backdropFilter: "blur(10px)",
-              } : null),
-            }}>
             {!isStreaming && onThinkingLevelChange && (
               <div ref={thinkingDropdownRef} style={{ position: "relative" }}>
                 <button
@@ -3026,145 +3190,47 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 })()}
               </div>
             )}
-            {!isStreaming && onToolPresetChange && (
-              <div ref={toolDropdownRef} style={{ position: "relative" }}>
-                <button
-                  className="native-toolbar-button"
-                  onClick={() => !isStreaming && setToolDropdownOpen((v) => !v)}
-                  disabled={isStreaming}
-                   title={t("chat.changeToolPreset") + `: ${toolPresetLabel}`}
-                   aria-label={t("chat.changeToolPreset")}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 6px" : "8px 12px",
-                    width: isMobile ? "auto" : undefined,
-                    height: 32,
-                    background: toolDropdownOpen ? "var(--bg-hover)" : "none",
-                    border: "none",
-                    borderRadius: 9,
-                    color: "var(--text-muted)",
-                    cursor: isStreaming ? "not-allowed" : "pointer",
-                    fontSize: 12,
-                    opacity: isStreaming ? 0.5 : 1,
-                    transition: "background 0.12s, color 0.12s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (isStreaming) return;
-                    e.currentTarget.style.background = "var(--bg-hover)";
-                    e.currentTarget.style.color = "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = toolDropdownOpen ? "var(--bg-hover)" : "none";
-                    e.currentTarget.style.color = "var(--text-muted)";
-                  }}
-                >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                  </svg>
-                  {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
-                </button>
-                {toolDropdownOpen && (() => {
-                  const vh = typeof window !== "undefined" ? window.visualViewport?.height ?? window.innerHeight : 800;
-                  const maxH = Math.max(120, vh * 0.6);
-                  return (
-                  <div className="native-popover" style={{
-                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
-                    borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
-                    overflow: "hidden", minWidth: 120,
-                    maxHeight: maxH, display: "flex", flexDirection: "column",
-                  }}>
-                    <div style={{ minHeight: 0, overflowY: "auto" }}>
-                    {TOOL_PRESETS.map((lvl) => {
-                      const preset = TOOL_PRESET_MAP[lvl];
-                      const isActive = (toolPreset ?? "default") === preset;
-                       const desc = lvl === "off" ? t("chat.noTools") : lvl === "default" ? t("chat.builtInTools", { count: 4 }) : t("chat.allBuiltInTools");
-                      return (
-                        <button
-                          key={lvl}
-                          onClick={() => { setToolDropdownOpen(false); if (!isActive) onToolPresetChange(preset); }}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "7px 12px",
-                            background: isActive ? "var(--bg-selected)" : "none",
-                            border: "none",
-                            color: isActive ? "var(--text)" : "var(--text-muted)",
-                            cursor: "pointer", fontSize: 12, textAlign: "left",
-                            fontWeight: isActive ? 600 : 400,
-                            whiteSpace: "nowrap",
-                          }}
-                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
-                        >
-                          {isActive
-                            ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-                            : <span style={{ width: 10, flexShrink: 0 }} />}
-                          <span style={{ flex: 1 }}>{locale === "zh-CN" ? ({ off: "关闭", default: "默认", full: "完整" } as const)[lvl] : lvl}</span>
-                          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
-                        </button>
-                      );
-                    })}
-                    </div>
-                  </div>
-                  );
-                })()}
-              </div>
-            )}
-
-            {!isStreaming && onCompact && (
-              <div style={{ position: "relative" }}>
-                {compactError && (
-                  <div style={{
-                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    background: "#1f2937", color: "var(--danger)",
-                    fontSize: 11, padding: "4px 8px", borderRadius: 5,
-                    whiteSpace: "nowrap", pointerEvents: "none",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.2)", zIndex: 50,
-                  }}>
-                    {compactError}
-                  </div>
-                )}
-                <button
-                  className="native-toolbar-button"
-                  onClick={isCompacting ? onAbortCompaction : onCompact}
-                  disabled={isStreaming && !isCompacting}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 6px" : "8px 12px",
-                    width: isMobile ? "auto" : undefined,
-                    height: 32,
-                    background: isCompacting ? "color-mix(in srgb, var(--danger) 8%, transparent)" : "none",
-                    border: "none",
-                    borderRadius: 9,
-                    color: isCompacting ? "var(--danger)" : "var(--text-muted)",
-                    cursor: (isStreaming && !isCompacting) ? "not-allowed" : "pointer",
-                    fontSize: 12, opacity: (isStreaming && !isCompacting) ? 0.5 : 1,
-                    transition: "background 0.12s, color 0.12s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (isStreaming && !isCompacting) return;
-                    e.currentTarget.style.background = isCompacting ? "color-mix(in srgb, var(--danger) 16%, transparent)" : "var(--bg-hover)";
-                    e.currentTarget.style.color = isCompacting ? "var(--danger)" : "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isCompacting ? "color-mix(in srgb, var(--danger) 8%, transparent)" : "none";
-                    e.currentTarget.style.color = isCompacting ? "var(--danger)" : "var(--text-muted)";
-                  }}
-                   title={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
-                   aria-label={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
-                >
-                  {isCompacting ? (
-                    <><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" /></svg>{(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{t("chat.compacting")}</span>}</>
-                  ) : (
-                    <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
-                      <line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" />
-                    </svg>{(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{t("chat.compact")}</span>}</>
-                  )}
-                </button>
-              </div>
-            )}
-
+          {isStreaming ? (
+            <div className="chat-composer-stream-actions">
+              {hasStreamingQueueActions && onFollowUp ? <button type="button" className="chat-composer-stream-actions__queue"
+                onClick={() => void sendQueued("followup")} disabled={!canQueueStreamingMessage}
+                aria-label={t("chat.followUp")} title={t("chat.followUpTitle")}>{t("chat.followUp")}</button> : null}
+              {hasStreamingPriorityAction ? <button type="button" className="chat-composer-stream-actions__priority"
+                onClick={() => { if (steerPriority) void sendQueued("steer"); else void sendInterrupt(); }}
+                disabled={!canPriorityStreamingMessage}
+                aria-label={steerPriority ? t("chat.steer") : t("chat.stopAndSend")}
+                title={steerPriority ? t("chat.steerTitle") : t("chat.stopAndSendTitle")}
+              >{steerPriority ? t("chat.steer") : t("chat.stopAndSend")}</button> : null}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="native-primary-button composer-send-button"
+              onClick={handleSend}
+              disabled={!canSendMessage}
+              aria-label={t("chat.send")}
+              title={t("chat.send")}
+              style={{
+                flexShrink: 0,
+                alignSelf: "flex-end",
+                display: "flex", width: 38, height: 34, padding: 0, alignItems: "center", justifyContent: "center",
+                background: canSendMessage ? "var(--accent)" : "var(--bg-panel)",
+                border: "none",
+                borderRadius: 8,
+                color: canSendMessage ? "var(--accent-contrast)" : "var(--text-dim)",
+                cursor: canSendMessage ? "pointer" : "not-allowed",
+                fontSize: 13,
+                fontWeight: 600,
+                letterSpacing: "-0.01em",
+                boxShadow: canSendMessage ? "0 1px 3px var(--focus-ring)" : "none",
+                transition: "background 0.15s, box-shadow 0.15s",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M7 12V2M3 6l4-4 4 4" />
+              </svg>
+            </button>
+          )}
             {isStreaming && (
               <button
                 onClick={onAbort}
@@ -3189,94 +3255,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </button>
             )}
 
-            {onSoundToggle !== undefined && (
-              <button
-                className="native-toolbar-button"
-                onClick={onSoundToggle}
-                 title={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
-                 aria-label={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                  width: isMobile ? 32 : 32,
-                  height: 32,
-                  padding: 0,
-                  background: "none",
-                  border: "none",
-                  borderRadius: 9,
-                  color: soundEnabled ? "var(--text-muted)" : "var(--text-dim)",
-                  cursor: "pointer",
-                  opacity: soundEnabled ? 1 : 0.55,
-                  transition: "background 0.12s, color 0.12s, opacity 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text)";
-                  e.currentTarget.style.opacity = "1";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "none";
-                  e.currentTarget.style.color = soundEnabled ? "var(--text-muted)" : "var(--text-dim)";
-                  e.currentTarget.style.opacity = soundEnabled ? "1" : "0.55";
-                }}
-              >
-                {soundEnabled ? (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                  </svg>
-                ) : (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                    <line x1="23" y1="9" x2="17" y2="15" />
-                    <line x1="17" y1="9" x2="23" y2="15" />
-                  </svg>
-                )}
-              </button>
-            )}
-            {teacherMode && extensionStatuses.length ? <details><summary style={{ fontSize: 12, padding: "6px 8px", cursor: "pointer", whiteSpace: "nowrap" }}>运行详情</summary><ExtensionStatusBar statuses={extensionStatuses} /></details> : null}
-            {compactControls && controlsMenuOpen && (
-              <button
-                type="button"
-                 title={t("chat.collapseControls")}
-                 aria-label={t("chat.collapseControls")}
-                aria-expanded={true}
-                onClick={() => {
-                  setToolDropdownOpen(false);
-                  setThinkingDropdownOpen(false);
-                  setControlsMenuOpen(false);
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 36,
-                  height: 32,
-                  padding: 0,
-                  marginLeft: 0,
-                  background: "var(--bg-hover)",
-                  border: "none",
-                  borderLeft: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
-                  borderRadius: "0 9px 9px 0",
-                  color: "var(--text)",
-                  cursor: "pointer",
-                  transition: "background 0.12s, color 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-selected)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            )}
-            </div>
+
           </div>
+
+
 
           </div>
         </div>

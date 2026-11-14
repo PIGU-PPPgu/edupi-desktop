@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { EducationContract, EducationEntityDeleteKind, TaskReviewAction, TeacherTask } from "@/lib/edupi-education-contract";
 import { calendarSelectionFromLink, calendarSelectionLink, type CalendarItemSelection } from "@/lib/edupi-calendar-model";
@@ -70,6 +70,8 @@ import type { CreateTeacherTaskInput, CreateTeacherTaskOutcome } from "@/lib/edu
 import { hasEveryTrackedTask, mergeTaskRefreshRequirement, refreshUntilTaskVisible, type TaskRefreshRequirement } from "@/lib/edupi-task-refresh";
 import { isTerminalPreparationRead, workspaceHasReadyPreparation } from "@/lib/edupi-preparation-status";
 import type { EduPiMaterialLessonProposal, EduPiMaterialScheduleProposal } from "@/lib/edupi-core-process-client";
+import type { ResizablePanel } from "@/hooks/useResizablePanel";
+import { DESKTOP_CHAT_MIN_WIDTH, SIDEBAR_DEFAULT_WIDTH, TEACHER_TASK_PANEL_WIDTH } from "@/lib/panel-layout";
 
 function RetryWorkspaceIcon() {
   return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7" /><path d="M20 4v7h-7" /></svg>;
@@ -87,7 +89,10 @@ type Props = {
   chatPanel: ReactNode;
   reminderPanel: ReactNode;
   chatSidebar: ReactNode;
+  chatSidebarResizer?: ResizablePanel;
+  onChatLayoutChange?: () => void;
   chatSidebarSuspended?: boolean;
+  chatPreviewForeground?: boolean;
   renderFilePreview: (path: string) => ReactNode;
   onOpenAdmin: () => void;
   onOpenSettings: () => void;
@@ -133,12 +138,14 @@ function hasDroppedFiles(event: ReactDragEvent): boolean {
   return Array.from(event.dataTransfer.types).includes("Files");
 }
 
-export function EduPiEducationPanel({ initialModule = "home", refreshKey, activeAgentSessionId, onActivateAgentSession, chatPanel, reminderPanel, chatSidebar, chatSidebarSuspended = false, renderFilePreview, onOpenAdmin, onOpenSettings, onOpenProactive, onOpenGuide, onOpenPhoneControl, onPrepareAgentPrompt, onReplaceAgentPrompt, onPrepareTeacherDraft, quickEntryOpen, onOpenQuickEntry, onNewConversation, onCloseQuickEntry, onFocusAgentChat }: Props) {
+export function EduPiEducationPanel({ initialModule = "home", refreshKey, activeAgentSessionId, onActivateAgentSession, chatPanel, reminderPanel, chatSidebar, chatSidebarResizer, onChatLayoutChange, chatSidebarSuspended = false, chatPreviewForeground = false, renderFilePreview, onOpenAdmin, onOpenSettings, onOpenProactive, onOpenGuide, onOpenPhoneControl, onPrepareAgentPrompt, onReplaceAgentPrompt, onPrepareTeacherDraft, quickEntryOpen, onOpenQuickEntry, onNewConversation, onCloseQuickEntry, onFocusAgentChat }: Props) {
   const foregroundPolicy = useEduPiForegroundPolicy();
   const router = useRouter();
   const searchParams = useSearchParams();
   const desktopChrome = useDesktopChrome();
   const widePanel = useDockedPanel();
+  const chatBodyRef = useRef<HTMLDivElement>(null);
+  const [chatBodyWidth, setChatBodyWidth] = useState(0);
   const requestedView = searchParams.get("view");
   const requestedModule = searchParams.get("module");
   const requestedStage = searchParams.get("stage");
@@ -1340,7 +1347,23 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     return () => cancelAnimationFrame(frame);
   }, [activeView, drawer, onPrepareAgentPrompt, onReplaceAgentPrompt, onPrepareTeacherDraft, pendingAgentPrompt, pendingAgentPromptMode]);
 
-  if (shouldShowBlockingEducationLoad(education)) {
+  const workspaceReady = !shouldShowBlockingEducationLoad(education);
+  const sidebarWidth = chatSidebarResizer?.width ?? SIDEBAR_DEFAULT_WIDTH;
+  const chatDetailsFit = chatBodyWidth >= sidebarWidth + DESKTOP_CHAT_MIN_WIDTH + TEACHER_TASK_PANEL_WIDTH;
+  useLayoutEffect(() => {
+    const body = chatBodyRef.current;
+    if (!body || !workspaceReady) return;
+    const measure = () => {
+      setChatBodyWidth(body.clientWidth);
+      onChatLayoutChange?.();
+    };
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(body);
+    return () => observer?.disconnect();
+  }, [activeView, chatDetailsFit, navigationRail.collapsed, onChatLayoutChange, workspaceReady]);
+
+  if (!workspaceReady || !education) {
     return <section className={`edupi-teacher-shell is-loading${desktopChrome.isDesktop ? " has-desktop-drag-region" : ""}`}>{desktopChrome.isDesktop ? <div className="edupi-window-drag-region" {...desktopChrome.dragRegionProps}><WindowControls /></div> : null}<div className="edupi-workbench-loading" role={loadError ? "alert" : "status"}><span>π</span><strong>{loadError || "正在读取教育工作区"}</strong>{loadError ? <div><button type="button" onClick={retryLoadWorkspace}>重试</button><button type="button" onClick={onOpenAdmin}>打开设置</button></div> : null}</div></section>;
   }
 
@@ -1363,7 +1386,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     artifactsUnavailable: Boolean(education.workspaceResourcesUnavailable),
     onOpen: () => openTaskDetail(chatTask, true),
   } : null;
-  const dockedDetails = widePanel && activeView === "chat" && !showingReminders;
+  const dockedDetails = widePanel && chatDetailsFit && activeView === "chat" && !showingReminders;
   const hasTaskPane = dockedDetails && Boolean(taskDetail || drawer === "file");
   const detailReviewable = taskDetail && !loadError && isTaskReviewable(taskDetail, workCaseForTask(education, taskDetail.id))
     && (education.workCandidates.some(item => item.taskId === taskDetail.id) ? education.capabilities.workCandidateReview : education.capabilities.taskReview).enabled;
@@ -1386,10 +1409,10 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       {educationFileDragOver ? <div className="edupi-global-material-drop" role="status" aria-live="polite"><strong>放入 EduPi</strong><span>松开后识别材料、日程与课表</span></div> : null}
       <EduPiNavigationRail activeView={activeView} pendingReviewCount={pendingCount + c1PendingCount + factPendingCount + teacherContextPendingCount} runningAgentCount={runningAgentCount} memoryCount={education.continuity.memories.filter((memory) => memory.state === "active" && isUserFacingMemory(memory)).length} workspaceLabel={context?.school || context?.name || "教师工作区"} collapsed={navigationRail.collapsed} onSelect={selectView} onOpenAdmin={onOpenAdmin} onOpenSettings={onOpenSettings} onOpenProactive={onOpenProactive} onOpenGuide={onOpenGuide} onOpenPhoneControl={onOpenPhoneControl} onCollapse={navigationRail.toggle} />
       <div className="edupi-teacher-app">
-        <div className={`edupi-teacher-body${activeView === "chat" ? " is-chat" : ""}${showingReminders ? " is-reminders" : ""}${bodyControlsVisible ? " has-body-controls" : ""}${detailSurfaceOpen ? " has-detail-surface" : ""}${objectSiderAvailable ? " has-object-sider" : ""}${objectSiderAvailable && effectiveObjectNavigationCollapsed ? " is-object-sider-collapsed" : ""}${inspectorAvailable && inspectorOpen ? " has-inspector" : ""}${hasTaskPane ? " has-task-pane" : ""}`} style={bodyControlStyle}>
+        <div ref={chatBodyRef} className={`edupi-teacher-body${activeView === "chat" ? " is-chat" : ""}${showingReminders ? " is-reminders" : ""}${bodyControlsVisible ? " has-body-controls" : ""}${detailSurfaceOpen ? " has-detail-surface" : ""}${objectSiderAvailable ? " has-object-sider" : ""}${objectSiderAvailable && effectiveObjectNavigationCollapsed ? " is-object-sider-collapsed" : ""}${inspectorAvailable && inspectorOpen ? " has-inspector" : ""}${hasTaskPane ? " has-task-pane" : ""}`} style={bodyControlStyle}>
           {bodyControlsVisible ? <div className="edupi-teacher-body__controls">{loadError ? <button className="edupi-teacher-body__icon-button" type="button" onClick={retryLoadWorkspace} aria-label="重试读取工作区" title={`重试读取工作区：${loadError}`}><RetryWorkspaceIcon /></button> : null}{inspectorAvailable ? <button className={`edupi-teacher-body__icon-button${inspectorOpen ? " is-open" : ""}`} type="button" onClick={toggleInspector} aria-label={inspectorOpen ? "收起检查" : "打开检查"} title={inspectorOpen ? "收起检查" : "打开检查"} aria-pressed={inspectorOpen}><InspectorIcon /></button> : null}</div> : null}
           {objectSiderAvailable ? <EduPiObjectSider foreground={objectNavigationForeground} hidden={!showObjectSider} containerRef={objectNavigationRef} collapseButtonRef={objectNavigationCollapseRef} view={activeView} data={education} context={context} memoryScopes={memoryScopes} teachingSkills={teachingSkills} query={query} onQuery={updateQuery} selectedStudentId={selectedStudentId} onStudent={selectStudent} selectedObjectId={selectedObjectId} onObject={selectObject} onNavigate={selectView} selectedTaskKey={activeTask ? taskKey(activeTask) : null} onTask={selectTask} onReviewTarget={focusC1Review} selectedCalendarSourceId={calendarSelection?.sourceId ?? null} onCalendarItem={selectCalendarItem} onUpload={openUpload} onCollapse={collapseObjectNavigation} /> : null}
-          <EduPiChatSidebarFrame active={activeView === "chat" && !showingReminders} narrow={narrowObjectNavigation} scope={JSON.stringify([education.workspace, objectNavigationModalScope, chatSidebarSuspended])} sidebar={chatSidebar} onFocusChat={onFocusAgentChat}>
+          <EduPiChatSidebarFrame active={activeView === "chat" && !showingReminders} narrow={narrowObjectNavigation} scope={JSON.stringify([education.workspace, objectNavigationModalScope, chatSidebarSuspended])} sidebar={chatSidebar} resizer={chatSidebarResizer} onFocusChat={onFocusAgentChat}>
           <div ref={objectNavigationMainRef} inert={objectNavigationForeground} className={`edupi-teacher-main${activeView === "chat" ? " is-chat" : ""}`}>
             {objectSiderAvailable && effectiveObjectNavigationCollapsed ? <EduPiObjectNavigationRestore rootRef={objectNavigationMainRef} buttonRef={objectNavigationRestoreRef} view={activeView} onExpand={expandObjectNavigation} onReady={focusObjectNavigation} /> : null}
             <EduPiTaskRunContext.Provider value={chatTaskInfo}>
@@ -1408,8 +1431,8 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
           </div>
           </EduPiChatSidebarFrame>
           {inspectorAvailable ? <EduPiInspector open={inspectorOpen} data={education} task={activeTask} onClose={toggleInspector} onOpenAgent={openAgent} onStage={selectStage} /> : null}
-      {taskDetail ? <EduPiTaskDetailDrawer task={taskDetail} workCase={workCaseForTask(education, taskDetail.id)} files={education.generatedArtifacts} workspace={education.workspace} docked={dockedDetails} unavailable={Boolean(loadError)} artifactsUnavailable={education.workspaceResourcesUnavailable} onClose={closeTaskDetail} onOpenFile={openTaskFile} onOpenTask={selectTask} onReview={detailReviewable ? () => selectTask(taskDetail, "review") : undefined} onOpenAgent={openAgentForTask} onDelete={(task) => { if (task.id) void deleteEntity("task", task.id, task.title).catch(() => {}); }} onRecurringStage={moveBoardTask} onUpdateRecurring={updateRecurringTask} onReactivateRecurring={reactivateRecurringTask} deleteBusy={deleteBusy === `task:${taskDetail.id}`} agentBusy={taskSessionBusy} agentError={taskSessionError ? "会话暂不可用，请重试" : null} /> : null}
-      {drawer === "file" ? <FileWorkspaceDrawer kind="file" docked={dockedDetails} onBack={fileReturnTaskKey ? () => closeDrawer(true) : undefined} task={activeView === "tasks" || activeView === "review" ? activeTask : undefined} filePath={previewPath} fileTitle={education?.generatedArtifacts?.find(file => file.artifact_id === previewArtifactId || previewPath?.replaceAll("\\", "/").endsWith(`/${file.relative_path.replaceAll("\\", "/")}`))?.title || previewArtifact?.title || education?.teacherMaterials?.find(file => previewPath?.replaceAll("\\", "/").endsWith(`/${file.relative_path.replaceAll("\\", "/")}`))?.title} filePanel={previewPath ? <EduPiArtifactUsageContext.Provider value={previewUsageTarget ? { target: previewUsageTarget, filePath: previewPath } : null}>{previewArtifactId ? <EduPiPreparationArtifactEditor
+      {taskDetail ? <EduPiTaskDetailDrawer task={taskDetail} workCase={workCaseForTask(education, taskDetail.id)} files={education.generatedArtifacts} workspace={education.workspace} docked={dockedDetails} focusSuspended={chatPreviewForeground} unavailable={Boolean(loadError)} artifactsUnavailable={education.workspaceResourcesUnavailable} onClose={closeTaskDetail} onOpenFile={openTaskFile} onOpenTask={selectTask} onReview={detailReviewable ? () => selectTask(taskDetail, "review") : undefined} onOpenAgent={openAgentForTask} onDelete={(task) => { if (task.id) void deleteEntity("task", task.id, task.title).catch(() => {}); }} onRecurringStage={moveBoardTask} onUpdateRecurring={updateRecurringTask} onReactivateRecurring={reactivateRecurringTask} deleteBusy={deleteBusy === `task:${taskDetail.id}`} agentBusy={taskSessionBusy} agentError={taskSessionError ? "会话暂不可用，请重试" : null} /> : null}
+      {drawer === "file" ? <FileWorkspaceDrawer kind="file" docked={dockedDetails} focusSuspended={chatPreviewForeground} onBack={fileReturnTaskKey ? () => closeDrawer(true) : undefined} task={activeView === "tasks" || activeView === "review" ? activeTask : undefined} filePath={previewPath} fileTitle={education?.generatedArtifacts?.find(file => file.artifact_id === previewArtifactId || previewPath?.replaceAll("\\", "/").endsWith(`/${file.relative_path.replaceAll("\\", "/")}`))?.title || previewArtifact?.title || education?.teacherMaterials?.find(file => previewPath?.replaceAll("\\", "/").endsWith(`/${file.relative_path.replaceAll("\\", "/")}`))?.title} filePanel={previewPath ? <EduPiArtifactUsageContext.Provider value={previewUsageTarget ? { target: previewUsageTarget, filePath: previewPath } : null}>{previewArtifactId ? <EduPiPreparationArtifactEditor
         key={previewArtifactId}
         artifactId={previewArtifactId}
         workspace={education.workspace}

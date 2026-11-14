@@ -50,6 +50,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { APP_PREF_KEYS, getPrefBool, getPrefJson, setPrefBool, setPrefJson } from "@/lib/app-prefs";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
+import { ElasticPanelHandle } from "./ElasticPanelHandle";
 import { copyText } from "@/lib/clipboard";
 import { useDesktopConnection } from "@/lib/desktop-connection";
 import { DesktopConnectionNotice } from "./DesktopConnectionNotice";
@@ -68,12 +69,15 @@ import {
   getDefaultRightPanelWidth,
   getRightPanelMaxWidth,
   getSidebarMaxWidth,
+  DESKTOP_CHAT_MIN_WIDTH,
   RIGHT_PANEL_FALLBACK_WIDTH,
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
   SIDEBAR_DEFAULT_WIDTH,
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
+  TEACHER_NARROW_MAX_WIDTH,
+  TEACHER_SPLIT_PANEL_MIN_WIDTH,
 } from "@/lib/panel-layout";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { ProjectTrustStatus } from "@/lib/api-types";
@@ -220,6 +224,20 @@ export function AppShell() {
   const desktopChrome = useDesktopChrome();
   const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
   const rightPanelWidthRef = useRef(RIGHT_PANEL_FALLBACK_WIDTH);
+  const getTeacherReservedWidth = useCallback((includeTask = true) => {
+    if (!edupiChatActive || typeof document === "undefined") return 0;
+    const shell = document.querySelector<HTMLElement>(".edupi-teacher-shell");
+    const body = shell?.querySelector<HTMLElement>(".edupi-teacher-body");
+    if (!shell || !body) return 0;
+    const navigationWidth = window.innerWidth > TEACHER_NARROW_MAX_WIDTH
+      ? shell.clientWidth - body.clientWidth : 0;
+    const taskPane = body.querySelector<HTMLElement>(".edupi-task-detail-layer.is-docked, .edupi-workspace-drawer.is-docked");
+    const taskWidth = taskPane?.getBoundingClientRect().width ?? 0;
+    // A shrinking body will undock details in EducationPanel's next layout.
+    // Do not persist a smaller sidebar because of that outgoing task track.
+    const taskFits = body.clientWidth >= sidebarWidthRef.current + DESKTOP_CHAT_MIN_WIDTH + taskWidth;
+    return Math.max(0, navigationWidth) + (includeTask && taskFits ? taskWidth : 0);
+  }, [edupiChatActive]);
   const getResponsiveRightPanelWidth = useCallback(
     () => typeof window === "undefined"
       ? RIGHT_PANEL_FALLBACK_WIDTH
@@ -227,24 +245,27 @@ export function AppShell() {
     [],
   );
   const getResponsiveSidebarMaxWidth = useCallback(
-    () => typeof window === "undefined"
+    () => typeof window === "undefined" || edupiEducationModule && (!edupiChatActive || window.innerWidth <= TEACHER_NARROW_MAX_WIDTH)
       ? SIDEBAR_MAX_WIDTH
       : getSidebarMaxWidth({
         viewportWidth: window.innerWidth,
-        rightPanelOpen,
+        rightPanelOpen: rightPanelOpen && !rightPanelExpanded && (!edupiEducationModule || window.innerWidth >= TEACHER_SPLIT_PANEL_MIN_WIDTH),
         rightPanelWidth: rightPanelWidthRef.current,
+        reservedWidth: getTeacherReservedWidth(),
+        chatMinWidth: edupiEducationModule ? DESKTOP_CHAT_MIN_WIDTH : undefined,
       }),
-    [rightPanelOpen],
+    [edupiChatActive, edupiEducationModule, getTeacherReservedWidth, rightPanelExpanded, rightPanelOpen],
   );
   const getResponsiveRightPanelMaxWidth = useCallback(
-    () => typeof window === "undefined"
+    () => typeof window === "undefined" || rightPanelExpanded || edupiEducationModule && (!edupiChatActive || window.innerWidth < TEACHER_SPLIT_PANEL_MIN_WIDTH)
       ? RIGHT_PANEL_MAX_WIDTH
       : getRightPanelMaxWidth({
         viewportWidth: window.innerWidth,
-        sidebarOpen,
+        sidebarOpen: edupiEducationModule ? edupiChatActive && window.innerWidth > TEACHER_NARROW_MAX_WIDTH : sidebarOpen,
         sidebarWidth: sidebarWidthRef.current,
+        reservedWidth: getTeacherReservedWidth(false),
       }),
-    [sidebarOpen],
+    [edupiChatActive, edupiEducationModule, getTeacherReservedWidth, rightPanelExpanded, sidebarOpen],
   );
   const sidebarResizer = useResizablePanel({
     ariaLabel: translate("layout.resizeSidebar"),
@@ -271,6 +292,10 @@ export function AppShell() {
   });
   const reclampSidebarWidth = sidebarResizer.reclampWidth;
   const reclampRightPanelWidth = rightPanelResizer.reclampWidth;
+  const reclampChatPanels = useCallback(() => {
+    reclampSidebarWidth();
+    reclampRightPanelWidth();
+  }, [reclampSidebarWidth, reclampRightPanelWidth]);
   // On mobile the sidebar is an overlay drawer; hide it by default so the chat
   // is visible on load. Runs once the breakpoint resolves after hydration.
   useEffect(() => {
@@ -1573,7 +1598,7 @@ export function AppShell() {
       }
     `}</style>
     <div
-      className="app-shell"
+      className={`app-shell${edupiEducationModule ? " is-education" : ""}`}
       inert={edupiAdminOpen ? true : undefined}
       aria-hidden={edupiAdminOpen ? true : undefined}
       style={{
@@ -1590,7 +1615,7 @@ export function AppShell() {
       <DesktopConnectionNotice state={connectionState} retry={retryConnection} diagnostics={connectionDiagnostics} failureIncident={connectionFailureIncident}
         detailsOpen={connectionDetailsOpen} onOpenDetails={() => setConnectionDetailsOpen(true)} onCloseDetails={() => setConnectionDetailsOpen(false)} />
       <SafeModeBanner />
-      <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+      <div ref={sidebarResizer.panelRef} style={{ "--sidebar-width": `${sidebarResizer.width}px`, display: "flex", flex: 1, minHeight: 0, overflow: "hidden" } as React.CSSProperties}>
       {/* Mobile overlay backdrop */}
       <div
         className={`sidebar-overlay-backdrop${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
@@ -1608,15 +1633,14 @@ export function AppShell() {
       />
 
       {/* Left sidebar */}
+      {!edupiEducationModule ? (
       <div
-        ref={sidebarResizer.panelRef}
         id="session-sidebar"
         className={`app-sidebar sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}${sidebarResizer.isResizing ? " sidebar-resizing" : ""}`}
         style={{
-          "--sidebar-width": `${sidebarResizer.width}px`,
           background: "var(--bg-panel)",
           borderRight: "1px solid var(--border)",
-          display: edupiEducationModule ? "none" : "flex",
+          display: "flex",
           flexDirection: "column",
           flexShrink: 0,
           paddingTop: "env(safe-area-inset-top)",
@@ -1624,14 +1648,13 @@ export function AppShell() {
           zIndex: 200,
         } as React.CSSProperties}
       >
-        {edupiEducationModule && initialSessionRestored ? null : sidebarContent}
+        {sidebarContent}
       </div>
+      ) : !initialSessionRestored ? <div hidden inert>{sidebarContent}</div> : null}
       {!edupiEducationModule && sidebarOpen && (
-        <div
-          {...sidebarResizer.separatorProps}
-          aria-controls="session-sidebar"
-          className={`panel-resize-handle sidebar-resize-handle${sidebarResizer.isResizing ? " is-resizing" : ""}`}
-          data-resize-handle="sidebar"
+        <ElasticPanelHandle resizer={sidebarResizer} controls="session-sidebar"
+          className="sidebar-resize-handle"
+          name="sidebar"
           title={`${translate("layout.resizeSidebar")}: ${translate("layout.resizeHint")}`}
         />
       )}
@@ -2169,7 +2192,10 @@ export function AppShell() {
               chatPanel={edupiChatWindow}
               reminderPanel={edupiReminderPanel}
               chatSidebar={initialSessionRestored ? renderSessionSidebar("embedded-chat") : null}
+              chatSidebarResizer={sidebarResizer}
+              onChatLayoutChange={reclampChatPanels}
               chatSidebarSuspended={edupiAdminOpen}
+              chatPreviewForeground={rightPanelOpen && filePanelAvailable}
               renderFilePreview={(filePath) => (
                 <FileViewer
                   embedded
@@ -2264,11 +2290,9 @@ export function AppShell() {
         style={{ display: filePanelAvailable ? undefined : "none" }}
       />
       {filePanelAvailable && rightPanelOpen && !rightPanelExpanded && (
-        <div
-          {...rightPanelResizer.separatorProps}
-          aria-controls="file-panel"
-          className={`panel-resize-handle right-panel-resize-handle${rightPanelResizer.isResizing ? " is-resizing" : ""}`}
-          data-resize-handle="right-panel"
+        <ElasticPanelHandle resizer={rightPanelResizer} controls="file-panel"
+          className="right-panel-resize-handle"
+          name="right-panel"
           title={`${translate("layout.resizeFilePanel")}: ${translate("layout.resizeHint")}`}
         />
       )}

@@ -2,12 +2,15 @@
 
 import { cloneElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
+import type { ResizablePanel } from "@/hooks/useResizablePanel";
+import { ElasticPanelHandle } from "./ElasticPanelHandle";
 
 type Props = {
   active: boolean;
   narrow: boolean;
   scope: string;
   sidebar: ReactNode;
+  resizer?: ResizablePanel;
   onFocusChat: () => void;
   children: ReactElement<{ inert?: boolean }>;
 };
@@ -26,7 +29,7 @@ function invalidateOwnedMenus(panel: HTMLElement | null) {
 }
 
 /** Keep the list and composer in fixed slots while the narrow list is hidden. */
-export function EduPiChatSidebarFrame({ active, narrow, scope, sidebar, onFocusChat, children }: Props) {
+export function EduPiChatSidebarFrame({ active, narrow, scope, sidebar, resizer, onFocusChat, children }: Props) {
   const context = useMemo(() => ({ active, narrow, scope }), [active, narrow, scope]);
   const [revealed, setRevealed] = useState<typeof context | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
@@ -110,6 +113,8 @@ export function EduPiChatSidebarFrame({ active, narrow, scope, sidebar, onFocusC
       role={foreground ? "dialog" : undefined} aria-modal={foreground ? "true" : undefined} aria-label="对话与文件">
       <header className="edupi-chat-sidebar-header"><strong>对话与文件</strong><button type="button" data-autofocus onClick={() => dismiss("trigger")} aria-label="收起对话与文件" title="收起对话与文件">×</button></header>
       <div className="edupi-chat-session-sidebar__content">{sidebar}</div>
+      {resizer && visible && !narrow ? <ElasticPanelHandle resizer={resizer} controls="edupi-chat-sidebar"
+        className="edupi-chat-resize-handle" name="teacher-sidebar" /> : null}
     </aside>
     {foreground ? <button type="button" className="edupi-chat-sidebar-backdrop" tabIndex={-1} aria-label="关闭对话与文件" onClick={() => dismiss("trigger")} /> : null}
     <button ref={triggerRef} type="button" className="edupi-chat-sidebar-trigger" hidden={!active || !narrow || foreground} inert={!active || !narrow || foreground}
