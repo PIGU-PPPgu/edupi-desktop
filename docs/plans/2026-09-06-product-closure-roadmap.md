@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-16 R18／R20 `.115`：**同源签名重试 attempt 2 仍被 Apple HTTP403 阻塞**。用户表示账户状态应已恢复后，实际重跑run43629706865，冻结Desktop`6d14dbba`／Core`98e4f7cd`不变。北京时间03:04:20公证预检再次提示必需协议缺失或已过期，release/build跳过；已认证核对115无tag、Release或签名资产，未安装未公开。当前结果取代下方attempt1状态；前端生产构建及页面证据继续有效。本机114、正式70／feed不变，完整L4未放行。原始日志与exact-attempt API已留存，见[对话侧栏验收](../acceptance/2026-11-15-elastic-chat-panels.md)。
+
 2026-11-15 R18／R20 弹性侧栏与输入区：**源码及生产前端编译通过，Mac115公证外部阻塞**。PR494正常合`6d14dbba`，受测`2b193957`与merge同树，source CI43627036466三项全通过。实际页面验证双栏、草稿、SDK本地回执、插队／停止、预览与窄屏两层菜单；独立审查缺陷已修复。Mac-only run43629706865 attempt1的Apple预检返回HTTP403“required agreement missing or expired”，release/build跳过，115无tag／Draft／签名资产、未安装未公开；需账户持有人检查协议或会员状态后恢复同一冻结分支。本机114及其公开安装验收保留、正式70／feed不变。此记录取代115“仅待验收”状态；见[对话侧栏验收](../acceptance/2026-11-15-elastic-chat-panels.md)。
 
 2026-11-15 R04／L4 G4 `.114` **Mac-only公开预发布与公开DMG重装冷启验收通过**：冻结Desktop `febea954`、Core `98e4f7cd`，Release443426142三资产匿名完整摘要一致；实际原生取消0→首条1→续录取消1→第二条2，审核、两条历史、真实Quit／cold、公版重装后同记录回读及About`.114`／正式`.70`均通过。最后受控350项逐字节保持、3WebView恢复、global prefs未回写，跨日旧保护失败另存未改绿。正式Latest／feed不变，Windows/Linux暂缓，R04/R15/完整L4仍不勾选；此记录取代下方13日锁屏状态，详见[`.114`验收](../acceptance/2026-11-13-g4-macos114-release.md)。
