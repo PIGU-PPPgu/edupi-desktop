@@ -1,6 +1,6 @@
 # 对话侧栏与输入区验收
 
-当前状态：**R18／R20 源码已正常合并，隔离页面交互、生产前端构建和独立审查通过；`.115` 被 Apple 公证服务的协议状态阻塞，尚无签名安装包、安装或公开发布验收。** 本机保持已公开验收的 `.114`，完整 L4 保持未放行。Core 继续固定 `98e4f7cd0c31dd30954574d2040bb1b948cdd954`。
+当前状态：**R18／R20 源码已正常合并，隔离页面交互、生产前端构建和独立审查通过；2026-11-16 同源签名重试 attempt 2 仍被 Apple 协议状态的 HTTP 403 阻塞，尚无 `.115` 签名安装包、安装或公开发布验收。** 本机保持已公开验收的 `.114`，完整 L4 保持未放行。Core 继续固定 `98e4f7cd0c31dd30954574d2040bb1b948cdd954`。
 
 左右侧栏沿用原宽度偏好，由同一 resize hook 管理合法布局宽度。把手空闲时隐藏，悬停、聚焦和拖动时显示；SVG 根据速度弯曲，越界时产生阻尼反馈，释放后归位。取消拖动恢复起始宽度。教师对话、通用对话与右侧文件预览分别接线，窄屏沿用浮层。
 
@@ -36,11 +36,13 @@ PR494正常合入 `6d14dbba928db133b87aa10d947214b5ba062089`，第二父提交�
 
 Mac-only `phase=draft/platform=macos` run43629706865 attempt1，于北京时间2026-11-15 03:00:56在 `Check Apple notary status route before packaging` 失败。Apple实际返回HTTP403：`A required agreement is missing or has expired`。日志不足以确定是哪份协议或会员状态，需由Apple Developer账户持有人检查账户与团队状态。release及build均未执行，本轮未创建115tag、Draft或签名资产；未改凭证、切换账户、绕过公证或盲目重试。原始日志为 `~/edupi-install-checkpoints/v0.3.115/evidence/signed-attempt1-failure.log`。
 
+2026-11-16 用户表示账户状态应已恢复后，执行 `gh run rerun 43629706865 --repo PIGU-PPPgu/edupi-desktop`。同一冻结源码的真实 attempt 2、job132922502376 于北京时间03:04:20再次在 `xcrun notarytool history` 返回相同 HTTP403，run 与 exact attempt 均最终 failure，release/build仍为skipped。已认证 API 复核115 Release及tag均404；签名分支仍为`6d14dbba`，正式Latest仍为`v0.3.70`，updater-feed仍为`7924328ee893c9527adb54e25b0023e9f2a26ff7`。当前阻塞状态以本次结果为准，首轮日志保留；证据为 `~/edupi-install-checkpoints/v0.3.115/evidence/notary-preflight-attempt2-blocked-20261116.json`、同目录`signing-attempt2-final-20261116.json`及`signed-attempt2-failure-20261116.log`。本轮未下载、安装或启动候选，未创建candidate或成功proof；日志仍不足以指出具体待处理的协议。
+
 独立生产工作树使用冻结合并提交与精确锁文件，Next16.4.3、React19.2.4，`PI_WEB_DESKTOP_BUILD=1 next build --webpack`退出0；输出位于独立`.next-desktop`，没有污染在用开发目录。此检查证明前端生产编译通过，不构成Mac签名、安装或启动通过。
 
 浏览器capture已绑定14个实际生产UI文件。初次完整页面验收后变更的两个文件，另有More及内层工具菜单实测；其余12文件与原受测字节一致，最终14文件逐个匹配冻结合并提交。完整App中另实测任务详情→预览展开→恢复→关闭预览→Task Escape，Tab留在预览、真正关闭回原opener，输入节点与草稿保持；空间不足时任务详情浮层覆盖聊天，返回编辑前先收起预览。
 
-恢复入口：`~/edupi-install-checkpoints/v0.3.115/evidence/continuation.json`。仅在账户协议／服务状态已改变后，对同一冻结run重跑；读取真实attempt、release ID及资产后再独占创建candidate，不预填成功证据。
+恢复入口：`~/edupi-install-checkpoints/v0.3.115/evidence/continuation.json`。attempt 2 已实际重试并失败；仅在账户协议／服务状态有新变化后，对同一冻结run重跑，读取真实attempt、release ID及资产后再独占创建candidate，不预填成功证据。
 
 编译检查完成后，已删除独立生产工作树的`.next-desktop`与重复`node_modules`，以及已停止开发预览的`.next`；路径报告分配量3,201,728,512字节，实际可用空间增加3,259,437,056字节，见`generated115-cleanup-blocked.json`。临时唤醒断言已结束，源码、锁文件、截图、实际日志与资料回退继续保留。
 
