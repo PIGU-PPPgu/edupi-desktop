@@ -146,7 +146,7 @@ jobs:
 
   build:
     needs: release
-    if: inputs.phase == 'draft'
+    if: ${{ !cancelled() && inputs.phase == 'draft' && needs.release.result == 'success' }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -519,6 +519,18 @@ jobs:
           bash scripts/verify-macos-bundle-triad.sh \
             "$app_path" "${dmgs[0]}" \
             "src-tauri/target/${{ matrix.target }}/release/bundle/macos/EduPi.app.tar.gz"
+
+      - name: Verify final updater signatures and signed version
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.release.outputs.version }}
+          RELEASE_TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          node scripts/verify-updater-signatures.mjs \
+            --bundle-root "src-tauri/target/$RELEASE_TARGET/release/bundle" \
+            --target "$RELEASE_TARGET" --version "$RELEASE_VERSION" \
+            --config src-tauri/tauri.conf.json
 
       - name: Replace verified macOS draft assets
         if: runner.os == 'macOS'

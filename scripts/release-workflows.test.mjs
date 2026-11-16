@@ -387,7 +387,7 @@ test("signed draft builds and manifest publication require separate dispatches",
   assert.match(releaseJob, /if \[ "\$RELEASE_PHASE" = "publish" \]; then[\s\S]*?No accepted draft exists/);
   assert.match(releaseJob, /release_draft.*!= "true"/);
   assert.match(releaseJob, /release_target.*!= "\$GITHUB_SHA"/);
-  assert.match(buildJob, /needs: release\s*\n\s*if: inputs\.phase == 'draft'/);
+  assert.match(buildJob, /needs: release\s*\n\s*if: \$\{\{ !cancelled\(\) && inputs\.phase == 'draft' && needs\.release\.result == 'success' \}\}/);
   assert.match(proofJob, /needs: \[release, build\]\s*\n\s*if: inputs\.phase == 'draft' && inputs\.platform == 'all'/);
   assert.match(proofJob, /release-draft-proof\.mjs fingerprint/);
   assert.match(manifestJob, /needs: \[release, build, draft-proof\]/);
@@ -779,7 +779,7 @@ test("signed Draft build installs the Linux Debian candidate before draft proof 
   const signed = build.indexOf("name: Build, sign, and upload updater artifacts");
   const installed = build.indexOf("name: Install signed Linux candidate and verify isolated Core startup");
   assert.ok(signed >= 0 && installed > signed);
-  assert.match(build, /needs: release\s+if: inputs\.phase == 'draft'/u);
+  assert.match(build, /needs: release\s+if: \$\{\{ !cancelled\(\) && inputs\.phase == 'draft' && needs\.release\.result == 'success' \}\}/u);
   const step = build.slice(installed, build.indexOf("\n      - name:", installed));
   assert.match(step, /if: runner\.os == 'Linux'/u);
   assert.match(step, /EDUPI_TEST_RELEASE: \$\{\{ needs\.release\.outputs\.tag \}\}/u);
