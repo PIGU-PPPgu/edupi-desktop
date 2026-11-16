@@ -1,5 +1,9 @@
 # 自动下载安装
 
+2026-11-16 R18／R20 `.115`：**Mac签名、私有冷启、公开预发布、匿名三资产完整下载和公开DMG重装冷启通过**。同源`6d14dbba`／Core`98e4f7cd`、run43629706865 attempt4、Release446714564；本机115及114回退已核验。两次原G4两条历史、版本、真实Quit及350项／3WebView恢复通过，最终公开证明独立生成；原生键盘调宽、草稿和预览通过，鼠标自动拖动仍无结论。先前失败与额外时机等待另存。当前状态取代下方进行中记录；正式Latest70与feed保持，Windows/Linux、自动升级完整流程及完整L4不放行。见[对话侧栏验收](../acceptance/2026-11-15-elastic-chat-panels.md)。
+
+2026-11-16 R18／R20 `.115`：**Apple 预检已恢复，同源attempt 4的Mac签名构建进行中**。固定Desktop`6d14dbba`／Core`98e4f7cd`、run43629706865；15:18:35预检success，Draft446714564已创建，标签精确固定源码。attempt3的403与账户观察另存，当前记录取代下方协议阻塞状态；安装与公开复验待完成，本机114、正式70／feed保持。见[对话侧栏验收](../acceptance/2026-11-15-elastic-chat-panels.md)。
+
 2026-11-16 R18／R20 `.115`：**同源签名重试 attempt 2 仍被 Apple HTTP403 阻塞**。用户表示账户状态应已恢复后，实际重跑run43629706865，冻结Desktop`6d14dbba`／Core`98e4f7cd`不变。北京时间03:04:20公证预检再次提示必需协议缺失或已过期，release/build跳过；已认证核对115无tag、Release或签名资产，未安装未公开。当前结果取代下方attempt1状态；前端生产构建仍通过，本机114、正式70／feed保持。原始日志与exact-attempt API已留存，见[对话侧栏验收](../acceptance/2026-11-15-elastic-chat-panels.md)。
 
 2026-11-15 R18／R20 弹性侧栏与输入区：**源码及生产前端编译通过，Mac115公证外部阻塞**。PR494正常合`6d14dbba`，source CI43627036466三项全通过。Mac-only run43629706865 attempt1的Apple预检返回HTTP403“required agreement missing or expired”，release/build跳过，115无tag／Draft／签名资产、未安装未公开；需账户持有人检查协议或会员状态后恢复同一冻结分支。本机114、正式70／feed保持。此记录取代115“仅待验收”状态；见[对话侧栏验收](../acceptance/2026-11-15-elastic-chat-panels.md)。
