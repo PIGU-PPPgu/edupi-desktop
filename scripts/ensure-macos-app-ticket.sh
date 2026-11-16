@@ -61,7 +61,7 @@ codesign --force --sign "$APPLE_SIGNING_IDENTITY" --keychain "$EDUPI_RESOURCE_KE
 codesign --verify --verbose=2 "$dmg"
 
 COPYFILE_DISABLE=1 tar -czf "$updater" -C "$mac_dir" EduPi.app
-node_modules/.bin/tauri signer sign "$updater"
+node_modules/.bin/tauri signer sign --app-version "$RELEASE_VERSION" "$updater"
 test -s "$updater"
 test -s "$updater.sig"
 printf 'EDUPI_MAC_APP_REPACKED=1\n' >> "$GITHUB_ENV"

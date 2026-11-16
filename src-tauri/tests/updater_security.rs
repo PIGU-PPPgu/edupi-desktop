@@ -13,7 +13,7 @@ fn update(version: &str, signature: &str) -> Update {
     let mut context = tauri::test::mock_context(tauri::test::noop_assets());
     context.config_mut().plugins.0.insert(
         "updater".into(),
-        json!({ "pubkey": STANDARD.encode(PUBLIC_KEY) }),
+        json!({ "pubkey": STANDARD.encode(PUBLIC_KEY), "requireSignedVersion": true }),
     );
     let app = tauri::test::mock_builder()
         .plugin(
@@ -110,7 +110,7 @@ fn production_configuration_keeps_transport_and_downgrade_guards() {
         serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
     let config: Config = serde_json::from_value(value["plugins"]["updater"].clone()).unwrap();
     assert!(!config.allow_downgrades);
-    assert!(!config.require_signed_version);
+    assert!(config.require_signed_version);
     assert!(!config.dangerous_insecure_transport_protocol);
     assert!(!config.dangerous_accept_invalid_certs);
     assert!(!config.dangerous_accept_invalid_hostnames);

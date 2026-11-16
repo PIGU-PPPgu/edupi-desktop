@@ -36,6 +36,7 @@
   },
   "plugins": {
     "updater": {
+      "requireSignedVersion": true,
       "endpoints": [
         "https://raw.githubusercontent.com/PIGU-PPPgu/edupi-desktop/updater-feed/latest.json",
         "https://raw.githubusercontent.com/Intellinfinity/edupi-desktop/updater-feed/latest.json",
