@@ -39,6 +39,7 @@ use tauri::{
 
 mod computer_use;
 mod foreground_prefs;
+mod isolated_update_feed;
 mod reminder_notification;
 mod reminder_notification_gate;
 #[cfg(windows)]
@@ -2988,6 +2989,23 @@ fn start_development_server(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let isolated_feed_value = env::var(isolated_update_feed::ENV).ok();
+    let route1_marker = env::var(ROUTE1_ISOLATED_CANARY_ENV).ok();
+    let isolated_feed = isolated_update_feed::from_inputs(
+        route1_marker.as_deref(), isolated_feed_value.as_deref(),
+    ).expect("invalid isolated updater configuration");
+    if isolated_feed.is_some() && !cfg!(feature = "custom-protocol") {
+        panic!("isolated update acceptance requires the packaged application");
+    }
+    let mut context = tauri::generate_context!();
+    if let Some(feed) = isolated_feed {
+        let updater = context.config_mut().plugins.0.get_mut("updater")
+            .and_then(serde_json::Value::as_object_mut)
+            .expect("missing updater configuration");
+        updater.insert("endpoints".into(), serde_json::json!([feed.as_str()]));
+        // A cohort must not relabel an otherwise valid signed package.
+        updater.insert("requireSignedVersion".into(), serde_json::json!(true));
+    }
     if safe_mode_requested() {
         env::set_var("EDUPI_SAFE_MODE", "1");
     }
@@ -3155,7 +3173,7 @@ pub fn run() {
                 }
             }
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("failed to build Pi Agent desktop app");
 
     app.run(|app_handle, event| match event {

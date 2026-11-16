@@ -67,10 +67,19 @@ jobs:
             throw "Downloaded installer differs from the Draft asset digest"
           }
           "Draft asset source: $($release.target_commitish); verifier: $env:GITHUB_SHA" >> $env:GITHUB_STEP_SUMMARY
+      - name: Check out the candidate compatibility contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.source_sha }}
+          path: .edupi-candidate-source
+          sparse-checkout: contracts/edupi-core-compat.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - name: Install and verify in isolation
         shell: pwsh
         env:
           EDUPI_PREVIEW_INSTALLER_DIR: ${{ runner.temp }}/edupi-draft-smoke-${{ github.run_id }}
+          EDUPI_PREVIEW_COMPAT_PATH: ${{ github.workspace }}/.edupi-candidate-source/contracts/edupi-core-compat.json
         run: ./scripts/test-windows-route1-preview.ps1
       - name: Remove downloaded runner copy
         if: always()

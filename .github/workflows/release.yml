@@ -312,7 +312,8 @@ jobs:
             libclang-dev \
             libgbm-dev \
             libwebkit2gtk-4.1-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            xvfb
 
       - name: Verify bundled component releases
         env:
@@ -423,6 +424,22 @@ jobs:
           includeUpdaterJson: false
           tauriScript: npx tauri
           args: --verbose --target ${{ matrix.target }} --bundles ${{ runner.os == 'macOS' && 'app,dmg' || runner.os == 'Windows' && 'nsis' || 'deb,appimage' }}
+
+      - name: Install signed Linux candidate and verify isolated Core startup
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          EDUPI_TEST_RELEASE: ${{ needs.release.outputs.tag }}
+          EDUPI_LINUX_INSTALLER_DIR: ${{ github.workspace }}/src-tauri/target/${{ matrix.target }}/release/bundle/deb
+        run: bash scripts/test-linux-route1-install.sh
+
+      - name: Keep Linux installation evidence
+        if: always() && runner.os == 'Linux' && env.EDUPI_LINUX_INSTALL_EVIDENCE != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: signed-linux-install-evidence
+          path: ${{ env.EDUPI_LINUX_INSTALL_EVIDENCE }}
+          if-no-files-found: error
 
       - name: Ensure macOS App ticket before final packaging
         if: runner.os == 'macOS'

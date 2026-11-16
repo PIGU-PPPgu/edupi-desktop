@@ -79,6 +79,20 @@ Tauri updater 签名负责应用内更新完整性，但不会消除系统安装
 
 `.github/workflows/preview-installers.yml` 生成的 DMG/EXE 是内部预览包：没有正式 updater 公钥，不参与自动更新，也不能作为正式更新基线。首个正式签名包需要由教师手动安装一次。
 
+### 隔离升级验收
+
+签名客户端从 `.116` 开始支持仅用于隔离验收的 `EDUPI_ISOLATED_UPDATE_FEED`。不设置该变量时，应用继续使用原正式更新源。设置时必须同时使用 `EDUPI_ROUTE1_ISOLATED_CANARY=1` 和已经通过原生守卫的独立资料根；开发版不支持此入口。服务端还检查原生派生的 `EDUPI_DESKTOP_ISOLATED_CANARY=1`，浏览器参数和页面请求不能开启它。
+
+清单地址只接受以下形状，`<commit>` 必须是40位小写完整 SHA，`<cohort>` 为1至64位小写字母、数字和连字符：
+
+```text
+https://raw.githubusercontent.com/PIGU-PPPgu/edupi-desktop/<commit>/docs/acceptance/update-cohorts/<cohort>.json
+```
+
+地址不能含查询参数、片段、凭据、显式端口或路径归一化。该地址同时用于设置页发现版本和原生 updater 检查；原生端保持原公钥、HTTPS 验证及禁止降级，并额外要求签名中的版本与清单一致。清单使用标准 Tauri `version/notes/pub_date/platforms` 格式，资产必须是已冻结、匿名可下载的签名资产。制作清单不能改写旧资产或正式 `latest.json`。
+
+验收以两个独立签名版本完成：旧客户端发现更高版本、下载、验签、安装、自动重启，再核对新版本、Core 固定点、隔离资料和模型设置；随后冷启回读。源码测试、安装器 harness 和 DMG 重装不能代替这个流程。每轮记录两个源码 SHA、run/attempt、资产 ID/摘要、清单 commit 和原始运行证据。当前尚未有该全链的通过记录。
+
 如果新版出现问题：
 
 1. 不发布仍在 draft 的 Release；

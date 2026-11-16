@@ -498,17 +498,15 @@ test("the published Linux installer workflow verifies a real packaged Core start
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /gh release download/);
   assert.match(workflow, /\*_amd64\.deb/);
-  assert.match(workflow, /dpkg-deb -f/);
-  assert.match(workflow, /apt-get install --yes "\$EDUPI_DEB"/);
-  assert.match(workflow, /xvfb-run/);
-  assert.match(workflow, /EDUPI_DATA_ROOT/);
-  assert.match(workflow, /api\/edupi\/status\?summary=1/);
-  assert.match(workflow, /core.*status.*ready/);
-  assert.match(workflow, /kill -0 "\$app_pid"/);
-  assert.match(workflow, /dump_diagnostics/);
-  assert.match(workflow, /tail -n 160/);
-  assert.match(workflow, /startup-diagnostics\.jsonl/);
-  assert.match(workflow, /\[redacted\]/);
+  assert.match(workflow, /run: bash scripts\/test-linux-route1-install\.sh/u);
+  assert.match(workflow, /ref: \$\{\{ inputs\.tag \}\}\s+path: \.edupi-published-source/u);
+  assert.match(workflow, /EDUPI_TEST_RELEASE: \$\{\{ inputs\.tag \}\}/u);
+  assert.match(workflow, /EDUPI_LINUX_COMPAT_PATH:.*\.edupi-published-source\/contracts\/edupi-core-compat\.json/u);
+  assert.match(workflow, /EDUPI_LINUX_INSTALLER_DIR: \$\{\{ runner\.temp \}\}\/edupi-release/u);
+  assert.match(workflow, /xvfb/u);
+  assert.match(workflow, /if: always\(\) && env\.EDUPI_LINUX_INSTALL_EVIDENCE != ''/u);
+  assert.match(workflow, /path: \$\{\{ env\.EDUPI_LINUX_INSTALL_EVIDENCE \}\}/u);
+  assert.doesNotMatch(workflow, /pgrep -af|tee .*status\.json|xvfb-run/u);
 });
 
 test("nothing reintroduces a literal homedir() into an fs call", async () => {
@@ -689,7 +687,10 @@ test("release and preview verify the bundled read-only OpenConnector catalog", a
   assert.match(release, /name: Verify signed macOS packaged runtime[\s\S]*?EDUPI_STAGED_RESOURCES: \$\{\{ github\.workspace \}\}\/src-tauri\/target/u);
   assert.match(release, /name: Verify signed macOS packaged runtime[\s\S]*?EDUPI_STAGED_NODE="\$helper" npm run test:staged-openconnector/u);
   const linux = await readFile(join(root, ".github", "workflows", "linux-published-install.yml"), "utf8");
-  assert.match(linux, /name: Verify installed OpenConnector catalog[\s\S]*?test-staged-openconnector\.mjs/u);
+  assert.match(linux, /run: bash scripts\/test-linux-route1-install\.sh/u);
+  const linuxInstall = await readFile(join(root, "scripts", "test-linux-route1-install.sh"), "utf8");
+  assert.match(linuxInstall, /test-staged-openconnector\.mjs/u);
+  assert.match(linuxInstall, /"EDUPI_STAGED_RESOURCES": str\(resources\)/u);
   const windows = await readFile(join(root, "scripts", "test-windows-installed-release.ps1"), "utf8");
   assert.match(windows, /Installed OpenConnector catalog smoke failed/u);
   assert.match(windows, /Installed executable version does not match release tag/u);
@@ -770,6 +771,27 @@ test("signed Draft build installs the Windows candidate before draft proof succe
   const proof = release.indexOf("  draft-proof:");
   assert.ok(signed >= 0 && installed > signed && proof > installed);
   assert.match(release.slice(installed, proof), /if: runner\.os == 'Windows'[\s\S]*run: \.\/scripts\/test-windows-route1-preview\.ps1/u);
+});
+
+test("signed Draft build installs the Linux Debian candidate before draft proof succeeds", async () => {
+  const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+  const build = release.slice(release.indexOf("\n  build:"), release.indexOf("\n  draft-proof:"));
+  const signed = build.indexOf("name: Build, sign, and upload updater artifacts");
+  const installed = build.indexOf("name: Install signed Linux candidate and verify isolated Core startup");
+  assert.ok(signed >= 0 && installed > signed);
+  assert.match(build, /needs: release\s+if: inputs\.phase == 'draft'/u);
+  const step = build.slice(installed, build.indexOf("\n      - name:", installed));
+  assert.match(step, /if: runner\.os == 'Linux'/u);
+  assert.match(step, /EDUPI_TEST_RELEASE: \$\{\{ needs\.release\.outputs\.tag \}\}/u);
+  assert.match(step, /EDUPI_LINUX_INSTALLER_DIR:.*src-tauri\/target\/\$\{\{ matrix\.target \}\}\/release\/bundle\/deb/u);
+  assert.match(step, /run: bash scripts\/test-linux-route1-install\.sh/u);
+  assert.doesNotMatch(step, /continue-on-error/u);
+  const dependencies = build.slice(build.indexOf("name: Install Linux desktop dependencies"),
+    build.indexOf("name: Verify bundled component releases"));
+  assert.match(dependencies, /if: runner\.os == 'Linux'/u);
+  assert.match(dependencies, /xvfb/u);
+  assert.match(build, /if: always\(\) && runner\.os == 'Linux' && env\.EDUPI_LINUX_INSTALL_EVIDENCE != ''/u);
+  assert.match(build, /path: \$\{\{ env\.EDUPI_LINUX_INSTALL_EVIDENCE \}\}/u);
 });
 
 test("a preview installer can be rechecked on Windows without rebuilding or publishing", async () => {
