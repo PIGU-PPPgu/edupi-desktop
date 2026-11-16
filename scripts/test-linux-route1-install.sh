@@ -80,34 +80,45 @@ def read_storage(data):
                 "tables": tables, "fileIdentity": [database.stat().st_dev, database.stat().st_ino]}
 
 
-def live_group(group):
+def live_session(session):
     # Inspect IDs and state only; command lines can contain credentials.
     rows = subprocess.check_output(["ps", "-axo", "pid=,pgid=,stat="], text=True).splitlines()
-    return [int(pid) for pid, pgid, state in (row.split() for row in rows)
-            if int(pgid) == group and not state.startswith("Z")]
+    result = []
+    for pid, pgid, state in (row.split() for row in rows):
+        if state.startswith("Z"):
+            continue
+        try:
+            if os.getsid(int(pid)) == session:
+                result.append((int(pid), int(pgid)))
+        except ProcessLookupError:
+            pass
+    return result
 
 
 def stop_application(process):
     if process is None:
         return
-    # Popen starts a new session, so this group contains only this launch's
-    # Xvfb wrapper, desktop shell, bundled server and Core descendants.
+    # Popen owns this session. The shell puts Node in its own process group,
+    # which must also be stopped before the database is read or reopened.
     for action in [signal.SIGTERM, signal.SIGKILL]:
-        try:
-            os.killpg(process.pid, action)
-        except ProcessLookupError:
-            pass
+        for group in {group for _, group in live_session(process.pid)}:
+            if not any(current == group for _, current in live_session(process.pid)):
+                continue
+            try:
+                os.killpg(group, action)
+            except ProcessLookupError:
+                pass
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             process.poll()
-            if not live_group(process.pid):
+            if not live_session(process.pid):
                 process.wait(timeout=1)
                 return
             time.sleep(0.1)
     raise InstallFailure("installed_application_cleanup_failed")
 
 
-def wait_for_core(process, config, root, label, pin):
+def wait_for_core(process, config, root, label, pin, previous_instance=None):
     deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
         check(process.poll() is None, "installed_application_exited_before_ready")
@@ -122,6 +133,9 @@ def wait_for_core(process, config, root, label, pin):
                 with urllib.request.urlopen(origin + "/api/desktop/identity", timeout=2) as response:
                     if response.status != 204:
                         continue
+                    instance = response.headers.get("x-pi-desktop-instance", "")
+                    if not re.fullmatch(r"[a-f0-9]{64}", instance) or instance == previous_instance:
+                        continue
                 remaining = max(1, min(60, deadline - time.monotonic()))
                 with urllib.request.urlopen(origin + "/api/edupi/status?summary=1", timeout=remaining) as response:
                     payload = json.load(response)
@@ -132,7 +146,7 @@ def wait_for_core(process, config, root, label, pin):
                 verify_status(payload, pin)
                 check(process.poll() is None, "installed_application_exited_during_ready")
                 return {"core": "ready", "projection": "ready", "validationMode": "bundled",
-                        "port": port, "processGroup": process.pid}
+                        "port": port, "processSession": process.pid, "instanceId": instance}
         time.sleep(1)
     raise InstallFailure("installed_core_readiness_deadline")
 
@@ -223,12 +237,16 @@ def main(desktop):
                 process = subprocess.Popen(["xvfb-run", "--auto-servernum",
                     "--server-args=-screen 0 1280x900x24", str(binary)], env=environment,
                     stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
-                evidence["launches"].append(wait_for_core(process, config, root, label, pin))
+                previous_instance = evidence["launches"][-1]["instanceId"] if evidence["launches"] else None
+                evidence["launches"].append(wait_for_core(process, config, root, label, pin, previous_instance))
                 stop_application(process)
                 process = None
             stage = label + "_storage"
             storage.append(read_storage(data))
         check(storage[0] == storage[1], "core_database_changed_across_restart")
+        check(evidence["launches"][0]["instanceId"] != evidence["launches"][1]["instanceId"],
+              "desktop_instance_unchanged_across_restart")
+        evidence["freshInstanceAfterRestart"] = True
         evidence["storage"] = {"readOnlyChecks": storage, "sameDatabaseAfterRestart": True}
         evidence["status"] = "passed"
         result = 0

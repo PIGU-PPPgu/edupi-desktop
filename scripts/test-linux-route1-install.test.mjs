@@ -154,23 +154,61 @@ with tempfile.TemporaryDirectory() as directory:
 `);
 });
 
-test("cleanup stops the launch and its child while preserving another process group",
+for (const separateGroup of [false, true]) test(`cleanup stops the launch and its ${separateGroup ? "independent" : "shared"} child process group without touching another session`,
   { skip: process.platform === "win32" }, () => {
   runPython(`
 unrelated = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], start_new_session=True)
 process = None
 try:
     process = subprocess.Popen([sys.executable, "-c",
-        "import subprocess,sys,time; child=subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); print(child.pid, flush=True); time.sleep(60)"],
+        "import os,subprocess,sys,time; child=subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], preexec_fn=${separateGroup ? "os.setpgrp" : "None"}); print(child.pid, flush=True); time.sleep(60)"],
         start_new_session=True, stdout=subprocess.PIPE, text=True)
     child_pid = int(process.stdout.readline())
-    assert child_pid in live_group(process.pid)
+    assert child_pid in [pid for pid, _ in live_session(process.pid)]
+    if ${separateGroup ? "True" : "False"}:
+        assert os.getpgid(child_pid) != process.pid
     stop_application(process)
-    assert process.poll() is not None and live_group(process.pid) == []
+    assert process.poll() is not None and live_session(process.pid) == []
     assert unrelated.poll() is None
 finally:
     stop_application(process)
     stop_application(unrelated)
+`);
+});
+
+test("restart readiness skips an old instance response before reading the new Core status", () => {
+  runPython(`
+import io
+from unittest.mock import patch
+pin = {"core_commit": "a" * 40, "component_manifest_hash": "sha256:" + "b" * 64,
+       "runtime_component_manifest_hash": "sha256:" + "c" * 64}
+identity = {"coreCommit": pin["core_commit"], "componentManifestHash": pin["component_manifest_hash"],
+            "runtimeComponentManifestHash": pin["runtime_component_manifest_hash"]}
+ready = {"core": {**identity, "status": "ready", "validationMode": "bundled"},
+         "projection": {"status": "ready"}, "externalSend": False,
+         "compatibility": {"expected": identity, "actual": identity}}
+class Reply(io.BytesIO):
+    status = 204
+    def __init__(self, instance):
+        super().__init__(json.dumps(ready).encode())
+        self.headers = {"x-pi-desktop-instance": instance}
+class Running:
+    pid = 12345
+    def poll(self): return None
+instances = iter(["a" * 64, "b" * 64])
+calls = []
+def response(url, **kwargs):
+    calls.append(url)
+    return Reply(next(instances) if url.endswith("/identity") else "b" * 64)
+with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    (root / "ui-prefs.json").write_text('{"serverPort":38471}')
+    with patch.object(urllib.request, "urlopen", side_effect=response), patch.object(time, "sleep"):
+        result = wait_for_core(Running(), root, root, "restart", pin, "a" * 64)
+    assert result["instanceId"] == "b" * 64
+    assert calls == ["http://127.0.0.1:38471/api/desktop/identity",
+                     "http://127.0.0.1:38471/api/desktop/identity",
+                     "http://127.0.0.1:38471/api/edupi/status?summary=1"]
 `);
 });
 
