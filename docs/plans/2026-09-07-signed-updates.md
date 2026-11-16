@@ -1,5 +1,7 @@
 # 自动下载安装
 
+2026-11-17 R15 安装补证：**`.117` run43967319356三平台真实签名构建与整轮Draft proof成功；Windows NSIS run43975180076真实安装／启动／隔离Core通过，Linux Deb两次启动与同一SQLite回读通过，Mac最终三资产完整字节及原生安全核验通过**。源a557；最终DMG756856348／SHA `d39d95f8cf681cf795f35c6e8f2a3a50a077faedf2fa21de234400a1e8c0eb8f`，九资产指纹 `sha256:47068a9d6613a4fb697db202ab874466782ff342d3e7fdea94902b34428e43c4`。Mac独立安装入口29项含隔离守卫通过、SQLite内容丢失P2复审关闭，真实App冷启待CI；仍Draft447680099。`.116` tag_name异常已修复、九资产未改且未公开。完整旧客户端升级另验；正式Latest70/feed792保持。
+
 2026-11-17 当前发布状态：**116仍Draft447334004，117新签名源a5577740已冻结并运行三平台draft43967319356。** 新源source CI43962527784三项成功，CLI2.12.4真实版本签名及crypto篡改拒绝、最终production requireSignedVersion、单平台skip祖先和选择性重跑proof时间错误修复均经定向检查及独立审查。116三平台builder成功，Linux/Windows真实安装smoke通过，Mac三资产完整字节、签名/公证/Gatekeeper、双App全树及Core固定点通过；旧116整体failure不改绿，不使用其正式publish门。GUI和旧客户端自动升级被本次Mac锁屏阻塞，未作通过；原UI已归还、当前模型元数据变化保留，旧350一致性false。正式Latest70、feed和已公开115资产保持，详见[当前验收与证据](../acceptance/2026-11-17-unverified-risk-closure.md)。
 
 2026-11-17 用户要求继续未验收项与风险：Windows/Linux 安装、真实旧客户端升级与安装版鼠标验收重新进入范围，旧“暂缓”不再表示当前范围。已用独立非持久 WKWebView 定位 CUA 拖动按键状态始终为0的问题，保留产品松键保护与安装版人工鼠标待验状态；尚未新增跨平台或升级通过结论。`.115` 已冻结资产不重建，正式Latest／feed推广须以实际验收为依据。见[未验收项与风险收口](../acceptance/2026-11-17-unverified-risk-closure.md)。

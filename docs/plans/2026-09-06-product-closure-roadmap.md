@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-17 R15 实际安装补证：**`.117` 三平台签名构建与整轮Draft proof成功；Windows精确NSIS安装、单实例和隔离Core通过，Linux Deb两次启动与同库回读通过；Mac最终三资产原生安全核验通过、安装待验**。签名run43967319356／源a557，Windows安装run43975180076／asset756730447；Mac最终DMG756856348，九资产指纹47068a9d。独立Mac安装入口的29项含隔离守卫检查通过，SQLite内容丢失P2已修复并独立复审，真实App冷启待CI；不证明旧客户端升级或教师GUI通过。`.116` Draft标签元数据已恢复，九项资产未改，仍Draft。详见[未验收项收口](../acceptance/2026-11-17-unverified-risk-closure.md)；Core98、正式Latest70/feed792及完整L4状态保持。
+
 2026-11-17 当前未验收项收口：**PR498／499／500正常合并，117实际签名源a5577740／Core98e4f7cd；source CI43962527784成功，签名run43967319356已派发。** 116三平台builder真实成功，Linux／Windows安装smoke通过，Mac私有完整三包安全核验及DMG/updater全树通过；整体draft-proof仍failure（选择性重跑时间下界错误），不作正式发布proof。新CLI2.12.4、认证版本gate和单平台祖先skip修复均已源码验收；正式70／feed不变。115临时副本已隔离启动但CUA实际返回Mac锁屏，原生G3/G5点击0，未通过GUI；退出后原3WebView／4UI配置已归还并独立核对，期间models七项价格／maxTokens变化保留，其余349项和G4两全文件匹配，原350字节审计明确false。Main4周期create_task仍被固定Core门禁拒绝，完整L4不放行。当前段取代下方准备阶段状态，详见[未验收项与风险收口](../acceptance/2026-11-17-unverified-risk-closure.md)。
 
 2026-11-17 R18／R20、R15／R04／L4 未验收项继续：**已定位原生鼠标自动化输入限制，人工鼠标仍待验收；Windows/Linux 与真实升级重新进入范围**。非持久 WKWebView 中实际记录 CUA drag 的原生按键状态与 Web `buttons` 全为0，命中把手且捕获成功后触发正确松键保护；未改生产 hook，真实 hook 新增该序列与后续正常拖动回归，12项通过。本轮未启动正常 EduPi，App/helper为0。该证据取代“自动拖动原因未定位”，不将安装版鼠标、跨平台或完整L4标绿；旧“Windows/Linux暂缓”只保留为历史状态。见[未验收项与风险收口](../acceptance/2026-11-17-unverified-risk-closure.md)。

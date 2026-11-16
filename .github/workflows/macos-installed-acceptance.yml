@@ -1,0 +1,88 @@
+name: macOS installed acceptance
+
+# Independent acceptance of an existing signed asset. This workflow never
+# builds, signs, publishes, changes the update feed, or requests GUI input.
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Exact GitHub release ID, including private drafts
+        required: true
+        type: string
+      asset_id:
+        description: Exact aarch64 DMG asset ID in that release
+        required: true
+        type: string
+      source_sha:
+        description: Full 40 character Desktop source commit of that package
+        required: true
+        type: string
+      asset_sha256:
+        description: Full lowercase SHA256 of the final signed DMG bytes
+        required: true
+        type: string
+      version:
+        description: Exact packaged version without the v prefix
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  installed:
+    runs-on: macos-15
+    timeout-minutes: 25
+    permissions:
+      # GitHub requires this for reading drafts with GITHUB_TOKEN. The script
+      # only issues GETs; it has no release mutation operation.
+      contents: write
+    env:
+      ACCEPT_RELEASE_ID: ${{ inputs.release_id }}
+      ACCEPT_ASSET_ID: ${{ inputs.asset_id }}
+      ACCEPT_SOURCE_SHA: ${{ inputs.source_sha }}
+      ACCEPT_ASSET_SHA256: ${{ inputs.asset_sha256 }}
+      ACCEPT_VERSION: ${{ inputs.version }}
+      ACCEPT_EVIDENCE: ${{ github.workspace }}/acceptance-evidence/e.JSON
+    steps:
+      - name: Initialize setup failure evidence
+        shell: bash
+        run: |
+          umask 077
+          mkdir -p "$(dirname "$ACCEPT_EVIDENCE")"
+          printf '%s\n' '{"schemaVersion":1,"scope":"macos_signed_dmg_install_app_cold_start","status":"failed","stage":"workflow_setup","claims":{"gui":"not_exercised","normalCmdQ":"not_exercised","teacherWorkflow":"not_exercised","updater":"not_exercised"}}' > "$ACCEPT_EVIDENCE"
+
+      - name: Check out acceptance harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: acceptance-harness
+          persist-credentials: false
+
+      - name: Set up acceptance Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22.23.2
+
+      - name: Validate inputs and initialize failure evidence
+        run: node acceptance-harness/scripts/test-macos-installed-acceptance.mjs prepare
+
+      - name: Check out the package source contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.source_sha }}
+          path: release-source
+          persist-credentials: false
+
+      - name: Install signed DMG and cold start the real App twice
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACCEPT_SOURCE_DIR: ${{ github.workspace }}/release-source
+        run: node acceptance-harness/scripts/test-macos-installed-acceptance.mjs run
+
+      - name: Preserve deidentified acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-installed-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.ACCEPT_EVIDENCE }}
+          if-no-files-found: error
+          retention-days: 14
