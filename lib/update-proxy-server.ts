@@ -4,6 +4,7 @@ import { ProxyAgent, fetch as undiciFetch } from "undici";
 import { getLatestAppRelease, type AppUpdateProject } from "./app-updates";
 import type { AppComponentReleaseInfo } from "./app-update-types";
 import { parseUpdateProxyInput } from "./update-proxy-url";
+import { getIsolatedAppRelease, isolatedUpdateFeedFromEnvironment } from "./isolated-update-feed";
 
 const CONFIG_FILE = "updater-proxy.json";
 
@@ -38,22 +39,27 @@ export async function readSavedUpdateProxy(stateDir = process.env.PI_DESKTOP_STA
 }
 
 export async function getLatestAppReleaseWithConfiguredProxy(project: AppUpdateProject, stateDir?: string): Promise<AppComponentReleaseInfo> {
+  const isolatedFeed = isolatedUpdateFeedFromEnvironment();
+  const release = (fetcher?: (input: string, init?: RequestInit) => Promise<Response>) => (
+    isolatedFeed ? getIsolatedAppRelease(project, isolatedFeed, fetcher)
+      : getLatestAppRelease(project, fetcher ? { fetcher } : undefined)
+  );
   const proxy = await readSavedUpdateProxy(stateDir);
-  if (!proxy) return getLatestAppRelease(project);
+  if (!proxy) return release();
   const agent = new ProxyAgent(proxy);
   try {
-    return await getLatestAppRelease(project, {
+    return await release(
       // Undici's Response implements the four Fetch response members consumed by
       // getLatestAppRelease; its TypeScript Response type is separate from DOM's.
-      fetcher: (input, init) => undiciFetch(input, {
+      (input, init) => undiciFetch(input, {
         method: "GET",
         headers: init?.headers ? Object.fromEntries(new Headers(init.headers).entries()) : undefined,
         signal: init?.signal ?? undefined,
         dispatcher: agent,
       }) as unknown as Promise<Response>,
-    });
+    );
   } catch (error) {
-    if (error instanceof Error && /^GitHub request failed with HTTP \d+\.$/u.test(error.message)) throw error;
+    if (error instanceof Error && /^(?:GitHub request failed with HTTP \d+\.$|隔离更新(?:清单|版本))/u.test(error.message)) throw error;
     throw new Error("更新代理连接失败");
   } finally {
     await agent.close();

@@ -160,6 +160,27 @@ test("other pointers and secondary buttons cannot replace a captured drag", asyn
   assert.equal(f.width, 300);
 });
 
+test("a mouse move without a held button ends the drag and a later valid gesture still resizes", async t => {
+  const f = await mount(t);
+  // The macOS background input probe delivered this sequence with buttons=0
+  // even on pointerdown. Keep the lost-button guard; do not treat it as a drag.
+  await f.down({ buttons: 0 });
+  await f.move({ buttons: 0, clientX: 350 });
+  await f.move({ buttons: 0, clientX: 400 });
+  await f.up({ buttons: 0, clientX: 400 });
+  assert.equal(f.width, 260);
+  assert.equal(f.current.isResizing, false);
+  assert.equal(f.current.motionRef.current.dragging, false);
+  assert.equal(f.captured.size, 0);
+  assert.deepEqual(f.document.body.style, { cursor: "crosshair", userSelect: "text" });
+
+  await f.down();
+  await f.move({ clientX: 400 });
+  await f.up({ clientX: 400 });
+  assert.equal(f.width, 360);
+  assert.equal(f.storage.get("synthetic-panel-width"), "360");
+});
+
 test("keyboard, reset and restored preferences share the responsive clamp", async t => {
   const f = await mount(t, { storedWidth: 700 });
   assert.equal(f.width, 480);

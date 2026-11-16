@@ -24,6 +24,15 @@ jobs:
           sparse-checkout: scripts
           sparse-checkout-cone-mode: true
 
+      - name: Check out the published Core compatibility pin
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag }}
+          path: .edupi-published-source
+          sparse-checkout: contracts
+          sparse-checkout-cone-mode: true
+          persist-credentials: false
+
       - name: Install Linux desktop dependencies
         run: |
           sudo apt-get update
@@ -46,85 +55,19 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --pattern '*_amd64.deb' \
             --dir "$RUNNER_TEMP/edupi-release"
-          deb="$(find "$RUNNER_TEMP/edupi-release" -name '*_amd64.deb' -type f -print -quit)"
-          test -n "$deb"
-          expected="${EDUPI_TEST_RELEASE#v}"
-          actual="$(dpkg-deb -f "$deb" Version)"
-          test "$actual" = "$expected"
-          echo "EDUPI_DEB=$deb" >> "$GITHUB_ENV"
 
-      - name: Install the published package
-        run: |
-          sudo apt-get install --yes "$EDUPI_DEB"
-
-      - name: Verify installed OpenConnector catalog
+      - name: Install the published package and verify isolated Core startup
         shell: bash
         env:
           EDUPI_TEST_RELEASE: ${{ inputs.tag }}
-        run: |
-          set -euo pipefail
-          if dpkg --compare-versions "${EDUPI_TEST_RELEASE#v}" lt 0.3.38; then exit 0; fi
-          package_name="$(dpkg-deb -f "$EDUPI_DEB" Package)"
-          host="$(dpkg -L "$package_name" | grep -E '/resources/open-connector/host\.mjs$')"
-          node="$(dpkg -L "$package_name" | grep -E '/resources/node/node$')"
-          test -f "$host"
-          test -x "$node"
-          EDUPI_STAGED_RESOURCES="$(dirname "$(dirname "$host")")" "$node" scripts/test-staged-openconnector.mjs
+          EDUPI_LINUX_INSTALLER_DIR: ${{ runner.temp }}/edupi-release
+          EDUPI_LINUX_COMPAT_PATH: ${{ github.workspace }}/.edupi-published-source/contracts/edupi-core-compat.json
+        run: bash scripts/test-linux-route1-install.sh
 
-      - name: Start the installed application and verify Core readiness
-        shell: bash
-        run: |
-          set -euo pipefail
-          smoke_root="$RUNNER_TEMP/edupi-linux-smoke"
-          mkdir -p "$smoke_root/workspace" "$smoke_root/home" "$smoke_root/state"
-          package_name="$(dpkg-deb -f "$EDUPI_DEB" Package)"
-          binary="$(dpkg -L "$package_name" | awk '/^\/usr\/bin\// { print; exit }')"
-          test -x "$binary"
-          xvfb-run --auto-servernum --server-args='-screen 0 1280x900x24' \
-            env HOME="$smoke_root/home" \
-              EDUPI_DATA_ROOT="$smoke_root/workspace" \
-              EDUPI_DATA_ALLOWED_ROOT="$smoke_root" \
-              EDUPI_PROJECT_ROOT="$smoke_root/workspace" \
-              PI_DESKTOP_STATE_DIR="$smoke_root/state" \
-              "$binary" >"$smoke_root/app.log" 2>&1 &
-          app_pid=$!
-          cleanup() { kill "$app_pid" 2>/dev/null || true; }
-          trap cleanup EXIT
-
-          dump_diagnostics() {
-            echo '--- process state ---'
-            pgrep -af 'pi-agent-desktop|msedge|WebKit' || true
-            echo '--- bounded application logs ---'
-            while IFS= read -r log; do
-              echo "--- $(basename "$log") ($(wc -c < "$log") bytes) ---"
-              tail -n 160 "$log" \
-                | sed -E 's/([Bb]earer)[[:space:]]+[^[:space:]]+/\1 [redacted]/g; s/((authorization|token|secret|password|api[-_ ]?key)[[:space:]]*[:=][[:space:]]*)[^[:space:]]+/\1[redacted]/Ig'
-            done < <(find "$smoke_root" "$smoke_root/home" -type f \
-              \( -name 'app.log' -o -name 'server.log' -o -name 'startup-diagnostics.jsonl' \) \
-              -print 2>/dev/null | sort -u)
-          }
-
-          ready_port=""
-          for _ in $(seq 1 120); do
-            if ! kill -0 "$app_pid" 2>/dev/null; then
-              if wait "$app_pid"; then app_status=0; else app_status=$?; fi
-              dump_diagnostics
-              echo "::error::Installed application exited before readiness with status $app_status."
-              exit 1
-            fi
-            for port in $(seq 38471 38480); do
-              payload="$(curl --silent --max-time 2 "http://127.0.0.1:$port/api/edupi/status?summary=1" 2>/dev/null || true)"
-              if printf '%s' "$payload" | python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("core",{}).get("status")=="ready" and d.get("projection",{}).get("status")=="ready" else 1)' 2>/dev/null; then
-                ready_port="$port"
-                break 2
-              fi
-            done
-            sleep 2
-          done
-          if [ -z "$ready_port" ]; then
-            dump_diagnostics
-            echo '::error::Installed application did not expose a ready Core before the deadline.'
-            exit 1
-          fi
-          curl --fail --silent --show-error "http://127.0.0.1:$ready_port/api/edupi/status?summary=1" | tee "$smoke_root/status.json"
-          grep -q '"status":"ready"' "$smoke_root/status.json"
+      - name: Keep Linux installation evidence
+        if: always() && env.EDUPI_LINUX_INSTALL_EVIDENCE != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: published-linux-install-evidence
+          path: ${{ env.EDUPI_LINUX_INSTALL_EVIDENCE }}
+          if-no-files-found: error
