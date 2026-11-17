@@ -33,6 +33,7 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingSearchResult[] = [
   { id: "foreground", label: "过期事务收起", section: "general", path: "个人 / 常规", keywords: "工作台 自动收起 天数 过期 历史事务" },
   { id: "window-close", label: "关闭窗口时退出应用", section: "general", path: "个人 / 常规", keywords: "窗口 托盘 菜单栏 后台 退出 close" },
   { id: "teacher-profile", label: "教师资料", section: "profile", path: "个人 / 教师信息", keywords: "姓名 称呼 学校 身份 学科 年级 班级 个人资料 历史 修订" },
+  { id: "account", label: "账号", section: "profile", path: "个人 / 教师信息", keywords: "小程序 扫码 登录 微信 手机号 邮箱 绑定 退出" },
   { id: "completion-notifications", label: "任务完成通知", section: "notifications", path: "个人 / 通知", keywords: "后台 系统通知 提醒 通知测试" },
   { id: "notification-permission", label: "系统通知权限", section: "notifications", path: "个人 / 通知", keywords: "通知授权 macOS Windows 桌面通知" },
   { id: "chat-models", label: "对话模型", section: "models", path: "AI 与服务 / AI 与模型", keywords: "AI 默认模型 供应商 API Key 密钥 OpenAI DeepSeek Anthropic 模型服务", modelPane: "chat" },

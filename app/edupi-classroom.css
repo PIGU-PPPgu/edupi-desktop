@@ -1,0 +1,47 @@
+.edupi-classroom-workspace{height:100%;min-width:0;display:flex;flex-direction:column}
+.edupi-classroom-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);padding:10px 24px;flex-wrap:wrap}
+.edupi-classroom-tabs button{border:0;background:transparent;padding:8px 12px;border-radius:6px;color:var(--text-muted)}
+.edupi-classroom-tabs button[aria-current]{background:var(--bg-selected);color:var(--text)}
+.edupi-classroom-workspace>.edupi-module-workspace{flex:1;overflow:auto;min-height:0}
+.edupi-classroom-tab{flex:1;overflow:auto;min-height:0}.edupi-classroom-tab[hidden]{display:none}.edupi-classroom-tab>.edupi-module-workspace{height:100%;overflow:auto}
+.edupi-classroom-editor{max-width:1200px;margin:0 auto;padding-bottom:40px;color:var(--text)}
+.edupi-classroom-editor .edupi-module-heading{display:flex;gap:12px;flex-wrap:wrap;justify-content:space-between}
+.edupi-classroom-editor .edupi-module-heading>div{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.edupi-classroom-editor button,.edupi-classroom-editor select,.edupi-classroom-editor input:not([type=checkbox]):not([type=file]){font:inherit;border:1px solid var(--border);border-radius:6px;padding:7px 9px;background:var(--bg-panel);color:var(--text);max-width:100%}
+.edupi-classroom-editor button{cursor:pointer}.edupi-classroom-editor button:hover{background:var(--bg-hover)}
+.edupi-classroom-editor button:disabled{opacity:.5;cursor:default}
+.edupi-classroom-editor button.is-primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.edupi-classroom-editor .is-selected{outline:2px solid var(--accent)}
+.edupi-classroom-form{border:0;padding:0;margin:0;min-width:0}
+.edupi-classroom-fields{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:16px 0}
+.edupi-classroom-fields label{display:flex;flex-direction:column;gap:6px;color:var(--text-muted);font-size:13px}
+.edupi-classroom-fields input[type=number]{width:110px}
+.edupi-classroom-fields input[aria-label=方案名称]{width:320px}
+.edupi-classroom-editor fieldset:not(.edupi-classroom-form){border:1px solid var(--border);border-radius:6px;display:flex;flex-wrap:wrap;gap:12px;padding:12px;margin:16px 0}
+.edupi-classroom-editor fieldset:not(.edupi-classroom-form) label{display:inline-flex;gap:5px;align-items:center}
+.edupi-classroom-editor details{border-top:1px solid var(--border);padding:14px 0;margin-top:12px}
+.edupi-classroom-editor summary{cursor:pointer;color:var(--text-muted)}
+.edupi-classroom-file{display:inline-flex;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:9px 12px}
+.edupi-classroom-file input{width:1px;position:absolute;opacity:0}.edupi-classroom-file:focus-within{outline:2px solid var(--accent)}
+.edupi-classroom-table{overflow:auto;margin:16px 0;max-height:520px;border:1px solid var(--border);border-radius:6px}
+.edupi-classroom-table table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
+.edupi-classroom-table td,.edupi-classroom-table th{padding:10px 12px;text-align:left;border-bottom:1px solid var(--border)}
+.edupi-classroom-table thead{position:sticky;top:0;background:var(--bg-panel);z-index:1}
+.edupi-classroom-table th{font-weight:500;color:var(--text-muted)}
+.edupi-classroom-table input[type=number]{width:80px}
+.edupi-classroom-editor p{font-size:13px;color:var(--text-muted);line-height:1.6}
+.edupi-classroom-editor .edupi-classroom-error{color:#bd4d43}
+.edupi-classroom-seats{display:grid;gap:8px;overflow:auto;margin:16px 0;padding:3px}
+.edupi-classroom-seats button{display:flex;flex-direction:column;min-height:60px;align-items:center;justify-content:center;gap:5px}
+.edupi-classroom-seats small{color:var(--text-muted);font-size:11px}
+.edupi-classroom-front{max-width:220px;border-bottom:3px solid var(--border);text-align:center;margin:20px auto;padding-bottom:8px;color:var(--text-muted)}
+.edupi-classroom-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0}
+.edupi-classroom-groups section{border:1px solid var(--border);padding:12px;border-radius:6px}
+.edupi-classroom-groups h3{font-size:13px;margin:0 0 10px;color:var(--text-muted)}
+.edupi-classroom-groups button{margin:3px}
+.edupi-classroom-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:24px;padding-top:16px;border-top:1px solid var(--border)}
+.edupi-classroom-actions span{font-size:12px;color:var(--text-muted)}
+.edupi-classroom-workloads{display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--text-muted)}
+.edupi-classroom-version{display:flex;justify-content:space-between;align-items:center;padding:10px 0;font-size:13px;gap:12px}
+.edupi-classroom-issues{font-size:13px;padding-left:20px;line-height:1.8}
+@media(max-width:600px){.edupi-classroom-tabs{padding:8px}.edupi-classroom-tabs button{padding:8px}.edupi-classroom-fields{gap:8px}.edupi-classroom-fields label{flex:1;min-width:100px}.edupi-classroom-editor .edupi-module-heading select{max-width:200px}.edupi-classroom-version{align-items:flex-start}}

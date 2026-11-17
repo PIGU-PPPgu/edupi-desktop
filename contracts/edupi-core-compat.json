@@ -6,19 +6,19 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "98e4f7cd0c31dd30954574d2040bb1b948cdd954",
+    "core_commit": "976c6e646c2dbe8630812d1b4899fcfde421fe7e",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:e8d0cdf0196ae84a3d5bb5b9552934bcfefc5111ba3ba4882b99ff4b4abfb770",
-    "runtime_component_manifest_hash": "sha256:46252d3917be4035a8bc9bf4b779b6d6621db0a3caadb71a38bd2da63ffa0bc2",
-    "runtime_schema_hash": "sha256:99a62fa3d2b45864c717a5c35cfb08aea48fa1c09dd0cfcf099ed87877497608"
+    "component_manifest_hash": "sha256:1cb3a6cbdbbed7fba342bdf726609be6eb14af4ccb3fe4dc1e37d10abe156599",
+    "runtime_component_manifest_hash": "sha256:4596ebd0da92df002448c6158088fdf3c5cd7c1c8c899578c2146a22bd7cd6eb",
+    "runtime_schema_hash": "sha256:d0546c49b07c56ad0020910ba024da1a470e85ef138607ccb2304a1db8b4060c"
   },
   "contract_identities": [
     {
       "contract_id": "edupi-bridge-v1.1",
       "contract_version": "1.1",
-      "schema_hash": "sha256:a6510b54f557960bd037563971aac32ad66bd819e97c771cce79d54db6eae0f4",
+      "schema_hash": "sha256:4d406ea05466f525d68e9a5c2e8f21b05a1013346fff5962a3ccc0ea61398b1d",
       "fixture_manifest_path": "fixtures/bridge/v1.1/fixture-manifest.json",
-      "fixture_manifest_hash": "sha256:f6080ae728ac8acd783e4f46f79bdc7f3bfd35cc714f7dcce1285e58b5ee636f",
+      "fixture_manifest_hash": "sha256:344be1cc882dc5f7fa84d082a2ac9073854782f615f5521379edce6504ea255a",
       "supported_commands": [
         "review_observation",
         "review_memory_candidate",
@@ -282,5 +282,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/458",
     "https://github.com/PIGU-PPPgu/edupi/pull/462"
   ],
-  "change_note": "This source candidate pins Core 98e4f7cd with both component manifests and the runtime schema, including G4 reflection source writes and history reads. Isolated Main4 fixtures use SQLite planning storage without rewriting the retired V1 planning tombstone. Source-derived parent questions require an exact owner grant and explicit recipient confirmation. Production root migration, signed installed pairing and public updates are not enabled by this change."
+  "change_note": "Pins the current Main4 Core with built-in grade analysis, seating/groups and duty scheduling, preserving the existing Bridge v1.1 and schedule v1.2 identities, writer admission and SQLite owner authority. Classroom UI and AI share one Core service. The separately configured account client remains local by default; installed pairing and public updates are not enabled by this source change."
 }

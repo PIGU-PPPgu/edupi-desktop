@@ -1,0 +1,36 @@
+
+> @agegr/pi-web@0.8.7 lint
+> eslint . && npm run check:branding
+
+
+<desktop-root>/scripts/test-edupi-core-history-e2.mjs
+  156:17  warning  '_text' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+✖ 1 problem (0 errors, 1 warning)
+
+
+> @agegr/pi-web@0.8.7 check:branding
+> node --test lib/branding.test.mjs
+
+TAP version 13
+# Subtest: locks the local user-facing product name
+ok 1 - locks the local user-facing product name
+  ---
+  duration_ms: 3.423583
+  type: 'test'
+  ...
+# Subtest: derives visible versions from package metadata instead of build-time globals
+ok 2 - derives visible versions from package metadata instead of build-time globals
+  ---
+  duration_ms: 0.686542
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 55.844042

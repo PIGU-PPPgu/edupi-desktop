@@ -1,0 +1,15 @@
+{
+  "data_root": "<isolated temporary data root, removed after runtime shutdown>",
+  "core_root": "<paired Core source>",
+  "model_calls": 0,
+  "external_send": false,
+  "checks": [
+    "UI service writes are read by the actual AI tool through Core",
+    "grades: calculate, compare, revise, restore and stale-write rejection",
+    "competing process writers cannot overwrite the same revision",
+    "seating and groups: complete roster, swap, save and independent process readback",
+    "duty: exemption, substitution, revised workload, single task, retry, linked adjustment and history restore",
+    "interrupted publication resumes from a persisted Core reservation"
+  ],
+  "ok": true
+}
