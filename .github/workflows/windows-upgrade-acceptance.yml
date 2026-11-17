@@ -1,8 +1,8 @@
 name: Windows old-client upgrade acceptance
 
 # Opt-in isolated acceptance. This workflow cannot publish a Release or
-# change the normal latest/feed. Preflight is runnable; upgrade fails closed
-# with explicit gaps until its native restart/attach executor is implemented.
+# change the normal latest/feed. Upgrade requires a dedicated, non-elevated,
+# disposable interactive user and observes the native NSIS automatic restart.
 on:
   workflow_dispatch:
     inputs:
@@ -13,7 +13,7 @@ on:
         options: [hosted-windows, native-windows]
         default: hosted-windows
       mode:
-        description: Preflight tests frozen 116; upgrade currently reports blocked
+        description: Preflight tests frozen 116; upgrade executes native UI update on the dedicated runner
         required: true
         type: choice
         options: [preflight, upgrade]
@@ -108,12 +108,12 @@ jobs:
         run: |
           node scripts/windows-upgrade-support.mjs download
           if ($LASTEXITCODE -ne 0) { throw "frozen_116_download_blocked" }
-      - name: Exercise shell and real installed WebView
+      - name: Exercise installed WebView and optional native upgrade
         shell: pwsh
         run: |
           & ./scripts/test-windows-upgrade-acceptance.ps1 -Mode $env:WINDOWS_UPGRADE_MODE
           if ($LASTEXITCODE -ne 0) { throw "windows_upgrade_acceptance_not_passed" }
-      - name: Remove task download
+      - name: Recover profile environment and remove task download
         if: always()
         shell: pwsh
         run: ./scripts/test-windows-upgrade-acceptance.ps1 -CleanupDownloadOnly
