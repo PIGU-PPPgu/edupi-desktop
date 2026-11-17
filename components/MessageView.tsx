@@ -27,6 +27,10 @@ import { encodeFilePathForApi } from "@/lib/file-paths";
 import { isPathInside } from "@/lib/file-links";
 import { isPreviewableImageSource } from "@/lib/chat-image-source";
 import { ChatVisualResult, type ChatVisualItem } from "./ChatVisualResult";
+import { CORE_RECALL_ANSWER_MESSAGE } from "@/lib/edupi-recall-answer";
+import { coreRecallAnswerDetails } from "@/lib/edupi-recall-answer-client";
+import { CoreRecallAnswer } from "./CoreRecallAnswer";
+import { CoreRecallPersonConfirmation } from "./CoreRecallPersonConfirmation";
 
 const MAX_THINKING_CACHE_ENTRIES = 100;
 const thinkingContentCache = new Map<string, Promise<string>>();
@@ -80,6 +84,9 @@ interface Props {
   showTimestamp?: boolean;
   prevTimestamp?: number;
   sessionId?: string;
+  coreRecallEnabled?: boolean;
+  coreRecallUserEntryId?: string;
+  coreRecallContextKey?: string;
 }
 
 function formatTime(ts?: number): string | null {
@@ -134,9 +141,9 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenImage, onOpenPreview, autoOpenQr, showToolVisuals = true, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenImage, onOpenPreview, autoOpenQr, showToolVisuals = true, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, coreRecallEnabled = false, coreRecallUserEntryId, coreRecallContextKey }: Props) {
   if (message.role === "user") {
-    return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
+    return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} sessionId={sessionId} coreRecallEnabled={coreRecallEnabled} coreRecallContextKey={coreRecallContextKey} />;
   }
   if (message.role === "assistant") {
     return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenImage={onOpenImage} onOpenPreview={onOpenPreview} autoOpenQr={autoOpenQr} showToolVisuals={showToolVisuals} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} />;
@@ -146,6 +153,10 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     return null;
   }
   if (message.role === "custom") {
+    if (message.customType === CORE_RECALL_ANSWER_MESSAGE) {
+      return <CoreRecallAnswer key={coreRecallAnswerDetails(message)?.receiptId ?? "unverified"}
+        message={message} sessionId={sessionId} userEntryId={coreRecallUserEntryId} enabled={coreRecallEnabled} />;
+    }
     if ((message as CustomMessage).customType === "compaction") {
       return <CompactionMessageView message={message as CustomMessage} />;
     }
@@ -174,7 +185,10 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.onEditContent === next.onEditContent
     && prev.showTimestamp === next.showTimestamp
     && prev.prevTimestamp === next.prevTimestamp
-    && prev.sessionId === next.sessionId;
+    && prev.sessionId === next.sessionId
+    && prev.coreRecallEnabled === next.coreRecallEnabled
+    && prev.coreRecallUserEntryId === next.coreRecallUserEntryId
+    && prev.coreRecallContextKey === next.coreRecallContextKey;
 });
 
 const USER_TEXT_COLLAPSE_HEIGHT = 220;
@@ -239,7 +253,7 @@ function CollapsibleUserText({ text, cwd, onOpenFile }: {
   );
 }
 
-function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent }: {
+function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, sessionId, coreRecallEnabled, coreRecallContextKey }: {
   message: UserMessage;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
@@ -249,6 +263,9 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
   onNavigate?: (entryId: string) => void;
   prevAssistantEntryId?: string;
   onEditContent?: (message: UserMessage) => void;
+  sessionId?: string;
+  coreRecallEnabled?: boolean;
+  coreRecallContextKey?: string;
 }) {
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
@@ -390,6 +407,9 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
         </div>
 
       </div>
+
+      {coreRecallEnabled && sessionId && entryId && <CoreRecallPersonConfirmation
+        sessionId={sessionId} entryId={entryId} sourceText={contextual?.teacherText ?? content} contextKey={coreRecallContextKey} />}
 
       {/* Bottom row: action buttons + timestamp */}
       {(time || canFork || canNavigate || true) && (

@@ -293,12 +293,13 @@ export async function POST(request: Request) {
       const rootRef = health?.data_root_fingerprint;
       if (healthFrame?.ok !== true || typeof rootRef !== "string" || !ROOT_REF.test(rootRef)
         || capabilities?.ambient_planning !== "active" || capabilities?.owner_message_registration !== "active"
-        || enabled.some(({ domain }) => domain === "teaching_preparation" && capabilities?.g1_processor !== "active")
+        || enabled.some(({ domain }) => domain === "teaching_preparation" && capabilities?.g1_processor !== "active"
+          && !(process.env.EDUPI_CORE_RECALL_ANSWERS === "1" && host.recallAnswersActive === true))
         || enabled.some(({ domain }) => domain === "student_followup" && capabilities?.g2_processor !== "active")
         || enabled.some(({ domain }) => domain !== "teaching_preparation" && domain !== "student_followup" && capabilities?.g3_processor !== "active")) {
         return response("core_unavailable", 503);
       }
-      const text = promptCommand.message.trim();
+      const text = promptCommand.message;
       const bindings = prior?.bindings ?? await Promise.all(enabled.map(async ({ domain, activation }) => {
         const context = await readProactivityOwnerContext(host, rootRef, activation.grantId!);
         if (!context || context.status !== "active") throw new Error("owner_grant_unavailable");

@@ -10,6 +10,8 @@ import { ensureEduPiRuntime } from "./edupi-runtime-supervisor";
 import { proactivityConversationId } from "./edupi-proactivity-control";
 import { isSafeModeEnabled } from "./safe-mode";
 import { createMemorySummaryGuard, memoryHistoryIds, projectMemoryHistory } from "./edupi-memory-summary";
+import { CORE_RECALL_ANSWER_MESSAGE, parseCoreRecallAnswer, type CoreRecallAnswer, type CoreRecallAnswerDetails } from "./edupi-recall-answer";
+import { eduPiRecallRootEpoch, invalidateEduPiRecallSession, issueEduPiRecall } from "./edupi-recall-state";
 
 const hash = (text: string) => `sha256:${createHash("sha256").update(text).digest("hex")}`;
 const canonical = (directory: string) => { try { return realpathSync(directory); } catch { return resolve(directory); } };
@@ -26,11 +28,15 @@ type RecallParameters = Static<typeof parameters>;
 type Entry = { id: string; category: typeof categories[number]; content: string; source_fingerprint: string;
   student_id: string | null; student: string | null; managed_method: boolean };
 type SourceProof = { status: "verified" | "held"; case_status: "bound" | "held"; reason_code: string | null };
-type Recall = { status: "current" | "held"; reason_code: string | null; entries: Entry[]; source_proof?: SourceProof };
+type Recall = { status: "current" | "held"; reason_code: string | null; entries: Entry[]; source_proof?: SourceProof;
+  answer?: CoreRecallAnswer; term_ref?: string };
 type Turn = { manager: SessionManager; sessionId: string; clientRequestId: string; text: string; active: boolean; captured: boolean;
-  sourceNonce: string; startingLeafId: string | null; startingUserId: string | null; boundUserId: string | null; boundUserHash: string | null };
+  sourceNonce: string; startingLeafId: string | null; startingUserId: string | null; boundUserId: string | null; boundUserHash: string | null;
+  answerAttempted: boolean; answerEpoch?: number; answerRequest?: Record<string, unknown>;
+  publish?: (details: CoreRecallAnswerDetails) => Promise<void> };
 type Dependencies = {
   disabled?: () => boolean;
+  answersEnabled?: () => boolean;
   readOutbox?: typeof readEduPiPromptOutbox;
   core?: () => Promise<{ rootRef: string; call: (request: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown>;
     proofCall?: (request: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown> }>;
@@ -59,13 +65,13 @@ function sourceProof(value: unknown, fingerprint: string): SourceProof {
       ? result.case_reason_code as string : null };
 }
 
-function response(value: unknown, identity: Record<string, unknown>, queried: boolean): Recall {
+function response(value: unknown, identity: Record<string, unknown>, queried: boolean, formalAnswer = false): Recall {
   const envelope = value as { ok?: unknown; result?: Record<string, unknown> } | null;
   const result = envelope?.ok === true ? envelope.result : null;
   if (!result || result.version !== 1 || !["current", "held"].includes(String(result.status))
     || result.external_send !== false || typeof result.model_execute !== "boolean"
     || Object.keys(identity).some(key => result[key] !== identity[key])
-    || !Array.isArray(result.entries) || result.entries.length > 50 || JSON.stringify(result).length > 70000) {
+    || !Array.isArray(result.entries) || result.entries.length > 50 || JSON.stringify(result).length > (formalAnswer ? 192_000 : 70000)) {
     return { status: "held", reason_code: "recall_unavailable", entries: [] };
   }
   const support = result.source_support as Record<string, unknown> | undefined;
@@ -76,8 +82,10 @@ function response(value: unknown, identity: Record<string, unknown>, queried: bo
     || support.status === "assessed" && (result.model_execute !== true
       || support.reason_code !== null && support.reason_code !== "requested_contact_evidence_missing")
     || support.status === "held" && (result.status !== "held" || result.entries.length !== 0))
-    || result.model_execute && (!queried || !support)
-    || queried && result.entries.length > 0 && (support?.status !== "assessed" || result.model_execute !== true)) {
+    || result.model_execute && (!queried || !support && !(formalAnswer
+      && (result.answer || result.status === "held" && result.entries.length === 0)))
+    || queried && result.entries.length > 0 && (result.model_execute !== true
+      || support?.status !== "assessed" && !(formalAnswer && result.answer))) {
     return { status: "held", reason_code: "recall_unavailable", entries: [] };
   }
   const valid = result.entries.every((entry: Entry) => entry && Object.keys(entry).sort().join(",") === entryFields
@@ -88,6 +96,14 @@ function response(value: unknown, identity: Record<string, unknown>, queried: bo
     && (entry.student === null || typeof entry.student === "string") && typeof entry.managed_method === "boolean");
   if (!valid || new Set(result.entries.map((entry: Entry) => entry.id)).size !== result.entries.length) {
     return { status: "held", reason_code: "recall_unavailable", entries: [] };
+  }
+  if (formalAnswer) {
+    const answer = result.status === "current" && result.reason_code === null && result.model_execute === true
+      && typeof result.term_ref === "string" && result.term_ref.length > 0 && result.term_ref.length <= 160
+      ? parseCoreRecallAnswer(result.answer, result.entries as Entry[]) : null;
+    if (!answer) return { status: "held", reason_code: result.status === "held" && typeof result.reason_code === "string"
+      ? result.reason_code : "answer_unavailable", entries: [] };
+    return { status: "current", reason_code: null, entries: result.entries as Entry[], answer, term_ref: result.term_ref as string };
   }
   return { status: result.status as Recall["status"], reason_code: typeof result.reason_code === "string" ? result.reason_code
     : typeof support?.reason_code === "string" ? support.reason_code : null,
@@ -100,10 +116,12 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
   const turns = new AsyncLocalStorage<Turn | null>();
   const activeTurns = new WeakMap<SessionManager, Turn>();
   const disabled = () => isSafeModeEnabled() || dependencies.disabled?.() === true;
+  const answersEnabled = () => !disabled() && (dependencies.answersEnabled?.() ?? process.env.EDUPI_CORE_RECALL_ANSWERS === "1");
   const denied = (reason_code = "scope_unverified"): Recall => ({ status: "held", reason_code, entries: [] });
   const readOutbox = dependencies.readOutbox ?? readEduPiPromptOutbox;
   function invalidate(manager: unknown): void {
     if (!(manager instanceof SessionManager)) return;
+    invalidateEduPiRecallSession(manager.getSessionId());
     const turn = activeTurns.get(manager);
     if (turn) turn.active = false;
     activeTurns.delete(manager);
@@ -171,17 +189,25 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
       const binding = outbox.bindings.find(item => item.domain === "teaching_preparation") ?? outbox.bindings[0];
       const identity = { root_ref: host.rootRef, message_ref: binding.messageRef!,
         conversation_id: proactivityConversationId(binding.domain), message_id: binding.captureMessageId,
-        original_text_hash: hash(turn.text.trim()) };
+        original_text_hash: hash(turn.text) };
       const proofDeadline = performance.now() + 15_000;
-      const value = await host.call({ ...identity, expected_owner_id: binding.ownerId,
+      const formalAnswer = answersEnabled() && Boolean(params.query);
+      if (formalAnswer && (turn.text.length < 2 || turn.text.length > 512)) return denied("question_too_long");
+      const epoch = eduPiRecallRootEpoch(root);
+      const request = { ...identity, expected_owner_id: binding.ownerId,
         registration: { carrier_id: binding.carrierId, plan_id: binding.planId,
           producer_epoch: binding.registration!.producerEpoch, sequence: binding.registration!.sequence },
-        ...(params.category && params.category !== "all" ? { category: params.category } : {}),
-        ...(params.query ? { query: params.query } : {}), ...(params.student ? { student: params.student } : {}),
-        ...(params.student_id ? { student_id: params.student_id } : {}), ...(memoryIds?.length ? { memory_ids: memoryIds } : {}),
-        limit: params.limit ?? 30 }, signal);
+        ...(formalAnswer ? { query: turn.text } : {
+          ...(params.category && params.category !== "all" ? { category: params.category } : {}),
+          ...(params.query ? { query: params.query } : {}), ...(params.student ? { student: params.student } : {}),
+          ...(params.student_id ? { student_id: params.student_id } : {}), ...(memoryIds?.length ? { memory_ids: memoryIds } : {}),
+          limit: params.limit ?? 30,
+        }) };
+      const value = await host.call(request, signal);
       if (!current(turn, manager)) return denied();
-      const result = response(value, identity, Boolean(params.query));
+      if (formalAnswer && epoch !== eduPiRecallRootEpoch(root)) return denied("source_changed");
+      const result = response(value, identity, Boolean(params.query), formalAnswer);
+      if (formalAnswer) { turn.answerEpoch = epoch; turn.answerRequest = structuredClone(request); return result; }
       // This is a provenance hint for one displayed result, never an answer
       // support decision or a permit to combine sources. Keep private refs in Core.
       if (!params.query || result.entries.length !== 1 || !host.proofCall) return result;
@@ -243,8 +269,36 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
     return { entries: result.entries, scopeKey: scope, turnKey: currentTurnKey(manager), status: result.status, active: scope !== null };
   }
   const summary = createMemorySummaryGuard(root, memorySnapshot, scopeKey, currentTurnKey);
+  async function finalizeAnswer(manager: unknown, signal?: AbortSignal): Promise<boolean> {
+    const turn = turns.getStore();
+    if (!(manager instanceof SessionManager) || !turn || !turn.captured || !answersEnabled()) return false;
+    if (turn.answerAttempted) return true;
+    if (!turn.publish) throw new Error("core_answer_saving_unavailable");
+    turn.answerAttempted = true;
+    const result = await recall(manager, { query: turn.text }, signal);
+    if (signal?.aborted || !sourceCurrent(turn, manager) || !turn.boundUserId || !turn.active) return true;
+    const epoch = eduPiRecallRootEpoch(root);
+    const answer = turn.answerEpoch === epoch && result.answer && Date.parse(result.answer.valid_until) > Date.now()
+      ? result.answer : null;
+    const details: CoreRecallAnswerDetails = {
+      version: 1, receiptId: randomUUID(), sessionId: turn.sessionId, userEntryId: turn.boundUserId,
+      clientRequestId: turn.clientRequestId, originalTextHash: hash(turn.text), issuedAt: new Date().toISOString(),
+      answer, sources: answer ? result.entries.map(({ id, content, source_fingerprint }) => ({ id, content, source_fingerprint })) : [],
+      reasonCode: answer ? null : result.reason_code ?? "answer_unavailable",
+    };
+    if (!issueEduPiRecall(root, epoch, details, answer ? result.term_ref ?? null : null, answer ? turn.answerRequest ?? null : null)) return true;
+    try { await turn.publish(details); }
+    catch { invalidateEduPiRecallSession(turn.sessionId, "answer_not_saved"); throw new Error("core_answer_not_saved"); }
+    return true;
+  }
   const extension: ExtensionFactory = pi => {
-    pi.on("session_before_compact", (event, ctx) => summary.compact(event, ctx));
+    pi.on("session_before_compact", (event, ctx) => {
+      const turn = turns.getStore();
+      // Pi checks the old history before appending the new user entry.
+      // A captured Core-only turn must reach that entry without a model summary.
+      if (turn?.active && turn.captured && answersEnabled() && turn.manager === ctx.sessionManager) return { cancel: true };
+      return summary.compact(event, ctx);
+    });
     // The public tree hook cannot replace the default summarizer's inputs.
     // Navigation itself stays available; a protected abandoned-branch summary is held.
     pi.on("session_before_tree", (event, ctx) => canonical(ctx.sessionManager.getCwd()) === root
@@ -253,12 +307,19 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
     pi.on("context", async (event, ctx) => {
       try {
         if (canonical(ctx.sessionManager.getCwd()) !== root) return undefined;
+        // The real SDK has already appended this exact user entry. A formal
+        // Core answer bypasses the chat model, including for held results.
+        if (await finalizeAnswer(ctx.sessionManager, ctx.signal)) {
+          ctx.abort();
+          return { messages: [] };
+        }
         const snapshot = await memorySnapshot(ctx.sessionManager, event.messages);
         const entries = snapshot.entries;
         const { messages, memories, turnKey } = summary.project(event.messages, ctx.sessionManager, snapshot);
         const automatic = entries.filter(entry => ["preferences", "semester", "class"].includes(entry.category)
           || entry.category === "teaching" && entry.managed_method).slice(0, 12);
-        const projected = automatic.length ? [{ role: "user" as const, content: [{ type: "text" as const, text: `[EduPi 长期记忆]\n${automatic.map(entry => entry.content).join("\n")}\n[历史记忆供参考]` }], timestamp: Date.now() }, ...messages] : messages;
+        const projected = (automatic.length ? [{ role: "user" as const, content: [{ type: "text" as const, text: `[EduPi 长期记忆]\n${automatic.map(entry => entry.content).join("\n")}\n[历史记忆供参考]` }], timestamp: Date.now() }, ...messages] : messages)
+          .filter(message => message.role !== "custom" || message.customType !== CORE_RECALL_ANSWER_MESSAGE);
         summary.rememberContext(ctx.sessionManager, event.messages, projected, snapshot,
           [...new Map([...memories, ...automatic].map(entry => [entry.id, { id: entry.id, category: entry.category, source_fingerprint: entry.source_fingerprint }])).values()], turnKey);
         return { messages: projected };
@@ -273,14 +334,14 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
 
   return { extension, tool, recall, invalidate, bindSummarization: summary.bind,
     async run<T>(manager: SessionManager, command: { message: string; clientRequestId?: string },
-      captured: boolean, callback: () => Promise<T>): Promise<T> {
+      captured: boolean, callback: () => Promise<T>, publish?: Turn["publish"]): Promise<T> {
       invalidate(manager);
       if (!(manager instanceof SessionManager)
         || canonical(manager.getCwd()) !== root) return turns.run(null, callback);
       const previousUser = manager.getBranch().findLast(entry => entry.type === "message" && entry.message.role === "user");
       const turn: Turn = { manager, sessionId: manager.getSessionId(), clientRequestId: command.clientRequestId ?? "", text: command.message, active: true,
         captured: captured && !!command.clientRequestId && !disabled(), sourceNonce: randomUUID(), startingLeafId: manager.getLeafId(),
-        startingUserId: previousUser?.id ?? null, boundUserId: null, boundUserHash: null };
+        startingUserId: previousUser?.id ?? null, boundUserId: null, boundUserHash: null, answerAttempted: false, publish };
       activeTurns.set(manager, turn);
       try { return await turns.run(turn, callback); } finally {
         turn.active = false;

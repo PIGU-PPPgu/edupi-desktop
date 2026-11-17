@@ -7,10 +7,11 @@ import { isDeepStrictEqual } from "node:util";
 import { validateContainedRegularFile, type ResolvedEduPiCore, type ResolvedEduPiDataRoot } from "./edupi-core-root";
 import { attachRuntimeModelHost, createRuntimeModelHost } from "./edupi-runtime-model-host";
 import { loadRuntimeOwnerControlToken } from "./edupi-owner-control-token";
+import { invalidateEduPiRecallRoot } from "./edupi-recall-state";
 import { EDUPI_CAPABILITY_DOMAINS, readEduPiProactivityActivation, type EduPiCapabilityDomain, type EduPiProactivityActivation } from "./edupi-proactivity-config";
 import { canStartEduPiCapabilityDrafts, canStartEduPiProactivity, canStartEduPiStudentFollowup, coreRuntimeCanaryEnvironment } from "./safe-mode";
 
-export type EduPiRuntimeHandle = { call(operation: string, payload: unknown, signal?: AbortSignal): Promise<Record<string, unknown>>; callOwnerControl(operation: string, payload: unknown, signal?: AbortSignal): Promise<Record<string, unknown>>; callBridge(request: unknown, signal?: AbortSignal): Promise<Record<string, unknown>>; close(): Promise<void> };
+export type EduPiRuntimeHandle = { readonly recallAnswersActive?: boolean; call(operation: string, payload: unknown, signal?: AbortSignal): Promise<Record<string, unknown>>; callOwnerControl(operation: string, payload: unknown, signal?: AbortSignal): Promise<Record<string, unknown>>; callBridge(request: unknown, signal?: AbortSignal): Promise<Record<string, unknown>>; close(): Promise<void> };
 export function eduPiBridgeRequestBudget(request: unknown): { processingMs: number; transportMs: number } {
   const frame = request && typeof request === "object" && !Array.isArray(request) ? request as Record<string, unknown> : null;
   const envelope = frame?.envelope && typeof frame.envelope === "object" ? frame.envelope as Record<string, unknown> : null;
@@ -115,7 +116,8 @@ export function ensureEduPiRuntime({ runtime, dataRoot }: { runtime: ResolvedEdu
   const executionAllowed = canStartEduPiProactivity();
   const g1Scope = g1ScopeForActivation(activation);
   const g2Scope = g2ScopeForActivation(g2Activation);
-  const identity = `${runtime.root}:${runtime.coreCommit}:${runtime.componentManifestHash}:${activation.enabled}:${activation.source}:${activation.updatedAt || "none"}:${executionAllowed}:${JSON.stringify(g1Scope)}:${g2Activation.updatedAt || "none"}:${JSON.stringify(g2Scope)}:${JSON.stringify(g3Bindings)}`;
+  const recallAnswersRequested = process.env.EDUPI_CORE_RECALL_ANSWERS === "1";
+  const identity = `${runtime.root}:${runtime.coreCommit}:${runtime.componentManifestHash}:${activation.enabled}:${activation.source}:${activation.updatedAt || "none"}:${executionAllowed}:${JSON.stringify(g1Scope)}:${g2Activation.updatedAt || "none"}:${JSON.stringify(g2Scope)}:${JSON.stringify(g3Bindings)}:${recallAnswersRequested}`;
   const existing = entries.get(dataRoot.root);
   if (existing) {
     if (existing.identity !== identity) return Promise.reject(unavailable());
@@ -123,7 +125,7 @@ export function ensureEduPiRuntime({ runtime, dataRoot }: { runtime: ResolvedEdu
   }
   const entry: Entry = { identity, startup: Promise.resolve(null as unknown as EduPiRuntimeHandle) };
   entries.set(dataRoot.root, entry);
-  entry.startup = start(runtime, dataRoot, entry, activation, g1Scope, g2Scope, g3Bindings, executionAllowed).then(handle => { entry.handle = handle; return handle; }).catch(error => { if (entries.get(dataRoot.root) === entry) entries.delete(dataRoot.root); throw unavailable(startupFailureCode(error)); });
+  entry.startup = start(runtime, dataRoot, entry, activation, g1Scope, g2Scope, g3Bindings, executionAllowed, recallAnswersRequested).then(handle => { entry.handle = handle; return handle; }).catch(error => { if (entries.get(dataRoot.root) === entry) entries.delete(dataRoot.root); throw unavailable(startupFailureCode(error)); });
   return entry.startup;
 }
 
@@ -133,6 +135,7 @@ export function restartEduPiRuntime(args: { runtime: ResolvedEduPiCore; dataRoot
   if (existingRestart) return existingRestart;
 
   const restart = (async () => {
+    invalidateEduPiRecallRoot(key);
     const existing = entries.get(key);
     if (existing) {
       try {
@@ -154,7 +157,7 @@ export function restartEduPiRuntime(args: { runtime: ResolvedEduPiCore; dataRoot
 
 async function start(runtime: ResolvedEduPiCore, dataRoot: ResolvedEduPiDataRoot, entry: Entry, activation: EduPiProactivityActivation,
   g1Scope: ReturnType<typeof g1ScopeForActivation>, g2Scope: ReturnType<typeof g2ScopeForActivation>, g3Bindings: readonly EduPiCapabilityBinding[], executionAllowed: boolean,
-  ownerHistoryV3 = false, capacityChecked = false): Promise<EduPiRuntimeHandle> {
+  recallAnswersRequested: boolean, ownerHistoryV3 = false, capacityChecked = false): Promise<EduPiRuntimeHandle> {
   const load = (file: string) => import(/* webpackIgnore: true */ pathToFileURL(path.join(runtime.root, "scripts", file)).href);
   const manifestFile = validateContainedRegularFile({ allowedRoot: runtime.root, candidate: path.join(runtime.root, "contracts/edupi-core-runtime-component-manifest.json") });
   const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
@@ -177,7 +180,8 @@ async function start(runtime: ResolvedEduPiCore, dataRoot: ResolvedEduPiDataRoot
   const wantsParentQuestionGoals = sourceParentQuestionGoalsForBindings(g3Bindings);
   const wantsReflectionGoals = sourceReflectionGoalsForBindings(g3Bindings);
   const capacityProbe = (wantsParentQuestionGoals || wantsReflectionGoals) && !capacityChecked;
-  const ambientPlanning = capacityProbe || activation.enabled && executionAllowed || g2Scope !== null || g3Bindings.length > 0;
+  const ambientPlanning = capacityProbe || activation.enabled && executionAllowed || g2Scope !== null || g3Bindings.length > 0
+    || recallAnswersRequested && process.env.EDUPI_CORE_AMBIENT_PLANNING === "1";
   const sourceAdministrativeGoals = sourceAdministrativeGoalsForBindings(g3Bindings);
   const sourceParentQuestionGoals = wantsParentQuestionGoals && ownerHistoryV3;
   const sourceReflectionGoals = wantsReflectionGoals && ownerHistoryV3;
@@ -185,20 +189,24 @@ async function start(runtime: ResolvedEduPiCore, dataRoot: ResolvedEduPiDataRoot
   const ownerControlToken = ownerControlAvailable
     ? loadRuntimeOwnerControlToken(configuredStateDir, dataRoot.root, { required: ambientPlanning })
     : null;
+  const recallAnswers = recallAnswersRequested && ambientPlanning && !capacityProbe && Boolean(ownerControlToken);
   const child = fork(bootstrap, [], {
     cwd: runtime.root, execArgv: [], stdio: ["ignore", "ignore", "ignore", "ipc"],
     env: { PATH: process.env.PATH, LANG: process.env.LANG || "en_US.UTF-8", TZ: process.env.TZ || "Asia/Shanghai", NODE_ENV: process.env.NODE_ENV || "production", EDUPI_PROJECT_ROOT: dataRoot.root, EDUPI_HOME: path.join(dataRoot.root, ".edupi"), EDUPI_MEMORY_DIR: dataRoot.memoryDir, EDUPI_OUTPUT_DIR: dataRoot.outputDir, EDUPI_LOCK_DIR: dataRoot.lockDir, EDUPI_CORE_COMMIT: runtime.coreCommit, EDUPI_CORE_PARENT_PID: String(process.pid), ...(configuredStateDir && path.isAbsolute(configuredStateDir) ? { PI_DESKTOP_STATE_DIR: path.resolve(configuredStateDir) } : {}), ...coreRuntimeCanaryEnvironment(process.platform, process.env) },
   });
   entry.kill = () => { child.kill("SIGKILL"); };
-  const modelHost = attachRuntimeModelHost(child, createRuntimeModelHost({ coreRoot: runtime.root, projectRoot: dataRoot.root }));
+  const modelHost = attachRuntimeModelHost(child, createRuntimeModelHost({ coreRoot: runtime.root, projectRoot: dataRoot.root,
+    allowLoopback: recallAnswersRequested && process.env.EDUPI_DESKTOP_ISOLATED_CANARY === "1" }));
   let exited = false, stopping = false;
   let hasMaterialCompletion = false;
+  let hasRecallAnswerCompletion = false;
   const requests = new Set<AbortController>();
   let preserveEntryDuringProbe = false;
   const exit = new Promise<void>(resolve => child.once("close", () => { exited = true; for (const controller of requests) controller.abort(); if (!preserveEntryDuringProbe && entries.get(dataRoot.root) === entry) entries.delete(dataRoot.root); resolve(); }));
   let closing: Promise<void> | undefined;
   const close = (preserveEntry = false) => {
     if (closing) return closing;
+    invalidateEduPiRecallRoot(dataRoot.root);
     preserveEntryDuringProbe = preserveEntry;
     stopping = true;
     for (const controller of requests) controller.abort();
@@ -206,10 +214,15 @@ async function start(runtime: ResolvedEduPiCore, dataRoot: ResolvedEduPiDataRoot
       // A caller timeout/cancel does not reap Core's FIFO-delayed extraction.
       // Core closes its admission and owns actual completion; allow the full
       // bounded completion window from shutdown, not the caller's start.
-      const timer = setTimeout(() => child.kill("SIGKILL"), hasMaterialCompletion ? 38_000 : 5000);
+      const timer = setTimeout(() => child.kill("SIGKILL"), hasRecallAnswerCompletion ? 46_000 : hasMaterialCompletion ? 38_000 : 5000);
       try {
         if (!exited) { if (child.connected) child.send({ type: "runtime-stop" }, () => {}); else child.kill("SIGTERM"); }
-        await Promise.all([exit, modelHost.close()]);
+        const modelsClosed = modelHost.close().then(() => {
+          // The broker stops delivering results when close begins. Keep the
+          // child assessor pending until its real model work has been reaped.
+          if (hasRecallAnswerCompletion && !exited && child.connected) child.disconnect();
+        });
+        await Promise.all([exit, modelsClosed]);
       } finally { clearTimeout(timer); if (!preserveEntry && entries.get(dataRoot.root) === entry) entries.delete(dataRoot.root); }
     })();
     return closing;
@@ -217,6 +230,7 @@ async function start(runtime: ResolvedEduPiCore, dataRoot: ResolvedEduPiDataRoot
   child.once("disconnect", () => { void close(); });
   child.once("error", () => { void close(); });
   let endpoint: string;
+  let recallAnswersActive = false;
   try {
     endpoint = await new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => { cleanup(); reject(unavailable()); }, 15000);
@@ -232,7 +246,9 @@ async function start(runtime: ResolvedEduPiCore, dataRoot: ResolvedEduPiDataRoot
           const url = new URL(String(value.endpoint));
           const verifiedRoot = verifyCoreRuntimeRoot(dataRoot.root);
           if (!verifiedRoot.ok || value.dataRootFingerprint !== verifiedRoot.dataRootFingerprint) throw unavailable();
+          if (value.recallAnswersActive !== undefined && typeof value.recallAnswersActive !== "boolean") throw unavailable();
           if (value.host !== "127.0.0.1" || url.hostname !== "127.0.0.1" || url.protocol !== "http:" || url.pathname !== protocol.CORE_RUNTIME_ENDPOINT || url.username || url.password || url.search || url.hash || Number(url.port) !== value.port || value.protocol !== protocol.CORE_RUNTIME_PROTOCOL || value.protocolVersion !== protocol.CORE_RUNTIME_PROTOCOL_VERSION || value.contractVersion !== protocol.CORE_RUNTIME_CONTRACT_VERSION || value.schemaHash !== protocol.CORE_RUNTIME_SCHEMA_HASH || value.supervisorSessionId !== supervisorSessionId || value.coreCommit !== runtime.coreCommit || value.componentManifestHash !== manifest.component_manifest_hash || !/^sha256:[a-f0-9]{64}$/.test(String(value.dataRootFingerprint)) || !Number.isSafeInteger(value.fencingGeneration) || Number(value.fencingGeneration) < 1 || typeof value.instanceNonce !== "string" || !value.instanceNonce) throw unavailable();
+          recallAnswersActive = recallAnswers && value.recallAnswersActive === true;
           cleanup(); resolve(url.href);
         } catch { failed(); }
       };
@@ -242,6 +258,7 @@ async function start(runtime: ResolvedEduPiCore, dataRoot: ResolvedEduPiDataRoot
         componentManifestHash: manifest.component_manifest_hash, port: 0,
         ...(ambientPlanning ? { ambientPlanning: true } : {}),
         ...(ambientPlanning && !capacityProbe ? { ownerMessageRegistration: true } : {}),
+        ...(recallAnswers ? { recallAnswers: true } : {}),
         ...(ownerControlToken ? { ownerControlToken } : {}),
         ...(!capacityProbe && g1Scope ? { g1Scope } : {}),
         ...(!capacityProbe && g2Scope ? { g2Scope } : {}),
@@ -259,13 +276,20 @@ async function start(runtime: ResolvedEduPiCore, dataRoot: ResolvedEduPiDataRoot
     if (!protocol.validateRuntimeRequest(request).ok) throw Object.assign(new Error("Invalid runtime request."), { code: "invalid_request" });
     const bytes = JSON.stringify(request);
     if (Buffer.byteLength(bytes) > protocol.CORE_RUNTIME_OUTER_REQUEST_MAX_BYTES) throw Object.assign(new Error("Runtime request too large."), { code: "invalid_request" });
+    if (ownerControl && !["health", "owner_read", "owner_memory_recall"].includes(operation) && !operation.endsWith("_read")) {
+      invalidateEduPiRecallRoot(dataRoot.root, "source_changed", operation);
+    }
+    const answerRequest = recallAnswersActive && ownerControl && operation === "owner_memory_recall"
+      && payload !== null && typeof payload === "object" && !Array.isArray(payload)
+      && typeof (payload as Record<string, unknown>).query === "string";
+    if (answerRequest && !signal?.aborted) hasRecallAnswerCompletion = true;
     if (ownerControl && ["material_schedule_read", "material_schedule_apply"].includes(operation) && !signal?.aborted) {
       hasMaterialCompletion = true;
     }
     const controller = new AbortController(); requests.add(controller);
     const cancel = () => controller.abort(); signal?.addEventListener("abort", cancel, { once: true });
     if (signal?.aborted) controller.abort();
-    const timer = setTimeout(cancel, timeoutMs);
+    const timer = setTimeout(cancel, answerRequest ? 46_000 : timeoutMs);
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
       if (ownerControlToken && ownerControl) headers["x-edupi-owner-control"] = ownerControlToken;
@@ -294,15 +318,22 @@ async function start(runtime: ResolvedEduPiCore, dataRoot: ResolvedEduPiDataRoot
     if (!capacity || capacity.status === "unavailable") { await close(); throw unavailable(); }
     const v3 = capacity?.record_limit === 512 || capacity?.storage === "sqlite_stream_v1" && capacity.record_limit === null;
     await close(true);
-    return start(runtime, dataRoot, entry, activation, g1Scope, g2Scope, g3Bindings, executionAllowed, v3, true);
+    return start(runtime, dataRoot, entry, activation, g1Scope, g2Scope, g3Bindings, executionAllowed, recallAnswersRequested, v3, true);
   }
   return {
+    recallAnswersActive,
     close,
     async callBridge(this: EduPiRuntimeHandle, request: unknown, signal?: AbortSignal) {
       const kind = protocol.classifyCoreRuntimeBridgeRequest(request);
       if (kind !== "read" && kind !== "call") throw Object.assign(new Error("Invalid runtime bridge request."), { code: "invalid_request" });
+      const frame = request as { operation?: string; action?: string; connector_id?: string };
+      // Foreground recovery claims queue leases and starts the connector host.
+      // These calls do not edit recall sources, goals or grants; later source
+      // and artifact writes still use the normal invalidating Bridge paths.
+      const recovery = frame.operation === "agent-computer" && frame.action === "claim"
+        || frame.operation === "connector-setup" && frame.action === "start_runtime" && frame.connector_id === "dingtalk";
+      if (kind === "call" && !recovery) invalidateEduPiRecallRoot(dataRoot.root);
       const budget = eduPiBridgeRequestBudget(request);
-      const frame = request as { operation?: string; action?: string };
       const sourceRead = frame.operation === "g1-excerpt" && ["source_preview", "review_source"].includes(frame.action || "");
       if ((budget.processingMs === 37_000 || sourceRead) && !signal?.aborted) hasMaterialCompletion = true;
       return callRuntime(kind === "read" ? "bridge_read" : "bridge_call", { bridge_frame: JSON.stringify(request) }, signal, false, budget.transportMs);

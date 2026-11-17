@@ -26,6 +26,7 @@ import { isTauriDesktop } from "@/lib/desktop-updater";
 import { recallQueueWithBackup } from "@/lib/queue-recovery";
 import { interruptForPrioritySend } from "@/lib/edupi-priority-send";
 import { emptyMessageHistory, messageHistoryReducer, type MessageHistoryAction } from "@/lib/agent-message-history";
+import { coreRecallAnswerDetails, recallViewIsActive, subscribeCoreRecallInvalidation } from "@/lib/edupi-recall-answer-client";
 
 export interface SessionData {
   sessionId: string;
@@ -345,16 +346,66 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [appliedIdentity, setAppliedIdentity] = useState(sessionIdentity);
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
   const [messageHistory, rawDispatchMessageHistory] = useReducer(messageHistoryReducer, undefined, emptyMessageHistory);
-  const { messages, entryIds } = messageHistory;
+  const { entryIds } = messageHistory;
+  const [coreRecallContextEpoch, setCoreRecallContextEpoch] = useState(0);
+  const [coreRecallLive, setCoreRecallLive] = useState<{
+    receiptId: string; clientRequestId: string; sessionId: string; userEntryId: string;
+    generation: number; runId: number; payload: string;
+  } | null>(null);
+  const coreRecallDeliveryRef = useRef<typeof coreRecallLive>(null);
+  const coreRecallRevokedRef = useRef(true);
+  const coreRecallRequestRef = useRef<string | null>(null);
+  const coreRecallReceiptsRef = useRef(new Set<string>());
+  const invalidateCoreRecallLive = useCallback(() => {
+    coreRecallRevokedRef.current = true;
+    coreRecallDeliveryRef.current = null;
+    setCoreRecallLive(null);
+    setCoreRecallContextEpoch(value => value + 1);
+  }, []);
+  useEffect(() => subscribeCoreRecallInvalidation(invalidateCoreRecallLive), [invalidateCoreRecallLive]);
   const messageHistoryRef = useRef(messageHistory);
   const dispatchMessageHistory = useCallback((action: MessageHistoryAction) => {
     const previous = messageHistoryRef.current;
     const next = messageHistoryReducer(previous, action);
     if (next === previous) return false;
+    if (action.type === "optimistic") {
+      invalidateCoreRecallLive();
+      coreRecallRequestRef.current = action.requestId;
+      coreRecallRevokedRef.current = false;
+    }
+    if (action.type === "replace" && coreRecallDeliveryRef.current) {
+      const delivery = coreRecallDeliveryRef.current;
+      const matching = action.messages.map(coreRecallAnswerDetails).filter(details => details?.receiptId === delivery.receiptId);
+      const userIndex = action.messages.findLastIndex(message => message.role === "user");
+      if (matching.length !== 1 || JSON.stringify(matching[0]) !== delivery.payload
+        || action.entryIds[userIndex] !== delivery.userEntryId) invalidateCoreRecallLive();
+    }
+    if (action.type === "completed") {
+      const details = coreRecallAnswerDetails(action.message);
+      if (details && !coreRecallReceiptsRef.current.has(details.receiptId)) {
+        const userIndex = previous.messages.findLastIndex(message => message.role === "user");
+        const userEntry = previous.entryIds[userIndex];
+        if (!coreRecallRevokedRef.current && recallViewIsActive()
+          && action.requestId === coreRecallRequestRef.current
+          && details.clientRequestId === action.requestId && details.sessionId === sessionIdRef.current
+          && (!userEntry || details.userEntryId === userEntry)) {
+          // A fast context-only answer may beat the POST acknowledgement or
+          // its user-entry identity packet. Eligibility is scoped to our own
+          // request; the server still verifies the real latest SDK entry and
+          // complete Core receipt before any current state is displayed.
+          coreRecallReceiptsRef.current.add(details.receiptId);
+          const delivery = { receiptId: details.receiptId, clientRequestId: details.clientRequestId,
+            sessionId: details.sessionId, userEntryId: details.userEntryId, payload: JSON.stringify(details),
+            generation: sessionGenerationRef.current, runId: promptRunIdRef.current };
+          coreRecallDeliveryRef.current = delivery;
+          setCoreRecallLive(delivery);
+        }
+      }
+    }
     messageHistoryRef.current = next;
     rawDispatchMessageHistory(action);
     return true;
-  }, []);
+  }, [invalidateCoreRecallLive]);
   const [streamState, rawStreamDispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
   const streamingMessageRef = useRef<Partial<AgentMessage> | null>(null);
 
@@ -496,6 +547,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const promptRequestIdRef = useRef<string | null>(null);
   const completedPromptRequestIdsRef = useRef(new Set<string>());
   const peerRequestProbeIdRef = useRef(0);
+  const coreRecallGeneration = sessionGenerationRef.current;
+  const messages = useMemo(() => messageHistory.messages.map(message => {
+    if (message.role !== "custom") return message;
+    const details = coreRecallAnswerDetails(message);
+    // Persisted data never supplies live authority, including a forged runtime field.
+    const clean = message.coreRecallLive ? { ...message } : message;
+    if (clean !== message) delete clean.coreRecallLive;
+    return coreRecallLive && !coreRecallRevokedRef.current
+      && coreRecallLive.generation === coreRecallGeneration
+      && details?.receiptId === coreRecallLive.receiptId && details.clientRequestId === coreRecallLive.clientRequestId
+      && details.sessionId === coreRecallLive.sessionId && JSON.stringify(details) === coreRecallLive.payload
+      ? { ...clean, coreRecallLive: { receiptId: coreRecallLive.receiptId, clientRequestId: coreRecallLive.clientRequestId } } : clean;
+  }), [messageHistory.messages, coreRecallLive, coreRecallGeneration]);
 
   const setToolPresetState = opts.setToolPreset ?? setToolPreset;
   toolPresetRef.current = toolPreset;
@@ -522,6 +586,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setAppliedIdentity(sessionIdentity);
 
     if (!isPromotion) {
+      invalidateCoreRecallLive();
+      coreRecallRequestRef.current = null;
       educationToolCallsRef.current.clear();
       // Save the departing session's scroll position now, while the DOM still
       // shows it. The resets below empty the message list in this same commit,
@@ -1254,11 +1320,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const finishPromptWithoutStream = useCallback(async (sid: string | null = sessionIdRef.current, runId = promptRunIdRef.current) => {
     // Bail out before loadSession too: a stale finish for a previous run
     // must not overwrite the messages of the run currently streaming.
-    if (promptRunIdRef.current !== runId) return;
+    if (promptRunIdRef.current !== runId || promptSubmissionRunIdRef.current === runId) return;
     try {
       if (sid) await loadSession(sid);
     } finally {
-      if (promptRunIdRef.current !== runId) return;
+      if (promptRunIdRef.current !== runId || promptSubmissionRunIdRef.current === runId) return;
       const promptWasPending = rpcPromptPendingRef.current;
       const agentWasActive = sdkAgentActiveRef.current;
       rpcPromptPendingRef.current = false;
@@ -1330,7 +1396,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // If the server reports idle while we still think it's running, finish
   // through the same settlement path used by non-streaming prompts.
   const reconcileAgentState = useCallback(async (sid: string) => {
-    if (!agentRunningRef.current) return;
+    if (!agentRunningRef.current || promptSubmissionRunIdRef.current === promptRunIdRef.current) return;
     const runId = promptRunIdRef.current;
     try {
       const res = await fetch(`/api/agent/${encodeURIComponent(sid)}`);
@@ -2000,6 +2066,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   executeBashRef.current = executeBash;
 
   const handleAbort = useCallback(async () => {
+    invalidateCoreRecallLive();
     const sid = sessionIdRef.current;
     if (!sid) return;
     if (bashRunningRef.current) {
@@ -2015,12 +2082,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch (e) {
       console.error("Failed to abort:", e);
     }
-  }, []);
+  }, [invalidateCoreRecallLive]);
 
   const handleInterruptSend = useCallback(async (message: string, images?: AttachedImage[]) => {
     if (interruptSendInFlightRef.current) throw new Error("正在打断当前处理，请稍候");
     const sid = sessionIdRef.current;
     if (!sid || !agentRunningRef.current || bashRunningRef.current) return false;
+    invalidateCoreRecallLive();
     const generation = sessionGenerationRef.current;
     const runId = promptRunIdRef.current;
     interruptSendInFlightRef.current = true;
@@ -2047,7 +2115,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       interruptSendInFlightRef.current = false;
     }
-  }, [draftKey, finishPromptWithoutStream, handleSend, waitForPromptSettlement]);
+  }, [draftKey, finishPromptWithoutStream, handleSend, invalidateCoreRecallLive, waitForPromptSettlement]);
 
   const handleFork = useCallback(async (entryId: string) => {
     if (bashRunningRef.current) return;
@@ -2074,21 +2142,23 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (bashRunningRef.current) return;
     const sid = sessionIdRef.current;
     if (!sid) return;
+    invalidateCoreRecallLive();
     sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }).catch(() => {});
     setActiveLeafId(entryId);
     await loadContext(sid, entryId);
-  }, [loadContext]);
+  }, [invalidateCoreRecallLive, loadContext]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
     if (bashRunningRef.current) return;
     const sid = sessionIdRef.current;
     if (!sid) return;
+    invalidateCoreRecallLive();
     setActiveLeafId(leafId);
     const loaded = await loadContext(sid, leafId);
     if (loaded && leafId && sessionIdRef.current === sid) {
       sendAgentCommand(sid, { type: "navigate_tree", targetId: leafId }).catch(() => {});
     }
-  }, [loadContext]);
+  }, [invalidateCoreRecallLive, loadContext]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
     if (isNew) {
@@ -2518,8 +2588,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     completionScrollAllowedRef.current = false;
   }, []);
 
-  // Close SSE / invalidate in-flight work when ChatWindow unmounts.
-  useEffect(() => () => {
+  // Retire the old lifecycle before a replacement layout effect starts loading.
+  // A passive cleanup can run after that new load during StrictMode or refresh,
+  // invalidate its run id, and leave no request owning the loading state.
+  useLayoutEffect(() => () => {
     if (liveFollowFrameRef.current !== null) {
       cancelAnimationFrame(liveFollowFrameRef.current);
       liveFollowFrameRef.current = null;
@@ -2725,6 +2797,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   return {
     // State
     data, loading, error, activeLeafId, messages, entryIds, streamState,
+    coreRecallContextKey: `${sessionGenerationRef.current}:${promptRunIdRef.current}:${coreRecallContextEpoch}`,
     agentRunning, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, permissionMode, thinkingLevel,
     retryInfo, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, compactResult, currentModel, displayModel, sessionStats,

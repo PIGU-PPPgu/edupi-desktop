@@ -6,19 +6,19 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "98e4f7cd0c31dd30954574d2040bb1b948cdd954",
+    "core_commit": "b60d4b29bf827a8e7822ba00f5cacef7f351b811",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:e8d0cdf0196ae84a3d5bb5b9552934bcfefc5111ba3ba4882b99ff4b4abfb770",
-    "runtime_component_manifest_hash": "sha256:46252d3917be4035a8bc9bf4b779b6d6621db0a3caadb71a38bd2da63ffa0bc2",
-    "runtime_schema_hash": "sha256:99a62fa3d2b45864c717a5c35cfb08aea48fa1c09dd0cfcf099ed87877497608"
+    "component_manifest_hash": "sha256:9e2011b079292f9adb8be6ebfea670cbae8d9f04f5414f81121db542b26082a6",
+    "runtime_component_manifest_hash": "sha256:c872f949b8e79d65fc87d778744fb87345186bb6af62b97a6d42df53b27768be",
+    "runtime_schema_hash": "sha256:815da174d88273e2d8df1039fce600eff7999455c2a30af8ebdcfe1627fe1e2d"
   },
   "contract_identities": [
     {
       "contract_id": "edupi-bridge-v1.1",
       "contract_version": "1.1",
-      "schema_hash": "sha256:a6510b54f557960bd037563971aac32ad66bd819e97c771cce79d54db6eae0f4",
+      "schema_hash": "sha256:4d406ea05466f525d68e9a5c2e8f21b05a1013346fff5962a3ccc0ea61398b1d",
       "fixture_manifest_path": "fixtures/bridge/v1.1/fixture-manifest.json",
-      "fixture_manifest_hash": "sha256:f6080ae728ac8acd783e4f46f79bdc7f3bfd35cc714f7dcce1285e58b5ee636f",
+      "fixture_manifest_hash": "sha256:344be1cc882dc5f7fa84d082a2ac9073854782f615f5521379edce6504ea255a",
       "supported_commands": [
         "review_observation",
         "review_memory_candidate",
@@ -282,5 +282,5 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/458",
     "https://github.com/PIGU-PPPgu/edupi/pull/462"
   ],
-  "change_note": "This source candidate pins Core 98e4f7cd with both component manifests and the runtime schema, including G4 reflection source writes and history reads. Isolated Main4 fixtures use SQLite planning storage without rewriting the retired V1 planning tombstone. Source-derived parent questions require an exact owner grant and explicit recipient confirmation. Production root migration, signed installed pairing and public updates are not enabled by this change."
+  "change_note": "R04 combined development candidate b60d4b29: opaque answer receipt and complete no-model revalidation; final CI/merge pin and signed package remain pending. Published117/Core98 unchanged."
 }

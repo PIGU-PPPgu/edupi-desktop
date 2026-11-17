@@ -33,6 +33,7 @@ import type { ComputerUseBridgeResult, ComputerUseInput } from "@/lib/edupi-comp
 import type { KernelRunAction } from "@/lib/edupi-kernel-display";
 import { parseTeacherMessage, type EduPiComposerContext } from "@/lib/edupi-composer-context";
 import { calendarResultSummary } from "@/lib/edupi-calendar-result";
+import { coreRecallAnswerDetails, coreRecallClient } from "@/lib/edupi-recall-answer-client";
 
 interface Props {
   session: SessionInfo | null;
@@ -122,6 +123,8 @@ function getUserInputText(message: AgentMessage): string | null {
 }
 
 function getAssistantPreviewText(message: AgentMessage): string | null {
+  const core = coreRecallAnswerDetails(message);
+  if (core?.answer) return core.answer.text;
   if (message.role !== "assistant") return null;
   const text = getFinalSplit(message as AssistantMessage).answerBlocks
     .filter((block) => block.type === "text")
@@ -313,7 +316,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   }, [chatInputRef, draftKey, onSessionCreated]);
 
   const {
-    loading, error, messages, entryIds, streamState,
+    loading, error, messages, entryIds, streamState, coreRecallContextKey,
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, permissionMode, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, displayModel: displayModelValue, sessionStats,
@@ -336,6 +339,44 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     onEducationImportCompleted, onEduPiAction, onEduPiComputerAction,
   });
   const sessionBusy = agentRunning || bashRunning;
+  const [coreRecallEnabled, setCoreRecallEnabled] = useState(false);
+  useEffect(() => {
+    setCoreRecallEnabled(false);
+    if (!teacherMode) return;
+    let stopped = false;
+    let attempts = 0;
+    let pending: AbortController | undefined;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const check = async () => {
+      const controller = new AbortController();
+      pending = controller;
+      attempts++;
+      const timedOut = new Promise<never>((_resolve, reject) => {
+        deadline = setTimeout(() => {
+          controller.abort();
+          reject(new Error("Core 核验读取超时"));
+        }, 10_000);
+      });
+      try {
+        const enabled = await Promise.race([coreRecallClient.enabled(controller.signal), timedOut]);
+        if (!stopped && !controller.signal.aborted) setCoreRecallEnabled(enabled);
+      } catch {
+        if (!stopped && attempts < 3) retry = setTimeout(() => void check(), 1_000);
+      } finally {
+        clearTimeout(deadline);
+      }
+    };
+    void check();
+    return () => {
+      stopped = true;
+      pending?.abort();
+      clearTimeout(deadline);
+      clearTimeout(retry);
+    };
+    // Capability discovery is independent of per-turn source/view revocation.
+    // Every answer and person action still obtains its own current Core proof.
+  }, [teacherMode, session?.id, newSessionCwd, modelsRefreshKey]);
 
   const conversationTurns = useMemo<ConversationTurnLocation[]>(() => {
     const turns: ConversationTurnLocation[] = [];
@@ -714,6 +755,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       }
     }
 
+    const userEntryForMessage = new Map<number, string>();
+    let userEntry = "";
+    for (let index = 0; index < messages.length; index++) {
+      if (messages[index].role === "user") userEntry = entryIds[index] ?? "";
+      userEntryForMessage.set(index, userEntry);
+    }
     const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; showToolVisuals?: boolean } = {}): ReactNode => {
       const msg = options.messageOverride ?? messages[idx];
       const prevAssistantEntryId =
@@ -756,6 +803,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           showTimestamp={showTimestamp}
           prevTimestamp={idx > 0 ? (messages[idx - 1] as AgentMessage & { timestamp?: number }).timestamp : undefined}
           sessionId={sessionIdForViews ?? sessionIdRef.current ?? undefined}
+          coreRecallEnabled={teacherMode && coreRecallEnabled}
+          coreRecallUserEntryId={userEntryForMessage.get(idx)}
+          coreRecallContextKey={coreRecallContextKey}
         />
       );
       if (!isVisible || options.attachRef === false) return view;
@@ -791,6 +841,47 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       const userIdx = idx;
       let endIdx = userIdx + 1;
       while (endIdx < messages.length && !isGroupAnchor(messages[endIdx])) endIdx += 1;
+
+      let canonicalIdx = -1;
+      for (let candidateIdx = endIdx - 1; candidateIdx > userIdx; candidateIdx--) {
+        const details = coreRecallAnswerDetails(messages[candidateIdx]);
+        if (details?.sessionId === (sessionIdForViews ?? sessionIdRef.current)
+          && Boolean(entryIds[userIdx]) && details?.userEntryId === entryIds[userIdx]) {
+          canonicalIdx = candidateIdx;
+          break;
+        }
+      }
+      if (canonicalIdx !== -1) {
+        // Core's canonical custom is this turn's final answer, including after SDK abort.
+        // The SDK can flush a context-only custom either before or after its
+        // empty abort terminator. Genuine provider errors remain visible.
+        const isCoreTerminator = (index: number) => {
+          const candidate = messages[index];
+          return candidate.role === "assistant" && candidate.stopReason === "error" && candidate.content.length === 0
+            && (!candidate.errorMessage?.trim() || candidate.errorMessage === "This operation was aborted");
+        };
+        rendered.push(renderMessage(userIdx, { showToolVisuals: false }));
+        const process = [];
+        for (let index = userIdx + 1; index < endIdx; index++) {
+          if (index !== canonicalIdx && !isCoreTerminator(index)) process.push(index);
+        }
+        const visibleProcess = process.filter(index => hasDisplayableProcessMessage(messages[index]));
+        const errors = process.filter(index => {
+          const candidate = messages[index];
+          return candidate.role === "assistant" && candidate.stopReason === "error";
+        });
+        const folded = visibleProcess.filter(index => !errors.includes(index));
+        if (folded.length) rendered.push(
+          <ProcessDetailsGroup key={`core-process-${entryIds[userIdx]}`} messageCount={folded.length}
+            toolCallCount={countToolCalls(messages, folded)} t={t}>
+            {folded.map(index => renderMessage(index, { attachRef: false, showToolVisuals: false }))}
+          </ProcessDetailsGroup>,
+        );
+        rendered.push(renderMessage(canonicalIdx, { showToolVisuals: false }));
+        errors.forEach(index => rendered.push(renderMessage(index, { showToolVisuals: false })));
+        idx = endIdx;
+        continue;
+      }
 
       const finalAssistantIdx = findFinalAssistantIndex(messages, userIdx, endIdx);
 
@@ -849,6 +940,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         const calendarResult = teacherMode ? calendarResultSummary(messages.slice(userIdx + 1, endIdx)) : null;
         if (calendarResult) rendered.push(<div key={`calendar-result-${userIdx}`} role={calendarResult.uncertain ? "alert" : "status"} style={{ marginBottom: 8, fontSize: 12, color: calendarResult.uncertain ? "var(--warning, var(--text-muted))" : "var(--text-muted)" }}>{calendarResult.text}</div>);
         rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage, showToolVisuals: false }));
+      } else if (finalAssistant.stopReason === "error") {
+        rendered.push(renderMessage(finalAssistantIdx, { showToolVisuals: false }));
       }
       for (let renderIdx = finalAssistantIdx + 1; renderIdx < endIdx; renderIdx++) {
         rendered.push(renderMessage(renderIdx, { showToolVisuals: false }));
@@ -870,7 +963,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     messages, entryIds, streamActive, sessionBusy, isNew, forkingEntryId,
     modelNames, messageCwd, onOpenFile, onOpenImage, onOpenPreview, handleEditContent,
     stableHandleFork, stableHandleNavigate, sessionIdForViews,
-    visibleCount, t, lastUserMsgRef, sessionIdRef, teacherMode,
+    visibleCount, t, lastUserMsgRef, sessionIdRef, teacherMode, coreRecallEnabled, coreRecallContextKey,
   ]);
 
   const availableThinkingLevels = displayModelValue

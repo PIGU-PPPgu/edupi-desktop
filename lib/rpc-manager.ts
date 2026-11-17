@@ -52,6 +52,7 @@ import { persistInitialPiSessionFile } from "./pi-session-first-file";
 import { eduPiDirectPromptGate } from "./edupi-direct-prompt-gate";
 import { createEduPiMemoryRecallAccess, type EduPiMemoryRecallAccess } from "./edupi-memory-recall-access";
 import { inspectEduPiPromptSession } from "./edupi-prompt-reconciliation";
+import { CORE_RECALL_ANSWER_MESSAGE } from "./edupi-recall-answer";
 
 const CORE_CAPTURED_PROMPT = Symbol("edupi-core-captured-prompt");
 const WORKFLOW_CHILD_PROMPT = Symbol("edupi-workflow-child-prompt");
@@ -404,14 +405,21 @@ export class AgentSessionWrapper {
       const clientRequestId = this.promptRequestId;
       const scopedEvent = clientRequestId ? { ...event, clientRequestId } : event;
       if (event.type === "message_end" && event.message && typeof event.message === "object") {
-        const message = event.message;
+        const message = event.message as Record<string, unknown>;
         const manager = this.inner.sessionManager;
         // Pi 1 publishes message_end just before appending the corresponding
         // entry. Defer only this delivery one microtask to attach the actual
         // persisted identity; the next SDK event still follows it in order.
         queueMicrotask(() => {
           const leaf = manager.getLeafEntry();
-          const entryId = leaf?.type === "message" && leaf.message === message ? leaf.id : undefined;
+          const persisted = leaf?.type === "message" && leaf.message === message ? leaf
+            : manager.getBranch().findLast(entry => entry.type === "message" && entry.message === message
+              || entry.type === "custom_message" && message.role === "custom"
+                && message.customType === CORE_RECALL_ANSWER_MESSAGE && entry.customType === CORE_RECALL_ANSWER_MESSAGE
+                && (entry.details as { receiptId?: unknown } | undefined)?.receiptId
+                  === (message.details as { receiptId?: unknown } | undefined)?.receiptId
+                && entry.content === message.content && isDeepStrictEqual(entry.details, message.details));
+          const entryId = persisted?.id;
           const messageId = entryId ?? this.messageEventIds.get(message) ?? `live:${randomUUID()}`;
           this.messageEventIds.set(message, messageId);
           this.emit({ ...scopedEvent, messageId, ...(entryId ? { entryId } : {}) });
@@ -537,10 +545,19 @@ export class AgentSessionWrapper {
 
   private runPromptWithMemoryRecall<T>(command: Record<string, unknown>, callback: () => Promise<T>): Promise<T> {
     if (!this.memoryRecall) return callback();
+    const inner = this.inner;
     return this.memoryRecall.run(this.inner.sessionManager, {
       message: command.message as string,
       ...(typeof command.clientRequestId === "string" ? { clientRequestId: command.clientRequestId } : {}),
-    }, Reflect.get(command, CORE_CAPTURED_PROMPT) === true && !command.streamingBehavior, callback);
+    }, Reflect.get(command, CORE_CAPTURED_PROMPT) === true && !command.streamingBehavior, callback,
+    typeof inner.sendCustomMessage === "function" ? async details => {
+      if (this.inner !== inner || inner.sessionManager.getSessionId() !== details.sessionId) throw new Error("recall_session_changed");
+      await inner.sendCustomMessage!({
+        customType: CORE_RECALL_ANSWER_MESSAGE,
+        content: details.answer?.text ?? "当前资料尚不能核验这个问题。",
+        display: true, details,
+      }, { triggerTurn: false });
+    } : undefined);
   }
 
   private emit(event: AgentEvent): void {

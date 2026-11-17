@@ -16,10 +16,12 @@ const occurredAt = "2026-10-10T08:00:00.000Z";
 
 function fixture({ authorized = true, g2 = false, registrationFailure = null,
   captureFailure = null, piError = false, piAsyncFailure = false,
-  settleFailure = false, settleStatus = "sealed_absent", reconciliationEvidence = "confirmed", capability = false } = {}) {
+  settleFailure = false, settleStatus = "sealed_absent", reconciliationEvidence = "confirmed", capability = false,
+  g1Active = true, answerActive = false, registrationActive = true, text = "请准备数学课" } = {}) {
   // An in-memory transport proves route ordering only: no Core daemon, Pi
   // model, teacher files, or installed app is touched by these tests.
   const events = [];
+  const captures = [], settlements = [], piCommands = [];
   let piListener = () => {};
   const outbox = new Map();
   const ledger = new Map();
@@ -32,11 +34,12 @@ function fixture({ authorized = true, g2 = false, registrationFailure = null,
     change(entry);
     return entry;
   };
-  const host = { call: async (operation) => {
+  const host = { recallAnswersActive: answerActive, call: async (operation) => {
     assert.equal(operation, "health");
     events.push("health");
     return { ok: true, result: { data_root_fingerprint: rootRef, capabilities: {
-      ambient_planning: "active", owner_message_registration: "active", g1_processor: "active", g2_processor: "active", g3_processor: "active",
+      ambient_planning: "active", owner_message_registration: registrationActive ? "active" : "inactive",
+      g1_processor: g1Active ? "active" : "activation_pending", g2_processor: "active", g3_processor: "active",
     } } };
   } };
   const modules = {
@@ -58,9 +61,9 @@ function fixture({ authorized = true, g2 = false, registrationFailure = null,
     "@/lib/edupi-core-snapshot": { resolveEduPiBridgeRoots: () => ({ dataRoot: { root: "/isolated/synthetic" } }) },
     "@/lib/edupi-prompt-intent": {
       listEduPiPromptIntents: () => [{ sessionId: "session-1", clientRequestId: "request-1",
-        occurredAt, message: "请准备数学课", cwd: "/synthetic", status: "pending" }],
+        occurredAt, message: text, cwd: "/synthetic", status: "pending" }],
       readEduPiPromptIntent: (sessionId, clientRequestId) => sessionId === "session-1" && clientRequestId === "request-1"
-        ? { sessionId, clientRequestId, occurredAt, message: "请准备数学课", cwd: "/synthetic", status: "pending" } : null,
+        ? { sessionId, clientRequestId, occurredAt, message: text, cwd: "/synthetic", status: "pending" } : null,
       resolveEduPiPromptIntent: () => events.push("intent_resolved"),
       discardEduPiPromptIntent: () => events.push("intent_discarded"),
     },
@@ -71,6 +74,7 @@ function fixture({ authorized = true, g2 = false, registrationFailure = null,
       status: "active", ownerId: "owner-fixture", grantId, grantVersion: 2,
     }) },
     "@/lib/edupi-registered-prompt": { registerAndCapturePrompt: async (_host, input, hooks) => {
+      captures.push(structuredClone(input));
       events.push(`register:${input.domain}`);
       if (registrationFailure === input.domain) throw new Error("synthetic_registration_failure");
       const proof = { messageRef: `owner_message:${(input.domain === G1 ? "b" : "c").repeat(64)}`,
@@ -84,6 +88,7 @@ function fixture({ authorized = true, g2 = false, registrationFailure = null,
       hooks.onCaptured(proof);
       return proof;
     }, settleRegisteredPrompt: async (_host, input, hooks) => {
+      settlements.push(structuredClone(input));
       events.push(`settle:${input.domain}`);
       if (settleFailure) throw new Error("synthetic_settle_unknown");
       const proof = { messageRef: `owner_message:${(input.domain === G1 ? "b" : "c").repeat(64)}`,
@@ -103,6 +108,7 @@ function fixture({ authorized = true, g2 = false, registrationFailure = null,
         assert.equal(commandHash, `sha256:${createHash("sha256").update(JSON.stringify(persisted.command)).digest("hex")}`);
         events.push("pi_session_marker");
       }, sendCoreCapturedPrompt: async command => {
+        piCommands.push(structuredClone(command));
         events.push("pi_send"); if (piError) throw new Error("synthetic_pi_uncertain");
         queueMicrotask(() => piListener(piAsyncFailure
           ? { type: "prompt_error", clientRequestId: command.clientRequestId }
@@ -175,7 +181,7 @@ function fixture({ authorized = true, g2 = false, registrationFailure = null,
     return modules[name];
   }, routeModule, routeModule.exports);
   const body = { sessionId: "session-1", messageId: "message-1", occurredAt,
-    command: { type: "prompt", message: "请准备数学课", clientRequestId: "request-1" } };
+    command: { type: "prompt", message: text, clientRequestId: "request-1" } };
   const post = (payload = body) => routeModule.exports.POST(new Request("http://localhost/api/edupi/proactivity/prompt", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
   }));
@@ -191,9 +197,52 @@ function fixture({ authorized = true, g2 = false, registrationFailure = null,
     method: "DELETE", headers: { "content-type": "application/json" },
     body: JSON.stringify({ sessionId: body.sessionId, clientRequestId: body.command.clientRequestId }),
   }));
-  return { events, outbox, body, post, put, patch, cancel, deactivate: () => { domains = []; },
+  return { events, captures, settlements, piCommands, outbox, body, post, put, patch, cancel,
+    resumeCapture: () => { registrationFailure = captureFailure = null; }, deactivate: () => { domains = []; },
     entry: () => get(body.sessionId, body.command.clientRequestId) };
 }
+
+test("capture, retry and Pi dispatch bind the exact raw prompt including surrounding whitespace", async () => {
+  for (const text of [" \t\n请准备数学课\r\n ", "\u3000请准备数学课\u00a0"]) {
+    const f = fixture({ text, g2: true, captureFailure: G1 });
+    assert.equal((await f.post()).status, 202);
+    assert.equal(f.entry().command.message, text);
+    assert.equal(f.captures[0].text, text);
+    assert.equal(f.piCommands.length, 0);
+    f.resumeCapture();
+    assert.equal((await f.put()).status, 200);
+    assert.ok(f.captures.every(input => input.text === text));
+    assert.deepEqual(f.piCommands, [f.body.command]);
+    assert.equal((await f.post()).status, 200);
+    assert.equal(f.piCommands.length, 1);
+    const changed = await f.post({ ...f.body, command: { ...f.body.command, message: text.trim() } });
+    assert.equal(changed.status, 409, "trimming the same request changes its identity");
+  }
+});
+
+test("cancellation and withdrawal reuse the raw prompt for settlement and registration repair", async () => {
+  const text = " \n请准备数学课\t ";
+  for (const failure of [
+    { registrationFailure: G1, settleStatus: "sealed_absent" },
+    { captureFailure: G1, settleStatus: "withdrawn" },
+    { piError: true, settleStatus: "withdrawn" },
+  ]) {
+    const f = fixture({ text, ...failure });
+    assert.equal((await f.post()).status, 202);
+    assert.equal((await f.cancel()).status, 200);
+    assert.equal(f.captures[0].text, text);
+    assert.equal(f.settlements[0].text, text);
+    assert.equal(Boolean(f.settlements[0].previousRegistration), !failure.registrationFailure);
+    assert.equal((await f.put()).status, 409);
+  }
+});
+
+test("a whitespace-only prompt is rejected before registration", async () => {
+  const f = fixture({ text: " \t\n\u3000" });
+  assert.equal((await f.post()).status, 400);
+  assert.equal(f.captures.length, 0);
+  assert.equal(f.entry(), null);
+});
 
 test("unauthorized request never reads private body or touches Core and Pi", async () => {
   const f = fixture({ authorized: false });
@@ -220,6 +269,37 @@ test("G1 affirmative capture is durable before the sole Pi dispatch", async () =
   assert.ok(position("pi_accepted") < position("intent_resolved"));
   assert.equal(f.events.filter(event => event === "pi_send").length, 1);
   assert.equal(f.events.includes("pi_accepted"), true);
+});
+
+test("explicit branded R04 answer support captures the owner question without a G1 generation processor", async () => {
+  const previous = process.env.EDUPI_CORE_RECALL_ANSWERS;
+  process.env.EDUPI_CORE_RECALL_ANSWERS = "1";
+  try {
+    const f = fixture({ g1Active: false, answerActive: true });
+    const result = await f.post();
+    assert.equal(result.status, 200);
+    assert.equal(f.entry().stage, "pi_accepted");
+    assert.ok(f.events.indexOf(`capture:${G1}`) < f.events.indexOf("pi_send"));
+    assert.equal(f.events.filter(event => event === "pi_send").length, 1);
+  } finally {
+    if (previous === undefined) delete process.env.EDUPI_CORE_RECALL_ANSWERS; else process.env.EDUPI_CORE_RECALL_ANSWERS = previous;
+  }
+});
+
+test("R04 cannot manufacture registration or an answer processor from a flag or an inactive bootstrap", async () => {
+  const previous = process.env.EDUPI_CORE_RECALL_ANSWERS;
+  try {
+    for (const [flag, answerActive, registrationActive] of [[undefined, true, true], ["0", true, true], ["1", false, true], ["1", true, false]]) {
+      if (flag === undefined) delete process.env.EDUPI_CORE_RECALL_ANSWERS; else process.env.EDUPI_CORE_RECALL_ANSWERS = flag;
+      const f = fixture({ g1Active: false, answerActive, registrationActive });
+      const result = await f.post();
+      assert.equal(result.status, 503);
+      assert.equal(f.events.includes("pi_send"), false);
+      assert.equal(f.events.some(event => event.startsWith("register:")), false);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.EDUPI_CORE_RECALL_ANSWERS; else process.env.EDUPI_CORE_RECALL_ANSWERS = previous;
+  }
 });
 
 test("a legal JSON key order uses the durable command hash for its Pi marker", async () => {

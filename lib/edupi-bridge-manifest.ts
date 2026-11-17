@@ -4,9 +4,9 @@ import { BRIDGE_COMMAND_TYPES, type CoreCommandType } from "./edupi-bridge-contr
 export type EduPiBridgeContractIdentity = {
   contract_id: "edupi-bridge-v1.1";
   contract_version: "1.1";
-  schema_hash: "sha256:a6510b54f557960bd037563971aac32ad66bd819e97c771cce79d54db6eae0f4";
+  schema_hash: "sha256:4d406ea05466f525d68e9a5c2e8f21b05a1013346fff5962a3ccc0ea61398b1d";
   fixture_manifest_path: "fixtures/bridge/v1.1/fixture-manifest.json";
-  fixture_manifest_hash: "sha256:f6080ae728ac8acd783e4f46f79bdc7f3bfd35cc714f7dcce1285e58b5ee636f";
+  fixture_manifest_hash: "sha256:344be1cc882dc5f7fa84d082a2ac9073854782f615f5521379edce6504ea255a";
   supported_commands: CoreCommandType[];
   supported_projections: ["education_workspace"];
   depends_on: [];
@@ -26,7 +26,7 @@ export type EduPiCompatManifest = {
   compat_manifest_version: "1.0";
   core_repository: "edupi";
   core_sdk: { pi: "1.0.2"; pi_durable: "1.0.2" };
-  core_runtime: { core_commit: "98e4f7cd0c31dd30954574d2040bb1b948cdd954"; component_manifest_path: "contracts/edupi-desktop-component-manifest.json"; component_manifest_hash: "sha256:e8d0cdf0196ae84a3d5bb5b9552934bcfefc5111ba3ba4882b99ff4b4abfb770"; runtime_component_manifest_hash: "sha256:46252d3917be4035a8bc9bf4b779b6d6621db0a3caadb71a38bd2da63ffa0bc2"; runtime_schema_hash: "sha256:99a62fa3d2b45864c717a5c35cfb08aea48fa1c09dd0cfcf099ed87877497608" };
+  core_runtime: { core_commit: "b60d4b29bf827a8e7822ba00f5cacef7f351b811"; component_manifest_path: "contracts/edupi-desktop-component-manifest.json"; component_manifest_hash: "sha256:9e2011b079292f9adb8be6ebfea670cbae8d9f04f5414f81121db542b26082a6"; runtime_component_manifest_hash: "sha256:c872f949b8e79d65fc87d778744fb87345186bb6af62b97a6d42df53b27768be"; runtime_schema_hash: "sha256:815da174d88273e2d8df1039fce600eff7999455c2a30af8ebdcfe1627fe1e2d" };
   contract_identities: [EduPiBridgeContractIdentity, ScheduleOccurrenceContractIdentity];
   cumulative_projection_manifest: null | Record<string, unknown>;
   supported_commands: CoreCommandType[];
@@ -41,10 +41,10 @@ export function loadEduPiCompatManifest(): EduPiCompatManifest {
   const manifest = manifestJson as unknown as EduPiCompatManifest;
   if (manifest.compat_manifest_version !== "1.0" || manifest.core_repository !== "edupi") throw new Error("Invalid EduPi compatibility manifest");
   if (manifest.core_sdk?.pi !== "1.0.2" || manifest.core_sdk.pi_durable !== "1.0.2") throw new Error("Invalid EduPi Core SDK pairing");
-  if (!manifest.core_runtime || manifest.core_runtime.core_commit !== "98e4f7cd0c31dd30954574d2040bb1b948cdd954" || manifest.core_runtime.component_manifest_path !== "contracts/edupi-desktop-component-manifest.json" || manifest.core_runtime.component_manifest_hash !== "sha256:e8d0cdf0196ae84a3d5bb5b9552934bcfefc5111ba3ba4882b99ff4b4abfb770" || manifest.core_runtime.runtime_component_manifest_hash !== "sha256:46252d3917be4035a8bc9bf4b779b6d6621db0a3caadb71a38bd2da63ffa0bc2" || manifest.core_runtime.runtime_schema_hash !== "sha256:99a62fa3d2b45864c717a5c35cfb08aea48fa1c09dd0cfcf099ed87877497608") throw new Error("Invalid EduPi core_runtime identity");
+  if (!manifest.core_runtime || manifest.core_runtime.core_commit !== "b60d4b29bf827a8e7822ba00f5cacef7f351b811" || manifest.core_runtime.component_manifest_path !== "contracts/edupi-desktop-component-manifest.json" || manifest.core_runtime.component_manifest_hash !== "sha256:9e2011b079292f9adb8be6ebfea670cbae8d9f04f5414f81121db542b26082a6" || manifest.core_runtime.runtime_component_manifest_hash !== "sha256:c872f949b8e79d65fc87d778744fb87345186bb6af62b97a6d42df53b27768be" || manifest.core_runtime.runtime_schema_hash !== "sha256:815da174d88273e2d8df1039fce600eff7999455c2a30af8ebdcfe1627fe1e2d") throw new Error("Invalid EduPi core_runtime identity");
   const identity = manifest.contract_identities.find((item) => item.contract_id === "edupi-bridge-v1.1") as EduPiBridgeContractIdentity | undefined;
   const occurrence = manifest.contract_identities.find((item) => item.contract_id === "edupi-schedule-occurrence-v1.2") as ScheduleOccurrenceContractIdentity | undefined;
-  if (manifest.contract_identities.length !== 2 || !identity || identity.contract_version !== "1.1" || identity.schema_hash !== "sha256:a6510b54f557960bd037563971aac32ad66bd819e97c771cce79d54db6eae0f4" || identity.fixture_manifest_path !== "fixtures/bridge/v1.1/fixture-manifest.json" || identity.fixture_manifest_hash !== "sha256:f6080ae728ac8acd783e4f46f79bdc7f3bfd35cc714f7dcce1285e58b5ee636f" || identity.depends_on.length !== 0) throw new Error("Invalid EduPi v1.1 contract identity");
+  if (manifest.contract_identities.length !== 2 || !identity || identity.contract_version !== "1.1" || identity.schema_hash !== "sha256:4d406ea05466f525d68e9a5c2e8f21b05a1013346fff5962a3ccc0ea61398b1d" || identity.fixture_manifest_path !== "fixtures/bridge/v1.1/fixture-manifest.json" || identity.fixture_manifest_hash !== "sha256:344be1cc882dc5f7fa84d082a2ac9073854782f615f5521379edce6504ea255a" || identity.depends_on.length !== 0) throw new Error("Invalid EduPi v1.1 contract identity");
   if (!occurrence || occurrence.contract_version !== "1.2" || occurrence.schema_path !== "contracts/edupi-schedule-occurrence-v1.2.schema.json" || occurrence.schema_hash !== "sha256:b739852f427520f787ad32c7f41b258976a3b41d60fa6116439696c1495b97cb" || occurrence.supported_commands.length !== 1 || occurrence.supported_commands[0] !== "import_calendar" || occurrence.supported_projections.length !== 1 || occurrence.supported_projections[0] !== "schedule_occurrence" || occurrence.depends_on.length !== 1 || occurrence.depends_on[0] !== "edupi-bridge-v1.1") throw new Error("Invalid EduPi v1.2 occurrence contract identity");
   const supportedCommands = ["review_observation", "review_memory_candidate", "review_teacher_context", "review_work_candidate", "review_follow_up", "review_task", "import_calendar", "import_timetable", "intake_material", "create_task", "move_task_stage", "update_memory"] as const;
   const hasExactCommands = (value: unknown): boolean => Array.isArray(value)
