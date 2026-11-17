@@ -8,13 +8,16 @@ Desktop `.117` 的冻结签名源为 `a55777400dea49f1ba3d953418b6965a41942c3e`�
 
 已完成一次新的说明专用PATCH，加入本机Mac原生升级/G3/G5冷启回读与Windows后续构建暂停，前后九资产、tag、正式Latest及feed均保持；此操作没有workflow dispatch或构建。首次准备误读不存在的feed tag在PATCH前拒绝，实际feed为 `refs/heads/updater-feed`，失败记录保留；修正引用后完成说明更新，没有重跑公开发布器。
 
+后续 h 补验使用本机 macOS26.6／arm64、临时 `.115`／固定Core98和全新合成根。真实Core事项进入提醒，应用内“继续聊”打开精确task；普通草稿A和事项草稿B均在各自持久键中回读。系统通知开关与权限实际显示开启，但6次认领均延后、系统提交与打开均为0，具体延后原因尚未证明。Mac随后再次锁屏，未完成通知点击、发送、会话绑定及UI离开重入；未把SQLite回读替代这些交互。自有进程已停止，原UI及350项保护已恢复通过。
+
 | 原任务 | 当前状态 | 实际证据与未覆盖范围 |
 | --- | --- | --- |
 | R15 Mac 公开下载、安装 | 验收通过，范围为隔离安装 | 三份公开Mac资产匿名完整size/SHA匹配；公开DMG run44011387309／harness cdd8cdc5 两次真实App/Core/HTTP启动、不同PID/nonce、同一SQLite持久记录和marker/model回读、清理通过。此前CI1／CI2失败保留；不是普通教师根迁移验收 |
 | R15 Mac 原生升级 | 验收通过，范围为隔离cohort `.116→.117` | 本机旧116设置发现117，实际点击更新和继续，自动新App PID77828→30243／Core30799；About117、安全签名和冻结包全树核对通过。正常Cmd+Q后再冷启App68191／Core68492，G3/G5状态回读保持；两次正常退出后App/helper均0。正常 `/Applications/EduPi.app` 仍115；未证明正式70通道升级 |
 | R15 Linux | Deb安装与AppImage隔离原生升级分别通过 | run44011387634 实际从旧116 UI触发公开117原生updater，新App PID3382→3503，HTTP3536／Core3588；同资料根、同SQLite记录、marker/model回读与清理通过，未手动launch117补证。升级后GUI、Deb升级、真实教师流程未操作 |
-| R15 Windows | 用户因费用暂停构建与runner；源码待审 | 历史run43975180076的117 NSIS安装/Core smoke通过；最新run44022244522非零 `blocked/dedicated_native_runner_required`，User env未改、`actualUpgradePassed=false`、清理通过。hosted宿主／shell均elevated，自托管runner为0。完整executor已实现，诊断token泄漏已修，独立只读复审另记；不再为此派发付费作业 |
+| R15 Windows | 用户因费用暂停构建与runner；修补源码保留Draft | 历史run43975180076的117 NSIS安装/Core smoke通过；run44022244522仍为非零blocked，不改为升级通过。PR504 head0a61c16e修复诊断token泄漏、环境读取数组展开、独占截图重名和资源journal前中断恢复误绿。本机WebDriver12项及PowerShell7.4.13支持检查24项通过；独立复审未见新增P1/P2，但其14项PowerShell因无pwsh未重跑。没有新Windows runner、构建或installer执行 |
 | R18／R20 原生拖动 | 自动化输入限制已定位，人工持键鼠标未验 | CUA drag的原生pressedButtons和Web buttons均为0，命中把手后正确触发松键保护；真实hook12项回归通过。macOS权限probe44015411776仅读取且accessibility/screenRecording均true，未启动App；它不能证明持键拖动通过 |
+| R03 提醒续聊与通知 | 事项路由、两份草稿持久化局部通过；完整流程未验 | h的G3仍未审核，seed模型调用0；应用内续聊到对应task，A/B在不同new/reminder键落盘。`taskSessionBinding=null`、没有发送。6次通知deferred、0 submitted／opened；系统菜单操作受CUA限制，后续又锁屏。原生通知点击、发送绑定及UI离开重入均未完成 |
 | R04／L4 G3、G5 | 隔离安装版交互与冷启回读通过，完整L4未验收 | G3打开三份产物、接受草稿、材料确认及关联任务回读；G5错误短语disabled、精确短语enabled并确认，内部候选草稿在升级和冷启后保持。外发未授权，未执行外发；不证明真实模型或教学内容质量 |
 | R04／完整L4其余项 | 外部条件与固定Core合同仍阻塞 | Main4在dispatch前拒绝generic `create_task`，周/月模板503／activation_pending；真实模型预检要求HTTPS，而当前默认模型为本机HTTP网关，0calls。自然跨期、实睡、通知实际点击、真实教师连续使用、正式盲测六域／双裁决者／预算配置冻结仍缺；未绕过门禁或切换账号／模型 |
 
@@ -24,7 +27,11 @@ Desktop `.117` 的冻结签名源为 `a55777400dea49f1ba3d953418b6965a41942c3e`�
 
 本机新 cohort `native-l4-116-117-20261117g` 实际执行 snapshot→isolate→restore→check，350项按新基线逐字节相同，原三个LocalStorage和四份UI配置已归还。新基线保留当前全局models摘要 `222a6b2f95b67558cfbe7b9d58a0106919f37d4dab40fd0dc1411fa1db61fcec`；旧f基线七项元数据漂移及其 `original350ByteAuditPassed=false` 仍是历史事实，不回写旧配置。合成canary的agent配置未提前独立采集前后摘要，不能宣称该项已有完整快照比较；本机升级proof已明确false。
 
+最新 h 在锁屏后仅对身份重核的自有App／Core发SIGTERM，不计正常Cmd+Q。当前隔离UI留下57712字节WAL；完整raw被保留，checkpoint只在stage副本执行，15行内容摘要、schema与quick_check前后相同。准备阶段实际复现umask077使普通复制的0644变成0600，改用已审的精确权限复制函数，8项恢复／复制回归及h独立复审通过；未改原保护器。随后原封不动的restore/check均通过，check SHA为 `4def72cad4fce1d9919efc3b7746ec1af3e76c4eabc512bad87cf3bd45e58fb4`。h隔离agent的settings/models保持，仅自动新建2字节空auth `{}`，所以canary配置全字节相等明确false；真实global auth/models/settings及350项不变。
+
 已实际删除九份完成验收的包下载副本及SQLite诊断根，实际可用空间增加1,440,083,968字节；又删除临时升级App与旧／新已解包的三份测试App，增加3,124,912,128字节。正常115、114回退、教师资料、当前模型、G3/G5合成根、源码、备份、失败日志和JSON证据保留。临时PowerShell已删除；当前不为重跑Windows重新安装工具或申请runner。
+
+本机源码修补曾临时使用macOS版PowerShell做纯mock检查，未使用Windows runner或installer；工具已清理，可用空间增加270,495,744字节。h验收结束后核对进程／FD、Git跟踪和ignore，再删除其临时App及旧Windows任务树中已不再使用的重复node_modules，可用空间实际增加2,763,821,056字节；源码、锁文件、主QA依赖、合成数据、UI备份和全部证据保留。两棵任务树的`.next`、`.next-desktop`、Rust target与列出的生成资源目录均不存在。
 
 ### 证据索引
 
@@ -42,7 +49,11 @@ Desktop `.117` 的冻结签名源为 `a55777400dea49f1ba3d953418b6965a41942c3e`�
 | Mac权限只读probe | `v0.3.117/evidence/macos-native-permissions-44015411776.noindex/macos-native-permissions.json` |
 | 历史Windows executor定向29项／实际环境阻塞 | `v0.3.117/evidence/windows-upgrade-executor-verification.noindex.json` |
 | 用户费用限制及无活跃作业核对 | `v0.3.117/evidence/windows-cost-stop-20261117.noindex/proof.json` |
+| Windows本机风险修补与独立复审边界 | `v0.3.117/evidence/windows-local-safety-fixes-proof.json`；PR504保持Draft，head `0a61c16e6e833c6ad6da72d059134cd587a19e79` |
+| h提醒／通知／草稿与原UI归还 | `v0.3.117/evidence/notify-115-20261117h.noindex/final-notification-draft-proof.json` |
+| h的stage副本与两份草稿持久回读 | `v0.3.117/evidence/notify-115-20261117h.noindex/staged-wal-and-drafts-proof.json`；不是UI离开重入验收 |
 | 已执行的下载／诊断及测试App清理 | `v0.3.117/evidence/completed-downloads-and-sql-cleanup.json`、`v0.3.117/evidence/completed-native-app-copies-cleanup.json` |
+| h测试App及停止使用的重复依赖清理 | `v0.3.117/evidence/notify-h-and-duplicate-dependencies-cleanup.json` |
 
 ## 2026-11-17 早期安装记录
 

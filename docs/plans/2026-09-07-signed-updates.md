@@ -2,6 +2,8 @@
 
 2026-11-17 R15 当前：**Release447680099／`v0.3.117` 已公开为预发布，非 Latest；九项资产、tag/source a557 与 Core98冻结。** 三份Mac资产匿名完整下载、公开DMG安装及二次冷启 run44011387309、本机隔离 `.116→.117` 原生升级和升级后 G3/G5 冷启回读、Linux AppImage隔离原生升级 run44011387634 均有实际通过证据。本机原350项与UI已按新g基线归还，普通安装仍`.115`；正常通道升级、真实教师迁移及完整R15不作通过。**用户因费用明确暂停Windows构建及runner，不再触发Windows作业**，历史NSIS/Core smoke不替代GUI升级。正式Latest70／feed792不变，详见[当前发布验收](../acceptance/2026-11-17-unverified-risk-closure.md)。
 
+同日补证：Windows验收器的环境数组、截图冲突、早期中断恢复及诊断泄漏修补仅在macOS本机检查与独立复审，PR504保留Draft，未派发Windows作业。Mac h补验取得精确事项路由与两份独立草稿落盘；6次通知均延后、0提交／打开，后续锁屏使点击／发送／绑定／UI重入未完成。原WAL留存、副本15行等价、原保护器restore/check350项均通过，正常115保持；临时App及停止使用的重复依赖已清理。公开117说明已按g实际升级证据更新，发布资产和正式通道未动。
+
 ## 2026-11-17 早期阶段记录
 
 2026-11-17 R15 最新验收：**Linux116 AppImage原生WebView前置CI通过；Windows前置在真实WebView阶段blocked，Mac117 CI2后置只读/cleanup失败，117仍Draft。** Windows同SID shell与匹配WebView2/Driver已通过，后续实际升级执行器仍未实现；Linux前置不证明升级。Mac实际两次启动/Core/投影/marker/model已观察，新Node只读探针与逐目录cleanup修补78项、独立复审通过，真实重跑待完成。失败证据不改绿，正式70/feed792和冻结资产不变。
