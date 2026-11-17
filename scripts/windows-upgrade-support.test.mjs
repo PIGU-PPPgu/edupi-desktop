@@ -171,7 +171,7 @@ test("actual PowerShell outcome, environment whitelist and PID tracking function
     $tokens = $null; $parseErrors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:WINDOWS_UPGRADE_PS_FILE, [ref]$tokens, [ref]$parseErrors)
     if ($parseErrors.Count) { throw "parse failed" }
-    foreach ($name in @("Assert-Condition", "Get-SafeDiagnostic", "Get-AcceptanceOutcome", "Get-BaseEnvironment", "Test-CimProcessIdentity", "Capture-OwnedDescendants", "Get-EdgeDriverCandidates")) {
+    foreach ($name in @("Assert-Condition", "Get-SafeDiagnostic", "Get-AcceptanceOutcome", "Get-BaseEnvironment", "Get-ApplicationExecutable", "Start-OwnedProcess", "Test-CimProcessIdentity", "Capture-OwnedDescendants", "Get-EdgeDriverCandidates")) {
       $function = $ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name}, $true)
       if (!$function) { throw "missing function" }
       Invoke-Expression $function.Extent.Text
@@ -185,6 +185,27 @@ test("actual PowerShell outcome, environment whitelist and PID tracking function
         $diagnostic.exceptions[0].type -cne "System.InvalidOperationException") { throw "exception identity lost" }
     $safeJson = $diagnostic | ConvertTo-Json -Depth 8 -Compress
     if ($safeJson.Contains("synthetic-token") -or $safeJson.Contains("private") -or $safeJson.Contains("Bearer")) { throw "diagnostic leaked error message" }
+    $realNode = $env:WINDOWS_UPGRADE_REAL_NODE
+    $script:commandCandidates = @(@{Source=$realNode}, @{Source="$realNode-synthetic-second-path"})
+    function Get-Command { param($Name, $CommandType) return $script:commandCandidates }
+    $chosen = Get-ApplicationExecutable "node"
+    if ($chosen -isnot [string] -or $chosen -cne $realNode) { throw "array of executable paths was not resolved" }
+    $taskRoot = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "windows-upgrade-resolver-$([guid]::NewGuid().ToString('N'))")
+    [void][System.IO.Directory]::CreateDirectory($taskRoot)
+    $script:ownedProcesses = [System.Collections.Generic.List[object]]::new()
+    try {
+      try {
+        $bad = Start-OwnedProcess -File $script:commandCandidates.Source -Arguments @("--version") -Environment @{}
+        throw "combined executable paths unexpectedly launched"
+      } catch {
+        $broken = Get-SafeDiagnostic $_ "resolver-regression"
+        if (!@($broken.exceptions | Where-Object {$_.nativeErrorCode -eq 2}).Count) { throw "old file-not-found failure was not reproduced" }
+      }
+      $child = Start-OwnedProcess -File $chosen -Arguments @("--version") -Environment @{}
+      if (!$child.WaitForExit(10000) -or $child.ExitCode -ne 0) { throw "resolved Node did not start" }
+      if ($script:ownedProcesses[0].stdout.Result -cnotmatch '^v[0-9]+\\.') { throw "resolved Node output missing" }
+      $child.Dispose()
+    } finally { [System.IO.Directory]::Delete($taskRoot) }
     $script:upstreamVersion = "131.0.2903.146"
     function Invoke-WebRequest { param($Uri, $TimeoutSec)
       if ($Uri -cne "https://msedgedriver.microsoft.com/LATEST_RELEASE_131_WINDOWS") { throw "wrong Microsoft endpoint" }
@@ -256,7 +277,8 @@ test("actual PowerShell outcome, environment whitelist and PID tracking function
     if ($ids.Count -ne 0) { throw "reused PID was trusted" }
     "PowerShell mocks passed"
   `], { encoding: "utf8", env: { ...process.env,
-    WINDOWS_UPGRADE_PS_FILE: fileURLToPath(new URL("./test-windows-upgrade-acceptance.ps1", import.meta.url)) } });
+    WINDOWS_UPGRADE_PS_FILE: fileURLToPath(new URL("./test-windows-upgrade-acceptance.ps1", import.meta.url)),
+    WINDOWS_UPGRADE_REAL_NODE: process.execPath } });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /PowerShell mocks passed/u);
 });

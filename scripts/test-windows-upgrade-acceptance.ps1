@@ -140,6 +140,16 @@ function Get-BaseEnvironment {
     $result.PATH = "$(Join-Path $env:SystemRoot 'System32');$env:SystemRoot"
     return $result
 }
+function Get-ApplicationExecutable([ValidateSet("node", "cargo")][string]$Name) {
+    $candidates = @(Get-Command -Name $Name -CommandType Application)
+    Assert-Condition ($candidates.Count -gt 0) "application_executable_unavailable"
+    # Get-Command can return every PATH match. Passing .Source on that array
+    # binds several paths into one FileName and Process.Start returns Win32 2.
+    $file = [string]$candidates[0].Source
+    Assert-Condition ([System.IO.Path]::IsPathFullyQualified($file) -and
+        (Test-Path -LiteralPath $file -PathType Leaf)) "application_executable_not_a_file"
+    return $file
+}
 function Start-OwnedProcess([string]$File, [string[]]$Arguments, [hashtable]$Environment, [string]$RawArguments = "") {
     $info = [System.Diagnostics.ProcessStartInfo]::new()
     $info.FileName = $File
@@ -466,7 +476,7 @@ try {
         $value = [Environment]::GetEnvironmentVariable($name, "Process")
         if ($value) { $cargoEnv[$name] = $value }
     }
-    $cargo = Start-OwnedProcess -File (Get-Command cargo -CommandType Application).Source -Environment $cargoEnv -Arguments @(
+    $cargo = Start-OwnedProcess -File (Get-ApplicationExecutable "cargo") -Environment $cargoEnv -Arguments @(
         "install", "tauri-driver", "--version", "=$driverVersion", "--locked", "--root", $tauriRoot,
         "--target-dir", (Join-Path $taskRoot "cargo-target")
     )
@@ -508,7 +518,7 @@ try {
     $helperEnvironment = Get-BaseEnvironment
     $helperEnvironment.WINDOWS_UPGRADE_RUN_CONFIG = $runConfig
     Set-Phase "real-webview-helper-resolve"
-    $helperNode = (Get-Command node -CommandType Application).Source
+    $helperNode = Get-ApplicationExecutable "node"
     Set-Phase "real-webview-helper-start"
     $helper = Start-OwnedProcess -File $helperNode -Environment $helperEnvironment -Arguments @(
         (Join-Path $PSScriptRoot "windows-upgrade-webdriver.mjs")
