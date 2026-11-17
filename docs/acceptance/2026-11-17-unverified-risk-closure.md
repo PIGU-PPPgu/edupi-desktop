@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-2026-11-17 安装验收继续：PR503已合并d63b6a7b，两个平台前置CI已实际运行。Linux run44004124512通过冻结116 AppImage真实WebView／About／Core98／marker回读及清理；不是117升级通过。Windows run44004124764的同SID shell、116字节、WebView2和匹配驱动均通过，真实WebView阶段仅返回泛化 `phase_failed`，当前blocked、清理通过，具体错误继续定位。Mac CI2 run43991025944实际两次App／Core／投影ready、native guard、同marker/model通过，但第二Python只读探针及目录cleanup失败，整轮仍failure。新Mac探针使用包内Node只读SQLite，真实WAL复现、写入拒绝和目录逐项清理共78项通过，审查P2已关闭，待下一次真实CI；上述结果不公开117、不推广正式70/feed。
+2026-11-17 当前安装证据取代上一轮：Mac CI3 run44007284437／harness bd87b1aa **真实临时安装、两次冷启、Core／投影、同一SQLite持久记录、marker/model回读和清理全部通过**，源仍a557。Linux116 AppImage前置run44004124512通过但截图中文方框；run44008633609补系统CJK字体后功能与实际中文截图均通过，原始字体列表由空变为包含Noto CJK。Windows run44004124764的同SID shell、116字节、WebView2和匹配驱动通过，真实WebView阶段泛化 `phase_failed`，当前blocked、清理通过，继续定位。117受控发布input的22项本地引用已核验，公开发布、匿名下载和旧客户端升级仍未执行；正式70/feed不变。
 
 本段取代下方早期“源码准备中、等待重跑”的阶段状态。Desktop PR498、PR499、PR500 已正常合并；真正 `.117` 签名源为 `a55777400dea49f1ba3d953418b6965a41942c3e`，与受测 `2b1f0c14adba71fc95012b30cd453b0f6f2f6df3` 整树相同，Core 仍固定 `98e4f7cd0c31dd30954574d2040bb1b948cdd954`。旧 `2618757a` 仅为未使用准备源，没有移动旧分支。正式 Latest `.70` 与 feed `7924328ee893c9527adb54e25b0023e9f2a26ff7` 保持；完整 L4 不放行。
 
@@ -13,7 +13,7 @@
 | R15 Windows `.116` | 原 all-platform run 中 Windows 实际重跑通过 | 初次 npm `ECONNRESET` 失败保留；单平台 run43919850507 的 build 被跳过，不作证据。原 run43913704753 重跑后实际 Windows job成功 |
 | R15 Windows `.117` | 精确 Draft NSIS 安装、启动与隔离 Core 验收通过 | run43975180076／job133677226510，asset756730447，140263717字节，SHA `5c7dab4a4966333228771bc5b8f43953d4df191bd187dc33779034d1d6fbeb6f`；正常模式守卫、单实例、Safe Mode Core/投影ready、Core98和G1 pending均通过。未验公开下载、GUI或旧客户端升级 |
 | R15 Mac `.116` | 私有完整资产与原生安全 gate通过 | Release447334004／源13de；三包完整size/SHA、Minisign及篡改拒绝、Developer ID、票据、Gatekeeper、arm64、DMG/updater整App树及30份包内源文件匹配；未启动或安装116 |
-| R15 Mac `.117` | 最终资产安全gate通过；实际两次启动ready，后置验收仍失败 | Release447680099／源a557／DMG756856348，SHA `d39d95f8cf681cf795f35c6e8f2a3a50a077faedf2fa21de234400a1e8c0eb8f`。首次CI合同检查失败留证；CI2两次真实App／Core／投影ready、nativeGuard、marker/model回读通过，第二Python只读及cleanup失败；本机正常App仍115 |
+| R15 Mac `.117` | 私有临时安装与两次真实冷启验收通过 | CI3 run44007284437／job133785571292，harness bd87b1aa，Release447680099／源a557／DMG756856348。App PID2987→3185、不同nonce、Core/投影ready、native guard、同SQLite记录／marker/model、包内Node22.23.4只读均通过；八目录实际删除，native_saved_state已缺失单列，清理通过。本机正常App仍115；失败1/2保留 |
 | R15 `.116` 整轮发布 proof | 未通过，保持 Draft | 选择性重跑更新 `run_started_at`，旧代码误拒绝保留的早期Mac/Linux资产。最终整体success发布门未跳过；修复进入PR500，不将历史run failure改绿 |
 | R15 `.117` 整轮 Draft proof与版本签名 | 三平台真实签名构建和最终发布身份gate通过，仍Draft | run43967319356 attempt1／source a557：Mac、Windows、Linux builder与draft-proof均success；九资产指纹 `sha256:47068a9d6613a4fb697db202ab874466782ff342d3e7fdea94902b34428e43c4`。CLI2.12.4、最终签名精确版本117、原公钥／TLS／禁止降级均保留；安装、公开下载和升级另验 |
 | G3／G5 原生流程 | 合成根与后端重启回读通过，GUI外部阻塞 | `.115`临时副本实际启动，Core/投影ready、隔离guard通过；CUA返回Mac锁屏、自动解锁失败，实际点击0。未接受G3、未确认G5、未发送消息 |
@@ -43,6 +43,8 @@ Mac锁屏阻止交互后，仅对自有隔离App发送SIGTERM，App/HTTP/Core三
 - 新Linux AppImage入口支持冻结116前置验收和受控公开117原生升级。Xvfb私有cookie复制、HTTP socket到新App／Core PID与出生时间绑定、取消请求和禁止中断写绿均已有定向回归，12项通过，独立复审待完成；尚未在Linux实跑。升级只允许旧App界面触发原生updater，观察自动重启后再核对新包、同一SQLite持久记录、合成marker和模型配置，不手动启动117补证。
 - `update-cohorts/all-116-117-20261117.json` 由真实九资产及四份精确签名生成，包含7个updater平台键，已随PR503提交；固定URL使用受测commit `c8bc4aff57f06062ff8bf4e0c56c11b6d74580bd`。目标117仍须先通过受控公开门，清单仅供明确canary环境使用，正式Latest70/feed792不变。首次GitHub元数据GET的EOF在任何签名写入前发生并留证，后续同ID／size／digest读取已通过。
 - Mac系统Python读取器的失败已用同一包内Core实际复现：两次干净关闭后，数据库为WAL模式且sidecar已清理，系统Python只读报无法打开；包内Node22.23.4／SQLite3.53.4两次只读读取和quick_check通过，数据库字节不变。新 `NODE_STORAGE_PROGRAM` 使用包内Node、`readOnly:true`、`query_only`及禁扩展读取，逐记录／同inode核对保留；Linux原Python helper保持。新目录helper逐项保留角色和父链／leaf身份、测量前后复核、失败继续独立目录，native叶已缺失单列 `already_absent`，新inode仍拒绝。inode回收误重叠和创建后登记失败漏报的P2已修复并独立复审，78项通过；CI2实际坏目录仍未知，不归因于App重建。
+- CI3全部通过，数据位于 `v0.3.117/evidence/macos-installed-attempt3.noindex/e.JSON`；只读版本为Node22.23.4／SQLite3.53.4，九项readback均true，registrationFailures为空。`native_saved_state`本轮已经缺失，未执行删除；其余八项删除allocated1255870464字节，实际可用空间增加1237778432字节。该事实不倒推CI2坏目录。当前完整Node回归4324 passed／0 failed／51 skipped，功能定向78项另有实际数据及独立审查，skipped不算验收。
+- Linux带字体前置run44008633609保存了字体列表和真实About截图；安装前可用CJK family为空，安装 `fonts-noto-cjk` 后中文正常。冻结116/117未因此内置字体，系统CJK字体仍是运行前提，已写入更新文档。前置验收不是原生升级通过。
 
 ## 早期阶段记录
 

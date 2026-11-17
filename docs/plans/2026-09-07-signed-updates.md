@@ -1,5 +1,7 @@
 # 自动下载安装
 
+2026-11-17 R15 当前发布门：**Mac117真实安装/二冷启/持久记录与清理CI3通过，Windows117 NSIS、Linux117 Deb安装smoke已有同源通过证据；117仍Draft，正在准备受控公开。** Mac run44007284437／harness bd87b1aa；Linux116字体补齐前置run44008633609及中文截图通过，Windows116真实WebView前置仍诊断中。发布器197项与独立复审、22项实际本地引用核验通过，不代表已执行PATCH或升级；普通Latest70/feed792不变。
+
 2026-11-17 R15 最新验收：**Linux116 AppImage原生WebView前置CI通过；Windows前置在真实WebView阶段blocked，Mac117 CI2后置只读/cleanup失败，117仍Draft。** Windows同SID shell与匹配WebView2/Driver已通过，后续实际升级执行器仍未实现；Linux前置不证明升级。Mac实际两次启动/Core/投影/marker/model已观察，新Node只读探针与逐目录cleanup修补78项、独立复审通过，真实重跑待完成。失败证据不改绿，正式70/feed792和冻结资产不变。
 
 2026-11-17 R15 真实安装CI：**PR501已合并，Mac run43982417466在包内合同核对阶段失败，App启动0、临时安装与挂载清理通过**。新harness误要求未列入既有分发合同的开发fixture；修复按原闭包与fixture索引核对，同一117包13359运行文件、30项定向检查通过，独立复审和冷启重跑待完成。Windows新前置脚本16项实际PowerShell／helper与审查通过，升级执行器仍未实现；Linux入口12项helper通过、复审待完成，均待实跑。隔离cohort的7平台键绑定已构建九资产和四签名，待提交固定commit URL；不推广正式Latest70/feed792，不把上述代码检查当作实际升级通过。
