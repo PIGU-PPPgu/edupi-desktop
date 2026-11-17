@@ -6,10 +6,12 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
 import {
-  AcceptanceFailure, HDI_INFO_PROGRAM, STORAGE_PROGRAM, cleanupTargets, collectOwned, downloadVerified,
+  AcceptanceFailure, HDI_INFO_PROGRAM, NODE_STORAGE_PROGRAM, STORAGE_PROGRAM, acceptanceCleanupReport,
+  cleanupTargets, collectOwned, downloadVerified,
   githubReader, launchEnvironment, main, parseProcesses, requireHostedMac, validateInputs,
-  verifyBundleContracts, verifyHttpOwner, verifyMetadata, verifyRestart, verifyStatus, verifyTag, verifyWorkspace,
+  trackAcceptanceDirectory, verifyBundleContracts, verifyHttpOwner, verifyMetadata, verifyRestart, verifyStatus, verifyTag, verifyWorkspace,
 } from "./test-macos-installed-acceptance.mjs";
+import { cleanupRegisteredDirectories, registerCleanupDirectory } from "./macos-acceptance-cleanup.mjs";
 
 const digest = bytes => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 const sourceSha = "a".repeat(40);
@@ -162,6 +164,10 @@ function fixtureBundle(t) {
   const pin = { core_commit: "98e4f7cd0c31dd30954574d2040bb1b948cdd954",
     component_manifest_path: "contracts/edupi-desktop-component-manifest.json",
     runtime_schema_hash: `sha256:${"3".repeat(64)}` };
+  const schemaPath = "contracts/edupi-core-runtime-v1-hash.json";
+  const schemaBytes = Buffer.from(JSON.stringify({ schema_hash: pin.runtime_schema_hash }));
+  fs.writeFileSync(path.join(coreRoot, schemaPath), schemaBytes);
+  const schemaEntry = { path: schemaPath, size: schemaBytes.length, sha256: digest(schemaBytes) };
   const files = ["scripts/desktop_bridge_port.mjs", "scripts/core_runtime_daemon.mjs"].map(relative => {
     const content = Buffer.from(`// synthetic helper ${relative}\n`);
     fs.writeFileSync(path.join(coreRoot, relative), content);
@@ -172,13 +178,12 @@ function fixtureBundle(t) {
     [files[1], "runtime_component_manifest_hash", "contracts/edupi-core-runtime-component-manifest.json"],
   ]) {
     const payload = { component_manifest_version: "1", algorithm: "sha256-canonical-component-payload-v1",
-      entrypoint: entry.path, modules: [entry], assets: [], runtime_dependencies: [] };
+      entrypoint: entry.path, modules: [entry],
+      assets: field === "runtime_component_manifest_hash" ? [schemaEntry] : [], runtime_dependencies: [] };
     pin[field] = digest(JSON.stringify(canonical(payload)));
     fs.writeFileSync(path.join(coreRoot, filename), JSON.stringify({ ...payload, component_manifest_hash: pin[field] }));
   }
-  fs.writeFileSync(path.join(coreRoot, "contracts/edupi-core-runtime-v1-hash.json"), JSON.stringify({ schema_hash: pin.runtime_schema_hash }));
   const fixtureBytes = Buffer.from('{"synthetic":true}\n');
-  fs.writeFileSync(path.join(coreRoot, "fixtures/bridge/v1.1/synthetic.json"), fixtureBytes);
   const fixtureFiles = [{ path: "synthetic.json", size: fixtureBytes.length, sha256: digest(fixtureBytes) }];
   const bridge = { contract_id: "edupi-bridge-v1.1", contract_version: "1.1", schema_hash: `sha256:${"4".repeat(64)}`,
     fixture_manifest_path: "fixtures/bridge/v1.1/fixture-manifest.json", fixture_manifest_hash: digest(JSON.stringify(fixtureFiles)),
@@ -191,7 +196,7 @@ function fixtureBundle(t) {
 
 test("bundled Core uses the supplied source contract and detects file tampering and a newer harness pin", t => {
   const fixture = fixtureBundle(t);
-  assert.equal(verifyBundleContracts(fixture.resources, fixture.compat).verifiedCoreFiles, 2);
+  assert.equal(verifyBundleContracts(fixture.resources, fixture.compat).verifiedCoreFiles, 3);
   const differentSource = structuredClone(fixture.compat);
   differentSource.core_runtime.component_manifest_hash = `sha256:${"f".repeat(64)}`;
   fails(() => verifyBundleContracts(fixture.resources, differentSource), "bundled_manifest_hash_mismatch");
@@ -208,11 +213,25 @@ test("bundled Core files cannot escape the package through symlinks", t => {
   fails(() => verifyBundleContracts(fixture.resources, fixture.compat), "manifest_file_outside_bundle");
 });
 
-test("fixture hashes protect the actual bundled files as well as the manifest index", t => {
+test("the exact runtime closure includes the pinned fixture index without development examples", t => {
   const fixture = fixtureBundle(t);
-  assert.equal(verifyBundleContracts(fixture.resources, fixture.compat).verifiedFixtureFiles, 1);
-  fs.writeFileSync(path.join(fixture.coreRoot, "fixtures/bridge/v1.1/synthetic.json"), '{"synthetic":"changed"}');
-  fails(() => verifyBundleContracts(fixture.resources, fixture.compat), "fixture_file_mismatch");
+  const proof = verifyBundleContracts(fixture.resources, fixture.compat);
+  assert.equal(proof.fixtureIndexEntries, 1);
+  assert.equal(proof.exactRuntimeInventory, true);
+  assert.equal(fs.existsSync(path.join(fixture.coreRoot, "fixtures/bridge/v1.1/synthetic.json")), false);
+  fs.writeFileSync(path.join(fixture.coreRoot, "fixtures/bridge/v1.1/synthetic.json"), '{"synthetic":"unlisted"}');
+  fails(() => verifyBundleContracts(fixture.resources, fixture.compat), "bundled_contract_inventory_mismatch");
+});
+
+test("missing runtime files and a changed fixture index are rejected against the supplied source contract", t => {
+  const first = fixtureBundle(t), second = fixtureBundle(t);
+  fs.unlinkSync(path.join(first.coreRoot, "scripts/core_runtime_daemon.mjs"));
+  fails(() => verifyBundleContracts(first.resources, first.compat), "bundled_contract_file_missing");
+  const index = path.join(second.coreRoot, "fixtures/bridge/v1.1/fixture-manifest.json");
+  const value = JSON.parse(fs.readFileSync(index));
+  value.files[0].sha256 = `sha256:${"a".repeat(64)}`;
+  fs.writeFileSync(index, JSON.stringify(value));
+  fails(() => verifyBundleContracts(second.resources, second.compat), "fixture_manifest_mismatch");
 });
 
 function readyStatus(compat) {
@@ -304,7 +323,8 @@ test("task cleanup includes detached helper groups and title-erased orphans but 
   assert.deepEqual(cleanupTargets(new Map([[101, http]]), [http, mixedGroup]), { groups: [], pids: [101] });
 });
 
-test("read-only SQLite quick_check preserves the same synthetic database and detects same-path replacement", t => {
+for (const reader of ["system_python", "node_sqlite"]) {
+test(`read-only SQLite ${reader} preserves records and detects replacement or content loss`, t => {
   const directory = temporary(t), database = path.join(directory, "synthetic.sqlite");
   const python = process.platform === "darwin" ? "/usr/bin/python3" : "python3";
   execFileSync(python, ["-c", `import sqlite3,sys
@@ -313,7 +333,10 @@ with sqlite3.connect(sys.argv[1]) as db:
  db.execute("INSERT INTO synthetic_marker VALUES ('synthetic-only', 'stable content')")
 `, database]);
   const before = fs.readFileSync(database);
-  const readStorage = () => JSON.parse(execFileSync(python, ["-c", STORAGE_PROGRAM, database], { encoding: "utf8" }));
+  const readStorage = () => JSON.parse(reader === "system_python"
+    ? execFileSync(python, ["-c", STORAGE_PROGRAM, database], { encoding: "utf8" })
+    : execFileSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--input-type=module", "-e",
+      NODE_STORAGE_PROGRAM, database], { encoding: "utf8" }));
   const first = readStorage(), second = readStorage();
   assert.deepEqual(first, second);
   assert.equal(first.quickCheck, "ok");
@@ -347,6 +370,60 @@ with sqlite3.connect(sys.argv[1]) as db:
   fails(() => verifyRestart(launch, { ...restarted, storage: readStorage() }), "restart_database_identity_changed");
   for (const key of ["marker", "version", "core", "modelConfig"])
     fails(() => verifyRestart(launch, { ...restarted, [key]: "changed" }), `restart_${key}_changed`);
+});
+}
+
+test("Node's read-only SQLite opens a clean WAL database without sidecars and rejects writes", t => {
+  const directory = temporary(t), database = path.join(directory, "wal.sqlite");
+  execFileSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--input-type=module", "-e", `
+    import {DatabaseSync} from "node:sqlite";
+    const db=new DatabaseSync(process.argv[1]);
+    db.exec("PRAGMA journal_mode=WAL; CREATE TABLE synthetic(id INTEGER PRIMARY KEY, content TEXT); INSERT INTO synthetic VALUES(1,'stable'); PRAGMA wal_checkpoint(TRUNCATE)");
+    db.close();
+  `, database]);
+  assert.equal(fs.existsSync(database + "-wal"), false);
+  assert.equal(fs.existsSync(database + "-shm"), false);
+  const before = fs.readFileSync(database);
+  const read = JSON.parse(execFileSync(process.execPath, ["--disable-warning=ExperimentalWarning",
+    "--input-type=module", "-e", NODE_STORAGE_PROGRAM, database], { encoding: "utf8" }));
+  assert.equal(read.quickCheck, "ok"); assert.equal(read.readOnly, true); assert.equal(read.queryOnly, true);
+  assert.equal(read.driver.engine, "node:sqlite");
+  assert.equal(read.persistentRecords.synthetic.length, 1);
+  execFileSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--input-type=module", "-e", `
+    import assert from "node:assert/strict"; import {DatabaseSync} from "node:sqlite";
+    const db=new DatabaseSync(process.argv[1],{readOnly:true,allowExtension:false});
+    assert.throws(()=>db.exec("DELETE FROM synthetic"),/readonly|read.only/i);db.close();
+  `, database]);
+  assert.deepEqual(fs.readFileSync(database), before);
+});
+
+test("created but unregistered directories stay visible as cleanup failures while registered siblings are removed", async t => {
+  const root = temporary(t), entries = [], failures = [];
+  const directories = Object.fromEntries(["canary", "synthetic_default", "task"].map(role => {
+    const directory = path.join(root, role);
+    fs.mkdirSync(directory, { mode: 0o700 });
+    fs.writeFileSync(path.join(directory, "marker"), "synthetic-only");
+    return [role, directory];
+  }));
+  const register = (directory, options) => {
+    if (options.role === "synthetic_default")
+      throw Object.assign(new Error("private fixture text must not enter evidence"), { code: "cleanup_registration_refused" });
+    return registerCleanupDirectory(directory, options);
+  };
+  for (const role of ["canary", "task"])
+    trackAcceptanceDirectory({ directory: directories[role], role, entries, failures }, register);
+  assert.throws(() => trackAcceptanceDirectory({
+    directory: directories.synthetic_default, role: "synthetic_default", entries, failures,
+  }, register), { code: "cleanup_registration_refused" });
+  const report = acceptanceCleanupReport(await cleanupRegisteredDirectories(entries, { measureBytes: async () => 4096 }), failures);
+  assert.equal(report.status, "failed");
+  assert.equal(report.registrationFailures[0].role, "synthetic_default");
+  assert.equal(report.registrationFailures[0].status, "failed");
+  assert.ok(fs.existsSync(path.join(directories.synthetic_default, "marker")));
+  assert.equal(fs.existsSync(directories.canary), false);
+  assert.equal(fs.existsSync(directories.task), false);
+  assert.equal(JSON.stringify(report).includes(root), false);
+  assert.doesNotMatch(JSON.stringify(report), /private fixture text/u);
 });
 
 test("hdiutil plist preserves mount ownership when an image includes CFData aliases", () => {

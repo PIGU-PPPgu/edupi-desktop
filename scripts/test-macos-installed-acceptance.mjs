@@ -13,6 +13,7 @@ import { setTimeout as wait } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { assertIsolatedProcessEvidence } from "./assert-macos-isolated-edupi.mjs";
+import { cleanupRegisteredDirectories, registerCleanupDirectory } from "./macos-acceptance-cleanup.mjs";
 
 const TEAM = "BY3XZG2839";
 const BUNDLE = "com.abcwyc.pi-agent";
@@ -22,7 +23,10 @@ const DIGEST = /^sha256:[a-f0-9]{64}$/u;
 const harness = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const hash = bytes => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 const readJson = filename => JSON.parse(fs.readFileSync(filename, "utf8"));
-const inside = (root, candidate) => candidate === root || candidate.startsWith(`${root}/`);
+const inside = (root, candidate) => {
+  const relative = path.relative(root, candidate);
+  return relative === "" || relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+};
 const nonce = () => randomBytes(16).toString("hex");
 let operationSignal;
 const requestSignal = milliseconds => operationSignal
@@ -149,13 +153,31 @@ function canonical(value) {
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
 }
-function safeFile(root, relative) {
+function contractPath(relative) {
   check(typeof relative === "string" && relative.length > 0 && !relative.includes("\\")
     && relative.split("/").every(part => part && part !== "." && part !== "..")
     && !path.isAbsolute(relative), "invalid_manifest_path");
+  return relative;
+}
+function safeFile(root, relative) {
+  contractPath(relative);
   const filename = path.join(root, relative);
-  check(inside(root, fs.realpathSync(filename)) && fs.lstatSync(filename).isFile(), "manifest_file_outside_bundle");
+  try {
+    check(inside(root, fs.realpathSync(filename)) && fs.lstatSync(filename).isFile(), "manifest_file_outside_bundle");
+  } catch (error) {
+    if (error.code === "ENOENT") throw new AcceptanceFailure("bundled_contract_file_missing");
+    throw error;
+  }
   return filename;
+}
+function bundleFiles(root, relative = "") {
+  return fs.readdirSync(path.join(root, relative), { withFileTypes: true }).flatMap(entry => {
+    check(!entry.isSymbolicLink(), "bundle_contract_symlink_refused");
+    const name = relative ? `${relative}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) return bundleFiles(root, name);
+    check(entry.isFile(), "bundle_contract_special_file_refused");
+    return [name];
+  });
 }
 
 export function verifyBundleContracts(resources, compat) {
@@ -204,14 +226,22 @@ export function verifyBundleContracts(resources, compat) {
   check(fixtures.algorithm === "sha256-raw-files-canonical-list-v1" && Array.isArray(fixtures.files)
     && fixtures.fixture_manifest_hash === bridge.fixture_manifest_hash
     && hash(JSON.stringify(fixtures.files)) === bridge.fixture_manifest_hash, "fixture_manifest_mismatch");
+  // packaged-core-bundle.mjs distributes the manifest and the exact runtime
+  // closure union. Its referenced development examples are not runtime assets.
+  const fixturePaths = new Set();
   for (const entry of fixtures.files) {
-    const filename = safeFile(core, `${path.posix.dirname(bridge.fixture_manifest_path)}/${entry.path}`);
-    const bytes = fs.readFileSync(filename);
-    check(entry.size === bytes.length && entry.sha256 === hash(bytes), "fixture_file_mismatch");
+    contractPath(entry.path);
+    check(!fixturePaths.has(entry.path) && Number.isSafeInteger(entry.size) && entry.size >= 0
+      && DIGEST.test(entry.sha256), "fixture_index_entry_invalid");
+    fixturePaths.add(entry.path);
   }
+  const expectedFiles = [...new Set([...checked.keys()].map(filename => path.relative(core, filename).split(path.sep).join("/"))
+    .concat([pin.component_manifest_path, "contracts/edupi-core-runtime-component-manifest.json", bridge.fixture_manifest_path]))];
+  equal(bundleFiles(core).sort(), expectedFiles.sort(), "bundled_contract_inventory_mismatch");
   return { core_commit: pin.core_commit, component_manifest_hash: pin.component_manifest_hash,
     runtime_component_manifest_hash: pin.runtime_component_manifest_hash, runtime_schema_hash: pin.runtime_schema_hash,
-    verifiedCoreFiles: checked.size, verifiedFixtureFiles: fixtures.files.length };
+    verifiedCoreFiles: checked.size, exactRuntimeInventory: true, fixtureIndexEntries: fixtures.files.length,
+    developmentFixtureExamples: "not_in_distribution_contract" };
 }
 
 export function verifyStatus(payload, compat) {
@@ -361,12 +391,76 @@ print(json.dumps({"quickCheck":"ok","readOnly":True,"fileIdentity":[str(s.st_dev
  "persistentRecords":records}))
 `;
 
+// Use the application's actual SQLite runtime for installed macOS evidence.
+// A system Python reader can fail to open a clean WAL-mode database once its
+// sidecars have been removed. No immutable flag or writable fallback is used.
+export const NODE_STORAGE_PROGRAM = String.raw`
+import fs from "node:fs";
+import { createHash } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
+const filename = process.argv[1];
+const stat = fs.lstatSync(filename, { bigint: true });
+if (!stat.isFile() || stat.isSymbolicLink() || stat.size === 0n || fs.realpathSync(filename) !== filename)
+  throw new Error("database_missing_or_not_canonical");
+const encode = value => {
+  if (typeof value === "bigint") return { int64: value.toString() };
+  if (value instanceof Uint8Array) return { blob: Buffer.from(value).toString("hex") };
+  if (Array.isArray(value)) return value.map(encode);
+  if (value && typeof value === "object")
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, encode(value[key])]));
+  return value;
+};
+const digest = value => createHash("sha256").update(JSON.stringify(encode(value))).digest("hex");
+const quote = name => '"' + name.replaceAll('"', '""') + '"';
+const db = new DatabaseSync(filename, { readOnly: true, allowExtension: false });
+let result;
+try {
+  db.exec("PRAGMA query_only=ON; PRAGMA busy_timeout=5000");
+  const integrity = db.prepare("PRAGMA quick_check").all();
+  if (db.prepare("PRAGMA query_only").get().query_only !== 1
+    || integrity.length !== 1 || integrity[0].quick_check !== "ok")
+    throw new Error("sqlite_readonly_or_quick_check_failed");
+  const schema = db.prepare("SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name").all();
+  if (!schema.length) throw new Error("database_schema_missing");
+  const records = {};
+  for (const { name: table } of schema) {
+    if (table.startsWith("sqlite_")) continue;
+    const info = db.prepare("PRAGMA table_info(" + quote(table) + ")").all();
+    let columns = info.map(row => row.name);
+    let keys = info.filter(row => row.pk > 0).sort((a, b) => a.pk - b.pk).map(row => row.name);
+    if (table === "authority") {
+      columns = ["singleton", "schema_version", "root_fingerprint"]; keys = ["singleton"];
+    } else if (table === "events") {
+      columns = ["event_id", "event_version", "event_type", "occurrence_time", "source_ref",
+        "actor_ref", "scope_ref", "revision_ref", "payload_json", "canonical_json", "canonical_hash", "external_send"];
+      keys = ["event_id"];
+    }
+    const statement = db.prepare("SELECT " + columns.map(quote).join(",") + " FROM " + quote(table));
+    statement.setReadBigInts(true);
+    records[table] = statement.all().map(row => [
+      digest(keys.length ? Object.fromEntries(keys.map(key => [key, row[key]])) : row), digest(row),
+    ]).sort((a, b) => a[0].localeCompare(b[0], "en"));
+    if (new Set(records[table].map(entry => entry[0])).size !== records[table].length)
+      throw new Error("database_record_identity_not_unique");
+  }
+  if (!Object.values(records).some(rows => rows.length)) throw new Error("database_has_no_persisted_records");
+  result = {
+    quickCheck: "ok", readOnly: true, queryOnly: true, fileIdentity: [String(stat.dev), String(stat.ino)],
+    bytes: Number(stat.size), userVersion: db.prepare("PRAGMA user_version").get().user_version,
+    schemaSha256: digest(schema), persistentRecords: records,
+    driver: { engine: "node:sqlite", nodeVersion: process.versions.node, sqliteVersion: process.versions.sqlite },
+  };
+} finally { db.close(); }
+console.log(JSON.stringify(result));
+`;
+
 export function verifyRestart(first, second) {
   check(first.appPid !== second.appPid && first.instanceNonce !== second.instanceNonce,
     "restart_did_not_create_new_app_and_instance");
   equal(first.storage.fileIdentity, second.storage.fileIdentity, "restart_database_identity_changed");
   for (const key of ["schemaSha256", "userVersion", "quickCheck", "readOnly"])
     equal(first.storage[key], second.storage[key], "restart_database_schema_changed");
+  equal(first.storage.driver, second.storage.driver, "restart_database_reader_changed");
   const records = first.storage.persistentRecords;
   check(records && Object.values(records).some(rows => rows.length > 0), "restart_database_baseline_records_missing");
   for (const [table, rows] of Object.entries(records)) {
@@ -491,15 +585,28 @@ function saveEvidence(filename, evidence) {
   fs.writeFileSync(filename, `${JSON.stringify(evidence, null, 2)}\n`, { mode: 0o600 });
 }
 
+export function trackAcceptanceDirectory({ directory, role, nativeProfile = false, entries, failures },
+  register = registerCleanupDirectory) {
+  try { entries.push(register(directory, { role, nativeProfile })); }
+  catch (error) {
+    failures.push(Object.freeze({ role, phase: "registration", status: "failed",
+      code: /^cleanup_[a-z_]{1,70}$/u.test(error?.code || "") ? error.code : "cleanup_registration_failed",
+      errno: ["ENOENT", "EACCES", "EPERM", "ENOTDIR", "ELOOP", "EIO", "ENOSPC"].includes(error?.code) ? error.code : null }));
+    throw error;
+  }
+}
+export function acceptanceCleanupReport(report, registrationFailures) {
+  return Object.freeze({ ...report,
+    status: registrationFailures.length ? "failed" : report.status,
+    registrationFailures: Object.freeze([...registrationFailures]),
+  });
+}
+
 export async function runAcceptance(input, source, evidence, persist, abort = new AbortController().signal) {
   let task, home, root, teacher, appPath, mount, diskImage;
-  const privateDirectories = [];
-  const directoryIdentities = new Map();
-  const ownDirectory = directory => {
-    const stat = fs.lstatSync(directory, { bigint: true });
-    check(stat.isDirectory() && fs.realpathSync(directory) === directory, "private_directory_not_canonical");
-    directoryIdentities.set(directory, [String(stat.dev), String(stat.ino)]);
-  };
+  const cleanupEntries = [], registrationFailures = [];
+  const ownDirectory = (directory, role, nativeProfile = false) =>
+    trackAcceptanceDirectory({ directory, role, nativeProfile, entries: cleanupEntries, failures: registrationFailures });
   const processes = { known: new Map(), appPid: null };
   const liveApps = [];
   const stage = name => { evidence.stage = name; persist(); check(!abort.aborted, "acceptance_interrupted"); };
@@ -588,7 +695,7 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
     stage("private_synthetic_directories");
     task = fs.realpathSync(fs.mkdtempSync("/private/tmp/edupi-installed-"));
     fs.chmodSync(task, 0o700);
-    ownDirectory(task);
+    ownDirectory(task, "task");
     check(/^\/private\/tmp\/edupi-installed-[A-Za-z0-9]+$/u.test(task), "invalid_task_directory");
     appPath = path.join(task, "EduPi.app");
     mount = path.join(task, "mount");
@@ -597,17 +704,18 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
     teacher = path.join(home, `edupi-installed-synthetic-default-${nonce()}`);
     for (const directory of [root, teacher]) {
       fs.mkdirSync(directory, { mode: 0o700 });
-      privateDirectories.push(directory);
-      ownDirectory(directory);
+      ownDirectory(directory, directory === root ? "canary" : "synthetic_default");
     }
     // Refuse to overwrite any prior native profile, even on a hosted runner.
-    for (const relative of [`Application Support/${BUNDLE}`, `Logs/${BUNDLE}`, `Caches/${BUNDLE}`,
-      `WebKit/${BUNDLE}`, `HTTPStorages/${BUNDLE}`, `Saved Application State/${BUNDLE}.savedState`]) {
+    for (const [relative, role] of [
+      [`Application Support/${BUNDLE}`, "native_support"], [`Logs/${BUNDLE}`, "native_logs"],
+      [`Caches/${BUNDLE}`, "native_cache"], [`WebKit/${BUNDLE}`, "native_webkit"],
+      [`HTTPStorages/${BUNDLE}`, "native_http"], [`Saved Application State/${BUNDLE}.savedState`, "native_saved_state"],
+    ]) {
       const directory = path.join(home, "Library", relative);
       check(!fs.existsSync(directory), "native_profile_is_not_fresh");
       fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-      privateDirectories.push(directory);
-      ownDirectory(directory);
+      ownDirectory(directory, role, true);
     }
     const config = path.join(home, "Library/Application Support", BUNDLE);
     const prefs = path.join(config, "ui-prefs.json");
@@ -812,7 +920,11 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
       stage(`${label}_readonly_sqlite_and_marker_readback`);
       const database = path.join(root, ".edupi/runtime/core-runtime-v1.sqlite");
       equal(fs.realpathSync(database), database, "sqlite_not_canonical_in_canary");
-      launch.storage = JSON.parse((await command("/usr/bin/python3", ["-c", STORAGE_PROGRAM, database])).stdout);
+      launch.storage = JSON.parse((await command(node, [
+        "--disable-warning=ExperimentalWarning", "--input-type=module", "-e", NODE_STORAGE_PROGRAM, database,
+      ])).stdout);
+      check(launch.storage.driver?.engine === "node:sqlite" && launch.storage.readOnly === true
+        && launch.storage.queryOnly === true, "bundled_sqlite_readonly_probe_missing");
       equal(markerRead(), markerBaseline, "marker_changed_after_app_exit");
       equal(modelSummary(), initialModels, "model_configuration_changed_after_app_exit");
       equal(hash(JSON.stringify(fs.readdirSync(teacher))), teacherFingerprint, "synthetic_default_root_touched");
@@ -827,7 +939,8 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
   } catch (error) {
     evidence.status = "failed";
     evidence.failure = { stage: evidence.stage, code: abort.aborted ? "acceptance_interrupted"
-      : error instanceof AcceptanceFailure ? error.code : "unexpected_acceptance_failure",
+      : error instanceof AcceptanceFailure || /^cleanup_[a-z_]{1,70}$/u.test(error?.code || "")
+        ? error.code : "unexpected_acceptance_failure",
       type: error instanceof AcceptanceFailure ? "AcceptanceFailure" : "Error" };
   } finally {
     // Cleanup must still run after an interrupted command/download.
@@ -855,21 +968,31 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
     }
     // Never traverse a mounted volume or remove files still in use.
     if (task && detached && failures.length === 0) {
+      let before;
+      try { before = fs.statfsSync("/private/tmp"); }
+      catch { failures.push("task_disk_measurement_failed"); }
       try {
-        const before = fs.statfsSync(task);
-        let allocatedKiB = 0;
-        for (const directory of [...privateDirectories, task]) {
-          check(fs.realpathSync(directory) === directory, "cleanup_directory_identity_changed");
-          const stat = fs.lstatSync(directory, { bigint: true });
-          equal([String(stat.dev), String(stat.ino)], directoryIdentities.get(directory), "cleanup_directory_replaced");
-          allocatedKiB += Number((await command("/usr/bin/du", ["-sk", directory])).stdout.split(/\s/u)[0]);
-          fs.rmSync(directory, { recursive: true });
-          check(!fs.existsSync(directory), "cleanup_directory_still_present");
+        const ordered = [...cleanupEntries.filter(entry => entry.role !== "task"),
+          ...cleanupEntries.filter(entry => entry.role === "task")];
+        const baseReport = await cleanupRegisteredDirectories(ordered, {
+          measureBytes: async directory => Number((await command("/usr/bin/du", ["-sk", directory])).stdout.split(/\s/u)[0]) * 1024,
+          onProgress: snapshot => {
+            evidence.cleanup.directories = acceptanceCleanupReport(snapshot, registrationFailures); persist();
+          },
+        });
+        const report = acceptanceCleanupReport(baseReport, registrationFailures);
+        evidence.cleanup.directories = report;
+        evidence.cleanup.files = {
+          removedRoles: report.results.filter(item => item.status === "removed").map(item => item.role),
+          alreadyAbsentRoles: report.results.filter(item => item.status === "already_absent").map(item => item.role),
+          removedAllocatedBytes: report.removedAllocatedBytes,
+          availableBytesDelta: null,
+        };
+        if (report.status !== "passed") failures.push("task_directory_cleanup_failed");
+        if (before) {
+          const after = fs.statfsSync("/private/tmp");
+          evidence.cleanup.files.availableBytesDelta = after.bavail * after.bsize - before.bavail * before.bsize;
         }
-        const after = fs.statfsSync("/private/tmp");
-        evidence.cleanup.files = { removed: ["$TASK", "$CANARY", "$SYNTHETIC_DEFAULT", "$SYNTHETIC_NATIVE_PROFILE"],
-          removedAllocatedBytes: allocatedKiB * 1024,
-          availableBytesDelta: after.bavail * after.bsize - before.bavail * before.bsize };
         await command("/bin/df", ["-h", "/private/tmp"]);
       } catch { failures.push("task_directory_cleanup_failed"); }
     }
@@ -877,6 +1000,10 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
     evidence.cleanup.status = failures.length ? "failed" : "passed";
     if (failures.length) {
       evidence.status = "failed"; evidence.cleanup.failures = failures;
+    }
+    if (abort.aborted) {
+      evidence.status = "failed";
+      evidence.failure = { stage: evidence.stage, code: "acceptance_interrupted", type: "AcceptanceFailure" };
     }
     evidence.finishedAt = new Date().toISOString();
     persist();

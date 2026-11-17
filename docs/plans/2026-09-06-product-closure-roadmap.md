@@ -1,5 +1,11 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-17 R15 当前：**Mac117私有安装与二冷启CI3 run44007284437全通过；Linux116 AppImage字体补齐后前置及中文截图通过；WindowsWebView前置仍blocked。** Mac同一SQLite持久记录、marker/model、不同PID/nonce、Core及九目录清理均有实际证据，前两次失败保留；Linux首次方框与后续Noto CJK环境分别留证。117发布器197项与独立复审通过，22项实际本地引用已核对，公开发布/匿名下载/真实升级仍待执行。Core98、普通70/feed792及完整L4限制保持。
+
+2026-11-17 R15 最新运行证据：**Linux116 AppImage前置run44004124512通过；Windows前置run44004124764在真实WebView阶段blocked；Mac117 CI2两次真实启动ready但后置只读/cleanup失败，未公开。** Windows同SID shell及匹配驱动通过，错误仍需具体诊断，清理通过；Linux不是升级验收。Mac已用真实Core复现系统Python无sidecar WAL读取失败，改包内Node只读并补逐目录身份/部分失败证据；78项及独立复审通过，待下一次真实CI。PR503已合并，正式Latest70/feed792、Core98及完整L4限制保持。
+
+2026-11-17 R15 安装验收入口：**PR501已合并4ffb2833；首次Mac CI在App启动前因验收脚本错误要求开发fixture失败，清理通过，冷启仍待验**。现按既有分发合同补精确闭包文件清单，真实117包13359运行文件及30项定向检查通过，独立复审与重跑待完成。Windows原生WebView前置脚本16项实际PowerShell／helper通过、审查P1/P2关闭，升级执行器未实现；Linux原生升级入口12项helper通过、独立复审待完成，均未实跑。7平台隔离cohort已按真实签名生成，待提交固定URL。上述源码准备不改变117仍Draft、Core98、正式70/feed792及完整L4状态。
+
 2026-11-17 R15 实际安装补证：**`.117` 三平台签名构建与整轮Draft proof成功；Windows精确NSIS安装、单实例和隔离Core通过，Linux Deb两次启动与同库回读通过；Mac最终三资产原生安全核验通过、安装待验**。签名run43967319356／源a557，Windows安装run43975180076／asset756730447；Mac最终DMG756856348，九资产指纹47068a9d。独立Mac安装入口的29项含隔离守卫检查通过，SQLite内容丢失P2已修复并独立复审，真实App冷启待CI；不证明旧客户端升级或教师GUI通过。`.116` Draft标签元数据已恢复，九项资产未改，仍Draft。详见[未验收项收口](../acceptance/2026-11-17-unverified-risk-closure.md)；Core98、正式Latest70/feed792及完整L4状态保持。
 
 2026-11-17 当前未验收项收口：**PR498／499／500正常合并，117实际签名源a5577740／Core98e4f7cd；source CI43962527784成功，签名run43967319356已派发。** 116三平台builder真实成功，Linux／Windows安装smoke通过，Mac私有完整三包安全核验及DMG/updater全树通过；整体draft-proof仍failure（选择性重跑时间下界错误），不作正式发布proof。新CLI2.12.4、认证版本gate和单平台祖先skip修复均已源码验收；正式70／feed不变。115临时副本已隔离启动但CUA实际返回Mac锁屏，原生G3/G5点击0，未通过GUI；退出后原3WebView／4UI配置已归还并独立核对，期间models七项价格／maxTokens变化保留，其余349项和G4两全文件匹配，原350字节审计明确false。Main4周期create_task仍被固定Core门禁拒绝，完整L4不放行。当前段取代下方准备阶段状态，详见[未验收项与风险收口](../acceptance/2026-11-17-unverified-risk-closure.md)。
