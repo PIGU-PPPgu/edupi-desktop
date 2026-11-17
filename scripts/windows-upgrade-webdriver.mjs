@@ -33,10 +33,18 @@ export function remoteDiagnostic(status, value) {
     "user data directory already use in permission access denied binary executable version supports current chrome edge msedge " +
     "msedgewebview2 file path invalid unknown error no was closed crashed unable environment").split(" "));
   const words = String(value?.message ?? "").toLowerCase().match(/[a-z][a-z0-9]*/gu) ?? [];
+  const hResultCategories = [
+    ["80070005", "access_denied"],
+    ["80070002", "file_not_found"],
+    ["80070003", "path_not_found"],
+    ["80040154", "class_not_registered"],
+    ["80004005", "unspecified_failure"],
+  ].filter(([code]) => new RegExp(`\\bHRESULT\\s*[:=(]?\\s*0x${code}\\b`, "iu").test(String(value?.message ?? "")))
+    .map(([, category]) => category);
   // A vocabulary, never reconstructed raw text. Paths, URLs, command lines,
   // usernames, opaque identifiers and secrets cannot be included.
   return { httpStatus: status, messageKeywords: [...new Set(words.filter(word => allowed.has(word)))],
-    hResults: [...new Set(String(value?.message ?? "").match(/\b0x[0-9a-f]{8}\b/giu) ?? [])].slice(0, 4) };
+    hResultCategories };
 }
 
 export class W3CDriver {

@@ -122,13 +122,36 @@ test("protocol errors redact server messages, refuse redirects and reject off-ma
   const failed = new W3CDriver("http://127.0.0.1:4444", async () => { throw new Error("synthetic-secret"); });
   await assert.rejects(failed.attach(config.attachPort), { message: "webdriver_transport_failed" });
   await assert.rejects(driver.request("GET", "/session/id/../../outside"), /invalid_webdriver_route/);
-  const diagnostic = remoteDiagnostic(500, { message: "session not created: no WebView2 process found. 0x80070005 C:\\private\\Alice\\data Bearer synthetic-secret https://private.example?token=synthetic" });
+  const diagnostic = remoteDiagnostic(500, { message: "session not created: no WebView2 process found. HRESULT: 0x80070005 C:\\private\\Alice\\data Bearer synthetic-secret https://private.example?token=synthetic" });
   assert.equal(diagnostic.httpStatus, 500);
-  assert.deepEqual(diagnostic.hResults, ["0x80070005"]);
+  assert.deepEqual(diagnostic.hResultCategories, ["access_denied"]);
+  assert.equal(Object.hasOwn(diagnostic, "hResults"), false);
   assert.ok(diagnostic.messageKeywords.includes("webview2"));
-  for (const secret of ["Alice", "private", "synthetic", "Bearer", "https:", "\\"]) {
+  for (const secret of ["Alice", "private", "synthetic", "Bearer", "https:", "\\", "0x80070005"]) {
     assert.equal(JSON.stringify(diagnostic).includes(secret), false);
   }
+});
+
+test("diagnostic evidence never copies hexadecimal URL tokens or unknown HRESULTs", async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "windows-upgrade-diagnostic-test-"));
+  t.after(() => fs.rmSync(directory, { force: true, recursive: true }));
+  for (const token of ["0x12ab34cd", "0x80070005", "0XDEADBEEF"]) {
+    const message = `failed to connect https://private.invalid/callback?token=${token}`;
+    const diagnostic = remoteDiagnostic(500, { message });
+    assert.deepEqual(diagnostic.hResultCategories, []);
+    assert.equal(JSON.stringify(diagnostic).includes(token), false);
+    const driver = new W3CDriver("http://127.0.0.1:4444", async () => Response.json({
+      value: { error: "session not created", message },
+    }, { status: 500 }));
+    const proof = await runWebViewPreflight({ ...config, runtimeVersion: "131.0.2903.48", evidenceDir: directory }, driver);
+    assert.equal(proof.actualUpgradePassed, false);
+    const evidence = fs.readFileSync(path.join(directory, "windows-upgrade-webview.json"), "utf8");
+    assert.equal(evidence.includes(token), false);
+    assert.equal(evidence.includes("private.invalid"), false);
+  }
+  assert.deepEqual(remoteDiagnostic(500, { message: "HRESULT: 0x12ab34cd" }).hResultCategories, []);
+  assert.deepEqual(remoteDiagnostic(500, { message: "HRESULT=0X80070002; HRESULT (0x80040154)" }).hResultCategories,
+    ["file_not_found", "class_not_registered"]);
 });
 
 test("mock orchestration preserves phase evidence, closes the session on failure and cannot claim actual upgrade", async t => {
