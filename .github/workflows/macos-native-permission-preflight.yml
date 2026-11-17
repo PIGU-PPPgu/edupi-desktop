@@ -1,0 +1,51 @@
+name: macOS native permission preflight
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  readonly-permissions:
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - name: Read existing native GUI permission state
+        shell: bash
+        env:
+          PERMISSION_EVIDENCE: ${{ github.workspace }}/macos-native-permissions.json
+        run: |
+          set -euo pipefail
+          umask 077
+          export SWIFT_MODULECACHE_PATH="$RUNNER_TEMP/edupi-permission-module-cache"
+          swift -module-cache-path "$SWIFT_MODULECACHE_PATH" -e '
+          import Foundation
+          import ApplicationServices
+          import CoreGraphics
+          let report: [String: Any] = [
+            "scope": "macos_native_permissions_readonly",
+            "accessibility": AXIsProcessTrusted(),
+            "screenRecording": CGPreflightScreenCaptureAccess(),
+            "requestedPermissions": false,
+            "launchedApplication": false,
+            "platform": "darwin",
+            "osVersion": ProcessInfo.processInfo.operatingSystemVersionString
+          ]
+          let data = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
+          try data.write(to: URL(fileURLWithPath: ProcessInfo.processInfo.environment["PERMISSION_EVIDENCE"]!), options: .withoutOverwriting)
+          '
+      - name: Remove the task compiler cache
+        if: always()
+        shell: bash
+        run: |
+          if [ -d "$RUNNER_TEMP/edupi-permission-module-cache" ]; then
+            rm -r -- "$RUNNER_TEMP/edupi-permission-module-cache"
+          fi
+      - name: Keep read-only permission evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-native-permissions-${{ github.run_id }}-${{ github.run_attempt }}
+          path: macos-native-permissions.json
+          if-no-files-found: error
+          retention-days: 14
