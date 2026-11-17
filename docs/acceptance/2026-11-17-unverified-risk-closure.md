@@ -72,3 +72,12 @@ CUA `App.drag([520,700],[720,700])` 确实命中把手，Web 坐标由 `260` 移
 真实模型的只读预检命令为 `node scripts/run_g1_real_model_rehearsal.mjs --preflight --max-calls 2 --max-cost-usd 0.20 --only positive`，实际返回 `blocked/invalid_model_endpoint`，模型调用为0。当前默认模型是已配置的本机 HTTP 网关，该验收器明确要求 HTTPS；未改变模型、账户、密钥或放宽现有守卫。此结果不是模型推理失败，也不证明真实内容质量。
 
 Core `l4_formal_blind_prepare.mjs --check` 实际为 `prepared_not_frozen`、`declaration_complete=false`、安装六域记录为空、provider/model calls为0。缺少同源安装六域、双裁决者、配置和预算冻结，不能把形式准备脚本退出0当成正式盲测通过。真实教师连续使用、自然跨期、系统睡眠与通知点击继续保留为独立条件。
+
+## Windows/Linux 原生验收入口
+
+R15 状态为**已实现待验收**。实现7ef20ede将两个入口从Mac验收修补中独立出来，便于在全新runner实际运行；签名源a557、Core98、九资产和正式Latest70/feed792保持。Mac run43991025944已两次启动App、Core/投影ready并回读同marker/model，但第二只读探针和目录cleanup仍失败，发布继续保持Draft，不能将平台入口合并当作发布验收。
+
+- Windows `windows-upgrade-acceptance.yml` 安装冻结116，核对同SID shell、真实WebView2及匹配驱动，使用可信W3C鼠标测量实际面板宽度并刷新回读草稿。进程清理保留Windows句柄、拒绝过期PID/父子出生时间；这些P1/P2已独立复审关闭。当前只实现 `preflight`，`upgrade` 未实现时明确非零blocked且 `actualUpgradePassed=false`。
+- Linux `linux-upgrade-acceptance.yml` 安装冻结116 AppImage，可在公开117与固定commit cohort可用后由旧界面触发原生升级；仅观察自动重启，再核对新App、HTTP socket owner、Core进程、同SQLite持久记录、合成marker和模型配置。Xvfb认证、中断取消和进程归属的P1/P2均已修复并独立复审。
+- 当前分支在macOS arm64／Node24.22.2运行两平台helper：27 passed、0 failed、1 skipped；跳过项是本机未安装PowerShell，不算通过。相同Windows源码此前由主线程和独立审查实际使用PowerShell7.4.13运行16/16通过，临时runtime随后清理；Linux12/12通过，均不能替代真实Windows/Linux运行。
+- `update-cohorts/all-116-117-20261117.json` 由真实九资产及四签名生成，七平台键均使用API asset ID；仅供显式原生canary使用。目标Release仍须通过独立发布门，正式更新源未改变。

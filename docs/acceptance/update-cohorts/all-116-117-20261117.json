@@ -1,0 +1,35 @@
+{
+  "version": "0.3.117",
+  "notes": "EduPi 0.3.117 隔离升级验收。",
+  "pub_date": "2026-11-16T23:30:39.000Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTkrdyt6Q3MvM1YrVVpIME41enVmMGtucmNHMC9QRE9uSlZaSnNmZ3JMVFZpNldVRE5lYU5rRUYxZTdwakdtVWN2Z1BreVJoSXBSRUZSbDhpSkRQeGZSVWRMNzJyUmdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0ODcwOTg0CWZpbGU6RWR1UGkuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4xMTcKdTlvckFwVzZNRjNlV2IwRFJURjBQT3Z3bHpjWXN6d1RrbTFuKy9CNXZSc3J1M1ZReWd3WlhmWk9ESVBqVVNVMnpiUFZDM2cwYU82NEhnRHh5NzdBQnc9PQo=",
+      "url": "https://api.github.com/repos/PIGU-PPPgu/edupi-desktop/releases/assets/756820150"
+    },
+    "darwin-aarch64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTkrdyt6Q3MvM1YrVVpIME41enVmMGtucmNHMC9QRE9uSlZaSnNmZ3JMVFZpNldVRE5lYU5rRUYxZTdwakdtVWN2Z1BreVJoSXBSRUZSbDhpSkRQeGZSVWRMNzJyUmdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0ODcwOTg0CWZpbGU6RWR1UGkuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4xMTcKdTlvckFwVzZNRjNlV2IwRFJURjBQT3Z3bHpjWXN6d1RrbTFuKy9CNXZSc3J1M1ZReWd3WlhmWk9ESVBqVVNVMnpiUFZDM2cwYU82NEhnRHh5NzdBQnc9PQo=",
+      "url": "https://api.github.com/repos/PIGU-PPPgu/edupi-desktop/releases/assets/756820150"
+    },
+    "linux-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTkrdyt6Q3MvM2VsbW82bXFvSlk5eTAxZUxZdHpaQ3Bab3kzdFNNODZzRG5EbS9NWFhuU0ZBN1FCMUtKQnhva1o1N2lWUkRTV3djYWVPSWdXV2p1Nm1NRnZnWUsxbHdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0ODY4MjY1CWZpbGU6RWR1UGlfMC4zLjExN19hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjAuMy4xMTcKL2tva0ltK3NsVXU3YlFjQVNqMDBLbTlEcHQwcHVZcmsyZk5xRHRPd3NSSHBaM3kzbjBCS3VmQi9MaUd2UDJJMU0rejlrNFErT09WWXNZTHhmZDB0QkE9PQo=",
+      "url": "https://api.github.com/repos/PIGU-PPPgu/edupi-desktop/releases/assets/756698080"
+    },
+    "linux-x86_64-appimage": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTkrdyt6Q3MvM2VsbW82bXFvSlk5eTAxZUxZdHpaQ3Bab3kzdFNNODZzRG5EbS9NWFhuU0ZBN1FCMUtKQnhva1o1N2lWUkRTV3djYWVPSWdXV2p1Nm1NRnZnWUsxbHdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0ODY4MjY1CWZpbGU6RWR1UGlfMC4zLjExN19hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjAuMy4xMTcKL2tva0ltK3NsVXU3YlFjQVNqMDBLbTlEcHQwcHVZcmsyZk5xRHRPd3NSSHBaM3kzbjBCS3VmQi9MaUd2UDJJMU0rejlrNFErT09WWXNZTHhmZDB0QkE9PQo=",
+      "url": "https://api.github.com/repos/PIGU-PPPgu/edupi-desktop/releases/assets/756698080"
+    },
+    "linux-x86_64-deb": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTkrdyt6Q3MvM1JxbXNDYUE2MkFNeFExZHRaM29xWnM5N2J0Z1JzMENMVGFKNzM3RWlFMGJtSUdDaWtld01LWm5NTjNtVnVGWGVrRUF0VmVvdDRKRmpaaTB6bDZUd1FrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0ODY4MjY1CWZpbGU6RWR1UGlfMC4zLjExN19hbWQ2NC5kZWIJdmVyc2lvbjowLjMuMTE3CkJSNlhiTFp1bEdjYmpTNG4xbUhpc3N0UU84TytpRGxkK1FaVkNObzdqZWoxcmVqeEZuWjNGVHc2RjlUU3ZIVzlmbnA4TGpFM3BNUDNnVmNGSE5lWkNRPT0K",
+      "url": "https://api.github.com/repos/PIGU-PPPgu/edupi-desktop/releases/assets/756697730"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTkrdyt6Q3MvM1o1V2tsWEJaQ3Y5dlNENklycFlxbE5jTGFBK1lmVGp0bkFrT2ZmK05SMmRMUjZsWXYxMW5RTTNPZ1lZTWswelh4WnZ2bmgxc3lIRnR2aFpJT0tLSXdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0ODY5MDAwCWZpbGU6RWR1UGlfMC4zLjExN194NjQtc2V0dXAuZXhlCXZlcnNpb246MC4zLjExNwp4SU5HUzBnaFRLang5YjJPMmp5N080eGRUNXg0RVc5ck1wZEtxbjh0MlhvMytNN0N2QWRaeEl4Y1pYWHkrZzVYSG5jREE3L1FFejNYcXpTaXJ4TmxEUT09Cg==",
+      "url": "https://api.github.com/repos/PIGU-PPPgu/edupi-desktop/releases/assets/756730447"
+    },
+    "windows-x86_64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTkrdyt6Q3MvM1o1V2tsWEJaQ3Y5dlNENklycFlxbE5jTGFBK1lmVGp0bkFrT2ZmK05SMmRMUjZsWXYxMW5RTTNPZ1lZTWswelh4WnZ2bmgxc3lIRnR2aFpJT0tLSXdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0ODY5MDAwCWZpbGU6RWR1UGlfMC4zLjExN194NjQtc2V0dXAuZXhlCXZlcnNpb246MC4zLjExNwp4SU5HUzBnaFRLang5YjJPMmp5N080eGRUNXg0RVc5ck1wZEtxbjh0MlhvMytNN0N2QWRaeEl4Y1pYWHkrZzVYSG5jREE3L1FFejNYcXpTaXJ4TmxEUT09Cg==",
+      "url": "https://api.github.com/repos/PIGU-PPPgu/edupi-desktop/releases/assets/756730447"
+    }
+  }
+}
