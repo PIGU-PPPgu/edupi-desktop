@@ -1,0 +1,25 @@
+Command: EDUPI_CORE_ROOT=<paired-source> node --test <six bridge/pairing suites>
+Raw output SHA-256: 64f1e662c6c5ef1fa52499fddc83f6cd539d60a455bed9c09cf558913225a8c0
+
+  ...
+# Subtest: maps stale and rejects forged receipts before refresh
+ok 45 - maps stale and rejects forged receipts before refresh
+  ---
+  duration_ms: 34.055209
+  type: 'test'
+  ...
+# Subtest: rejects false-success status/revision/task-join mismatches and never refreshes
+ok 46 - rejects false-success status/revision/task-join mismatches and never refreshes
+  ---
+  duration_ms: 16.874125
+  type: 'test'
+  ...
+1..46
+# tests 46
+# suites 0
+# pass 45
+# fail 0
+# cancelled 0
+# skipped 1
+# todo 0
+# duration_ms 1929.296917

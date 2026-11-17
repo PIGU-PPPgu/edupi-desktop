@@ -1,0 +1,42 @@
+
+> @agegr/pi-web@0.8.7 security:audit
+> npm audit --audit-level=high
+
+# npm audit report
+
+@hono/node-server  2.0.0 - 2.1.5
+Severity: moderate
+@hono/node-server: Unhandled `ECONNRESET` on the socket during an asynchronous WebSocket upgrade crashes the process - https://github.com/advisories/GHSA-qv5m-9pm6-hqp3
+@hono/node-server: Backslash in the request path is parsed as a path separator, bypassing path-based access control at a reverse proxy - https://github.com/advisories/GHSA-jpvv-r467-5p4w
+fix available via `npm audit fix`
+node_modules/@hono/node-server
+
+fast-xml-parser  <=5.11.2
+fast-xml-parser: Quadratic CPU consumption scanning unterminated stop-node tags - https://github.com/advisories/GHSA-474x-hrwr-fgx4
+fix available via `npm audit fix`
+node_modules/fast-xml-parser
+
+hono  <=4.13.15
+Severity: moderate
+Hono: `mount()` and `app.mount()` can forward a path that bypasses middleware scoped inside the mount prefix - https://github.com/advisories/GHSA-4m76-xfj5-7975
+Hono: RegExpRouter skips wildcard middleware for some route sets and for paths with an encoded line terminator - https://github.com/advisories/GHSA-h7mg-cq63-vhpq
+Hono: `css` helper does not escape a closing tag split between the template and an interpolated value, allowing HTML injection - https://github.com/advisories/GHSA-3gg2-335m-rxc6
+Hono: `csrf()` does not check requests sent by hyperlink auditing (`text/ping`) - https://github.com/advisories/GHSA-46wx-v44x-9hh2
+Hono: `validator('form')` skips validation for `multipart/form-data` requests with extra parameters - https://github.com/advisories/GHSA-4h7h-rv7c-7m2v
+fix available via `npm audit fix`
+node_modules/hono
+
+next  16.3.0 - 16.4.4
+Severity: moderate
+Next.js: Information disclosure across root params when a 'use cache' function is called through unstable_cache() - https://github.com/advisories/GHSA-mfr8-8qww-v76h
+fix available via `npm audit fix --force`
+Will install next@16.4.6, which is outside the stated dependency range
+node_modules/next
+
+4 vulnerabilities (1 low, 3 moderate)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues, run:
+  npm audit fix --force

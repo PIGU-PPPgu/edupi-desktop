@@ -123,6 +123,7 @@ export function EduPiTaskDetailDrawer({ task, workCase, files = [], workspace, o
           <EduPiIconButton data-autofocus type="button" icon="close" label="关闭任务详情" className="edupi-task-detail-drawer__close" onClick={onClose}/>
         </header>
         <div className="edupi-task-detail-drawer__body">
+          {task.id?.startsWith("duty-classroom-") ? <a href={`/?module=students&view=homeroom&classroom=duty&classroomId=${encodeURIComponent(task.id.slice(5))}`}>查看值日排班</a> : null}
           <section className="edupi-task-detail-summary" aria-label="任务概览">
             <span className={`edupi-task-detail-status is-${unavailable ? "warning" : statusTone}`}>{unavailable ? "任务状态暂不可用" : status}</span>
             <dl>

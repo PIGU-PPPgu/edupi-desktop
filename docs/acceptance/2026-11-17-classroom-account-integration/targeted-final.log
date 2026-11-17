@@ -1,0 +1,168 @@
+TAP version 13
+# Subtest: account endpoints reject cross-origin, non-loopback and missing native credentials
+ok 1 - account endpoints reject cross-origin, non-loopback and missing native credentials
+  ---
+  duration_ms: 4.388542
+  type: 'test'
+  ...
+# Subtest: unconfigured account status is explicit and never cached
+ok 2 - unconfigured account status is explicit and never cached
+  ---
+  duration_ms: 0.38025
+  type: 'test'
+  ...
+# Subtest: account action schema rejects caller-supplied verified identities and credentials
+ok 3 - account action schema rejects caller-supplied verified identities and credentials
+  ---
+  duration_ms: 1.927625
+  type: 'test'
+  ...
+# Subtest: classroom routes reject cross-origin writes and imports
+ok 4 - classroom routes reject cross-origin writes and imports
+  ---
+  duration_ms: 2.004459
+  type: 'test'
+  ...
+# Subtest: classroom route rejects unknown actions and injected bridge fields
+ok 5 - classroom route rejects unknown actions and injected bridge fields
+  ---
+  duration_ms: 1.628041
+  type: 'test'
+  ...
+# react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+# react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+# Subtest: a slow URL read cannot overwrite a later selected plan or its unsaved edits
+ok 6 - a slow URL read cannot overwrite a later selected plan or its unsaved edits
+  ---
+  duration_ms: 30.687625
+  type: 'test'
+  ...
+# Subtest: a linked duty plan can restore a prior version through the same service and keep its task link
+ok 7 - a linked duty plan can restore a prior version through the same service and keep its task link
+  ---
+  duration_ms: 12.044791
+  type: 'test'
+  ...
+# Subtest: unconfigured client stays local with no network or credential writes
+ok 8 - unconfigured client stays local with no network or credential writes
+  ---
+  duration_ms: 0.609708
+  type: 'test'
+  ...
+# Subtest: real loopback challenge, scanned confirmation, PKCE, private persistence and restart
+ok 9 - real loopback challenge, scanned confirmation, PKCE, private persistence and restart
+  ---
+  duration_ms: 58.514833
+  type: 'test'
+  ...
+# Subtest: binding phone and email preserves one account, denies wrong account and missing verification
+ok 10 - binding phone and email preserves one account, denies wrong account and missing verification
+  ---
+  duration_ms: 125.294584
+  type: 'test'
+  ...
+# Subtest: expiry, denial, slow_down, replacement and cancellation cannot produce a login
+ok 11 - expiry, denial, slow_down, replacement and cancellation cannot produce a login
+  ---
+  duration_ms: 1843.952416
+  type: 'test'
+  ...
+# Subtest: cancel during exchange fences the late credentials and logout clears only the account file
+ok 12 - cancel during exchange fences the late credentials and logout clears only the account file
+  ---
+  duration_ms: 343.721959
+  type: 'test'
+  ...
+# Subtest: exchange response loss retries the persisted code and idempotency key after restart
+ok 13 - exchange response loss retries the persisted code and idempotency key after restart
+  ---
+  duration_ms: 44.725542
+  type: 'test'
+  ...
+# Subtest: session expiry refreshes privately and issuer changes cannot reuse its credentials
+ok 14 - session expiry refreshes privately and issuer changes cannot reuse its credentials
+  ---
+  duration_ms: 35.27275
+  type: 'test'
+  ...
+# Subtest: late successful profile refresh cannot resurrect credentials invalidated by a concurrent 401
+ok 15 - late successful profile refresh cannot resurrect credentials invalidated by a concurrent 401
+  ---
+  duration_ms: 39.508375
+  type: 'test'
+  ...
+# Subtest: a refresh token issued during logout is discarded and remotely revoked
+ok 16 - a refresh token issued during logout is discarded and remotely revoked
+  ---
+  duration_ms: 33.089375
+  type: 'test'
+  ...
+# Subtest: canceling a binding does not hide a 401 for the unchanged credential
+ok 17 - canceling a binding does not hide a 401 for the unchanged credential
+  ---
+  duration_ms: 45.697042
+  type: 'test'
+  ...
+# Subtest: a late 401 for an old credential cannot erase a newer login
+ok 18 - a late 401 for an old credential cannot erase a newer login
+  ---
+  duration_ms: 50.324458
+  type: 'test'
+  ...
+# Subtest: a late 401 preserves a new login begun after the old session naturally expires
+ok 19 - a late 401 preserves a new login begun after the old session naturally expires
+  ---
+  duration_ms: 62.528625
+  type: 'test'
+  ...
+# Subtest: an expired account can explicitly sign in as a different authoritative account
+ok 20 - an expired account can explicitly sign in as a different authoritative account
+  ---
+  duration_ms: 50.789458
+  type: 'test'
+  ...
+# Subtest: simultaneous idempotent token refresh does not revoke credentials adopted by the other request
+ok 21 - simultaneous idempotent token refresh does not revoke credentials adopted by the other request
+  ---
+  duration_ms: 47.980042
+  type: 'test'
+  ...
+# Subtest: a generation change retains an idempotent refresh while its original credential is still recoverable
+ok 22 - a generation change retains an idempotent refresh while its original credential is still recoverable
+  ---
+  duration_ms: 49.312125
+  type: 'test'
+  ...
+# Subtest: credential permissions, symlinks, external redirects and malformed actions fail closed
+ok 23 - credential permissions, symlinks, external redirects and malformed actions fail closed
+  ---
+  duration_ms: 35.751875
+  type: 'test'
+  ...
+# Subtest: classroom tool forwards exact calculation input to the shared service
+ok 24 - classroom tool forwards exact calculation input to the shared service
+  ---
+  duration_ms: 0.517583
+  type: 'test'
+  ...
+# Subtest: classroom tool rejects a different workspace before the service
+ok 25 - classroom tool rejects a different workspace before the service
+  ---
+  duration_ms: 0.195875
+  type: 'test'
+  ...
+# Subtest: classroom tool propagates service failure without an invented result
+ok 26 - classroom tool propagates service failure without an invented result
+  ---
+  duration_ms: 0.070917
+  type: 'test'
+  ...
+1..26
+# tests 26
+# suites 0
+# pass 26
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3486.545417

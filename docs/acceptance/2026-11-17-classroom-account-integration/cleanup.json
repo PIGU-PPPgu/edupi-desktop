@@ -1,0 +1,34 @@
+{
+  "removed": [
+    {
+      "path": ".next",
+      "allocated_bytes_before": 541536256,
+      "tracked": false,
+      "ignored": true
+    },
+    {
+      "path": ".next-desktop",
+      "allocated_bytes_before": 77824,
+      "tracked": false,
+      "ignored": true
+    },
+    {
+      "path": "<owned synthetic UI root>",
+      "allocated_bytes_before": 376832,
+      "synthetic_profiles_verified": 6,
+      "open_files": false
+    }
+  ],
+  "allocated_bytes_removed": 541990912,
+  "filesystem_free_before": 794452172800,
+  "filesystem_free_after": 794993987584,
+  "kept": [
+    "source worktrees",
+    "active project dependencies",
+    "original worktrees and edits",
+    "installed application",
+    "acceptance evidence"
+  ],
+  "packaging_artifacts_created": false,
+  "filesystem_free_change": 541814784
+}

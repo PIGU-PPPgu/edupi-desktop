@@ -1,0 +1,233 @@
+.edupi-account {
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 8px);
+  background: var(--surface, var(--bg));
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.edupi-account p,
+.edupi-account dl,
+.edupi-account dd,
+.edupi-account h3 {
+  margin: 0;
+}
+
+.edupi-account__header,
+.edupi-account__identity dd,
+.edupi-account__actions,
+.edupi-account__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.edupi-account__header {
+  justify-content: space-between;
+}
+
+.edupi-account__header h3 {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.edupi-account__muted {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.edupi-account__body,
+.edupi-account__error {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.edupi-account__body > .native-button,
+.edupi-account__error > .native-button {
+  justify-self: start;
+}
+
+.edupi-account__name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.edupi-account__help,
+.edupi-account__account-id {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.edupi-account summary {
+  width: fit-content;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+.edupi-account details[open] > summary {
+  margin-bottom: 8px;
+}
+
+.edupi-account__account-id code {
+  display: block;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  user-select: all;
+}
+
+.edupi-account__identities {
+  display: grid;
+  border-top: 1px solid var(--separator, var(--border));
+}
+
+.edupi-account__identity {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--separator, var(--border));
+}
+
+.edupi-account__identity dt {
+  color: var(--text-muted);
+}
+
+.edupi-account__identity dd {
+  min-width: 0;
+  justify-content: space-between;
+}
+
+.edupi-account__identity-value {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0 8px;
+}
+
+.edupi-account__identity .native-button {
+  flex-shrink: 0;
+}
+
+.edupi-account__challenge {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin-top: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--separator, var(--border));
+  border-bottom: 1px solid var(--separator, var(--border));
+  text-align: center;
+}
+
+.edupi-account__flow-status {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.edupi-account > .edupi-account__flow-status {
+  margin-top: 12px;
+}
+
+.edupi-account__qr {
+  box-sizing: border-box;
+  width: min(100%, 248px);
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: #fff;
+}
+
+.edupi-account__qr img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.edupi-account__scan-details {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  max-width: 100%;
+}
+
+.edupi-account__verification {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+}
+
+.edupi-account__verification > span,
+.edupi-account__countdown {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.edupi-account__verification code {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  user-select: all;
+}
+
+.edupi-account__countdown {
+  font-variant-numeric: tabular-nums;
+}
+
+.edupi-account__actions,
+.edupi-account__footer {
+  flex-wrap: wrap;
+}
+
+.edupi-account__footer {
+  margin-top: 12px;
+}
+
+.edupi-account__error,
+.edupi-account__warning {
+  color: var(--danger, var(--text));
+  font-size: 11px;
+}
+
+.edupi-account .edupi-account__warning,
+.edupi-account .edupi-account__local-note {
+  margin-top: 8px;
+}
+
+.edupi-account .native-button {
+  min-height: 32px;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.edupi-account:focus-visible,
+.edupi-account__challenge:focus-visible,
+.edupi-account button:focus-visible,
+.edupi-account summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@media (max-width: 420px) {
+  .edupi-account__identity {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .edupi-account__identity dd {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "date": "2026-11-17",
+  "scope": "isolated development browser; synthetic students and account backend",
+  "objects": [
+    {
+      "id": "classroom-69c84452-b0e0-4c0d-b535-858888c4fcad",
+      "domain": "grades",
+      "title": "集成期中",
+      "mode": null,
+      "revision": 3,
+      "task_id": null
+    },
+    {
+      "id": "classroom-a72a694c-35f4-4137-9b77-1fadfcd46053",
+      "domain": "grades",
+      "title": "集成期末",
+      "mode": null,
+      "revision": 1,
+      "task_id": null
+    },
+    {
+      "id": "classroom-f91629a8-caa7-4ba1-80f9-bbf8f278a13f",
+      "domain": "seating",
+      "title": "集成座位",
+      "mode": "seating",
+      "revision": 2,
+      "task_id": null
+    },
+    {
+      "id": "classroom-2016d063-d5ca-4307-a740-633fd11f546f",
+      "domain": "seating",
+      "title": "集成分组",
+      "mode": "groups",
+      "revision": 1,
+      "task_id": null
+    },
+    {
+      "id": "classroom-5f884b89-c791-4bbe-af58-d8d5edb245a0",
+      "domain": "duty",
+      "title": "集成值日",
+      "mode": null,
+      "revision": 6,
+      "task_id": "duty-classroom-5f884b89-c791-4bbe-af58-d8d5edb245a0"
+    }
+  ],
+  "profiles_sha256": "410979160d8989d87f423834c79e2f0e256d04b966bf916465ed6d4e4b664c9a",
+  "objects_sha256": "3bc349f21923eec2913661f56cd6c39ae82dd41c84e28408ee612ac04ce19cd1",
+  "duty_current_first_student": "integration-4",
+  "date_input_observed": "2026-11-17; 5 calendar days with selected weekdays produced 4 working days and 12 assigned slots",
+  "checks": [
+    "CSV import and manual same-name identity matching",
+    "grade calculate/revise/cancel/read/restore v3",
+    "cross-exam deltas 5,5,-5,5",
+    "seating swap v2 and hard-capacity rejection",
+    "two groups of three, cross-group swap and save",
+    "duty exemption and substitution, recalculated workload",
+    "task drawer returns to same duty ID",
+    "linked duty history restored to v5 and back to v6"
+  ]
+}

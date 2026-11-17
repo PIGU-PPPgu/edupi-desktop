@@ -1,0 +1,37 @@
+{
+  "core_commit": "6ca5d8ab134c90d5b43876566a5f0f160ca5c8a2",
+  "ui_objects_read_by_actual_sdk_tool": [
+    {
+      "id": "classroom-69c84452-b0e0-4c0d-b535-858888c4fcad",
+      "domain": "grades",
+      "revision": 3,
+      "task_id": null
+    },
+    {
+      "id": "classroom-a72a694c-35f4-4137-9b77-1fadfcd46053",
+      "domain": "grades",
+      "revision": 1,
+      "task_id": null
+    },
+    {
+      "id": "classroom-f91629a8-caa7-4ba1-80f9-bbf8f278a13f",
+      "domain": "seating",
+      "revision": 2,
+      "task_id": null
+    },
+    {
+      "id": "classroom-2016d063-d5ca-4307-a740-633fd11f546f",
+      "domain": "seating",
+      "revision": 1,
+      "task_id": null
+    },
+    {
+      "id": "classroom-5f884b89-c791-4bbe-af58-d8d5edb245a0",
+      "domain": "duty",
+      "revision": 6,
+      "task_id": "duty-classroom-5f884b89-c791-4bbe-af58-d8d5edb245a0"
+    }
+  ],
+  "model_calls": 0,
+  "ok": true
+}

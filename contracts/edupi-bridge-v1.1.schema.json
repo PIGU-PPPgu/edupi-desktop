@@ -10772,6 +10772,126 @@
               "maxItems": 200,
               "type": "array"
             },
+            "template_proposals": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "candidate_id": {
+                    "maxLength": 160,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "candidate_revision": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "effective_after_period": {
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "evidence_ids": {
+                    "items": {
+                      "maxLength": 160,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 50,
+                    "minItems": 1,
+                    "type": "array",
+                    "uniqueItems": true
+                  },
+                  "external_send": {
+                    "const": false,
+                    "type": "boolean"
+                  },
+                  "fingerprint": {
+                    "maxLength": 71,
+                    "minLength": 71,
+                    "pattern": "^sha256:[a-f0-9]{64}$",
+                    "type": "string"
+                  },
+                  "patch": {
+                    "additionalProperties": false,
+                    "minProperties": 1,
+                    "properties": {
+                      "deliverables": {
+                        "items": {
+                          "maxLength": 240,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "maxItems": 20,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      "title": {
+                        "maxLength": 240,
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "proposal_id": {
+                    "maxLength": 160,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "scope": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "class_id": {
+                        "maxLength": 160,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "subject": {
+                        "maxLength": 128,
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "class_id",
+                      "subject"
+                    ],
+                    "type": "object"
+                  },
+                  "template_id": {
+                    "maxLength": 160,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "template_revision": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "title": {
+                    "maxLength": 240,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "proposal_id",
+                  "fingerprint",
+                  "template_id",
+                  "template_revision",
+                  "candidate_id",
+                  "candidate_revision",
+                  "title",
+                  "patch",
+                  "effective_after_period",
+                  "scope",
+                  "evidence_ids",
+                  "external_send"
+                ],
+                "type": "object"
+              },
+              "maxItems": 200,
+              "type": "array"
+            },
             "work_cases": {
               "items": {
                 "additionalProperties": false,
@@ -11685,181 +11805,6 @@
                   "additionalProperties": false,
                   "properties": {
                     "command_type": {
-                      "const": "review_task",
-                      "type": "string"
-                    },
-                    "decision": {
-                      "anyOf": [
-                        {
-                          "const": "accept",
-                          "type": "string"
-                        },
-                        {
-                          "const": "modify",
-                          "type": "string"
-                        },
-                        {
-                          "const": "reject",
-                          "type": "string"
-                        },
-                        {
-                          "const": "hold",
-                          "type": "string"
-                        },
-                        {
-                          "const": "rollback",
-                          "type": "string"
-                        }
-                      ]
-                    },
-                    "expected_revision": {
-                      "minimum": 0,
-                      "type": "integer"
-                    },
-                    "note": {
-                      "anyOf": [
-                        {
-                          "maxLength": 1000,
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "patch": {
-                      "anyOf": [
-                        {
-                          "additionalProperties": false,
-                          "properties": {
-                            "deliverables": {
-                              "items": {
-                                "maxLength": 240,
-                                "type": "string"
-                              },
-                              "maxItems": 50,
-                              "type": "array"
-                            },
-                            "due_date": {
-                              "anyOf": [
-                                {
-                                  "maxLength": 64,
-                                  "minLength": 1,
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "title": {
-                              "maxLength": 240,
-                              "type": "string"
-                            }
-                          },
-                          "type": "object"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "rollback_id": {
-                      "anyOf": [
-                        {
-                          "maxLength": 160,
-                          "minLength": 1,
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "source": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "evidence_ids": {
-                          "items": {
-                            "maxLength": 160,
-                            "minLength": 1,
-                            "type": "string"
-                          },
-                          "maxItems": 50,
-                          "type": "array"
-                        },
-                        "source_hash": {
-                          "anyOf": [
-                            {
-                              "maxLength": 160,
-                              "pattern": "^sha256:[A-Za-z0-9_-]+$",
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "source_id": {
-                          "maxLength": 160,
-                          "minLength": 1,
-                          "type": "string"
-                        },
-                        "source_kind": {
-                          "anyOf": [
-                            {
-                              "const": "teacher_message",
-                              "type": "string"
-                            },
-                            {
-                              "const": "teacher_file",
-                              "type": "string"
-                            },
-                            {
-                              "const": "core_event",
-                              "type": "string"
-                            },
-                            {
-                              "const": "memory_candidate",
-                              "type": "string"
-                            },
-                            {
-                              "const": "core_task",
-                              "type": "string"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "source_id",
-                        "source_kind",
-                        "source_hash",
-                        "evidence_ids"
-                      ],
-                      "type": "object"
-                    },
-                    "task_id": {
-                      "maxLength": 160,
-                      "minLength": 1,
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "command_type",
-                    "task_id",
-                    "expected_revision",
-                    "decision",
-                    "patch",
-                    "source",
-                    "note",
-                    "rollback_id"
-                  ],
-                  "type": "object"
-                },
-                {
-                  "additionalProperties": false,
-                  "properties": {
-                    "command_type": {
                       "const": "review_teacher_context",
                       "type": "string"
                     },
@@ -12002,203 +11947,6 @@
                   "required": [
                     "command_type",
                     "context_id",
-                    "expected_revision",
-                    "decision",
-                    "patch",
-                    "source",
-                    "note"
-                  ],
-                  "type": "object"
-                },
-                {
-                  "additionalProperties": false,
-                  "properties": {
-                    "candidate_id": {
-                      "maxLength": 160,
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "command_type": {
-                      "const": "review_work_candidate",
-                      "type": "string"
-                    },
-                    "decision": {
-                      "anyOf": [
-                        {
-                          "const": "accept",
-                          "type": "string"
-                        },
-                        {
-                          "const": "modify",
-                          "type": "string"
-                        },
-                        {
-                          "const": "reject",
-                          "type": "string"
-                        },
-                        {
-                          "const": "hold",
-                          "type": "string"
-                        },
-                        {
-                          "const": "snooze",
-                          "type": "string"
-                        },
-                        {
-                          "const": "suppress",
-                          "type": "string"
-                        }
-                      ]
-                    },
-                    "expected_revision": {
-                      "minimum": 0,
-                      "type": "integer"
-                    },
-                    "note": {
-                      "anyOf": [
-                        {
-                          "maxLength": 1000,
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "patch": {
-                      "anyOf": [
-                        {
-                          "additionalProperties": false,
-                          "properties": {
-                            "due_at": {
-                              "anyOf": [
-                                {
-                                  "maxLength": 64,
-                                  "minLength": 1,
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "snooze_until": {
-                              "anyOf": [
-                                {
-                                  "maxLength": 64,
-                                  "minLength": 1,
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "summary": {
-                              "maxLength": 2000,
-                              "type": "string"
-                            },
-                            "suppression_scope": {
-                              "anyOf": [
-                                {
-                                  "anyOf": [
-                                    {
-                                      "const": "this_candidate",
-                                      "type": "string"
-                                    },
-                                    {
-                                      "const": "matching_reason",
-                                      "type": "string"
-                                    },
-                                    {
-                                      "const": "next_cycle",
-                                      "type": "string"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "title": {
-                              "maxLength": 240,
-                              "type": "string"
-                            }
-                          },
-                          "type": "object"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "source": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "evidence_ids": {
-                          "items": {
-                            "maxLength": 160,
-                            "minLength": 1,
-                            "type": "string"
-                          },
-                          "maxItems": 50,
-                          "type": "array"
-                        },
-                        "source_hash": {
-                          "anyOf": [
-                            {
-                              "maxLength": 160,
-                              "pattern": "^sha256:[A-Za-z0-9_-]+$",
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "source_id": {
-                          "maxLength": 160,
-                          "minLength": 1,
-                          "type": "string"
-                        },
-                        "source_kind": {
-                          "anyOf": [
-                            {
-                              "const": "teacher_message",
-                              "type": "string"
-                            },
-                            {
-                              "const": "teacher_file",
-                              "type": "string"
-                            },
-                            {
-                              "const": "core_event",
-                              "type": "string"
-                            },
-                            {
-                              "const": "memory_candidate",
-                              "type": "string"
-                            },
-                            {
-                              "const": "core_task",
-                              "type": "string"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "source_id",
-                        "source_kind",
-                        "source_hash",
-                        "evidence_ids"
-                      ],
-                      "type": "object"
-                    }
-                  },
-                  "required": [
-                    "command_type",
-                    "candidate_id",
                     "expected_revision",
                     "decision",
                     "patch",
@@ -14321,6 +14069,409 @@
                 "command_type",
                 "source",
                 "slots"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "command_type": {
+                  "const": "review_task",
+                  "type": "string"
+                },
+                "decision": {
+                  "anyOf": [
+                    {
+                      "const": "accept",
+                      "type": "string"
+                    },
+                    {
+                      "const": "modify",
+                      "type": "string"
+                    },
+                    {
+                      "const": "reject",
+                      "type": "string"
+                    },
+                    {
+                      "const": "hold",
+                      "type": "string"
+                    },
+                    {
+                      "const": "rollback",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "expected_revision": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "note": {
+                  "anyOf": [
+                    {
+                      "maxLength": 1000,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "patch": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "deliverables": {
+                          "items": {
+                            "maxLength": 240,
+                            "type": "string"
+                          },
+                          "maxItems": 50,
+                          "type": "array"
+                        },
+                        "due_date": {
+                          "anyOf": [
+                            {
+                              "maxLength": 64,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "title": {
+                          "maxLength": 240,
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "rollback_id": {
+                  "anyOf": [
+                    {
+                      "maxLength": 160,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "source": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "evidence_ids": {
+                      "items": {
+                        "maxLength": 160,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 50,
+                      "type": "array"
+                    },
+                    "source_hash": {
+                      "anyOf": [
+                        {
+                          "maxLength": 160,
+                          "pattern": "^sha256:[A-Za-z0-9_-]+$",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_id": {
+                      "maxLength": 160,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "source_kind": {
+                      "anyOf": [
+                        {
+                          "const": "teacher_message",
+                          "type": "string"
+                        },
+                        {
+                          "const": "teacher_file",
+                          "type": "string"
+                        },
+                        {
+                          "const": "core_event",
+                          "type": "string"
+                        },
+                        {
+                          "const": "memory_candidate",
+                          "type": "string"
+                        },
+                        {
+                          "const": "core_task",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "source_id",
+                    "source_kind",
+                    "source_hash",
+                    "evidence_ids"
+                  ],
+                  "type": "object"
+                },
+                "task_id": {
+                  "maxLength": 160,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "template_proposal_ref": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "fingerprint": {
+                      "maxLength": 71,
+                      "minLength": 71,
+                      "pattern": "^sha256:[a-f0-9]{64}$",
+                      "type": "string"
+                    },
+                    "proposal_id": {
+                      "maxLength": 160,
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "proposal_id",
+                    "fingerprint"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "command_type",
+                "task_id",
+                "expected_revision",
+                "decision",
+                "patch",
+                "source",
+                "note",
+                "rollback_id"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "candidate_id": {
+                  "maxLength": 160,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "command_type": {
+                  "const": "review_work_candidate",
+                  "type": "string"
+                },
+                "decision": {
+                  "anyOf": [
+                    {
+                      "const": "accept",
+                      "type": "string"
+                    },
+                    {
+                      "const": "modify",
+                      "type": "string"
+                    },
+                    {
+                      "const": "reject",
+                      "type": "string"
+                    },
+                    {
+                      "const": "hold",
+                      "type": "string"
+                    },
+                    {
+                      "const": "snooze",
+                      "type": "string"
+                    },
+                    {
+                      "const": "suppress",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "expected_revision": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "note": {
+                  "anyOf": [
+                    {
+                      "maxLength": 1000,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "patch": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "deliverables": {
+                          "items": {
+                            "maxLength": 240,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "maxItems": 20,
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "due_at": {
+                          "anyOf": [
+                            {
+                              "maxLength": 64,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "snooze_until": {
+                          "anyOf": [
+                            {
+                              "maxLength": 64,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "summary": {
+                          "maxLength": 2000,
+                          "type": "string"
+                        },
+                        "suppression_scope": {
+                          "anyOf": [
+                            {
+                              "anyOf": [
+                                {
+                                  "const": "this_candidate",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "matching_reason",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "next_cycle",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "title": {
+                          "maxLength": 240,
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "source": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "evidence_ids": {
+                      "items": {
+                        "maxLength": 160,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 50,
+                      "type": "array"
+                    },
+                    "source_hash": {
+                      "anyOf": [
+                        {
+                          "maxLength": 160,
+                          "pattern": "^sha256:[A-Za-z0-9_-]+$",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source_id": {
+                      "maxLength": 160,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "source_kind": {
+                      "anyOf": [
+                        {
+                          "const": "teacher_message",
+                          "type": "string"
+                        },
+                        {
+                          "const": "teacher_file",
+                          "type": "string"
+                        },
+                        {
+                          "const": "core_event",
+                          "type": "string"
+                        },
+                        {
+                          "const": "memory_candidate",
+                          "type": "string"
+                        },
+                        {
+                          "const": "core_task",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "source_id",
+                    "source_kind",
+                    "source_hash",
+                    "evidence_ids"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "command_type",
+                "candidate_id",
+                "expected_revision",
+                "decision",
+                "patch",
+                "source",
+                "note"
               ],
               "type": "object"
             },
