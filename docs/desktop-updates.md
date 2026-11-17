@@ -10,6 +10,16 @@ EduPi Desktop v0.3.35 起使用 Tauri 的完整包更新。旧版 macOS 需要�
 
 普通 Git commit 不会直接更新教师电脑。只有完整质量门通过并发布为 GitHub Release 的版本才会被客户端识别。
 
+## Linux 中文字体
+
+Linux 运行环境需要可用的 CJK 字体。最小英文系统上即使 AppImage 能启动，中文仍可能显示为方框；这不能算视觉验收通过。Debian/Ubuntu 可安装：
+
+```bash
+sudo apt-get install fonts-noto-cjk
+```
+
+其他发行版使用等价的中文字体包。原生 Linux 验收保存字体安装前后的 family 列表，并在补齐字体后重新截取实际页面；该环境前提不表示旧安装包已经内置中文字体。
+
 ## 旧版 macOS 一次性迁移
 
 v0.3.29 没有可用的 updater 插件；v0.3.25–v0.3.28 固化了旧 Release 地址；v0.3.30–v0.3.34 的 macOS 包因签名 Node 缺 JIT 权限已撤回。这些已安装版本需要一次替换安装。退出 EduPi，从 [正式 Releases](https://github.com/PIGU-PPPgu/edupi-desktop/releases) 下载最新 `aarch64.dmg`，替换 `/Applications/EduPi.app` 后重新打开。教师数据和模型配置位于应用包之外，替换时不要删除这些目录。

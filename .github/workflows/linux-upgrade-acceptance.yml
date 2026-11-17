@@ -52,10 +52,34 @@ jobs:
           set -euo pipefail
           df -h "$RUNNER_TEMP"
           du -sh "$RUNNER_TEMP"
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import path from "node:path";
+          import { spawnSync } from "node:child_process";
+          const probe = spawnSync("fc-list", [":lang=zh", "family"], { encoding: "utf8" });
+          const families = probe.status === 0 ? [...new Set(probe.stdout.trim().split("\n").filter(Boolean))] : [];
+          fs.writeFileSync(path.join(path.dirname(process.env.LINUX_UPGRADE_EVIDENCE), "linux-font-environment.json"),
+            JSON.stringify({ before: { available: probe.status === 0, families }, after: null }, null, 2),
+            { flag: "wx", mode: 0o600 });
+          NODE
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             webkit2gtk-driver libwebkit2gtk-4.1-0 libgtk-3-0t64 \
-            libayatana-appindicator3-1 libfuse2t64 xvfb xauth dbus-x11 python3
+            libayatana-appindicator3-1 libfuse2t64 xvfb xauth dbus-x11 python3 \
+            fontconfig fonts-noto-cjk
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import path from "node:path";
+          import { execFileSync } from "node:child_process";
+          const file = path.join(path.dirname(process.env.LINUX_UPGRADE_EVIDENCE), "linux-font-environment.json");
+          const report = JSON.parse(fs.readFileSync(file, "utf8"));
+          const families = [...new Set(execFileSync("fc-list", [":lang=zh", "family"], { encoding: "utf8" })
+            .trim().split("\n").filter(Boolean))];
+          if (!families.some(family => family.includes("Noto Sans CJK SC"))) throw new Error("chinese_font_unavailable");
+          report.after = { families, selected: execFileSync("fc-match", ["-f", "%{family}", ":lang=zh"], { encoding: "utf8" }),
+            packageVersion: execFileSync("dpkg-query", ["-W", "-f=${Version}", "fonts-noto-cjk"], { encoding: "utf8" }) };
+          fs.writeFileSync(file, JSON.stringify(report, null, 2));
+          NODE
       - name: Download exact old AppImage by API asset ID
         env:
           GH_TOKEN: ${{ github.token }}
@@ -78,6 +102,7 @@ jobs:
           name: linux-appimage-upgrade-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             linux-acceptance-evidence/linux-upgrade.json
+            linux-acceptance-evidence/linux-font-environment.json
             linux-acceptance-evidence/linux-upgrade-*.png
           if-no-files-found: error
           retention-days: 14
