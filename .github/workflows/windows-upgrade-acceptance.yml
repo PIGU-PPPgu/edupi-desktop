@@ -6,6 +6,12 @@ name: Windows old-client upgrade acceptance
 on:
   workflow_dispatch:
     inputs:
+      runner:
+        description: Native requires a disposable non-elevated interactive Windows user
+        required: true
+        type: choice
+        options: [hosted-windows, native-windows]
+        default: hosted-windows
       mode:
         description: Preflight tests frozen 116; upgrade currently reports blocked
         required: true
@@ -44,9 +50,13 @@ concurrency:
 
 jobs:
   windows-acceptance:
-    runs-on: windows-2025
+    # Hosted Windows may have an elevated shell. WebView2 then ignores its
+    # environment overrides. A dedicated native runner must use a disposable
+    # non-elevated interactive user, with the same SID as its existing shell.
+    runs-on: ${{ inputs.runner == 'native-windows' && fromJSON('["self-hosted","Windows","X64","edupi-native-acceptance"]') || 'windows-2025' }}
     timeout-minutes: 40
     env:
+      WINDOWS_UPGRADE_RUNNER: ${{ inputs.runner || 'hosted-windows' }}
       WINDOWS_UPGRADE_MODE: ${{ inputs.mode }}
       WINDOWS_UPGRADE_TARGET_RELEASE_ID: ${{ inputs.target_release_id }}
       WINDOWS_UPGRADE_TARGET_ASSET_ID: ${{ inputs.target_asset_id }}
@@ -64,6 +74,7 @@ jobs:
           if ($env:GITHUB_RUN_ID -cnotmatch '^[1-9][0-9]*$' -or
               $env:GITHUB_RUN_ATTEMPT -cnotmatch '^[1-9][0-9]*$' -or
               $env:GITHUB_SHA -cnotmatch '^[a-f0-9]{40}$') { throw "invalid_run_identity" }
+          if ($env:WINDOWS_UPGRADE_RUNNER -cnotin @("hosted-windows", "native-windows")) { throw "invalid_runner_choice" }
           $suffix = "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           $evidence = Join-Path $env:RUNNER_TEMP "edupi-windows-upgrade-evidence-$suffix"
           $download = Join-Path $env:RUNNER_TEMP "edupi-windows-upgrade-download-$suffix"
@@ -72,7 +83,7 @@ jobs:
           icacls.exe $evidence "/inheritance:r" "/grant:r" "*${sid}:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" | Out-Null
           if ($LASTEXITCODE -ne 0) { throw "evidence_acl_failed" }
           @{ schemaVersion = 1; runId = $env:GITHUB_RUN_ID; attempt = $env:GITHUB_RUN_ATTEMPT
-            verifier = $env:GITHUB_SHA; mode = $env:WINDOWS_UPGRADE_MODE } |
+            verifier = $env:GITHUB_SHA; mode = $env:WINDOWS_UPGRADE_MODE; runner = $env:WINDOWS_UPGRADE_RUNNER } |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence "windows-upgrade-job.json") -Encoding utf8
           "WINDOWS_UPGRADE_EVIDENCE_DIR=$evidence" >> $env:GITHUB_ENV
           "WINDOWS_UPGRADE_DOWNLOAD_DIR=$download" >> $env:GITHUB_ENV
