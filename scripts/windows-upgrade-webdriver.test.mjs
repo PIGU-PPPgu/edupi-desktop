@@ -8,7 +8,7 @@ import { OLD } from "./windows-upgrade-support.mjs";
 import { W3CDriver, assertNativeSnapshot, assertPointerEvidence, pointerDrag, remoteDiagnostic, runWebViewPreflight } from "./windows-upgrade-webdriver.mjs";
 
 const config = { application: "C:\\Users\\synthetic\\edupi-windows-upgrade-test\\application\\pi-agent-desktop.exe",
-  dataRoot: "C:\\Users\\synthetic\\edupi-route1-canary-windows-upgrade-test" };
+  dataRoot: "C:\\Users\\synthetic\\edupi-route1-canary-windows-upgrade-test", expectedPid: 1234, attachPort: 9222 };
 function native() {
   return { host: { appVersion: OLD.version, platform: "windows", processId: 1234, executablePath: config.application },
     roots: { dataRoot: config.dataRoot, dataSource: "environment", coreSource: "bundled",
@@ -28,7 +28,7 @@ test("native proof requires the exact installed 116, original task path, bundled
   assert.doesNotThrow(() => assertNativeSnapshot(native(), config));
   const changes = [
     n => { n.host.appVersion = "0.3.117"; }, n => { n.host.platform = "linux"; },
-    n => { n.host.processId = 0; }, n => { n.host.executablePath = "C:\\Other\\pi-agent-desktop.exe"; },
+    n => { n.host.processId = 0; }, n => { n.host.processId = 1235; }, n => { n.host.executablePath = "C:\\Other\\pi-agent-desktop.exe"; },
     n => { n.roots.dataRoot = "C:\\real-teacher"; }, n => { n.roots.dataSource = "persisted"; },
     n => { n.roots.coreSource = "environment"; }, n => { n.roots.coreRoot = "C:\\other-core"; },
     n => { n.runtime.safeMode = false; }, n => { n.runtime.mobileBridgeEnabled = true; },
@@ -94,6 +94,13 @@ test("W3C HTTP performs launch, real pointer input, refresh, screenshot and dele
   assert.ok(calls.every(call => call.headers.authorization === undefined));
   assert.ok(calls.some(call => call.url.endsWith("/actions") && call.body.actions[0].parameters.pointerType === "mouse"));
   assert.deepEqual(calls.at(-1), { method: "DELETE", url: `/session/${sessionId}`, body: null, headers: calls.at(-1).headers });
+  await driver.attach(9222);
+  const attached = calls.filter(call => call.url === "/session").at(-1).body.capabilities.alwaysMatch;
+  assert.deepEqual(attached["ms:edgeOptions"], { debuggerAddress: "127.0.0.1:9222" });
+  assert.equal(attached["tauri:options"], undefined, "attach must not launch an application");
+  await driver.command("POST", "/element/f.ABC.d.DEF.e.3/click", {});
+  await assert.rejects(driver.request("GET", "/session/id/%2e%2e/outside"), /invalid_webdriver_route/);
+  await driver.close();
 });
 
 test("protocol errors redact server messages, refuse redirects and reject off-machine endpoints", async () => {
@@ -125,7 +132,7 @@ test("mock orchestration preserves phase evidence, closes the session on failure
     let snapshots = 0;
     return {
       calls,
-      async launch(application) { calls.push(["launch", application]); return { browserName: "webview2", browserVersion: "131.0.2903.48" }; },
+      async attach(port) { calls.push(["attach", port]); return { browserName: "webview2", browserVersion: "131.0.2903.48" }; },
       async wait(read, code) {
         for (let attempt = 0; attempt < 3; attempt++) { const value = await read(); if (value) return value; }
         throw new Error(code);
@@ -138,6 +145,7 @@ test("mock orchestration preserves phase evidence, closes the session on failure
       async visible(css) { return css.includes("textarea") ? { "element-6066-11e4-a52e-4f735466cecf": "synthetic-textarea" } : null; },
       async click(css, text) { calls.push(["click", css, text]); },
       async execute(script) {
+        if (script.includes("width:innerWidth")) return { width: 1440, height: 900 };
         if (script.includes("Boolean(window.__TAURI_INTERNALS__")) return true;
         if (script.includes("Math.round(r.x")) return { x: 300, y: 400, before: 284, beforeWidth: 284, max: 480, min: 200 };
         if (script.includes("events:window.__windowsUpgradePointer")) {

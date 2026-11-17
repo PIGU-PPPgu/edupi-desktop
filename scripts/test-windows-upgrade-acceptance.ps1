@@ -509,10 +509,36 @@ try {
         Start-Sleep -Milliseconds 300
     }
     Assert-Condition $ready "tauri_or_edge_driver_not_ready"
+    Set-Phase "real-webview-116-start"
+    # Microsoft's documented attach strategy avoids DevToolsActivePort
+    # discovery in the launch strategy. This is an owned 116 preflight launch,
+    # never a replacement for an updater's automatic 117 restart.
+    $oldApplication = Start-OwnedProcess -File $application -Environment $appEnvironment -Arguments @("--safe-mode")
+    $proof.oldLaunch = @{ version = "0.3.116"; pid = $oldApplication.Id; method = "owned_preflight_safe_mode" }
+    Set-Phase "real-webview-owned-debug-port"
+    $debugReady = $false
+    $deadline = [DateTime]::UtcNow.AddSeconds(120)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        Assert-Condition (!$oldApplication.HasExited) "old_116_exited_before_attach"
+        $ownedIds = Capture-OwnedDescendants
+        $debugListeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -eq $debugPort })
+        if ($debugListeners.Count) {
+            Assert-Condition (@($debugListeners | Where-Object {
+                !$ownedIds.Contains([int]$_.OwningProcess) -or $_.LocalAddress -notin @("127.0.0.1", "::1")
+            }).Count -eq 0) "debug_port_not_owned_loopback"
+            try {
+                $debugInfo = Invoke-RestMethod -Uri "http://127.0.0.1:$debugPort/json/version" -TimeoutSec 3
+                if ($debugInfo.webSocketDebuggerUrl -match "^ws://127\.0\.0\.1:${debugPort}/devtools/browser/") { $debugReady = $true; break }
+            } catch { }
+        }
+        Start-Sleep -Milliseconds 300
+    }
+    Assert-Condition $debugReady "owned_webview_debug_port_unavailable"
     Set-Phase "real-webview-config"
     $runConfig = Join-Path $taskRoot "webview-config.json"
     @{ endpoint = "http://127.0.0.1:$tauriPort"; application = $application; dataRoot = $canaryRoot
-        runtimeVersion = $webview.identity.version; evidenceDir = $evidenceDir } |
+        runtimeVersion = $webview.identity.version; evidenceDir = $evidenceDir
+        attachPort = $debugPort; expectedPid = $oldApplication.Id } |
         ConvertTo-Json | Set-Content -LiteralPath $runConfig -Encoding utf8
     Set-Phase "real-webview-helper-environment"
     $helperEnvironment = Get-BaseEnvironment

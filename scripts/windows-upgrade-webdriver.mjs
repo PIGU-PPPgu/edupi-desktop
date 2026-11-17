@@ -30,7 +30,10 @@ export class W3CDriver {
     this.session = null;
   }
   async request(method, route, body, timeout = 120_000) {
-    requireValue(/^\/(?:status|session(?:\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_/-]+)?)?)$/u.test(route),
+    requireValue(/^\/(?:status|session(?:\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_.%/-]+)?)?)$/u.test(route)
+      && route.split("/").every(segment => {
+        try { return ![".", ".."].includes(decodeURIComponent(segment)); } catch { return false; }
+      }),
       "invalid_webdriver_route");
     let response, payload;
     try {
@@ -60,6 +63,18 @@ export class W3CDriver {
   async launch(application) {
     const value = await this.request("POST", "/session", { capabilities: {
       alwaysMatch: { "tauri:options": { application, args: ["--safe-mode"] }, acceptInsecureCerts: false },
+      firstMatch: [{}],
+    } });
+    requireValue(/^[A-Za-z0-9_-]{1,128}$/u.test(value?.sessionId), "webdriver_session_missing");
+    this.session = value.sessionId;
+    await this.command("POST", "/timeouts", { script: 120_000, pageLoad: 120_000, implicit: 0 });
+    return value.capabilities;
+  }
+  async attach(port) {
+    requireValue(Number.isInteger(port) && port >= 1024 && port <= 65535, "invalid_owned_debug_port");
+    const value = await this.request("POST", "/session", { capabilities: {
+      alwaysMatch: { browserName: "webview2", "ms:edgeChromium": true,
+        "ms:edgeOptions": { debuggerAddress: `127.0.0.1:${port}` }, acceptInsecureCerts: false },
       firstMatch: [{}],
     } });
     requireValue(/^[A-Za-z0-9_-]{1,128}$/u.test(value?.sessionId), "webdriver_session_missing");
@@ -134,6 +149,7 @@ export function assertPointerEvidence({ events, before, after, saved, restored, 
 export function assertNativeIdentity(snapshot, config) {
   requireValue(snapshot?.host?.appVersion === OLD.version && snapshot.host.platform === "windows"
     && Number.isSafeInteger(snapshot.host.processId) && snapshot.host.processId > 0
+    && (config.expectedPid === undefined || snapshot.host.processId === config.expectedPid)
     && windowsPath(snapshot.host.executablePath) === windowsPath(config.application), "native_116_identity_mismatch");
   requireValue(windowsPath(snapshot.roots?.dataRoot) === windowsPath(config.dataRoot)
     && snapshot.roots.dataSource === "environment" && snapshot.roots.coreSource === "bundled"
@@ -245,12 +261,14 @@ async function checkAbout(driver, config) {
 
 export async function runWebViewPreflight(config, driver = new W3CDriver(config.endpoint)) {
   versionBuild(config.runtimeVersion);
-  const proof = { status: "blocked", actualUpgradePassed: false, phase: "webdriver-connect", checks: [] };
+  requireValue(Number.isInteger(config.expectedPid) && config.expectedPid > 0, "owned_preflight_pid_required");
+  const proof = { status: "blocked", actualUpgradePassed: false, phase: "webdriver-connect",
+    connectionStrategy: "attach_owned_116", checks: [] };
   const file = path.join(config.evidenceDir, "windows-upgrade-webview.json");
   const save = () => writeJson(file, proof);
   save();
   try {
-    const capabilities = await driver.launch(config.application);
+    const capabilities = await driver.attach(config.attachPort);
     assertDriverVersion(config.runtimeVersion, capabilities?.browserVersion);
     // EdgeDriver releases can report their vendor browserName. The native
     // bridge, executable/data paths, Safe Mode and runtime checks below
@@ -260,7 +278,10 @@ export async function runWebViewPreflight(config, driver = new W3CDriver(config.
       browserVersion: capabilities.browserVersion, runtimeVersion: config.runtimeVersion });
     save();
     proof.phase = "native-source-root-core98";
-    await driver.command("POST", "/window/rect", { width: 1440, height: 1000 });
+    // Attached WebView2 sessions do not own the native window rectangle.
+    // The installed App supplies its real window; observe that viewport.
+    proof.viewport = await driver.execute("return {width:innerWidth,height:innerHeight};");
+    requireValue(proof.viewport?.width >= 1000 && proof.viewport?.height >= 600, "native_viewport_too_small");
     await driver.wait(() => driver.execute('return Boolean(window.__TAURI_INTERNALS__?.invoke);'), "tauri_bridge_unavailable");
     const native = await driver.wait(async () => {
       const value = await snapshot(driver);
