@@ -6,11 +6,11 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "976c6e646c2dbe8630812d1b4899fcfde421fe7e",
+    "core_commit": "6ca5d8ab134c90d5b43876566a5f0f160ca5c8a2",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
-    "component_manifest_hash": "sha256:1cb3a6cbdbbed7fba342bdf726609be6eb14af4ccb3fe4dc1e37d10abe156599",
-    "runtime_component_manifest_hash": "sha256:4596ebd0da92df002448c6158088fdf3c5cd7c1c8c899578c2146a22bd7cd6eb",
-    "runtime_schema_hash": "sha256:d0546c49b07c56ad0020910ba024da1a470e85ef138607ccb2304a1db8b4060c"
+    "component_manifest_hash": "sha256:f7378b72a0f096b17d12ab14d6cd8e92036405d3919d83ea33c0e6daa811da04",
+    "runtime_component_manifest_hash": "sha256:5fa7e6c24c82d8967a290e3dacc717d2296caae98a9582bb8d742174391813f6",
+    "runtime_schema_hash": "sha256:037eeee9a4f84f45f45559ab5191feecfcc815cd38c646d903013096ce938962"
   },
   "contract_identities": [
     {
@@ -280,7 +280,10 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/444",
     "https://github.com/PIGU-PPPgu/edupi/pull/446",
     "https://github.com/PIGU-PPPgu/edupi/pull/458",
-    "https://github.com/PIGU-PPPgu/edupi/pull/462"
+    "https://github.com/PIGU-PPPgu/edupi/pull/462",
+    "https://github.com/PIGU-PPPgu/edupi/pull/472",
+    "https://github.com/PIGU-PPPgu/edupi-desktop/pull/508",
+    "https://github.com/PIGU-PPPgu/edupi/pull/473"
   ],
   "change_note": "Pins the current Main4 Core with built-in grade analysis, seating/groups and duty scheduling, preserving the existing Bridge v1.1 and schedule v1.2 identities, writer admission and SQLite owner authority. Classroom UI and AI share one Core service. The separately configured account client remains local by default; installed pairing and public updates are not enabled by this source change."
 }

@@ -1,0 +1,15 @@
+{
+  "cold_account_id": "synthetic-teacher-1",
+  "identity_kinds": [
+    "wechat_miniprogram",
+    "phone",
+    "email"
+  ],
+  "closed_poll_count_before": 15,
+  "closed_poll_count_after": 15,
+  "reopened_same_flow": true,
+  "cancelled": true,
+  "logout_state": "signed_out",
+  "remote_revoke_failure_explicit": true,
+  "synthetic_backend": true
+}

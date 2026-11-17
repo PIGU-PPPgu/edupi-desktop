@@ -1,6 +1,6 @@
 {
-  "data_root": "<isolated temporary data root, removed after runtime shutdown>",
-  "core_root": "<paired Core source>",
+  "data_root": "<isolated temporary root removed after runtime shutdown>",
+  "core_root": "<paired merged Core 6ca5d8ab>",
   "model_calls": 0,
   "external_send": false,
   "checks": [

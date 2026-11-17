@@ -1,0 +1,59 @@
+{
+  "core_commit": "6ca5d8ab134c90d5b43876566a5f0f160ca5c8a2",
+  "reopened": [
+    {
+      "domain": "grades",
+      "id": "classroom-69c84452-b0e0-4c0d-b535-858888c4fcad",
+      "revision": 3,
+      "title": "集成期中",
+      "score": "60",
+      "seatNames": [],
+      "groups": []
+    },
+    {
+      "domain": "grades",
+      "id": "classroom-a72a694c-35f4-4137-9b77-1fadfcd46053",
+      "revision": 1,
+      "title": "集成期末",
+      "score": "65",
+      "seatNames": [],
+      "groups": []
+    },
+    {
+      "domain": "seating",
+      "id": "classroom-f91629a8-caa7-4ba1-80f9-bbf8f278a13f",
+      "revision": 2,
+      "title": "集成座位",
+      "seatNames": [
+        "隔离甲",
+        "隔离丙",
+        "同名验收 · ration-5",
+        "隔离丁",
+        "同名验收 · ration-4",
+        "隔离乙"
+      ],
+      "groups": []
+    },
+    {
+      "domain": "seating",
+      "id": "classroom-2016d063-d5ca-4307-a740-633fd11f546f",
+      "revision": 1,
+      "title": "集成分组",
+      "seatNames": [],
+      "groups": [
+        3,
+        3
+      ]
+    },
+    {
+      "domain": "duty",
+      "id": "classroom-5f884b89-c791-4bbe-af58-d8d5edb245a0",
+      "revision": 6,
+      "title": "集成值日",
+      "seatNames": [],
+      "groups": [],
+      "dutyFirst": "integration-4"
+    }
+  ],
+  "ok": true
+}

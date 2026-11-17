@@ -16,13 +16,13 @@ TAP version 13
 # Subtest: locks the local user-facing product name
 ok 1 - locks the local user-facing product name
   ---
-  duration_ms: 3.423583
+  duration_ms: 1.575709
   type: 'test'
   ...
 # Subtest: derives visible versions from package metadata instead of build-time globals
 ok 2 - derives visible versions from package metadata instead of build-time globals
   ---
-  duration_ms: 0.686542
+  duration_ms: 0.53175
   type: 'test'
   ...
 1..2
@@ -33,4 +33,4 @@ ok 2 - derives visible versions from package metadata instead of build-time glob
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 55.844042
+# duration_ms 48.294084
