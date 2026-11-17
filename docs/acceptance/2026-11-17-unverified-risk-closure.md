@@ -11,7 +11,7 @@
 | R15 Windows `.116` | 原 all-platform run 中 Windows 实际重跑通过 | 初次 npm `ECONNRESET` 失败保留；单平台 run43919850507 的 build 被跳过，不作证据。原 run43913704753 重跑后实际 Windows job成功 |
 | R15 Windows `.117` | 精确 Draft NSIS 安装、启动与隔离 Core 验收通过 | run43975180076／job133677226510，asset756730447，140263717字节，SHA `5c7dab4a4966333228771bc5b8f43953d4df191bd187dc33779034d1d6fbeb6f`；正常模式守卫、单实例、Safe Mode Core/投影ready、Core98和G1 pending均通过。未验公开下载、GUI或旧客户端升级 |
 | R15 Mac `.116` | 私有完整资产与原生安全 gate通过 | Release447334004／源13de；三包完整size/SHA、Minisign及篡改拒绝、Developer ID、票据、Gatekeeper、arm64、DMG/updater整App树及30份包内源文件匹配；未启动或安装116 |
-| R15 Mac `.117` | 最终三资产完整字节与原生安全 gate通过，安装待验 | Release447680099／源a557；最终DMG756856348，238768964字节，SHA `d39d95f8cf681cf795f35c6e8f2a3a50a077faedf2fa21de234400a1e8c0eb8f`；永久公钥Minisign、精确签名版本117、篡改拒绝、Developer ID／票据／Gatekeeper／arm64／双App全树／30份冻结源码均通过，DMG已卸载。未启动或安装117 |
+| R15 Mac `.117` | 最终三资产完整字节与原生安全 gate通过，冷启待验 | Release447680099／源a557；最终DMG756856348，238768964字节，SHA `d39d95f8cf681cf795f35c6e8f2a3a50a077faedf2fa21de234400a1e8c0eb8f`；永久公钥Minisign、精确签名版本117、篡改拒绝、Developer ID／票据／Gatekeeper／arm64／双App全树／30份冻结源码均通过，DMG已卸载。本机未安装117；首次CI复制临时App并验签后在合同检查失败，App启动0，清理通过 |
 | R15 `.116` 整轮发布 proof | 未通过，保持 Draft | 选择性重跑更新 `run_started_at`，旧代码误拒绝保留的早期Mac/Linux资产。最终整体success发布门未跳过；修复进入PR500，不将历史run failure改绿 |
 | R15 `.117` 整轮 Draft proof与版本签名 | 三平台真实签名构建和最终发布身份gate通过，仍Draft | run43967319356 attempt1／source a557：Mac、Windows、Linux builder与draft-proof均success；九资产指纹 `sha256:47068a9d6613a4fb697db202ab874466782ff342d3e7fdea94902b34428e43c4`。CLI2.12.4、最终签名精确版本117、原公钥／TLS／禁止降级均保留；安装、公开下载和升级另验 |
 | G3／G5 原生流程 | 合成根与后端重启回读通过，GUI外部阻塞 | `.115`临时副本实际启动，Core/投影ready、隔离guard通过；CUA返回Mac锁屏、自动解锁失败，实际点击0。未接受G3、未确认G5、未发送消息 |
@@ -36,6 +36,10 @@ Mac锁屏阻止交互后，仅对自有隔离App发送SIGTERM，App/HTTP/Core三
 - `.116` Draft 更新说明后，真实API的 `tag_name` 变为 `untagged-df41d75c4b0cbd7734b1`，使版本定位失配。已显式恢复 `v0.3.116` 并复核Git tag仍为13de、九项资产ID／size／digest完全一致、仍Draft、Latest/feed未变。Draft的 `browser_download_url` 仍可能使用 `untagged-*` 占位地址；下载信任继续绑定API asset ID，不用该占位地址代替资产身份。
 - 新增独立 `macos-installed-acceptance.yml`：只在全新 macOS15 arm64 hosted runner 上按精确DMG资产安装临时App，实际两次冷启动，分别绑定App／HTTP／Core进程，核对固定Core、同一SQLite／合成marker／模型配置后清理。20项helper/mock与实际Python SQLite／CFData plist回归、ESLint和actionlint通过；真实CI安装尚未执行，GUI、正常Cmd+Q、教学内容和升级没有通过声明。
 - Mac独立审查发现只比SQLite文件和schema会漏报同inode记录丢失。已改为只读逐条主键／内容摘要比较，允许正常新增；authority仅比较稳定root身份，events比较不可变内容。真实SQLite删除、同ID修改、正常owner／settlement变化及内容保持反例均复验，29项含隔离守卫通过，P2独立复审关闭。当前`.117`原生安全证明为 `v0.3.117/evidence/mac117-private-platform-verification.json`，安装和GUI状态仍未因此改变。
+- PR501 已正常合并为4ffb2833，与受测d120feb8整树相等。首次Mac安装run43982417466／job133701966537在 `bundled_core_exact_source_contract` 失败：新验收脚本错误要求包内存在 `command-unsupported.json` 等开发fixture示例，而既有 `packaged-core-bundle.mjs` 明确只分发两个运行闭包、对应manifest和fixture索引。临时App已验签，未启动；挂载、App／数据／原生临时profile清理通过，回执与失败日志保留。修复按原分发合同校验精确文件清单，保留全部运行文件字节及fixture索引自hash；缺失运行文件、额外文件和索引篡改均拒绝。对同一签名117包实际核对13359运行文件通过，30项含隔离守卫通过；独立复审与新CI冷启仍待完成。
+- 新Windows入口只执行冻结116的真实WebView前置验收；`upgrade` 尚未实现时明确非零blocked、`actualUpgradePassed=false`。独立审查的PID误认领／树清理P1、只比属性宽度和冷启动过早判断两个P2均已修复并复审关闭：保留Windows进程句柄逐个清理，实际测量面板几何尺寸，等待Core／投影ready。实际PowerShell7.4.13 AST与隔离mock及W3C helper共16项通过、0跳过；临时工具已删除，实际可用空间增加270417920字节。尚无该新入口的Windows运行结果，不以既有117安装smoke替代。
+- 新Linux AppImage入口支持冻结116前置验收和受控公开117原生升级。Xvfb私有cookie复制、HTTP socket到新App／Core PID与出生时间绑定、取消请求和禁止中断写绿均已有定向回归，12项通过，独立复审待完成；尚未在Linux实跑。升级只允许旧App界面触发原生updater，观察自动重启后再核对新包、同一SQLite持久记录、合成marker和模型配置，不手动启动117补证。
+- `update-cohorts/all-116-117-20261117.json` 由真实九资产及四份精确签名生成，包含7个updater平台键；当前尚待提交后取得固定commit URL，目标Release仍须先通过受控公开门。该清单仅供明确canary环境使用，正式Latest70/feed792不变。首次GitHub元数据GET的EOF在任何签名写入前发生并留证，后续同ID／size／digest读取已通过。
 
 ## 早期阶段记录
 

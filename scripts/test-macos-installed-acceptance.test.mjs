@@ -162,6 +162,10 @@ function fixtureBundle(t) {
   const pin = { core_commit: "98e4f7cd0c31dd30954574d2040bb1b948cdd954",
     component_manifest_path: "contracts/edupi-desktop-component-manifest.json",
     runtime_schema_hash: `sha256:${"3".repeat(64)}` };
+  const schemaPath = "contracts/edupi-core-runtime-v1-hash.json";
+  const schemaBytes = Buffer.from(JSON.stringify({ schema_hash: pin.runtime_schema_hash }));
+  fs.writeFileSync(path.join(coreRoot, schemaPath), schemaBytes);
+  const schemaEntry = { path: schemaPath, size: schemaBytes.length, sha256: digest(schemaBytes) };
   const files = ["scripts/desktop_bridge_port.mjs", "scripts/core_runtime_daemon.mjs"].map(relative => {
     const content = Buffer.from(`// synthetic helper ${relative}\n`);
     fs.writeFileSync(path.join(coreRoot, relative), content);
@@ -172,13 +176,12 @@ function fixtureBundle(t) {
     [files[1], "runtime_component_manifest_hash", "contracts/edupi-core-runtime-component-manifest.json"],
   ]) {
     const payload = { component_manifest_version: "1", algorithm: "sha256-canonical-component-payload-v1",
-      entrypoint: entry.path, modules: [entry], assets: [], runtime_dependencies: [] };
+      entrypoint: entry.path, modules: [entry],
+      assets: field === "runtime_component_manifest_hash" ? [schemaEntry] : [], runtime_dependencies: [] };
     pin[field] = digest(JSON.stringify(canonical(payload)));
     fs.writeFileSync(path.join(coreRoot, filename), JSON.stringify({ ...payload, component_manifest_hash: pin[field] }));
   }
-  fs.writeFileSync(path.join(coreRoot, "contracts/edupi-core-runtime-v1-hash.json"), JSON.stringify({ schema_hash: pin.runtime_schema_hash }));
   const fixtureBytes = Buffer.from('{"synthetic":true}\n');
-  fs.writeFileSync(path.join(coreRoot, "fixtures/bridge/v1.1/synthetic.json"), fixtureBytes);
   const fixtureFiles = [{ path: "synthetic.json", size: fixtureBytes.length, sha256: digest(fixtureBytes) }];
   const bridge = { contract_id: "edupi-bridge-v1.1", contract_version: "1.1", schema_hash: `sha256:${"4".repeat(64)}`,
     fixture_manifest_path: "fixtures/bridge/v1.1/fixture-manifest.json", fixture_manifest_hash: digest(JSON.stringify(fixtureFiles)),
@@ -191,7 +194,7 @@ function fixtureBundle(t) {
 
 test("bundled Core uses the supplied source contract and detects file tampering and a newer harness pin", t => {
   const fixture = fixtureBundle(t);
-  assert.equal(verifyBundleContracts(fixture.resources, fixture.compat).verifiedCoreFiles, 2);
+  assert.equal(verifyBundleContracts(fixture.resources, fixture.compat).verifiedCoreFiles, 3);
   const differentSource = structuredClone(fixture.compat);
   differentSource.core_runtime.component_manifest_hash = `sha256:${"f".repeat(64)}`;
   fails(() => verifyBundleContracts(fixture.resources, differentSource), "bundled_manifest_hash_mismatch");
@@ -208,11 +211,25 @@ test("bundled Core files cannot escape the package through symlinks", t => {
   fails(() => verifyBundleContracts(fixture.resources, fixture.compat), "manifest_file_outside_bundle");
 });
 
-test("fixture hashes protect the actual bundled files as well as the manifest index", t => {
+test("the exact runtime closure includes the pinned fixture index without development examples", t => {
   const fixture = fixtureBundle(t);
-  assert.equal(verifyBundleContracts(fixture.resources, fixture.compat).verifiedFixtureFiles, 1);
-  fs.writeFileSync(path.join(fixture.coreRoot, "fixtures/bridge/v1.1/synthetic.json"), '{"synthetic":"changed"}');
-  fails(() => verifyBundleContracts(fixture.resources, fixture.compat), "fixture_file_mismatch");
+  const proof = verifyBundleContracts(fixture.resources, fixture.compat);
+  assert.equal(proof.fixtureIndexEntries, 1);
+  assert.equal(proof.exactRuntimeInventory, true);
+  assert.equal(fs.existsSync(path.join(fixture.coreRoot, "fixtures/bridge/v1.1/synthetic.json")), false);
+  fs.writeFileSync(path.join(fixture.coreRoot, "fixtures/bridge/v1.1/synthetic.json"), '{"synthetic":"unlisted"}');
+  fails(() => verifyBundleContracts(fixture.resources, fixture.compat), "bundled_contract_inventory_mismatch");
+});
+
+test("missing runtime files and a changed fixture index are rejected against the supplied source contract", t => {
+  const first = fixtureBundle(t), second = fixtureBundle(t);
+  fs.unlinkSync(path.join(first.coreRoot, "scripts/core_runtime_daemon.mjs"));
+  fails(() => verifyBundleContracts(first.resources, first.compat), "bundled_contract_file_missing");
+  const index = path.join(second.coreRoot, "fixtures/bridge/v1.1/fixture-manifest.json");
+  const value = JSON.parse(fs.readFileSync(index));
+  value.files[0].sha256 = `sha256:${"a".repeat(64)}`;
+  fs.writeFileSync(index, JSON.stringify(value));
+  fails(() => verifyBundleContracts(second.resources, second.compat), "fixture_manifest_mismatch");
 });
 
 function readyStatus(compat) {

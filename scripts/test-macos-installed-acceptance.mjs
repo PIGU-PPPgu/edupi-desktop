@@ -22,7 +22,10 @@ const DIGEST = /^sha256:[a-f0-9]{64}$/u;
 const harness = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const hash = bytes => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 const readJson = filename => JSON.parse(fs.readFileSync(filename, "utf8"));
-const inside = (root, candidate) => candidate === root || candidate.startsWith(`${root}/`);
+const inside = (root, candidate) => {
+  const relative = path.relative(root, candidate);
+  return relative === "" || relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+};
 const nonce = () => randomBytes(16).toString("hex");
 let operationSignal;
 const requestSignal = milliseconds => operationSignal
@@ -149,13 +152,31 @@ function canonical(value) {
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
 }
-function safeFile(root, relative) {
+function contractPath(relative) {
   check(typeof relative === "string" && relative.length > 0 && !relative.includes("\\")
     && relative.split("/").every(part => part && part !== "." && part !== "..")
     && !path.isAbsolute(relative), "invalid_manifest_path");
+  return relative;
+}
+function safeFile(root, relative) {
+  contractPath(relative);
   const filename = path.join(root, relative);
-  check(inside(root, fs.realpathSync(filename)) && fs.lstatSync(filename).isFile(), "manifest_file_outside_bundle");
+  try {
+    check(inside(root, fs.realpathSync(filename)) && fs.lstatSync(filename).isFile(), "manifest_file_outside_bundle");
+  } catch (error) {
+    if (error.code === "ENOENT") throw new AcceptanceFailure("bundled_contract_file_missing");
+    throw error;
+  }
   return filename;
+}
+function bundleFiles(root, relative = "") {
+  return fs.readdirSync(path.join(root, relative), { withFileTypes: true }).flatMap(entry => {
+    check(!entry.isSymbolicLink(), "bundle_contract_symlink_refused");
+    const name = relative ? `${relative}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) return bundleFiles(root, name);
+    check(entry.isFile(), "bundle_contract_special_file_refused");
+    return [name];
+  });
 }
 
 export function verifyBundleContracts(resources, compat) {
@@ -204,14 +225,22 @@ export function verifyBundleContracts(resources, compat) {
   check(fixtures.algorithm === "sha256-raw-files-canonical-list-v1" && Array.isArray(fixtures.files)
     && fixtures.fixture_manifest_hash === bridge.fixture_manifest_hash
     && hash(JSON.stringify(fixtures.files)) === bridge.fixture_manifest_hash, "fixture_manifest_mismatch");
+  // packaged-core-bundle.mjs distributes the manifest and the exact runtime
+  // closure union. Its referenced development examples are not runtime assets.
+  const fixturePaths = new Set();
   for (const entry of fixtures.files) {
-    const filename = safeFile(core, `${path.posix.dirname(bridge.fixture_manifest_path)}/${entry.path}`);
-    const bytes = fs.readFileSync(filename);
-    check(entry.size === bytes.length && entry.sha256 === hash(bytes), "fixture_file_mismatch");
+    contractPath(entry.path);
+    check(!fixturePaths.has(entry.path) && Number.isSafeInteger(entry.size) && entry.size >= 0
+      && DIGEST.test(entry.sha256), "fixture_index_entry_invalid");
+    fixturePaths.add(entry.path);
   }
+  const expectedFiles = [...new Set([...checked.keys()].map(filename => path.relative(core, filename).split(path.sep).join("/"))
+    .concat([pin.component_manifest_path, "contracts/edupi-core-runtime-component-manifest.json", bridge.fixture_manifest_path]))];
+  equal(bundleFiles(core).sort(), expectedFiles.sort(), "bundled_contract_inventory_mismatch");
   return { core_commit: pin.core_commit, component_manifest_hash: pin.component_manifest_hash,
     runtime_component_manifest_hash: pin.runtime_component_manifest_hash, runtime_schema_hash: pin.runtime_schema_hash,
-    verifiedCoreFiles: checked.size, verifiedFixtureFiles: fixtures.files.length };
+    verifiedCoreFiles: checked.size, exactRuntimeInventory: true, fixtureIndexEntries: fixtures.files.length,
+    developmentFixtureExamples: "not_in_distribution_contract" };
 }
 
 export function verifyStatus(payload, compat) {
