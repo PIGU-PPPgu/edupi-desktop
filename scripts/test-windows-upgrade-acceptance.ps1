@@ -21,6 +21,11 @@ $taskRoot = $null
 $destination = $null
 $canaryRoot = $null
 $appEnvironment = $null
+$application = $null
+$helperNode = $null
+$tauriDriver = $null
+$edgeDriver = $null
+$debugPort = $null
 $phase = "inputs"
 $checks = [System.Collections.Generic.List[object]]::new()
 $proof = @{
@@ -182,6 +187,13 @@ function Get-FreePort {
     $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
     try { $listener.Start(); return $listener.LocalEndpoint.Port }
     finally { $listener.Stop() }
+}
+function Test-OwnedDebugEndpoint([string]$Value, [int]$Port) {
+    $url = $null
+    if (![Uri]::TryCreate($Value, [UriKind]::Absolute, [ref]$url)) { return $false }
+    return $url.Scheme -ceq "ws" -and $url.Host -in @("127.0.0.1", "localhost", "[::1]") -and
+        $url.Port -eq $Port -and !$url.UserInfo -and !$url.Query -and !$url.Fragment -and
+        ($url.AbsolutePath -ceq "/devtools/browser" -or $url.AbsolutePath.StartsWith("/devtools/browser/"))
 }
 function Get-ShellEvidence {
     Add-Type -TypeDefinition @'
@@ -367,6 +379,60 @@ function Stop-TaskProcesses {
         Assert-Condition ($current.WaitForExit(10000)) "owned_process_cleanup_incomplete"
     }
 }
+function Save-NativeDiagnostics {
+    $snapshot = @(Get-CimInstance Win32_Process)
+    $byId = @{}
+    foreach ($row in $snapshot) { $byId[[int]$row.ProcessId] = $row }
+    $proof.nativeProcesses = @($script:ownedProcesses | ForEach-Object {
+        $record = $_
+        $name = [System.IO.Path]::GetFileName($record.file)
+        $role = if ($record.file -eq $application) { "installed-app" }
+            elseif ($record.file -eq $helperNode) { "node-helper" }
+            elseif ($record.file -eq $tauriDriver) { "tauri-driver" }
+            elseif ($record.file -eq $edgeDriver) { "edge-driver" }
+            elseif ($name -eq "msedgewebview2.exe") { "webview2-runtime" }
+            elseif ($destination -and $record.file.StartsWith($destination, [StringComparison]::OrdinalIgnoreCase)) { "installed-resource" }
+            elseif ($name -in @("conhost.exe", "OpenConsole.exe", "pi-agent-desktop.exe")) { $name }
+            else { "other-owned" }
+        $exited = $record.process.HasExited
+        $command = if ($byId.ContainsKey([int]$record.id)) { [string]$byId[[int]$record.id].CommandLine } else { "" }
+        $ports = @([regex]::Matches($command, '(?:^|\s)--remote-debugging-port=(\d+)(?:\s|$)') | ForEach-Object { [int]$_.Groups[1].Value })
+        @{ role = $role; pid = $record.id; exited = $exited; exitCode = if ($exited) { $record.process.ExitCode } else { $null }
+            debugPorts = $ports; debugPipe = $command.Contains("--remote-debugging-pipe")
+            privateUserDataArgument = $taskRoot -and $command.Contains($taskRoot) }
+    })
+    $ownedIds = @($script:ownedProcesses | ForEach-Object { $_.id })
+    $proof.nativeListeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+        Where-Object { $_.OwningProcess -in $ownedIds } |
+        ForEach-Object { @{ pid = $_.OwningProcess; port = $_.LocalPort; loopback = $_.LocalAddress -in @("127.0.0.1", "::1") } })
+    $proof.browserPolicies = @(
+        foreach ($key in @("HKLM:\Software\Policies\Microsoft\Edge", "HKCU:\Software\Policies\Microsoft\Edge",
+            "HKLM:\Software\Policies\Microsoft\Edge\WebView2", "HKCU:\Software\Policies\Microsoft\Edge\WebView2")) {
+            $values = Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
+            foreach ($name in @("RemoteDebuggingAllowed", "DeveloperToolsAvailability")) {
+                if ($values -and $values.PSObject.Properties[$name] -and $values.$name -is [int]) {
+                    @{ policy = $name; value = $values.$name; machine = $key.StartsWith("HKLM:") }
+                }
+            }
+        }
+    )
+    $proof.nativeStartupCodes = @(
+        foreach ($base in @((Join-Path $env:APPDATA "com.abcwyc.pi-agent"), (Join-Path $env:LOCALAPPDATA "com.abcwyc.pi-agent"))) {
+            foreach ($file in @(Get-ChildItem -LiteralPath $base -Filter "startup-diagnostics.jsonl" -Recurse -File -ErrorAction SilentlyContinue)) {
+                foreach ($line in @(Get-Content -LiteralPath $file.FullName -Tail 20)) {
+                    try {
+                        $entry = $line | ConvertFrom-Json
+                        $safe = @{}
+                        foreach ($key in @("stage", "component", "errorCode")) {
+                            if ($entry.PSObject.Properties[$key] -and [string]$entry.$key -cmatch '^[a-zA-Z0-9_-]{1,100}$') { $safe[$key] = $entry.$key }
+                        }
+                        if ($safe.Count) { $safe }
+                    } catch { }
+                }
+            }
+        }
+    )
+}
 
 Save-Evidence
 try {
@@ -522,14 +588,17 @@ try {
         Assert-Condition (!$oldApplication.HasExited) "old_116_exited_before_attach"
         $ownedIds = Capture-OwnedDescendants
         $debugListeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -eq $debugPort })
+        $proof.debugProbe = @{ listenerCount = $debugListeners.Count; configuredPort = $debugPort }
         if ($debugListeners.Count) {
             Assert-Condition (@($debugListeners | Where-Object {
                 !$ownedIds.Contains([int]$_.OwningProcess) -or $_.LocalAddress -notin @("127.0.0.1", "::1")
             }).Count -eq 0) "debug_port_not_owned_loopback"
             try {
                 $debugInfo = Invoke-RestMethod -Uri "http://127.0.0.1:$debugPort/json/version" -TimeoutSec 3
-                if ($debugInfo.webSocketDebuggerUrl -match "^ws://127\.0\.0\.1:${debugPort}/devtools/browser/") { $debugReady = $true; break }
-            } catch { }
+                $proof.debugProbe.versionResponse = $true
+                $proof.debugProbe.browserWebSocketMatches = Test-OwnedDebugEndpoint $debugInfo.webSocketDebuggerUrl $debugPort
+                if ($proof.debugProbe.browserWebSocketMatches) { $debugReady = $true; break }
+            } catch { $proof.debugProbe.requestErrorType = $_.Exception.GetType().FullName }
         }
         Start-Sleep -Milliseconds 300
     }
@@ -566,34 +635,7 @@ try {
     Assert-Condition ($samples -gt 0) "live_listener_evidence_missing"
     Set-Phase "real-webview-read-proof"
     $webviewProof = Get-Content -LiteralPath (Join-Path $evidenceDir "windows-upgrade-webview.json") -Raw | ConvertFrom-Json
-    $proof.nativeProcesses = @($script:ownedProcesses | ForEach-Object {
-        $record = $_
-        $role = if ($record.file -eq $application) { "installed-app" }
-            elseif ($record.file -eq $helperNode) { "node-helper" }
-            elseif ($record.file -eq $tauriDriver) { "tauri-driver" }
-            elseif ($record.file -eq $edgeDriver) { "edge-driver" }
-            elseif ([System.IO.Path]::GetFileName($record.file) -eq "msedgewebview2.exe") { "webview2-runtime" }
-            elseif ($record.file.StartsWith($destination, [StringComparison]::OrdinalIgnoreCase)) { "installed-resource" }
-            else { "other-owned" }
-        $exited = $record.process.HasExited
-        @{ role = $role; pid = $record.id; exited = $exited; exitCode = if ($exited) { $record.process.ExitCode } else { $null } }
-    })
-    $proof.nativeStartupCodes = @(
-        foreach ($base in @((Join-Path $env:APPDATA "com.abcwyc.pi-agent"), (Join-Path $env:LOCALAPPDATA "com.abcwyc.pi-agent"))) {
-            foreach ($file in @(Get-ChildItem -LiteralPath $base -Filter "startup-diagnostics.jsonl" -Recurse -File -ErrorAction SilentlyContinue)) {
-                foreach ($line in @(Get-Content -LiteralPath $file.FullName -Tail 20)) {
-                    try {
-                        $entry = $line | ConvertFrom-Json
-                        $safe = @{}
-                        foreach ($key in @("stage", "component", "errorCode")) {
-                            if ($entry.PSObject.Properties[$key] -and [string]$entry.$key -cmatch '^[a-zA-Z0-9_-]{1,100}$') { $safe[$key] = $entry.$key }
-                        }
-                        if ($safe.Count) { $safe }
-                    } catch { }
-                }
-            }
-        }
-    )
+    Save-NativeDiagnostics
     $webviewStatus = if ($webviewProof.status -ceq "passed" -and $helper.ExitCode -eq 0 -and $webviewProof.sessionClosed) { "passed" }
         elseif ($webviewProof.status -ceq "failed") { "failed" } else { "blocked" }
     Add-Check "real-webview-preflight" $webviewStatus @{ evidence = "windows-upgrade-webview.json"
@@ -602,6 +644,9 @@ try {
     if ($Mode -eq "upgrade") { Add-Check "upgrade-executor" "blocked" @{ code = "upgrade_executor_not_implemented" } }
 } catch {
     $diagnostic = Get-SafeDiagnostic $_ $phase
+    if ($script:ownedProcesses.Count) {
+        try { Save-NativeDiagnostics } catch { $proof.nativeDiagnosticError = Get-SafeDiagnostic $_ "native-diagnostics" }
+    }
     Add-Check $phase "blocked" @{ code = Get-SafeCode $_; diagnostic = $diagnostic }
     Write-Output (@{ status = "blocked"; diagnostic = $diagnostic } | ConvertTo-Json -Depth 10 -Compress)
 } finally {

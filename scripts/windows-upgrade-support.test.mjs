@@ -171,10 +171,18 @@ test("actual PowerShell outcome, environment whitelist and PID tracking function
     $tokens = $null; $parseErrors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:WINDOWS_UPGRADE_PS_FILE, [ref]$tokens, [ref]$parseErrors)
     if ($parseErrors.Count) { throw "parse failed" }
-    foreach ($name in @("Assert-Condition", "Get-SafeDiagnostic", "Get-AcceptanceOutcome", "Get-BaseEnvironment", "Get-ApplicationExecutable", "Start-OwnedProcess", "Test-CimProcessIdentity", "Capture-OwnedDescendants", "Get-EdgeDriverCandidates")) {
+    foreach ($name in @("Assert-Condition", "Get-SafeDiagnostic", "Get-AcceptanceOutcome", "Get-BaseEnvironment", "Get-ApplicationExecutable", "Start-OwnedProcess", "Test-OwnedDebugEndpoint", "Test-CimProcessIdentity", "Capture-OwnedDescendants", "Get-EdgeDriverCandidates")) {
       $function = $ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name}, $true)
       if (!$function) { throw "missing function" }
       Invoke-Expression $function.Extent.Text
+    }
+    foreach ($url in @("ws://127.0.0.1:9222/devtools/browser", "ws://localhost:9222/devtools/browser/synthetic")) {
+      if (!(Test-OwnedDebugEndpoint $url 9222)) { throw "valid owned WebView endpoint rejected" }
+    }
+    foreach ($url in @("ws://remote.example:9222/devtools/browser", "ws://127.0.0.1:9333/devtools/browser",
+      "http://127.0.0.1:9222/devtools/browser", "ws://user:secret@127.0.0.1:9222/devtools/browser",
+      "ws://127.0.0.1:9222/devtools/browser?token=secret")) {
+      if (Test-OwnedDebugEndpoint $url 9222) { throw "foreign debug endpoint accepted" }
     }
     try {
       $inner = [System.ComponentModel.Win32Exception]::new(5, "synthetic-token C:\\Users\\private\\secret")
