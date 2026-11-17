@@ -6,10 +6,12 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
 import {
-  AcceptanceFailure, HDI_INFO_PROGRAM, STORAGE_PROGRAM, cleanupTargets, collectOwned, downloadVerified,
+  AcceptanceFailure, HDI_INFO_PROGRAM, NODE_STORAGE_PROGRAM, STORAGE_PROGRAM, acceptanceCleanupReport,
+  cleanupTargets, collectOwned, downloadVerified,
   githubReader, launchEnvironment, main, parseProcesses, requireHostedMac, validateInputs,
-  verifyBundleContracts, verifyHttpOwner, verifyMetadata, verifyRestart, verifyStatus, verifyTag, verifyWorkspace,
+  trackAcceptanceDirectory, verifyBundleContracts, verifyHttpOwner, verifyMetadata, verifyRestart, verifyStatus, verifyTag, verifyWorkspace,
 } from "./test-macos-installed-acceptance.mjs";
+import { cleanupRegisteredDirectories, registerCleanupDirectory } from "./macos-acceptance-cleanup.mjs";
 
 const digest = bytes => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 const sourceSha = "a".repeat(40);
@@ -321,7 +323,8 @@ test("task cleanup includes detached helper groups and title-erased orphans but 
   assert.deepEqual(cleanupTargets(new Map([[101, http]]), [http, mixedGroup]), { groups: [], pids: [101] });
 });
 
-test("read-only SQLite quick_check preserves the same synthetic database and detects same-path replacement", t => {
+for (const reader of ["system_python", "node_sqlite"]) {
+test(`read-only SQLite ${reader} preserves records and detects replacement or content loss`, t => {
   const directory = temporary(t), database = path.join(directory, "synthetic.sqlite");
   const python = process.platform === "darwin" ? "/usr/bin/python3" : "python3";
   execFileSync(python, ["-c", `import sqlite3,sys
@@ -330,7 +333,10 @@ with sqlite3.connect(sys.argv[1]) as db:
  db.execute("INSERT INTO synthetic_marker VALUES ('synthetic-only', 'stable content')")
 `, database]);
   const before = fs.readFileSync(database);
-  const readStorage = () => JSON.parse(execFileSync(python, ["-c", STORAGE_PROGRAM, database], { encoding: "utf8" }));
+  const readStorage = () => JSON.parse(reader === "system_python"
+    ? execFileSync(python, ["-c", STORAGE_PROGRAM, database], { encoding: "utf8" })
+    : execFileSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--input-type=module", "-e",
+      NODE_STORAGE_PROGRAM, database], { encoding: "utf8" }));
   const first = readStorage(), second = readStorage();
   assert.deepEqual(first, second);
   assert.equal(first.quickCheck, "ok");
@@ -364,6 +370,60 @@ with sqlite3.connect(sys.argv[1]) as db:
   fails(() => verifyRestart(launch, { ...restarted, storage: readStorage() }), "restart_database_identity_changed");
   for (const key of ["marker", "version", "core", "modelConfig"])
     fails(() => verifyRestart(launch, { ...restarted, [key]: "changed" }), `restart_${key}_changed`);
+});
+}
+
+test("Node's read-only SQLite opens a clean WAL database without sidecars and rejects writes", t => {
+  const directory = temporary(t), database = path.join(directory, "wal.sqlite");
+  execFileSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--input-type=module", "-e", `
+    import {DatabaseSync} from "node:sqlite";
+    const db=new DatabaseSync(process.argv[1]);
+    db.exec("PRAGMA journal_mode=WAL; CREATE TABLE synthetic(id INTEGER PRIMARY KEY, content TEXT); INSERT INTO synthetic VALUES(1,'stable'); PRAGMA wal_checkpoint(TRUNCATE)");
+    db.close();
+  `, database]);
+  assert.equal(fs.existsSync(database + "-wal"), false);
+  assert.equal(fs.existsSync(database + "-shm"), false);
+  const before = fs.readFileSync(database);
+  const read = JSON.parse(execFileSync(process.execPath, ["--disable-warning=ExperimentalWarning",
+    "--input-type=module", "-e", NODE_STORAGE_PROGRAM, database], { encoding: "utf8" }));
+  assert.equal(read.quickCheck, "ok"); assert.equal(read.readOnly, true); assert.equal(read.queryOnly, true);
+  assert.equal(read.driver.engine, "node:sqlite");
+  assert.equal(read.persistentRecords.synthetic.length, 1);
+  execFileSync(process.execPath, ["--disable-warning=ExperimentalWarning", "--input-type=module", "-e", `
+    import assert from "node:assert/strict"; import {DatabaseSync} from "node:sqlite";
+    const db=new DatabaseSync(process.argv[1],{readOnly:true,allowExtension:false});
+    assert.throws(()=>db.exec("DELETE FROM synthetic"),/readonly|read.only/i);db.close();
+  `, database]);
+  assert.deepEqual(fs.readFileSync(database), before);
+});
+
+test("created but unregistered directories stay visible as cleanup failures while registered siblings are removed", async t => {
+  const root = temporary(t), entries = [], failures = [];
+  const directories = Object.fromEntries(["canary", "synthetic_default", "task"].map(role => {
+    const directory = path.join(root, role);
+    fs.mkdirSync(directory, { mode: 0o700 });
+    fs.writeFileSync(path.join(directory, "marker"), "synthetic-only");
+    return [role, directory];
+  }));
+  const register = (directory, options) => {
+    if (options.role === "synthetic_default")
+      throw Object.assign(new Error("private fixture text must not enter evidence"), { code: "cleanup_registration_refused" });
+    return registerCleanupDirectory(directory, options);
+  };
+  for (const role of ["canary", "task"])
+    trackAcceptanceDirectory({ directory: directories[role], role, entries, failures }, register);
+  assert.throws(() => trackAcceptanceDirectory({
+    directory: directories.synthetic_default, role: "synthetic_default", entries, failures,
+  }, register), { code: "cleanup_registration_refused" });
+  const report = acceptanceCleanupReport(await cleanupRegisteredDirectories(entries, { measureBytes: async () => 4096 }), failures);
+  assert.equal(report.status, "failed");
+  assert.equal(report.registrationFailures[0].role, "synthetic_default");
+  assert.equal(report.registrationFailures[0].status, "failed");
+  assert.ok(fs.existsSync(path.join(directories.synthetic_default, "marker")));
+  assert.equal(fs.existsSync(directories.canary), false);
+  assert.equal(fs.existsSync(directories.task), false);
+  assert.equal(JSON.stringify(report).includes(root), false);
+  assert.doesNotMatch(JSON.stringify(report), /private fixture text/u);
 });
 
 test("hdiutil plist preserves mount ownership when an image includes CFData aliases", () => {

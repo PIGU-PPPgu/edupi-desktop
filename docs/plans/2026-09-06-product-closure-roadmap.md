@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-17 R15 最新运行证据：**Linux116 AppImage前置run44004124512通过；Windows前置run44004124764在真实WebView阶段blocked；Mac117 CI2两次真实启动ready但后置只读/cleanup失败，未公开。** Windows同SID shell及匹配驱动通过，错误仍需具体诊断，清理通过；Linux不是升级验收。Mac已用真实Core复现系统Python无sidecar WAL读取失败，改包内Node只读并补逐目录身份/部分失败证据；78项及独立复审通过，待下一次真实CI。PR503已合并，正式Latest70/feed792、Core98及完整L4限制保持。
+
 2026-11-17 R15 安装验收入口：**PR501已合并4ffb2833；首次Mac CI在App启动前因验收脚本错误要求开发fixture失败，清理通过，冷启仍待验**。现按既有分发合同补精确闭包文件清单，真实117包13359运行文件及30项定向检查通过，独立复审与重跑待完成。Windows原生WebView前置脚本16项实际PowerShell／helper通过、审查P1/P2关闭，升级执行器未实现；Linux原生升级入口12项helper通过、独立复审待完成，均未实跑。7平台隔离cohort已按真实签名生成，待提交固定URL。上述源码准备不改变117仍Draft、Core98、正式70/feed792及完整L4状态。
 
 2026-11-17 R15 实际安装补证：**`.117` 三平台签名构建与整轮Draft proof成功；Windows精确NSIS安装、单实例和隔离Core通过，Linux Deb两次启动与同库回读通过；Mac最终三资产原生安全核验通过、安装待验**。签名run43967319356／源a557，Windows安装run43975180076／asset756730447；Mac最终DMG756856348，九资产指纹47068a9d。独立Mac安装入口的29项含隔离守卫检查通过，SQLite内容丢失P2已修复并独立复审，真实App冷启待CI；不证明旧客户端升级或教师GUI通过。`.116` Draft标签元数据已恢复，九项资产未改，仍Draft。详见[未验收项收口](../acceptance/2026-11-17-unverified-risk-closure.md)；Core98、正式Latest70/feed792及完整L4状态保持。

@@ -1,5 +1,7 @@
 # 自动下载安装
 
+2026-11-17 R15 最新验收：**Linux116 AppImage原生WebView前置CI通过；Windows前置在真实WebView阶段blocked，Mac117 CI2后置只读/cleanup失败，117仍Draft。** Windows同SID shell与匹配WebView2/Driver已通过，后续实际升级执行器仍未实现；Linux前置不证明升级。Mac实际两次启动/Core/投影/marker/model已观察，新Node只读探针与逐目录cleanup修补78项、独立复审通过，真实重跑待完成。失败证据不改绿，正式70/feed792和冻结资产不变。
+
 2026-11-17 R15 真实安装CI：**PR501已合并，Mac run43982417466在包内合同核对阶段失败，App启动0、临时安装与挂载清理通过**。新harness误要求未列入既有分发合同的开发fixture；修复按原闭包与fixture索引核对，同一117包13359运行文件、30项定向检查通过，独立复审和冷启重跑待完成。Windows新前置脚本16项实际PowerShell／helper与审查通过，升级执行器仍未实现；Linux入口12项helper通过、复审待完成，均待实跑。隔离cohort的7平台键绑定已构建九资产和四签名，待提交固定commit URL；不推广正式Latest70/feed792，不把上述代码检查当作实际升级通过。
 
 2026-11-17 R15 安装补证：**`.117` run43967319356三平台真实签名构建与整轮Draft proof成功；Windows NSIS run43975180076真实安装／启动／隔离Core通过，Linux Deb两次启动与同一SQLite回读通过，Mac最终三资产完整字节及原生安全核验通过**。源a557；最终DMG756856348／SHA `d39d95f8cf681cf795f35c6e8f2a3a50a077faedf2fa21de234400a1e8c0eb8f`，九资产指纹 `sha256:47068a9d6613a4fb697db202ab874466782ff342d3e7fdea94902b34428e43c4`。Mac独立安装入口29项含隔离守卫通过、SQLite内容丢失P2复审关闭，真实App冷启待CI；仍Draft447680099。`.116` tag_name异常已修复、九资产未改且未公开。完整旧客户端升级另验；正式Latest70/feed792保持。
