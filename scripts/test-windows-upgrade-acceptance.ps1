@@ -198,10 +198,29 @@ function Test-OwnedDebugEndpoint([string]$Value, [int]$Port) {
 function Get-ShellEvidence {
     Add-Type -TypeDefinition @'
 using System;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 public static class WindowsUpgradeShell {
     [DllImport("user32.dll")] public static extern IntPtr GetShellWindow();
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+    [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr OpenProcess(uint access, bool inherit, uint processId);
+    [DllImport("advapi32.dll", SetLastError=true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+    [DllImport("advapi32.dll", SetLastError=true)] static extern bool GetTokenInformation(IntPtr token, int infoClass, out int value, int length, out int returned);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    public static bool IsElevated(uint processId) {
+        // Read only: PROCESS_QUERY_LIMITED_INFORMATION and TOKEN_QUERY.
+        IntPtr process = OpenProcess(0x1000, false, processId), token = IntPtr.Zero;
+        if (process == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error());
+        try {
+            if (!OpenProcessToken(process, 0x0008, out token)) throw new Win32Exception(Marshal.GetLastWin32Error());
+            int value, returned;
+            if (!GetTokenInformation(token, 20, out value, 4, out returned)) throw new Win32Exception(Marshal.GetLastWin32Error());
+            return value != 0;
+        } finally {
+            if (token != IntPtr.Zero) CloseHandle(token);
+            CloseHandle(process);
+        }
+    }
 }
 '@
     $handle = [WindowsUpgradeShell]::GetShellWindow()
@@ -209,6 +228,7 @@ public static class WindowsUpgradeShell {
     $selfSession = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
     $result = @{ status = "blocked"; shellWindowPresent = $handle -ne [IntPtr]::Zero; shellPid = $null
         hwnd = $handle.ToInt64().ToString("x"); currentSessionId = $selfSession
+        currentTokenElevated = $null; shellTokenElevated = $null
         sidMatches = $false; sessionMatches = $false; code = "shell_window_missing" }
     if ($handle -eq [IntPtr]::Zero) { return $result }
     [uint32]$shellProcessId = 0
@@ -217,6 +237,8 @@ public static class WindowsUpgradeShell {
     $process = Get-CimInstance Win32_Process -Filter "ProcessId=$shellProcessId"
     $owner = Invoke-CimMethod -InputObject $process -MethodName GetOwnerSid
     $result.shellPid = [int]$shellProcessId
+    $result.currentTokenElevated = [WindowsUpgradeShell]::IsElevated([uint32]$PID)
+    $result.shellTokenElevated = [WindowsUpgradeShell]::IsElevated($shellProcessId)
     $result.sidMatches = $owner.ReturnValue -eq 0 -and $owner.Sid -ceq $current
     $result.sessionMatches = [int]$process.SessionId -eq $selfSession
     if ($result.sidMatches -and $result.sessionMatches) { $result.status = "passed"; $result.code = $null }
@@ -433,6 +455,31 @@ function Save-NativeDiagnostics {
         }
     )
 }
+function Read-OwnedCoreStatus {
+    $probe = @{ status = "blocked"; code = "owned_core_status_unavailable"; uiEvidence = $false }
+    $nodeIds = @($script:ownedProcesses | Where-Object {
+        [System.IO.Path]::GetFileName($_.file) -eq "node.exe" -and
+        $_.file.StartsWith($destination, [StringComparison]::OrdinalIgnoreCase) -and !($_.process.HasExited)
+    } | ForEach-Object { $_.id })
+    foreach ($listener in @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object {
+        $_.OwningProcess -in $nodeIds -and $_.LocalAddress -eq "127.0.0.1"
+    })) {
+        $origin = "http://127.0.0.1:$($listener.LocalPort)"
+        try {
+            $identity = Invoke-WebRequest -Uri "$origin/api/desktop/identity" -Headers @{ Origin = $origin } -TimeoutSec 3
+            if ($identity.StatusCode -ne 204) { continue }
+            $status = Invoke-RestMethod -Uri "$origin/api/edupi/status?summary=1" -Headers @{ Origin = $origin } -TimeoutSec 60
+            if ($status.core.status -eq "ready" -and $status.projection.status -eq "ready" -and
+                $status.compatibility.actual.coreCommit -ceq $coreCommit -and $status.externalSend -eq $false -and
+                $status.core.capabilities.g1_processor -eq "activation_pending" -and $status.core.validationMode -eq "bundled") {
+                $probe = @{ status = "passed"; coreCommit = $coreCommit; core = "ready"; projection = "ready"
+                    g1 = "activation_pending"; externalSend = $false; uiEvidence = $false }
+                break
+            }
+        } catch { }
+    }
+    $proof.independentCoreProbe = $probe
+}
 
 Save-Evidence
 try {
@@ -580,7 +627,8 @@ try {
     # discovery in the launch strategy. This is an owned 116 preflight launch,
     # never a replacement for an updater's automatic 117 restart.
     $oldApplication = Start-OwnedProcess -File $application -Environment $appEnvironment -Arguments @("--safe-mode")
-    $proof.oldLaunch = @{ version = "0.3.116"; pid = $oldApplication.Id; method = "owned_preflight_safe_mode" }
+    $proof.oldLaunch = @{ version = "0.3.116"; pid = $oldApplication.Id; method = "owned_preflight_safe_mode"
+        tokenElevated = [WindowsUpgradeShell]::IsElevated([uint32]$oldApplication.Id) }
     Set-Phase "real-webview-owned-debug-port"
     $debugReady = $false
     $deadline = [DateTime]::UtcNow.AddSeconds(120)
@@ -601,6 +649,9 @@ try {
             } catch { $proof.debugProbe.requestErrorType = $_.Exception.GetType().FullName }
         }
         Start-Sleep -Milliseconds 300
+    }
+    if (!$debugReady -and $proof.oldLaunch.tokenElevated -and $proof.shell.shellTokenElevated) {
+        throw "elevated_shell_and_host_ignore_webview_environment_overrides"
     }
     Assert-Condition $debugReady "owned_webview_debug_port_unavailable"
     Set-Phase "real-webview-config"
@@ -646,6 +697,9 @@ try {
     $diagnostic = Get-SafeDiagnostic $_ $phase
     if ($script:ownedProcesses.Count) {
         try { Save-NativeDiagnostics } catch { $proof.nativeDiagnosticError = Get-SafeDiagnostic $_ "native-diagnostics" }
+        if ($phase -eq "real-webview-owned-debug-port") {
+            try { Read-OwnedCoreStatus } catch { $proof.coreDiagnosticError = Get-SafeDiagnostic $_ "owned-core-probe" }
+        }
     }
     Add-Check $phase "blocked" @{ code = Get-SafeCode $_; diagnostic = $diagnostic }
     Write-Output (@{ status = "blocked"; diagnostic = $diagnostic } | ConvertTo-Json -Depth 10 -Compress)

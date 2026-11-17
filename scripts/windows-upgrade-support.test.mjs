@@ -295,6 +295,9 @@ test("Windows cleanup uses retained process handles without an unchecked tree ki
   const source = fs.readFileSync(new URL("./test-windows-upgrade-acceptance.ps1", import.meta.url), "utf8");
   assert.doesNotMatch(source, /taskkill|Kill\(\$true\)|Stop-Process\s+-Id/u);
   assert.match(source, /\$current = \$record\.process[\s\S]*\$current\.SafeHandle[\s\S]*\$current\.Kill\(\)/u);
+  assert.doesNotMatch(source, /AdjustTokenPrivileges|CreateRestrictedToken|EnableLUA|no-sandbox|ignore-certificate-errors|do-not-de-elevate/u);
+  assert.match(source, /OpenProcess\(0x1000, false, processId\)/u);
+  assert.match(source, /OpenProcessToken\(process, 0x0008, out token\)/u);
 });
 
 test("imports have no environment, cwd, file or process side effects", () => {
