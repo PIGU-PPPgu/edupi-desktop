@@ -346,9 +346,12 @@ function upgradeMock(config, { ack = true, download = true, modelChanged = false
   const calls = [];
   return {
     calls,
-    async attach(port) { calls.push(["attach", port]); return { browserVersion: "131.0.2903.48" }; },
+    async attach(port) { calls.push(["attach", port]); return { browserName: "webview2", browserVersion: "131.0.2903.48" }; },
     async launch() { throw new Error("must_never_launch_117"); },
-    async command(method, route, body) { calls.push([method, route, body]); },
+    async command(method, route, body) {
+      calls.push([method, route, body]);
+      if (method === "GET" && route === "/url") return "http://127.0.0.1:30141/";
+    },
     async wait(read, code) { const value = await read(); if (!value) throw new Error(code); return value; },
     async visible() { return { "element-6066-11e4-a52e-4f735466cecf": "synthetic" }; },
     async click(css, text) {
@@ -358,6 +361,13 @@ function upgradeMock(config, { ack = true, download = true, modelChanged = false
     async screenshot(_directory, name) { calls.push(["screenshot", name]); },
     async close() { calls.push(["close"]); },
     async execute(script, args) {
+      if (script.includes("width:innerWidth")) return { width: 1440, height: 900 };
+      if (script.includes("Math.round(r.x")) return { x: 300, y: 400, before: 284, beforeWidth: 284, max: 480, min: 200 };
+      if (script.includes("events:window.__windowsUpgradePointer")) {
+        const { after, saved, events, afterWidth } = pointerProof();
+        return { after, saved, events, afterWidth };
+      }
+      if (script.includes("draftRestored:input.value")) return { restored: 344, restoredWidth: 344, draftRestored: true };
       if (script.includes("return window.__windowsUpgradeObserved")) {
         if (ack) fs.writeFileSync(config.ackFile, JSON.stringify({ oldPid: config.expectedPid, oldExited: true, installerVerified: true }));
         return { downloading: download, verifying: false, installing: true, error: uiError };
@@ -388,6 +398,30 @@ function upgradeMock(config, { ack = true, download = true, modelChanged = false
 }
 const storageMock = async () => ({ readOnly: true, quickCheck: "ok", fileIdentity: ["1", "2", "3"], schemaSha256: "schema",
   userVersion: "1", persistentRecords: { authority: [["root", "hash"]], events: [["synthetic-context", "hash"]] } });
+
+test("preflight screenshots survive the upgrade trigger in the same evidence directory", async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "windows-upgrade-screenshot-stages-test-"));
+  t.after(() => fs.rmSync(directory, { force: true, recursive: true }));
+  const input = { ...config, dataRoot: path.join(directory, "canary"), expectedVersion: OLD.version,
+    runtimeVersion: "131.0.2903.48", evidenceDir: directory, baselineFile: path.join(directory, "baseline.json"),
+    triggerFile: path.join(directory, "trigger.json"), ackFile: path.join(directory, "ack.json"),
+    target: { status: "passed", ...TARGET }, pollMs: 1, timeoutMs: 1000 };
+  const driver = upgradeMock(input);
+  const png = Buffer.from("89504e470d0a1a0a0000000049454e44ae426082", "hex");
+  const command = driver.command.bind(driver);
+  driver.command = async (method, route, body) => method === "GET" && route === "/screenshot"
+    ? png.toString("base64") : command(method, route, body);
+  driver.screenshot = W3CDriver.prototype.screenshot;
+  const preflight = await runWebViewPreflight(input, driver);
+  assert.equal(preflight.status, "passed", JSON.stringify(preflight));
+  const before = fs.readFileSync(path.join(directory, "windows-upgrade-old-about.png"));
+  const trigger = await requestUiUpgrade(input, driver, storageMock);
+  assert.equal(trigger.status, "passed", JSON.stringify(trigger));
+  assert.equal(trigger.uiContinueClicked, true);
+  assert.deepEqual(fs.readFileSync(path.join(directory, "windows-upgrade-old-about.png")), before);
+  assert.deepEqual(fs.readFileSync(path.join(directory, "windows-upgrade-old-trigger-about.png")), png);
+  assert.deepEqual(fs.readFileSync(path.join(directory, "windows-upgrade-ui-target.png")), png);
+});
 
 test("upgrade orchestration clicks old UI, observes native exit, then only attaches new PID and reads the same objects", async t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "windows-upgrade-ui-test-"));

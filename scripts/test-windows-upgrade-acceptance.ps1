@@ -30,6 +30,7 @@ $edgeDriver = $null
 $debugPort = $null
 $profileJournal = $null
 $profileLease = $null
+$resourceJournal = $null
 $script:upgradeInstaller = $null
 $script:newApplication = $null
 $script:upgradeBoundary = $null
@@ -130,6 +131,9 @@ function Add-Check([string]$Name, [string]$Status, $Details) {
 function New-PrivateDirectory([string]$Path) {
     Assert-NoReparseAncestor $Path
     Assert-Condition (!(Test-Path -LiteralPath $Path)) "exclusive_task_directory_required"
+    # Persist intent before creating anything, including before the ACL/marker.
+    $resourceJournal.directories = @($resourceJournal.directories) + @($Path)
+    Save-ProfileJournal $resourceJournal (Join-Path $env:WINDOWS_UPGRADE_DOWNLOAD_DIR "resource-recovery.json")
     New-Item -ItemType Directory -Path $Path | Out-Null
     $script:ownedDirectories.Add($Path)
     $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -166,7 +170,7 @@ function Get-CurrentUserSid { return [System.Security.Principal.WindowsIdentity]
 function Read-UserEnvironment([string]$Name) {
     $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $false)
     try {
-        $original = if ($key) { @($key.GetValueNames() | Where-Object { $_ -ieq $Name }) } else { @() }
+        $original = @(if ($key) { $key.GetValueNames() | Where-Object { $_ -ieq $Name } })
         if (!$original.Count) { return @{ name = $Name; exists = $false; kind = $null; value = $null } }
         Assert-Condition ($original.Count -eq 1) "ambiguous_profile_environment"
         return @{ name = $original[0]; exists = $true; kind = [int]$key.GetValueKind($original[0])
@@ -245,6 +249,23 @@ function Save-ProfileJournal($Journal, [string]$File) {
     # worker is interrupted while checkpointing process identities.
     [IO.File]::Move($temporary, $File, $true)
 }
+function Start-ResourceJournal([string]$Directory) {
+    foreach ($name in @("resource-recovery.json", "user-environment-backup.json")) {
+        Assert-Condition (!(Test-Path -LiteralPath (Join-Path $Directory $name)) -and
+            !(Test-Path -LiteralPath (Join-Path $Directory "$name.next"))) "existing_recovery_journal_refused"
+    }
+    $leasePath = Join-Path $env:USERPROFILE ".edupi-windows-upgrade-env.lock"
+    Assert-NoReparseAncestor $leasePath
+    $script:profileLease = [IO.FileStream]::new($leasePath, [IO.FileMode]::CreateNew, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    $bytes = [Text.Encoding]::UTF8.GetBytes("$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT")
+    $script:profileLease.Write($bytes, 0, $bytes.Length)
+    $script:profileLease.Flush($true)
+    $script:resourceJournal = @{ schemaVersion = 1; runId = $env:GITHUB_RUN_ID; attempt = $env:GITHUB_RUN_ATTEMPT
+        sid = Get-CurrentUserSid; sessionId = [Diagnostics.Process]::GetCurrentProcess().SessionId
+        status = "active"; environmentStarted = $false; installation = "not_started"; processStartPending = $false
+        taskRoot = $taskRoot; canaryRoot = $canaryRoot; destination = $destination; processes = @(); directories = @() }
+    Save-ProfileJournal $resourceJournal (Join-Path $Directory "resource-recovery.json")
+}
 function Start-ProfileEnvironment([hashtable]$Values, [string]$File) {
     $names = @(Get-ProfileEnvironmentNames)
     Assert-Condition ($Values.Count -eq $names.Count -and @($Values.Keys | Where-Object { $_ -cnotin $names }).Count -eq 0) "unexpected_profile_environment_key"
@@ -256,6 +277,8 @@ function Start-ProfileEnvironment([hashtable]$Values, [string]$File) {
     Save-ProfileJournal $journal $File
     # Caller retains this journal even if a partial write or broadcast fails.
     $script:profileJournal = $journal
+    $resourceJournal.environmentStarted = $true
+    Save-ProfileJournal $resourceJournal (Join-Path ([IO.Path]::GetDirectoryName($File)) "resource-recovery.json")
     foreach ($name in $names) {
         Write-UserEnvironment @{ name = $name; exists = $true; kind = [int][Microsoft.Win32.RegistryValueKind]::String; value = $Values[$name] }
     }
@@ -285,11 +308,17 @@ function Restore-ProfileEnvironment($Journal, [string]$File) {
     catch { $Journal.status = $previous; throw }
 }
 function Save-RecoveryProcesses {
-    if (!$profileJournal) { return }
-    $profileJournal.processes = @($script:ownedProcesses | ForEach-Object {
+    $processes = @($script:ownedProcesses | ForEach-Object {
         @{ id = $_.id; started = $_.started.ToString("o"); file = $_.file }
     })
-    Save-ProfileJournal $profileJournal (Join-Path $env:WINDOWS_UPGRADE_DOWNLOAD_DIR "user-environment-backup.json")
+    if (Get-Variable -Name resourceJournal -ValueOnly -ErrorAction SilentlyContinue) {
+        $resourceJournal.processes = $processes
+        Save-ProfileJournal $resourceJournal (Join-Path $env:WINDOWS_UPGRADE_DOWNLOAD_DIR "resource-recovery.json")
+    }
+    if (Get-Variable -Name profileJournal -ValueOnly -ErrorAction SilentlyContinue) {
+        $profileJournal.processes = $processes
+        Save-ProfileJournal $profileJournal (Join-Path $env:WINDOWS_UPGRADE_DOWNLOAD_DIR "user-environment-backup.json")
+    }
 }
 function Remove-RecoveryDirectories($Journal) {
     $directories = @($Journal.directories)
@@ -304,42 +333,98 @@ function Remove-RecoveryDirectories($Journal) {
                 "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT") "recovery_cleanup_marker_mismatch"
             Remove-Item -LiteralPath $directory -Recurse -Force
         }
+        Assert-Condition (!(Test-Path -LiteralPath $directory)) "recovery_directory_cleanup_incomplete"
+    }
+}
+function Assert-NoUpgradeInstallation([string]$Code) {
+    foreach ($registryRoot in @("HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall",
+        "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall",
+        "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall")) {
+        if (!(Test-Path -LiteralPath $registryRoot)) { continue }
+        foreach ($key in @(Get-ChildItem -LiteralPath $registryRoot -ErrorAction Stop)) {
+            $entry = Get-ItemProperty -LiteralPath $key.PSPath
+            Assert-Condition (!$entry.PSObject.Properties["DisplayName"] -or $entry.DisplayName -cne "EduPi") $Code
+        }
+    }
+    foreach ($folder in @("Desktop", "CommonDesktopDirectory", "Programs", "CommonPrograms")) {
+        $location = [Environment]::GetFolderPath([Environment+SpecialFolder]::$folder)
+        if ($location) {
+            Assert-Condition (!(Test-Path -LiteralPath (Join-Path $location "EduPi.lnk")) -and
+                !(Test-Path -LiteralPath (Join-Path $location "EduPi"))) $Code
+        }
     }
 }
 function Recover-ProfileEnvironment([string]$Directory) {
+    $resourceFile = Join-Path $Directory "resource-recovery.json"
+    Assert-Condition (Test-Path -LiteralPath $resourceFile -PathType Leaf) "resource_recovery_journal_missing"
+    $resources = Get-Content -LiteralPath $resourceFile -Raw | ConvertFrom-Json -AsHashtable
+    foreach ($name in @("schemaVersion", "runId", "attempt", "sid", "sessionId", "status", "environmentStarted",
+        "installation", "processStartPending", "taskRoot", "canaryRoot", "destination", "processes", "directories")) {
+        Assert-Condition ($resources.ContainsKey($name) -and $null -ne $resources[$name]) "resource_recovery_journal_incomplete"
+    }
+    Assert-Condition ($resources.schemaVersion -eq 1 -and $resources.runId -ceq $env:GITHUB_RUN_ID -and
+        $resources.attempt -ceq $env:GITHUB_RUN_ATTEMPT -and $resources.sid -ceq (Get-CurrentUserSid) -and
+        $resources.sessionId -eq [Diagnostics.Process]::GetCurrentProcess().SessionId) "resource_recovery_identity_mismatch"
+    Assert-Condition ($resources.status -cin @("active", "restored") -and
+        $resources.installation -cin @("not_started", "started", "removed") -and
+        $resources.environmentStarted -is [bool] -and $resources.processStartPending -is [bool] -and $resources.processes -is [array] -and
+        $resources.directories -is [array]) "resource_recovery_state_invalid"
+    Assert-Condition (!$resources.processStartPending) "resource_process_start_uncheckpointed"
+    Assert-Condition ([IO.Path]::GetDirectoryName($resources.taskRoot) -eq $env:USERPROFILE -and
+        [IO.Path]::GetFileName($resources.taskRoot) -cmatch '^edupi-windows-upgrade-[a-f0-9]{32}$' -and
+        [IO.Path]::GetDirectoryName($resources.canaryRoot) -eq $env:USERPROFILE -and
+        [IO.Path]::GetFileName($resources.canaryRoot) -cmatch '^edupi-route1-canary-windows-upgrade-[a-f0-9]{32}$' -and
+        $resources.destination -ceq (Join-Path $resources.taskRoot "application")) "profile_recovery_private_path_mismatch"
+    $allowed = @($resources.taskRoot, $resources.canaryRoot,
+        (Join-Path $env:APPDATA "com.abcwyc.pi-agent"), (Join-Path $env:LOCALAPPDATA "com.abcwyc.pi-agent"))
+    foreach ($ownedDirectory in $resources.directories) {
+        Assert-Condition ($ownedDirectory -in $allowed) "recovery_cleanup_path_refused"
+        Assert-NoReparseAncestor $ownedDirectory
+        if (Test-Path -LiteralPath $ownedDirectory) {
+            Assert-Condition ((Get-Content -LiteralPath (Join-Path $ownedDirectory ".windows-upgrade-owned") -Raw) -ceq
+                "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT") "recovery_cleanup_marker_mismatch"
+        }
+    }
+    Assert-Condition (($resources.installation -ceq "not_started" -and !$resources.environmentStarted) -or
+        $resources.taskRoot -in $resources.directories) "resource_recovery_task_ownership_missing"
     $file = Join-Path $Directory "user-environment-backup.json"
-    if (!(Test-Path -LiteralPath $file)) { return }
-    $journal = Get-Content -LiteralPath $file -Raw | ConvertFrom-Json -AsHashtable
-    Assert-Condition ($journal.schemaVersion -eq 1 -and $journal.runId -ceq $env:GITHUB_RUN_ID -and
-        $journal.attempt -ceq $env:GITHUB_RUN_ATTEMPT -and
-        $journal.sid -ceq (Get-CurrentUserSid)) "profile_recovery_identity_mismatch"
-    Assert-Condition (@($journal.entries).Count -eq @(Get-ProfileEnvironmentNames).Count -and
-        @($journal.entries | Where-Object { $_.name -notin (Get-ProfileEnvironmentNames) }).Count -eq 0 -and
-        @($journal.entries.name | Sort-Object -Unique).Count -eq @(Get-ProfileEnvironmentNames).Count) "profile_recovery_keys_mismatch"
+    $journal = $null
+    Assert-Condition ((Test-Path -LiteralPath $file) -or
+        !(Test-Path -LiteralPath "$file.next")) "profile_recovery_journal_incomplete"
+    if (Test-Path -LiteralPath $file) {
+        $journal = Get-Content -LiteralPath $file -Raw | ConvertFrom-Json -AsHashtable
+        Assert-Condition ($journal.schemaVersion -eq 1 -and $journal.runId -ceq $resources.runId -and
+            $journal.attempt -ceq $resources.attempt -and $journal.sid -ceq $resources.sid -and
+            $journal.taskRoot -ceq $resources.taskRoot -and $journal.canaryRoot -ceq $resources.canaryRoot -and
+            $journal.destination -ceq $resources.destination) "profile_recovery_identity_mismatch"
+        Assert-Condition ($journal.status -cin @("prepared", "active", "restored") -and
+            @($journal.entries).Count -eq @(Get-ProfileEnvironmentNames).Count -and
+            @($journal.entries | Where-Object { $_.name -notin (Get-ProfileEnvironmentNames) }).Count -eq 0 -and
+            @($journal.entries.name | Sort-Object -Unique).Count -eq @(Get-ProfileEnvironmentNames).Count) "profile_recovery_keys_mismatch"
+    }
+    Assert-Condition (!$resources.environmentStarted -or $null -ne $journal) "profile_recovery_journal_missing"
     $leasePath = Join-Path $env:USERPROFILE ".edupi-windows-upgrade-env.lock"
-    if ($journal.status -ceq "restored") {
+    if ($resources.status -ceq "restored") {
+        Assert-Condition ($resources.installation -cne "started" -and (!$journal -or $journal.status -ceq "restored") -and
+            @($resources.directories | Where-Object { Test-Path -LiteralPath $_ }).Count -eq 0) "resource_recovery_incomplete"
+        Assert-NoUpgradeInstallation "recovery_installation_remains"
         if (Test-Path -LiteralPath $leasePath) {
             Assert-Condition ((Get-Content -LiteralPath $leasePath -Raw) -ceq "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT") "profile_lease_identity_mismatch"
             Remove-Item -LiteralPath $leasePath -Force
         }
-        Remove-RecoveryDirectories $journal
         return
     }
-    Assert-Condition ([IO.Path]::GetDirectoryName($journal.taskRoot) -eq $env:USERPROFILE -and
-        [IO.Path]::GetFileName($journal.taskRoot) -cmatch '^edupi-windows-upgrade-[a-f0-9]{32}$' -and
-        [IO.Path]::GetDirectoryName($journal.canaryRoot) -eq $env:USERPROFILE -and
-        [IO.Path]::GetFileName($journal.canaryRoot) -cmatch '^edupi-route1-canary-windows-upgrade-[a-f0-9]{32}$' -and
-        $journal.destination -ceq (Join-Path $journal.taskRoot "application")) "profile_recovery_private_path_mismatch"
-    Assert-NoReparseAncestor $journal.taskRoot
+    Assert-NoReparseAncestor $resources.taskRoot
     # Opening the lease with FileShare.None proves the owning step has ended.
     $lease = [IO.FileStream]::new($leasePath, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
     try {
         $reader = [IO.StreamReader]::new($lease, [Text.Encoding]::UTF8, $true, 1024, $true)
         try { Assert-Condition ($reader.ReadToEnd() -ceq "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT") "profile_lease_identity_mismatch" }
         finally { $reader.Dispose() }
-        $script:destination = $journal.destination
-        $script:taskRoot = $journal.taskRoot
-        foreach ($record in $journal.processes) {
+        $script:destination = $resources.destination
+        $script:taskRoot = $resources.taskRoot
+        $script:resourceJournal = $resources
+        foreach ($record in $resources.processes) {
             $running = Get-Process -Id $record.id -ErrorAction SilentlyContinue
             if (!$running) { continue }
             [void]$running.SafeHandle
@@ -351,7 +436,7 @@ function Recover-ProfileEnvironment([string]$Directory) {
         # handle and recheck birth/path for every process in the exclusive task
         # install/TEMP. Other executables require the saved exact identity.
         foreach ($row in @(Get-CimInstance Win32_Process)) {
-            if (!$row.ExecutablePath -or !$row.ExecutablePath.StartsWith($journal.taskRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { continue }
+            if (!$row.ExecutablePath -or !$row.ExecutablePath.StartsWith($resources.taskRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { continue }
             $running = Get-Process -Id $row.ProcessId -ErrorAction SilentlyContinue
             if (!$running) { continue }
             [void]$running.SafeHandle
@@ -361,15 +446,25 @@ function Recover-ProfileEnvironment([string]$Directory) {
         }
         Stop-TaskProcesses
         $uninstallerPath = Join-Path $destination "uninstall.exe"
-        if (Test-Path -LiteralPath $uninstallerPath) {
+        if ($resources.installation -ceq "started") {
+            Assert-Condition (Test-Path -LiteralPath $uninstallerPath -PathType Leaf) "recovery_private_uninstaller_missing"
             $uninstaller = Start-OwnedProcess -File $uninstallerPath -Environment (Get-BaseEnvironment) -RawArguments "/S _?=$destination"
             Wait-OwnedProcess $uninstaller 120 "recovery_private_uninstaller_failed"
             Stop-TaskProcesses
+            Assert-NoUpgradeInstallation "recovery_installation_remains"
+            $resources.installation = "removed"
+            Save-ProfileJournal $resources $resourceFile
+        } else {
+            Assert-Condition ($resources.installation -ceq "removed" -or
+                !(Test-Path -LiteralPath $uninstallerPath)) "resource_recovery_installation_conflict"
+            Assert-NoUpgradeInstallation "recovery_installation_remains"
         }
-        Restore-ProfileEnvironment $journal $file
+        if ($journal) { Restore-ProfileEnvironment $journal $file }
+        Remove-RecoveryDirectories $resources
+        $resources.status = "restored"
+        Save-ProfileJournal $resources $resourceFile
     } finally { $lease.Dispose() }
     Remove-Item -LiteralPath $leasePath -Force
-    Remove-RecoveryDirectories $journal
 }
 function Get-ApplicationExecutable([ValidateSet("node", "cargo")][string]$Name) {
     $candidates = @(Get-Command -Name $Name -CommandType Application)
@@ -392,6 +487,12 @@ function Start-OwnedProcess([string]$File, [string[]]$Arguments, [hashtable]$Env
     foreach ($entry in $Environment.GetEnumerator()) { $info.Environment[$entry.Key] = $entry.Value }
     if ($RawArguments) { $info.Arguments = $RawArguments }
     else { foreach ($argument in $Arguments) { $info.ArgumentList.Add($argument) } }
+    if (Get-Variable -Name resourceJournal -ValueOnly -ErrorAction SilentlyContinue) {
+        # A worker can be terminated between Process.Start and saving the
+        # exact PID/birth/path. Such a launch must never look quiescent.
+        $resourceJournal.processStartPending = $true
+        Save-ProfileJournal $resourceJournal (Join-Path $env:WINDOWS_UPGRADE_DOWNLOAD_DIR "resource-recovery.json")
+    }
     $process = [System.Diagnostics.Process]::Start($info)
     [void]$process.SafeHandle
     $record = @{
@@ -400,7 +501,9 @@ function Start-OwnedProcess([string]$File, [string[]]$Arguments, [hashtable]$Env
         stdout = $process.StandardOutput.ReadToEndAsync(); stderr = $process.StandardError.ReadToEndAsync()
     }
     $script:ownedProcesses.Add($record)
-    if (Get-Variable -Name profileJournal -ValueOnly -ErrorAction SilentlyContinue) { Save-RecoveryProcesses }
+    if (Get-Variable -Name resourceJournal -ValueOnly -ErrorAction SilentlyContinue) { $resourceJournal.processStartPending = $false }
+    if ((Get-Variable -Name resourceJournal -ValueOnly -ErrorAction SilentlyContinue) -or
+        (Get-Variable -Name profileJournal -ValueOnly -ErrorAction SilentlyContinue)) { Save-RecoveryProcesses }
     return $process
 }
 function Start-OldApplication {
@@ -954,21 +1057,7 @@ try {
     # existing EduPi installation/state rather than disturb its registry,
     # native preferences or teacher profile. No process is killed by name.
     Assert-Condition (@(Get-Process -Name "pi-agent-desktop" -ErrorAction SilentlyContinue).Count -eq 0) "existing_edupi_process_refused"
-    foreach ($registryRoot in @("HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall",
-        "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall",
-        "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall")) {
-        foreach ($key in @(Get-ChildItem -LiteralPath $registryRoot -ErrorAction SilentlyContinue)) {
-            $entry = Get-ItemProperty -LiteralPath $key.PSPath
-            if ($entry.PSObject.Properties["DisplayName"] -and $entry.DisplayName -ceq "EduPi") { throw "existing_edupi_installation_refused" }
-        }
-    }
-    foreach ($folder in @("Desktop", "CommonDesktopDirectory", "Programs", "CommonPrograms")) {
-        $location = [Environment]::GetFolderPath([Environment+SpecialFolder]::$folder)
-        if ($location) {
-            Assert-Condition (!(Test-Path -LiteralPath (Join-Path $location "EduPi.lnk")) -and
-                !(Test-Path -LiteralPath (Join-Path $location "EduPi"))) "existing_edupi_shortcut_refused"
-        }
-    }
+    Assert-NoUpgradeInstallation "existing_edupi_installation_or_shortcut_refused"
     $id = [guid]::NewGuid().ToString("N")
     $taskRoot = Join-Path $env:USERPROFILE "edupi-windows-upgrade-$id"
     $canaryRoot = Join-Path $env:USERPROFILE "edupi-route1-canary-windows-upgrade-$id"
@@ -977,6 +1066,11 @@ try {
     $drive = Get-PSDrive -Name ([System.IO.Path]::GetPathRoot($taskRoot).Substring(0, 1))
     $proof.disk = @{ freeBeforeBytes = $drive.Free }
     Assert-Condition ($drive.Free -gt 4GB) "insufficient_private_install_space"
+    $destination = Join-Path $taskRoot "application"
+    $sid = Get-CurrentUserSid
+    & (Join-Path $env:SystemRoot "System32/icacls.exe") $downloadDir "/inheritance:r" "/grant:r" "*${sid}:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" | Out-Null
+    Assert-Condition ($LASTEXITCODE -eq 0) "profile_journal_directory_acl_failed"
+    Start-ResourceJournal $downloadDir
     New-PrivateDirectory $taskRoot
     New-PrivateDirectory $canaryRoot
     New-Item -ItemType Directory -Path (Join-Path $taskRoot "temp") | Out-Null
@@ -1021,7 +1115,8 @@ try {
         appEnvironmentKeys = @($appEnvironment.Keys | Sort-Object); seededViaApi = $false; realModels = $false }
 
     $phase = "install-116"
-    $destination = Join-Path $taskRoot "application"
+    $resourceJournal.installation = "started"
+    Save-ProfileJournal $resourceJournal (Join-Path $downloadDir "resource-recovery.json")
     # NSIS requires /D to be last and unquoted. This is a native process
     # command line, never a shell expression. Paths are task allocated.
     $installation = Start-OwnedProcess -File $installer -Environment $appEnvironment -RawArguments "/S /D=$destination"
@@ -1039,17 +1134,8 @@ try {
     $appEnvironment.WEBVIEW2_BROWSER_EXECUTABLE_FOLDER = $webview.folder
     if ($Mode -ceq "upgrade") {
         Set-Phase "profile-environment-set"
-        $leasePath = Join-Path $env:USERPROFILE ".edupi-windows-upgrade-env.lock"
-        Assert-NoReparseAncestor $leasePath
-        $profileLease = [IO.FileStream]::new($leasePath, [IO.FileMode]::CreateNew, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
-        $leaseBytes = [Text.Encoding]::UTF8.GetBytes("$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT")
-        $profileLease.Write($leaseBytes, 0, $leaseBytes.Length)
-        $profileLease.Flush($true)
         $values = @{}
         foreach ($name in (Get-ProfileEnvironmentNames)) { $values[$name] = $appEnvironment[$name] }
-        $sid = Get-CurrentUserSid
-        & (Join-Path $env:SystemRoot "System32/icacls.exe") $downloadDir "/inheritance:r" "/grant:r" "*${sid}:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" | Out-Null
-        Assert-Condition ($LASTEXITCODE -eq 0) "profile_journal_directory_acl_failed"
         $profileJournal = Start-ProfileEnvironment $values (Join-Path $downloadDir "user-environment-backup.json")
         $proof.profileEnvironment = @{ changed = $true; setReadback = "passed"; broadcast = "passed"
             upgradeInheritanceTested = $false; rawBackupUploaded = $false }
@@ -1254,11 +1340,19 @@ try {
 } finally {
     $cleanupErrors = [System.Collections.Generic.List[string]]::new()
     try { Stop-TaskProcesses } catch { $cleanupErrors.Add((Get-SafeCode $_)) }
-    if ($destination -and (Test-Path -LiteralPath (Join-Path $destination "uninstall.exe"))) {
+    if ($resourceJournal -and $resourceJournal.processStartPending) { $cleanupErrors.Add("resource_process_start_uncheckpointed") }
+    if ($cleanupErrors.Count -eq 0 -and $destination -and (Test-Path -LiteralPath (Join-Path $destination "uninstall.exe"))) {
         try {
             $uninstaller = Start-OwnedProcess -File (Join-Path $destination "uninstall.exe") -Environment $appEnvironment -RawArguments "/S _?=$destination"
             Wait-OwnedProcess $uninstaller 120 "private_uninstaller_failed"
+            Stop-TaskProcesses
+            Assert-NoUpgradeInstallation "private_installation_remains"
+            $resourceJournal.installation = "removed"
+            Save-ProfileJournal $resourceJournal (Join-Path $env:WINDOWS_UPGRADE_DOWNLOAD_DIR "resource-recovery.json")
         } catch { $cleanupErrors.Add((Get-SafeCode $_)) }
+    } elseif ($resourceJournal -and $resourceJournal.installation -ceq "started" -and
+        !(Test-Path -LiteralPath (Join-Path $destination "uninstall.exe"))) {
+        $cleanupErrors.Add("private_uninstaller_missing")
     }
     try { Stop-TaskProcesses } catch { $cleanupErrors.Add((Get-SafeCode $_)) }
     $remaining = @($script:ownedProcesses | ForEach-Object {
@@ -1284,13 +1378,6 @@ try {
             $cleanupErrors.Add("profile_restore_requires_stopped_owned_processes")
         }
     }
-    if ($profileLease) {
-        $profileLease.Dispose()
-        if (!$profileJournal -or $profileJournal.status -ceq "restored") {
-            try { Remove-Item -LiteralPath (Join-Path $env:USERPROFILE ".edupi-windows-upgrade-env.lock") -Force }
-            catch { $cleanupErrors.Add("profile_lease_cleanup_failed") }
-        }
-    }
     if ($remaining.Count -eq 0 -and $cleanupErrors.Count -eq 0) {
         $removed = [System.Collections.Generic.List[string]]::new()
         $directories = @($script:ownedDirectories.ToArray())
@@ -1298,12 +1385,32 @@ try {
         foreach ($directory in $directories) {
             try {
                 Assert-NoReparseAncestor $directory
-                if (Test-Path -LiteralPath $directory) { Remove-Item -LiteralPath $directory -Recurse -Force }
+                if (Test-Path -LiteralPath $directory) {
+                    Assert-Condition ((Get-Content -LiteralPath (Join-Path $directory ".windows-upgrade-owned") -Raw) -ceq
+                        "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT") "recovery_cleanup_marker_mismatch"
+                    Remove-Item -LiteralPath $directory -Recurse -Force
+                }
                 Assert-Condition (!(Test-Path -LiteralPath $directory)) "owned_directory_cleanup_incomplete"
                 $removed.Add($directory.Replace($env:USERPROFILE, "<userprofile>").Replace($env:LOCALAPPDATA, "<localappdata>").Replace($env:APPDATA, "<appdata>"))
             } catch { $cleanupErrors.Add((Get-SafeCode $_)) }
         }
         $proof.cleanup.removed = @($removed)
+    }
+    if ($resourceJournal -and $remaining.Count -eq 0 -and $cleanupErrors.Count -eq 0) {
+        try {
+            # Include interrupted directory creation intents, not just the
+            # directories whose creation returned successfully.
+            Remove-RecoveryDirectories $resourceJournal
+            $resourceJournal.status = "restored"
+            Save-ProfileJournal $resourceJournal (Join-Path $env:WINDOWS_UPGRADE_DOWNLOAD_DIR "resource-recovery.json")
+        } catch { $cleanupErrors.Add((Get-SafeCode $_)) }
+    }
+    if ($profileLease) {
+        $profileLease.Dispose()
+        if ($cleanupErrors.Count -eq 0 -and (!$resourceJournal -or $resourceJournal.status -ceq "restored")) {
+            try { Remove-Item -LiteralPath (Join-Path $env:USERPROFILE ".edupi-windows-upgrade-env.lock") -Force }
+            catch { $cleanupErrors.Add("profile_lease_cleanup_failed") }
+        }
     }
     $proof.cleanup.errors = @($cleanupErrors)
     $proof.cleanup.status = if ($remaining.Count -eq 0 -and $cleanupErrors.Count -eq 0) { "passed" } else { "failed" }

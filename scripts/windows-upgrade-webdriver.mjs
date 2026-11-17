@@ -270,7 +270,7 @@ async function checkDragAndDraft(driver, config) {
   return { status: "passed", input: "W3C pointer mouse and element value", ...result, draftSent: false, reload: true };
 }
 
-async function checkAbout(driver, config) {
+async function checkAbout(driver, config, screenshotName) {
   const expected = config.expectedVersion ?? OLD.version;
   await driver.click('button[aria-label="设置"], button[aria-label="教师设置"]');
   await driver.click('nav[aria-label="设置分类"] button', "关于与更新");
@@ -280,7 +280,7 @@ async function checkAbout(driver, config) {
     const pattern=new RegExp("(?:^|[^0-9])"+arguments[0].replaceAll(".","\\\\.")+"(?:[^0-9]|$)");
     return pattern.test(p.innerText) ? arguments[0] : null;
   `, [expected]), "settings_expected_version_not_visible", 30);
-  await driver.screenshot(config.evidenceDir, expected === OLD.version ? "windows-upgrade-old-about.png" : "windows-upgrade-new-about.png");
+  await driver.screenshot(config.evidenceDir, screenshotName);
   return { status: "passed", page: "关于与更新", version, upgradeClicked: false };
 }
 
@@ -327,7 +327,7 @@ export async function runWebViewPreflight(config, driver = new W3CDriver(config.
     proof.checks.push({ name: proof.phase, ...await checkDragAndDraft(driver, config) });
     save();
     proof.phase = "settings-version";
-    proof.checks.push({ name: proof.phase, ...await checkAbout(driver, config) });
+    proof.checks.push({ name: proof.phase, ...await checkAbout(driver, config, "windows-upgrade-old-about.png") });
     proof.status = "passed";
     proof.phase = "complete";
   } catch (error) {
@@ -588,7 +588,7 @@ export async function requestUiUpgrade(config, driver = new W3CDriver(config.end
     proof.seededViaApi = true;
     proof.baseline = { contextIdSha256: digest(data.context.contextId), modelSha256: digest(canonical(data.model)),
       markerSha256: baseline.markerFile.sha256, sqlReadOnly: true };
-    await checkAbout(driver, config);
+    await checkAbout(driver, config, "windows-upgrade-old-trigger-about.png");
     proof.phase = "old-ui-check-update"; save();
     await driver.click('[data-setting-id="updates"] .app-settings-row__control button.native-button:not(.native-button-primary)');
     await driver.wait(() => driver.execute(`
@@ -696,7 +696,7 @@ export async function verifyUpgradedWebView(config, driver = new W3CDriver(confi
       contextIdSha256: digest(before.context.contextId), modelSha256: digest(canonical(after.model)),
       markerSha256: after.markerFile.sha256, sqlSchemaSha256: database.schemaSha256 };
     await dismissWelcome(driver);
-    await checkAbout(driver, config);
+    await checkAbout(driver, config, "windows-upgrade-new-about.png");
     proof.status = "passed"; proof.phase = "complete";
   } catch (error) {
     proof.code = safeCode(error);

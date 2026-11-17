@@ -171,7 +171,7 @@ test("actual PowerShell outcome, environment whitelist and PID tracking function
     $tokens = $null; $parseErrors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:WINDOWS_UPGRADE_PS_FILE, [ref]$tokens, [ref]$parseErrors)
     if ($parseErrors.Count) { throw "parse failed" }
-    foreach ($name in @("Assert-Condition", "Get-SafeDiagnostic", "Get-AcceptanceOutcome", "Get-BaseEnvironment", "Get-ApplicationExecutable", "Start-OwnedProcess", "Test-OwnedDebugEndpoint", "Test-CimProcessIdentity", "Capture-OwnedDescendants", "Get-EdgeDriverCandidates")) {
+    foreach ($name in @("Assert-Condition", "Get-SafeDiagnostic", "Get-AcceptanceOutcome", "Get-BaseEnvironment", "Get-ApplicationExecutable", "Start-OwnedProcess", "Save-ProfileJournal", "Save-RecoveryProcesses", "Test-OwnedDebugEndpoint", "Test-CimProcessIdentity", "Capture-OwnedDescendants", "Get-EdgeDriverCandidates")) {
       $function = $ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name}, $true)
       if (!$function) { throw "missing function" }
       Invoke-Expression $function.Extent.Text
@@ -209,11 +209,19 @@ test("actual PowerShell outcome, environment whitelist and PID tracking function
         $broken = Get-SafeDiagnostic $_ "resolver-regression"
         if (!@($broken.exceptions | Where-Object {$_.nativeErrorCode -eq 2}).Count) { throw "old file-not-found failure was not reproduced" }
       }
+      $env:WINDOWS_UPGRADE_DOWNLOAD_DIR=$taskRoot
+      $script:resourceJournal=@{processStartPending=$false;processes=@()}
       $child = Start-OwnedProcess -File $chosen -Arguments @("--version") -Environment @{}
       if (!$child.WaitForExit(10000) -or $child.ExitCode -ne 0) { throw "resolved Node did not start" }
       if ($script:ownedProcesses[0].stdout.Result -cnotmatch '^v[0-9]+\\.') { throw "resolved Node output missing" }
       $child.Dispose()
-    } finally { [System.IO.Directory]::Delete($taskRoot) }
+      $file=Join-Path $taskRoot "resource-recovery.json"
+      $saved=Get-Content -LiteralPath $file -Raw | ConvertFrom-Json
+      if($saved.processStartPending -or @($saved.processes).Count -ne 1){throw "started process identity was not checkpointed"}
+      try{Start-OwnedProcess -File "$chosen-synthetic-missing" -Arguments @() -Environment @{};throw "missing executable started"}
+      catch{if(!(Get-Content -LiteralPath $file -Raw | ConvertFrom-Json).processStartPending){throw "uncheckpointed launch was green"}}
+      $script:resourceJournal=$null
+    } finally { [System.IO.Directory]::Delete($taskRoot,$true) }
     $script:upstreamVersion = "131.0.2903.146"
     function Invoke-WebRequest { param($Uri, $TimeoutSec)
       if ($Uri -cne "https://msedgedriver.microsoft.com/LATEST_RELEASE_131_WINDOWS") { throw "wrong Microsoft endpoint" }
@@ -312,6 +320,8 @@ test("Windows cleanup uses retained process handles without an unchecked tree ki
   assert.doesNotMatch(source, /AdjustTokenPrivileges|CreateRestrictedToken|EnableLUA|no-sandbox|ignore-certificate-errors|do-not-de-elevate/u);
   assert.match(source, /OpenProcess\(0x1000, false, processId\)/u);
   assert.match(source, /OpenProcessToken\(process, 0x0008, out token\)/u);
+  assert.match(source, /Start-ResourceJournal \$downloadDir\s+New-PrivateDirectory \$taskRoot/u);
+  assert.match(source, /\$resourceJournal\.installation = "started"\s+Save-ProfileJournal[\s\S]*?\$installation = Start-OwnedProcess -File \$installer/u);
 });
 
 test("imports have no environment, cwd, file or process side effects", () => {
@@ -374,6 +384,48 @@ test("actual PowerShell refuses hosted, elevated, session-zero and missing-shell
   `);
 });
 
+test("actual Read-UserEnvironment handles absent and single registry names under StrictMode without losing case or raw values", t => {
+  powershellMocks(t, [], `
+    # Substitute only the unavailable HKCU boundary; execute the production reader.
+    $definition=$ast.Find({param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+      $n.Name -ceq "Read-UserEnvironment"},$true)
+    Invoke-Expression ($definition.Extent.Text.Replace('[Microsoft.Win32.Registry]::CurrentUser','$script:registryHive'))
+    $script:key=$null
+    $script:registryHive=[pscustomobject]@{}
+    $script:registryHive | Add-Member ScriptMethod OpenSubKey {param($Path,$Writable)
+      if($Path -cne "Environment" -or $Writable){throw "wrong registry access"}
+      return $script:key
+    }
+    $absent=Read-UserEnvironment "TEMP"
+    if($absent.exists -or $absent.name -cne "TEMP" -or $null -ne $absent.value){throw "absent key was not preserved"}
+    $script:names=@();$script:disposed=$false
+    $script:key=[pscustomobject]@{}
+    $script:key | Add-Member ScriptMethod GetValueNames {return $script:names}
+    $script:key | Add-Member ScriptMethod GetValueKind {param($Name)
+      if($Name -cne "Temp"){throw "registry name was truncated or case changed"}
+      return [Microsoft.Win32.RegistryValueKind]::ExpandString
+    }
+    $script:key | Add-Member ScriptMethod GetValue {param($Name,$Default,$Options)
+      if($Name -cne "Temp" -or $null -ne $Default -or
+        $Options -ne [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames){throw "raw registry read changed"}
+      return '%USERPROFILE%\\literal-$-private'
+    }
+    $script:key | Add-Member ScriptMethod Dispose {$script:disposed=$true}
+    foreach($names in @(@(),@("Other"),@("Other","Temp"))){
+      $script:names=$names;$script:disposed=$false
+      $entry=Read-UserEnvironment "TEMP"
+      if(!$script:disposed){throw "registry key was not disposed"}
+      if("Temp" -cin $names){
+        if(!$entry.exists -or $entry.name -cne "Temp" -or $entry.kind -ne 2 -or
+          $entry.value -cne '%USERPROFILE%\\literal-$-private'){throw "single raw registry entry changed"}
+      }elseif($entry.exists -or $entry.name -cne "TEMP" -or $null -ne $entry.kind){throw "zero matches were not preserved"}
+    }
+    $script:names=@("Temp","TEMP");$rejected=$false
+    try{Read-UserEnvironment "TEMP"}catch{$rejected=$_.Exception.Message -ceq "ambiguous_profile_environment"}
+    if(!$rejected -or !$script:disposed){throw "ambiguous names were accepted"}
+  `);
+});
+
 test("actual PowerShell env transaction restores raw names, absence, ExpandString and partial failures with broadcast", t => {
   powershellMocks(t, ["Get-ProfileEnvironmentNames", "Test-EnvironmentEntryEqual", "Start-ProfileEnvironment",
     "Restore-ProfileEnvironment"], `
@@ -398,6 +450,7 @@ test("actual PowerShell env transaction restores raw names, absence, ExpandStrin
     }
     $env:GITHUB_RUN_ID="123";$env:GITHUB_RUN_ATTEMPT="1"
     $taskRoot="/synthetic/task";$canaryRoot="/synthetic/canary";$destination="/synthetic/task/application"
+    $script:resourceJournal=@{environmentStarted=$false}
     $script:ownedDirectories=[Collections.Generic.List[string]]::new()
     $original=@{
       "Temp"=@{name="Temp";exists=$true;kind=2;value="%USERPROFILE%\\literal-$-private"}
@@ -504,26 +557,33 @@ test("actual PowerShell transition observer requires native hashed NSIS ancestry
 });
 
 test("actual PowerShell durable journal atomically retains raw backup and validates recovery ownership", t => {
-  powershellMocks(t, ["Save-ProfileJournal", "Get-ProfileEnvironmentNames", "Recover-ProfileEnvironment"], `
+  powershellMocks(t, ["Save-ProfileJournal", "Start-ResourceJournal", "Get-ProfileEnvironmentNames", "Recover-ProfileEnvironment"], `
     $temp=[IO.Path]::Combine([IO.Path]::GetTempPath(),"windows-upgrade-journal-"+[guid]::NewGuid().ToString("N"))
     [void][IO.Directory]::CreateDirectory($temp)
     try{
+      $env:USERPROFILE=$temp;$env:APPDATA=Join-Path $temp "appdata";$env:LOCALAPPDATA=Join-Path $temp "localappdata"
+      $env:GITHUB_RUN_ID="123";$env:GITHUB_RUN_ATTEMPT="2"
+      $taskRoot=Join-Path $temp ("edupi-windows-upgrade-"+("a"*32))
+      $canaryRoot=Join-Path $temp ("edupi-route1-canary-windows-upgrade-"+("a"*32))
+      $destination=Join-Path $taskRoot "application"
+      function Get-CurrentUserSid {return "synthetic"}
+      function Assert-NoReparseAncestor {param($Path)}
+      Start-ResourceJournal $temp
       $file=Join-Path $temp "user-environment-backup.json"
       $journal=@{schemaVersion=1;runId="123";attempt="2";sid="synthetic";status="prepared";entries=@();
+        taskRoot=$taskRoot;canaryRoot=$canaryRoot;destination=$destination;
         raw=@{name="Temp";kind=2;value="%USERPROFILE%\\literal"}}
       Save-ProfileJournal $journal $file
       $read=Get-Content -LiteralPath $file -Raw | ConvertFrom-Json -AsHashtable
       if($read.raw.value -cne $journal.raw.value -or $read.raw.kind -ne 2){throw "raw journal changed"}
       $journal.status="active";Save-ProfileJournal $journal $file
       if((Get-Content -LiteralPath $file -Raw | ConvertFrom-Json).status -cne "active" -or (Test-Path "$file.next")){throw "journal replacement incomplete"}
-      $env:GITHUB_RUN_ID="123";$env:GITHUB_RUN_ATTEMPT="2"
-      function Get-CurrentUserSid {return "synthetic"}
       $rejected=$false;try{Recover-ProfileEnvironment $temp}catch{$rejected=$_.Exception.Message -ceq "profile_recovery_keys_mismatch"}
       if(!$rejected){throw "invalid recovery key set accepted"}
       $journal.runId="other";Save-ProfileJournal $journal $file
       $rejected=$false;try{Recover-ProfileEnvironment $temp}catch{$rejected=$_.Exception.Message -ceq "profile_recovery_identity_mismatch"}
       if(!$rejected){throw "other run backup accepted"}
-    }finally{[IO.Directory]::Delete($temp,$true)}
+    }finally{if($script:profileLease){$script:profileLease.Dispose()};[IO.Directory]::Delete($temp,$true)}
   `);
 });
 
@@ -546,6 +606,7 @@ test("actual PowerShell always recovery stops owned processes before restoring e
       function Assert-NoReparseAncestor {param($Path)}
       function Get-CimInstance {param($ClassName) return @()}
       function Stop-TaskProcesses {$script:stopped=$true}
+      function Assert-NoUpgradeInstallation {param($Code)}
       function Read-UserEnvironment {param($Name)
         if($script:registry.ContainsKey($Name)){return $script:registry[$Name].Clone()}
         return @{name=$Name;exists=$false;kind=$null;value=$null}
@@ -560,6 +621,11 @@ test("actual PowerShell always recovery stops owned processes before restoring e
       foreach($entry in $entries){$script:registry[$entry.name]=@{name=$entry.name;exists=$true;kind=1;value="active-task-value"}}
       $journal=@{schemaVersion=1;runId="123";attempt="2";sid="synthetic";status="active";entries=$entries;
         taskRoot=$task;canaryRoot=$canary;destination=(Join-Path $task "application");processes=@();directories=@($task,$canary)}
+      $resources=$journal.Clone();$resources.Remove("entries")
+      $resources.sessionId=[Diagnostics.Process]::GetCurrentProcess().SessionId
+      $resources.installation="not_started";$resources.environmentStarted=$true
+      $resources.processStartPending=$false
+      Save-ProfileJournal $resources (Join-Path $temp "resource-recovery.json")
       $file=Join-Path $temp "user-environment-backup.json"
       Save-ProfileJournal $journal $file
       [IO.File]::WriteAllText((Join-Path $temp ".edupi-windows-upgrade-env.lock"),"123-2")
@@ -571,6 +637,215 @@ test("actual PowerShell always recovery stops owned processes before restoring e
       if((Get-Content -LiteralPath $file -Raw | ConvertFrom-Json).status -cne "restored"){throw "recovery journal state lost"}
     }finally{[IO.Directory]::Delete($temp,$true)}
   `);
+});
+
+test("actual PowerShell resource journal recovers before env starts and refuses missing, partial, conflicting or interrupted cleanup", t => {
+  powershellMocks(t, ["Save-ProfileJournal", "Start-ResourceJournal", "Save-RecoveryProcesses",
+    "Remove-RecoveryDirectories", "Recover-ProfileEnvironment"], `
+    $temp=[IO.Path]::Combine([IO.Path]::GetTempPath(),"windows-upgrade-resource-"+[guid]::NewGuid().ToString("N"))
+    [void][IO.Directory]::CreateDirectory($temp)
+    $script:realSave=\${function:Save-ProfileJournal}
+    function Save-ProfileJournal {param($Journal,$File)
+      if($script:scenario -ceq "save-interrupted" -and $Journal.status -ceq "restored"){throw "synthetic_save_interrupted"}
+      & $script:realSave $Journal $File
+    }
+    function Get-CurrentUserSid {return "synthetic"}
+    function Assert-NoReparseAncestor {param($Path)}
+    function Get-CimInstance {param($ClassName) return @()}
+    function Stop-TaskProcesses {
+      if($script:scenario -ceq "process-cleanup-fails"){throw "synthetic_process_cleanup_failed"}
+      $script:stops++
+    }
+    function Get-BaseEnvironment {return @{}}
+    function Start-OwnedProcess {param($File,$Environment,$RawArguments)
+      if(!$script:stops -or $File -cne (Join-Path $destination "uninstall.exe") -or
+        $RawArguments -cne "/S _?=$destination"){throw "unowned or premature uninstall"}
+      if((Get-Content -LiteralPath $resourceFile -Raw | ConvertFrom-Json).installation -cne "started"){
+        throw "installer intent was not durable"
+      }
+      $script:uninstalls++;return @{ExitCode=0}
+    }
+    function Wait-OwnedProcess {param($Process,$Seconds,$Code)
+      if($script:scenario -ceq "uninstall-fails"){throw $Code}
+      if($script:scenario -cne "registration-remains"){$script:registered=$false}
+    }
+    function Assert-NoUpgradeInstallation {param($Code)
+      if($script:registered){throw $Code}
+    }
+    function Restore-ProfileEnvironment {param($Journal,$File) throw "environment recovery was not expected"}
+    function Remove-Item {param($LiteralPath,[switch]$Recurse,[switch]$Force)
+      if($script:scenario -ceq "remove-interrupted" -and $LiteralPath -ceq $canaryRoot){throw "synthetic_remove_interrupted"}
+      Microsoft.PowerShell.Management\\Remove-Item -LiteralPath $LiteralPath -Recurse:$Recurse -Force:$Force
+    }
+    try{
+      foreach($scenario in @("no-install","installed","missing-resource","partial-resource","wrong-run","wrong-sid",
+        "wrong-session","unmarked-directory","foreign-directory","missing-env","partial-env","conflicting-env",
+        "missing-uninstaller","uninstall-fails","registration-remains","process-cleanup-fails",
+        "live-lease","uncheckpointed-process","false-restored","remove-interrupted","save-interrupted")){
+        $script:scenario=$scenario;$script:stops=0;$script:uninstalls=0
+        $caseRoot=Join-Path $temp $scenario
+        [void][IO.Directory]::CreateDirectory($caseRoot)
+        $env:USERPROFILE=$caseRoot;$env:APPDATA=Join-Path $caseRoot "appdata";$env:LOCALAPPDATA=Join-Path $caseRoot "localappdata"
+        $env:GITHUB_RUN_ID="123";$env:GITHUB_RUN_ATTEMPT="2";$env:WINDOWS_UPGRADE_DOWNLOAD_DIR=$caseRoot
+        $script:taskRoot=Join-Path $caseRoot ("edupi-windows-upgrade-"+("a"*32))
+        $script:canaryRoot=Join-Path $caseRoot ("edupi-route1-canary-windows-upgrade-"+("a"*32))
+        $script:destination=Join-Path $taskRoot "application"
+        $script:ownedProcesses=[Collections.Generic.List[object]]::new();$script:profileJournal=$null
+        Start-ResourceJournal $caseRoot
+        $resourceFile=Join-Path $caseRoot "resource-recovery.json"
+        if((Test-Path $taskRoot) -or (Test-Path $canaryRoot) -or
+          (Test-Path (Join-Path $caseRoot "user-environment-backup.json"))){throw "resource journal was not created first"}
+        foreach($folder in @($taskRoot,$canaryRoot)){
+          [void][IO.Directory]::CreateDirectory($folder)
+          [IO.File]::WriteAllText((Join-Path $folder ".windows-upgrade-owned"),"123-2")
+        }
+        $resourceJournal.directories=@($taskRoot,$canaryRoot)
+        $script:registered=$scenario -cne "no-install"
+        if($script:registered){
+          $resourceJournal.installation="started"
+          [void][IO.Directory]::CreateDirectory($destination)
+          [IO.File]::WriteAllText((Join-Path $destination "uninstall.exe"),"synthetic bytes; never executed")
+        }
+        Save-RecoveryProcesses
+        switch($scenario){
+          "partial-resource" {$resourceJournal.Remove("installation")}
+          "wrong-run" {$resourceJournal.runId="other"}
+          "wrong-sid" {$resourceJournal.sid="other"}
+          "wrong-session" {$resourceJournal.sessionId++}
+          "uncheckpointed-process" {$resourceJournal.processStartPending=$true}
+          "false-restored" {$resourceJournal.status="restored"}
+          "unmarked-directory" {[IO.File]::WriteAllText((Join-Path $canaryRoot ".windows-upgrade-owned"),"other-run")}
+          "foreign-directory" {$resourceJournal.directories+=@($caseRoot)}
+          "missing-env" {$resourceJournal.environmentStarted=$true}
+          "partial-env" {[IO.File]::WriteAllText((Join-Path $caseRoot "user-environment-backup.json.next"),'{"incomplete":')}
+          "conflicting-env" {
+            @{schemaVersion=1;runId="other";attempt="2";sid="synthetic"} | ConvertTo-Json |
+              Set-Content -LiteralPath (Join-Path $caseRoot "user-environment-backup.json")
+          }
+          "missing-uninstaller" {[IO.File]::Delete((Join-Path $destination "uninstall.exe"))}
+        }
+        Save-ProfileJournal $resourceJournal $resourceFile
+        if($scenario -ceq "missing-resource"){[IO.File]::Delete($resourceFile)}
+        if($scenario -cne "live-lease"){$script:profileLease.Dispose()}
+        $failed=$false
+        try{Recover-ProfileEnvironment $caseRoot}catch{$failed=$true}
+        $success=$scenario -cin @("no-install","installed")
+        if($failed -eq $success){throw "recovery result mismatch: $scenario"}
+        if($success){
+          if((Test-Path $taskRoot) -or (Test-Path $canaryRoot) -or
+            (Test-Path (Join-Path $caseRoot ".edupi-windows-upgrade-env.lock")) -or $script:registered -or
+            (Get-Content -LiteralPath $resourceFile -Raw | ConvertFrom-Json).status -cne "restored"){throw "resources were not restored"}
+          Recover-ProfileEnvironment $caseRoot
+          if($script:uninstalls -ne [int]($scenario -ceq "installed")){throw "uninstall was not idempotent"}
+        }else{
+          if(!(Test-Path (Join-Path $caseRoot ".edupi-windows-upgrade-env.lock")) -or
+            ($scenario -cne "false-restored" -and (Test-Path $resourceFile) -and
+              (Get-Content -LiteralPath $resourceFile -Raw | ConvertFrom-Json).status -ceq "restored")){
+            throw "incomplete recovery was marked restored"
+          }
+          if($scenario -cin @("remove-interrupted","save-interrupted","uninstall-fails","registration-remains","process-cleanup-fails","live-lease")){
+            $script:profileLease.Dispose();$script:scenario="retry"
+            Recover-ProfileEnvironment $caseRoot
+            if((Test-Path $taskRoot) -or (Test-Path $canaryRoot) -or $script:registered){throw "interrupted recovery could not resume"}
+          }
+        }
+        $script:profileLease.Dispose()
+      }
+    }finally{
+      if($script:profileLease){$script:profileLease.Dispose()}
+      [IO.Directory]::Delete($temp,$true)
+    }
+  `);
+});
+
+test("actual PowerShell persists directory intent before creation and preserves the last journal on a failed checkpoint", t => {
+  powershellMocks(t, ["Save-ProfileJournal", "Start-ResourceJournal", "New-PrivateDirectory",
+    "Remove-RecoveryDirectories", "Recover-ProfileEnvironment"], `
+    $temp=[IO.Path]::Combine([IO.Path]::GetTempPath(),"windows-upgrade-intent-"+[guid]::NewGuid().ToString("N"))
+    [void][IO.Directory]::CreateDirectory($temp)
+    try{
+      $env:USERPROFILE=$temp;$env:APPDATA=Join-Path $temp "appdata";$env:LOCALAPPDATA=Join-Path $temp "localappdata"
+      $env:GITHUB_RUN_ID="123";$env:GITHUB_RUN_ATTEMPT="2";$env:WINDOWS_UPGRADE_DOWNLOAD_DIR=$temp
+      $taskRoot=Join-Path $temp ("edupi-windows-upgrade-"+("a"*32))
+      $canaryRoot=Join-Path $temp ("edupi-route1-canary-windows-upgrade-"+("a"*32))
+      $destination=Join-Path $taskRoot "application"
+      function Get-CurrentUserSid {return "synthetic"}
+      function Assert-NoReparseAncestor {param($Path)}
+      Start-ResourceJournal $temp
+      $file=Join-Path $temp "resource-recovery.json"
+      $script:creates=0
+      function New-Item {param($ItemType,$Path)
+        $script:creates++
+        $read=Get-Content -LiteralPath $file -Raw | ConvertFrom-Json
+        if($Path -cnotin $read.directories){throw "directory intent was not persisted first"}
+        throw "synthetic_directory_interruption"
+      }
+      $rejected=$false
+      try{New-PrivateDirectory $taskRoot}catch{$rejected=$_.Exception.Message -ceq "synthetic_directory_interruption"}
+      if(!$rejected -or (Test-Path $taskRoot) -or $script:creates -ne 1){throw "interruption was hidden"}
+      function Save-ProfileJournal {param($Journal,$File) throw "synthetic_checkpoint_failure"}
+      $rejected=$false
+      try{New-PrivateDirectory $canaryRoot}catch{$rejected=$_.Exception.Message -ceq "synthetic_checkpoint_failure"}
+      if(!$rejected -or (Test-Path $canaryRoot) -or $script:creates -ne 1){throw "created resources without a durable checkpoint"}
+      $read=Get-Content -LiteralPath $file -Raw | ConvertFrom-Json
+      if(@($read.directories).Count -ne 1 -or $read.directories[0] -cne $taskRoot){throw "last durable intent was lost"}
+    }finally{
+      if($script:profileLease){$script:profileLease.Dispose()}
+      [IO.Directory]::Delete($temp,$true)
+    }
+  `);
+});
+
+test("actual PowerShell installation readback rejects remaining registration and unreadable registry keys", t => {
+  powershellMocks(t, ["Assert-NoUpgradeInstallation"], `
+    $script:registered=$false;$script:unreadable=$false
+    function Test-Path {param($LiteralPath) return $LiteralPath.StartsWith("HK")}
+    function Get-ChildItem {param($LiteralPath,$ErrorAction)
+      if($ErrorAction -cne "Stop"){throw "registry errors were suppressed"}
+      if($script:unreadable){throw "synthetic_registry_unreadable"}
+      if($script:registered){return @{PSPath="synthetic-registration"}}
+      return @()
+    }
+    function Get-ItemProperty {param($LiteralPath) return [pscustomobject]@{DisplayName="EduPi"}}
+    Assert-NoUpgradeInstallation "synthetic_registration_remains"
+    $script:registered=$true;$rejected=$false
+    try{Assert-NoUpgradeInstallation "synthetic_registration_remains"}catch{$rejected=$_.Exception.Message -ceq "synthetic_registration_remains"}
+    if(!$rejected){throw "remaining registration was green"}
+    $script:registered=$false;$script:unreadable=$true;$rejected=$false
+    try{Assert-NoUpgradeInstallation "synthetic_registration_remains"}catch{$rejected=$_.Exception.Message -ceq "synthetic_registry_unreadable"}
+    if(!$rejected){throw "unreadable registration was green"}
+  `);
+});
+
+test("cleanup entrypoint records blocked and retains downloads when resource recovery journal is missing or incomplete", t => {
+  const executable = process.env.WINDOWS_UPGRADE_PWSH || "pwsh";
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "windows-upgrade-cleanup-test-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const download = path.join(root, "edupi-windows-upgrade-download-123-1");
+  const evidence = path.join(root, "edupi-windows-upgrade-evidence-123-1");
+  fs.mkdirSync(download);
+  fs.mkdirSync(evidence);
+  fs.writeFileSync(path.join(download, ".windows-upgrade-owned"), OLD.sha256);
+  fs.writeFileSync(path.join(download, "synthetic-retained.txt"), "synthetic recovery material");
+  for (const state of ["missing", "incomplete"]) {
+    if (state === "incomplete") {
+      fs.writeFileSync(path.join(download, "resource-recovery.json"), JSON.stringify({ schemaVersion: 1 }));
+    }
+    // Both cases fail before SID, registry or process APIs. No installer/App exists.
+    const result = spawnSync(executable, ["-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+      fileURLToPath(new URL("./test-windows-upgrade-acceptance.ps1", import.meta.url)), "-CleanupDownloadOnly"], {
+      encoding: "utf8", timeout: 30_000, env: { ...process.env, RUNNER_TEMP: root,
+        WINDOWS_UPGRADE_DOWNLOAD_DIR: download, WINDOWS_UPGRADE_EVIDENCE_DIR: evidence,
+        GITHUB_RUN_ID: "123", GITHUB_RUN_ATTEMPT: "1" },
+    });
+    if (result.error?.code === "ENOENT") { t.skip("pwsh unavailable; cleanup entrypoint was not executed"); return; }
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    const proof = JSON.parse(fs.readFileSync(path.join(evidence, "windows-upgrade-recovery.json"), "utf8").replace(/^\uFEFF/u, ""));
+    assert.equal(proof.status, "blocked");
+    assert.equal(proof.actualUpgradePassed, false);
+    assert.equal(proof.code, `resource_recovery_journal_${state}`);
+    assert.equal(fs.readFileSync(path.join(download, "synthetic-retained.txt"), "utf8"), "synthetic recovery material");
+  }
 });
 
 test("actual PowerShell retires only retained drivers before fresh attach and cannot launch or stop the new App", t => {
