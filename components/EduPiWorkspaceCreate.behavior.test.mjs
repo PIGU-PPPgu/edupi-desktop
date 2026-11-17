@@ -40,9 +40,11 @@ function mount({ workspace = "/ui-test/one", immediate = false } = {}) {
     useEffect(create, deps) { const i = cursor++, old = slots[i]; if (!same(old?.deps, deps)) { slots[i] = { deps, create }; effects.push(() => { old?.cleanup?.(); slots[i].cleanup = create(); }); } },
   };
   const modules = { ...libraries, react, "react/jsx-runtime": { jsx, jsxs: jsx }, "./EduPiForeground": { useEduPiForegroundPolicy: () => ({ today: "2026-10-28", graceDays: 3, pinnedTaskIds: [] }), EduPiPagedRows: "paged-rows" },
+    "@/lib/edupi-teacher-template-client": { readTeacherTemplateSettings: async () => ({ version: 1, enabled: false }),
+      stopTeacherTemplateAutomation: assert.fail },
     "./AffectSegmentedControl": { SegmentedControl: "segmented-control" } };
   const exported = {};
-  vm.runInNewContext(code, { exports: exported, document, Error, crypto: { randomUUID: () => `ui-create-${++uuid}` }, requestAnimationFrame: fn => { fn(); return 1; }, cancelAnimationFrame() {},
+  vm.runInNewContext(code, { exports: exported, document, Error, AbortController, crypto: { randomUUID: () => `ui-create-${++uuid}` }, requestAnimationFrame: fn => { fn(); return 1; }, cancelAnimationFrame() {},
     require(name) { assert.ok(modules[name], name); return modules[name]; },
   });
   const props = { data: { ...buildEducationContract({ workspace }), timetable: [{ slot_id: "slot-one", day_of_week: 3, period: 1, subject: "数学", class_name: "UI一班" }], teacherMaterials: [{ material_id: "material-one", title: "TEST材料", available: true, subject: "数学", class_id: "UI一班" }] }, query: "", selectedObjectId: null, onTaskDetail() {}, onMoveTask: async () => {}, onObject(route) { props.selectedObjectId = route; },
@@ -139,17 +141,21 @@ test("same-tick submit creates one immutable request and locks every field", () 
 });
 
 test("weekly internal materials submit one explicit recurrence without starting lesson preparation", () => {
-  const f = mount(); f.open(); f.change("周期材料", true);
+  const f = mount();
+  f.props.data.factSpine = { entities: [{ kind: "class", id: "class-test", name: "UI一班" }], teachingView: { bySubject: [] } };
+  f.render(); f.open(); f.change("周期材料", true);
   f.change("任务", "年级组内部材料");
   f.change("首期日期", "2026-11-06");
   f.change("结束日期", "2026-12-04");
   f.change("产物", "内部议程\n材料清单");
+  f.change("班级", "class-test"); f.change("学科", "数学");
   assert.equal(f.elements.get("submit").disabled, false);
   f.submit({ render: false }); f.submit({ render: false }); f.render();
   assert.equal(f.requests.length, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(f.requests[0].input)), {
     clientRequestId: "ui-create-1", title: "年级组内部材料", dueDate: "2026-11-06", note: null,
     preparationSource: null,
+    templateScope: { classId: "class-test", subject: "数学" },
     recurrence: { kind: "teacher_internal_materials", cadence: "weekly", untilDate: "2026-12-04", leadDays: 2,
       deliverables: ["内部议程", "材料清单"] },
   });

@@ -60,6 +60,13 @@ function fixture(t) {
         config ? { type: "model-config-result", id: message.id, configuration: config }
           : { type: "model-config-error", id: message.id, code: "model_unavailable" }));
     };
+    // These IDs belong only to this synthetic channel. A failed assertion
+    // before its reply must still complete the assessor before host.close().
+    value.settleModels = () => {
+      for (const message of value.sent.filter(message => message.type === "model-run")) {
+        value.emit("message", { type: "model-error", id: message.id, code: "model_unavailable" });
+      }
+    };
     return value;
   }
   return { root, options, channel, module: () => import(pathToFileURL(path.join(root, "scripts/core_runtime_daemon.mjs")).href) };
@@ -138,22 +145,38 @@ test("loopback answer profiles require both private opt-in and the explicit isol
 test("answer factory belongs to the daemon module registry and model work uses only private IPC", async t => {
   const f = fixture(t), channel = f.channel();
   const host = await startCoreRuntimeHost({ coreRoot: f.root, options: { ...f.options, recallAnswers: true } }, channel);
+  const work = [];
   try {
     const { received } = await f.module();
     assert.equal(typeof received.recallAnswers.assess, "function");
     assert.equal(JSON.stringify(received).includes(configuration().apiKey), false);
     assert.deepEqual(channel.sent.map(value => value.type), ["model-config-request"]);
     const result = received.recallAnswers.assess({ prompt: "synthetic question", signal: new AbortController().signal });
+    work.push(result); void result.catch(() => {});
     const message = channel.sent.at(-1);
     assert.equal(message.type, "model-run");
     assert.deepEqual(Object.keys(message.request).sort(), ["deadline_at", "model_kind", "prompt"]);
-    assert.equal(message.request.model_kind, "memory_recall");
+    assert.equal(message.request.model_kind, "recall_answer");
     assert.equal(message.request.prompt, "synthetic question");
     assert.ok(Date.parse(message.request.deadline_at) - Date.now() <= 12000);
     assert.equal(JSON.stringify(message).includes(configuration().apiKey), false);
     channel.emit("message", { type: "model-result", id: message.id, result: { output: "synthetic answer" } });
     assert.deepEqual(await result, { output: "synthetic answer" });
-  } finally { await host.close(); }
+    const support = received.recallSupport.assess({ prompt: "synthetic source support", signal: new AbortController().signal });
+    work.push(support); void support.catch(() => {});
+    const supportMessage = channel.sent.at(-1);
+    assert.equal(supportMessage.type, "model-run");
+    assert.deepEqual(Object.keys(supportMessage.request).sort(), ["deadline_at", "model_kind", "prompt"]);
+    assert.equal(supportMessage.request.model_kind, "memory_recall", "ordinary source support keeps its separate kind");
+    assert.equal(supportMessage.request.prompt, "synthetic source support");
+    assert.equal(JSON.stringify(supportMessage).includes(configuration().apiKey), false);
+    channel.emit("message", { type: "model-result", id: supportMessage.id, result: { output: "synthetic source support" } });
+    assert.deepEqual(await support, { output: "synthetic source support" });
+  } finally {
+    channel.settleModels();
+    await Promise.allSettled(work);
+    await host.close();
+  }
 });
 
 for (const interrupt of ["cancel", "deadline"]) {
@@ -161,29 +184,56 @@ for (const interrupt of ["cancel", "deadline"]) {
     const f = fixture(t), channel = f.channel();
     const host = await startCoreRuntimeHost({ coreRoot: f.root, options: { ...f.options, recallAnswers: true } }, channel);
     t.mock.timers.enable({ apis: ["setTimeout"] });
-    const { received } = await f.module();
-    const controller = new AbortController();
-    let finished = false, closed = false;
-    const work = received.recallAnswers.assess({ prompt: "synthetic pending question", signal: controller.signal });
-    const observed = assert.rejects(work, { code: "model_unavailable" }).then(() => { finished = true; });
-    const message = channel.sent.at(-1);
-    if (interrupt === "cancel") controller.abort();
-    else t.mock.timers.tick(18000);
-    await Promise.resolve();
-    assert.equal(finished, false);
-    assert.equal(channel.sent.at(-1).type, "model-cancel");
-    const closing = host.close().then(() => { closed = true; });
-    assert.equal(host.close(), host.close(), "close shares one real completion");
-    await new Promise(resolve => setImmediate(resolve));
-    assert.equal(closed, false, "daemon.close alone cannot release unfinished assessment");
-    assert.equal(finished, false);
-    channel.emit("message", { type: "model-error", id: message.id, code: "model_unavailable" });
-    await observed; await closing;
-    assert.equal(closed, true);
-    assert.equal((await f.module()).closes, 1);
-    t.mock.timers.reset();
+    let work, observed;
+    try {
+      const { received } = await f.module();
+      const controller = new AbortController();
+      let finished = false, closed = false;
+      work = received.recallAnswers.assess({ prompt: "synthetic pending question", signal: controller.signal });
+      observed = assert.rejects(work, { code: "model_unavailable" }).then(() => { finished = true; });
+      void observed.catch(() => {});
+      const message = channel.sent.at(-1);
+      assert.equal(message.request.model_kind, "recall_answer");
+      if (interrupt === "cancel") controller.abort();
+      else t.mock.timers.tick(18000);
+      await Promise.resolve();
+      assert.equal(finished, false);
+      assert.equal(channel.sent.at(-1).type, "model-cancel");
+      const closing = host.close().then(() => { closed = true; });
+      assert.equal(host.close(), host.close(), "close shares one real completion");
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(closed, false, "daemon.close alone cannot release unfinished assessment");
+      assert.equal(finished, false);
+      channel.emit("message", { type: "model-error", id: message.id, code: "model_unavailable" });
+      await observed; await closing;
+      assert.equal(closed, true);
+      assert.equal((await f.module()).closes, 1);
+    } finally {
+      channel.settleModels();
+      await Promise.allSettled([work, observed]);
+      await host.close();
+      t.mock.timers.reset();
+    }
   });
 }
+
+test("a pre-reply assertion failure settles its own synthetic IPC before draining the host", async t => {
+  const f = fixture(t), channel = f.channel(), work = [];
+  const host = await startCoreRuntimeHost({ coreRoot: f.root, options: { ...f.options, recallAnswers: true } }, channel);
+  await assert.rejects(async () => {
+    try {
+      const { received } = await f.module();
+      const result = received.recallAnswers.assess({ prompt: "synthetic failed assertion", signal: new AbortController().signal });
+      work.push(result); void result.catch(() => {});
+      assert.fail("synthetic assertion before the IPC reply");
+    } finally {
+      channel.settleModels();
+      await Promise.allSettled(work);
+      await host.close();
+    }
+  }, error => error instanceof assert.AssertionError && error.message === "synthetic assertion before the IPC reply");
+  assert.equal((await f.module()).closes, 1);
+});
 
 test("paired Core brands answer assessors in the real daemon and runs only an isolated loopback SDK through the private broker", {
   skip: !process.env.EDUPI_CORE_ROOT, timeout: 120000,

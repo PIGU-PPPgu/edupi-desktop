@@ -279,12 +279,16 @@ jobs:
           EDUPI_USAGE_TEST_CORE: ${{ github.workspace }}/.edupi-core-runtime
           EDUPI_REMINDER_PROOF_CORE_TEST_ROOT: ${{ github.workspace }}/.edupi-core-runtime
           EDUPI_PREPARATION_TEST_CORE: ${{ github.workspace }}/.edupi-core-runtime
+          EDUPI_R04_RAW_CORE_ROOT: ${{ github.workspace }}/.edupi-core-runtime
+          EDUPI_TEACHER_TEMPLATE_CORE_ROOT: ${{ github.workspace }}/.edupi-core-runtime
           TMPDIR: ${{ github.workspace }}/.edupi-core-host-test-tmp
         run: |
           mkdir -m 700 "$TMPDIR"
           trap 'test "$TMPDIR" = "$GITHUB_WORKSPACE/.edupi-core-host-test-tmp" && rm -r "$TMPDIR"' EXIT
           node --test lib/edupi-memory-recall-access.test.mjs lib/edupi-teacher-usage-runtime.test.mjs
           node --test lib/edupi-core-process-client.test.mjs lib/edupi-reminder-notification-proof.test.mjs 'app/api/edupi/tasks/[taskId]/execution/route.test.mjs'
+          node --test desktop/core-runtime-host.test.mjs desktop/core-runtime-recall.test.mjs lib/edupi-runtime-supervisor.test.mjs lib/edupi-runtime-model-host.test.mjs lib/edupi-recall-raw-core.test.mjs lib/edupi-recall-settings-runtime.test.mjs lib/edupi-teacher-template-runtime.test.mjs
+          node scripts/test-edupi-recurring-materials-e2.mjs
           node scripts/test-edupi-capability-canary-e2.mjs --require-recipient-confirmation
           node scripts/test-edupi-capability-canary-e2.mjs --main4 --require-recipient-confirmation
 
@@ -461,7 +465,7 @@ jobs:
           set -euo pipefail
           helper="$EDUPI_STAGED_RESOURCES/Pi Agent Server.app/Contents/MacOS/node"
           test "$("$helper" -e 'process.stdout.write("EDUPI_NODE_JIT_READY")')" = EDUPI_NODE_JIT_READY
-          npm run test:staged-desktop-runtime
+          EDUPI_STAGED_RECURRING_E2=1 npm run test:staged-desktop-runtime
           npm run test:staged-ocr
           npm run test:staged-docx
           EDUPI_STAGED_NODE="$helper" npm run test:staged-openconnector

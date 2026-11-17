@@ -26,7 +26,7 @@ test("CLI requires explicit create, fixed Core input and an absolute evidence de
     ["--create", "--root", "/existing", "--core-root", "/core", "--evidence-dir", "/evidence"],
     ["--create", "--core-root", "/core", "--evidence-dir"],
   ]) assert.throws(() => parseArguments(args));
-  assert.equal(CORE_COMMIT, "98e4f7cd0c31dd30954574d2040bb1b948cdd954");
+  assert.equal(CORE_COMMIT, "fc89b3bc899a55b0fdad61b8f37e238d950f37c6");
 });
 
 test("import has no HOME, cwd, environment, output or listener side effects", () => {
@@ -156,6 +156,7 @@ test("seed IPC denies model execution and configuration before downstream provid
 test("official weekly and monthly POST refusal remains an explicit gap without a taskboard fallback", async () => {
   const inputs = [], bridgeFailures = [];
   const result = await seedRecurringTemplates({
+    scope: { classId: "synthetic-class", subject: "数学" },
     tasks: { async POST(request) {
       inputs.push(await request.json());
       bridgeFailures.push({ sequence: bridgeFailures.length + 1, phase: "recurring-templates",
@@ -181,5 +182,38 @@ test("official weekly and monthly POST refusal remains an explicit gap without a
   assert.equal(result.firstFailure.cadence, "weekly");
   assert.equal(result.firstFailure.firstBridgeFailure, bridgeFailures[0]);
   assert.equal(result.attempts[1].firstBridgeFailure, bridgeFailures[1]);
-  assert.equal(result.contract.bootstrapOrActivationCanUnlockMain4CreateTask, false);
+  assert.equal(result.contract.requiresTeacherTemplateBinding, true);
+  assert.equal(result.contract.requiresOwnerReviewer, true);
+  assert.equal(result.contract.modelExecute, false);
+});
+
+test("both stable template IDs are explicitly selected before formal create and replay while G1 remains off", async () => {
+  let selected = null;
+  const seen = new Set(), inputs = [], scope = { classId: "synthetic-class", subject: "数学" };
+  const result = await seedRecurringTemplates({
+    scope,
+    prepareSelection: async planned => {
+      assert.equal(planned.length, 2); assert.equal(inputs.length, 0);
+      selected = planned.map(input => `teacher-task-${input.clientRequestId}`);
+    },
+    tasks: { async POST(request) {
+      const input = await request.json();
+      inputs.push(input);
+      const taskId = `teacher-task-${input.clientRequestId}`;
+      assert.ok(selected.includes(taskId));
+      assert.deepEqual(input.templateScope, scope);
+      const replayed = seen.has(taskId); seen.add(taskId);
+      return Response.json({ taskId, replayed, receipt: { status: "accepted", external_send: false }, preparation: null });
+    } },
+    request: (url, input) => new Request(`http://localhost${url}`, { method: "POST", body: JSON.stringify(input) }),
+    readActivation: async domain => {
+      assert.equal(domain, "teaching_preparation"); return { activation: { enabled: false } };
+    },
+  });
+  assert.equal(result.status, "templates-created-g1-disabled");
+  assert.equal(result.activationEnabled, false);
+  assert.equal(inputs.length, 4);
+  assert.deepEqual(result.templates.map(item => item.taskId), selected);
+  assert.deepEqual(inputs[0], inputs[1]);
+  assert.deepEqual(inputs[2], inputs[3]);
 });

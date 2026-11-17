@@ -56,6 +56,7 @@ import { inspectEduPiPromptSession } from "./edupi-prompt-reconciliation";
 import { CORE_RECALL_ANSWER_MESSAGE } from "./edupi-recall-answer";
 
 const CORE_CAPTURED_PROMPT = Symbol("edupi-core-captured-prompt");
+const CORE_CAPTURED_RECALL_PROMPT = Symbol("edupi-core-captured-recall-prompt");
 const WORKFLOW_CHILD_PROMPT = Symbol("edupi-workflow-child-prompt");
 
 // The legacy HTTP adapter is intentionally not a production authority. Until
@@ -314,6 +315,11 @@ export class AgentSessionWrapper {
     return this.send({ ...command, [CORE_CAPTURED_PROMPT]: true });
   }
 
+  /** Explicit R04 intent is host-owned and never accepted as a JSON command flag. */
+  sendCoreCapturedRecallPrompt(command: { type: "prompt"; message: string; clientRequestId: string }): Promise<unknown> {
+    return this.send({ ...command, [CORE_CAPTURED_PROMPT]: true, [CORE_CAPTURED_RECALL_PROMPT]: true });
+  }
+
   /** Internal child dispatch: the parent must still be running its Core-captured turn. */
   sendWorkflowChildPrompt(command: { type: "prompt"; message: string }): Promise<unknown> {
     if (!this.privateWorkflowChild || !this.workflowParent) throw new Error("workflow_child_unavailable");
@@ -558,7 +564,7 @@ export class AgentSessionWrapper {
         content: details.answer?.text ?? "当前资料尚不能核验这个问题。",
         display: true, details,
       }, { triggerTurn: false });
-    } : undefined);
+    } : undefined, Reflect.get(command, CORE_CAPTURED_RECALL_PROMPT) === true);
   }
 
   private emit(event: AgentEvent): void {

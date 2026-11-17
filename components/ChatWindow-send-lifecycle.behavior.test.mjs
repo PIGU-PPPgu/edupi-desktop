@@ -105,6 +105,11 @@ async function mount({ existing = false, durable = true, immediate = false, dela
     sendEduPiCapturedPrompt: async ({ sessionId, command }) => { if (!durable) { await receive(sessionId, command); return "accepted"; } return "disabled"; } };
   modules["@/lib/fetch-timeout"] = { fetchWithRetry: fetch, fetchJsonWithDeadline: async url => { const res = await fetch(url); return { response: res, body: await res.json() }; } };
   modules["@/lib/desktop-updater"] = { isTauriDesktop: () => durable };
+  modules["@/lib/edupi-recall-prompt-client"] = {
+    readRecallSettings: async () => null, recallSendAvailable: () => false,
+    RECALL_SETTINGS_CHANGED: "synthetic-recall-settings-changed",
+    inspectRecallPrompt: assert.fail, submitRecallPrompt: assert.fail,
+  };
   modules["@/lib/edupi-ui-events"] = { EDUPI_STUDENT_RECORDS_UPDATED_EVENT: "synthetic-records" };
   modules["@/lib/queue-recovery"] = { recallQueueWithBackup: assert.fail };
   const hook = load("useAgentSession", { fetch, EventSource });

@@ -1,9 +1,11 @@
 import type { CoreRecallAnswerDetails } from "./edupi-recall-answer";
+import { randomUUID } from "node:crypto";
 
 type IssuedRecall = { root: string; epoch: number; details: CoreRecallAnswerDetails; termRef: string | null;
   request: Record<string, unknown> | null; invalidated: string | null };
 type State = { epochs: Map<string, number>; issued: Map<string, IssuedRecall>;
-  lastChanges?: Map<string, { epoch: number; reason: string; operation?: string }> };
+  lastChanges?: Map<string, { epoch: number; reason: string; operation?: string }>;
+  questions?: Map<string, { root: string; intentId: string; queryHash: string; cancelled: boolean; requestId: string | null }> };
 const globalState = globalThis as typeof globalThis & { __edupiRecallState?: State };
 const state = (): State => globalState.__edupiRecallState ??= { epochs: new Map(), issued: new Map() };
 
@@ -43,4 +45,37 @@ export function readIssuedEduPiRecall(receiptId: string): Readonly<IssuedRecall>
 
 export function invalidateEduPiRecallSession(sessionId: string, reason = "turn_changed"): void {
   for (const issued of state().issued.values()) if (issued.details.sessionId === sessionId) issued.invalidated = reason;
+}
+
+/** Correlation only. The persistent authorization ledger owns every model permit. */
+export function beginEduPiRecallQuestion(root: string, intentId: string, queryHash: string): string {
+  const token = randomUUID();
+  (state().questions ??= new Map()).set(token, { root, intentId, queryHash, cancelled: false, requestId: null });
+  return token;
+}
+
+export function claimEduPiRecallQuestion(root: string, queryHash: string, requestId: string): { token: string; intentId: string } | null {
+  const matches = [...(state().questions ?? [])].filter(([, item]) => item.root === root && item.queryHash === queryHash);
+  if (matches.length !== 1 || matches[0][1].cancelled || matches[0][1].requestId !== null) return null;
+  const [token, item] = matches[0];
+  item.requestId = requestId;
+  return { token, intentId: item.intentId };
+}
+
+export function finishEduPiRecallQuestion(token: string, settled: boolean): void {
+  const questions = state().questions, item = questions?.get(token);
+  if (!item) return;
+  if (settled && item.requestId === null) questions!.delete(token);
+  else if (!settled) item.cancelled = true;
+}
+
+export function settleEduPiRecallModel(token: string, requestId: string): void {
+  const questions = state().questions;
+  if (questions?.get(token)?.requestId === requestId) questions.delete(token);
+}
+
+/** Call only after the old model channel has closed and its actual work drained. */
+export function clearEduPiRecallQuestions(root: string): void {
+  const questions = state().questions;
+  if (questions) for (const [token, item] of questions) if (item.root === root) questions.delete(token);
 }

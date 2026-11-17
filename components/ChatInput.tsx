@@ -45,7 +45,8 @@ interface ModelOption {
 
 interface Props {
   teacherMode?: boolean;
-  onSend: (message: string, images?: AttachedImage[]) => boolean | void | Promise<boolean | void>;
+  onSend: (message: string, images?: AttachedImage[], purpose?: "recall") => boolean | void | Promise<boolean | void>;
+  recallCapability?: { available: boolean; status: string; remaining: number | null; model: string | null };
   onAbort: () => void;
   onInterruptSend?: (message: string, images?: AttachedImage[]) => Promise<boolean | void>;
   onSteer?: (message: string, images?: AttachedImage[]) => void | Promise<void>;
@@ -412,6 +413,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   autoFocus = false,
   extensionStatuses = [],
   teacherMode = false,
+  recallCapability,
 }: Props, ref) {
   const { t, locale } = useI18n();
   const isMobile = useIsMobile();
@@ -442,6 +444,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [permissionDropdownOpen, setPermissionDropdownOpen] = useState(false);
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [controlsMenuOpen, setControlsMenuOpen] = useState(false);
+  const [recallChoice, setRecallChoice] = useState<string | null>(null);
   const [queueSubmitting, setQueueSubmitting] = useState(false);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const [attachedImages, updateAttachedImages] = useState<AttachedImage[]>(() => (
@@ -451,6 +454,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [attachError, setAttachError] = useState<string | null>(null);
   const [streamingQueueAllowed, setStreamingQueueAllowed] = useState(() => !isTauriDesktop());
   const pendingPrompt = draftKey ? getDraft(draftKey)?.pendingPrompt : undefined;
+  const recallMode = pendingPrompt ? pendingPrompt.purpose === "recall" : Boolean(draftKey && recallChoice === draftKey);
   const submittedDraftRef = useRef<{ draftKey: string; clientRequestId: string | null; sessionId: string | null;
     revision: number; acknowledged: boolean } | null>(draftKey && pendingPrompt ? { draftKey,
       clientRequestId: pendingPrompt.clientRequestId, sessionId: pendingPrompt.sessionId,
@@ -1084,6 +1088,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (pendingTeacherText) return;
     if (queueRecoveryId) return;
     if (isStreaming) return;
+    if (recallMode && (!recallCapability?.available || attachedImages.length || context || value.length > 512 || /^[!/]/u.test(msg))) {
+      setAttachError(!recallCapability?.available ? "记忆核验暂不可用，草稿已保留" : "核对记忆仅支持 512 字以内的文本问题，请移除图片、参考和命令");
+      return;
+    }
     onAudioUnlock?.();
     if (!attachedImages.length && msg.startsWith("/") && onBuiltinCommand) {
       const result = await onBuiltinCommand(msg);
@@ -1106,15 +1114,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     submittedDraftRef.current = submittedDraft;
     submittingRef.current = true;
     try {
-      const accepted = await onSend(composeComposerMessage(context, msg, attachedImages.length > 0),
-        attachedImages.length ? attachedImages : undefined);
+      const accepted = recallMode ? await onSend(value, undefined, "recall")
+        : await onSend(composeComposerMessage(context, msg, attachedImages.length > 0),
+          attachedImages.length ? attachedImages : undefined);
       if (accepted === false) {
+        if (recallMode && draftKeyRef.current === originKey && !getDraft(originKey)?.pendingPrompt) setRecallChoice(null);
         if (!submittedDraft.acknowledged && submittedDraftRef.current === submittedDraft && draftKeyRef.current === originKey
           && editRevisionRef.current === submittedDraft.revision) {
           setAttachError("消息尚未确认，草稿已保留");
         }
         return;
       }
+      if (recallMode) setRecallChoice(null);
       // A retry may only confirm an earlier delivery. Its request-aware ACK
       // owns cleanup; this send's fresh revision cannot authorize it again.
       if (previous.pendingPrompt) return;
@@ -1131,7 +1142,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         && editRevisionRef.current === submittedDraft.revision) setAttachError("消息未发送，草稿已保留");
     }
     finally { submittingRef.current = false; }
-  }, [value, context, pendingTeacherText, queueRecoveryId, attachedImages, isStreaming, onBuiltinCommand, onSend, clearInput, onAudioUnlock]);
+  }, [value, context, pendingTeacherText, queueRecoveryId, attachedImages, isStreaming, onBuiltinCommand, onSend, clearInput, onAudioUnlock, recallMode, recallCapability]);
 
   const slashQuery = value.startsWith("/") && !/\s/.test(value.slice(1))
     ? value.slice(1).toLowerCase()
@@ -1163,13 +1174,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     ? t(slashQuery ? "chat.match" : "chat.command")
     : t(slashQuery ? "chat.matches" : "chat.commands", { count: filteredSlashCommands.length });
   const hasInputText = Boolean(value.trim());
-  const canQueueStreamingMessage = streamingQueueAllowed && hasInputText && attachedImages.length === 0 && !pendingTeacherText && !bashMode && !queueSubmitting && !queueRecoveryId && !queueUncertain;
-  const hasStreamingQueueActions = streamingQueueAllowed && Boolean(onSteer || onFollowUp);
-  const canInterruptStreamingMessage = Boolean(onInterruptSend) && hasInputText && attachedImages.length === 0 && !pendingTeacherText && !bashMode && !queueSubmitting && !queueRecoveryId && !queueUncertain;
-  const steerPriority = streamingQueueAllowed && Boolean(onSteer);
-  const hasStreamingPriorityAction = steerPriority || Boolean(onInterruptSend);
+  const canQueueStreamingMessage = streamingQueueAllowed && hasInputText && attachedImages.length === 0 && !pendingTeacherText && !bashMode && !queueSubmitting && !queueRecoveryId && !queueUncertain && !recallMode;
+  const hasStreamingQueueActions = !recallMode && streamingQueueAllowed && Boolean(onSteer || onFollowUp);
+  const canInterruptStreamingMessage = !recallMode && Boolean(onInterruptSend) && hasInputText && attachedImages.length === 0 && !pendingTeacherText && !bashMode && !queueSubmitting && !queueRecoveryId && !queueUncertain;
+  const steerPriority = !recallMode && streamingQueueAllowed && Boolean(onSteer);
+  const hasStreamingPriorityAction = !recallMode && (steerPriority || Boolean(onInterruptSend));
   const canPriorityStreamingMessage = steerPriority ? canQueueStreamingMessage : canInterruptStreamingMessage;
-  const canSendMessage = Boolean(hasInputText || attachedImages.length) && (!context || hasInputText) && !pendingTeacherText && !queueRecoveryId && !queueSubmitting;
+  const canSendMessage = Boolean(hasInputText || attachedImages.length) && (!context || hasInputText) && !pendingTeacherText && !queueRecoveryId && !queueSubmitting
+    && (!recallMode || Boolean(recallCapability?.available && !attachedImages.length && !context && value.length <= 512 && !/^[!/]/u.test(value.trim())));
 
   // ── @ file autocomplete ──────────────────────────────────────────────────
   // Recomputed from the text before the caret on every change/caret move.
@@ -1354,6 +1366,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, [setValue]);
 
   const sendQueued = useCallback(async (mode: "steer" | "followup") => {
+    if (recallMode) return;
     if (queueSubmittingRef.current) return;
     if (!streamingQueueAllowed) { setAttachError("主动运行期间，请等当前回复结束再发送"); return; }
     const msg = value.trim();
@@ -1393,9 +1406,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       queueSubmittingRef.current = false;
       setQueueSubmitting(false);
     }
-  }, [value, context, pendingTeacherText, queueRecoveryId, attachedImages, onPromptWithStreamingBehavior, onSteer, onFollowUp, clearInput, onAudioUnlock, streamingQueueAllowed]);
+  }, [value, context, pendingTeacherText, queueRecoveryId, attachedImages, onPromptWithStreamingBehavior, onSteer, onFollowUp, clearInput, onAudioUnlock, streamingQueueAllowed, recallMode]);
 
   const sendInterrupt = useCallback(async () => {
+    if (recallMode) return;
     if (queueSubmittingRef.current || !onInterruptSend) return;
     const msg = value.trim();
     if (!msg || attachedImages.length || pendingTeacherText || queueRecoveryId || queueUncertain || bashMode) return;
@@ -1422,7 +1436,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       queueSubmittingRef.current = false;
       setQueueSubmitting(false);
     }
-  }, [onInterruptSend, value, attachedImages.length, pendingTeacherText, queueRecoveryId, queueUncertain, bashMode, onAudioUnlock, context, clearInput]);
+  }, [onInterruptSend, value, attachedImages.length, pendingTeacherText, queueRecoveryId, queueUncertain, bashMode, onAudioUnlock, context, clearInput, recallMode]);
 
   const applyPendingQueue = useCallback((replace: boolean) => {
     if (!pendingQueueMessages.length || pendingFailedMessages.length || queueRecoveryId) return;
@@ -2368,8 +2382,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               layout is referenced; its demo, assets and dependencies are unused. */}
           <div className="chat-composer">
           {draftSaveFailed ? <div className="chat-composer-save-error" role="alert">草稿暂未保存到本机，刷新前请复制内容。</div> : null}
+          {recallMode ? <div className="chat-composer-teacher-offer" role="status">
+            <span>核对记忆</span>
+            <span>{recallCapability?.available ? `剩余 ${recallCapability.remaining} 次 · ${recallCapability.model ?? ""}` : recallCapability?.status ?? "暂不可用"}</span>
+            <button type="button" disabled={Boolean(pendingPrompt) || isStreaming} onClick={() => setRecallChoice(null)}>普通发送</button>
+          </div> : null}
           {pendingPrompt && !isStreaming ? <div className="chat-composer-teacher-offer" role="status">
             <span>上一条消息待核对</span>
+            {pendingPrompt.purpose === "recall" ? <button type="button" onClick={() => {
+              const key = draftKeyRef.current;
+              void Promise.resolve(onSend(pendingPrompt.message, undefined, "recall")).then(() => {
+                if (key && draftKeyRef.current === key && !getDraft(key)?.pendingPrompt) setRecallChoice(null);
+              });
+            }}>核对发送结果</button> : null}
             <button type="button" onClick={() => {
               if (!draftKey || !window.confirm("请先核对会话和管理中心的待核对消息。重置发送标识后再次发送，可能产生重复消息。")) return;
               releasePendingPromptForNewMessage(draftKey, pendingPrompt.clientRequestId);
@@ -2705,6 +2730,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 backdropFilter: "blur(10px)",
               } : null),
             }}>
+            {teacherMode ? <button type="button" className="native-toolbar-button" aria-pressed={recallMode}
+              disabled={!recallCapability?.available || isStreaming || Boolean(pendingPrompt) || Boolean(queueRecoveryId) || Boolean(pendingQueueMessages.length)}
+              title={recallCapability?.available ? `剩余 ${recallCapability.remaining} 次 · ${recallCapability.model ?? ""}` : recallCapability?.status ?? "待验收"}
+              onClick={() => { setRecallChoice(recallMode ? null : draftKey ?? null); setControlsMenuOpen(false); }}
+              style={{ padding: "8px 12px", color: "var(--text-muted)", border: "none", background: recallMode ? "var(--bg-selected)" : "none", borderRadius: 9 }}>
+              核对记忆
+            </button> : null}
             {!isStreaming && onToolPresetChange && (
               <div ref={toolDropdownRef} style={{ position: "relative" }}>
                 <button

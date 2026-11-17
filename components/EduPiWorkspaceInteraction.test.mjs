@@ -36,6 +36,8 @@ function mount(name, initialProps = {}, controlled = true, componentName = name,
   const jsx = (type, props, key) => ({ type, props: props || {}, key });
   const modules = {
     ...libraries, react: hooks, "react/jsx-runtime": { jsx, jsxs: jsx },
+    "@/lib/edupi-teacher-template-client": { readTeacherTemplateSettings: async () => ({ version: 1, enabled: false }),
+      stopTeacherTemplateAutomation: assert.fail },
     "./EduPiForeground": { useEduPiForegroundPolicy: () => policy, EduPiPagedRows: "paged-rows", EduPiListPreview: "list-preview" },
     "./EduPiTimetableGrid": { EduPiTimetableGrid: "timetable-grid" },
     "@/hooks/useModalDismiss": { useModalDismiss: () => hooks.useRef(null) },
@@ -49,7 +51,7 @@ function mount(name, initialProps = {}, controlled = true, componentName = name,
   class Select {}
   const exports = {};
   vm.runInNewContext(sources[name] + (name === "EduPiCalendarWorkspace" ? "\nexports.MonthView = MonthView; exports.WeekView = WeekView; exports.DayView = DayView; exports.IntakeComposer = IntakeComposer; exports.CalendarDetailDrawer = CalendarDetailDrawer;" : ""), {
-    exports, URLSearchParams,
+    exports, URLSearchParams, AbortController,
     crypto: { randomUUID: () => `synthetic-occurrence-${++uuid}` },
     FormData: environment.FormData || class { constructor(form) { this.values = { ...form.values }; } get(key) { return this.values[key] ?? null; } },
     require: dependency => { assert.ok(modules[dependency], dependency); return modules[dependency]; },

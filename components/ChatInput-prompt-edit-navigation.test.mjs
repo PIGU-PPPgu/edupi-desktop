@@ -46,6 +46,7 @@ function editor(store, key = "A") {
     textareaRef: { current: { style: { height: "40px" } } },
   };
   const context = { ...refs, useCallback: callback => callback, useEffect: callback => callback(),
+    recallMode: false, recallCapability: undefined, setRecallChoice: noop,
     getDraft: store.getDraft, setDraft: store.setDraft, flushDraftNow: store.flushDraftNow,
     markPendingPromptDraftEdited: store.markPendingPromptDraftEdited ?? noop,
     updateValue: next => { state.value = typeof next === "function" ? next(state.value) : next; refs.valueRef.current = state.value; },

@@ -12,6 +12,7 @@ import { dateBefore, lessonDateMatchesSlot, MAX_PREPARATION_MATERIALS, parseTeac
 import { isTaskForeground, paginateForeground, shanghaiDate, taskCompletionTime, taskReferenceDate } from "@/lib/edupi-foreground";
 import { EduPiPagedRows, useEduPiForegroundPolicy } from "./EduPiForeground";
 import { SegmentedControl } from "./AffectSegmentedControl";
+import { readTeacherTemplateSettings, stopTeacherTemplateAutomation, type TeacherTemplateSettings } from "@/lib/edupi-teacher-template-client";
 
 type Props = {
   data: EducationContract;
@@ -135,6 +136,10 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   const [untilDate, setUntilDate] = useState("");
   const [leadDays, setLeadDays] = useState(2);
   const [recurringDeliverables, setRecurringDeliverables] = useState("");
+  const [templateSelection, setTemplateSelection] = useState({ workspace: data.workspace, classId: "", subject: "" });
+  const [templateSettings, setTemplateSettings] = useState<{ workspace: string; value: TeacherTemplateSettings } | null>(null);
+  const [templateSettingsRefresh, setTemplateSettingsRefresh] = useState(0);
+  const [templateStopping, setTemplateStopping] = useState(false);
   const [timetableSlotId, setTimetableSlotId] = useState("");
   const [lessonDate, setLessonDate] = useState("");
   const [materialIds, setMaterialIds] = useState<string[]>([]);
@@ -155,6 +160,13 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
     createScopeRef.current = { workspace: data.workspace, alive: true, submitting: false, sequence: 0 };
   }
   const createScope = createScopeRef.current;
+  const templateRunRef = useRef({ scope: createScope, alive: true, sequence: 0, stopping: false });
+  if (templateRunRef.current.scope !== createScope) {
+    templateRunRef.current.alive = false;
+    templateRunRef.current = { scope: createScope, alive: true, sequence: 0, stopping: false };
+  }
+  const templateRun = templateRunRef.current;
+  const currentTemplateSettings = templateSettings?.workspace === createScope.workspace ? templateSettings.value : null;
   const dragStartRef = useRef<{ id: string; x: number; y: number; offX: number; offY: number; width: number } | null>(null);
   const suppressClickRef = useRef(false);
   const ghostFrameRef = useRef(0);
@@ -164,6 +176,20 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<TaskBoardLaneId | null>(null);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string; preparationTaskId?: string } | null>(null);
+  useEffect(() => {
+    templateRun.alive = true; templateRun.stopping = false; setTemplateStopping(false);
+    const sequence = templateRun.sequence, controller = new AbortController();
+    const current = () => templateRun.alive && templateRunRef.current === templateRun && templateRun.sequence === sequence && !controller.signal.aborted;
+    if (templateRun.scope.workspace) {
+      void readTeacherTemplateSettings(controller.signal).then(value => {
+        if (current()) setTemplateSettings({ workspace: templateRun.scope.workspace, value });
+      }).catch(() => { if (current()) setTemplateSettings(null); });
+    }
+    return () => {
+      templateRun.alive = false; templateRun.stopping = false; templateRun.sequence++;
+      controller.abort();
+    };
+  }, [templateRun, templateSettingsRefresh]);
   useEffect(() => {
     if (!message?.preparationTaskId) return;
     const task = data.tasks.find(item => item.id === message.preparationTaskId);
@@ -196,6 +222,32 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   const compatibleMaterials = useMemo(() => (data.teacherMaterials || []).filter((material) => material.available === true
     && material.subject === activeSubject && material.class_id === activeClass), [activeClass, activeSubject, data.teacherMaterials]);
   const compatibleMaterialIds = useMemo(() => new Set(compatibleMaterials.map((material) => material.material_id)), [compatibleMaterials]);
+  const templateClasses = useMemo(() => [...new Map((data.factSpine?.entities ?? [])
+    .filter(entity => entity.kind === "class" && rawText(entity.id))
+    .map(entity => [entity.id, { id: entity.id, name: rawText(entity.name) || entity.id }])).values()]
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)), [data.factSpine?.entities]);
+  const templateSubjects = useMemo(() => {
+    const subjectNames = new Map((data.factSpine?.entities ?? []).filter(entity => entity.kind === "subject")
+      .map(entity => [entity.id, rawText(entity.name)]));
+    return [...new Set([
+      ...data.timetable.map(slot => rawText(slot.subject)),
+      ...(data.teacherMaterials ?? []).map(material => rawText(material.subject)),
+      ...(data.factSpine?.teachingView.bySubject ?? []).filter(item => item.subjectRef !== "unscoped")
+        .map(item => subjectNames.get(item.subjectRef) || rawText(item.subjectRef)),
+    ].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  }, [data.timetable, data.teacherMaterials, data.factSpine]);
+  const templateClassId = templateSelection.workspace === createScope.workspace
+    && templateClasses.some(item => item.id === templateSelection.classId) ? templateSelection.classId : "";
+  const templateSubject = templateSelection.workspace === createScope.workspace
+    && templateSubjects.includes(templateSelection.subject) ? templateSelection.subject : "";
+  useEffect(() => {
+    setTemplateSelection(current => {
+      if (current.workspace !== createScope.workspace) return current;
+      const classId = templateClasses.some(item => item.id === current.classId) ? current.classId : "";
+      const subject = templateSubjects.includes(current.subject) ? current.subject : "";
+      return classId === current.classId && subject === current.subject ? current : { ...current, classId, subject };
+    });
+  }, [createScope.workspace, templateClasses, templateSubjects]);
   useEffect(() => setMaterialIds((current) => {
     const next = current.filter((id) => compatibleMaterialIds.has(id));
     return next.length === current.length ? current : next;
@@ -210,7 +262,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   const lessonDateError = activeSlot && lessonDate && !lessonDateValid
     ? `请选择${weekdayLabels[timetableDayOfWeek(activeSlot) || 0]}对应的上课日期。`
     : null;
-  const canCreate = Boolean(title.trim()) && (!recurring || Boolean(recurringValidation.value && !recurringItems.error))
+  const canCreate = Boolean(title.trim()) && (!recurring || Boolean(templateClassId && templateSubject && recurringValidation.value && !recurringItems.error))
     && (!managedPreparation || Boolean(activeSlot && lessonDateValid
     && materialIds.length > 0 && materialIds.length <= MAX_PREPARATION_MATERIALS
     && materialIds.every((id) => compatibleMaterialIds.has(id))
@@ -223,6 +275,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
     if (createScope.workspace) {
       if (draftWorkspaceRef.current && draftWorkspaceRef.current !== createScope.workspace) {
         setTitle(""); setDueDate(""); setNote(""); setManagedPreparation(false); setRecurring(false); setCadence("weekly"); setUntilDate(""); setLeadDays(2); setRecurringDeliverables(""); setTimetableSlotId(""); setLessonDate(""); setMaterialIds([]);
+        setTemplateSelection({ workspace: createScope.workspace, classId: "", subject: "" });
         setDeliverables(DEFAULT_PREPARATION_DELIVERABLES.join("\n")); dueDateManuallyEditedRef.current = false; pendingCreateRef.current = null;
       }
       draftWorkspaceRef.current = createScope.workspace;
@@ -271,6 +324,40 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
     if (!createScope.alive || createScopeRef.current !== createScope || createScope.submitting) return;
     rememberCreateFocus("trigger", true); setMessage(null); setCreateOpen(false);
   };
+  const stopTemplates = async () => {
+    if (!currentTemplateSettings?.enabled || !templateRun.scope.workspace || !templateRun.alive
+      || templateRunRef.current !== templateRun || templateRun.stopping) return;
+    templateRun.stopping = true;
+    const sequence = ++templateRun.sequence;
+    const current = () => templateRun.alive && templateRunRef.current === templateRun && templateRun.sequence === sequence;
+    setTemplateStopping(true); setMessage(null);
+    try {
+      const result = await stopTeacherTemplateAutomation(currentTemplateSettings.updatedAt);
+      if (!current()) return;
+      if (result.localStatus === "disabled") {
+        setTemplateSettings({ workspace: templateRun.scope.workspace,
+          value: { ...currentTemplateSettings, enabled: false, updatedAt: result.updatedAt } });
+        const verified = result.runtimeStatus === "verified" && result.coreStatus !== "unknown";
+        setMessage(verified ? { tone: "success", text: "周期材料已停止。" }
+          : { tone: "error", text: result.runtimeStatus === "unknown"
+            ? "本地已停用，运行状态待核对。" : "本地已停用，授权状态待核对。" });
+      } else {
+        setMessage({ tone: "error", text: result.localStatus === "superseded" ? "设置已变化，停止状态待核对。" : "停止状态待核对。" });
+        setTemplateSettingsRefresh(value => value + 1);
+      }
+    } catch (error) {
+      if (current()) {
+        setMessage({ tone: "error", text: error instanceof Error ? error.message : "周期材料停止状态待核对。" });
+        setTemplateSettingsRefresh(value => value + 1);
+      }
+    } finally {
+      if (current()) { templateRun.stopping = false; setTemplateStopping(false); }
+    }
+  };
+  const templateStopControl = currentTemplateSettings?.enabled
+    ? <button type="button" className="native-button" disabled={templateStopping} onClick={() => void stopTemplates()}>
+      {templateStopping ? "停止中…" : "停止周期材料"}
+    </button> : null;
 
   const stopDragging = () => {
     draggedTaskIdRef.current = null;
@@ -330,7 +417,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
       dueDate: dueDate || null,
       note: note.trim() || null,
       preparationSource: managedPreparation ? { kind: "teaching_before_class", timetableSlotId: activeSlotId, lessonDate, materialIds: [...materialIds], deliverables: [...requestedDeliverables] } : null,
-      ...(recurring ? { recurrence: recurringValidation.value } : {}),
+      ...(recurring ? { recurrence: recurringValidation.value, templateScope: { classId: templateClassId, subject: templateSubject } } : {}),
     };
     createScope.submitting = true;
     const sequence = ++createScope.sequence;
@@ -355,6 +442,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
       setUntilDate("");
       setLeadDays(2);
       setRecurringDeliverables("");
+      setTemplateSelection({ workspace: createScope.workspace, classId: "", subject: "" });
       setTimetableSlotId("");
       setLessonDate("");
       setMaterialIds([]);
@@ -364,6 +452,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
       setMessage(result.preparationState === "error"
         ? { tone: "error", text: `任务已创建；自动准备尚未启动：${result.preparationError || "请打开任务后重试"}`, preparationTaskId: `teacher-task-${clientRequestId.toLowerCase()}` }
         : { tone: "success", text: recurring ? "周期任务已创建。" : result.preparationState ? "任务已创建，正在准备教学产物。" : "任务已创建到“待处理”。" });
+      if (recurring) setTemplateSettingsRefresh(value => value + 1);
     } catch (error) {
       if (current()) setMessage({ tone: "error", text: error instanceof Error ? error.message : "任务创建失败。" });
     } finally {
@@ -375,7 +464,8 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
   if (inList) {
     const listTasks = listColumn?.tasks || (listId === "history" ? historyColumns : columns).flatMap(column => column.tasks).filter(task => listId !== "actionable" || isTaskActionable(task));
     return <main className="edupi-module-workspace"><header className="edupi-module-heading"><div><button type="button" className="edupi-back-link" onClick={() => navigate(`workspace:board${category === "all" ? "" : `:${category}`}`)}>← 工作区</button><h1>{listColumn?.label || (listId === "history" ? "任务历史" : listId === "actionable" ? "需要处理" : "任务")}</h1></div></header>
-      <div className="edupi-foreground-controls"><select aria-label="列表状态" value={listId} onChange={event => openList(event.target.value)}><option value="all">全部状态</option><option value="actionable">需要处理</option>{columns.map(column => <option key={column.id} value={column.id}>{column.label}</option>)}<option value="history">历史</option></select><select aria-label="任务类型" value={category} onChange={event => changeCategory(event.target.value as typeof category)}><option value="all">全部类型</option>{TASK_CATEGORY_CONFIG.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span>{query.trim() ? `搜索：${query}` : null}</span></div>
+      <div className="edupi-foreground-controls"><select aria-label="列表状态" value={listId} onChange={event => openList(event.target.value)}><option value="all">全部状态</option><option value="actionable">需要处理</option>{columns.map(column => <option key={column.id} value={column.id}>{column.label}</option>)}<option value="history">历史</option></select><select aria-label="任务类型" value={category} onChange={event => changeCategory(event.target.value as typeof category)}><option value="all">全部类型</option>{TASK_CATEGORY_CONFIG.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span>{query.trim() ? `搜索：${query}` : null}</span>{templateStopControl}</div>
+      {message ? <p className={`edupi-task-board-message is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p> : null}
       <EduPiPagedRows rows={listTasks} memoryKey={`workspace:${listId}:${category}:${query}`} renderRow={task => {
         const lane = taskBoardLane(task, task.id ? data.taskSessions[task.id] : null, task.id ? candidateByTask.get(task.id) : null);
         const completion = taskCompletionTime(task, data);
@@ -388,7 +478,7 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
     <main ref={boardRef} className="edupi-workspace-board" onPointerMove={(event) => { if (!draggedTaskIdRef.current) { const start = dragStartRef.current; if (!start || Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 6) return; suppressClickRef.current = true; beginDrag(start, event.clientX, event.clientY); } queueGhostPosition(event.clientX, event.clientY); setDropTarget(dragTarget(event)?.stage ?? null); }} onPointerUp={(event) => { const target = dragTarget(event); stopDragging(); if (target) void move(target.task, target.stage); }} onPointerCancel={stopDragging} onPointerLeave={() => { if (draggedTaskIdRef.current) stopDragging(); }}>
       <header className="edupi-workspace-board__heading">
         <div><h1>工作区</h1><p>{visibleCount} 项</p></div>
-        <div className="edupi-workspace-board__actions"><button type="button" className="native-button" onClick={() => openList("history")}>历史 <span>{historyCount}</span></button>{!createOpen ? <button ref={createButtonRef} type="button" className="native-button native-button-primary is-primary" aria-expanded={createOpen} disabled={creating || !data.workspace} onClick={openCreate}>新建任务</button> : null}</div>
+        <div className="edupi-workspace-board__actions">{templateStopControl}<button type="button" className="native-button" onClick={() => openList("history")}>历史 <span>{historyCount}</span></button>{!createOpen ? <button ref={createButtonRef} type="button" className="native-button native-button-primary is-primary" aria-expanded={createOpen} disabled={creating || !data.workspace} onClick={openCreate}>新建任务</button> : null}</div>
       </header>
       {mergeSuggestions}
       <SegmentedControl<"all" | TaskCategoryId>
@@ -406,9 +496,15 @@ export function EduPiWorkspaceBoard({ data, query, onTaskDetail, onCreateTask, o
         <label><span>任务</span><input ref={titleRef} className="native-input" required maxLength={240} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：准备第一次单元检测" /></label>
         <label><span>{recurring ? "首期日期" : "截止日期"}</span><input className="native-input" type="date" value={dueDate} onInput={(event) => { dueDateManuallyEditedRef.current = true; setDueDate(event.currentTarget.value); }} /></label>
         <label><span>备注</span><input className="native-input" maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} placeholder="可选" /></label>
-        <label className="edupi-task-board-create__managed"><input type="checkbox" checked={managedPreparation} onChange={(event) => { setManagedPreparation(event.target.checked); if (event.target.checked) { setRecurring(false); if (!timetableSlotId) setTimetableSlotId(slotId(usableSlots[0] || {})); } }} /><span>自动准备教学产物</span></label>
-        <label className="edupi-task-board-create__managed"><input type="checkbox" checked={recurring} onChange={(event) => { setRecurring(event.target.checked); if (event.target.checked) setManagedPreparation(false); }} /><span>周期材料</span></label>
+        <label className="edupi-task-board-create__managed"><input type="checkbox" checked={managedPreparation} onChange={(event) => { setManagedPreparation(event.target.checked); if (event.target.checked) { setRecurring(false); setTemplateSelection({ workspace: createScope.workspace, classId: "", subject: "" }); if (!timetableSlotId) setTimetableSlotId(slotId(usableSlots[0] || {})); } }} /><span>自动准备教学产物</span></label>
+        <label className="edupi-task-board-create__managed"><input type="checkbox" checked={recurring} onChange={(event) => { setRecurring(event.target.checked); if (event.target.checked) setManagedPreparation(false); else setTemplateSelection({ workspace: createScope.workspace, classId: "", subject: "" }); }} /><span>周期材料</span></label>
         {recurring ? <div className="edupi-task-board-create__source">
+          <label><span>班级</span><select className="native-select" required value={templateClassId} onChange={event => setTemplateSelection(current => ({
+            workspace: createScope.workspace, classId: event.target.value, subject: current.workspace === createScope.workspace ? current.subject : "",
+          }))}><option value="">选择班级</option>{templateClasses.map(item => <option key={item.id} value={item.id}>{templateClasses.some(other => other.id !== item.id && other.name === item.name) ? `${item.name} · ${item.id}` : item.name}</option>)}</select></label>
+          <label><span>学科</span><select className="native-select" required value={templateSubject} onChange={event => setTemplateSelection(current => ({
+            workspace: createScope.workspace, classId: current.workspace === createScope.workspace ? current.classId : "", subject: event.target.value,
+          }))}><option value="">选择学科</option>{templateSubjects.map(subject => <option key={subject} value={subject}>{subject}</option>)}</select></label>
           <label><span>周期</span><select className="native-select" value={cadence} onChange={(event) => { setCadence(event.target.value as "weekly" | "monthly"); setLeadDays(Math.min(leadDays, event.target.value === "weekly" ? 6 : 7)); }}><option value="weekly">每周</option><option value="monthly">每月</option></select></label>
           <label><span>结束日期</span><input className="native-input" type="date" min={dueDate || undefined} value={untilDate} onChange={(event) => setUntilDate(event.target.value)} /></label>
           <label><span>提前天数</span><input className="native-input" type="number" min={0} max={cadence === "weekly" ? 6 : 7} value={leadDays} onChange={(event) => setLeadDays(Number(event.target.value))} /></label>

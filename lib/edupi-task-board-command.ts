@@ -4,13 +4,14 @@ import { activeBridgeIdentity } from "./edupi-bridge-manifest";
 import { callEduPiCore } from "./edupi-core-process-client";
 import { readEduPiEducationSnapshot, type CoreEducationSnapshotPayload, type EduPiBridgeRoots } from "./edupi-core-snapshot";
 import type { TeacherRecurringMaterialsInput } from "./edupi-teacher-task-form";
+import { readEduPiTeacherTemplateHistoryBinding } from "./edupi-teacher-template-config";
 
 type RawRecord = Record<string, unknown>;
 export type TaskBoardStage = "todo" | "progress" | "review" | "done";
 export type TaskBoardSource = { source_id: string; source_kind: "teacher_message"; source_hash: string; evidence_ids: string[] };
 export type TeacherCreatedPreparationSource = { kind: "teaching_before_class"; timetable_slot_id: string; lesson_date: string; material_ids: string[]; deliverables: string[] };
 export type TeacherCreatedPreparationInput = { kind: "teaching_before_class"; timetableSlotId: string; lessonDate: string; materialIds: string[]; deliverables: string[] };
-export type CreateTeacherTaskInput = { clientRequestId: string; title: string; dueDate: string | null; note: string | null; preparationSource: TeacherCreatedPreparationInput | null; recurrence?: TeacherRecurringMaterialsInput | null };
+export type CreateTeacherTaskInput = { clientRequestId: string; title: string; dueDate: string | null; note: string | null; preparationSource: TeacherCreatedPreparationInput | null; recurrence?: TeacherRecurringMaterialsInput | null; templateScope?: { classId: string; subject: string } };
 export type CreateTeacherTaskOutcome = { preparationState: "running" | "ready" | "error" | null; preparationError: string | null };
 export type CreateTaskCommand = { command_type: "create_task"; source: TaskBoardSource; task: { task_id: string; title: string; due_date: string | null; note: string | null; preparation_source?: TeacherCreatedPreparationSource | null; recurrence?: { kind: "teacher_internal_materials"; cadence: "weekly" | "monthly"; until_date: string; lead_days: number; deliverables: string[] } | null } };
 export type MoveTaskStageCommand = { command_type: "move_task_stage"; source: TaskBoardSource; task_id: string; expected_revision: number; to_stage: TaskBoardStage; note: string | null };
@@ -46,6 +47,7 @@ export function buildTaskBoardCommandEnvelope({
   requestId = id("task-board-request"),
   messageId = id("task-board-message"),
   idempotencyKey = id("task-board-idempotency"),
+  reviewerId = null,
 }: {
   snapshotId: string;
   command: TaskBoardCommand;
@@ -53,6 +55,7 @@ export function buildTaskBoardCommandEnvelope({
   requestId?: string;
   messageId?: string;
   idempotencyKey?: string;
+  reviewerId?: string | null;
 }): RawRecord {
   const identity = activeBridgeIdentity();
   const envelope = {
@@ -74,7 +77,8 @@ export function buildTaskBoardCommandEnvelope({
       evidence_ids: [...command.source.evidence_ids],
       parent_ids: [],
     }],
-    teacher_review: { state: "pending_review", reviewer_id: null, reviewed_at: null, note: null, revision: 0 },
+    teacher_review: { state: "pending_review", reviewer_id: reviewerId, reviewed_at: null, note: null,
+      revision: command.command_type === "create_task" ? 0 : command.expected_revision },
     external_send: false,
     command,
   };
@@ -109,7 +113,10 @@ export async function issueTaskBoardCommand(command: TaskBoardCommand, dependenc
   const initial = await (dependencies.readSnapshot || productionSnapshot)();
   const snapshotId = String(initial.payload.snapshot_id || "");
   if (!snapshotId) throw new TaskBoardCommandError("unavailable", "Core 教育快照不可用。");
-  const envelope = buildTaskBoardCommandEnvelope({ snapshotId, command, ...dependencies.envelopeOptions });
+  const taskId = command.command_type === "create_task" ? command.task.task_id : command.task_id;
+  const binding = readEduPiTeacherTemplateHistoryBinding({ dataRoot: initial.roots.dataRoot.root });
+  const reviewerId = binding?.templateIds.includes(taskId) ? binding.ownerId : null;
+  const envelope = buildTaskBoardCommandEnvelope({ snapshotId, command, ...dependencies.envelopeOptions, reviewerId });
   const dispatch = dependencies.dispatch || ((nextEnvelope, roots) => callEduPiCore({ operation: "command", requestId: String(nextEnvelope.request_id), runtime: roots.runtime, dataRoot: roots.dataRoot, envelope: nextEnvelope }));
   let rawResponse: unknown;
   try {
@@ -127,7 +134,6 @@ export async function issueTaskBoardCommand(command: TaskBoardCommand, dependenc
   const replayed = response.replayed === true;
   const receiptEnvelope = record(response.receipt);
   const receipt = record(receiptEnvelope?.payload);
-  const taskId = command.command_type === "create_task" ? command.task.task_id : command.task_id;
   const target = record(receipt?.target);
   if (!receiptEnvelope || !receipt || !validateCoreEnvelopeSchema(receiptEnvelope)
     || receiptEnvelope.producer !== "edupi-core" || receiptEnvelope.external_send !== false

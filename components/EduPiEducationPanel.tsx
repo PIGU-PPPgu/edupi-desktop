@@ -48,7 +48,7 @@ import { useDragDrop } from "@/hooks/useDragDrop";
 import { createActivationRequestTracker } from "@/lib/edupi-activation-request";
 import { shouldShowBlockingEducationLoad } from "@/lib/edupi-workspace-load-state";
 import { isTauriDesktop } from "@/lib/desktop-updater";
-import { listDesktopStagedMaterials, removeDesktopStagedMaterial, selectFilesNative, stageDesktopMaterialFiles, stageDesktopMaterialPaths } from "@/lib/desktop-native";
+import { desktopApiHeaders, listDesktopStagedMaterials, removeDesktopStagedMaterial, selectFilesNative, stageDesktopMaterialFiles, stageDesktopMaterialPaths } from "@/lib/desktop-native";
 import { loadStagedMaterials, removeStagedMaterial, stageBrowserMaterialFiles, type MaterialStagingDescriptor } from "@/lib/edupi-material-staging-client";
 import type { CoreTaskBoardStage } from "@/lib/edupi-task-board";
 import { calendarQuickEntryKey, calendarQuickEntryStatusLabel, type EduPiQuickEntryItem } from "@/lib/edupi-quick-entry";
@@ -92,6 +92,7 @@ type Props = {
   chatSidebarResizer?: ResizablePanel;
   onChatLayoutChange?: () => void;
   chatSidebarSuspended?: boolean;
+  readOnlyRefreshActive?: boolean;
   chatPreviewForeground?: boolean;
   renderFilePreview: (path: string) => ReactNode;
   onOpenAdmin: () => void;
@@ -138,7 +139,14 @@ function hasDroppedFiles(event: ReactDragEvent): boolean {
   return Array.from(event.dataTransfer.types).includes("Files");
 }
 
-export function EduPiEducationPanel({ initialModule = "home", refreshKey, activeAgentSessionId, onActivateAgentSession, chatPanel, reminderPanel, chatSidebar, chatSidebarResizer, onChatLayoutChange, chatSidebarSuspended = false, chatPreviewForeground = false, renderFilePreview, onOpenAdmin, onOpenSettings, onOpenProactive, onOpenGuide, onOpenPhoneControl, onPrepareAgentPrompt, onReplaceAgentPrompt, onPrepareTeacherDraft, quickEntryOpen, onOpenQuickEntry, onNewConversation, onCloseQuickEntry, onFocusAgentChat }: Props) {
+export function EduPiEducationPanel({ initialModule = "home", refreshKey, activeAgentSessionId, onActivateAgentSession, chatPanel, reminderPanel, chatSidebar, chatSidebarResizer, onChatLayoutChange, chatSidebarSuspended = false, readOnlyRefreshActive = true, chatPreviewForeground = false, renderFilePreview, onOpenAdmin, onOpenSettings, onOpenProactive, onOpenGuide, onOpenPhoneControl, onPrepareAgentPrompt, onReplaceAgentPrompt, onPrepareTeacherDraft, quickEntryOpen, onOpenQuickEntry, onNewConversation, onCloseQuickEntry, onFocusAgentChat }: Props) {
+  const [pageVisible, setPageVisible] = useState(() => typeof document === "undefined" || document.visibilityState !== "hidden");
+  useEffect(() => {
+    const changed = () => setPageVisible(document.visibilityState !== "hidden");
+    document.addEventListener("visibilitychange", changed);
+    return () => document.removeEventListener("visibilitychange", changed);
+  }, []);
+  const projectionReadsActive = readOnlyRefreshActive && pageVisible;
   const foregroundPolicy = useEduPiForegroundPolicy();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -318,6 +326,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       readEduPiTeachingSkills(signal),
       readEduPiKernel(signal),
     ]);
+    if (signal?.aborted) return null;
     const { context: nextContext, data: nextEducation } = workspace;
     if (sequence < workspaceMinimumApplySequenceRef.current) return null;
     if (!hasEveryTrackedTask(nextEducation, durableTaskIdsRef.current)) return null;
@@ -411,6 +420,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [loadWorkspace]);
 
   useEffect(() => {
+    if (!projectionReadsActive) return;
     const controller = new AbortController();
     setLoading(true);
     setLoadError(null);
@@ -421,12 +431,16 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => controller.abort();
-  }, [loadWorkspace, refreshKey]);
+  }, [loadWorkspace, refreshKey, projectionReadsActive]);
 
   useEffect(() => { if (initialModule !== "context" && !contextBusy) setContextOpen(false); }, [initialModule, contextBusy]);
 
   useEffect(() => {
+    const controller = new AbortController();
     const refresh = (event: Event) => {
+      // Reply completion already advances refreshKey; the same event also
+      // refreshes file panels and must not start a second projection batch.
+      if (event.type === "edupi-artifacts-updated" && (event as CustomEvent<{ refreshOnly?: boolean }>).detail?.refreshOnly === true) return;
       if (event.type === "edupi-education-refresh") {
         setReviewMessage(null);
         const notice = (event as CustomEvent<{ scheduleResolution?: ScheduleResolutionNotice }>).detail?.scheduleResolution;
@@ -435,15 +449,17 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
             ? { tone: "success", text: "日程已核对。" } : current);
         }
       }
-      void loadWorkspace().catch(() => {
+      if (!projectionReadsActive) return;
+      void loadWorkspace(controller.signal).catch(() => {
+        if (controller.signal.aborted) return;
         if (event.type === "edupi-education-refresh") setReviewMessage("任务读取失败，请重试。");
       });
     };
     window.addEventListener("edupi-preparation-updated", refresh);
     window.addEventListener("edupi-artifacts-updated", refresh);
     window.addEventListener("edupi-education-refresh", refresh);
-    return () => { window.removeEventListener("edupi-preparation-updated", refresh); window.removeEventListener("edupi-artifacts-updated", refresh); window.removeEventListener("edupi-education-refresh", refresh); };
-  }, [loadWorkspace]);
+    return () => { controller.abort(); window.removeEventListener("edupi-preparation-updated", refresh); window.removeEventListener("edupi-artifacts-updated", refresh); window.removeEventListener("edupi-education-refresh", refresh); };
+  }, [loadWorkspace, projectionReadsActive]);
 
   useEffect(() => {
     if (!materialStagingMessage || materialStagingMessage.sticky || materialStagingMessage.text.endsWith("…")) return;
@@ -526,6 +542,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, []);
 
   useEffect(() => {
+    if (!projectionReadsActive) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
@@ -540,12 +557,13 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       }
       if (!controller.signal.aborted) timer = setTimeout(poll, 20_000);
     };
-    void poll();
+    // The workspace batch already reads the initial kernel projection.
+    timer = setTimeout(poll, 20_000);
     return () => {
       controller.abort();
       if (timer) clearTimeout(timer);
     };
-  }, []);
+  }, [projectionReadsActive]);
 
   useEffect(() => {
     setActiveView(routeView);
@@ -1133,7 +1151,9 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [cancelActivation, updateTaskDetailLocation]);
 
   const createBoardTask = useCallback(async (input: CreateTeacherTaskInput): Promise<CreateTeacherTaskOutcome> => {
-    const response = await fetch("/api/edupi/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    const response = await fetch("/api/edupi/tasks", { method: "POST",
+      headers: input.recurrence ? await desktopApiHeaders({ "Content-Type": "application/json" }) : { "Content-Type": "application/json" },
+      body: JSON.stringify(input) });
     const result = await response.json() as { error?: string; taskId?: string; data?: EducationContract | null; refreshPending?: boolean; preparation?: { state?: string; error?: string; taskId?: string | null } | null };
     if (!response.ok || !result.taskId) throw new Error(result.error || `任务创建失败（HTTP ${response.status}）`);
     durableTaskIdsRef.current.add(result.taskId);

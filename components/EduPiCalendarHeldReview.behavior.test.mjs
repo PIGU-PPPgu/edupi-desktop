@@ -245,20 +245,22 @@ function expression(find) {
   visit(panelSource); assert.ok(found);
   return printer.printNode(ts.EmitHint.Expression, found, panelSource);
 }
-function panelHandlers(receipt = { status: "held", evidence_ids: ["evidence-a"] }) {
-  const listeners = new Map(), requests = [], messages = [];
+function panelHandlers(receipt = { status: "held", evidence_ids: ["evidence-a"] }, { projectionReadsActive = true, load } = {}) {
+  const listeners = new Map(), requests = [], messages = [], signals = [], reviewMessages = [];
   let current = null, refreshes = 0;
-  const exports = {}, context = { exports, scheduleResolutionMatchesTarget: conflicts.scheduleResolutionMatchesTarget,
+  const exports = {}, context = { exports, AbortController, projectionReadsActive, scheduleResolutionMatchesTarget: conflicts.scheduleResolutionMatchesTarget,
     useCallback: fn => fn, submitEducationIntake: async body => { requests.push(body); return { receipt }; },
     setMaterialStagingMessage: value => { current = typeof value === "function" ? value(current) : value; messages.push(current); },
-    setReviewMessage() {}, loadWorkspace: async () => { refreshes += 1; },
+    setReviewMessage: value => reviewMessages.push(value), loadWorkspace: async signal => {
+      refreshes += 1; signals.push(signal); return load?.(signal);
+    },
     window: { addEventListener: (type, fn) => listeners.set(type, fn), removeEventListener: type => listeners.delete(type) },
   };
   const callback = expression(node => ts.isCallExpression(node) && node.parent && ts.isVariableDeclaration(node.parent) && node.parent.name.getText(panelSource) === "importCalendarEvent");
   const setup = expression(node => ts.isArrowFunction(node) && node.parent && ts.isCallExpression(node.parent) && node.parent.expression.getText(panelSource) === "useEffect" && node.getText(panelSource).includes('window.addEventListener("edupi-education-refresh"'));
   vm.runInNewContext(transpile(`exports.importCalendar = ${callback}; exports.setup = ${setup};`), context);
   const cleanup = exports.setup();
-  return { exports, listeners, requests, messages, cleanup, get message() { return current; }, get refreshes() { return refreshes; } };
+  return { exports, listeners, requests, messages, signals, reviewMessages, cleanup, get message() { return current; }, get refreshes() { return refreshes; } };
 }
 
 test("the real parent calendar callback returns receipt status and evidence without changing its wire payload", async () => {
@@ -289,6 +291,32 @@ test("parent refresh updates only the matching held message and preserves newer 
   refresh({ type: "edupi-education-refresh", detail: { scheduleResolution: { kind: "calendar", canonicalId: "calendar-a", occurrenceRef: "occurrence-a", evidenceIds: ["evidence-a"] } } });
   assert.equal(f.message.scheduleReviewTarget.canonicalId, "calendar-b"); assert.equal(f.message.sticky, true);
   await tick(); assert.equal(f.refreshes, 4); f.cleanup();
+});
+
+test("parent refresh cleanup aborts pending projection work and suppresses its late failure", async () => {
+  const pending = deferred(), f = panelHandlers(undefined, { load: () => pending.promise });
+  f.listeners.get("edupi-education-refresh")({ type: "edupi-education-refresh" });
+  assert.equal(f.refreshes, 1);
+  assert.equal(f.signals[0].aborted, false);
+  assert.deepEqual(f.reviewMessages, [null]);
+  f.cleanup();
+  assert.equal(f.listeners.size, 0);
+  assert.equal(f.signals[0].aborted, true);
+  pending.reject(new Error("synthetic cancelled projection"));
+  await tick();
+  assert.equal(f.refreshes, 1);
+  assert.deepEqual(f.reviewMessages, [null]);
+});
+
+test("inactive parent projections still reconcile matching held feedback without reading", async () => {
+  const f = panelHandlers(undefined, { projectionReadsActive: false });
+  await f.exports.importCalendar({ eventId: "calendar-a", sourceOccurrenceRef: "occurrence-a" });
+  f.listeners.get("edupi-education-refresh")({ type: "edupi-education-refresh",
+    detail: { scheduleResolution: { kind: "calendar", canonicalId: "calendar-a",
+      occurrenceRef: "occurrence-a", evidenceIds: ["evidence-a"] } } });
+  assert.deepEqual(JSON.parse(JSON.stringify(f.message)), { tone: "success", text: "日程已核对。" });
+  assert.equal(f.refreshes, 0);
+  f.cleanup(); assert.equal(f.listeners.size, 0);
 });
 
 test("a parent load snapshot does not reopen a locally closed calendar before URL acknowledgement", async () => {

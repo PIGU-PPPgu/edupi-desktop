@@ -5,6 +5,7 @@ import { callEduPiCore } from "./edupi-core-process-client";
 import { readEduPiEducationSnapshot, type CoreEducationSnapshotPayload, type EduPiBridgeRoots } from "./edupi-core-snapshot";
 import { buildEducationContractFromWorkspace, type TeacherTaskStatus } from "./edupi-education-contract";
 import { hasCommittedTaskReview, type TaskReviewRefreshRequirement } from "./edupi-task-refresh";
+import { readEduPiTeacherTemplateHistoryBinding } from "./edupi-teacher-template-config";
 
 type RawRecord = Record<string, unknown>;
 
@@ -319,7 +320,10 @@ export async function issueTaskReview(input: TaskReviewInput, dependencies: Task
   if (!exactList(snapshotCommands, supportedCommands) || !supportedCommands.includes("review_task")) throw new TaskReviewError("unsupported_command", "Core 快照尚未启用任务审核。");
   const beforeTask = taskFromPayload(payload, requiredText(input.taskId, "taskId"));
   const beforeStatus = taskStatus(beforeTask.status);
-  const envelope = buildTaskReviewCommandEnvelope({ ...input, payload });
+  const binding = record(beforeTask.recurrence)?.kind === "teacher_internal_materials"
+    ? readEduPiTeacherTemplateHistoryBinding({ dataRoot: initial.roots.dataRoot.root }) : null;
+  const reviewerId = binding?.templateIds.includes(input.taskId) ? binding.ownerId : input.reviewerId;
+  const envelope = buildTaskReviewCommandEnvelope({ ...input, reviewerId, payload });
   const dispatch = dependencies.dispatch || ((nextEnvelope, roots) => callEduPiCore({ operation: "command", requestId: String(nextEnvelope.request_id), runtime: roots.runtime, dataRoot: roots.dataRoot, envelope: nextEnvelope }));
   let rawResponse: unknown;
   try {

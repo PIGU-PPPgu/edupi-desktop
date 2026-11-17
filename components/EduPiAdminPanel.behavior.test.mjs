@@ -24,7 +24,8 @@ function mountAdmin(initialSection = "connections") {
   const slots = [], effects = new Map(), frames = new Map(), timers = new Map(), observers = [];
   const focus = [], scroll = [], elements = new Map(), targets = new Map();
   let cursor = 0, dirty = false, unmounted = false, tree, nextId = 0, now = 0;
-  const document = { activeElement: null, contains: (element) => element.isConnected };
+  const document = { activeElement: null, visibilityState: "visible", contains: (element) => element.isConnected,
+    addEventListener() {}, removeEventListener() {} };
   class Element {
     constructor(id) {
       this.id = id;
@@ -90,6 +91,7 @@ function mountAdmin(initialSection = "connections") {
     "@/hooks/useDesktopHostIdentity": { useDesktopHostIdentity: () => ({ host: null, loading: false, refresh: async () => {} }) },
     "./desktop": { useDesktopChrome: () => ({ isDesktop: false }), WindowControls: "window-controls" },
     "@/lib/edupi-settings-navigation": navigation,
+    "@/lib/edupi-education-client": { readEduPiWorkspace: async () => null },
     "./EduPiSettingsIcon": { EduPiSettingsIcon: "settings-icon" },
     "./EduPiBrandMark": { EduPiBrandMark: "brand-mark" },
     "./EduPiBackgroundJobs": { EduPiBackgroundJobs: "background-jobs" },
@@ -104,6 +106,7 @@ function mountAdmin(initialSection = "connections") {
     "./EduPiPromptOutboxRecovery": { EduPiPromptOutboxRecovery: "outbox-recovery" },
     "./JevSettingsCard": { JevSettingsCard: "jev-settings" },
     "./OpenConnectorAdminPanel": { OpenConnectorAdminPanel: "connector-settings" },
+    "./CoreRecallSettings": { CoreRecallSettings: "recall-settings" },
   };
   const exports = {};
   vm.runInNewContext(compiled, {

@@ -13,7 +13,7 @@ const text = value => typeof value === "string" || typeof value === "number" ? S
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const job = (id = "job-one", status = "queued") => ({ job_id: id, title: `[UI验收 TEST] ${id}`, status });
 
-function mount(initialJobs = [], { data = { workspace: "/test/one" } } = {}) {
+function mount(initialJobs = [], { data = { workspace: "/test/one" }, active = true } = {}) {
   const slots = [], effects = [], requests = [], focused = [], revealed = [], interactions = [], listeners = new Set(), visibilityListeners = new Set(), elements = new Map(), timers = new Map();
   let cursor = 0, dirty = false, tree, mounted = true, writesAfterUnmount = 0, hidden = false, timerId = 0, previousRefs = [];
   const document = { body: {}, documentElement: {}, activeElement: null, hidden: false,
@@ -43,17 +43,17 @@ function mount(initialJobs = [], { data = { workspace: "/test/one" } } = {}) {
     "@/lib/desktop-native": { openPathNative: async () => {} }, "@/lib/desktop-updater": { isTauriDesktop: () => true },
   };
   const exported = {};
-  vm.runInNewContext(code, { exports: exported, document, Error,
+  vm.runInNewContext(code, { exports: exported, document, Error, AbortController,
     window: { setInterval(fn) { timers.set(++timerId, fn); return timerId; }, clearInterval(id) { timers.delete(id); } },
     fetch(url, options = {}) {
       assert.equal(url, "/api/edupi/jobs");
-      const item = { method: options.method || "GET", body: options.body ? JSON.parse(options.body) : null, done: false };
+      const item = { method: options.method || "GET", body: options.body ? JSON.parse(options.body) : null, signal: options.signal, done: false };
       item.promise = new Promise((resolve, reject) => { item.resolve = resolve; item.reject = reject; });
       requests.push(item); return item.promise;
     },
     require(name) { assert.ok(modules[name], name); return modules[name]; },
   });
-  const props = { data, onModels() {}, onMaterials() {} };
+  const props = { data, active, onModels() {}, onMaterials() {} };
   const commit = () => {
     for (const ref of previousRefs) ref.current = null;
     previousRefs = [];
@@ -102,6 +102,7 @@ function mount(initialJobs = [], { data = { workspace: "/test/one" } } = {}) {
     hide() { hidden = true; },
     visibility(hidden, dispatch = true) { document.hidden = hidden; if (dispatch) for (const listener of [...visibilityListeners]) listener(); },
     scope(workspace = "/test/two") { props.data = { workspace }; f.render(); },
+    active(value) { props.active = value; f.render(); },
     unmount() { mounted = false; root.isConnected = false; for (const slot of slots) slot?.cleanup?.(); },
     get writesAfterUnmount() { return writesAfterUnmount; },
   };
@@ -153,7 +154,7 @@ test("a hidden document before the opening commit cancels reveal and focus witho
 for (const completion of ["failure", "accepted"]) test(`a hidden document cancels the late ${completion} submit focus instead of implicitly scrolling`, async () => {
   const f = mount(); await f.ready(); f.fill(); f.submit(); f.revealed.length = 0; f.interactions.length = 0; f.visibility(true, false);
   if (completion === "failure") f.finish("POST", { error: "合成提交失败" }, { status: 503 });
-  else { f.finish("POST"); await f.settle(); f.finish("GET", [job()]); }
+  else { f.finish("POST"); await f.settle(); assert.equal(f.pending("GET").length, 0); }
   await f.settle(); assert.deepEqual(f.revealed, []); assert.deepEqual(f.interactions, []); assert.equal(f.listeners.size + f.visibilityListeners.size, 0);
   f.visibility(false, false); f.poll(); f.finish("GET", [job()]); await f.settle(); assert.deepEqual(f.interactions, []);
 });
@@ -208,6 +209,8 @@ test("moving focus away during the poll cancels replacement even after focus ret
 
 test("a late older poll cannot undo the newest completion or replay its replacement request", async () => {
   const f = mount([job()]); await f.ready(); f.move(f.elements.get("job:job-one")); f.poll(); f.poll();
+  assert.equal(f.pending("GET").length, 1, "an in-flight poll is shared until activity changes");
+  f.active(false); f.active(true);
   f.finish("GET", [completedJob()], { index: 1 }); await f.settle(); const artifact = f.elementForText("result.md"); assert.equal(f.document.activeElement, artifact);
   f.finish("GET", [job()]); await f.settle(); assert.equal(f.document.activeElement, artifact); assert.equal(f.interactions.length, 1); assert.match(f.text(), /result.md/);
 });
@@ -372,8 +375,41 @@ test("a poll predating a mutation cannot overwrite its result or show an old fai
 });
 
 test("out-of-order polls keep the newest projection and ignore stale errors", async () => {
-  const f = mount(); await f.ready(); f.poll(); f.poll(); f.finish("GET", [job("new")], { index: 1 }); await f.settle(); f.finish("GET", [], { status: 503 }); await f.settle();
+  const f = mount(); await f.ready(); f.poll(); f.active(false); f.active(true); f.finish("GET", [job("new")], { index: 1 }); await f.settle(); f.finish("GET", [], { status: 503 }); await f.settle();
   assert.match(f.text(), /\[UI验收 TEST\] new/); assert.doesNotMatch(f.text(), /后台任务暂不可用/);
+});
+
+test("inactive jobs cancel only their read, retain the creation draft, and read once on reopening", async () => {
+  const f = mount([job()], { active: false });
+  assert.equal(f.requests.length, 0);
+  f.active(true); await f.ready(); f.fill();
+  const draft = f.draft();
+  f.poll(); const pending = f.pending("GET")[0];
+  f.active(false);
+  assert.equal(pending.signal.aborted, true);
+  f.poll(); assert.equal(f.pending("GET").length, 1);
+  f.finish("GET", []); await f.settle();
+  assert.deepEqual(f.draft(), draft);
+  f.active(true);
+  assert.equal(f.pending("GET").length, 1);
+  f.finish("GET", [job()]); await f.settle();
+  assert.deepEqual(f.draft(), draft);
+});
+
+test("a submitted row cancellation finishes while inactive without clearing an unrelated job draft", async () => {
+  const f = mount([job()]); await f.ready(); f.fill();
+  const draft = f.draft(); f.click("job:job-one");
+  const mutation = f.pending("POST")[0];
+  f.active(false);
+  assert.equal(mutation.signal, undefined);
+  assert.equal(f.elements.get("submit").disabled, true);
+  f.finish("POST"); await f.settle();
+  assert.deepEqual(f.draft(), draft);
+  assert.equal(f.pending("GET").length, 0);
+  assert.equal(f.elements.get("submit").disabled, false);
+  f.active(true); f.finish("GET", [job("job-one", "canceled")]); await f.settle();
+  assert.deepEqual(f.draft(), draft);
+  assert.match(f.text(), /重新开始/);
 });
 
 test("a row mutation keeps an unrelated open creation draft and returns to the same job", async () => {

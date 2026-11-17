@@ -3,6 +3,8 @@ import { isDeepStrictEqual } from "node:util";
 import { NextResponse } from "next/server";
 import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
 import { isDesktopApiRequestAllowed } from "@/lib/desktop-api-auth";
+import { readEduPiRecallActivation } from "@/lib/edupi-recall-config";
+import { readRecallPromptOutboxBinding } from "@/lib/edupi-recall-prompt-server";
 import { confirmEduPiAmbientMessageBinding, markEduPiAmbientMessageAbandoned,
   markEduPiAmbientMessageWithdrawn, readEduPiAmbientMessagesForSession,
   prepareEduPiAmbientMessageBinding } from "@/lib/edupi-ambient-message-ledger";
@@ -180,14 +182,17 @@ export async function DELETE(request: Request) {
       if (saved.stage === "pi_unverified_withdrawn") return response("source_withdrawn");
       const piOutcomeUnknown = ["pi_dispatching", "pi_unknown"].includes(saved.stage);
       if (!["prepared", "registered", "captured", "pi_dispatching", "pi_unknown"].includes(saved.stage)) return response("cannot_cancel", 409);
+      const recall = readRecallPromptOutboxBinding(saved, options);
       const host = await ensureEduPiRuntime(roots);
       const health = record(record(await host.call("health", null))?.result);
       const rootRef = health?.data_root_fingerprint;
       if (typeof rootRef !== "string" || !ROOT_REF.test(rootRef)) return response("core_unavailable", 503);
+      const recallBinding = recall ? readRecallPromptOutboxBinding(saved, options, rootRef) : null;
       const proofs: Array<{ domain: EduPiProactivityDomain; messageRef: string; status: "sealed_absent" | "withdrawn" }> = [];
       for (const binding of saved.bindings) {
         const settled = await settleRegisteredPrompt(host, { rootRef, grantId: binding.grantId,
           sessionId, messageId: binding.captureMessageId, text: saved.command.message,
+          ...(recallBinding ? { conversationId: recallBinding.conversationId } : {}),
           occurredAt: saved.occurredAt, domain: binding.domain, carrierId: binding.carrierId,
           planId: binding.planId, previousBinding: { ownerId: binding.ownerId,
             grantId: binding.grantId, grantVersion: binding.grantVersion },
@@ -195,6 +200,7 @@ export async function DELETE(request: Request) {
             plan_id: binding.planId, producer_epoch: binding.registration.producerEpoch,
             sequence: binding.registration.sequence } } : {}),
         }, { onRegistered: proof => {
+          if (recallBinding && proof.messageRef !== recallBinding.expectedMessageRef) throw new Error("recall_message_ref_conflict");
           saved = recordEduPiPromptOutboxRegistration(sessionId, clientRequestId, binding.domain, {
             messageRef: proof.messageRef, producerEpoch: proof.registration.producer_epoch,
             sequence: proof.registration.sequence, fencingGeneration: proof.fencingGeneration,
@@ -204,6 +210,8 @@ export async function DELETE(request: Request) {
             messageRef: proof.messageRef, ownerId: binding.ownerId, grantId: binding.grantId,
             captureGrantVersion: binding.grantVersion, occurredAt: saved.occurredAt }, options);
         } });
+        if (recallBinding && (settled.messageRef !== recallBinding.expectedMessageRef
+          || binding.messageRef !== null && settled.messageRef !== binding.messageRef)) throw new Error("recall_message_ref_conflict");
         const ledger = readEduPiAmbientMessagesForSession(sessionId, options)
           .find(item => item.messageRef === settled.messageRef);
         if (piOutcomeUnknown && settled.status !== "withdrawn") throw new Error("dispatched_prompt_absence_conflict");
@@ -294,7 +302,7 @@ export async function POST(request: Request) {
       if (healthFrame?.ok !== true || typeof rootRef !== "string" || !ROOT_REF.test(rootRef)
         || capabilities?.ambient_planning !== "active" || capabilities?.owner_message_registration !== "active"
         || enabled.some(({ domain }) => domain === "teaching_preparation" && capabilities?.g1_processor !== "active"
-          && !(process.env.EDUPI_CORE_RECALL_ANSWERS === "1" && host.recallAnswersActive === true))
+          && !(readEduPiRecallActivation({ dataRoot: roots.dataRoot.root }).mode === "canary" && host.recallAnswersActive === true))
         || enabled.some(({ domain }) => domain === "student_followup" && capabilities?.g2_processor !== "active")
         || enabled.some(({ domain }) => domain !== "teaching_preparation" && domain !== "student_followup" && capabilities?.g3_processor !== "active")) {
         return response("core_unavailable", 503);

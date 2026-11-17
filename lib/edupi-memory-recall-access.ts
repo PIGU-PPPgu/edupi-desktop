@@ -11,7 +11,9 @@ import { proactivityConversationId } from "./edupi-proactivity-control";
 import { isSafeModeEnabled } from "./safe-mode";
 import { createMemorySummaryGuard, memoryHistoryIds, projectMemoryHistory } from "./edupi-memory-summary";
 import { CORE_RECALL_ANSWER_MESSAGE, parseCoreRecallAnswer, type CoreRecallAnswer, type CoreRecallAnswerDetails } from "./edupi-recall-answer";
-import { eduPiRecallRootEpoch, invalidateEduPiRecallSession, issueEduPiRecall } from "./edupi-recall-state";
+import { beginEduPiRecallQuestion, eduPiRecallRootEpoch, finishEduPiRecallQuestion, invalidateEduPiRecallSession, issueEduPiRecall } from "./edupi-recall-state";
+import { eduPiRecallConversationId, readEduPiRecallActivation } from "./edupi-recall-config";
+import { readRecallIntent, type EduPiRecallIntent } from "./edupi-recall-authorization";
 
 const hash = (text: string) => `sha256:${createHash("sha256").update(text).digest("hex")}`;
 const canonical = (directory: string) => { try { return realpathSync(directory); } catch { return resolve(directory); } };
@@ -32,6 +34,7 @@ type Recall = { status: "current" | "held"; reason_code: string | null; entries:
   answer?: CoreRecallAnswer; term_ref?: string };
 type Turn = { manager: SessionManager; sessionId: string; clientRequestId: string; text: string; active: boolean; captured: boolean;
   sourceNonce: string; startingLeafId: string | null; startingUserId: string | null; boundUserId: string | null; boundUserHash: string | null;
+  formalRequested: boolean; recallIntent: EduPiRecallIntent | null;
   answerAttempted: boolean; answerEpoch?: number; answerRequest?: Record<string, unknown>;
   publish?: (details: CoreRecallAnswerDetails) => Promise<void> };
 type Dependencies = {
@@ -116,7 +119,7 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
   const turns = new AsyncLocalStorage<Turn | null>();
   const activeTurns = new WeakMap<SessionManager, Turn>();
   const disabled = () => isSafeModeEnabled() || dependencies.disabled?.() === true;
-  const answersEnabled = () => !disabled() && (dependencies.answersEnabled?.() ?? process.env.EDUPI_CORE_RECALL_ANSWERS === "1");
+  const answersEnabled = () => !disabled() && (dependencies.answersEnabled?.() ?? readEduPiRecallActivation({ dataRoot: root }).enabled);
   const denied = (reason_code = "scope_unverified"): Recall => ({ status: "held", reason_code, entries: [] });
   const readOutbox = dependencies.readOutbox ?? readEduPiPromptOutbox;
   function invalidate(manager: unknown): void {
@@ -174,6 +177,16 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
       || (prior.data as { commandHash?: unknown }).commandHash !== hash(JSON.stringify(outbox.command))
       || outbox.command.clientRequestId !== turn.clientRequestId || outbox.cancellationProofs !== null
       || !outbox.bindings.length || outbox.bindings.some(binding => !binding.captured || !binding.registration || !binding.messageRef)) return null;
+    if (turn.recallIntent) {
+      const read = readRecallIntent({ intentId: turn.recallIntent.intentId }, { dataRoot: root });
+      const expected = turn.recallIntent;
+      if (!read.usable || !read.readyForDispatch || read.intent?.queryHash !== hash(turn.text)
+        || read.intent.configUpdatedAt !== expected.configUpdatedAt
+        || outbox.bindings.length !== 1 || outbox.bindings[0].ownerId !== expected.binding.ownerId
+        || outbox.bindings[0].grantId !== expected.binding.grantId
+        || outbox.bindings[0].grantVersion !== expected.binding.grantVersion
+        || outbox.bindings[0].messageRef !== expected.messageRef) return null;
+    } else if (turn.formalRequested && readEduPiRecallActivation({ dataRoot: root }).mode === "normal") return null;
     return outbox;
   }
 
@@ -188,10 +201,11 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
       // An ambiguous multi-domain capture must not combine different class scopes.
       const binding = outbox.bindings.find(item => item.domain === "teaching_preparation") ?? outbox.bindings[0];
       const identity = { root_ref: host.rootRef, message_ref: binding.messageRef!,
-        conversation_id: proactivityConversationId(binding.domain), message_id: binding.captureMessageId,
+        conversation_id: turn.recallIntent ? eduPiRecallConversationId(turn.recallIntent.binding.scope, { dataRoot: root })
+          : proactivityConversationId(binding.domain), message_id: binding.captureMessageId,
         original_text_hash: hash(turn.text) };
       const proofDeadline = performance.now() + 15_000;
-      const formalAnswer = answersEnabled() && Boolean(params.query);
+      const formalAnswer = turn.formalRequested && answersEnabled() && Boolean(params.query);
       if (formalAnswer && (turn.text.length < 2 || turn.text.length > 512)) return denied("question_too_long");
       const epoch = eduPiRecallRootEpoch(root);
       const request = { ...identity, expected_owner_id: binding.ownerId,
@@ -203,7 +217,16 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
           ...(params.student_id ? { student_id: params.student_id } : {}), ...(memoryIds?.length ? { memory_ids: memoryIds } : {}),
           limit: params.limit ?? 30,
         }) };
-      const value = await host.call(request, signal);
+      const correlation = formalAnswer && turn.recallIntent
+        ? beginEduPiRecallQuestion(root, turn.recallIntent.intentId, hash(turn.text)) : null;
+      let settled = false;
+      let value: unknown;
+      try {
+        value = await host.call(request, signal);
+        settled = true;
+      } finally {
+        if (correlation) finishEduPiRecallQuestion(correlation, settled);
+      }
       if (!current(turn, manager)) return denied();
       if (formalAnswer && epoch !== eduPiRecallRootEpoch(root)) return denied("source_changed");
       const result = response(value, identity, Boolean(params.query), formalAnswer);
@@ -271,11 +294,12 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
   const summary = createMemorySummaryGuard(root, memorySnapshot, scopeKey, currentTurnKey);
   async function finalizeAnswer(manager: unknown, signal?: AbortSignal): Promise<boolean> {
     const turn = turns.getStore();
-    if (!(manager instanceof SessionManager) || !turn || !turn.captured || !answersEnabled()) return false;
+    if (!(manager instanceof SessionManager) || !turn || !turn.formalRequested) return false;
     if (turn.answerAttempted) return true;
     if (!turn.publish) throw new Error("core_answer_saving_unavailable");
     turn.answerAttempted = true;
-    const result = await recall(manager, { query: turn.text }, signal);
+    const result = turn.captured && answersEnabled()
+      ? await recall(manager, { query: turn.text }, signal) : denied("recall_inactive");
     if (signal?.aborted || !sourceCurrent(turn, manager) || !turn.boundUserId || !turn.active) return true;
     const epoch = eduPiRecallRootEpoch(root);
     const answer = turn.answerEpoch === epoch && result.answer && Date.parse(result.answer.valid_until) > Date.now()
@@ -296,7 +320,7 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
       const turn = turns.getStore();
       // Pi checks the old history before appending the new user entry.
       // A captured Core-only turn must reach that entry without a model summary.
-      if (turn?.active && turn.captured && answersEnabled() && turn.manager === ctx.sessionManager) return { cancel: true };
+      if (turn?.active && turn.formalRequested && turn.manager === ctx.sessionManager) return { cancel: true };
       return summary.compact(event, ctx);
     });
     // The public tree hook cannot replace the default summarizer's inputs.
@@ -334,14 +358,19 @@ export function createEduPiMemoryRecallAccess(dataRoot: string, dependencies: De
 
   return { extension, tool, recall, invalidate, bindSummarization: summary.bind,
     async run<T>(manager: SessionManager, command: { message: string; clientRequestId?: string },
-      captured: boolean, callback: () => Promise<T>, publish?: Turn["publish"]): Promise<T> {
+      captured: boolean, callback: () => Promise<T>, publish?: Turn["publish"], explicitRecall = false): Promise<T> {
       invalidate(manager);
       if (!(manager instanceof SessionManager)
         || canonical(manager.getCwd()) !== root) return turns.run(null, callback);
       const previousUser = manager.getBranch().findLast(entry => entry.type === "message" && entry.message.role === "user");
+      const activation = readEduPiRecallActivation({ dataRoot: root });
+      const intent = explicitRecall && command.clientRequestId
+        ? readRecallIntent({ sessionId: manager.getSessionId(), clientRequestId: command.clientRequestId }, { dataRoot: root }) : null;
       const turn: Turn = { manager, sessionId: manager.getSessionId(), clientRequestId: command.clientRequestId ?? "", text: command.message, active: true,
         captured: captured && !!command.clientRequestId && !disabled(), sourceNonce: randomUUID(), startingLeafId: manager.getLeafId(),
-        startingUserId: previousUser?.id ?? null, boundUserId: null, boundUserHash: null, answerAttempted: false, publish };
+        startingUserId: previousUser?.id ?? null, boundUserId: null, boundUserHash: null, answerAttempted: false, publish,
+        formalRequested: explicitRecall || captured && (activation.mode === "canary" || dependencies.answersEnabled?.() === true),
+        recallIntent: intent?.usable && intent.readyForDispatch ? intent.intent : null };
       activeTurns.set(manager, turn);
       try { return await turns.run(turn, callback); } finally {
         turn.active = false;

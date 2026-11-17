@@ -118,10 +118,12 @@ async function withdrawCapturedMessage(host: Pick<EduPiRuntimeHandle, "callOwner
 
 const conversationId = proactivityConversationId;
 
-export function predictEduPiOwnerMessageRef(rootRef: string, ownerId: string, messageId: string, domain: EduPiProactivityDomain = "teaching_preparation"): string {
-  if (!HASH.test(rootRef) || !ID.test(ownerId) || !RAW_ID.test(messageId)) fail();
+export function predictEduPiOwnerMessageRef(rootRef: string, ownerId: string, messageId: string,
+  domain: EduPiProactivityDomain = "teaching_preparation", explicitConversationId?: string): string {
+  if (!HASH.test(rootRef) || !ID.test(ownerId) || !RAW_ID.test(messageId)
+    || explicitConversationId !== undefined && !ID.test(explicitConversationId)) fail();
   const digest = (value: string) => crypto.createHash("sha256").update(value, "utf8").digest("hex");
-  const conversationHash = `sha256:${digest(conversationId(domain))}`;
+  const conversationHash = `sha256:${digest(explicitConversationId ?? conversationId(domain))}`;
   const sourceRef = `conversation:${conversationHash.slice(7)}`;
   const messageHash = `sha256:${digest(messageId)}`;
   return `owner_message:${crypto.createHash("sha256").update("edupi.owner.message.v1\0")

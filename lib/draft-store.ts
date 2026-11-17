@@ -27,7 +27,7 @@ export interface ChatDraft {
   pendingQueueUncertain?: boolean;
   pendingFailedMessages?: FailedDraftMessage[];
   pendingPrompt?: { sessionId: string; clientRequestId: string; occurredAt: string; message: string; draftValue: string;
-    draftUnedited?: boolean };
+    draftUnedited?: boolean; purpose?: "recall" };
 }
 
 const drafts = new Map<string, ChatDraft>();
@@ -124,7 +124,9 @@ function validPendingPrompt(value: unknown): value is NonNullable<ChatDraft["pen
     && typeof item.clientRequestId === "string" && /^[0-9a-f-]{36}$/iu.test(item.clientRequestId)
     && typeof item.occurredAt === "string" && !Number.isNaN(Date.parse(item.occurredAt))
     && typeof item.message === "string" && item.message.length > 0 && item.message.length <= 500_000
-    && typeof item.draftValue === "string" && item.draftValue.length <= 500_000;
+    && typeof item.draftValue === "string" && item.draftValue.length <= 500_000
+    && (item.purpose === undefined || item.purpose === "recall" && item.message.length <= 512
+      && !/^[!/]/u.test(item.message.trim()));
 }
 
 function hydrateFromStorage(): void {
@@ -254,10 +256,13 @@ export function setDraft(key: string, draft: ChatDraft): void {
   if (pendingPrompt && !draft.pendingPrompt) draft = { ...draft, pendingPrompt };
   if (pendingPrompt && draft.pendingPrompt?.sessionId === pendingPrompt.sessionId
     && draft.pendingPrompt.clientRequestId === pendingPrompt.clientRequestId) {
+    const sameRequest = { ...draft.pendingPrompt };
+    if (pendingPrompt.purpose) sameRequest.purpose = pendingPrompt.purpose;
+    else delete sameRequest.purpose;
     const inputChanged = previous.value !== draft.value || previous.images.length !== draft.images.length
       || previous.images.some((image, index) => image.data !== draft.images[index]?.data || image.mimeType !== draft.images[index]?.mimeType)
       || JSON.stringify(previous.context ?? null) !== JSON.stringify(draft.context ?? null);
-    draft = { ...draft, pendingPrompt: { ...draft.pendingPrompt,
+    draft = { ...draft, pendingPrompt: { ...sameRequest,
       draftUnedited: pendingPrompt.draftUnedited === true && draft.pendingPrompt.draftUnedited !== false && !inputChanged } };
   }
   if (isEmptyDraft(draft)) {
@@ -293,7 +298,8 @@ export function stagePendingPrompt(key: string, pendingPrompt: NonNullable<ChatD
   if (!current) return false;
   if (current.pendingPrompt && (current.pendingPrompt.sessionId !== pendingPrompt.sessionId
     || current.pendingPrompt.clientRequestId !== pendingPrompt.clientRequestId || current.pendingPrompt.occurredAt !== pendingPrompt.occurredAt
-    || current.pendingPrompt.message !== pendingPrompt.message || current.pendingPrompt.draftValue !== pendingPrompt.draftValue)) return false;
+    || current.pendingPrompt.message !== pendingPrompt.message || current.pendingPrompt.draftValue !== pendingPrompt.draftValue
+    || current.pendingPrompt.purpose !== pendingPrompt.purpose)) return false;
   const prepared = current.pendingPrompt ?? { ...pendingPrompt,
     draftUnedited: draftUnedited === true && current.value === pendingPrompt.draftValue && current.images.length === 0 };
   setDraft(key, { ...current, pendingPrompt: prepared });
@@ -314,7 +320,8 @@ function clearPendingPrompt(key: string, clientRequestId: string, clearSubmitted
   if (current?.pendingPrompt?.clientRequestId !== clientRequestId) return;
   for (const [draftKey, draft] of [...drafts]) {
     if (draft.pendingPrompt?.clientRequestId !== clientRequestId
-      || draft.pendingPrompt.sessionId !== current.pendingPrompt.sessionId) continue;
+      || draft.pendingPrompt.sessionId !== current.pendingPrompt.sessionId
+      || draft.pendingPrompt.purpose !== current.pendingPrompt.purpose) continue;
     const next = { ...draft };
     if (clearSubmittedText && draft.pendingPrompt.draftUnedited === true
       && next.value === draft.pendingPrompt.draftValue && next.images.length === 0) {

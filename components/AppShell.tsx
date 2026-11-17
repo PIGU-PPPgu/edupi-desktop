@@ -2195,6 +2195,7 @@ export function AppShell() {
               chatSidebarResizer={sidebarResizer}
               onChatLayoutChange={reclampChatPanels}
               chatSidebarSuspended={edupiAdminOpen}
+              readOnlyRefreshActive={!edupiAdminOpen}
               chatPreviewForeground={rightPanelOpen && filePanelAvailable}
               renderFilePreview={(filePath) => (
                 <FileViewer

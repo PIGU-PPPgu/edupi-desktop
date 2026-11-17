@@ -10,6 +10,51 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createJiti } from "jiti";
 import { classifyCoreRuntimeStartupError, createParentModelExecutor, startCoreRuntimeHost } from "./core-runtime-host.mjs";
 
+test("template-only startup forwards an immutable exact selection without model or capability authority", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "edupi-runtime-host-templates-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, "scripts"));
+  fs.writeFileSync(path.join(root, "scripts/core_runtime_daemon.mjs"), "export let received; export async function createCoreRuntimeDaemon(options) { received = options; return { async close() {} }; }");
+  const channel = new EventEmitter(); channel.connected = true;
+  const sent = []; channel.send = message => sent.push(message);
+  const options = { dataRoot: root, token: "token", supervisorSessionId: "templates", coreCommit: "a".repeat(40),
+    componentManifestHash: `sha256:${"b".repeat(64)}`, port: 0, ambientPlanning: true, ownerControlToken: "control" };
+  const selection = { ownerId: "selected-owner", grantId: "selected-template-grant",
+    scope: { class_id: "selected-class", subject: "数学" }, templateIds: ["weekly-template", "monthly-template"] };
+  const opening = startCoreRuntimeHost({ coreRoot: root, options: { ...options, teacherTemplates: selection } }, channel);
+  selection.scope.class_id = "foreign-class"; selection.templateIds.push("unselected-template");
+  const host = await opening;
+  const daemon = await import(pathToFileURL(path.join(root, "scripts/core_runtime_daemon.mjs")).href);
+  const forwarded = daemon.received;
+  assert.deepEqual(forwarded.g3Live, { allowedBindings: [], teacherTemplates: {
+    ownerId: "selected-owner", grantId: "selected-template-grant",
+    scope: { class_id: "selected-class", subject: "数学" }, templateIds: ["weekly-template", "monthly-template"],
+  } });
+  assert.ok(Object.isFrozen(forwarded.g3Live));
+  assert.ok(Object.isFrozen(forwarded.g3Live.allowedBindings));
+  assert.ok(Object.isFrozen(forwarded.g3Live.teacherTemplates.scope));
+  assert.ok(Object.isFrozen(forwarded.g3Live.teacherTemplates.templateIds));
+  assert.equal(forwarded.teacherTemplates, undefined);
+  assert.equal(forwarded.g1Live, undefined);
+  assert.equal(forwarded.ownerMessageContinuation, undefined,
+    "a template-only binding does not authorize Core's separately scoped conversation continuation");
+  assert.deepEqual(sent, [], "deterministic template startup reads neither model configuration nor a provider");
+  await host.close();
+  let getterCalled = false;
+  const getter = { ...selection, get scope() { getterCalled = true; return selection.scope; } };
+  for (const unsafe of [
+    null, {}, { ...selection, allowAll: true }, { ...selection, grantVersion: 1 },
+    { ...selection, templateIds: [] }, { ...selection, templateIds: ["same", "same"] },
+    { ...selection, templateIds: new Array(2) }, { ...selection, scope: { ...selection.scope, term_id: "term" } },
+    { ...selection, scope: { ...selection.scope, subject: " 数学 " } }, getter,
+  ]) await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, teacherTemplates: unsafe } }, channel), /Invalid runtime bootstrap/);
+  assert.equal(getterCalled, false);
+  for (const override of [{ ambientPlanning: false }, { ownerControlToken: undefined }, { ownerControlToken: "" }]) {
+    await assert.rejects(startCoreRuntimeHost({ coreRoot: root, options: { ...options, teacherTemplates: selection, ...override } }, channel), /Invalid runtime bootstrap/);
+  }
+  assert.deepEqual(sent, []);
+});
+
 test("G3 forwards a frozen exact grant snapshot without reading model configuration and rejects broad or executable configuration", { skip: process.platform !== "darwin" }, async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "edupi-runtime-host-g3-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

@@ -223,6 +223,11 @@ async function mount({ history = [], ids = [], teacherMode = true, enabled = tru
       return host.captureGate ? await host.captureGate.promise : "disabled";
     } };
   modules["@/lib/desktop-updater"] = { isTauriDesktop: () => durable };
+  modules["@/lib/edupi-recall-prompt-client"] = {
+    readRecallSettings: async () => null, recallSendAvailable: () => false,
+    RECALL_SETTINGS_CHANGED: "synthetic-recall-settings-changed",
+    inspectRecallPrompt: assert.fail, submitRecallPrompt: assert.fail,
+  };
   modules["@/lib/queue-recovery"] = { recallQueueWithBackup: assert.fail };
   const hook = load("hook");
   modules["@/hooks/useAgentSession"] = { useAgentSession: options => { host.hook = hook.useAgentSession(options); return host.hook; } };

@@ -84,15 +84,25 @@ test("the Mac candidate exercises new host contracts against its exact pinned Co
   assert.match(step, /EDUPI_USAGE_TEST_CORE: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/u);
   assert.match(step, /EDUPI_REMINDER_PROOF_CORE_TEST_ROOT: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/u);
   assert.match(step, /EDUPI_PREPARATION_TEST_CORE: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/u);
+  assert.match(step, /EDUPI_R04_RAW_CORE_ROOT: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/u);
+  assert.match(step, /EDUPI_TEACHER_TEMPLATE_CORE_ROOT: \$\{\{ github\.workspace \}\}\/\.edupi-core-runtime/u);
   assert.match(step, /lib\/edupi-memory-recall-access\.test\.mjs/u);
   assert.match(step, /lib\/edupi-teacher-usage-runtime\.test\.mjs/u);
   assert.match(step, /lib\/edupi-core-process-client\.test\.mjs/u);
   assert.match(step, /lib\/edupi-reminder-notification-proof\.test\.mjs/u);
+  assert.match(step, /desktop\/core-runtime-recall\.test\.mjs/u);
+  assert.match(step, /lib\/edupi-recall-raw-core\.test\.mjs/u);
+  assert.match(step, /lib\/edupi-teacher-template-runtime\.test\.mjs/u);
+  assert.match(step, /node scripts\/test-edupi-recurring-materials-e2\.mjs/u);
   assert.match(step, /app\/api\/edupi\/tasks\/\[taskId\]\/execution\/route\.test\.mjs/u);
   assert.match(step, /test-edupi-capability-canary-e2\.mjs --require-recipient-confirmation/u);
   assert.match(step, /test-edupi-capability-canary-e2\.mjs --main4 --require-recipient-confirmation/u);
   assert.doesNotMatch(step, /--source-candidate|continue-on-error/u);
   assert.ok(start < release.indexOf("name: Prepare packaged Next.js server"));
+  const signedStart = release.indexOf("name: Verify signed macOS packaged runtime");
+  const signedStep = release.slice(signedStart, release.indexOf("\n      - ", signedStart));
+  assert.match(signedStep, /if: runner\.os == 'macOS'/u);
+  assert.match(signedStep, /EDUPI_STAGED_RECURRING_E2=1 npm run test:staged-desktop-runtime/u);
 });
 
 test("Main4 source canary migrates only its stopped fixture and proves storage across G5 review restarts", async () => {

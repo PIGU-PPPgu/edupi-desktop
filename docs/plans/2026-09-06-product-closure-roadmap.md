@@ -1,5 +1,9 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-18 发布阻塞补记：`.118` 仍为 Mac-only 源码候选。全量源码 4889 passed／0 failed／57 conditional skipped，实际 Main4 两期与默认 Core 停止／冷恢复已有新证据；普通 R04 语义仍因真实 GLM 额度而关闭。当前依赖审计另有 picomatch `GHSA-fc5q-39xc-vjpf` 高危链，官方未列修复版本，不能降低门或以未知 fork 赶签名；Mac 签名、安装、公开发布未执行，Draft PR 与页面验收继续。Windows 仍为用户暂停，不派发作业；`.117` 资产和正式通道不动。详见 [R04 当前验收](../acceptance/2026-11-18-core-recall-desktop.md)。
+
+2026-11-18 R04／L4-P1-5、P1-6 当前源码接线：Core 已固定最终合并 `fc89b3bc`，与受测 `b60d4b29` 同树，官方 main CI `44145905596` 成功；Desktop 已正常合入 `9d1b4c45`，继续保留 PR508 的班级与账号功能。普通 R04 的独立设置、每问 capture、持久预算、只读恢复和取消接线已实现，源码语义门仍为 false；真实 GLM `429/code1310` 的语义验收继续外部阻塞。Main4 周期模板的独立 zero-model grant、精确 scope／IDs、窄 owner 通道、首次 owner 创建和全局停止已接入；真实 Core fixture 的周／月创建、replay 与冷启通过，实际页面和最终组合验收仍在执行。`.118` 为新的 Mac-only 源码候选，尚未签名或公开；`.117` 资产和正式通道保持，**不触发任何 Windows runner、构建或安装验收**。本段取代旧的“Core 待 CI／待 pin”状态，不改变完整 R04／R15／L4 未完成结论。证据见 [R04 当前验收](../acceptance/2026-11-18-core-recall-desktop.md)。
+
 2026-11-17 当前：**`.117` 已完成三平台签名并公开为预发布；Mac 公开安装与两次冷启、隔离 `.116→.117` 原生升级及 G3/G5 冷启回读通过，Linux AppImage 隔离原生升级通过。** Mac 公开安装 run44011387309，Linux 升级 run44011387634，本机原生升级 proof 为 `native-116-117g-final-observed-proof.json`；新 g 基线350项逐字节保护及UI归还通过，旧 f 基线失败保留。本机正常安装仍`.115`，完整 R04/R15/L4 未验收。**用户因费用明确暂停 Windows 构建及 runner；后续不再派发 Windows 作业**。PR504仅作本机源码修补与独立复审，保持Draft，未新建Windows运行。正式 Latest70、feed792、固定Core98及已公开资产保持，详见[当前状态与边界](../acceptance/2026-11-17-unverified-risk-closure.md)。
 
 同日R03补验：本机Mac h隔离事项可从提醒进入精确task，普通A／事项B两草稿独立落盘；系统通知实际显示开启，但6次认领均延后，0提交／打开，原因未证明。Mac再次锁屏后停止自有进程，经副本15行等价核对、原WAL保留与未改动的restore/check，原UI和350项恢复通过。发送、绑定及UI离开重入未完成，不能以持久回读替代；完整R03不勾选。临时App与重复依赖已清理2,763,821,056字节实际可用空间。

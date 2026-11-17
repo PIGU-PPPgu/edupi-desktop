@@ -55,7 +55,7 @@ export function backgroundJobTechnicalDetail(error: string | null | undefined): 
   return value ? value.slice(0, 240) : null;
 }
 
-export function EduPiBackgroundJobs({ data, onMaterials, onModels }: { data: EducationContract | null; onMaterials: () => void; onModels: () => void }) {
+export function EduPiBackgroundJobs({ data, onMaterials, onModels, active = true }: { data: EducationContract | null; onMaterials: () => void; onModels: () => void; active?: boolean }) {
   const workspace = data?.workspace ?? null;
   // A failed snapshot read does not change the draft's directory.
   const draftWorkspaceRef = useRef(workspace);
@@ -65,6 +65,9 @@ export function EduPiBackgroundJobs({ data, onMaterials, onModels }: { data: Edu
     scopeRef.current = { workspace, alive: true, read: 0, mutation: 0, busy: false };
   }
   const scope = scopeRef.current;
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  const readAbort = useRef<AbortController | null>(null);
   const [snapshot, setSnapshot] = useState<{ scope: JobsScope; jobs: Job[] } | null>(null);
   const jobs = snapshot?.scope === scope ? snapshot.jobs : [];
   const [creating, setCreating] = useState(false);
@@ -100,9 +103,11 @@ export function EduPiBackgroundJobs({ data, onMaterials, onModels }: { data: Edu
     return request;
   }, [scope, clearFocusReturn]);
   const load = useCallback(async () => {
-    if (!scope.alive || scopeRef.current !== scope) return;
+    if (!activeRef.current || document.hidden || !scope.alive || scopeRef.current !== scope || readAbort.current) return;
+    const controller = new AbortController();
+    readAbort.current = controller;
     const read = ++scope.read;
-    const current = () => scope.alive && scopeRef.current === scope && read === scope.read;
+    const current = () => activeRef.current && !controller.signal.aborted && scope.alive && scopeRef.current === scope && read === scope.read;
     if (focusReturnRef.current?.read !== undefined) clearFocusReturn();
     const root = rootRef.current;
     const control = !scope.busy && !focusReturnRef.current && root?.isConnected
@@ -110,12 +115,15 @@ export function EduPiBackgroundJobs({ data, onMaterials, onModels }: { data: Edu
     const request = control ? rememberFocus("job", false, control.dataset.backgroundJobAction) : null;
     if (request) { request.replacedControl = control!; request.read = read; }
     try {
-      const response = await fetch("/api/edupi/jobs", { cache: "no-store" });
+      const response = await fetch("/api/edupi/jobs", { cache: "no-store", signal: controller.signal });
       if (!current()) return;
       if (!response.ok) throw new Error("后台任务暂不可用");
       const result = await response.json();
       if (current()) { if (request) request.ready = true; setSnapshot({ scope, jobs: result.projection.jobs }); }
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
     } finally {
+      if (readAbort.current === controller) readAbort.current = null;
       if (request && (!current() || !request.ready)) clearFocusReturn(request);
     }
   }, [scope, rememberFocus, clearFocusReturn]);
@@ -126,6 +134,14 @@ export function EduPiBackgroundJobs({ data, onMaterials, onModels }: { data: Edu
       if (draftWorkspaceRef.current && draftWorkspaceRef.current !== scope.workspace) { setTitle(""); setInstructions(""); setKind("document"); setSource(""); }
       draftWorkspaceRef.current = scope.workspace;
     }
+    return () => {
+      scope.alive = false; scope.read++; scope.mutation++; scope.busy = false;
+      readAbort.current?.abort(); readAbort.current = null;
+      if (focusReturnRef.current?.scope === scope) clearFocusReturn();
+    };
+  }, [scope, clearFocusReturn]);
+  useEffect(() => {
+    if (!active) return;
     const refresh = () => {
       if (scope.alive && !document.hidden && !scope.busy) {
         const previousRead = scope.read;
@@ -134,11 +150,12 @@ export function EduPiBackgroundJobs({ data, onMaterials, onModels }: { data: Edu
     };
     refresh(); const timer = window.setInterval(refresh, 5000);
     return () => {
-      scope.alive = false; scope.read++; scope.mutation++; scope.busy = false;
+      scope.read++;
+      readAbort.current?.abort(); readAbort.current = null;
       window.clearInterval(timer);
       if (focusReturnRef.current?.scope === scope) clearFocusReturn();
     };
-  }, [scope, load, clearFocusReturn]);
+  }, [scope, load, clearFocusReturn, active]);
   useEffect(() => {
     const request = focusReturnRef.current;
     if (!request) return;
@@ -180,6 +197,7 @@ export function EduPiBackgroundJobs({ data, onMaterials, onModels }: { data: Edu
     scope.busy = true;
     const mutation = ++scope.mutation;
     scope.read++;
+    readAbort.current?.abort(); readAbort.current = null;
     const current = () => scope.alive && scopeRef.current === scope && mutation === scope.mutation;
     const enqueuing = body.action === "enqueue";
     const request = rememberFocus(enqueuing ? "create" : "job", false, typeof body.jobId === "string" ? body.jobId : undefined);

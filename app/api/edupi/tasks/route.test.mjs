@@ -52,8 +52,18 @@ test("recurring internal materials require a valid bounded definition before dis
     { ...base, dueDate: "2026-11-12", recurrence: { ...recurrence, deliverables: [] } },
     { ...base, dueDate: "2026-11-12", recurrence, preparationSource: { kind: "teaching_before_class", timetableSlotId: "slot-1", lessonDate: "2026-11-12", materialIds: ["material-1"], deliverables: ["教案"] } },
   ]) assert.equal((await POST(request(invalid))).status, 400);
-  const acceptedShape = await POST(request({ ...base, dueDate: "2026-11-12", recurrence }));
-  assert.equal(acceptedShape.status, 503, "valid input reaches the currently unavailable Core boundary");
+  assert.equal((await POST(request({ ...base, recurrence }))).status, 400, "a recurrence cannot select a scope implicitly");
+  const selection = { ...base, recurrence, templateScope: { classId: "synthetic-class", subject: "数学" } };
+  assert.equal((await POST(request(selection))).status, 403, "grant creation requires the trusted Desktop transport");
+  const previous = process.env.PI_DESKTOP_API_TOKEN;
+  process.env.PI_DESKTOP_API_TOKEN = "synthetic-task-template-token-123456789";
+  try {
+    const acceptedShape = await POST(request(selection, { "x-pi-desktop-token": process.env.PI_DESKTOP_API_TOKEN }));
+    assert.equal(acceptedShape.status, 503, "valid input reaches the currently unavailable Core boundary");
+  } finally {
+    if (previous === undefined) delete process.env.PI_DESKTOP_API_TOKEN;
+    else process.env.PI_DESKTOP_API_TOKEN = previous;
+  }
 });
 
 test("a post-commit refresh gap returns accepted-pending instead of a false creation failure", async () => {

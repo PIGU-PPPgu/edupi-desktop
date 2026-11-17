@@ -1,4 +1,5 @@
 import type { EduPiRuntimeHandle } from "./edupi-runtime-supervisor";
+import { createHash } from "node:crypto";
 import { proactivityConversationId } from "./edupi-proactivity-control";
 import type { EduPiProactivityDomain } from "./edupi-proactivity-config";
 import { predictEduPiOwnerMessageRef } from "./edupi-ambient-message-runtime";
@@ -16,7 +17,7 @@ export type RegisteredPromptProof = { messageRef: string; binding: RegisteredPro
   fencingGeneration: number; instanceNonce: string };
 export type RegisteredPromptInput = { rootRef: string; grantId: string; sessionId: string; messageId: string;
   text: string; occurredAt: string; domain: EduPiProactivityDomain; carrierId: string; planId: string;
-  previousBinding?: RegisteredPromptBinding };
+  previousBinding?: RegisteredPromptBinding; conversationId?: string };
 
 function result(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value) || (value as Record<string, unknown>).ok !== true) {
@@ -45,7 +46,8 @@ export async function registerPrompt(
   if (!HASH.test(input.rootRef) || !ID.test(input.grantId) || !ID.test(input.sessionId) || !ID.test(input.messageId)
     || !PRODUCER_ID.test(input.carrierId) || !PRODUCER_ID.test(input.planId)
     || typeof input.text !== "string" || !input.text.trim() || input.text.length > 4000
-    || !canonicalTime(input.occurredAt)) throw new Error("owner_message_input_invalid");
+    || !canonicalTime(input.occurredAt)
+    || input.conversationId !== undefined && !ID.test(input.conversationId)) throw new Error("owner_message_input_invalid");
   let binding = input.previousBinding;
   if (!binding) {
     const context = await readProactivityOwnerContext(host, input.rootRef, input.grantId);
@@ -55,8 +57,9 @@ export async function registerPrompt(
   }
   if (!ID.test(binding.ownerId) || binding.grantId !== input.grantId
     || !Number.isSafeInteger(binding.grantVersion) || binding.grantVersion < 1) throw new Error("owner_message_binding_invalid");
-  const conversationId = conversation(input.domain);
-  const expectedMessageRef = predictEduPiOwnerMessageRef(input.rootRef, binding.ownerId, input.messageId, input.domain);
+  const conversationId = input.conversationId ?? conversation(input.domain);
+  const expectedSourceRef = `conversation:${createHash("sha256").update(conversationId, "utf8").digest("hex")}`;
+  const expectedMessageRef = predictEduPiOwnerMessageRef(input.rootRef, binding.ownerId, input.messageId, input.domain, input.conversationId);
   const registered = result(await host.callOwnerControl("owner_message_register", {
     root_ref: input.rootRef, expected_owner_id: binding.ownerId, grant_id: binding.grantId,
     expected_grant_version: binding.grantVersion, conversation_id: conversationId,
@@ -67,6 +70,7 @@ export async function registerPrompt(
     || registered.owner_id !== binding.ownerId || registered.grant_id !== binding.grantId
     || registered.grant_version !== binding.grantVersion || registered.message_ref !== expectedMessageRef
     || !SOURCE_REF.test(String(registered.source_ref || ""))
+    || input.conversationId !== undefined && registered.source_ref !== expectedSourceRef
     || registered.occurred_at !== input.occurredAt || registered.carrier_id !== input.carrierId
     || registered.plan_id !== input.planId || !EPOCH.test(String(registered.producer_epoch || ""))
     || !Number.isSafeInteger(registered.sequence) || Number(registered.sequence) < 1
@@ -93,7 +97,7 @@ export async function registerAndCapturePrompt(
 ): Promise<RegisteredPromptProof> {
   const proof = await registerPrompt(host, input, hooks);
   const { binding, registration } = proof;
-  const conversationId = conversation(input.domain);
+  const conversationId = input.conversationId ?? conversation(input.domain);
   const captured = result(await host.callOwnerControl("owner_message", {
     action: "capture", root_ref: input.rootRef, expected_owner_id: binding.ownerId,
     grant_id: binding.grantId, expected_grant_version: binding.grantVersion,
@@ -107,6 +111,8 @@ export async function registerAndCapturePrompt(
     || item.owner_id !== binding.ownerId || item.root_ref !== input.rootRef
     || item.capture_grant_version !== binding.grantVersion || item.sender_kind !== "local_owner_authenticated"
     || !SOURCE_REF.test(String(item.source_ref || "")) || !canonicalTime(item.received_at)
+    || input.conversationId !== undefined
+      && item.source_ref !== `conversation:${createHash("sha256").update(conversationId, "utf8").digest("hex")}`
     || !canonicalTime(item.recorded_at)
     || item.apply !== false || item.live_authority !== false || item.external_send !== false
     || typeof captured.replayed !== "boolean") throw new Error("owner_message_capture_invalid");
@@ -127,7 +133,7 @@ export async function settleRegisteredPrompt(
     if (!Number.isSafeInteger(health.fencing_generation) || Number(health.fencing_generation) < 1
       || typeof health.instance_nonce !== "string" || !ID.test(health.instance_nonce)
       || health.data_root_fingerprint !== input.rootRef) throw new Error("owner_message_health_invalid");
-    proof = { messageRef: predictEduPiOwnerMessageRef(input.rootRef, binding.ownerId, input.messageId, input.domain),
+    proof = { messageRef: predictEduPiOwnerMessageRef(input.rootRef, binding.ownerId, input.messageId, input.domain, input.conversationId),
       binding, registration: input.previousRegistration,
       fencingGeneration: Number(health.fencing_generation), instanceNonce: health.instance_nonce };
   } else {
@@ -136,7 +142,7 @@ export async function settleRegisteredPrompt(
   }
   const common = { root_ref: input.rootRef, expected_owner_id: binding.ownerId,
     grant_id: binding.grantId, expected_grant_version: binding.grantVersion,
-    conversation_id: conversation(input.domain), message_id: input.messageId,
+    conversation_id: input.conversationId ?? conversation(input.domain), message_id: input.messageId,
     occurred_at: input.occurredAt, expected_message_ref: proof.messageRef,
     registration: proof.registration, expected_fencing_generation: proof.fencingGeneration,
     expected_instance_nonce: proof.instanceNonce };

@@ -11,6 +11,7 @@ import type { EducationMemoryScopeProjection } from "./edupi-memory-scopes";
 import { resolveEduPiCoreRoot, resolveEduPiDataRoot, type ResolvedEduPiCore, type ResolvedEduPiDataRoot } from "./edupi-core-root";
 import { ensureEduPiRuntime } from "./edupi-runtime-supervisor";
 import { readEduPiProactivityActivation } from "./edupi-proactivity-config";
+import { readEduPiTeacherTemplateHistoryBinding } from "./edupi-teacher-template-config";
 
 export type CoreEducationWorkspace = Record<string, unknown>;
 export type CoreEducationSnapshotPayload = Record<string, unknown> & {
@@ -152,7 +153,8 @@ export async function readEduPiEducationSnapshot({
   dataRoot: ResolvedEduPiDataRoot;
 }> {
   const resolved = roots || resolveEduPiBridgeRoots();
-  if (!roots && readEduPiProactivityActivation({ dataRoot: resolved.dataRoot.root }).enabled) await ensureEduPiRuntime(resolved);
+  if (!roots && (readEduPiProactivityActivation({ dataRoot: resolved.dataRoot.root }).enabled
+    || readEduPiTeacherTemplateHistoryBinding({ dataRoot: resolved.dataRoot.root }) !== null)) await ensureEduPiRuntime(resolved);
   let response: Record<string, unknown>;
   try {
     response = await callEduPiCore<Record<string, unknown>>({

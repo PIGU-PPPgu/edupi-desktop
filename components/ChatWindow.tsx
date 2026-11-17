@@ -34,6 +34,7 @@ import type { KernelRunAction } from "@/lib/edupi-kernel-display";
 import { parseTeacherMessage, type EduPiComposerContext } from "@/lib/edupi-composer-context";
 import { calendarResultSummary } from "@/lib/edupi-calendar-result";
 import { coreRecallAnswerDetails, coreRecallClient } from "@/lib/edupi-recall-answer-client";
+import { readRecallSettings, recallSendAvailable, RECALL_SETTINGS_CHANGED, type RecallSettingsView } from "@/lib/edupi-recall-prompt-client";
 
 interface Props {
   session: SessionInfo | null;
@@ -340,6 +341,29 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   });
   const sessionBusy = agentRunning || bashRunning;
   const [coreRecallEnabled, setCoreRecallEnabled] = useState(false);
+  const [recallSettings, setRecallSettings] = useState<RecallSettingsView | null>(null);
+  useEffect(() => {
+    setRecallSettings(null);
+    if (!teacherMode) return;
+    let stopped = false;
+    let controller: AbortController | undefined;
+    const refresh = () => {
+      controller?.abort();
+      const current = new AbortController();
+      controller = current;
+      void readRecallSettings(current.signal).then(value => {
+        if (!stopped && !current.signal.aborted) setRecallSettings(value);
+      }, () => { if (!stopped && !current.signal.aborted) setRecallSettings(null); });
+    };
+    refresh();
+    window.addEventListener(RECALL_SETTINGS_CHANGED, refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      stopped = true; controller?.abort();
+      window.removeEventListener(RECALL_SETTINGS_CHANGED, refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [teacherMode, session?.id, newSessionCwd, modelsRefreshKey, agentRunning]);
   useEffect(() => {
     setCoreRecallEnabled(false);
     if (!teacherMode) return;
@@ -979,6 +1003,14 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       ref={chatInputRef}
       teacherMode={teacherMode}
       onSend={handleSend}
+      recallCapability={{
+        available: recallSendAvailable(recallSettings),
+        status: recallSettings?.normalApproved === false ? "待验收"
+          : recallSettings?.config.remaining === 0 ? "额度已用完"
+            : recallSettings?.activation.enabled ? "暂不可用" : "未开启",
+        remaining: recallSettings?.config.remaining ?? null,
+        model: recallSettings?.config.model?.modelId ?? null,
+      }}
       onAbort={handleAbort}
       onInterruptSend={agentRunning ? handleInterruptSend : undefined}
       onSteer={agentRunning ? handleSteer : undefined}

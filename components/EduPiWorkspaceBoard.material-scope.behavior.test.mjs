@@ -34,10 +34,12 @@ async function mount({ timetable = [slot()], materials = [material("own")] } = {
   window.HTMLElement.prototype.attachEvent = () => {};
   window.HTMLElement.prototype.detachEvent = () => {};
   const runtime = { ...modules, react: React, "react/jsx-runtime": { jsx, jsxs, Fragment },
+    "@/lib/edupi-teacher-template-client": { readTeacherTemplateSettings: async () => ({ version: 1, enabled: false }),
+      stopTeacherTemplateAutomation: assert.fail },
     "./EduPiForeground": { useEduPiForegroundPolicy: () => ({ today: "2026-10-28", graceDays: 3, pinnedTaskIds: [] }), EduPiPagedRows: () => null },
     "./AffectSegmentedControl": { SegmentedControl: () => null } };
   const exported = {};
-  vm.runInNewContext(code, { exports: exported, window, document, crypto: globalThis.crypto,
+  vm.runInNewContext(code, { exports: exported, window, document, AbortController, crypto: globalThis.crypto,
     requestAnimationFrame: fn => { fn(); return 1; }, cancelAnimationFrame() {},
     require(name) { assert.ok(runtime[name], name); return runtime[name]; } });
   const requests = [], root = createRoot(document.getElementById("root"));
