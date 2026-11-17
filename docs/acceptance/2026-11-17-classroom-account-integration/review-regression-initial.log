@@ -1,0 +1,114 @@
+TAP version 13
+# react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+# react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+# Subtest: a slow URL read cannot overwrite a later selected plan or its unsaved edits
+ok 1 - a slow URL read cannot overwrite a later selected plan or its unsaved edits
+  ---
+  duration_ms: 49.003459
+  type: 'test'
+  ...
+# Subtest: a linked duty plan can restore a prior version through the same service and keep its task link
+ok 2 - a linked duty plan can restore a prior version through the same service and keep its task link
+  ---
+  duration_ms: 15.224709
+  type: 'test'
+  ...
+# Subtest: unconfigured client stays local with no network or credential writes
+ok 3 - unconfigured client stays local with no network or credential writes
+  ---
+  duration_ms: 0.653333
+  type: 'test'
+  ...
+# Subtest: real loopback challenge, scanned confirmation, PKCE, private persistence and restart
+ok 4 - real loopback challenge, scanned confirmation, PKCE, private persistence and restart
+  ---
+  duration_ms: 110.097417
+  type: 'test'
+  ...
+# Subtest: binding phone and email preserves one account, denies wrong account and missing verification
+ok 5 - binding phone and email preserves one account, denies wrong account and missing verification
+  ---
+  duration_ms: 223.30275
+  type: 'test'
+  ...
+# Subtest: expiry, denial, slow_down, replacement and cancellation cannot produce a login
+ok 6 - expiry, denial, slow_down, replacement and cancellation cannot produce a login
+  ---
+  duration_ms: 108.333542
+  type: 'test'
+  ...
+# Subtest: cancel during exchange fences the late credentials and logout clears only the account file
+ok 7 - cancel during exchange fences the late credentials and logout clears only the account file
+  ---
+  duration_ms: 97.97525
+  type: 'test'
+  ...
+# Subtest: exchange response loss retries the persisted code and idempotency key after restart
+ok 8 - exchange response loss retries the persisted code and idempotency key after restart
+  ---
+  duration_ms: 54.841042
+  type: 'test'
+  ...
+# Subtest: session expiry refreshes privately and issuer changes cannot reuse its credentials
+ok 9 - session expiry refreshes privately and issuer changes cannot reuse its credentials
+  ---
+  duration_ms: 44.261208
+  type: 'test'
+  ...
+# Subtest: late successful profile refresh cannot resurrect credentials invalidated by a concurrent 401
+ok 10 - late successful profile refresh cannot resurrect credentials invalidated by a concurrent 401
+  ---
+  duration_ms: 49.083833
+  type: 'test'
+  ...
+# Subtest: a refresh token issued during logout is discarded and remotely revoked
+ok 11 - a refresh token issued during logout is discarded and remotely revoked
+  ---
+  duration_ms: 59.284333
+  type: 'test'
+  ...
+# Subtest: canceling a binding does not hide a 401 for the unchanged credential
+ok 12 - canceling a binding does not hide a 401 for the unchanged credential
+  ---
+  duration_ms: 67.99775
+  type: 'test'
+  ...
+# Subtest: a late 401 for an old credential cannot erase a newer login
+ok 13 - a late 401 for an old credential cannot erase a newer login
+  ---
+  duration_ms: 81.185584
+  type: 'test'
+  ...
+# Subtest: an expired account can explicitly sign in as a different authoritative account
+ok 14 - an expired account can explicitly sign in as a different authoritative account
+  ---
+  duration_ms: 69.908833
+  type: 'test'
+  ...
+# Subtest: simultaneous idempotent token refresh does not revoke credentials adopted by the other request
+ok 15 - simultaneous idempotent token refresh does not revoke credentials adopted by the other request
+  ---
+  duration_ms: 81.792834
+  type: 'test'
+  ...
+# Subtest: a generation change retains an idempotent refresh while its original credential is still recoverable
+ok 16 - a generation change retains an idempotent refresh while its original credential is still recoverable
+  ---
+  duration_ms: 75.128208
+  type: 'test'
+  ...
+# Subtest: credential permissions, symlinks, external redirects and malformed actions fail closed
+ok 17 - credential permissions, symlinks, external redirects and malformed actions fail closed
+  ---
+  duration_ms: 55.800417
+  type: 'test'
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 17
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2325.34125

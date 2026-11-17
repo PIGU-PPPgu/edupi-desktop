@@ -1,0 +1,34 @@
+{
+  "desktop": {
+    "run_id": 44076578840,
+    "source_commit": "991e85516511661e329b0aa1a7f5d928b566dedd",
+    "conclusion": "failure",
+    "jobs": {
+      "audit": "success",
+      "linux-source": "success",
+      "rust-audit": "failure"
+    },
+    "rust_reason": "existing chrono 0.4.45 unmaintained warning RUSTSEC-2026-0543",
+    "cargo_lock_identical_to_main": true,
+    "cargo_lock_sha256": "7110cd1625ce4830d5d352fa6d4e17db9511c69c323f56e34455ef72bab2873b"
+  },
+  "core": {
+    "first_run": 44060547189,
+    "first_result": "checkout failed: self-hosted GitHub connection timeouts",
+    "hosted_mac_run": 44088493535,
+    "conclusion": "failure",
+    "test_suite": {
+      "pass": 374,
+      "fail": 4,
+      "skip": 0
+    },
+    "failures": [
+      "new legacy admission probe timed out: fixed by Core PR473, independently repeated twice",
+      "baseline teacher template CLI historical read_only assertion",
+      "baseline factory combined-domain reflection held vs ready",
+      "baseline CLI combined-domain reflection held vs ready"
+    ],
+    "windows_job": "skipped",
+    "probe_fix_full_suite_rerun": false
+  }
+}

@@ -71,7 +71,7 @@ function mount() {
     "@/hooks/useDesktopHostIdentity": { useDesktopHostIdentity: () => ({ host, loading: false, refresh: async () => {} }) },
     "@/lib/computer-use-permissions": permissions, "./UpdateProxySettingsCard": {},
     "./EduPiComputerUseStop": { COMPUTER_USE_CHANGED_EVENT: changedEvent, announceComputerUseChanged(enabled) { announcements.push(enabled); window.dispatchEvent({ type: changedEvent, detail: enabled }); } },
-    "./MobileBridgeSettingsCard": {}, "./EduPiUsageSettingsCard": {}, "@/lib/edupi-foreground-settings": {},
+    "./MobileBridgeSettingsCard": {}, "./EduPiUsageSettingsCard": {}, "./EduPiAccountSettingsCard": {}, "@/lib/edupi-foreground-settings": {},
   };
   const exports = {};
   vm.runInNewContext(code + "\nexports.ComputerUseSettingsCard = ComputerUseSettingsCard;", {

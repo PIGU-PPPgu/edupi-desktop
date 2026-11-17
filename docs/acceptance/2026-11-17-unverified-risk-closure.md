@@ -35,7 +35,7 @@ Desktop `.117` 的冻结签名源为 `a55777400dea49f1ba3d953418b6965a41942c3e`�
 
 ### 证据索引
 
-下面路径均相对于本机私有证据根 `/Users/iguppp/edupi-install-checkpoints/`；原始教师资料与认证内容不提交仓库。
+下面路径均相对于本机私有证据根 `<私有验收目录>/edupi-install-checkpoints/`；原始教师资料与认证内容不提交仓库。
 
 | 证据 | 位置 |
 | --- | --- |

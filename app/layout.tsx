@@ -27,6 +27,8 @@ import "./edupi-resource-picker.css";
 import "./edupi-chat-resources.css";
 import "./edupi-home-launchpad.css";
 import "./edupi-motion.css";
+import "./edupi-classroom.css";
+import "./edupi-account.css";
 import "./edupi-disclosure.css";
 import { PRODUCT_NAME } from "@/lib/branding";
 

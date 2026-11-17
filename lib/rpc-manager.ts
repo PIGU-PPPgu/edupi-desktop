@@ -23,6 +23,7 @@ import { recordStartupDiagnostic } from "./desktop-diagnostics";
 import { abandonPreparedQueueRecovery, acknowledgeQueueRecovery, clearQueueRecoverably } from "./queue-recovery-server";
 import { createEduPiAppControlTool } from "./edupi-desktop-tool";
 import { createEduPiTaskTool } from "./edupi-task-tool";
+import { createEduPiClassroomTool } from "./edupi-classroom-tool";
 import { createEduPiUpdateTaskTool } from "./edupi-update-task-tool";
 import { createEduPiPresentationTool } from "./edupi-presentation-tool";
 import { createEduPiDocumentTool } from "./edupi-document-tool";
@@ -1760,14 +1761,14 @@ export async function startRpcSession(
           ...(sessionIsEduPiDataRoot && !safeMode ? [memoryRecall.tool] : []),
           defineTool(createBashToolDefinition(sessionCwd, { shellPath: services.settingsManager.getShellPath(), spawnHook: redactDesktopSpawnContext })),
           ...(!safeMode && !strictToolNames ? [createEduPiWorkflowTool()] : []),
-          ...(sessionIsEduPiDataRoot ? [...createEduPiCalendarTools({ projectRoot: EDUPI_ROOT }), createPreparationArtifactTool(EDUPI_ROOT), createEduPiDocumentTool(EDUPI_ROOT), createEduPiPresentationTool(EDUPI_ROOT), createEduPiQrTool(), createEduPiShowImageTool(EDUPI_ROOT), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createMemoryWriteTool(EDUPI_ROOT), createMemoryForgetTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiUpdateTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
+          ...(sessionIsEduPiDataRoot ? [...createEduPiCalendarTools({ projectRoot: EDUPI_ROOT }), createPreparationArtifactTool(EDUPI_ROOT), createEduPiDocumentTool(EDUPI_ROOT), createEduPiPresentationTool(EDUPI_ROOT), createEduPiQrTool(), createEduPiShowImageTool(EDUPI_ROOT), createPrepareTaskTool(EDUPI_ROOT), createStudentEventTool(EDUPI_ROOT), createMemoryWriteTool(EDUPI_ROOT), createMemoryForgetTool(EDUPI_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiClassroomTool({ projectRoot: EDUPI_ROOT }), createEduPiUpdateTaskTool({ projectRoot: EDUPI_ROOT }), createEduPiAppControlTool({
             projectRoot: EDUPI_ROOT,
             requestAction: (action, signal) => requestEduPiAppAction(action, signal),
           }), createEduPiComputerUseTool({
             projectRoot: EDUPI_ROOT,
             requestAction: (action, signal) => requestEduPiComputerAction(action, signal),
           })] : []),
-          ...(sessionIsEduPiCoreRoot && !sessionIsEduPiDataRoot ? [...createEduPiCalendarTools({ projectRoot: EDUPI_CODE_ROOT }), createStudentEventTool(EDUPI_CODE_ROOT), createMemoryWriteTool(EDUPI_CODE_ROOT), createMemoryForgetTool(EDUPI_CODE_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_CODE_ROOT }), createEduPiUpdateTaskTool({ projectRoot: EDUPI_CODE_ROOT })] : []),
+          ...(sessionIsEduPiCoreRoot && !sessionIsEduPiDataRoot ? [...createEduPiCalendarTools({ projectRoot: EDUPI_CODE_ROOT }), createStudentEventTool(EDUPI_CODE_ROOT), createMemoryWriteTool(EDUPI_CODE_ROOT), createMemoryForgetTool(EDUPI_CODE_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_CODE_ROOT }), createEduPiClassroomTool({ projectRoot: EDUPI_CODE_ROOT }), createEduPiUpdateTaskTool({ projectRoot: EDUPI_CODE_ROOT })] : []),
         ],
       });
       const { session: inner } = result;

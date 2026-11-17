@@ -1,0 +1,29 @@
+Command: npm test
+Execution output summary.
+Raw output SHA-256: 0109c562fc5acce91247361ed6388f4dee6cd0273f56b409e63c384707c00bbc
+
+  ---
+  duration_ms: 38.294709
+  type: 'test'
+  ...
+# Subtest: protocol errors redact server messages, refuse redirects and reject off-machine endpoints
+ok 4210 - protocol errors redact server messages, refuse redirects and reject off-machine endpoints
+  ---
+  duration_ms: 0.95225
+  type: 'test'
+  ...
+# Subtest: mock orchestration preserves phase evidence, closes the session on failure and cannot claim actual upgrade
+ok 4211 - mock orchestration preserves phase evidence, closes the session on failure and cannot claim actual upgrade
+  ---
+  duration_ms: 6.372708
+  type: 'test'
+  ...
+1..4211
+# tests 4402
+# suites 6
+# pass 4351
+# fail 0
+# cancelled 0
+# skipped 51
+# todo 0
+# duration_ms 69227.88625

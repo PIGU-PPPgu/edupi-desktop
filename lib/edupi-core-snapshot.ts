@@ -48,7 +48,7 @@ type CoreHealth = {
   supported_operations?: unknown;
 };
 
-const CORE_OPERATIONS = ["health", "snapshot", "workspace-resources", "generated-artifacts", "command", "students", "teaching-priorities", "material-metadata", "education-facts", "delete", "kernel", "memory-scopes", "teaching-skills", "connectors", "agent-computer", "platform", "connector-setup"] as const;
+const CORE_OPERATIONS = ["health", "snapshot", "workspace-resources", "generated-artifacts", "command", "students", "classroom", "teaching-priorities", "material-metadata", "education-facts", "delete", "kernel", "memory-scopes", "teaching-skills", "connectors", "agent-computer", "platform", "connector-setup"] as const;
 
 export function validateScheduleOccurrenceV12Envelope(value: unknown): boolean {
   try {

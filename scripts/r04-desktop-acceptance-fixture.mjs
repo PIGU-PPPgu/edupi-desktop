@@ -19,7 +19,7 @@ import { DatabaseSync } from "node:sqlite";
 import { createJiti } from "jiti";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 
-export const R04_CORE_COMMIT = "b60d4b29bf827a8e7822ba00f5cacef7f351b811";
+export const R04_CORE_COMMIT = "fc89b3bc899a55b0fdad61b8f37e238d950f37c6";
 export const R04_SOURCE_TEXTS = Object.freeze(["合成班会由张老师主持。", "合成班会安排在第二场展示。"]);
 export const R04_QUERY = "甲班合成班会由谁主持，排在第几场展示？";
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

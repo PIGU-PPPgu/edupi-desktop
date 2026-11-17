@@ -6,7 +6,7 @@
     "pi_durable": "1.0.2"
   },
   "core_runtime": {
-    "core_commit": "b60d4b29bf827a8e7822ba00f5cacef7f351b811",
+    "core_commit": "fc89b3bc899a55b0fdad61b8f37e238d950f37c6",
     "component_manifest_path": "contracts/edupi-desktop-component-manifest.json",
     "component_manifest_hash": "sha256:9e2011b079292f9adb8be6ebfea670cbae8d9f04f5414f81121db542b26082a6",
     "runtime_component_manifest_hash": "sha256:c872f949b8e79d65fc87d778744fb87345186bb6af62b97a6d42df53b27768be",
@@ -280,7 +280,10 @@
     "https://github.com/PIGU-PPPgu/edupi/pull/444",
     "https://github.com/PIGU-PPPgu/edupi/pull/446",
     "https://github.com/PIGU-PPPgu/edupi/pull/458",
-    "https://github.com/PIGU-PPPgu/edupi/pull/462"
+    "https://github.com/PIGU-PPPgu/edupi/pull/462",
+    "https://github.com/PIGU-PPPgu/edupi/pull/472",
+    "https://github.com/PIGU-PPPgu/edupi-desktop/pull/508",
+    "https://github.com/PIGU-PPPgu/edupi/pull/473"
   ],
-  "change_note": "R04 combined development candidate b60d4b29: opaque answer receipt and complete no-model revalidation; final CI/merge pin and signed package remain pending. Published117/Core98 unchanged."
+  "change_note": "Pins merged Core fc89b3bc with the tested b60d4b29 tree: canonical recall answers, complete no-model receipt revalidation, built-in classroom grade/seating/duty services, and local account configuration. Normal R04 semantic release remains closed; signed installation and public rollout are separate acceptance gates. Published117/Core98 assets are unchanged."
 }

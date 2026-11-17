@@ -1,0 +1,136 @@
+TAP version 13
+# Subtest: account endpoints reject cross-origin, non-loopback and missing native credentials
+ok 1 - account endpoints reject cross-origin, non-loopback and missing native credentials
+  ---
+  duration_ms: 4.365833
+  type: 'test'
+  ...
+# Subtest: unconfigured account status is explicit and never cached
+ok 2 - unconfigured account status is explicit and never cached
+  ---
+  duration_ms: 0.519917
+  type: 'test'
+  ...
+# Subtest: account action schema rejects caller-supplied verified identities and credentials
+ok 3 - account action schema rejects caller-supplied verified identities and credentials
+  ---
+  duration_ms: 2.382916
+  type: 'test'
+  ...
+# Subtest: classroom routes reject cross-origin writes and imports
+ok 4 - classroom routes reject cross-origin writes and imports
+  ---
+  duration_ms: 2.555083
+  type: 'test'
+  ...
+# Subtest: classroom route rejects unknown actions and injected bridge fields
+ok 5 - classroom route rejects unknown actions and injected bridge fields
+  ---
+  duration_ms: 3.038333
+  type: 'test'
+  ...
+# Subtest: unconfigured client stays local with no network or credential writes
+ok 6 - unconfigured client stays local with no network or credential writes
+  ---
+  duration_ms: 0.637041
+  type: 'test'
+  ...
+# Subtest: real loopback challenge, scanned confirmation, PKCE, private persistence and restart
+ok 7 - real loopback challenge, scanned confirmation, PKCE, private persistence and restart
+  ---
+  duration_ms: 82.684583
+  type: 'test'
+  ...
+# Subtest: binding phone and email preserves one account, denies wrong account and missing verification
+ok 8 - binding phone and email preserves one account, denies wrong account and missing verification
+  ---
+  duration_ms: 191.803125
+  type: 'test'
+  ...
+# Subtest: expiry, denial, slow_down, replacement and cancellation cannot produce a login
+ok 9 - expiry, denial, slow_down, replacement and cancellation cannot produce a login
+  ---
+  duration_ms: 79.601708
+  type: 'test'
+  ...
+# Subtest: cancel during exchange fences the late credentials and logout clears only the account file
+ok 10 - cancel during exchange fences the late credentials and logout clears only the account file
+  ---
+  duration_ms: 68.9265
+  type: 'test'
+  ...
+# Subtest: exchange response loss retries the persisted code and idempotency key after restart
+ok 11 - exchange response loss retries the persisted code and idempotency key after restart
+  ---
+  duration_ms: 41.851167
+  type: 'test'
+  ...
+# Subtest: session expiry refreshes privately and issuer changes cannot reuse its credentials
+ok 12 - session expiry refreshes privately and issuer changes cannot reuse its credentials
+  ---
+  duration_ms: 40.00425
+  type: 'test'
+  ...
+# Subtest: late successful profile refresh cannot resurrect credentials invalidated by a concurrent 401
+ok 13 - late successful profile refresh cannot resurrect credentials invalidated by a concurrent 401
+  ---
+  duration_ms: 44.776333
+  type: 'test'
+  ...
+# Subtest: a refresh token issued during logout is discarded and remotely revoked
+ok 14 - a refresh token issued during logout is discarded and remotely revoked
+  ---
+  duration_ms: 46.456208
+  type: 'test'
+  ...
+# Subtest: an expired account can explicitly sign in as a different authoritative account
+ok 15 - an expired account can explicitly sign in as a different authoritative account
+  ---
+  duration_ms: 60.7065
+  type: 'test'
+  ...
+# Subtest: simultaneous idempotent token refresh does not revoke credentials adopted by the other request
+ok 16 - simultaneous idempotent token refresh does not revoke credentials adopted by the other request
+  ---
+  duration_ms: 57.348708
+  type: 'test'
+  ...
+# Subtest: a generation change retains an idempotent refresh while its original credential is still recoverable
+ok 17 - a generation change retains an idempotent refresh while its original credential is still recoverable
+  ---
+  duration_ms: 55.607708
+  type: 'test'
+  ...
+# Subtest: credential permissions, symlinks, external redirects and malformed actions fail closed
+ok 18 - credential permissions, symlinks, external redirects and malformed actions fail closed
+  ---
+  duration_ms: 47.630333
+  type: 'test'
+  ...
+# Subtest: classroom tool forwards exact calculation input to the shared service
+ok 19 - classroom tool forwards exact calculation input to the shared service
+  ---
+  duration_ms: 0.538458
+  type: 'test'
+  ...
+# Subtest: classroom tool rejects a different workspace before the service
+ok 20 - classroom tool rejects a different workspace before the service
+  ---
+  duration_ms: 0.229708
+  type: 'test'
+  ...
+# Subtest: classroom tool propagates service failure without an invented result
+ok 21 - classroom tool propagates service failure without an invented result
+  ---
+  duration_ms: 0.082458
+  type: 'test'
+  ...
+1..21
+# tests 21
+# suites 0
+# pass 21
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1624.172
