@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { OLD } from "./windows-upgrade-support.mjs";
-import { W3CDriver, assertNativeSnapshot, assertPointerEvidence, pointerDrag, runWebViewPreflight } from "./windows-upgrade-webdriver.mjs";
+import { W3CDriver, assertNativeSnapshot, assertPointerEvidence, pointerDrag, remoteDiagnostic, runWebViewPreflight } from "./windows-upgrade-webdriver.mjs";
 
 const config = { application: "C:\\Users\\synthetic\\edupi-windows-upgrade-test\\application\\pi-agent-desktop.exe",
   dataRoot: "C:\\Users\\synthetic\\edupi-route1-canary-windows-upgrade-test" };
@@ -108,6 +108,13 @@ test("protocol errors redact server messages, refuse redirects and reject off-ma
   const failed = new W3CDriver("http://127.0.0.1:4444", async () => { throw new Error("synthetic-secret"); });
   await assert.rejects(failed.launch(config.application), { message: "webdriver_transport_failed" });
   await assert.rejects(driver.request("GET", "/session/id/../../outside"), /invalid_webdriver_route/);
+  const diagnostic = remoteDiagnostic(500, { message: "session not created: no WebView2 process found. 0x80070005 C:\\private\\Alice\\data Bearer synthetic-secret https://private.example?token=synthetic" });
+  assert.equal(diagnostic.httpStatus, 500);
+  assert.deepEqual(diagnostic.hResults, ["0x80070005"]);
+  assert.ok(diagnostic.messageKeywords.includes("webview2"));
+  for (const secret of ["Alice", "private", "synthetic", "Bearer", "https:", "\\"]) {
+    assert.equal(JSON.stringify(diagnostic).includes(secret), false);
+  }
 });
 
 test("mock orchestration preserves phase evidence, closes the session on failure and cannot claim actual upgrade", async t => {

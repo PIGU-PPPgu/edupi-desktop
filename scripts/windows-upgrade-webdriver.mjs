@@ -9,6 +9,18 @@ const ELEMENT = "element-6066-11e4-a52e-4f735466cecf";
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const windowsPath = value => String(value).replaceAll("/", "\\").toLowerCase();
 
+export function remoteDiagnostic(status, value) {
+  const allowed = new Set(("session not created failed create start launch browser process exited running webview webview2 webviews " +
+    "window windows found missing cannot connect disconnected devtools devtoolsactiveport debug debugging port timeout timed out " +
+    "user data directory already use in permission access denied binary executable version supports current chrome edge msedge " +
+    "msedgewebview2 file path invalid unknown error no was closed crashed unable environment").split(" "));
+  const words = String(value?.message ?? "").toLowerCase().match(/[a-z][a-z0-9]*/gu) ?? [];
+  // A vocabulary, never reconstructed raw text. Paths, URLs, command lines,
+  // usernames, opaque identifiers and secrets cannot be included.
+  return { httpStatus: status, messageKeywords: [...new Set(words.filter(word => allowed.has(word)))],
+    hResults: [...new Set(String(value?.message ?? "").match(/\b0x[0-9a-f]{8}\b/giu) ?? [])].slice(0, 4) };
+}
+
 export class W3CDriver {
   constructor(endpoint, fetcher = fetch) {
     requireValue(/^http:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}$/u.test(endpoint)
@@ -32,9 +44,11 @@ export class W3CDriver {
     // Keep only the standard protocol error, never its message or stacktrace.
     if (!response.ok || payload?.value?.error) {
       const error = payload?.value?.error;
-      throw new Error(`webdriver_${["no such element", "stale element reference", "session not created", "invalid session id",
+      const failure = new Error(`webdriver_${["no such element", "stale element reference", "session not created", "invalid session id",
         "element click intercepted", "timeout", "script timeout", "unknown error"].includes(error)
         ? error.replaceAll(" ", "_") : "protocol_error"}`);
+      failure.diagnostic = remoteDiagnostic(response.status, payload?.value);
+      throw failure;
     }
     requireValue(payload && Object.hasOwn(payload, "value"), "webdriver_invalid_response");
     return payload.value;
@@ -272,6 +286,7 @@ export async function runWebViewPreflight(config, driver = new W3CDriver(config.
     proof.phase = "complete";
   } catch (error) {
     proof.code = safeCode(error);
+    if (error.diagnostic) proof.diagnostic = error.diagnostic;
     const failed = /mismatch|not_a_real|pointer_width_or_draft|trusted_pointer/u.test(proof.code);
     proof.status = failed ? "failed" : "blocked";
     proof.checks.push({ name: proof.phase, status: proof.status, code: proof.code });

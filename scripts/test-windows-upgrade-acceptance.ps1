@@ -540,6 +540,34 @@ try {
     Assert-Condition ($samples -gt 0) "live_listener_evidence_missing"
     Set-Phase "real-webview-read-proof"
     $webviewProof = Get-Content -LiteralPath (Join-Path $evidenceDir "windows-upgrade-webview.json") -Raw | ConvertFrom-Json
+    $proof.nativeProcesses = @($script:ownedProcesses | ForEach-Object {
+        $record = $_
+        $role = if ($record.file -eq $application) { "installed-app" }
+            elseif ($record.file -eq $helperNode) { "node-helper" }
+            elseif ($record.file -eq $tauriDriver) { "tauri-driver" }
+            elseif ($record.file -eq $edgeDriver) { "edge-driver" }
+            elseif ([System.IO.Path]::GetFileName($record.file) -eq "msedgewebview2.exe") { "webview2-runtime" }
+            elseif ($record.file.StartsWith($destination, [StringComparison]::OrdinalIgnoreCase)) { "installed-resource" }
+            else { "other-owned" }
+        $exited = $record.process.HasExited
+        @{ role = $role; pid = $record.id; exited = $exited; exitCode = if ($exited) { $record.process.ExitCode } else { $null } }
+    })
+    $proof.nativeStartupCodes = @(
+        foreach ($base in @((Join-Path $env:APPDATA "com.abcwyc.pi-agent"), (Join-Path $env:LOCALAPPDATA "com.abcwyc.pi-agent"))) {
+            foreach ($file in @(Get-ChildItem -LiteralPath $base -Filter "startup-diagnostics.jsonl" -Recurse -File -ErrorAction SilentlyContinue)) {
+                foreach ($line in @(Get-Content -LiteralPath $file.FullName -Tail 20)) {
+                    try {
+                        $entry = $line | ConvertFrom-Json
+                        $safe = @{}
+                        foreach ($key in @("stage", "component", "errorCode")) {
+                            if ($entry.PSObject.Properties[$key] -and [string]$entry.$key -cmatch '^[a-zA-Z0-9_-]{1,100}$') { $safe[$key] = $entry.$key }
+                        }
+                        if ($safe.Count) { $safe }
+                    } catch { }
+                }
+            }
+        }
+    )
     $webviewStatus = if ($webviewProof.status -ceq "passed" -and $helper.ExitCode -eq 0 -and $webviewProof.sessionClosed) { "passed" }
         elseif ($webviewProof.status -ceq "failed") { "failed" } else { "blocked" }
     Add-Check "real-webview-preflight" $webviewStatus @{ evidence = "windows-upgrade-webview.json"
