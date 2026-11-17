@@ -1,0 +1,118 @@
+name: Windows old-client upgrade acceptance
+
+# Opt-in isolated acceptance. This workflow cannot publish a Release or
+# change the normal latest/feed. Preflight is runnable; upgrade fails closed
+# with explicit gaps until its native restart/attach executor is implemented.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Preflight tests frozen 116; upgrade currently reports blocked
+        required: true
+        type: choice
+        options: [preflight, upgrade]
+        default: preflight
+      target_release_id:
+        description: Exact public 117 Release ID for upgrade
+        required: false
+        type: string
+      target_asset_id:
+        description: Exact public 117 Windows installer asset ID
+        required: false
+        type: string
+      target_source_sha:
+        description: Full lowercase source commit for 117
+        required: false
+        type: string
+      target_asset_sha256:
+        description: Full lowercase SHA-256 for the 117 installer
+        required: false
+        type: string
+      cohort_url:
+        description: Immutable first-party HTTPS cohort URL supplied by the main agent
+        required: false
+        type: string
+
+# GitHub requires push access to GET a private Draft. The token is exposed
+# only to the exact API download step; every use is GET and asset-ID-bound.
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-upgrade-acceptance-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows-acceptance:
+    runs-on: windows-2025
+    timeout-minutes: 40
+    env:
+      WINDOWS_UPGRADE_MODE: ${{ inputs.mode }}
+      WINDOWS_UPGRADE_TARGET_RELEASE_ID: ${{ inputs.target_release_id }}
+      WINDOWS_UPGRADE_TARGET_ASSET_ID: ${{ inputs.target_asset_id }}
+      WINDOWS_UPGRADE_TARGET_SOURCE_SHA: ${{ inputs.target_source_sha }}
+      WINDOWS_UPGRADE_TARGET_ASSET_SHA256: ${{ inputs.target_asset_sha256 }}
+      WINDOWS_UPGRADE_COHORT_URL: ${{ inputs.cohort_url }}
+    steps:
+      - name: Check out verifier
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Initialize private evidence paths
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_RUN_ID -cnotmatch '^[1-9][0-9]*$' -or
+              $env:GITHUB_RUN_ATTEMPT -cnotmatch '^[1-9][0-9]*$' -or
+              $env:GITHUB_SHA -cnotmatch '^[a-f0-9]{40}$') { throw "invalid_run_identity" }
+          $suffix = "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $evidence = Join-Path $env:RUNNER_TEMP "edupi-windows-upgrade-evidence-$suffix"
+          $download = Join-Path $env:RUNNER_TEMP "edupi-windows-upgrade-download-$suffix"
+          New-Item -ItemType Directory -Path $evidence | Out-Null
+          $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+          icacls.exe $evidence "/inheritance:r" "/grant:r" "*${sid}:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "evidence_acl_failed" }
+          @{ schemaVersion = 1; runId = $env:GITHUB_RUN_ID; attempt = $env:GITHUB_RUN_ATTEMPT
+            verifier = $env:GITHUB_SHA; mode = $env:WINDOWS_UPGRADE_MODE } |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence "windows-upgrade-job.json") -Encoding utf8
+          "WINDOWS_UPGRADE_EVIDENCE_DIR=$evidence" >> $env:GITHUB_ENV
+          "WINDOWS_UPGRADE_DOWNLOAD_DIR=$download" >> $env:GITHUB_ENV
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "22.22.0"
+      - name: Test protocol and input helpers
+        shell: pwsh
+        run: |
+          node --test scripts/windows-upgrade-support.test.mjs scripts/windows-upgrade-webdriver.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw "windows_upgrade_helper_tests_failed" }
+          $tokens = $null
+          $parseErrors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $PWD "scripts/test-windows-upgrade-acceptance.ps1"), [ref]$tokens, [ref]$parseErrors)
+          if ($parseErrors.Count) { throw "windows_upgrade_powershell_parse_failed" }
+      - name: Download exact frozen 116 by API asset ID
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/windows-upgrade-support.mjs download
+          if ($LASTEXITCODE -ne 0) { throw "frozen_116_download_blocked" }
+      - name: Exercise shell and real installed WebView
+        shell: pwsh
+        run: |
+          & ./scripts/test-windows-upgrade-acceptance.ps1 -Mode $env:WINDOWS_UPGRADE_MODE
+          if ($LASTEXITCODE -ne 0) { throw "windows_upgrade_acceptance_not_passed" }
+      - name: Remove task download
+        if: always()
+        shell: pwsh
+        run: ./scripts/test-windows-upgrade-acceptance.ps1 -CleanupDownloadOnly
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-upgrade-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.WINDOWS_UPGRADE_EVIDENCE_DIR }}/windows-upgrade-*.json
+            ${{ env.WINDOWS_UPGRADE_EVIDENCE_DIR }}/windows-upgrade-*.png
+          if-no-files-found: warn
+          retention-days: 14
