@@ -1,0 +1,83 @@
+name: Linux installed AppImage upgrade acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Verify old AppImage first, then optionally its native public upgrade
+        required: true
+        type: choice
+        options: [preflight, upgrade]
+        default: preflight
+      cohort_url:
+        description: Immutable first-party 117 cohort URL, only for upgrade
+        required: false
+        type: string
+
+permissions: {}
+
+jobs:
+  installed-appimage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      # Needed only for the GET of the frozen private 116 Draft.
+      contents: write
+    env:
+      LINUX_UPGRADE_MODE: ${{ inputs.mode }}
+      LINUX_UPGRADE_COHORT_URL: ${{ inputs.cohort_url }}
+      LINUX_UPGRADE_EVIDENCE: ${{ github.workspace }}/linux-acceptance-evidence/linux-upgrade.json
+    steps:
+      - name: Check out acceptance harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Initialize private acceptance paths
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          echo "LINUX_UPGRADE_TASK=$RUNNER_TEMP/edupi-linux-upgrade-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+          mkdir -p "$(dirname "$LINUX_UPGRADE_EVIDENCE")"
+          printf '%s\n' '{"scope":"linux_appimage_native_upgrade","status":"failed","stage":"workflow_setup","actualUpgradePassed":false}' > "$LINUX_UPGRADE_EVIDENCE"
+      - name: Set up acceptance Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "22.23.2"
+      - name: Verify acceptance helpers
+        run: node --test scripts/test-linux-upgrade-acceptance.test.mjs
+      - name: Prepare private display and native WebKit driver
+        run: |
+          set -euo pipefail
+          df -h "$RUNNER_TEMP"
+          du -sh "$RUNNER_TEMP"
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            webkit2gtk-driver libwebkit2gtk-4.1-0 libgtk-3-0t64 \
+            libayatana-appindicator3-1 libfuse2t64 xvfb xauth dbus-x11 python3
+      - name: Download exact old AppImage by API asset ID
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/test-linux-upgrade-acceptance.mjs prepare
+      - name: Exercise installed native WebView and optional automatic upgrade
+        run: |
+          set -euo pipefail
+          dbus-run-session -- xvfb-run --auto-servernum \
+            --server-args="-screen 0 1440x1000x24" \
+            node scripts/test-linux-upgrade-acceptance.mjs run
+      - name: Remove task AppImages and synthetic data
+        if: always()
+        run: |
+          node scripts/test-linux-upgrade-acceptance.mjs cleanup
+          df -h "$RUNNER_TEMP"
+      - name: Keep deidentified acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-appimage-upgrade-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            linux-acceptance-evidence/linux-upgrade.json
+            linux-acceptance-evidence/linux-upgrade-*.png
+          if-no-files-found: error
+          retention-days: 14
