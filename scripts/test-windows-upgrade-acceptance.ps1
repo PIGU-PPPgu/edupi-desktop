@@ -46,6 +46,26 @@ function Get-SafeCode($ErrorRecord) {
     if ($message -cmatch '^[a-z][a-z0-9_]{0,99}$') { return $message }
     return "phase_failed"
 }
+function Get-SafeDiagnostic($ErrorRecord, [string]$Stage) {
+    # Deliberately omit Message, TargetObject, PositionMessage and raw stack
+    # text: framework errors can embed paths, arguments or environment values.
+    $chain = [System.Collections.Generic.List[object]]::new()
+    $exception = $ErrorRecord.Exception
+    for ($depth = 0; $null -ne $exception -and $depth -lt 6; $depth++) {
+        $native = $null
+        if ($exception -is [System.ComponentModel.Win32Exception]) { $native = $exception.NativeErrorCode }
+        $chain.Add(@{ type = $exception.GetType().FullName; hResult = $exception.HResult; nativeErrorCode = $native })
+        $exception = $exception.InnerException
+    }
+    $lines = @([regex]::Matches([string]$ErrorRecord.ScriptStackTrace, '(?m): line ([0-9]+)\r?$')
+        | ForEach-Object { [int]$_.Groups[1].Value })
+    return @{ phase = $Stage; scriptLineNumber = $ErrorRecord.InvocationInfo.ScriptLineNumber
+        stackLineNumbers = $lines; exceptions = $chain.ToArray() }
+}
+function Set-Phase([string]$Stage) {
+    $script:phase = $Stage
+    Save-Evidence
+}
 function Get-AcceptanceOutcome([string]$Mode, [string]$Shell, [string]$Cleanup, [object[]]$Checks) {
     $oldChecks = @($Checks | Where-Object { $_.name -ne "upgrade-executor" })
     $passed = $oldChecks.Count -gt 0 -and @($oldChecks | Where-Object { $_.status -ne "passed" }).Count -eq 0 -and
@@ -90,6 +110,7 @@ Assert-Condition (Test-Path -LiteralPath $evidenceDir -PathType Container) "down
 $evidenceFile = Join-Path $evidenceDir "windows-upgrade-acceptance.json"
 function Save-Evidence {
     $proof.updatedAt = [DateTimeOffset]::UtcNow.ToString("o")
+    $proof.phase = $phase
     $proof | ConvertTo-Json -Depth 18 | Set-Content -LiteralPath $evidenceFile -Encoding utf8
 }
 function Add-Check([string]$Name, [string]$Status, $Details) {
@@ -352,7 +373,7 @@ try {
     Add-Check "exact-116-installer" "passed" @{ sourceSha = $oldSource; sha256 = $oldHash }
     $phase = "shell"
     try { $proof.shell = Get-ShellEvidence }
-    catch { $proof.shell = @{ status = "blocked"; code = Get-SafeCode $_ } }
+    catch { $proof.shell = @{ status = "blocked"; code = Get-SafeCode $_; diagnostic = Get-SafeDiagnostic $_ $phase } }
     Save-Evidence
 
     $phase = "exclusive-environment"
@@ -459,13 +480,15 @@ try {
         primarySource = "tauri-apps/tauri:tauri-driver-v2.0.4"
         sha256 = (Get-FileHash -LiteralPath $tauriDriver -Algorithm SHA256).Hash.ToLowerInvariant() }
 
-    $phase = "real-webview-preflight"
+    Set-Phase "real-webview-ports"
     $tauriPort = Get-FreePort
     $edgePort = Get-FreePort
     Assert-Condition ($tauriPort -ne $edgePort -and $tauriPort -ne $debugPort -and $edgePort -ne $debugPort) "port_allocation_collision"
+    Set-Phase "real-webview-driver-start"
     $driver = Start-OwnedProcess -File $tauriDriver -Environment $appEnvironment -Arguments @(
         "--port", "$tauriPort", "--native-port", "$edgePort", "--native-driver", $edgeDriver
     )
+    Set-Phase "real-webview-driver-ready"
     $ready = $false
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     while ([DateTime]::UtcNow -lt $deadline -and !$driver.HasExited) {
@@ -476,15 +499,21 @@ try {
         Start-Sleep -Milliseconds 300
     }
     Assert-Condition $ready "tauri_or_edge_driver_not_ready"
+    Set-Phase "real-webview-config"
     $runConfig = Join-Path $taskRoot "webview-config.json"
     @{ endpoint = "http://127.0.0.1:$tauriPort"; application = $application; dataRoot = $canaryRoot
         runtimeVersion = $webview.identity.version; evidenceDir = $evidenceDir } |
         ConvertTo-Json | Set-Content -LiteralPath $runConfig -Encoding utf8
+    Set-Phase "real-webview-helper-environment"
     $helperEnvironment = Get-BaseEnvironment
     $helperEnvironment.WINDOWS_UPGRADE_RUN_CONFIG = $runConfig
-    $helper = Start-OwnedProcess -File (Get-Command node -CommandType Application).Source -Environment $helperEnvironment -Arguments @(
+    Set-Phase "real-webview-helper-resolve"
+    $helperNode = (Get-Command node -CommandType Application).Source
+    Set-Phase "real-webview-helper-start"
+    $helper = Start-OwnedProcess -File $helperNode -Environment $helperEnvironment -Arguments @(
         (Join-Path $PSScriptRoot "windows-upgrade-webdriver.mjs")
     )
+    Set-Phase "real-webview-helper-monitor"
     $deadline = [DateTime]::UtcNow.AddSeconds(600)
     $samples = 0
     $debugPortObserved = $false
@@ -499,6 +528,7 @@ try {
         }
     }
     Assert-Condition ($samples -gt 0) "live_listener_evidence_missing"
+    Set-Phase "real-webview-read-proof"
     $webviewProof = Get-Content -LiteralPath (Join-Path $evidenceDir "windows-upgrade-webview.json") -Raw | ConvertFrom-Json
     $webviewStatus = if ($webviewProof.status -ceq "passed" -and $helper.ExitCode -eq 0 -and $webviewProof.sessionClosed) { "passed" }
         elseif ($webviewProof.status -ceq "failed") { "failed" } else { "blocked" }
@@ -507,7 +537,9 @@ try {
         actualUpgradePassed = $false }
     if ($Mode -eq "upgrade") { Add-Check "upgrade-executor" "blocked" @{ code = "upgrade_executor_not_implemented" } }
 } catch {
-    Add-Check $phase "blocked" @{ code = Get-SafeCode $_ }
+    $diagnostic = Get-SafeDiagnostic $_ $phase
+    Add-Check $phase "blocked" @{ code = Get-SafeCode $_; diagnostic = $diagnostic }
+    Write-Output (@{ status = "blocked"; diagnostic = $diagnostic } | ConvertTo-Json -Depth 10 -Compress)
 } finally {
     $cleanupErrors = [System.Collections.Generic.List[string]]::new()
     try { Stop-TaskProcesses } catch { $cleanupErrors.Add((Get-SafeCode $_)) }

@@ -171,11 +171,20 @@ test("actual PowerShell outcome, environment whitelist and PID tracking function
     $tokens = $null; $parseErrors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:WINDOWS_UPGRADE_PS_FILE, [ref]$tokens, [ref]$parseErrors)
     if ($parseErrors.Count) { throw "parse failed" }
-    foreach ($name in @("Assert-Condition", "Get-AcceptanceOutcome", "Get-BaseEnvironment", "Test-CimProcessIdentity", "Capture-OwnedDescendants", "Get-EdgeDriverCandidates")) {
+    foreach ($name in @("Assert-Condition", "Get-SafeDiagnostic", "Get-AcceptanceOutcome", "Get-BaseEnvironment", "Test-CimProcessIdentity", "Capture-OwnedDescendants", "Get-EdgeDriverCandidates")) {
       $function = $ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name}, $true)
       if (!$function) { throw "missing function" }
       Invoke-Expression $function.Extent.Text
     }
+    try {
+      $inner = [System.ComponentModel.Win32Exception]::new(5, "synthetic-token C:\\Users\\private\\secret")
+      throw [System.InvalidOperationException]::new("Bearer synthetic-token C:\\private\\path", $inner)
+    } catch { $diagnostic = Get-SafeDiagnostic $_ "real-webview-helper-start" }
+    if ($diagnostic.scriptLineNumber -le 0 -or $diagnostic.exceptions.Count -ne 2 -or
+        $diagnostic.exceptions[1].nativeErrorCode -ne 5 -or
+        $diagnostic.exceptions[0].type -cne "System.InvalidOperationException") { throw "exception identity lost" }
+    $safeJson = $diagnostic | ConvertTo-Json -Depth 8 -Compress
+    if ($safeJson.Contains("synthetic-token") -or $safeJson.Contains("private") -or $safeJson.Contains("Bearer")) { throw "diagnostic leaked error message" }
     $script:upstreamVersion = "131.0.2903.146"
     function Invoke-WebRequest { param($Uri, $TimeoutSec)
       if ($Uri -cne "https://msedgedriver.microsoft.com/LATEST_RELEASE_131_WINDOWS") { throw "wrong Microsoft endpoint" }
