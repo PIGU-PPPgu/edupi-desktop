@@ -244,7 +244,10 @@ test("target contract pins public release, exact installer and signature, immuta
 
 test("public target uses anonymous API IDs, validates tag and full streams, and refuses credential or foreign redirects", async () => {
   const calls = [], measured = [];
-  const cohortBytes = fs.readFileSync(new URL("../docs/acceptance/update-cohorts/all-116-117-20261117.json", import.meta.url));
+  // Windows checkout may convert the repository fixture to CRLF. The raw
+  // immutable HTTPS response is LF and production hashes those exact bytes.
+  const cohortBytes = Buffer.from(fs.readFileSync(new URL("../docs/acceptance/update-cohorts/all-116-117-20261117.json", import.meta.url), "utf8")
+    .replaceAll("\r\n", "\n"));
   const publicSignature = JSON.parse(cohortBytes).platforms["windows-x86_64"].signature;
   const fetcher = async (url, init) => {
     calls.push({ url, init });
@@ -272,6 +275,11 @@ test("public target uses anonymous API IDs, validates tag and full streams, and 
   await assert.rejects(verifyPublicTarget({ mode: "upgrade", target: TARGET }, {
     fetcher: async (url, init) => url.includes("/git/ref/") ? Response.json({ object: { type: "commit", sha: OLD.sourceSha } }) : fetcher(url, init),
   }), /target_tag_source_mismatch/);
+  await assert.rejects(verifyPublicTarget({ mode: "upgrade", target: TARGET }, {
+    fetcher: async (url, init) => url === TARGET.cohortUrl
+      ? new Response(cohortBytes.toString("utf8").replaceAll("\n", "\r\n")) : fetcher(url, init),
+    measure: async () => Buffer.from(publicSignature),
+  }), /fixed_cohort_bytes_mismatch/);
   const bytes = Buffer.from("Synthetic signed installer content, never executed");
   const expected = { size: bytes.length, sha256: crypto.createHash("sha256").update(bytes).digest("hex") };
   assert.deepEqual(await measureResponse(new Response(bytes), expected), expected);
@@ -285,11 +293,11 @@ test("public target uses anonymous API IDs, validates tag and full streams, and 
 
 test("readonly SQLite snapshots retain database identity and the same immutable records across restart", async t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "windows-upgrade-sql-test-"));
-  t.after(() => fs.rmSync(directory, { force: true, recursive: true }));
+  let db;
+  t.after(() => { db?.close(); fs.rmSync(directory, { force: true, recursive: true }); });
   const file = path.join(directory, "core.sqlite");
   const { DatabaseSync } = await import("node:sqlite");
-  const db = new DatabaseSync(file);
-  t.after(() => db.close());
+  db = new DatabaseSync(file);
   db.exec(`CREATE TABLE authority(singleton INTEGER PRIMARY KEY,schema_version INTEGER,root_fingerprint TEXT,owner_pid INTEGER);
     INSERT INTO authority VALUES(1,1,'synthetic-root',123);
     CREATE TABLE events(event_id TEXT PRIMARY KEY,event_version INTEGER,event_type TEXT,occurrence_time TEXT,
