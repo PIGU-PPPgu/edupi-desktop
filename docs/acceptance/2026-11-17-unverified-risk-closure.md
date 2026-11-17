@@ -2,6 +2,50 @@
 
 ## 当前状态
 
+2026-11-17 本节取代下方全部阶段性状态。用户最新要求因费用停止 Windows 构建；本轮不再触发任何 Windows runner、打包、安装或升级重跑。已核对全部 queued／in_progress／waiting／requested／pending runs，均为空；旧 Windows 运行费用与失败不能撤销，原始记录保留。
+
+Desktop `.117` 的冻结签名源为 `a55777400dea49f1ba3d953418b6965a41942c3e`，Core 为 `98e4f7cd0c31dd30954574d2040bb1b948cdd954`。签名 run43967319356 attempt1 的三平台 builder 与最终 draft-proof 全部成功。Release447680099 已执行一次受控公开，`draft=false`、`prerelease=true`、`make_latest=false`；九项资产集合指纹仍为 `sha256:47068a9d6613a4fb697db202ab874466782ff342d3e7fdea94902b34428e43c4`。正式 Latest `v0.3.70`、feed `7924328ee893c9527adb54e25b0023e9f2a26ff7` 以及已公开 `.115/.117` 的 tag／资产保持。
+
+已完成一次新的说明专用PATCH，加入本机Mac原生升级/G3/G5冷启回读与Windows后续构建暂停，前后九资产、tag、正式Latest及feed均保持；此操作没有workflow dispatch或构建。首次准备误读不存在的feed tag在PATCH前拒绝，实际feed为 `refs/heads/updater-feed`，失败记录保留；修正引用后完成说明更新，没有重跑公开发布器。
+
+| 原任务 | 当前状态 | 实际证据与未覆盖范围 |
+| --- | --- | --- |
+| R15 Mac 公开下载、安装 | 验收通过，范围为隔离安装 | 三份公开Mac资产匿名完整size/SHA匹配；公开DMG run44011387309／harness cdd8cdc5 两次真实App/Core/HTTP启动、不同PID/nonce、同一SQLite持久记录和marker/model回读、清理通过。此前CI1／CI2失败保留；不是普通教师根迁移验收 |
+| R15 Mac 原生升级 | 验收通过，范围为隔离cohort `.116→.117` | 本机旧116设置发现117，实际点击更新和继续，自动新App PID77828→30243／Core30799；About117、安全签名和冻结包全树核对通过。正常Cmd+Q后再冷启App68191／Core68492，G3/G5状态回读保持；两次正常退出后App/helper均0。正常 `/Applications/EduPi.app` 仍115；未证明正式70通道升级 |
+| R15 Linux | Deb安装与AppImage隔离原生升级分别通过 | run44011387634 实际从旧116 UI触发公开117原生updater，新App PID3382→3503，HTTP3536／Core3588；同资料根、同SQLite记录、marker/model回读与清理通过，未手动launch117补证。升级后GUI、Deb升级、真实教师流程未操作 |
+| R15 Windows | 用户因费用暂停构建与runner；源码待审 | 历史run43975180076的117 NSIS安装/Core smoke通过；最新run44022244522非零 `blocked/dedicated_native_runner_required`，User env未改、`actualUpgradePassed=false`、清理通过。hosted宿主／shell均elevated，自托管runner为0。完整executor已实现，诊断token泄漏已修，独立只读复审另记；不再为此派发付费作业 |
+| R18／R20 原生拖动 | 自动化输入限制已定位，人工持键鼠标未验 | CUA drag的原生pressedButtons和Web buttons均为0，命中把手后正确触发松键保护；真实hook12项回归通过。macOS权限probe44015411776仅读取且accessibility/screenRecording均true，未启动App；它不能证明持键拖动通过 |
+| R04／L4 G3、G5 | 隔离安装版交互与冷启回读通过，完整L4未验收 | G3打开三份产物、接受草稿、材料确认及关联任务回读；G5错误短语disabled、精确短语enabled并确认，内部候选草稿在升级和冷启后保持。外发未授权，未执行外发；不证明真实模型或教学内容质量 |
+| R04／完整L4其余项 | 外部条件与固定Core合同仍阻塞 | Main4在dispatch前拒绝generic `create_task`，周/月模板503／activation_pending；真实模型预检要求HTTPS，而当前默认模型为本机HTTP网关，0calls。自然跨期、实睡、通知实际点击、真实教师连续使用、正式盲测六域／双裁决者／预算配置冻结仍缺；未绕过门禁或切换账号／模型 |
+
+源码、发布和用户验收分开记录：PR501／502／503／505 已合并；这些验收器源码不改变冻结 `.117` 安装包。Windows PR504 的源码审查不等于Windows运行验收，完整 R04／R15／L4 保持未勾选。
+
+### 资料保护与清理
+
+本机新 cohort `native-l4-116-117-20261117g` 实际执行 snapshot→isolate→restore→check，350项按新基线逐字节相同，原三个LocalStorage和四份UI配置已归还。新基线保留当前全局models摘要 `222a6b2f95b67558cfbe7b9d58a0106919f37d4dab40fd0dc1411fa1db61fcec`；旧f基线七项元数据漂移及其 `original350ByteAuditPassed=false` 仍是历史事实，不回写旧配置。合成canary的agent配置未提前独立采集前后摘要，不能宣称该项已有完整快照比较；本机升级proof已明确false。
+
+已实际删除九份完成验收的包下载副本及SQLite诊断根，实际可用空间增加1,440,083,968字节；又删除临时升级App与旧／新已解包的三份测试App，增加3,124,912,128字节。正常115、114回退、教师资料、当前模型、G3/G5合成根、源码、备份、失败日志和JSON证据保留。临时PowerShell已删除；当前不为重跑Windows重新安装工具或申请runner。
+
+### 证据索引
+
+下面路径均相对于本机私有证据根 `/Users/iguppp/edupi-install-checkpoints/`；原始教师资料与认证内容不提交仓库。
+
+| 证据 | 位置 |
+| --- | --- |
+| 一次受控公开，9资产／tag／正式通道前后保持 | `v0.3.117/evidence/publish-117-20261117a.noindex/controlled-prerelease-117-proof.json` |
+| 新Mac原生证据后的说明专用更新 | `v0.3.117/evidence/release-notes-after-native-mac-20261117b.noindex/proof.json`；首次准备拒绝为 `release-notes-after-native-mac.noindex/failure.json`，PATCH为0 |
+| 三份Mac公开资产无凭证完整下载 | `v0.3.117/evidence/anonymous-public-117-download-proof.json` |
+| 公开Mac安装及两次冷启 | `v0.3.117/evidence/macos-public-installed-117.noindex/e.JSON` |
+| Linux原生升级及同库回读 | `v0.3.117/evidence/linux-native-upgrade-public1.noindex/linux-upgrade.json` |
+| 本机Mac原生升级、G3/G5、g保护引用及边界 | `v0.3.116/evidence/native-116-117g-final-observed-proof.json` |
+| 新g完整恢复及350项核对 | `v0.3.116/evidence/ui-data.noindex/protect-native-l4-116-117-20261117g/check.json`；SHA `8747356fe01fcabd733fb6d5ff77bc6a2e48a6eab41caa6c44280f4337365bc2` |
+| Mac权限只读probe | `v0.3.117/evidence/macos-native-permissions-44015411776.noindex/macos-native-permissions.json` |
+| 历史Windows executor定向29项／实际环境阻塞 | `v0.3.117/evidence/windows-upgrade-executor-verification.noindex.json` |
+| 用户费用限制及无活跃作业核对 | `v0.3.117/evidence/windows-cost-stop-20261117.noindex/proof.json` |
+| 已执行的下载／诊断及测试App清理 | `v0.3.117/evidence/completed-downloads-and-sql-cleanup.json`、`v0.3.117/evidence/completed-native-app-copies-cleanup.json` |
+
+## 2026-11-17 早期安装记录
+
 2026-11-17 当前安装证据取代上一轮：Mac CI3 run44007284437／harness bd87b1aa **真实临时安装、两次冷启、Core／投影、同一SQLite持久记录、marker/model回读和清理全部通过**，源仍a557。Linux116 AppImage前置run44004124512通过但截图中文方框；run44008633609补系统CJK字体后功能与实际中文截图均通过，原始字体列表由空变为包含Noto CJK。Windows run44004124764的同SID shell、116字节、WebView2和匹配驱动通过，真实WebView阶段泛化 `phase_failed`，当前blocked、清理通过，继续定位。117受控发布input的22项本地引用已核验，公开发布、匿名下载和旧客户端升级仍未执行；正式70/feed不变。
 
 本段取代下方早期“源码准备中、等待重跑”的阶段状态。Desktop PR498、PR499、PR500 已正常合并；真正 `.117` 签名源为 `a55777400dea49f1ba3d953418b6965a41942c3e`，与受测 `2b1f0c14adba71fc95012b30cd453b0f6f2f6df3` 整树相同，Core 仍固定 `98e4f7cd0c31dd30954574d2040bb1b948cdd954`。旧 `2618757a` 仅为未使用准备源，没有移动旧分支。正式 Latest `.70` 与 feed `7924328ee893c9527adb54e25b0023e9f2a26ff7` 保持；完整 L4 不放行。

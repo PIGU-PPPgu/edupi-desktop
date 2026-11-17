@@ -1,6 +1,8 @@
 # 自动下载安装
 
-2026-11-17 R15 当前发布门：**Mac117真实安装/二冷启/持久记录与清理CI3通过，Windows117 NSIS、Linux117 Deb安装smoke已有同源通过证据；117仍Draft，正在准备受控公开。** Mac run44007284437／harness bd87b1aa；Linux116字体补齐前置run44008633609及中文截图通过，Windows116真实WebView前置仍诊断中。发布器197项与独立复审、22项实际本地引用核验通过，不代表已执行PATCH或升级；普通Latest70/feed792不变。
+2026-11-17 R15 当前：**Release447680099／`v0.3.117` 已公开为预发布，非 Latest；九项资产、tag/source a557 与 Core98冻结。** 三份Mac资产匿名完整下载、公开DMG安装及二次冷启 run44011387309、本机隔离 `.116→.117` 原生升级和升级后 G3/G5 冷启回读、Linux AppImage隔离原生升级 run44011387634 均有实际通过证据。本机原350项与UI已按新g基线归还，普通安装仍`.115`；正常通道升级、真实教师迁移及完整R15不作通过。**用户因费用明确暂停Windows构建及runner，不再触发Windows作业**，历史NSIS/Core smoke不替代GUI升级。正式Latest70／feed792不变，详见[当前发布验收](../acceptance/2026-11-17-unverified-risk-closure.md)。
+
+## 2026-11-17 早期阶段记录
 
 2026-11-17 R15 最新验收：**Linux116 AppImage原生WebView前置CI通过；Windows前置在真实WebView阶段blocked，Mac117 CI2后置只读/cleanup失败，117仍Draft。** Windows同SID shell与匹配WebView2/Driver已通过，后续实际升级执行器仍未实现；Linux前置不证明升级。Mac实际两次启动/Core/投影/marker/model已观察，新Node只读探针与逐目录cleanup修补78项、独立复审通过，真实重跑待完成。失败证据不改绿，正式70/feed792和冻结资产不变。
 
