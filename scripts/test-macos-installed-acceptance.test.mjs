@@ -161,7 +161,7 @@ function fixtureBundle(t) {
   fs.mkdirSync(path.join(coreRoot, "fixtures/bridge/v1.1"), { recursive: true });
   const canonical = value => Array.isArray(value) ? value.map(canonical)
     : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
-  const pin = { core_commit: "98e4f7cd0c31dd30954574d2040bb1b948cdd954",
+  const pin = { core_commit: "fc89b3bc899a55b0fdad61b8f37e238d950f37c6",
     component_manifest_path: "contracts/edupi-desktop-component-manifest.json",
     runtime_schema_hash: `sha256:${"3".repeat(64)}` };
   const schemaPath = "contracts/edupi-core-runtime-v1-hash.json";
