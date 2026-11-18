@@ -71,6 +71,7 @@
 | Next 补丁生产验证 | Next／eslint-config-next 16.4.6 生产前端编译成功；隔离安全模式页面可打开设置，CSS／JS 200、identity 204；空根教育工作区 503 保留，不作业务流程或原生安装通过 | `continuation-audit-20261118/frontend-production-build.json`、`production-http-smoke.json`、`production-browser-smoke.json` 及 PNG；独立 `.next-desktop` 输出，无桌面打包 |
 | 发布默认平台保护 | 手动发布入口的 `platform` 默认从 all 改为 macos；从实际矩阵表达式核对默认只选 Apple Silicon Mac，发布平台／workflow／draft proof 三组共 59 passed、0 failed、0 skipped | `continuation-audit-20261118/default-macos-release.tap`；仅配置与结构回归，没有触发任何 runner、签名、构建或发布，实际发布仍显式传 `platform=macos` |
 | Linux CI 准备修复 | 组合提交 `941112db` 引入 Ubuntu 区域镜像归一化、APT retries=2、HTTP/HTTPS 30s timeout、update 失败即停和原 11 包清单；Linux helper／workflow 及依赖安全回归定向 40 passed，完整 lint 通过 | `continuation-audit-20261118/combined-risk-targeted.tap`、`lint-combined-risk.log`；只证明本地结构与模拟 APT 行为，真实 Linux 网络／cargo 源码检查等待新 head 的 CI |
+| Linux 源码兼容修复 | 新 head 的 Linux job 已通过依赖准备并进入源码测试；应用兼容检查暴露两个 SDK 回归硬编码 macOS `/private/tmp`，改为 Node `os.tmpdir()` 后 `lib/edupi-recall-answer.test.mjs` 4 passed | `continuation-audit-20261118/a363-audit-full.log`、`recall-answer-linux-fix.tap`；新组合 CI 仍需重新取得最终 Linux 结果 |
 
 ## 已保留的失败与修复
 
@@ -118,7 +119,7 @@ Core 最终精确 CI 与同树合并 pin 已取得，Desktop 源码及连接窄�
 
 ## 发布阻塞
 
-精确 head `0803ab9f` 的 CI `44204350138` 中，Linux 源码 job `134466326215` 成功，npm 与 Rust audit 分别失败。后续 `b965999e` 的 CI `44213186503` 三项失败：两个审计仍失败，Linux 在系统依赖下载达到 15 分钟准备上限，后续编译与测试没有执行。组合提交 `941112db` 已修正 Linux 准备路径，但尚未触发或取得该新 head 的远端 CI 结果；旧 run 不得替代新 head 的通过证据。
+精确 head `0803ab9f` 的 CI `44204350138` 中，Linux 源码 job `134466326215` 成功，npm 与 Rust audit 分别失败。后续 `b965999e` 的 CI `44213186503` 三项失败：两个审计仍失败，Linux 在系统依赖下载达到 15 分钟准备上限，后续编译与测试没有执行。组合提交 `941112db` 修正了 Linux 准备路径，精确 head `a3639b82` 已成功完成依赖准备并进入源码检查；其应用兼容测试又暴露两个 `/private/tmp` 平台假设，现已在下一组合提交改为 `os.tmpdir()`。旧 run 不得替代新 head 的最终通过证据。
 
 `npm run security:audit` 的已记录失败有 15 项计数，其中 11 项 high 来自 picomatch 4.0.7 经 fdir／tinyglobby 到 ESLint 和构建 glob 的依赖链，并非 11 个独立公告。当次官方 `GHSA-fc5q-39xc-vjpf` 查询标注受影响版本 `<=4.0.7`，未列修复版本，registry latest 为 4.0.7；原输出为 `frozen-candidate-audit.log`。Rust audit job `134466326494` 因 chrono 0.4.45 的 `RUSTSEC-2026-0543` unmaintained 警告，在 `cargo audit --deny warnings` 下失败；本轮 Cargo 相对 PR508 仅调整应用版本，没有新增该依赖。
 
