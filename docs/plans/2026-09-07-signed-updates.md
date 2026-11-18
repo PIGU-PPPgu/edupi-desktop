@@ -1,6 +1,6 @@
 # 自动下载安装
 
-2026-11-18 审计门实际阻塞：`.118` 尚未构建、签名、安装或公开，源码 Draft PR509 包含 PR508。SDK 停止／同根冷恢复、Main4 模板页面与连接 busy／同页恢复已有工程证据，不能替代安装或真实模型验收；原全量 4889 passed／0 failed、57 conditional skipped，新增连接定向 32 passed。精确 head `0803ab9f` 的 CI `44204350138` 中 Linux 源码成功，npm audit 因 picomatch 4.0.7 高危链失败，Rust audit 因 chrono 0.4.45 的 `RUSTSEC-2026-0543` unmaintained 在 `--deny warnings` 下失败。保留两道审计门，不派发已知受阻的 Mac 签名作业；Windows runner／构建／打包／smoke／升级继续按用户费用要求暂停。普通 R04 语义门仍 false，真实 GLM `429/code1310` 独立阻塞，`.117` 公开资产、Latest70／feed792 不变。后续 head 的 CI 身份以 PR509 为准。
+2026-11-18 风险续修：`.118` 已通过本地生产前端编译，尚未生成桌面安装包、签名、安装或公开，Draft PR509 包含 PR508。npm 侧移除 picomatch lint 链并升级官方 Next／Hono／Node server／XML parser 补丁，干净 npm ci 后审计全部级别 0，适配 13 passed、安全 29 passed、类型与完整 lint 通过；不能把这些检查替代同源签名安装。Rust chrono 的 `RUSTSEC-2026-0543` 仍在原样 `cargo audit --deny warnings` 下阻塞，当前无官方维护迁移可直接升级。`b965999e` CI 的 Linux 准备阶段下载超时后未执行源码检查，协调侧修复后再组合一个 head 验证。SDK／Main4 页面／连接恢复的既有工程证据保留，普通 R04 语义门仍 false，真实 GLM `429/code1310` 不重试。Windows runner／构建／打包／smoke／升级继续按用户费用要求暂停；`.117` 公开资产、Latest70／feed792 不变。后续 head 的精确 CI 身份以 PR509 为准。
 
 2026-11-18 前序源码候选记录，当前状态以上段审计门补记为准：`.118` 仅为 Mac-only 源码候选，尚未构建、签名、安装或公开。Core 最终 `fc89b3bc` 与精确 main CI 已就绪；Desktop 正在完成 R04 独立入口、持久预算、Main4 模板和停止恢复的组合验收。普通 R04 语义门继续 false，真实 GLM `429/code1310` 不重试、不换账号或 key；不能把合成页面或测试计数视为真实语义通过。后续发布显式选择 `platform=macos`，**Windows runner、构建、打包、smoke、升级均维持用户暂停**。`.117` 已公开资产、tag/source 和正式 Latest70／feed792 不变；新包须独立完成同源签名及安装验收。详见 [当前 R04 接线记录](../acceptance/2026-11-18-core-recall-desktop.md)。
 

@@ -1,4 +1,6 @@
-EduPi Desktop 0.3.118，macOS Apple Silicon 预发布。
+EduPi Desktop 0.3.118，macOS Apple Silicon 预发布候选说明。
+
+当前仅完成源码和前端构建验收，桌面安装包尚未生成、签名或公开。
 
 Core 固定到 `fc89b3bc899a55b0fdad61b8f37e238d950f37c6`，保留主线班级工作与本机账号入口。
 
@@ -8,4 +10,6 @@ Core 固定到 `fc89b3bc899a55b0fdad61b8f37e238d950f37c6`，保留主线班级�
 
 停止先持久关闭本地配置，再关闭运行进程并暂停对应授权。无法确认关闭或撤权时显示待核对，历史内容保留。
 
-本版仅提供 macOS Apple Silicon 安装包。Windows 构建按用户要求暂停，正式自动更新通道保持原状态；完整 R04、R15 与 L4 不作验收通过。
+升级前端框架、本地 HTTP 服务和 XML 读取的安全依赖，替换受影响的 lint 文件匹配链。干净安装后的 npm 审计全部级别为零；Rust chrono 维护警告仍阻止签名发布，审计门保持原样。
+
+本版发布目标为 macOS Apple Silicon。Windows 构建按用户要求暂停，正式自动更新通道保持原状态；完整 R04、R15 与 L4 不作验收通过。

@@ -1,6 +1,6 @@
 # R04 Core 问答接线
 
-当前状态：源码接线已实现，隔离 SDK 停止／同根冷恢复、Main4 模板页面及连接慢响应窄修复已有工程证据；普通 R04 语义放行与签名安装尚未通过，签名发布另受 npm 与 Rust 审计阻塞。Core 已完成同树合并及主线精确 CI，Desktop 已固定最终 pin 并正常合入主线班级与账号功能。R04、R15、完整 L4 均不勾选完成。本文挂回原路线图，不建立另一份任务计划。
+当前状态：源码接线已实现，隔离 SDK 停止／同根冷恢复、Main4 模板页面及连接慢响应窄修复已有工程证据；本次风险续修已在干净安装后取得 npm 全部级别零漏洞、兼容回归、类型与 lint 通过，并完成 Next 生产前端编译。普通 R04 语义放行与签名安装尚未通过，Rust chrono 审计仍阻塞发布，组合 CI 另验。Core 已完成同树合并及主线精确 CI，Desktop 已固定最终 pin 并正常合入主线班级与账号功能。R04、R15、完整 L4 均不勾选完成。本文挂回原路线图，不建立另一份任务计划。
 
 ## 版本与环境
 
@@ -65,7 +65,10 @@
 | 模板页面刷新与模型边界 | 首次刷新设置回读 403，后续明确重新 bootstrap 后 200 且仍 off；独立观察曾见测试注入缺失，但不据此证明该次 403 的原因。合成模型累计 facet 1／chat 0 未增加，较早另一 provider 累计 4／0 已停止；模板隔离根无模型或认证 provider | `main4-ui-reload.json`、`main4-ui-reload-native-observation.json`、`main4-ui-final-model-counters.json`；累计数不是 0，不将独立 provider 计数当作任意上游流量的完整审计 |
 | 连接超时窄修复 | 连续纯 4s deadline 显示 busy，重试继续超时不重启；两个 ignoreAbort 迟到合法 204 均不成为 online、不 pin，retry 不 reload／relaunch；三文件 32 passed、0 failed、0 skipped，独立复审未留 P1/P2 | `health-timeout-busy.tap`、`health-timeout-late-response.tap`；4s deadline、8s interval、身份校验与混合失败 offline 门保留 |
 | 同页 busy 与实际恢复 | 受控仅延迟 identity transport 后观察 busy；还原实际 transport 后最终同页探测为相同实例 204，慢响应条消失、documentStartedAt 不变、relaunch 0，历史 timeout＋network incident 保留 | `connection-actual-before.json`、`connection-ui-busy.*`、`connection-ui-busy-retry.json`、`connection-ui-recovered-final.*`；中间 `connection-ui-recovered.*` 仍 busy 的原图保留；不是安装版、持续延迟或旧冷图成因证明 |
-| 全量源码检查 | 4946 tests，4889 passed、0 failed、0 cancelled、57 conditional skipped；类型检查、lint 通过，现有 `_text` lint warning 保留 | `full-source-suite-2.tap`、`frozen-candidate-typecheck.log`、`frozen-candidate-lint-2.log`；57 个条件检查不作通过 |
+| 接线 checkpoint 全量检查 | 4946 tests，4889 passed、0 failed、0 cancelled、57 conditional skipped；类型检查、lint 通过，现有 `_text` lint warning 保留 | `full-source-suite-2.tap`、`frozen-candidate-typecheck.log`、`frozen-candidate-lint-2.log`；57 个条件检查不作通过 |
+| npm 风险续修 | `npm ci --no-audit --no-fund` 成功且 lock 字节未变；其后 npm audit 全部级别 0，实际 TypeScript parser／resolver 等适配回归 13 passed，依赖安全回归 29 passed，类型与完整 lint 通过，原 `_text` warning 保留 | `continuation-audit-20261118/clean-npm-ci.json`、`npm-audit-clean.json`、`lint-project-glob-clean.tap`、`dependency-security-clean.tap`、`typecheck-clean.log`、`lint-clean.log` |
+| 风险续修全量检查 | 干净安装后 `npm test` 4974 tests，4917 passed、0 failed、0 cancelled、57 conditional skipped；未触发 Windows 构建或 runner | `continuation-audit-20261118/full-source-patched.log`、`checks-summary.json`；57 个条件检查不作通过，不能替代新 head 远端 CI |
+| Next 补丁生产验证 | Next／eslint-config-next 16.4.6 生产前端编译成功；隔离安全模式页面可打开设置，CSS／JS 200、identity 204；空根教育工作区 503 保留，不作业务流程或原生安装通过 | `continuation-audit-20261118/frontend-production-build.json`、`production-http-smoke.json`、`production-browser-smoke.json` 及 PNG；独立 `.next-desktop` 输出，无桌面打包 |
 
 ## 已保留的失败与修复
 
@@ -113,14 +116,20 @@ Core 最终精确 CI 与同树合并 pin 已取得，Desktop 源码及连接窄�
 
 ## 发布阻塞
 
-精确 head `0803ab9f` 的 CI `44204350138` 中，Linux 源码 job `134466326215` 成功，npm 与 Rust audit 分别失败；后续 head 的结果由 PR509 记录，不把旧 run 当作新 head 的通过证据。
+精确 head `0803ab9f` 的 CI `44204350138` 中，Linux 源码 job `134466326215` 成功，npm 与 Rust audit 分别失败。后续 `b965999e` 的 CI `44213186503` 三项失败：两个审计仍失败，Linux 在系统依赖下载达到 15 分钟准备上限，后续编译与测试没有执行。后续 head 的结果由 PR509 记录，不把旧 run 当作新 head 的通过证据。
 
 `npm run security:audit` 的已记录失败有 15 项计数，其中 11 项 high 来自 picomatch 4.0.7 经 fdir／tinyglobby 到 ESLint 和构建 glob 的依赖链，并非 11 个独立公告。当次官方 `GHSA-fc5q-39xc-vjpf` 查询标注受影响版本 `<=4.0.7`，未列修复版本，registry latest 为 4.0.7；原输出为 `frozen-candidate-audit.log`。Rust audit job `134466326494` 因 chrono 0.4.45 的 `RUSTSEC-2026-0543` unmaintained 警告，在 `cargo audit --deny warnings` 下失败；本轮 Cargo 相对 PR508 仅调整应用版本，没有新增该依赖。
 
-不降低审计门、不强制升级未知版本、不伪造版本或静默自维护 fork；签名、安装与公开 `.118` 保持外部阻塞。普通 R04 真实模型 `429/code1310` 是另一独立阻塞，源码 PR 不表示这两项已解除。
+2026-11-18 风险续修取代 npm 未修复状态：正式 registry 仍无 picomatch 修复版，因此移除它的 lint 依赖链。两个固定 TypeScript ESLint consumer 通过明确命名的 `@edupi/lint-project-glob@1.0.0` 窄适配包使用官方 `glob@14.0.6`，实际 parser typed program、resolver、目录展开、忽略路径和有界 repeated extglob 均有回归；不是改写上游版本或屏蔽公告。Next 根目录适配器独立改用同一官方引擎，仍只接受目录查询。并升级官方稳定补丁 Next／eslint-config-next 16.4.6、Hono 4.13.19、`@hono/node-server` 2.1.9、fast-xml-parser 5.12.1，关闭余下低／中危。干净安装后 `npm audit --audit-level=high --json` 的 info／low／moderate／high／critical 均为 0。审计门保持原样，组合 head 的 CI 尚须另取证。
+
+Rust `RUSTSEC-2026-0543` 当前为所有版本的 unmaintained 公告，官方 `patched=[]`，chrono 最新 0.4.45 不能通过换版本解决。直接父级为 notify-rust 的可选 macOS 集成、serde_with 的可选 `chrono_0_4` 集成，以及 Windows `uiautomation` 的必需依赖；已查其官方新版本仍保留 chrono。Mac 生产树 `cargo tree --frozen --target aarch64-apple-darwin -i chrono --edges normal,build` 无启用路径，不能替代完整锁文件审计。当前不引入 chrono／uiautomation／serde_with 新 fork，也不降低 `--deny warnings`；解除条件是维护中的上游迁移使完整锁文件不再含受影响依赖，并通过原审计。只读调查及缺缓存而未完成的跨目标检查分别记录于 `continuation-audit-20261118/readonly-audit-findings.json`。
+
+签名、安装与公开 `.118` 仍受 Rust 审计阻塞，Linux 准备超时由协调侧独立修复后组合验证。普通 R04 真实模型 `429/code1310` 是另一独立阻塞；真实模型不重试、不换账号或 key，不把 npm 零漏洞视为完整发布放行。
 
 ## 清理
 
-本轮已结束 Ego TaskSpace12，停止并核对自有 controller／Next／Core／provider 共五个 PID 全部不存在。按 metadata、用户 UID、realpath、Git 跟踪／ignore 和 lsof 逐路径核对后，删除 `.next/`、四组 R04 合成数据根／容器、三组 Native 合成根／独立 stateDir，以及已复制原始证据的两个临时 runtime proof 目录，共 17 个非重叠路径。删除前占用合计 709,472 KiB，操作前后卷可用空间增加 726,663,168 bytes；时点空间变化不单独用作内容完整性证明。
+上一轮接线验收已结束 Ego TaskSpace12，停止并核对自有 controller／Next／Core／provider 共五个 PID 全部不存在。按 metadata、用户 UID、realpath、Git 跟踪／ignore 和 lsof 逐路径核对后，删除 `.next/`、四组 R04 合成数据根／容器、三组 Native 合成根／独立 stateDir，以及已复制原始证据的两个临时 runtime proof 目录，共 17 个非重叠路径。删除前占用合计 709,472 KiB，操作前后卷可用空间增加 726,663,168 bytes；时点空间变化不单独用作内容完整性证明。
 
-证据为 `final-stop-before-processes.json`、`final-stop-after-processes.json`、`final-cleanup-preflight.json`、`final-cleanup.json`。原始 runtime 失败 metadata、合成 session 和最终 Main4 设置已保存到私有证据子目录 `cleanup-preserved/`；全部源码、依赖、失败 TAP／日志／图片／绑定和回退证据保留。`.next-desktop/`、`src-tauri/target/` 及生成资源目录本轮不存在，没有删除受跟踪的 resources 元数据；正常 App、真实教师资料、全局模型及认证未进入清理范围。
+证据为 `final-stop-before-processes.json`、`final-stop-after-processes.json`、`final-cleanup-preflight.json`、`final-cleanup.json`。原始 runtime 失败 metadata、合成 session 和最终 Main4 设置已保存到私有证据子目录 `cleanup-preserved/`；全部源码、依赖、失败 TAP／日志／图片／绑定和回退证据保留。该轮 `.next-desktop/`、`src-tauri/target/` 及生成资源目录未产生，没有删除受跟踪的 resources 元数据；正常 App、真实教师资料、全局模型及认证未进入清理范围。
+
+风险续修轮已结束 Ego TaskSpace13，生产前端检查服务、控制器和构建 PID 全部退出；再次核对 ignore、tracked、realpath、UID 和 lsof 后，删除新的 `.next-desktop/` 与空隔离构建根两处，合计 959,212 KiB，卷可用空间增加 969,543,680 bytes。证据为 `continuation-audit-20261118/cleanup.json`；前端编译、浏览器、审计、类型／lint、全量测试和旧失败日志仍保留，依赖保留供后续组合验证使用。
