@@ -69,6 +69,7 @@
 | npm 风险续修 | `npm ci --no-audit --no-fund` 成功且 lock 字节未变；其后 npm audit 全部级别 0，实际 TypeScript parser／resolver 等适配回归 13 passed，依赖安全回归 29 passed，类型与完整 lint 通过，原 `_text` warning 保留 | `continuation-audit-20261118/clean-npm-ci.json`、`npm-audit-clean.json`、`lint-project-glob-clean.tap`、`dependency-security-clean.tap`、`typecheck-clean.log`、`lint-clean.log` |
 | 风险续修全量检查 | 干净安装后 `npm test` 4974 tests，4917 passed、0 failed、0 cancelled、57 conditional skipped；未触发 Windows 构建或 runner | `continuation-audit-20261118/full-source-patched.log`、`checks-summary.json`；57 个条件检查不作通过，不能替代新 head 远端 CI |
 | Next 补丁生产验证 | Next／eslint-config-next 16.4.6 生产前端编译成功；隔离安全模式页面可打开设置，CSS／JS 200、identity 204；空根教育工作区 503 保留，不作业务流程或原生安装通过 | `continuation-audit-20261118/frontend-production-build.json`、`production-http-smoke.json`、`production-browser-smoke.json` 及 PNG；独立 `.next-desktop` 输出，无桌面打包 |
+| 发布默认平台保护 | 手动发布入口的 `platform` 默认从 all 改为 macos；从实际矩阵表达式核对默认只选 Apple Silicon Mac，发布平台／workflow／draft proof 三组共 59 passed、0 failed、0 skipped | `continuation-audit-20261118/default-macos-release.tap`；仅配置与结构回归，没有触发任何 runner、签名、构建或发布，实际发布仍显式传 `platform=macos` |
 
 ## 已保留的失败与修复
 

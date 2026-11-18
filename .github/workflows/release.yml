@@ -15,9 +15,9 @@ on:
         description: Asset-set fingerprint recorded during signed draft installation
         type: string
       platform:
-        description: Build all platforms or retry one platform
+        description: Target platform
         type: choice
-        default: all
+        default: macos
         options: [all, macos, windows, linux]
 
 permissions:
