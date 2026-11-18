@@ -1,6 +1,6 @@
 # R04 Core 问答接线
 
-当前状态：源码接线已实现，隔离 SDK 停止／同根冷恢复、Main4 模板页面及连接慢响应窄修复已有工程证据；本次风险续修已在干净安装后取得 npm 全部级别零漏洞、兼容回归、类型与 lint 通过，并完成 Next 生产前端编译。普通 R04 语义放行与签名安装尚未通过，Rust chrono 审计仍阻塞发布，组合 CI 另验。Core 已完成同树合并及主线精确 CI，Desktop 已固定最终 pin 并正常合入主线班级与账号功能。R04、R15、完整 L4 均不勾选完成。本文挂回原路线图，不建立另一份任务计划。
+当前状态：源码接线已实现，隔离 SDK 停止／同根冷恢复、Main4 模板页面及连接慢响应窄修复已有工程证据；本次风险续修已在干净安装后取得 npm 全部级别零漏洞、兼容回归、类型与 lint 通过，并完成 Next 生产前端编译。用户于 2026-11-18 明确批准仅 macOS Apple Silicon 发布，并书面接受 Rust `RUSTSEC-2026-0543` 作为本次 macOS 候选的例外；该 warning 不记为通过，例外负责人为本次批准者，范围不延伸到 Windows 或其他平台。Core 已完成同树合并及主线精确 CI，Desktop 已固定最终 pin 并正常合入主线班级与账号功能。R04、R15、完整 L4 均不勾选完成。本文挂回原路线图，不建立另一份任务计划。
 
 ## 版本与环境
 
@@ -125,9 +125,9 @@ Core 最终精确 CI 与同树合并 pin 已取得，Desktop 源码及连接窄�
 
 2026-11-18 风险续修取代 npm 未修复状态：正式 registry 仍无 picomatch 修复版，因此移除它的 lint 依赖链。两个固定 TypeScript ESLint consumer 通过明确命名的 `@edupi/lint-project-glob@1.0.0` 窄适配包使用官方 `glob@14.0.6`，实际 parser typed program、resolver、目录展开、忽略路径和有界 repeated extglob 均有回归；不是改写上游版本或屏蔽公告。Next 根目录适配器独立改用同一官方引擎，仍只接受目录查询。并升级官方稳定补丁 Next／eslint-config-next 16.4.6、Hono 4.13.19、`@hono/node-server` 2.1.9、fast-xml-parser 5.12.1，关闭余下低／中危。干净安装后 `npm audit --audit-level=high --json` 的 info／low／moderate／high／critical 均为 0。审计门保持原样，组合 head 的 CI 尚须另取证。
 
-Rust `RUSTSEC-2026-0543` 当前为所有版本的 unmaintained 公告，官方 `patched=[]`，chrono 最新 0.4.45 不能通过换版本解决。直接父级为 notify-rust 的可选 macOS 集成、serde_with 的可选 `chrono_0_4` 集成，以及 Windows `uiautomation` 的必需依赖；已查其官方新版本仍保留 chrono。Mac 生产树 `cargo tree --frozen --target aarch64-apple-darwin -i chrono --edges normal,build` 无启用路径，不能替代完整锁文件审计。当前不引入 chrono／uiautomation／serde_with 新 fork，也不降低 `--deny warnings`；解除条件是维护中的上游迁移使完整锁文件不再含受影响依赖，并通过原审计。只读调查及缺缓存而未完成的跨目标检查分别记录于 `continuation-audit-20261118/readonly-audit-findings.json`。
+Rust `RUSTSEC-2026-0543` 当前为所有版本的 unmaintained 公告，官方 `patched=[]`，chrono 最新 0.4.45 不能通过换版本解决。直接父级为 notify-rust 的可选 macOS 集成、serde_with 的可选 `chrono_0_4` 集成，以及 Windows `uiautomation` 的必需依赖；已查其官方新版本仍保留 chrono。Mac 生产树 `cargo tree --frozen --target aarch64-apple-darwin -i chrono --edges normal,build` 无启用路径，不能替代完整锁文件审计。用户已明确批准本次仅 macOS Apple Silicon 候选采用书面例外：`cargo audit --deny warnings` 仍会失败，例外不改变审计结果、不放开 Windows、不延伸到其他平台；后续上游迁移仍是正式解除条件。只读调查及缺缓存而未完成的跨目标检查分别记录于 `continuation-audit-20261118/readonly-audit-findings.json`。
 
-签名、安装与公开 `.118` 仍受 Rust 审计阻塞，Linux 准备超时由协调侧独立修复后组合验证。普通 R04 真实模型 `429/code1310` 是另一独立阻塞；真实模型不重试、不换账号或 key，不把 npm 零漏洞视为完整发布放行。
+签名、安装与公开 `.118` 现在按用户批准的 macOS-only 例外继续；若 Apple 凭据、公证、安装、冷启或更新任一步失败，保留失败并停止发布，不触发 Windows。普通 R04 真实模型 `429/code1310` 是另一独立阻塞；真实模型不重试、不换账号或 key，不把 npm 零漏洞视为完整 R04 放行。
 
 ## 清理
 

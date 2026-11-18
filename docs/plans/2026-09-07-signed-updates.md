@@ -1,6 +1,6 @@
 # 自动下载安装
 
-2026-11-18 风险续修：`.118` 已通过本地生产前端编译，尚未生成桌面安装包、签名、安装或公开，Draft PR509 包含 PR508。npm 侧移除 picomatch lint 链并升级官方 Next／Hono／Node server／XML parser 补丁，干净 npm ci 后审计全部级别 0，适配 13 passed、安全 29 passed、类型与完整 lint 通过；不能把这些检查替代同源签名安装。Rust chrono 的 `RUSTSEC-2026-0543` 仍在原样 `cargo audit --deny warnings` 下阻塞，当前无官方维护迁移可直接升级。`b965999e` CI 的 Linux 准备阶段下载超时后未执行源码检查，协调侧修复后再组合一个 head 验证。SDK／Main4 页面／连接恢复的既有工程证据保留，普通 R04 语义门仍 false，真实 GLM `429/code1310` 不重试。Windows runner／构建／打包／smoke／升级继续按用户费用要求暂停；`.117` 公开资产、Latest70／feed792 不变。后续 head 的精确 CI 身份以 PR509 为准。
+2026-11-18 风险续修：`.118` 已通过本地生产前端编译，尚未生成桌面安装包，Draft PR509 包含 PR508。npm 侧移除 picomatch lint 链并升级官方 Next／Hono／Node server／XML parser 补丁，干净 npm ci 后审计全部级别 0，适配 13 passed、安全 29 passed、类型与完整 lint 通过。Rust chrono 的 `RUSTSEC-2026-0543` 仍在原样 `cargo audit --deny warnings` 下失败；用户于 2026-11-18 明确批准仅 macOS Apple Silicon 候选采用书面例外，该例外不把 Rust audit 改成通过，也不适用于 Windows 或其他平台。`ca54e91` 功能 head 的 Linux source 和 npm/application audit 通过，Rust audit失败；后续文档 head的重复CI已取消。SDK／Main4 页面／连接恢复的既有工程证据保留，普通 R04 语义门仍 false，真实 GLM `429/code1310` 不重试。Windows runner／构建／打包／smoke／升级继续按用户费用要求暂停；`.117` 公开资产、Latest70／feed792 不变。Mac-only DMG流程可继续，任一 Apple 预检、公证、安装、冷启或更新失败即停止，不改做 Windows。
 
 发布费用保护：手动发布的 `platform` 默认改为 `macos`，避免省略参数时进入 all 平台矩阵；59 项发布平台、workflow 与 draft proof 结构回归通过。质量、审计、公证与发布证明门未改，后续实际 dispatch 仍显式指定 `platform=macos`；本次未运行任何平台构建或发布。
 
