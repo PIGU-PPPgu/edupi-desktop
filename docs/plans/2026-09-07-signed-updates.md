@@ -1,12 +1,14 @@
 # 自动下载安装
 
-2026-11-18 风险续修：`.118` 已通过本地生产前端编译，尚未生成桌面安装包，Draft PR509 包含 PR508。npm 侧移除 picomatch lint 链并升级官方 Next／Hono／Node server／XML parser 补丁，干净 npm ci 后审计全部级别 0，适配 13 passed、安全 29 passed、类型与完整 lint 通过。Rust chrono 的 `RUSTSEC-2026-0543` 仍在原样 `cargo audit --deny warnings` 下失败；用户于 2026-11-18 明确批准仅 macOS Apple Silicon 候选采用书面例外，该例外不把 Rust audit 改成通过，也不适用于 Windows 或其他平台。`ca54e91` 功能 head 的 Linux source 和 npm/application audit 通过，Rust audit失败；后续文档 head的重复CI已取消。SDK／Main4 页面／连接恢复的既有工程证据保留，普通 R04 语义门仍 false，真实 GLM `429/code1310` 不重试。Windows runner／构建／打包／smoke／升级继续按用户费用要求暂停；`.117` 公开资产、Latest70／feed792 不变。Mac-only DMG流程可继续，任一 Apple 预检、公证、安装、冷启或更新失败即停止，不改做 Windows。
+2026-11-18 最终发布回读：**`.118` 已公开为 macOS Apple Silicon 正式 GitHub Release，安装和双冷启通过，GUI／updater 未验收。** 签名源 `7935753a`、Core `fc89b3bc`，签名 run `44303236812` success；首轮安装 `44316698278` 的 harness 旧 pin 错误保留，修复 `5ef4bd0f` 后原 DMG 第二轮 `44318046052` success。Release `449948350`、tag `v0.3.118` 精确绑定原签名源，`draft=false`、`prerelease=false`、GitHub Latest `.118`；三项 Mac 资产的 ID／大小／SHA-256 和 `.117` 资产保持。用户明确批准后由协调侧唯一进行 Release metadata 发布，没有执行仍要求全平台资产的 `phase=publish`，没有重复构建或安装；正式自动更新 feed 仍 `7924328ee893c9527adb54e25b0023e9f2a26ff7`，不宣称客户端已升级。Windows 所有 runner／构建／打包／smoke／升级继续暂停；PR509 保持 Draft。Rust audit 仍失败、按本次 macOS 书面例外保留，普通 R04 语义门和完整 R04／R15／L4 均未放行。完整资产、失败及成功证据见 [当前 R04 记录](../acceptance/2026-11-18-core-recall-desktop.md)；本段取代下方尚未签名／安装／公开的历史状态。
 
-发布费用保护：手动发布的 `platform` 默认改为 `macos`，避免省略参数时进入 all 平台矩阵；59 项发布平台、workflow 与 draft proof 结构回归通过。质量、审计、公证与发布证明门未改，后续实际 dispatch 仍显式指定 `platform=macos`；本次未运行任何平台构建或发布。
+2026-11-18 风险续修历史：npm 侧移除 picomatch lint 链并升级官方 Next／Hono／Node server／XML parser 补丁，干净 npm ci 后审计全部级别 0，适配 13 passed、安全 29 passed、类型与完整 lint 通过。Rust chrono 的 `RUSTSEC-2026-0543` 仍在原样 `cargo audit --deny warnings` 下失败；用户于 2026-11-18 明确批准仅 macOS Apple Silicon 候选采用书面例外，该例外不把 Rust audit 改成通过，也不适用于 Windows 或其他平台。`ca54e91` 功能 head 的 Linux source 和 npm/application audit 通过，Rust audit 失败；后续文档 head 的重复 CI 已取消。SDK／Main4 页面／连接恢复的既有工程证据保留，普通 R04 语义门仍 false，真实 GLM `429/code1310` 不重试。
+
+发布费用保护：手动发布的 `platform` 默认改为 `macos`，避免省略参数时进入 all 平台矩阵；59 项发布平台、workflow 与 draft proof 结构回归通过。质量、审计、公证与发布证明门未改，后续实际构建 dispatch 仍显式指定 `platform=macos`；配置修改阶段没有运行构建，后续本次 Mac-only 实际签名与公开结果见首段。
 
 Linux CI 准备修复已组合到 `941112db`：只处理 Ubuntu 区域镜像下载慢、APT 有限重试和连接超时，保留原依赖清单、15 分钟上限、签名源与后续 `cargo check`／测试门。定向结构与模拟测试 40 passed；新的 Linux 真实网络和源码检查等待该 head 的一次精确 CI。Windows runner、构建、打包、smoke、升级仍暂停。
 
-最终 head `ca54e91` 的 CI `44259389523` 已确认 Linux source 和 npm/application audit 通过；Rust audit 仍因 chrono `RUSTSEC-2026-0543` 失败。此前 Linux 应用兼容测试发现两个 SDK 回归写死 macOS `/private/tmp`，已改为 `os.tmpdir()` 并定向 4 passed。`.118` 仍不签名、不安装、不公开。
+最终 head `ca54e91` 的 CI `44259389523` 已确认 Linux source 和 npm/application audit 通过；Rust audit 仍因 chrono `RUSTSEC-2026-0543` 失败。此前 Linux 应用兼容测试发现两个 SDK 回归写死 macOS `/private/tmp`，已改为 `os.tmpdir()` 并定向 4 passed。该阶段的签名暂停已由本次用户明确批准的 macOS-only 例外及上段实际发布取代。
 
 2026-11-18 前序源码候选记录，当前状态以上段审计门补记为准：`.118` 仅为 Mac-only 源码候选，尚未构建、签名、安装或公开。Core 最终 `fc89b3bc` 与精确 main CI 已就绪；Desktop 正在完成 R04 独立入口、持久预算、Main4 模板和停止恢复的组合验收。普通 R04 语义门继续 false，真实 GLM `429/code1310` 不重试、不换账号或 key；不能把合成页面或测试计数视为真实语义通过。后续发布显式选择 `platform=macos`，**Windows runner、构建、打包、smoke、升级均维持用户暂停**。`.117` 已公开资产、tag/source 和正式 Latest70／feed792 不变；新包须独立完成同源签名及安装验收。详见 [当前 R04 接线记录](../acceptance/2026-11-18-core-recall-desktop.md)。
 

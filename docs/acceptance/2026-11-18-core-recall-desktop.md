@@ -1,12 +1,12 @@
 # R04 Core 问答接线
 
-当前状态：源码接线已实现，隔离 SDK 停止／同根冷恢复、Main4 模板页面及连接慢响应窄修复已有工程证据；本次风险续修已在干净安装后取得 npm 全部级别零漏洞、兼容回归、类型与 lint 通过，并完成 Next 生产前端编译。用户于 2026-11-18 明确批准仅 macOS Apple Silicon 发布，并书面接受 Rust `RUSTSEC-2026-0543` 作为本次 macOS 候选的例外；该 warning 不记为通过，例外负责人为本次批准者，范围不延伸到 Windows 或其他平台。Core 已完成同树合并及主线精确 CI，Desktop 已固定最终 pin 并正常合入主线班级与账号功能。R04、R15、完整 L4 均不勾选完成。本文挂回原路线图，不建立另一份任务计划。
+当前状态：`.118` 已于 2026-11-18 22:47:42 CST 公开为 macOS Apple Silicon 正式 GitHub Release；只读回读 `draft=false`、`prerelease=false`、GitHub Latest `.118`，三项安装验收资产的 ID／大小／SHA-256 不变。正式自动更新 feed 仍为 `7924328e…`，不把 Release 公开记作 updater 通过。签名、公证和精确 DMG 安装验收已通过；同一包两次真实 App 冷启动、Core／projection ready、SQLite／marker／模型配置保持及清理均有回读证据。首轮安装验收因 harness 过期 Core 白名单失败，失败保留；`5ef4bd0f` 只更新 harness 与 fixture 的精确 pin，第二轮复用原 DMG 通过，没有重建或替换资产。用户于 2026-11-18 明确批准本次正式 Release，并书面接受 Rust `RUSTSEC-2026-0543` 例外；`cargo audit --deny warnings` 仍失败，不记为通过，范围不延伸到 Windows 或其他平台。GUI、正常 Cmd+Q、updater 和真实模型未在本次安装流程执行；PR509 保持 Draft，R04、R15、完整 L4 均不勾选完成。本文挂回原路线图，不建立另一份任务计划。
 
 ## 版本与环境
 
 | 项目 | 实际版本或边界 |
 | --- | --- |
-| Desktop | `codex/r04-core-answer-desktop-20261117`，本 PR 源码候选；组合基线 `e8412aaa159a76e65e6db433a8fc355489a68a16`，包含 PR508 merge `9d1b4c45`；接线 checkpoint `0803ab9f`，最终身份见 PR509 与私有源码清单；`.118` 尚未签名安装 |
+| Desktop | 签名包源 `7935753ae8296d820010a8e5bb1d7f3d477b72eb`、tree `c1a4de98309e9972f043f44081e08ceaa09f21df`；验收 harness `5ef4bd0fe5cf070e1885ae233365c6f6457aab5e`；分支 `codex/r04-core-answer-desktop-20261117`／PR509 仍 Draft，保留 PR508 merge `9d1b4c45` |
 | Core 开发候选 | `b60d4b29bf827a8e7822ba00f5cacef7f351b811` |
 | Core 最终合并 | `fc89b3bc899a55b0fdad61b8f37e238d950f37c6`，与受测候选同树；官方候选 CI `44123145520` attempt 2、最终 main CI `44145905596` attempt 1 成功；Windows/visual 条件 skip 不算通过 |
 | Core tree | `ed98dad0591a4d273c4d571a7e116c732354f582` |
@@ -14,13 +14,36 @@
 | Runtime component | `sha256:c872f949b8e79d65fc87d778744fb87345186bb6af62b97a6d42df53b27768be` |
 | Desktop component | `sha256:9e2011b079292f9adb8be6ebfea670cbae8d9f04f5414f81121db542b26082a6` |
 | Bridge 1.1 | `sha256:4d406ea05466f525d68e9a5c2e8f21b05a1013346fff5962a3ccc0ea61398b1d`，五份 fixture 逐字配对 |
-| 数据 | 新建合成 Main4 根；不使用真实教师资料、全局认证或已装 App |
-| 页面 | 已关闭的旧空间不复用；当前空间由私有 `active-ego.json` 定位，`127.0.0.1:61436`；使用官方 Tauri mocks 和本次测试进程 token，不是原生安装版 |
+| 数据 | 源码页面使用合成 Main4 根；安装流程使用 GitHub-hosted macOS 15.8.2 arm64 的全新隔离根、空认证与离线合成模型配置，没有调用真实模型；本机正常 `.115` 未替换或启动 |
+| 页面 | 原源码页面由私有 `active-ego.json` 定位的已结束空间验收，使用官方 Tauri mocks；本次真实 App 安装只验证启动与持久化，不声称 GUI 操作通过 |
 | 模型 | 合成本地 SSE assessor；不证明真实 GLM 语义质量，不使用其他账号、key 或付费路径 |
-| 发布 | `.117` 公开预发布资产、标签及正式 Latest `.70`、feed 均冻结；本轮没有签名或部署 |
+| 发布 | 签名 Draft run `44303236812` success、安装 run `44318046052` success；正式 Release `449948350`／`v0.3.118`，`draft=false`、`prerelease=false`、GitHub Latest `.118`；原三项 Mac 资产、`.117` 资产和自动更新 feed `7924328e…` 保留 |
 | Windows | 用户于 2026-11-17 因费用暂停；本轮没有 Windows runner、构建、打包或安装验收 |
 
 证据位于私有本机验收目录 `r04-desktop-20261117.noindex/`。运行期间的 fixture 与 PID 由 `active-next.json`、`active-provider.json`、`active-r04-fixture.json` 定位；最终清理记录优先于其中历史 PID，不得凭旧记录重启已删除的根。截图绑定记录采样时间和源码快照边界，不把稍后采集的源码清单冒充截图瞬间的精确版本。
+
+## macOS 签名与安装
+
+本节取代下方历史“尚未签名／安装”的状态。`ca54e91` 到签名源 `7935753a` 只变更三份验收／发布文字，`contracts/edupi-core-compat.json` 不变；首轮失败与这两份源码的 manifest 不匹配无关。
+
+| 检查 | 实际结果 | 证据 |
+| --- | --- | --- |
+| 同源签名 | `44303236812` attempt 1 的 notary-preflight、release 与唯一 `aarch64-apple-darwin` build 全部 success；App ticket、签名后 runtime、App／DMG 公证与 Gatekeeper、updater 签名及最终资产替换通过 | `continuation-audit-20261118/draft-run-44303236812.json`、`draft-jobs-44303236812.json`；全平台 draft-proof 依条件 skipped，不作通过 |
+| 首轮安装失败 | `44316698278` 的 DMG 下载摘要、只读安装和三处 codesign／stapler／spctl 已通过，随后在 `bundled_core_exact_source_contract` 返回 `unsupported_or_invalid_source_contract`；App 启动 0，cleanup passed | `macos-installed-acceptance-44316698278/job.log`、`artifact/e.JSON`；位于上述 continuation 目录 |
+| 原因与窄修复 | harness 仍精确要求旧 Core `98e4f7cd…`，真实 source contract 已固定 `fc89b3bc…`；`5ef4bd0f` 只同步 harness 常量与 fixture，manifest hash、逐文件字节、symlink／inventory、运行时身份与隔离门均保留 | 两文件 `+4/-3`；`node --test scripts/test-macos-installed-acceptance.test.mjs` 24 passed、0 failed、0 skipped；lint 0 errors、已有 1 warning，tsc 与 diff check 通过；magpie_reviewer 独立只读审查未留实质缺陷 |
+| 同包安装与双冷启 | `44318046052` attempt 1 使用原 source `7935753a`、同一 DMG asset `763552583` 和修复后 harness；两次 App PID／instance nonce 不同，Core／projection 均 ready，精确核对 13,381 个 Core 运行文件 | `macos-installed-acceptance-44318046052/e.JSON`、`summary.json`、`job-complete.log`；e.JSON SHA-256 `5f0f0a989078c8291606c49cb65cb649ff5b001c5cfed8179f6c7e735025d46e` |
+| 重启与清理 | 同一 SQLite inode、两次 readonly quick_check ok、持久记录／marker／三份模型配置不变；结束后自有 App/helper 0、DMG 已卸载，清理通过 | 同份 e.JSON 的 `readback`／`cleanup`；移除任务产物 1,252,659,200 allocated bytes，卷可用空间增加 1,239,142,400 bytes；没有在本机生成构建缓存 |
+| 未执行边界 | GUI、正常 Cmd+Q、teacher workflow、updater、model generation 均为 `not_exercised`；数据仅为 synthetic；不因安装 success 宣称完整产品、教学质量或升级验收通过 | 同份 e.JSON 的 `claims`；Windows 全程未触发 |
+
+下列是安装验收精确绑定的最终资产，后续只允许改变发布 metadata，不复用其他包的证据：
+
+| Asset ID | 名称 | bytes | SHA-256 |
+| --- | --- | --- | --- |
+| `763552583` | `EduPi_0.3.118_aarch64.dmg` | 239241349 | `99ed51f5b55ea7776f13684bc8b66274d6195326a7005b8b84dcf1fa97ce2eb6` |
+| `763511519` | `EduPi_aarch64.app.tar.gz` | 240551746 | `01dc41a473b80c139f40a5f5d890f554519f248d108cc79ec631522aa72ba10e` |
+| `763512164` | `EduPi_aarch64.app.tar.gz.sig` | 424 | `d7523dd989632fd727db5dacd8ab1ceaffb1125e3228a1ded80ec6ca89551d65` |
+
+协调侧按用户最新明确指令只变更 GitHub Release metadata，没有派发要求全平台资产的 `phase=publish`。正式 tag `v0.3.118` 精确指向签名源 `7935753ae8296d820010a8e5bb1d7f3d477b72eb`；22:50 CST 独立回读三项资产与安装快照逐项相等、`.117` 资产相等、PR509 仍 Draft、feed 仍为 `7924328ee893c9527adb54e25b0023e9f2a26ff7`，匿名公开页面可读并显示 Latest。证据为 `continuation-audit-20261118/publication-observed.json` 及 `publication-final-*.json`。公开说明列出 macOS-only、Rust audit 例外与 R04／L4 边界；当前正文未单列 GUI／updater 未执行，本账本保留这两项明确边界，不把签名验证或 Release 公开当作 GUI／更新验收。
 
 ## 已实现的边界
 
@@ -115,7 +138,7 @@
 
 原 L4-P0-1/P1-4/P1-6 的 Main4 周期装配已接入精确 owner／grant／scope／显式 templateIds、窄模板 owner 通道、首次 owner create，以及 review_task modify、done／progress 和全局停止。顺序加入模板保持同 scope grant ID，旧 selection 与版本须精确匹配，不能自动全选或借 G1 授权。fixture 已更新至 fc89，周／月正式 API 准备及周模板页面流程通过；同签名安装、自然到期、反馈与旧 proposal 生命周期仍分别待验，不能把确定性骨架记为教学质量。
 
-Core 最终精确 CI 与同树合并 pin 已取得，Desktop 源码及连接窄修复的独立复审已有证据；同源 Mac 签名安装须待审计门解除后执行，之后才可更新 `.118` 发布状态。后续发布显式使用 `platform=macos`，不使用包含 Windows 的默认全平台矩阵。
+Core 最终精确 CI 与同树合并 pin 已取得，Desktop 源码及连接窄修复的独立复审已有证据；同源 Mac 签名、安装与正式 Release 已按本文首节更新。GUI、updater 与真实教学内容质量仍分别未验收。后续构建显式使用 `platform=macos`，不使用包含 Windows 的全平台矩阵。
 
 ## 发布阻塞
 
@@ -127,7 +150,7 @@ Core 最终精确 CI 与同树合并 pin 已取得，Desktop 源码及连接窄�
 
 Rust `RUSTSEC-2026-0543` 当前为所有版本的 unmaintained 公告，官方 `patched=[]`，chrono 最新 0.4.45 不能通过换版本解决。直接父级为 notify-rust 的可选 macOS 集成、serde_with 的可选 `chrono_0_4` 集成，以及 Windows `uiautomation` 的必需依赖；已查其官方新版本仍保留 chrono。Mac 生产树 `cargo tree --frozen --target aarch64-apple-darwin -i chrono --edges normal,build` 无启用路径，不能替代完整锁文件审计。用户已明确批准本次仅 macOS Apple Silicon 候选采用书面例外：`cargo audit --deny warnings` 仍会失败，例外不改变审计结果、不放开 Windows、不延伸到其他平台；后续上游迁移仍是正式解除条件。只读调查及缺缓存而未完成的跨目标检查分别记录于 `continuation-audit-20261118/readonly-audit-findings.json`。
 
-签名、安装与公开 `.118` 现在按用户批准的 macOS-only 例外继续；若 Apple 凭据、公证、安装、冷启或更新任一步失败，保留失败并停止发布，不触发 Windows。普通 R04 真实模型 `429/code1310` 是另一独立阻塞；真实模型不重试、不换账号或 key，不把 npm 零漏洞视为完整 R04 放行。
+签名、安装与正式 Release `.118` 已按上述 macOS-only 例外完成，首轮 harness 失败保留。协调侧唯一执行 metadata 发布，GUI／updater 未验收的边界和公开说明差异见上节；没有使用仍要求全平台资产的 `phase=publish` 入口，没有重建或再次安装，也没有触发 Windows。普通 R04 真实模型 `429/code1310` 是另一独立阻塞；真实模型不重试、不换账号或 key，不把 npm 零漏洞或正式 Release 公开视为完整 R04 放行。
 
 ## 清理
 
