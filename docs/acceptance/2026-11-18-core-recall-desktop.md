@@ -1,12 +1,12 @@
 # R04 Core 问答接线
 
-当前状态：源码接线已实现，隔离工程组合验收进行中；普通 R04 语义放行与签名安装尚未通过，签名发布另受依赖审计阻塞。Core 已完成同树合并及主线精确 CI，Desktop 已固定最终 pin 并正常合入最新主线班级与账号功能。R04、R15、完整 L4 均不勾选完成。本文挂回原路线图，不建立另一份任务计划。
+当前状态：源码接线已实现，隔离 SDK 停止／同根冷恢复、Main4 模板页面及连接慢响应窄修复已有工程证据；普通 R04 语义放行与签名安装尚未通过，签名发布另受 npm 与 Rust 审计阻塞。Core 已完成同树合并及主线精确 CI，Desktop 已固定最终 pin 并正常合入主线班级与账号功能。R04、R15、完整 L4 均不勾选完成。本文挂回原路线图，不建立另一份任务计划。
 
 ## 版本与环境
 
 | 项目 | 实际版本或边界 |
 | --- | --- |
-| Desktop | `codex/r04-core-answer-desktop-20261117`，checkpoint `61857d9`，合并 `9d1b4c45` 后 HEAD `e8412aaa159a76e65e6db433a8fc355489a68a16`；当前仍有未提交组合修改和新增文件，`.118` 为源码候选 |
+| Desktop | `codex/r04-core-answer-desktop-20261117`，本 PR 源码候选；组合基线 `e8412aaa159a76e65e6db433a8fc355489a68a16`，包含 PR508 merge `9d1b4c45`；接线 checkpoint `0803ab9f`，最终身份见 PR509 与私有源码清单；`.118` 尚未签名安装 |
 | Core 开发候选 | `b60d4b29bf827a8e7822ba00f5cacef7f351b811` |
 | Core 最终合并 | `fc89b3bc899a55b0fdad61b8f37e238d950f37c6`，与受测候选同树；官方候选 CI `44123145520` attempt 2、最终 main CI `44145905596` attempt 1 成功；Windows/visual 条件 skip 不算通过 |
 | Core tree | `ed98dad0591a4d273c4d571a7e116c732354f582` |
@@ -20,7 +20,7 @@
 | 发布 | `.117` 公开预发布资产、标签及正式 Latest `.70`、feed 均冻结；本轮没有签名或部署 |
 | Windows | 用户于 2026-11-17 因费用暂停；本轮没有 Windows runner、构建、打包或安装验收 |
 
-证据位于私有本机验收目录 `r04-desktop-20261117.noindex/`，具体位置由私有续接文件的 `desktopCurrent.evidence` 定位。当前进程与 fixture 路径以其中 `active-next.json`、`active-provider.json`、`active-r04-fixture.json` 为准，不能使用较早的 PID 或已删除的 A 会话续接。截图绑定记录采样时间和源码快照边界，不把稍后采集的 dirty snapshot 冒充截图瞬间的精确版本。
+证据位于私有本机验收目录 `r04-desktop-20261117.noindex/`。运行期间的 fixture 与 PID 由 `active-next.json`、`active-provider.json`、`active-r04-fixture.json` 定位；最终清理记录优先于其中历史 PID，不得凭旧记录重启已删除的根。截图绑定记录采样时间和源码快照边界，不把稍后采集的源码清单冒充截图瞬间的精确版本。
 
 ## 已实现的边界
 
@@ -60,6 +60,11 @@
 | 默认服务实际关闭 | 实际 C0 capture／Core 模型 IPC 后，默认 settings＋supervisor 在 2543ms 返回 stopped／none，替代实例健康，冷启仍 off，facet 1／chat 0，清理 closed true | `r04-settings-real-runtime-4.tap`；直接 Core 生命周期证据，SDK 绑定由配对 raw 检查覆盖，实际新源码页面链仍另验 |
 | 真正进程冷恢复 | 自有 Next／Core PID 全部退出后冷启，Core ready、recall off、旧票据 historical；normal 开启 403，session／G1／recall 三个文件 hash 不变，facet 4／chat 0 | `r04-cold-off-and-gate-final.json`；普通语义门仍 false |
 | 修复后实际 SDK 页面 | 新合成根先经真实 Core 人物准备，再从实际页面发送；SDK 回答 current→点击停止→UI“已停止”、current 1→0、Core ready，G1 hash 不变、facet 1→1／chat 0 | `fixed-sdk-stop-1794959269454.*`；7733ms 包含页面撤核验与 status 回读；取代旧 unknown／unavailable 的该页面欠项，保留旧失败，不代表原生安装或真实 GLM 通过 |
+| 修复后同根冷恢复 | 自有 Next／Core 进程全部退出后，同一合成根与 session 冷启为 off／historical，Core ready，facet 1／chat 0、G1 hash 不变；旧冷图的连接红条原因未证实 | `fixed-sdk-stop-cold-process-check.json`、`fixed-sdk-same-root-cold.*`、`fixed-sdk-stop-cold.binding.json`；清单 `source-manifest-0803ab9.json` 采于停止后、冷启前 |
+| Main4 实际模板页面 | 显式选择同一班级与数学后创建周模板，首期两份 453 bytes 文件均实际打开；修改标题／产物、单项暂停 done／恢复 progress、全局停止后教育数据和历史回读通过，revision 0→1、board revision 0→1→2 | `main4-ui-create.json`、`main4-ui-create-disk-readback.json`、`main4-ui-artifact-*.txt`、`main4-ui-modify/pause/resume/global-stop.json`、`main4-ui-history.txt`；全局回执 disabled／verified／paused，落盘 false |
+| 模板页面刷新与模型边界 | 首次刷新设置回读 403，后续明确重新 bootstrap 后 200 且仍 off；独立观察曾见测试注入缺失，但不据此证明该次 403 的原因。合成模型累计 facet 1／chat 0 未增加，较早另一 provider 累计 4／0 已停止；模板隔离根无模型或认证 provider | `main4-ui-reload.json`、`main4-ui-reload-native-observation.json`、`main4-ui-final-model-counters.json`；累计数不是 0，不将独立 provider 计数当作任意上游流量的完整审计 |
+| 连接超时窄修复 | 连续纯 4s deadline 显示 busy，重试继续超时不重启；两个 ignoreAbort 迟到合法 204 均不成为 online、不 pin，retry 不 reload／relaunch；三文件 32 passed、0 failed、0 skipped，独立复审未留 P1/P2 | `health-timeout-busy.tap`、`health-timeout-late-response.tap`；4s deadline、8s interval、身份校验与混合失败 offline 门保留 |
+| 同页 busy 与实际恢复 | 受控仅延迟 identity transport 后观察 busy；还原实际 transport 后最终同页探测为相同实例 204，慢响应条消失、documentStartedAt 不变、relaunch 0，历史 timeout＋network incident 保留 | `connection-actual-before.json`、`connection-ui-busy.*`、`connection-ui-busy-retry.json`、`connection-ui-recovered-final.*`；中间 `connection-ui-recovered.*` 仍 busy 的原图保留；不是安装版、持续延迟或旧冷图成因证明 |
 | 全量源码检查 | 4946 tests，4889 passed、0 failed、0 cancelled、57 conditional skipped；类型检查、lint 通过，现有 `_text` lint warning 保留 | `full-source-suite-2.tap`、`frozen-candidate-typecheck.log`、`frozen-candidate-lint-2.log`；57 个条件检查不作通过 |
 
 ## 已保留的失败与修复
@@ -77,12 +82,14 @@
 11. 普通入口只读 inspect 曾调用不接受查询参数的 path-only 原生 helper，导致请求在本地被拒绝。现 GET 使用固定接口、编码后的查询参数和原生 token；helper 的纯路径限制保留。
 12. inspect 确认 accepted 后旧 outbox 未收敛，曾阻塞下一问；管理中心取消又曾使用旧 G1 conversation。新 POST 在会话锁内按精确 SDK markers 收敛旧 ACK，取消按持久 R04 intent 绑定原 conversation；不重新发送旧问题。
 13. 全局模板停止曾先访问 Core 再落本地 false；现先 CAS 持久关闭，再有界关闭旧 host 和暂停独立 grant。pending／failed drain 不能被其他领域的 clear／ensure 绕过；若模型忽略取消，48s 后返回 unknown 并保留同根隔离，须实际完成 drain 或恢复进程才能重新启动。48s 的真实墙钟等待未单独计时，现有证据是虚拟 deadline 与生产控制流。
-14. Core pause 回读后会推进第二个配置版本，原临时 host 曾滞留在第一个版本而令后续 ensure 失败；现停止事务结束后再次严格关闭临时 host，关闭失败不报 verified。实际停止后的教育／历史回读仍需本轮现场证据。
+14. Core pause 回读后会推进第二个配置版本，原临时 host 曾滞留在第一个版本而令后续 ensure 失败；现停止事务结束后再次严格关闭临时 host，关闭失败不报 verified。新页面全局停止返回 disabled／verified／paused，后续教育和历史回读通过，旧失败仍保留。
 15. 两期脚本第一轮在 legacy 根上请求新 Main4 模板，创建 503；第二轮迁移到 Main4 后又因模板专用启动误带 `ownerMessageContinuation` 而失败。两个原失败日志分别保留为 `fc89-recurring-two-periods-1.log`、`-2.log`；已改为合成根明确迁移和模板独立参数，第三轮按原两期、去重、冷启与零模型断言通过。生产选择前用固定 Core 的只读 V4 validator 检查存储，拒绝 legacy 而不写未来启用状态，不迁移真实根。
 16. 实际页面的小 GET 曾超时，独立进程测得完整 Core 校验单次 0.7–1.0s；同一次回答复核原有 3 次完整校验，多个收起或被覆盖界面仍读取投影。现保留每请求一次完整校验、跨 await 的现时数据根／SDK／授权检查，并暂停不可见界面的只读读取；命令和 mutation readback 不被暂停。实际响应时间仍待现场复测。
 17. R04 stop 先持久 false 后默认 ensure，会因驻留实例身份含旧配置而在 pause 前被拒，固定返回 grants unknown。协调侧最小修复改用同根已验证驻留 handle，保留 local-first、严格关闭和 off 替代实例；18 项生产 identity 回归及 tsc 通过，独立复审关闭该 P2。此前实际 Core unavailable 仍须另验，不能只凭此修复认定消除。
 18. 新增 SDK→stop 扩展回归曾在 120s 无结论，原日志、源码和合成会话已保存，确认自有 PID 停止后清理其临时根。聚焦的实际 C0／Core IPC／settings 生命周期第二轮到达 stop_returned 后 cleanup unknown，主错误又被 finally 断言覆盖；失败保留并新增受控阶段、耗时和 primary error 记录继续定位。此路径没有因既有 SDK 局部通过而改绿。
 19. 第三轮受控阶段记录确认：Core 回答完成，runtime-stop 后已有 disconnect、exit，却没有 close；监督器只等 close，导致 48s 停止和再次清理均 unknown。现只把 exit／close 作为幂等退出证明，disconnect 不作证明；继续独立等待父模型 drain，二者都完成才释放 entry／隔离。虚拟与独立只读差分检查通过，第四轮实际 Core 生命周期通过；不通过增加全局 timeout 掩盖。
+20. 连接原先把连续纯超时直接当作断连，现区分 busy；当前页面实际 incident 包含 timeout 与 network，后续真实同实例 204 恢复，不能回推旧冷图一定是纯 timeout。受控页面首次恢复等待未在 15s 内取得结论，随后又采到 busy 的中间图，均保留；最终无横条且最新探测为 same／204 的独立采样才记录本次恢复通过，不据此宣称连续性能通过。
+21. Ego 的日期 fill 曾只改变 DOM 值而未更新结束日期的 React 状态；按真实年份／月份／日期键盘输入后创建可用，未修改业务校验或生产表单。跨调用刷新还曾丢失测试注入，重新 bootstrap 仅修改私有 QA helper，不修改生产身份或 token 边界。
 
 ## 普通安装入口
 
@@ -100,14 +107,20 @@
 
 冻结 Core 配对的 G1/G2/G3/G4/G5 源检查、周期及反馈检查已补：九组 197 passed、0 failed、0 skipped；合成 2026-11-18/25 两期各两份 507 bytes 产物，route/磁盘/持久 SHA-256 一致，attempt 1，重启保持。三领域真实落盘产物和 synthetic feedback 保留；`synthetic_excluded=3`、`real_teacher_current=0`，未验证的反馈 source 不改绿。详见证据根 `paired-workflows/REPORT.md` 和 `summary.json`。这些是新私有根及一次性 source-candidate V3 测试迁移，`main4Checks=[]`，不覆盖旧 Main4 `create_task` 拒绝。
 
-原 L4-P0-1/P1-4/P1-6 的 Main4 周期装配已接入精确 owner／grant／scope／显式 templateIds、窄模板 owner 通道、首次 owner create，以及 review_task modify、done／progress 和全局停止。顺序加入模板保持同 scope grant ID，旧 selection 与版本须精确匹配，不能自动全选或借 G1 授权。fixture 已更新至 fc89，周／月正式 API 准备通过；页面、同签名安装、自然到期、反馈与旧 proposal 生命周期仍分别记录，不能把确定性骨架记为教学质量。
+原 L4-P0-1/P1-4/P1-6 的 Main4 周期装配已接入精确 owner／grant／scope／显式 templateIds、窄模板 owner 通道、首次 owner create，以及 review_task modify、done／progress 和全局停止。顺序加入模板保持同 scope grant ID，旧 selection 与版本须精确匹配，不能自动全选或借 G1 授权。fixture 已更新至 fc89，周／月正式 API 准备及周模板页面流程通过；同签名安装、自然到期、反馈与旧 proposal 生命周期仍分别待验，不能把确定性骨架记为教学质量。
 
-Core 最终精确 CI 与同树合并 pin 已取得；Desktop 仍须完成最终源码复审、组合检查和同源 Mac 签名安装，之后才可更新 `.118` 发布状态。后续发布显式使用 `platform=macos`，不使用包含 Windows 的默认全平台矩阵。
+Core 最终精确 CI 与同树合并 pin 已取得，Desktop 源码及连接窄修复的独立复审已有证据；同源 Mac 签名安装须待审计门解除后执行，之后才可更新 `.118` 发布状态。后续发布显式使用 `platform=macos`，不使用包含 Windows 的默认全平台矩阵。
 
 ## 发布阻塞
 
-`npm run security:audit` 当前失败：15 项计数中包含 11 项 high，来自 picomatch 4.0.7 经 fdir／tinyglobby 到 ESLint 和构建 glob 的依赖链，并非 11 个彼此独立的公告。官方 `GHSA-fc5q-39xc-vjpf` 当前标注受影响版本 `<=4.0.7`，未列官方修复版本，注册表 latest 仍为 4.0.7。原审计输出保留为 `frozen-candidate-audit.log`。不降低审计门、不强制升级未知版本、不用伪造版本排除公告；签名、安装与公开 `.118` 保持外部阻塞，源码 PR 和其余可执行验收继续。
+精确 head `0803ab9f` 的 CI `44204350138` 中，Linux 源码 job `134466326215` 成功，npm 与 Rust audit 分别失败；后续 head 的结果由 PR509 记录，不把旧 run 当作新 head 的通过证据。
+
+`npm run security:audit` 的已记录失败有 15 项计数，其中 11 项 high 来自 picomatch 4.0.7 经 fdir／tinyglobby 到 ESLint 和构建 glob 的依赖链，并非 11 个独立公告。当次官方 `GHSA-fc5q-39xc-vjpf` 查询标注受影响版本 `<=4.0.7`，未列修复版本，registry latest 为 4.0.7；原输出为 `frozen-candidate-audit.log`。Rust audit job `134466326494` 因 chrono 0.4.45 的 `RUSTSEC-2026-0543` unmaintained 警告，在 `cargo audit --deny warnings` 下失败；本轮 Cargo 相对 PR508 仅调整应用版本，没有新增该依赖。
+
+不降低审计门、不强制升级未知版本、不伪造版本或静默自维护 fork；签名、安装与公开 `.118` 保持外部阻塞。普通 R04 真实模型 `429/code1310` 是另一独立阻塞，源码 PR 不表示这两项已解除。
 
 ## 清理
 
-运行中的 `.next/`、Main4 fixture 和 provider 当前用于本轮验收，不提前删除。结束时必须先停止自有 Next/Core/provider、结束 Ego，再清理确认可重建的 `.next/` 和本轮临时 fixture，保留源码、原始失败、截图、绑定及回退证据；记录实际清理路径和空间。正常 App、真实教师资料、全局模型及认证不在清理范围。
+本轮已结束 Ego TaskSpace12，停止并核对自有 controller／Next／Core／provider 共五个 PID 全部不存在。按 metadata、用户 UID、realpath、Git 跟踪／ignore 和 lsof 逐路径核对后，删除 `.next/`、四组 R04 合成数据根／容器、三组 Native 合成根／独立 stateDir，以及已复制原始证据的两个临时 runtime proof 目录，共 17 个非重叠路径。删除前占用合计 709,472 KiB，操作前后卷可用空间增加 726,663,168 bytes；时点空间变化不单独用作内容完整性证明。
+
+证据为 `final-stop-before-processes.json`、`final-stop-after-processes.json`、`final-cleanup-preflight.json`、`final-cleanup.json`。原始 runtime 失败 metadata、合成 session 和最终 Main4 设置已保存到私有证据子目录 `cleanup-preserved/`；全部源码、依赖、失败 TAP／日志／图片／绑定和回退证据保留。`.next-desktop/`、`src-tauri/target/` 及生成资源目录本轮不存在，没有删除受跟踪的 resources 元数据；正常 App、真实教师资料、全局模型及认证未进入清理范围。

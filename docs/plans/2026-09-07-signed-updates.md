@@ -1,8 +1,8 @@
 # 自动下载安装
 
-2026-11-18 审计门实际阻塞：`.118` 尚未签名、安装或公开。源码全量 4889 passed／0 failed，57 条件用例保留 skipped；当前 `npm run security:audit` 因 picomatch 4.0.7 的高危依赖链失败，官方未列安全补丁。保留原门，先交付源码 Draft PR 和独立可执行验收；不派发已知会被该门阻止的 Mac 签名作业，更不触发 Windows。普通 R04 语义门与真实 GLM 额度阻塞独立记录，`.117` 公开资产、Latest70／feed792 不变。
+2026-11-18 审计门实际阻塞：`.118` 尚未构建、签名、安装或公开，源码 Draft PR509 包含 PR508。SDK 停止／同根冷恢复、Main4 模板页面与连接 busy／同页恢复已有工程证据，不能替代安装或真实模型验收；原全量 4889 passed／0 failed、57 conditional skipped，新增连接定向 32 passed。精确 head `0803ab9f` 的 CI `44204350138` 中 Linux 源码成功，npm audit 因 picomatch 4.0.7 高危链失败，Rust audit 因 chrono 0.4.45 的 `RUSTSEC-2026-0543` unmaintained 在 `--deny warnings` 下失败。保留两道审计门，不派发已知受阻的 Mac 签名作业；Windows runner／构建／打包／smoke／升级继续按用户费用要求暂停。普通 R04 语义门仍 false，真实 GLM `429/code1310` 独立阻塞，`.117` 公开资产、Latest70／feed792 不变。后续 head 的 CI 身份以 PR509 为准。
 
-2026-11-18 `.118` 当前仅为 Mac-only 源码候选，尚未构建、签名、安装或公开。Core 最终 `fc89b3bc` 与精确 main CI 已就绪；Desktop 正在完成 R04 独立入口、持久预算、Main4 模板和停止恢复的组合验收。普通 R04 语义门继续 false，真实 GLM `429/code1310` 不重试、不换账号或 key；不能把合成页面或测试计数视为真实语义通过。后续发布显式选择 `platform=macos`，**Windows runner、构建、打包、smoke、升级均维持用户暂停**。`.117` 已公开资产、tag/source 和正式 Latest70／feed792 不变；新包须独立完成同源签名及安装验收。详见 [当前 R04 接线记录](../acceptance/2026-11-18-core-recall-desktop.md)。
+2026-11-18 前序源码候选记录，当前状态以上段审计门补记为准：`.118` 仅为 Mac-only 源码候选，尚未构建、签名、安装或公开。Core 最终 `fc89b3bc` 与精确 main CI 已就绪；Desktop 正在完成 R04 独立入口、持久预算、Main4 模板和停止恢复的组合验收。普通 R04 语义门继续 false，真实 GLM `429/code1310` 不重试、不换账号或 key；不能把合成页面或测试计数视为真实语义通过。后续发布显式选择 `platform=macos`，**Windows runner、构建、打包、smoke、升级均维持用户暂停**。`.117` 已公开资产、tag/source 和正式 Latest70／feed792 不变；新包须独立完成同源签名及安装验收。详见 [当前 R04 接线记录](../acceptance/2026-11-18-core-recall-desktop.md)。
 
 2026-11-17 R15 当前：**Release447680099／`v0.3.117` 已公开为预发布，非 Latest；九项资产、tag/source a557 与 Core98冻结。** 三份Mac资产匿名完整下载、公开DMG安装及二次冷启 run44011387309、本机隔离 `.116→.117` 原生升级和升级后 G3/G5 冷启回读、Linux AppImage隔离原生升级 run44011387634 均有实际通过证据。本机原350项与UI已按新g基线归还，普通安装仍`.115`；正常通道升级、真实教师迁移及完整R15不作通过。**用户因费用明确暂停Windows构建及runner，不再触发Windows作业**，历史NSIS/Core smoke不替代GUI升级。正式Latest70／feed792不变，详见[当前发布验收](../acceptance/2026-11-17-unverified-risk-closure.md)。
 
