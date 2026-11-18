@@ -32,6 +32,10 @@ test("Linux compatibility checks compile source without a Windows runner or pack
   assert.match(linux, /cargo check --locked --all-targets/);
   assert.match(linux, /main_context_channel::tests/);
   assert.match(linux, /dbus-run-session -- env EDUPI_TEST_DBUS_ISOLATED=1/);
+  assert.match(linux, /name: Prepare Linux source dependencies\s+timeout-minutes: 15/);
+  assert.match(linux, /sudo env GITHUB_ACTIONS="\$GITHUB_ACTIONS" "\$\(command -v node\)" scripts\/prepare-linux-source-dependencies\.mjs/u);
+  assert.equal((workflow.match(/- "scripts\/prepare-linux-source-dependencies\.mjs"/gu) || []).length, 2);
+  assert.equal((workflow.match(/- "vendor\/lint-project-glob\/\*\*"/gu) || []).length, 2);
   assert.doesNotMatch(linux, /windows-latest|tauri build|next build|cargo install|rm -|cargo clean/);
 });
 
