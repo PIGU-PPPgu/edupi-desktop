@@ -2,6 +2,8 @@
 
 当前状态：`.118` 已于 2026-11-18 22:47:42 CST 公开为 macOS Apple Silicon 正式 GitHub Release；只读回读 `draft=false`、`prerelease=false`、GitHub Latest `.118`，三项安装验收资产的 ID／大小／SHA-256 不变。正式自动更新 feed 仍为 `7924328e…`，不把 Release 公开记作 updater 通过。2026-11-19 本机临时 `.118` App 复验已通过 DMG SHA、只读挂载、签名/Gatekeeper、bundled Core/Projection ready、隔离进程、HTTP identity、任务/SQLite 回读和冷重启 instance nonce 变更；完整证据见 `core-desktop-pairing-20261119/installed-acceptance-20261119.json`。原生 GUI 因系统锁屏未执行，正常 Cmd+Q、updater 和真实模型仍未执行。首轮安装验收因 harness 过期 Core 白名单失败，失败保留；`5ef4bd0f` 只更新 harness 与 fixture 的精确 pin，第二轮复用原 DMG 通过，没有重建或替换资产。用户于 2026-11-18 明确批准本次正式 Release，并书面接受 Rust `RUSTSEC-2026-0543` 例外；`cargo audit --deny warnings` 仍失败，不记为通过，范围不延伸到 Windows 或其他平台。PR509 保持 Draft，R04、R15、完整 L4 均不勾选完成。本文挂回原路线图，不建立另一份任务计划。
 
+2026-11-19 源代码风险续验收：PR509 head `3e5ef78670611354a870c89a4b39f091ecf2bf1b` 移除 `chrono` 的活跃依赖，改用 vendored `uiautomation` 的 `std::time::Instant`，并保留 `notify-rust` 与 `serde_with` 的默认功能。精确 CI `44459088660` 的 Node audit、Rust audit 和 Linux source 全部 success；macOS `cargo check --locked --target aarch64-apple-darwin`、`cargo check --locked --all-targets` 与 `notify-rust` 三项测试通过。该修复尚未进入已发布的 `.118` 签名资产，因此上段 `.118` 的历史 Rust 例外仍然保留。`.118` 隔离 GUI、菜单正常退出和冷启动回读证据见 `core-desktop-pairing-20261119/gui-acceptance-20261119.json`；真实模型和正式 updater 仍未执行。
+
 ## 版本与环境
 
 | 项目 | 实际版本或边界 |
