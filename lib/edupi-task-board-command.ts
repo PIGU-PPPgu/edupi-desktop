@@ -116,7 +116,9 @@ export async function issueTaskBoardCommand(command: TaskBoardCommand, dependenc
   const taskId = command.command_type === "create_task" ? command.task.task_id : command.task_id;
   const binding = readEduPiTeacherTemplateHistoryBinding({ dataRoot: initial.roots.dataRoot.root });
   const reviewerId = binding?.templateIds.includes(taskId) ? binding.ownerId : null;
-  const envelope = buildTaskBoardCommandEnvelope({ snapshotId, command, ...dependencies.envelopeOptions, reviewerId });
+  const idempotencyKey = dependencies.envelopeOptions?.idempotencyKey
+    ?? taskBoardContentHash({ command_type: command.command_type, command });
+  const envelope = buildTaskBoardCommandEnvelope({ snapshotId, command, ...dependencies.envelopeOptions, idempotencyKey, reviewerId });
   const dispatch = dependencies.dispatch || ((nextEnvelope, roots) => callEduPiCore({ operation: "command", requestId: String(nextEnvelope.request_id), runtime: roots.runtime, dataRoot: roots.dataRoot, envelope: nextEnvelope }));
   let rawResponse: unknown;
   try {

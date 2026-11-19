@@ -11,6 +11,8 @@ const parameters = Type.Object({
 }, { additionalProperties: false });
 
 export function createEduPiTaskTool({ projectRoot, issue = issueTaskBoardCommand }: { projectRoot: string; issue?: typeof issueTaskBoardCommand }) {
+  const completed = new Map<string, string>();
+  const attempted = new Set<string>();
   return defineTool<typeof parameters, { taskId: string; created: boolean }>({
     name: "edupi_create_task",
     label: "创建 EduPi 任务",
@@ -28,12 +30,23 @@ export function createEduPiTaskTool({ projectRoot, issue = issueTaskBoardCommand
         const date = new Date(`${dueDate}T00:00:00.000Z`);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || Number.isNaN(date.valueOf()) || date.toISOString().slice(0, 10) !== dueDate) throw new Error("截止日期无效。");
       }
-      const taskId = `teacher-task-${crypto.randomUUID()}`;
-      const task = { task_id: taskId, title, due_date: dueDate, note: params.note?.trim() || null };
       const branch = ctx.sessionManager.getBranch();
       const message = [...branch].reverse().find((entry) => entry.type === "message" && entry.message.role === "user");
-      const sourceId = message?.id || toolCallId;
+      const sourceId = message?.id || (message ? taskBoardContentHash(message) : toolCallId);
+      const taskInput = { title, due_date: dueDate, note: params.note?.trim() || null };
+      const identity = taskBoardContentHash({ source_id: sourceId, task: taskInput });
+      const digest = crypto.createHash("sha256").update(identity).digest("hex").slice(0, 32);
+      const variant = ((Number.parseInt(digest.slice(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, "0");
+      const taskId = `teacher-task-${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-${variant}${digest.slice(18, 20)}-${digest.slice(20, 32)}`;
+      const cachedTaskId = completed.get(identity);
+      if (cachedTaskId) {
+        return { content: [{ type: "text", text: `已创建任务：${title}。可在工作区查看；任务内容尚未执行。任务 ID：${cachedTaskId}` }], details: { taskId: cachedTaskId, created: true } };
+      }
+      if (attempted.has(identity)) throw new Error("本条教师请求已经尝试创建任务但未成功，请重新发送明确请求。");
+      attempted.add(identity);
+      const task = { task_id: taskId, ...taskInput };
       await issue({ command_type: "create_task", task, source: { source_id: sourceId, source_kind: "teacher_message", source_hash: taskBoardContentHash(message || task), evidence_ids: [sourceId] } });
+      completed.set(identity, taskId);
       return { content: [{ type: "text", text: `已创建任务：${title}。可在工作区查看；任务内容尚未执行。任务 ID：${taskId}` }], details: { taskId, created: true } };
     },
   });

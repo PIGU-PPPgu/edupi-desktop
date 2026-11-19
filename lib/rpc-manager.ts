@@ -39,6 +39,7 @@ import { createEduPiComputerUseTool } from "./edupi-computer-tool";
 import { createEduPiWorkflowTool } from "./edupi-workflow-tool";
 import { createEduPiQrTool, createEduPiShowImageTool } from "./edupi-visual-tool";
 import { createZhixueLoginGuard } from "./edupi-login-guard";
+import { createEduPiMutationGuard } from "./edupi-mutation-guard";
 import { createWorkflowReadTools } from "./edupi-workflow-read-tools";
 import { matchingCapturedUserEntry, workflowChildPromptAllowed } from "./edupi-workflow-admission";
 import { parseComputerUseBridgeResult, type ComputerUseBridgeResult, type ComputerUseInput } from "./edupi-computer-use";
@@ -1676,7 +1677,7 @@ export async function startRpcSession(
     const toolMode: RpcToolMode = { disabled: toolNames?.length === 0,
       ...(strictToolNames ? { exactToolNames: toolNames ?? [] } : {}) };
     const memoryRecall = createEduPiMemoryRecallAccess(EDUPI_ROOT, { disabled: () => toolMode.disabled });
-    const hostExtensions = [memoryRecall.extension, createZhixueLoginGuard()];
+    const hostExtensions = [memoryRecall.extension, createZhixueLoginGuard(), createEduPiMutationGuard()];
     const host: { wrapper?: AgentSessionWrapper } = {};
     const createRuntime: CreateAgentSessionRuntimeFactory = async ({ cwd: sessionCwd, sessionManager, sessionStartEvent }) => {
       const explicitTools = sessionStartEvent?.reason === "fork" ? host.wrapper?.inner.getActiveToolNames() : toolNames;
