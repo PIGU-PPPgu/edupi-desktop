@@ -11,7 +11,7 @@ export function createZhixueLoginGuard(): ExtensionFactory {
         entry.type === "message" && entry.message.role === "user");
       const key = `${statusRead ? "zhixue_status" : event.toolName}:${userEntry?.id ?? "no-user-entry"}`;
       if (startedForUserEntries.has(key)) {
-        return { block: true, reason: statusRead
+        return { block: true, terminate: true, reason: statusRead
           ? "本条请求已读过智学网状态。停止查询并告诉老师当前结论；需要扫码时只调用一次 zhixue_login，展示二维码后等待老师操作。"
           : event.toolName === "zhixue_login"
           ? "本条请求已尝试一次智学网扫码。请核对首次结果并告知老师，不要再次弹窗。"
