@@ -142,10 +142,6 @@ optional = true
 features = ["proxy"]
 default-features = false
 
-[target.'cfg(target_os="macos")'.dependencies.chrono]
-version = "0.4"
-optional = true
-
 [target.'cfg(target_os="macos")'.dependencies.mac-notification-sys]
 version = "0.6"
 
