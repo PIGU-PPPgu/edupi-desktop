@@ -40,6 +40,7 @@ import { createEduPiWorkflowTool } from "./edupi-workflow-tool";
 import { createEduPiQrTool, createEduPiShowImageTool } from "./edupi-visual-tool";
 import { createZhixueLoginGuard } from "./edupi-login-guard";
 import { createEduPiMutationGuard } from "./edupi-mutation-guard";
+import { createEduPiZhixueTools } from "./edupi-zhixue-bridge";
 import { createWorkflowReadTools } from "./edupi-workflow-read-tools";
 import { matchingCapturedUserEntry, workflowChildPromptAllowed } from "./edupi-workflow-admission";
 import { parseComputerUseBridgeResult, type ComputerUseBridgeResult, type ComputerUseInput } from "./edupi-computer-use";
@@ -1774,7 +1775,11 @@ export async function startRpcSession(
           }), createEduPiComputerUseTool({
             projectRoot: EDUPI_ROOT,
             requestAction: (action, signal) => requestEduPiComputerAction(action, signal),
-          })] : []),
+          }), ...createEduPiZhixueTools(EDUPI_ROOT,
+            process.env.EDUPI_ZHIXUE_WORKER_PATH
+              || (existsSync(resolve(EDUPI_CODE_ROOT, "desktop", "zhixue-login-worker.mjs"))
+                ? resolve(EDUPI_CODE_ROOT, "desktop", "zhixue-login-worker.mjs")
+                : resolve(process.cwd(), "desktop", "zhixue-login-worker.mjs")))] : []),
           ...(sessionIsEduPiCoreRoot && !sessionIsEduPiDataRoot ? [...createEduPiCalendarTools({ projectRoot: EDUPI_CODE_ROOT }), createStudentEventTool(EDUPI_CODE_ROOT), createMemoryWriteTool(EDUPI_CODE_ROOT), createMemoryForgetTool(EDUPI_CODE_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_CODE_ROOT }), createEduPiClassroomTool({ projectRoot: EDUPI_CODE_ROOT }), createEduPiUpdateTaskTool({ projectRoot: EDUPI_CODE_ROOT })] : []),
         ],
       });

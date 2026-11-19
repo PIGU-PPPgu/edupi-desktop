@@ -128,6 +128,8 @@ async function assembleServer() {
   );
   await copyFile(join(rootDir, "desktop", "mobile-gateway.cjs"), join(serverResourcesDir, "mobile-gateway.cjs"));
   await copyFile(join(rootDir, "desktop", "preparation-worker.mjs"), join(serverResourcesDir, "preparation-worker.mjs"));
+  await copyFile(join(rootDir, "desktop", "zhixue-login-worker.mjs"), join(serverResourcesDir, "zhixue-login-worker.mjs"));
+  await copyPackageClosure(rootDir, serverResourcesDir, "playwright-core");
   await copyFile(join(rootDir, "desktop", "core-runtime-host.mjs"), join(serverResourcesDir, "core-runtime-host.mjs"));
   await copyFile(join(rootDir, "desktop", "core-runtime-model-config.mjs"), join(serverResourcesDir, "core-runtime-model-config.mjs"));
   await copyFile(join(rootDir, "desktop", "model-output-repair.mjs"), join(serverResourcesDir, "model-output-repair.mjs"));
