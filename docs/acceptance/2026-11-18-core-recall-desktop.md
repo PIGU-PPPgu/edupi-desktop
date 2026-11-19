@@ -1,6 +1,6 @@
 # R04 Core 问答接线
 
-当前状态：`.118` 已于 2026-11-18 22:47:42 CST 公开为 macOS Apple Silicon 正式 GitHub Release；只读回读 `draft=false`、`prerelease=false`、GitHub Latest `.118`，三项安装验收资产的 ID／大小／SHA-256 不变。正式自动更新 feed 仍为 `7924328e…`，不把 Release 公开记作 updater 通过。签名、公证和精确 DMG 安装验收已通过；同一包两次真实 App 冷启动、Core／projection ready、SQLite／marker／模型配置保持及清理均有回读证据。首轮安装验收因 harness 过期 Core 白名单失败，失败保留；`5ef4bd0f` 只更新 harness 与 fixture 的精确 pin，第二轮复用原 DMG 通过，没有重建或替换资产。用户于 2026-11-18 明确批准本次正式 Release，并书面接受 Rust `RUSTSEC-2026-0543` 例外；`cargo audit --deny warnings` 仍失败，不记为通过，范围不延伸到 Windows 或其他平台。GUI、正常 Cmd+Q、updater 和真实模型未在本次安装流程执行；PR509 保持 Draft，R04、R15、完整 L4 均不勾选完成。本文挂回原路线图，不建立另一份任务计划。
+当前状态：`.118` 已于 2026-11-18 22:47:42 CST 公开为 macOS Apple Silicon 正式 GitHub Release；只读回读 `draft=false`、`prerelease=false`、GitHub Latest `.118`，三项安装验收资产的 ID／大小／SHA-256 不变。正式自动更新 feed 仍为 `7924328e…`，不把 Release 公开记作 updater 通过。2026-11-19 本机临时 `.118` App 复验已通过 DMG SHA、只读挂载、签名/Gatekeeper、bundled Core/Projection ready、隔离进程、HTTP identity、任务/SQLite 回读和冷重启 instance nonce 变更；完整证据见 `core-desktop-pairing-20261119/installed-acceptance-20261119.json`。原生 GUI 因系统锁屏未执行，正常 Cmd+Q、updater 和真实模型仍未执行。首轮安装验收因 harness 过期 Core 白名单失败，失败保留；`5ef4bd0f` 只更新 harness 与 fixture 的精确 pin，第二轮复用原 DMG 通过，没有重建或替换资产。用户于 2026-11-18 明确批准本次正式 Release，并书面接受 Rust `RUSTSEC-2026-0543` 例外；`cargo audit --deny warnings` 仍失败，不记为通过，范围不延伸到 Windows 或其他平台。PR509 保持 Draft，R04、R15、完整 L4 均不勾选完成。本文挂回原路线图，不建立另一份任务计划。
 
 ## 版本与环境
 

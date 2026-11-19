@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   allocateFixture, blockSeedModelRequests, CORE_COMMIT, nativeFixturePaths, parseArguments,
   ROOT_PREFIX, seedRecurringTemplates, writeExclusiveJson,
@@ -26,7 +27,15 @@ test("CLI requires explicit create, fixed Core input and an absolute evidence de
     ["--create", "--root", "/existing", "--core-root", "/core", "--evidence-dir", "/evidence"],
     ["--create", "--core-root", "/core", "--evidence-dir"],
   ]) assert.throws(() => parseArguments(args));
-  assert.equal(CORE_COMMIT, "fc89b3bc899a55b0fdad61b8f37e238d950f37c6");
+  const contract = JSON.parse(fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(driver)), "../contracts/edupi-core-compat.json"), "utf8",
+  ));
+  assert.match(CORE_COMMIT, /^[a-f0-9]{40}$/u);
+  assert.equal(CORE_COMMIT, contract.core_runtime.core_commit);
+  const help = spawnSync(process.execPath, [driver.pathname, "--help"], { encoding: "utf8" });
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /contract-pinned Core checkout/u);
+  assert.doesNotMatch(help.stdout, /canonical [a-f0-9]{40} checkout/u);
 });
 
 test("import has no HOME, cwd, environment, output or listener side effects", () => {

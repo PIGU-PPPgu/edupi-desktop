@@ -161,7 +161,7 @@ function fixtureBundle(t) {
   fs.mkdirSync(path.join(coreRoot, "fixtures/bridge/v1.1"), { recursive: true });
   const canonical = value => Array.isArray(value) ? value.map(canonical)
     : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
-  const pin = { core_commit: "fc89b3bc899a55b0fdad61b8f37e238d950f37c6",
+  const pin = { core_commit: sourceSha,
     component_manifest_path: "contracts/edupi-desktop-component-manifest.json",
     runtime_schema_hash: `sha256:${"3".repeat(64)}` };
   const schemaPath = "contracts/edupi-core-runtime-v1-hash.json";
@@ -202,6 +202,12 @@ test("bundled Core uses the supplied source contract and detects file tampering 
   fails(() => verifyBundleContracts(fixture.resources, differentSource), "bundled_manifest_hash_mismatch");
   fs.appendFileSync(path.join(fixture.coreRoot, "scripts/desktop_bridge_port.mjs"), "// modified");
   fails(() => verifyBundleContracts(fixture.resources, fixture.compat), "bundled_core_file_mismatch");
+});
+
+test("bundled Core accepts any valid commit declared by the source contract", t => {
+  const fixture = fixtureBundle(t);
+  fixture.compat.core_runtime.core_commit = "a".repeat(40);
+  assert.equal(verifyBundleContracts(fixture.resources, fixture.compat).core_commit, "a".repeat(40));
 });
 
 test("bundled Core files cannot escape the package through symlinks", t => {

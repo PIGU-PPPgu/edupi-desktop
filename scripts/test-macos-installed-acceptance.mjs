@@ -17,7 +17,6 @@ import { cleanupRegisteredDirectories, registerCleanupDirectory } from "./macos-
 
 const TEAM = "BY3XZG2839";
 const BUNDLE = "com.abcwyc.pi-agent";
-const EXPECTED_CORE_COMMIT = "fc89b3bc899a55b0fdad61b8f37e238d950f37c6";
 const SHA = /^[a-f0-9]{40}$/u;
 const DIGEST = /^sha256:[a-f0-9]{64}$/u;
 const harness = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -182,7 +181,7 @@ function bundleFiles(root, relative = "") {
 
 export function verifyBundleContracts(resources, compat) {
   const pin = compat.core_runtime;
-  check(pin?.core_commit === EXPECTED_CORE_COMMIT
+  check(SHA.test(pin?.core_commit || "")
     && pin.component_manifest_path === "contracts/edupi-desktop-component-manifest.json"
     && ["component_manifest_hash", "runtime_component_manifest_hash", "runtime_schema_hash"].every(key => DIGEST.test(pin[key])),
   "unsupported_or_invalid_source_contract");

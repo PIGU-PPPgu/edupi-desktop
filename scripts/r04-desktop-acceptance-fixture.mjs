@@ -19,13 +19,13 @@ import { DatabaseSync } from "node:sqlite";
 import { createJiti } from "jiti";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 
-export const R04_CORE_COMMIT = "fc89b3bc899a55b0fdad61b8f37e238d950f37c6";
 export const R04_SOURCE_TEXTS = Object.freeze(["合成班会由张老师主持。", "合成班会安排在第二场展示。"]);
 export const R04_QUERY = "甲班合成班会由谁主持，排在第几场展示？";
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sha = value => crypto.createHash("sha256").update(value).digest("hex");
 const digest = value => `sha256:${sha(typeof value === "string" ? value : JSON.stringify(value))}`;
 const json = file => JSON.parse(fs.readFileSync(file, "utf8"));
+export const R04_CORE_COMMIT = json(path.join(desktopRoot, "contracts/edupi-core-compat.json")).core_runtime.core_commit;
 const writeJson = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
 const git = (root, ...args) => execFileSync("git", ["-C", root, ...args], { encoding: "utf8" }).trim();
 const privateDir = directory => fs.mkdirSync(directory, { recursive: true, mode: 0o700 });

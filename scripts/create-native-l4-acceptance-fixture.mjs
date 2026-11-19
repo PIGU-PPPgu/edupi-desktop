@@ -8,9 +8,11 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const CORE_COMMIT = "fc89b3bc899a55b0fdad61b8f37e238d950f37c6";
 export const ROOT_PREFIX = "edupi-route1-canary-l4-118-20261118-";
 const desktopRoot = fileURLToPath(new URL("..", import.meta.url));
+export const CORE_COMMIT = JSON.parse(fs.readFileSync(
+  path.join(desktopRoot, "contracts/edupi-core-compat.json"), "utf8",
+)).core_runtime.core_commit;
 const hash = bytes => `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`;
 const check = (value, code) => { if (!value) throw Object.assign(new Error(code), { code }); };
 const dayAt = offset => new Intl.DateTimeFormat("en-CA", {
@@ -111,10 +113,11 @@ function git(repo, args) {
 
 function verifyCore(coreRoot) {
   canonicalDirectory(coreRoot);
-  check(git(coreRoot, ["rev-parse", "HEAD"]) === CORE_COMMIT, "fixed_core_fc89_required");
+  check(/^[a-f0-9]{40}$/u.test(CORE_COMMIT), "invalid_desktop_core_contract");
+  check(git(coreRoot, ["rev-parse", "HEAD"]) === CORE_COMMIT, "desktop_core_contract_mismatch");
   check(git(coreRoot, ["status", "--porcelain", "--untracked-files=all"]) === "", "frozen_core_must_be_clean");
   const compat = JSON.parse(fs.readFileSync(path.join(desktopRoot, "contracts/edupi-core-compat.json"), "utf8")).core_runtime;
-  check(compat.core_commit === CORE_COMMIT, "desktop_core_fc89_pin_required");
+  check(compat.core_commit === CORE_COMMIT, "desktop_core_contract_mismatch");
   for (const [file, expected] of [
     [compat.component_manifest_path, compat.component_manifest_hash],
     ["contracts/edupi-core-runtime-component-manifest.json", compat.runtime_component_manifest_hash],
@@ -582,7 +585,7 @@ export async function seedRecurringTemplates({ tasks, request, readActivation, s
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
   try {
     const options = parseArguments(process.argv.slice(2));
-    if (options.help) console.log("node scripts/create-native-l4-acceptance-fixture.mjs --create --core-root <canonical fc89 checkout> --evidence-dir <new absolute directory>");
+    if (options.help) console.log("node scripts/create-native-l4-acceptance-fixture.mjs --create --core-root <canonical contract-pinned Core checkout> --evidence-dir <new absolute directory>");
     else {
       const proof = await createNativeL4Fixture(options);
       console.log(JSON.stringify({ status: proof.status, root: proof.root, stateDir: proof.stateDir, agentDir: proof.agentDir,
