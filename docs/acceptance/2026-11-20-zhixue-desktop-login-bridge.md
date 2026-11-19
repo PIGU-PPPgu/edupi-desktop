@@ -7,7 +7,7 @@
 - Desktop 提交：`cec89e2be9ef2bc1b73d704aac1b5dcb0689007e`
 - 安全收紧提交：`6d54c7835ebea9b7ff9cbb2317a6a3d7638f8424`
 - 绑定 Core：`fc89b3bc899a55b0fdad61b8f37e238d950f37c6`
-- DMG：`src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/EduPi_0.3.118_aarch64.dmg`
+- DMG：`/Users/iguppp/edupi-build-artifacts/zhixue-login-0.3.118/EduPi_0.3.118_aarch64.dmg`
 - DMG SHA-256：`6836604d15920fa834242b79930eaed559bbaee60da73426b51a963254df882e`
 - DMG 大小：`240950533` bytes
 
@@ -39,4 +39,4 @@
 - Tauri updater 私钥未提供，DMG 可构建但 updater 签名未完成。
 - 未构建 Windows。
 
-DMG 作为本轮待验收产物保留在上述路径。完成正式公证、真实账号验收或清理本轮构建时再删除该路径及其对应的 `.app` 和生成资源。
+DMG 作为本轮待验收产物保留在上述路径。完成正式公证、真实账号验收或清理本轮构建时再删除该文件及对应的生成资源。
