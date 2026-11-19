@@ -40,3 +40,5 @@
 - 未构建 Windows。
 
 DMG 作为本轮待验收产物保留在上述路径。完成正式公证、真实账号验收或清理本轮构建时再删除该文件及对应的生成资源。
+
+本轮验收结束后已删除 `.next-desktop/`、`src-tauri/target/` 以及 staged server、Core、Node 和 OpenConnector 生成目录，保留最终 DMG。
