@@ -26,6 +26,7 @@ const sha = value => crypto.createHash("sha256").update(value).digest("hex");
 const digest = value => `sha256:${sha(typeof value === "string" ? value : JSON.stringify(value))}`;
 const json = file => JSON.parse(fs.readFileSync(file, "utf8"));
 export const R04_CORE_COMMIT = json(path.join(desktopRoot, "contracts/edupi-core-compat.json")).core_runtime.core_commit;
+assert.match(R04_CORE_COMMIT, /^[a-f0-9]{40}$/u, "invalid_desktop_core_contract");
 const writeJson = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
 const git = (root, ...args) => execFileSync("git", ["-C", root, ...args], { encoding: "utf8" }).trim();
 const privateDir = directory => fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
