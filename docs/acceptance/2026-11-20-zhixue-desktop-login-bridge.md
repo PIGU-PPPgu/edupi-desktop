@@ -8,10 +8,10 @@
 - 安全收紧提交：`6d54c7835ebea9b7ff9cbb2317a6a3d7638f8424`
 - 绑定 Core：`fc89b3bc899a55b0fdad61b8f37e238d950f37c6`
 - DMG 交付文件：`EduPi_0.3.120_aarch64.dmg`
-- DMG SHA-256：`ef454a66b6d180075f9a1fa5444a2b54481bbe7e543b703c76651a1609983d4d`
-- DMG 大小：`242473504` bytes
-- Signed draft：`v0.3.120`
-- GitHub Actions run：`44673379640`
+- DMG SHA-256：`ce4af04dd75c28145c4a6fcfb9d767143e3dae17f3ba4140f586b14aafa66c71`
+- DMG 大小：`242493309` bytes
+- 正式 Release：`v0.3.120`
+- GitHub Actions run：`44726825034`
 
 ## 已验证
 
@@ -42,7 +42,7 @@
 - 本轮真实二维码已从公证包内 worker 生成，但 15 分钟内没有完成手机扫码，状态为 `expired`，没有产生登录回执；因此真实 Chrome 回调和登录态跨冷启动续接仍未通过。
 - 同步 worker 已完成合成配置、锁和原子状态回归，真实学情抓取、班级/学科映射和真实 Core 学生档案写入仍未验证。
 - 本轮 GitHub signed draft 已通过 Apple notarization、stapling、Gatekeeper 和 updater 签名校验。
-- `v0.3.120` 已准备为下一次 macOS-only Release，尚未覆盖当前公开的 `v0.3.119`；正式发布前需完成本 PR 的精确 CI、签名、公证和安装验收。
+- `v0.3.120` 已公开为 macOS-only Latest Release，资产只有 DMG、updater tar 和 `.sig`。
 - 未构建 Windows。
 
 DMG 作为本轮待验收产物保留在本地交付目录。完成真实账号验收或清理本轮构建时再删除该文件及对应的生成资源。
