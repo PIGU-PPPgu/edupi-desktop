@@ -42,7 +42,7 @@
 - 本轮真实二维码已从公证包内 worker 生成，但 15 分钟内没有完成手机扫码，状态为 `expired`，没有产生登录回执；因此真实 Chrome 回调和登录态跨冷启动续接仍未通过。
 - 同步 worker 已完成合成配置、锁和原子状态回归，真实学情抓取、班级/学科映射和真实 Core 学生档案写入仍未验证。
 - 本轮 GitHub signed draft 已通过 Apple notarization、stapling、Gatekeeper 和 updater 签名校验。
-- `v0.3.120` 已发布为正式 macOS-only Release，公开资产只有 DMG、updater tar 和 `.sig`。
+- `v0.3.120` 已准备为下一次 macOS-only Release，尚未覆盖当前公开的 `v0.3.119`；正式发布前需完成本 PR 的精确 CI、签名、公证和安装验收。
 - 未构建 Windows。
 
 DMG 作为本轮待验收产物保留在本地交付目录。完成真实账号验收或清理本轮构建时再删除该文件及对应的生成资源。
