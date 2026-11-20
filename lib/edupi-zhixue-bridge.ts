@@ -373,6 +373,7 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
         updatedAt: new Date().toISOString(),
       } satisfies SyncState);
       if (!claimLock(paths.browserLock, { version: 1, flowId: syncFlowId, pid: 0, startedAt: new Date().toISOString() })) {
+        writeSyncFailure(paths, syncFlowId, "浏览器登录会话已被另一个任务占用。");
         return textResult("同步任务已经在运行，请稍后查看同步状态。", undefined, { isError: true, terminate: true });
       }
       const child = spawn(process.execPath, [
