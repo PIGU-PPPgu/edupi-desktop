@@ -119,6 +119,7 @@ process.on("SIGINT", () => { void stop(130); });
     executablePath: browser,
     headless: false,
     viewport: { width: 1280, height: 900 },
+    timeout: 30_000,
     args: ["--no-first-run", "--no-default-browser-check"],
   });
   const page = context.pages()[0] || await context.newPage();

@@ -244,7 +244,7 @@ function statusText(state: LoginState | null): string {
 // exists. Returning after a short fixed window loses the visual even though the
 // worker is still healthy, so keep this bounded wait aligned with the worker's
 // page, QR, and image-load deadlines.
-const LOGIN_QR_STARTUP_WAIT_MS = 90_000;
+const LOGIN_QR_STARTUP_WAIT_MS = 120_000;
 
 export function createEduPiZhixueTools(projectRoot: string, workerPath: string, syncWorkerPath = workerPath) {
   const paths = layout(projectRoot);
