@@ -119,13 +119,17 @@ process.on("SIGINT", () => { void stop(130); });
     executablePath: browser,
     headless: false,
     viewport: { width: 1280, height: 900 },
+    timeout: 30_000,
     args: ["--no-first-run", "--no-default-browser-check"],
   });
   const page = context.pages()[0] || await context.newPage();
   page.setDefaultTimeout(20_000);
   const readToken = async () => {
     try {
-      const response = await page.request.post("https://www.zhixue.com/container/app/token/getToken", { data: {} });
+      const response = await page.request.post("https://www.zhixue.com/container/app/token/getToken", {
+        data: {},
+        timeout: 15_000,
+      });
       return extractToken(await response.json());
     } catch { return ""; }
   };
