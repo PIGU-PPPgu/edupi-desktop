@@ -240,6 +240,12 @@ function statusText(state: LoginState | null): string {
   return `智学网登录失败：${state.error ?? "未知错误"}。`;
 }
 
+// Chrome can spend tens of seconds loading the login page before the QR image
+// exists. Returning after a short fixed window loses the visual even though the
+// worker is still healthy, so keep this bounded wait aligned with the worker's
+// page, QR, and image-load deadlines.
+const LOGIN_QR_STARTUP_WAIT_MS = 60_000;
+
 export function createEduPiZhixueTools(projectRoot: string, workerPath: string, syncWorkerPath = workerPath) {
   const paths = layout(projectRoot);
   privateDir(paths.root);
@@ -285,7 +291,7 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
       atomicJson(paths.lock, { version: 1, flowId, startedAt: new Date().toISOString(), pid: child.pid });
       if (childExited) releaseLockForFlow(paths.lock, flowId);
       child.unref();
-      const deadline = Date.now() + 8_000;
+      const deadline = Date.now() + LOGIN_QR_STARTUP_WAIT_MS;
       while (Date.now() < deadline) {
         const state = current(paths);
         if (state?.flowId === flowId && (state.status === "awaiting_scan" || state.status === "authenticated" || state.status === "error")) {
