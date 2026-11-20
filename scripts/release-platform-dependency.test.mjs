@@ -12,7 +12,7 @@ test("the default release dispatch selects only the Mac target", async () => {
   const selections = new Map([...targetLine.matchAll(/inputs\.platform == '([^']+)' && '([^']+)'/gu)]
     .map(([, platform, targets]) => [platform, JSON.parse(targets)]));
   assert.deepEqual(selections.get(defaultPlatform), ["aarch64-apple-darwin"]);
-  assert.match(input, /options: \[all, macos, windows, linux\]/u);
+  assert.match(input, /options: \[all, macos\]/u);
 });
 
 test("single-platform builds override skipped notary ancestry while requiring a successful release guard", async () => {

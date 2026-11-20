@@ -32,6 +32,26 @@ test("a successful three-platform draft accepts only the installed asset identit
   assert.equal(verifyDraftReleaseProof(input), acceptedFingerprint);
 });
 
+test("a successful macOS-only draft accepts only its signed assets", () => {
+  const macAssets = requiredReleaseAssetNames(version, "macos").map((name, index) => ({
+    name, id: index + 1, size: 100 + index, digest: `sha256:${String(index).padStart(64, "0")}`,
+    created_at: createdAt, updated_at: createdAt,
+  }));
+  const macJobs = ["release", "build (aarch64-apple-darwin)"].map((name) => ({
+    name, status: "completed", conclusion: "success",
+  }));
+  const macFingerprint = draftAssetFingerprint({
+    version, releaseId, assets: macAssets, runStartedAt: run.run_started_at, platform: "macos",
+  });
+  assert.equal(verifyDraftReleaseProof({
+    ...input, assets: macAssets, jobs: macJobs, acceptedFingerprint: macFingerprint, platform: "macos",
+  }), macFingerprint);
+  assert.throws(() => verifyDraftReleaseProof({
+    ...input, assets: macAssets, jobs: [{ name: "release", status: "completed", conclusion: "success" }],
+    acceptedFingerprint: macFingerprint, platform: "macos",
+  }), /Required draft builders/);
+});
+
 test("fingerprint CLI records an active selective rerun without requiring its own job to finish", (t) => {
   const root = mkdtempSync(join(tmpdir(), "release-draft-proof-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -47,6 +67,26 @@ test("fingerprint CLI records an active selective rerun without requiring its ow
   assert.equal(result.stdout.trim(), acceptedFingerprint);
   assert.deepEqual(JSON.parse(readFileSync(runFile, "utf8")), active);
   assert.throws(() => verifyDraftReleaseProof({ ...input, run: active }), /Successful commit-bound/);
+});
+
+test("fingerprint CLI accepts a macOS-only draft when given its platform", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "release-draft-proof-macos-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const macAssets = requiredReleaseAssetNames(version, "macos").map((name, index) => ({
+    name, id: index + 1, size: 100 + index, digest: `sha256:${String(index).padStart(64, "0")}`,
+    created_at: createdAt, updated_at: createdAt,
+  }));
+  const runFile = join(root, "run.json"), assetFile = join(root, "assets.json");
+  writeFileSync(runFile, JSON.stringify(run));
+  writeFileSync(assetFile, JSON.stringify(macAssets));
+  const expected = draftAssetFingerprint({
+    version, releaseId, assets: macAssets, runStartedAt: run.run_started_at, platform: "macos",
+  });
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL("./release-draft-proof.mjs", import.meta.url)),
+    "fingerprint", "--version", version, "--release-id", String(releaseId),
+    "--run-json", runFile, "--assets-json", assetFile, "--platform", "macos"], { encoding: "utf8", timeout: 10_000 });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), expected);
 });
 
 test("a successful selective rerun accepts retained builders but rejects assets from before the dispatch", () => {
