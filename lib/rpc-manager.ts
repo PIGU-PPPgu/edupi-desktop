@@ -1775,11 +1775,17 @@ export async function startRpcSession(
           }), createEduPiComputerUseTool({
             projectRoot: EDUPI_ROOT,
             requestAction: (action, signal) => requestEduPiComputerAction(action, signal),
-          }), ...createEduPiZhixueTools(EDUPI_ROOT,
+          }), ...createEduPiZhixueTools(
+            EDUPI_ROOT,
             process.env.EDUPI_ZHIXUE_WORKER_PATH
               || (existsSync(resolve(EDUPI_CODE_ROOT, "desktop", "zhixue-login-worker.mjs"))
                 ? resolve(EDUPI_CODE_ROOT, "desktop", "zhixue-login-worker.mjs")
-                : resolve(process.cwd(), "desktop", "zhixue-login-worker.mjs")))] : []),
+                : resolve(process.cwd(), "desktop", "zhixue-login-worker.mjs")),
+            process.env.EDUPI_ZHIXUE_SYNC_WORKER_PATH
+              || (existsSync(resolve(EDUPI_CODE_ROOT, "desktop", "zhixue-sync-worker.mjs"))
+                ? resolve(EDUPI_CODE_ROOT, "desktop", "zhixue-sync-worker.mjs")
+                : resolve(process.cwd(), "desktop", "zhixue-sync-worker.mjs")),
+          )] : []),
           ...(sessionIsEduPiCoreRoot && !sessionIsEduPiDataRoot ? [...createEduPiCalendarTools({ projectRoot: EDUPI_CODE_ROOT }), createStudentEventTool(EDUPI_CODE_ROOT), createMemoryWriteTool(EDUPI_CODE_ROOT), createMemoryForgetTool(EDUPI_CODE_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_CODE_ROOT }), createEduPiClassroomTool({ projectRoot: EDUPI_CODE_ROOT }), createEduPiUpdateTaskTool({ projectRoot: EDUPI_CODE_ROOT })] : []),
         ],
       });

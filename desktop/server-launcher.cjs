@@ -111,6 +111,7 @@ async function wakePackagedCoreAtStartup(environment = process.env, fetcher = fe
 if (require.main === module) {
   Object.assign(process.env, resolveEduPiLaunchRoots());
   process.env.EDUPI_ZHIXUE_WORKER_PATH ||= path.join(__dirname, "zhixue-login-worker.mjs");
+  process.env.EDUPI_ZHIXUE_SYNC_WORKER_PATH ||= path.join(__dirname, "zhixue-sync-worker.mjs");
 
   const expectedParentPid = Number.parseInt(process.env.PI_WEB_PARENT_PID ?? "", 10);
 

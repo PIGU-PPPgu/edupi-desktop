@@ -26,6 +26,30 @@ type LoginState = {
   error?: string;
 };
 
+type SyncState = {
+  version: 1;
+  flowId: string;
+  status: "running" | "ok" | "needs_login" | "failed";
+  completeness?: "empty" | "base_performance";
+  month?: string;
+  config?: Record<string, unknown>;
+  counts?: { reports?: number; students?: number };
+  message?: string;
+  error?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  updatedAt?: string;
+};
+
+type SyncConfig = {
+  className: string;
+  subjectCode: string;
+  phaseCode: string;
+  gradeCode?: string;
+  schoolId?: string;
+  classId?: string;
+};
+
 function privateDir(path: string): void {
   mkdirSync(path, { recursive: true, mode: 0o700 });
 }
@@ -65,6 +89,10 @@ function layout(projectRoot: string) {
     loginOk: resolve(root, "login_ok.json"),
     qr: resolve(root, "login-qr.png"),
     profile: resolve(root, "profile"),
+    config: resolve(root, "sync-config.json"),
+    syncState: resolve(root, "sync-state.json"),
+    syncSnapshot: resolve(root, "sync-snapshot.json"),
+    syncLock: resolve(root, "sync.lock"),
   };
 }
 
@@ -129,6 +157,41 @@ function claimLock(path: string, value: unknown): boolean {
   }
 }
 
+function syncBusy(layoutValue: ReturnType<typeof layout>): boolean {
+  const lock = readJson<{ pid?: number }>(layoutValue.syncLock);
+  if (!lock) return false;
+  if (alive(lock.pid)) return true;
+  try { unlinkSync(layoutValue.syncLock); } catch {}
+  return false;
+}
+
+function validSyncConfig(value: unknown): value is SyncConfig {
+  if (!value || typeof value !== "object") return false;
+  const config = value as Record<string, unknown>;
+  return typeof config.className === "string" && config.className.trim().length > 0
+    && typeof config.subjectCode === "string" && /^\d+$/.test(config.subjectCode)
+    && typeof config.phaseCode === "string" && /^\d+$/.test(config.phaseCode)
+    && (config.gradeCode === undefined || (typeof config.gradeCode === "string" && /^\d+$/.test(config.gradeCode)))
+    && (config.schoolId === undefined || typeof config.schoolId === "string")
+    && (config.classId === undefined || typeof config.classId === "string");
+}
+
+function syncText(state: SyncState | null, config: SyncConfig | null): string {
+  if (!state) {
+    return config
+      ? `还没有同步记录，已准备同步 ${config.className}。`
+      : "还没有同步配置，请先提供班级、学科和学段。";
+  }
+  if (state.status === "running") return state.message || `正在同步 ${state.month ?? "目标月份"}，完成后再读取结果。`;
+  if (state.status === "needs_login") return state.error || "智学网登录态已失效，请先重新扫码。";
+  if (state.status === "ok") {
+    const reports = state.counts?.reports ?? 0;
+    const students = state.counts?.students ?? 0;
+    return state.message || `同步完成：${reports} 份作业，${students} 名学生。`;
+  }
+  return `智学网同步失败：${state.error || "未知错误"}。`;
+}
+
 function releaseLockForFlow(path: string, flowId: string): void {
   const lock = readJson<{ flowId?: string }>(path);
   if (lock?.flowId === flowId) {
@@ -145,7 +208,7 @@ function statusText(state: LoginState | null): string {
   return `智学网登录失败：${state.error ?? "未知错误"}。`;
 }
 
-export function createEduPiZhixueTools(projectRoot: string, workerPath: string) {
+export function createEduPiZhixueTools(projectRoot: string, workerPath: string, syncWorkerPath = workerPath) {
   const paths = layout(projectRoot);
   privateDir(paths.root);
   const login = defineTool({
@@ -211,19 +274,97 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string) 
     executionMode: "sequential" as const,
     execute: async () => {
       const state = current(paths);
-      return textResult(state?.status === "authenticated"
-        ? "登录态已确认，但学情数据同步桥接尚未接入。"
-        : statusText(state), visual(paths, state), state?.status === "authenticated" ? { isError: true, terminate: true } : { terminate: true });
+      const config = readJson<SyncConfig>(paths.config);
+      const syncState = readJson<SyncState>(paths.syncState);
+      if (state?.status !== "authenticated") {
+        return textResult(statusText(state), visual(paths, state), { terminate: true });
+      }
+      return textResult(syncText(syncState, validSyncConfig(config) ? config : null), {
+        ...visual(paths, state),
+        sync: syncState,
+        config: validSyncConfig(config) ? config : undefined,
+      }, syncState?.status === "failed" || syncState?.status === "needs_login" ? { isError: true, terminate: true } : { terminate: true });
     },
   });
   const sync = defineTool({
     name: "zhixue_sync",
     label: "同步智学网学情",
-    description: "当前版本只负责登录回调和登录态确认，学情数据同步仍需单独接入。",
+    description: "按老师提供的班级、学科和学段配置同步智学网基础学情。同步在隔离浏览器进程中执行，结果写入当前用户数据根，并明确报告成功、空结果、登录失效或失败。",
     promptSnippet: "zhixue_sync: 当前仅返回同步桥接未接入状态",
-    parameters: Type.Object({ month: Type.Optional(Type.String()) }),
+    parameters: Type.Object({
+      month: Type.Optional(Type.String({ pattern: "^\\d{4}-\\d{2}$" })),
+      className: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
+      subjectCode: Type.Optional(Type.String({ pattern: "^\\d+$", maxLength: 12 })),
+      phaseCode: Type.Optional(Type.String({ pattern: "^\\d+$", maxLength: 12 })),
+      gradeCode: Type.Optional(Type.String({ pattern: "^\\d+$", maxLength: 12 })),
+      schoolId: Type.Optional(Type.String({ maxLength: 160 })),
+      classId: Type.Optional(Type.String({ maxLength: 160 })),
+    }),
     executionMode: "sequential" as const,
-    execute: async () => textResult("智学网登录桥已接通，但学情数据同步还未接入 Desktop，暂不执行抓取。", undefined, { isError: true, terminate: true }),
+    execute: async (_callId, params) => {
+      const loginState = current(paths);
+      if (loginState?.status !== "authenticated") {
+        return textResult(statusText(loginState), visual(paths, loginState), { isError: true, terminate: true });
+      }
+      if (syncBusy(paths)) {
+        const running = readJson<SyncState>(paths.syncState);
+        return textResult(running?.message || "同步任务已经在运行，请稍后查看同步状态。", { sync: running }, { terminate: true });
+      }
+      const previous = readJson<SyncConfig>(paths.config);
+      const next: SyncConfig = {
+        className: params.className?.trim() || previous?.className || "",
+        subjectCode: params.subjectCode || previous?.subjectCode || "",
+        phaseCode: params.phaseCode || previous?.phaseCode || "",
+        ...(params.gradeCode || previous?.gradeCode ? { gradeCode: params.gradeCode || previous?.gradeCode } : {}),
+        ...(params.schoolId || previous?.schoolId ? { schoolId: params.schoolId || previous?.schoolId } : {}),
+        ...(params.classId || previous?.classId ? { classId: params.classId || previous?.classId } : {}),
+      };
+      if (!validSyncConfig(next)) {
+        return textResult("同步前需要明确提供班级、学科代码和学段代码。没有这些信息不会启动抓取。", { config: next }, { isError: true, terminate: true });
+      }
+      atomicJson(paths.config, next);
+      const syncFlowId = randomUUID();
+      atomicJson(paths.syncState, {
+        version: 1,
+        flowId: syncFlowId,
+        status: "running",
+        month: params.month || new Date().toISOString().slice(0, 7),
+        config: next,
+        message: `正在同步 ${next.className} 的学情数据。`,
+        startedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } satisfies SyncState);
+      const child = spawn(process.execPath, [
+        syncWorkerPath,
+        "--root", paths.root,
+        "--flow-id", syncFlowId,
+        "--state", paths.syncState,
+        "--session", paths.session,
+        "--profile", paths.profile,
+        "--config", paths.config,
+        "--snapshot", paths.syncSnapshot,
+        "--month", params.month || new Date().toISOString().slice(0, 7),
+        "--lock", paths.syncLock,
+      ], { cwd: paths.root, detached: true, stdio: "ignore", env: { ...process.env } });
+      if (!child.pid) {
+        atomicJson(paths.syncState, {
+          version: 1,
+          flowId: syncFlowId,
+          status: "failed",
+          month: params.month || new Date().toISOString().slice(0, 7),
+          config: next,
+          error: "同步进程启动失败。",
+          updatedAt: new Date().toISOString(),
+        } satisfies SyncState);
+        return textResult("同步进程启动失败。", undefined, { isError: true, terminate: true });
+      }
+      child.unref();
+      return textResult(`已开始同步 ${next.className} 的学情数据。完成后查看同步状态。`, {
+        flowId: syncFlowId,
+        config: next,
+        pid: child.pid,
+      }, { terminate: true });
+    },
   });
   return [login, status, syncStatus, sync];
 }
