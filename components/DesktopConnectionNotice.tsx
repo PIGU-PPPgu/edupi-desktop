@@ -65,10 +65,11 @@ export function DesktopConnectionNotice({ state, retry, diagnostics, failureInci
   onCloseDetails: () => void;
 }) {
   const { t } = useI18n();
+  const slow = state === "busy";
   return <>
-    {state === "offline" && <div role="alert" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexShrink: 0, padding: "7px 12px", background: "color-mix(in srgb, var(--danger) 14%, var(--bg-panel))", borderBottom: "1px solid color-mix(in srgb, var(--danger) 35%, var(--border))", color: "var(--text)", fontSize: 12, zIndex: 300 }}>
-      <span>{t("connection.offline")}</span>
-      <button type="button" onClick={retry} style={{ height: 24, padding: "0 10px", border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg)", color: "var(--accent)", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>{t("connection.retry")}</button>
+    {(state === "offline" || slow) && <div role={slow ? "status" : "alert"} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexShrink: 0, padding: "7px 12px", background: slow ? "var(--bg-panel)" : "color-mix(in srgb, var(--danger) 14%, var(--bg-panel))", borderBottom: slow ? "1px solid var(--border)" : "1px solid color-mix(in srgb, var(--danger) 35%, var(--border))", color: "var(--text)", fontSize: 12, zIndex: 300 }}>
+      <span>{slow ? "本地服务响应较慢，正在核对" : t("connection.offline")}</span>
+      <button type="button" onClick={retry} style={{ height: 24, padding: "0 10px", border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg)", color: "var(--accent)", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>{slow ? "重试" : t("connection.retry")}</button>
       <button type="button" onClick={onOpenDetails} style={{ padding: 0, border: 0, background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}>连接详情</button>
     </div>}
     {detailsOpen && <ConnectionDetails records={diagnostics} incident={failureIncident} onClose={onCloseDetails} />}

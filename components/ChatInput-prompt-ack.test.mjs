@@ -73,6 +73,7 @@ test("the existing three-argument in-flight ACK stays compatible", () => {
 test("a request acknowledged during onSend is not relabelled as a failed submission by its late false result", async () => {
   const f = fixture();
   const context = { ...f.context, useCallback: callback => callback,
+    recallMode: false, recallCapability: undefined, setRecallChoice: noop,
     value: pending.draftValue, context: null, pendingTeacherText: "", queueRecoveryId: null,
     attachedImages: [], isStreaming: false, onAudioUnlock: noop, onBuiltinCommand: null,
     composeComposerMessage: (_context, text) => text, imageToDraftImage: image => image,

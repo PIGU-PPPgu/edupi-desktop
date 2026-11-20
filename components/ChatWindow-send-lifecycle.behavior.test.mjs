@@ -15,6 +15,10 @@ for (const name of ["edupi-composer-context", "image-attachments", "file-fuzzy",
   "scroll-memory", "streaming-message", "agent-message-history", "ansi", "terminal-input", "message-display",
   "chat-file-drop", "chat-lazy-load", "edupi-calendar-result", "edupi-priority-send"]) pure[`@/lib/${name}`] = await jiti.import(`../lib/${name}.ts`);
 pure["./EduPiBrandMark"] = await jiti.import("./EduPiBrandMark.tsx");
+pure["@/lib/edupi-recall-answer-client"] = {
+  ...await jiti.import("../lib/edupi-recall-answer-client.ts"),
+  coreRecallClient: { enabled: async () => false },
+};
 const sources = Object.fromEntries(["ChatInput", "ChatWindow"].map(name => [name, fs.readFileSync(new URL(`./${name}.tsx`, import.meta.url), "utf8")]));
 sources.useAgentSession = fs.readFileSync(new URL("../hooks/useAgentSession.ts", import.meta.url), "utf8");
 sources.drafts = fs.readFileSync(new URL("../lib/draft-store.ts", import.meta.url), "utf8");
@@ -101,6 +105,11 @@ async function mount({ existing = false, durable = true, immediate = false, dela
     sendEduPiCapturedPrompt: async ({ sessionId, command }) => { if (!durable) { await receive(sessionId, command); return "accepted"; } return "disabled"; } };
   modules["@/lib/fetch-timeout"] = { fetchWithRetry: fetch, fetchJsonWithDeadline: async url => { const res = await fetch(url); return { response: res, body: await res.json() }; } };
   modules["@/lib/desktop-updater"] = { isTauriDesktop: () => durable };
+  modules["@/lib/edupi-recall-prompt-client"] = {
+    readRecallSettings: async () => null, recallSendAvailable: () => false,
+    RECALL_SETTINGS_CHANGED: "synthetic-recall-settings-changed",
+    inspectRecallPrompt: assert.fail, submitRecallPrompt: assert.fail,
+  };
   modules["@/lib/edupi-ui-events"] = { EDUPI_STUDENT_RECORDS_UPDATED_EVENT: "synthetic-records" };
   modules["@/lib/queue-recovery"] = { recallQueueWithBackup: assert.fail };
   const hook = load("useAgentSession", { fetch, EventSource });
@@ -155,7 +164,7 @@ async function mount({ existing = false, durable = true, immediate = false, dela
     async accept(index = 0) { await f.run(() => host.pending[index].resolve()); },
     async fail(index = 0) { await f.run(() => host.pending[index].reject(new Error("synthetic delivery failure"))); },
     async done(index = 0) { await f.run(() => events.filter(source => source.url.includes(host.pending[index].sid)).at(-1)?.emit({ type: "prompt_done", clientRequestId: host.pending[index].command.clientRequestId })); },
-    persisted(key) { store.flushDraftNow(key); return JSON.parse(storage.get("drafts") ?? "{}")[key] ?? null; },
+    persisted(key) { act(() => store.flushDraftNow(key)); return JSON.parse(storage.get("drafts") ?? "{}")[key] ?? null; },
     async close() {
       await act(async () => root.unmount()); Object.assign(globalThis, globals);
       assert.ok(errors.every(([label, error]) => label === "Failed to send message:"

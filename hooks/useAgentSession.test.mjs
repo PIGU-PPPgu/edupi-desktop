@@ -236,7 +236,7 @@ test("tracks education import tools by call id and refreshes only once on comple
     source.indexOf("const currentModel ="),
   );
   const unmountSource = source.slice(
-    source.indexOf("// Close SSE / invalidate in-flight work"),
+    source.indexOf("useLayoutEffect(() => () => {"),
     source.indexOf("// Load (or reset) when the parent switches sessions"),
   );
 

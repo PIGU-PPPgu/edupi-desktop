@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { readEduPiProactivity, updateEduPiProactivity, type EduPiProactivityDomain, type EduPiProactivityState } from "@/lib/edupi-proactivity-client";
 import { createMissedTeacherFeedbackCapture, recordTeacherFeedback, type TeacherFeedbackCapture, type TeacherFeedbackDomain } from "@/lib/edupi-teacher-feedback";
-import { EduPiParentRecipientConfirmation } from "./EduPiParentRecipientConfirmation";
+import { EduPiParentRecipientConfirmationView } from "./EduPiParentRecipientConfirmation";
+import { readParentRecipientEntries, confirmParentRecipientEntry, type ParentRecipientEntry } from "@/lib/edupi-parent-recipient-client";
 
 type ViewProps = {
   state: EduPiProactivityState;
@@ -20,6 +21,54 @@ const EXECUTION_STATUS = { queued: "已排队", claimed: "已领取", completed:
 const DOMAIN_LABELS: Record<EduPiProactivityDomain, string> = { teaching_preparation: "课前准备", student_followup: "学生跟进",
   calendar_administration: "校历与行政", lesson_reflection: "课后复盘", parent_communication: "家长沟通" };
 type FeedbackScope = EduPiProactivityState["scopes"][number];
+
+// Keep this disclosure's existing view/confirmation protocol while giving its
+// reads the same lifetime as its containing Canary. Pending commands survive
+// hiding; the legacy standalone container retains its own default behavior.
+function ActiveParentRecipientConfirmation({ active }: { active: boolean }) {
+  const [entries, setEntries] = useState<ParentRecipientEntry[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const commands = useRef(new Map<string, string>());
+  const busyRef = useRef(false);
+  useEffect(() => {
+    if (!active || busy) return;
+    let pending: AbortController | null = null, disposed = false;
+    const refresh = () => {
+      if (pending || document.hidden || busyRef.current) return;
+      const controller = new AbortController();
+      pending = controller;
+      void readParentRecipientEntries(controller.signal).then(value => {
+        if (!disposed && !controller.signal.aborted) setEntries(value);
+      }, () => {
+        if (!disposed && !controller.signal.aborted) setMessage("收件人确认暂不可用");
+      }).finally(() => { if (pending === controller) pending = null; });
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 30_000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("edupi-education-refresh", refresh);
+    return () => {
+      disposed = true; pending?.abort(); window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("edupi-education-refresh", refresh);
+    };
+  }, [active, busy]);
+  const confirm = async (entry: ParentRecipientEntry) => {
+    if (busyRef.current) return;
+    const key = `${entry.sessionId}:${entry.clientRequestId}:${entry.candidate?.source_fingerprint}`;
+    const commandId = commands.current.get(key) ?? `recipient-${crypto.randomUUID()}`;
+    commands.current.set(key, commandId);
+    busyRef.current = true; setBusy(entry.clientRequestId); setMessage(null);
+    try {
+      await confirmParentRecipientEntry(entry, commandId);
+      setMessage("收件人已确认");
+      window.dispatchEvent(new Event("edupi-education-refresh"));
+    } catch (error) { setMessage(error instanceof Error ? error.message : "确认尚未完成，请重试"); }
+    finally { busyRef.current = false; setBusy(null); }
+  };
+  return <EduPiParentRecipientConfirmationView entries={entries} busy={busy} message={message} onConfirm={entry => void confirm(entry)} />;
+}
 
 const FEEDBACK_DOMAINS: Array<{ value: TeacherFeedbackDomain; label: string }> = [
   { value: "teaching_preparation", label: "教学准备" },
@@ -151,7 +200,7 @@ export function EduPiProactivityCanaryView({ state, selectedKey, busy, message, 
   </section>;
 }
 
-export function EduPiProactivityCanary({ onChanged, feedbackEnabled = false, domain = "teaching_preparation" }: { onChanged?: () => void; feedbackEnabled?: boolean; domain?: EduPiProactivityDomain }) {
+export function EduPiProactivityCanary({ onChanged, feedbackEnabled = false, domain = "teaching_preparation", active = true }: { onChanged?: () => void; feedbackEnabled?: boolean; domain?: EduPiProactivityDomain; active?: boolean }) {
   const [state, setState] = useState<EduPiProactivityState | null>(null);
   const [selectedKey, setSelectedKey] = useState("");
   const [busy, setBusy] = useState(false);
@@ -160,16 +209,15 @@ export function EduPiProactivityCanary({ onChanged, feedbackEnabled = false, dom
   const refreshEpoch = useRef(0);
   const refreshAbort = useRef<AbortController | null>(null);
   useEffect(() => {
-    if (!isTauriDesktop()) return;
+    if (!active || busy || !isTauriDesktop()) return;
     let disposed = false;
     const refresh = () => {
-      if (busyRef.current || document.hidden) return;
+      if (busyRef.current || document.hidden || refreshAbort.current) return;
       const epoch = ++refreshEpoch.current;
-      refreshAbort.current?.abort();
       const controller = new AbortController();
       refreshAbort.current = controller;
       void readEduPiProactivity(controller.signal, domain).then((next) => {
-        if (disposed || epoch !== refreshEpoch.current) return;
+        if (disposed || controller.signal.aborted || epoch !== refreshEpoch.current) return;
         setState(next);
         const preferred = next.activation.scope ? scopeKey(next.activation.scope)
           : next.scopes.find((scope) => scope.ready) ? scopeKey(next.scopes.find((scope) => scope.ready)!) : "";
@@ -177,7 +225,7 @@ export function EduPiProactivityCanary({ onChanged, feedbackEnabled = false, dom
         setMessage((current) => current === "主动运行状态暂不可用" ? null : current);
       }, () => {
         if (!disposed && epoch === refreshEpoch.current && !controller.signal.aborted) setMessage("主动运行状态暂不可用");
-      });
+      }).finally(() => { if (refreshAbort.current === controller) refreshAbort.current = null; });
     };
     refresh();
     const interval = window.setInterval(refresh, 30_000);
@@ -186,11 +234,12 @@ export function EduPiProactivityCanary({ onChanged, feedbackEnabled = false, dom
     return () => {
       disposed = true;
       refreshAbort.current?.abort();
+      refreshAbort.current = null;
       window.clearInterval(interval);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [domain]);
+  }, [domain, active, busy]);
   const selected = useMemo(() => state?.scopes.find((scope) => scopeKey(scope) === selectedKey) || null, [selectedKey, state]);
   if (!isTauriDesktop()) return null;
   if (!state || state.limits.domain !== domain) return <p className="edupi-proactivity-canary__loading" role={message ? "alert" : "status"}>{message || "正在读取主动运行…"}</p>;
@@ -220,7 +269,7 @@ export function EduPiProactivityCanary({ onChanged, feedbackEnabled = false, dom
   };
   return <>
     <EduPiProactivityCanaryView state={state} selectedKey={selectedKey} busy={busy} message={message} onSelect={setSelectedKey} onToggle={() => void toggle()} />
-    {domain === "parent_communication" && state.activation.enabled ? <EduPiParentRecipientConfirmation /> : null}
+    {domain === "parent_communication" && state.activation.enabled ? <ActiveParentRecipientConfirmation active={active} /> : null}
     <EduPiMissedOpportunityFeedback scopes={state.scopes} enabled={feedbackEnabled} />
   </>;
 }

@@ -8,9 +8,11 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const CORE_COMMIT = "98e4f7cd0c31dd30954574d2040bb1b948cdd954";
-export const ROOT_PREFIX = "edupi-route1-canary-l4-116-20261117-";
+export const ROOT_PREFIX = "edupi-route1-canary-l4-118-20261118-";
 const desktopRoot = fileURLToPath(new URL("..", import.meta.url));
+export const CORE_COMMIT = JSON.parse(fs.readFileSync(
+  path.join(desktopRoot, "contracts/edupi-core-compat.json"), "utf8",
+)).core_runtime.core_commit;
 const hash = bytes => `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`;
 const check = (value, code) => { if (!value) throw Object.assign(new Error(code), { code }); };
 const dayAt = offset => new Intl.DateTimeFormat("en-CA", {
@@ -111,10 +113,11 @@ function git(repo, args) {
 
 function verifyCore(coreRoot) {
   canonicalDirectory(coreRoot);
-  check(git(coreRoot, ["rev-parse", "HEAD"]) === CORE_COMMIT, "fixed_core98_required");
+  check(/^[a-f0-9]{40}$/u.test(CORE_COMMIT), "invalid_desktop_core_contract");
+  check(git(coreRoot, ["rev-parse", "HEAD"]) === CORE_COMMIT, "desktop_core_contract_mismatch");
   check(git(coreRoot, ["status", "--porcelain", "--untracked-files=all"]) === "", "frozen_core_must_be_clean");
   const compat = JSON.parse(fs.readFileSync(path.join(desktopRoot, "contracts/edupi-core-compat.json"), "utf8")).core_runtime;
-  check(compat.core_commit === CORE_COMMIT, "desktop_core98_pin_required");
+  check(compat.core_commit === CORE_COMMIT, "desktop_core_contract_mismatch");
   for (const [file, expected] of [
     [compat.component_manifest_path, compat.component_manifest_hash],
     ["contracts/edupi-core-runtime-component-manifest.json", compat.runtime_component_manifest_hash],
@@ -124,7 +127,17 @@ function verifyCore(coreRoot) {
   return compat;
 }
 
-async function migrateV3(loadCore, dataRoot, ownerControlToken) {
+function desktopRuntimeSourceHashes() {
+  return Object.fromEntries([
+    "contracts/edupi-core-compat.json", "desktop/core-runtime-host.mjs",
+    "lib/edupi-runtime-supervisor.ts", "lib/edupi-teacher-template-config.ts",
+    "lib/edupi-teacher-template-runtime.ts", "lib/edupi-teacher-template-server.ts", "lib/edupi-teacher-template-storage.ts",
+    "lib/edupi-task-board-command.ts", "lib/edupi-task-review.ts", "lib/edupi-core-snapshot.ts",
+    "app/api/edupi/tasks/route.ts",
+  ].map(file => [file, hash(fs.readFileSync(path.join(desktopRoot, file)))]));
+}
+
+export async function migrateV3(loadCore, dataRoot, ownerControlToken) {
   const { prepareCoreRuntimeRoot } = await loadCore("core_runtime_root.mjs");
   const admission = await loadCore("core_runtime_writer_admission.mjs");
   const store = await loadCore("core_runtime_store.mjs");
@@ -163,7 +176,7 @@ async function migrateV3(loadCore, dataRoot, ownerControlToken) {
   }
 }
 
-async function migrateMain4(loadCore, dataRoot, ownerControlToken) {
+export async function migrateMain4(loadCore, dataRoot, ownerControlToken) {
   const { DatabaseSync } = await import("node:sqlite");
   const { prepareCoreRuntimeRoot } = await loadCore("core_runtime_root.mjs");
   const admission = await loadCore("core_runtime_writer_admission.mjs");
@@ -205,6 +218,7 @@ async function seedSources(loadCore, dataRoot) {
       canonical_name: name, aliases: [],
     } }).entity;
     const classroom = entity("class", "合成验收班-L4-116"), term = entity("term", "合成验收学期-L4-116");
+    const subject = entity("subject", "数学");
     const student = entity("student", "合成学生-L4-116-甲"), parent = entity("parent", "合成家长-L4-116-甲");
     const calendarEvent = entity("calendar_event", "合成行政截止-L4-116");
     const sourceFact = (entityId, sourceId, kind, predicate, text, entityIds, subject = null) => {
@@ -225,7 +239,9 @@ async function seedSources(loadCore, dataRoot) {
       `合成行政材料截止 ${deadlineAt}`, [classroom.entity_id, term.entity_id, calendarEvent.entity_id]);
     const body = sourceFact(student.entity_id, "synthetic-native-l4-communication", "teacher_utterance", "communication.fact",
       "合成学生-L4-116-甲本周完成合成练习，仅供隔离验收。", [classroom.entity_id, term.entity_id, student.entity_id, parent.entity_id], "math");
-    return { classroom, term, student, parent, calendarEvent, admin, body, deadlineAt };
+    sourceFact(subject.entity_id, "synthetic-native-l4-subject", "teacher_utterance", "teacher.subject",
+      "合成验收范围为数学，仅供隔离验收。", [classroom.entity_id, term.entity_id, subject.entity_id], "数学");
+    return { classroom, term, subject, student, parent, calendarEvent, admin, body, deadlineAt };
   } finally { await lease.release(); }
 }
 
@@ -272,7 +288,9 @@ export async function createNativeL4Fixture({ create, coreRoot, evidenceDir }) {
   const appConfigRoot = path.join(home, "Library/Application Support/com.abcwyc.pi-agent");
   const fixture = allocateFixture({ home, appConfigRoot, evidenceDir });
   const proofFile = path.join(evidenceDir, "native-l4-fixture.json");
+  const desktopSourceHashes = desktopRuntimeSourceHashes();
   const start = { ...fixture, coreRoot, coreCommit: CORE_COMMIT, desktopCommit: git(desktopRoot, ["rev-parse", "HEAD"]),
+    desktopDirty: git(desktopRoot, ["status", "--porcelain", "--untracked-files=all"]) !== "", desktopSourceHashes,
     createdAt: new Date().toISOString(), syntheticOnly: true };
   writeExclusiveJson(path.join(evidenceDir, "native-l4-fixture-start.json"), start);
   const counters = { modelRequests: 0, modelConfigurationRequests: 0, deniedParentFetch: 0 };
@@ -285,7 +303,8 @@ export async function createNativeL4Fixture({ create, coreRoot, evidenceDir }) {
     EDUPI_OUTPUT_DIR: path.join(fixture.root, ".edupi/output"), EDUPI_LOCK_DIR: path.join(fixture.root, ".edupi/locks"),
     PI_CODING_AGENT_DIR: fixture.agentDir, PI_DESKTOP_STATE_DIR: fixture.stateDir,
     PI_DESKTOP_API_TOKEN: crypto.randomBytes(32).toString("hex"), PI_OFFLINE: "1",
-    EDUPI_DESKTOP_ISOLATED_CANARY: "1", EDUPI_SAFE_MODE: "0", EDUPI_AMBIENT_PLANNING: undefined, TZ: "Asia/Shanghai",
+    EDUPI_DESKTOP_ISOLATED_CANARY: "1", EDUPI_SAFE_MODE: "0", EDUPI_AMBIENT_PLANNING: undefined,
+    EDUPI_CORE_RECALL_ANSWERS: undefined, TZ: "Asia/Shanghai",
   };
   const previous = new Map(Object.keys(environment).map(key => [key, process.env[key]]));
   let supervisor, phase = "initializing", result, failure;
@@ -432,7 +451,20 @@ export async function createNativeL4Fixture({ create, coreRoot, evidenceDir }) {
     check(!snapshot.payload.work_cases.some(item => item.trigger_id === pending[0].candidate.case_id), "g5_must_not_have_a_preconfirmed_case");
     phase = "recurring-templates";
     const tasks = await loadDesktop("app/api/edupi/tasks/route.ts");
-    const recurring = await seedRecurringTemplates({ tasks, request, readActivation, bridgeFailures });
+    const templatesConfig = await loadDesktop("lib/edupi-teacher-template-config.ts");
+    const templatesRuntime = await loadDesktop("lib/edupi-teacher-template-runtime.ts");
+    const recurring = await seedRecurringTemplates({ tasks, request, readActivation, bridgeFailures,
+      scope: { classId: selected.classroom.entity_id, subject: "数学" },
+      prepareSelection: async inputs => {
+        const currentHost = await supervisor.ensureEduPiRuntime(roots);
+        const config = templatesConfig.readEduPiTeacherTemplateConfig({ dataRoot: fixture.root }).config;
+        await templatesRuntime.prepareEduPiTeacherTemplateGrant(currentHost, {
+          templateIds: inputs.map(input => templatesRuntime.teacherTemplateTaskId(input.clientRequestId)),
+          scope: { class_id: selected.classroom.entity_id, subject: "数学" },
+          endsAt: `${dayAt(90)}T23:59:59.999Z`,
+        }, { dataRoot: fixture.root, rootRef, expectedUpdatedAt: config?.updatedAt ?? null });
+        await supervisor.restartEduPiRuntime(roots);
+      } });
     phase = "restart-readback";
     await supervisor.closeAllEduPiRuntimes();
     // Explicit roots suppress readEduPiEducationSnapshot's automatic ensure.
@@ -472,6 +504,7 @@ export async function createNativeL4Fixture({ create, coreRoot, evidenceDir }) {
       unverified: ["signed App native UI", "G3 review and notification interaction", "G5 recipient confirmation and subsequent review",
         "recurring activation, natural due dates and native pause/resume", "real model and teaching content quality"] };
     verifyCore(coreRoot);
+    assert.deepEqual(desktopRuntimeSourceHashes(), desktopSourceHashes, "Desktop runtime source changed during fixture creation");
   } catch (error) { failure = safeError(error, phase); }
   finally {
     try { if (supervisor) await supervisor.closeAllEduPiRuntimes(); }
@@ -505,10 +538,9 @@ export async function createNativeL4Fixture({ create, coreRoot, evidenceDir }) {
   return proof;
 }
 
-export async function seedRecurringTemplates({ tasks, request, readActivation, bridgeFailures = [] }) {
+export async function seedRecurringTemplates({ tasks, request, readActivation, scope, prepareSelection, bridgeFailures = [] }) {
   const firstDate = dayAt(1);
-  const templates = [], attempts = [];
-  for (const cadence of ["weekly", "monthly"]) {
+  const templates = [], attempts = [], inputs = ["weekly", "monthly"].map(cadence => {
     // Monthly templates deliberately avoid days 29–31, which the official form rejects.
     const dueDate = cadence === "weekly" || Number(firstDate.slice(8)) <= 28 ? firstDate
       : `${firstDate.slice(0, 7)}-28`;
@@ -516,8 +548,14 @@ export async function seedRecurringTemplates({ tasks, request, readActivation, b
       ? new Date(Date.UTC(Number(firstDate.slice(0, 4)), Number(firstDate.slice(5, 7)), 1)).toISOString().slice(0, 10) : dueDate;
     const input = { clientRequestId: crypto.randomUUID(), title: `合成${cadence === "weekly" ? "每周" : "每月"}内部材料-L4-116`,
       dueDate: monthlyDate, note: "合成内部材料验收，不发送。", preparationSource: null,
+      templateScope: scope,
       recurrence: { kind: "teacher_internal_materials", cadence, untilDate: dayAt(90),
         leadDays: 0, deliverables: ["合成内部议程", "合成材料清单"] } };
+    return input;
+  });
+  if (prepareSelection) await prepareSelection(inputs);
+  for (const input of inputs) {
+    const cadence = input.recurrence.cadence;
     const failureOffset = bridgeFailures.length;
     const response = await tasks.POST(request("/api/edupi/tasks", input)), created = await response.json();
     if (![200, 202].includes(response.status)) {
@@ -539,16 +577,15 @@ export async function seedRecurringTemplates({ tasks, request, readActivation, b
   check(state.activation.enabled === false, "recurring_must_remain_disabled");
   return { status: attempts.some(item => item.status === "blocked") ? "blocked" : "templates-created-g1-disabled",
     activationEnabled: false, templates, attempts, firstFailure: attempts.find(item => item.status === "blocked") ?? null,
-    contract: { coreCommit: CORE_COMMIT, file: "scripts/core_runtime_daemon.mjs", function: "bridgeCallResult",
-      gateLine: 697, rejectionLine: 706, dispatchLine: 715,
-      bootstrapOrActivationCanUnlockMain4CreateTask: false },
-    limitation: "Core98 selects Main4 from the writer admission schema. Its bridgeCallResult rejects create_task and import_timetable before dispatchBridgeRequest regardless of owner bootstrap, grants or G1 activation. Pre-migration template creation and subsequent Main4 operation are not validated by this driver; no taskboard fallback was used." };
+    contract: { coreCommit: CORE_COMMIT, file: "scripts/core_runtime_teacher_templates.mjs",
+      requiresTeacherTemplateBinding: true, requiresOwnerReviewer: true, modelExecute: false },
+    limitation: "This driver prepares selected internal templates and checks command replay and cold readback. Natural due dates, native pause/resume and teaching-content quality require separate evidence." };
 }
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
   try {
     const options = parseArguments(process.argv.slice(2));
-    if (options.help) console.log("node scripts/create-native-l4-acceptance-fixture.mjs --create --core-root <canonical Core98 checkout> --evidence-dir <new absolute directory>");
+    if (options.help) console.log("node scripts/create-native-l4-acceptance-fixture.mjs --create --core-root <canonical contract-pinned Core checkout> --evidence-dir <new absolute directory>");
     else {
       const proof = await createNativeL4Fixture(options);
       console.log(JSON.stringify({ status: proof.status, root: proof.root, stateDir: proof.stateDir, agentDir: proof.agentDir,

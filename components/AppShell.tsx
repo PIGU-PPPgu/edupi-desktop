@@ -1059,7 +1059,7 @@ export function AppShell() {
     setRefreshKey((k) => k + 1);
     setExplorerRefreshKey((k) => k + 1);
     setEducationRefreshKey((key) => key + 1);
-    window.dispatchEvent(new Event("edupi-artifacts-updated"));
+    window.dispatchEvent(new CustomEvent("edupi-artifacts-updated", { detail: { refreshOnly: true } }));
   }, []);
 
   const handleEducationImportCompleted = useCallback(() => {
@@ -2195,6 +2195,7 @@ export function AppShell() {
               chatSidebarResizer={sidebarResizer}
               onChatLayoutChange={reclampChatPanels}
               chatSidebarSuspended={edupiAdminOpen}
+              readOnlyRefreshActive={!edupiAdminOpen}
               chatPreviewForeground={rightPanelOpen && filePanelAvailable}
               renderFilePreview={(filePath) => (
                 <FileViewer

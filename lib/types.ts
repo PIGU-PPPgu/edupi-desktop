@@ -96,6 +96,8 @@ export interface CustomMessage {
   display: boolean;
   details?: unknown;
   timestamp?: number;
+  /** UI-only delivery identity. Never restore this from persisted history. */
+  coreRecallLive?: { receiptId: string; clientRequestId: string };
 }
 
 export interface BashExecutionMessage {

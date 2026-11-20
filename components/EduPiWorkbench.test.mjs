@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import ts from "typescript";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
@@ -233,8 +234,10 @@ test("refreshes education data after Core imports without remounting chat", asyn
   const appShell = await read("./AppShell.tsx");
   const panel = await read("./EduPiEducationPanel.tsx");
   const conversationFiles = await read("./EduPiConversationFiles.tsx");
-  const loadEffectEnd = panel.indexOf("}, [loadWorkspace, refreshKey]);");
-  const loadEffect = panel.slice(panel.lastIndexOf("useEffect(() => {", loadEffectEnd), loadEffectEnd + "}, [loadWorkspace, refreshKey]);".length);
+  const loadEffectTail = "}, [loadWorkspace, refreshKey, projectionReadsActive]);";
+  const loadEffectEnd = panel.indexOf(loadEffectTail);
+  assert.ok(loadEffectEnd >= 0, "workspace refresh must retain its key and read-activity dependencies");
+  const loadEffect = panel.slice(panel.lastIndexOf("useEffect(() => {", loadEffectEnd), loadEffectEnd + loadEffectTail.length);
   const agentEndHandler = appShell.slice(
     appShell.indexOf("const handleAgentEnd"),
     appShell.indexOf("const handleEducationImportCompleted"),
@@ -242,7 +245,9 @@ test("refreshes education data after Core imports without remounting chat", asyn
 
   assert.match(appShell, /const \[educationRefreshKey, setEducationRefreshKey\] = useState\(0\)/);
   assert.match(agentEndHandler, /setEducationRefreshKey\(\(key\) => key \+ 1\)/);
-  assert.match(agentEndHandler, /window\.dispatchEvent\(new Event\("edupi-artifacts-updated"\)\)/);
+  assert.match(agentEndHandler, /setRefreshKey\(\(k\) => k \+ 1\)/);
+  assert.match(agentEndHandler, /setExplorerRefreshKey\(\(k\) => k \+ 1\)/);
+  assert.match(agentEndHandler, /window\.dispatchEvent\(new CustomEvent\("edupi-artifacts-updated", \{ detail: \{ refreshOnly: true \} \}\)\)/);
   assert.match(conversationFiles, /window\.addEventListener\("edupi-artifacts-updated", refreshFiles\)/);
   assert.match(conversationFiles, /setRefresh\(value => value \+ 1\)/);
   assert.match(appShell, /const handleEducationImportCompleted = useCallback\(\(\) => \{/);
@@ -251,7 +256,31 @@ test("refreshes education data after Core imports without remounting chat", asyn
   assert.match(appShell, /key=\{`edupi-chat-\$\{sessionKey\}`\}/);
   assert.doesNotMatch(appShell, /edupi-chat-\$\{educationRefreshKey\}/);
   assert.match(panel, /refreshKey\?: number/);
-  assert.match(loadEffect, /\}, \[loadWorkspace, refreshKey\]\);/);
+  assert.match(loadEffect, /\}, \[loadWorkspace, refreshKey, projectionReadsActive\]\);/);
+  assert.match(loadEffect, /if \(!projectionReadsActive\) return/);
+  assert.match(loadEffect, /loadWorkspace\(controller\.signal\)/);
+  assert.match(loadEffect, /return \(\) => controller\.abort\(\)/);
+
+  const recallClient = await read("../lib/edupi-recall-answer-client.ts");
+  const begin = recallClient.indexOf("  const onSource = (event: Event) => {");
+  const end = recallClient.indexOf("  const onHidden =", begin);
+  assert.ok(begin >= 0 && end > begin, "exercise the actual source invalidation handler");
+  const compiled = ts.transpileModule(`${recallClient.slice(begin, end)}\nreturn onSource;`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  let invalidations = 0;
+  const onSource = new Function("invalidate", compiled)(() => { invalidations++; });
+  onSource(new CustomEvent("edupi-artifacts-updated", { detail: { refreshOnly: true } }));
+  assert.equal(invalidations, 0, "completion refreshes files without asserting a source write");
+  const sourceChanges = [
+    new Event("edupi-artifacts-updated"),
+    new CustomEvent("edupi-artifacts-updated", { detail: { refreshOnly: false } }),
+    new CustomEvent("edupi-artifacts-updated", { detail: { refreshOnly: "true" } }),
+    new CustomEvent("edupi-facts-updated", { detail: { refreshOnly: true } }),
+    new Event("edupi-student-records-updated"),
+    new Event("edupi-education-refresh"),
+  ];
+  sourceChanges.forEach((event, index) => { onSource(event); assert.equal(invalidations, index + 1); });
 });
 
 test("chat utilities reserve their own row while panels remain overlaid", async () => {

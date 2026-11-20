@@ -1,0 +1,15 @@
+{
+  "version": "0.3.118",
+  "notes": "EduPi 0.3.118 隔离 macOS Apple Silicon 升级验收。",
+  "pub_date": "2026-11-18T14:47:42.000Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTkrdyt6Q3MvM1NRSm43UVFoWUJXdHhHTVJDQm9pdFhEUXBJdWpoZjBKWHhVV21TR2g4MXo2c1lFR1VzT2R5NjRicUVPWEE4Mm4zV2UzcmpKWjRVbW5nNmp5TDhGendNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MDA4NDM5CWZpbGU6RWR1UGkuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4xMTgKL0xTamhob0J0QisydFY0N3Z2Sjdpb25PSWlvcVRESTRFVXhEU0hpU1dPN2JCR3IxTGY0dm9VcTF6MWx4MkRxcDNkaG9Fd3BaWE9XSHU5YmpmaUpKQXc9PQo=",
+      "url": "https://api.github.com/repos/PIGU-PPPgu/edupi-desktop/releases/assets/763511519"
+    },
+    "darwin-aarch64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTkrdyt6Q3MvM1NRSm43UVFoWUJXdHhHTVJDQm9pdFhEUXBJdWpoZjBKWHhVV21TR2g4MXo2c1lFR1VzT2R5NjRicUVPWEE4Mm4zV2UzcmpKWjRVbW5nNmp5TDhGendNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MDA4NDM5CWZpbGU6RWR1UGkuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4xMTgKL0xTamhob0J0QisydFY0N3Z2Sjdpb25PSWlvcVRESTRFVXhEU0hpU1dPN2JCR3IxTGY0dm9VcTF6MWx4MkRxcDNkaG9Fd3BaWE9XSHU5YmpmaUpKQXc9PQo=",
+      "url": "https://api.github.com/repos/PIGU-PPPgu/edupi-desktop/releases/assets/763511519"
+    }
+  }
+}

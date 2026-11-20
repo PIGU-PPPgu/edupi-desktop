@@ -1,6 +1,6 @@
 [package]
 name = "pi-agent-desktop"
-version = "0.3.117"
+version = "0.3.120"
 description = "Desktop shell for Pi Agent"
 authors = ["pi-agent-desktop contributors"]
 license = "MIT"
@@ -111,6 +111,8 @@ libappindicator-sys = { path = "vendor/security-patches/libappindicator-sys" }
 rfd = { path = "vendor/security-patches/rfd" }
 # Preserve the existing Linux integrations while moving D-Bus types to zbus 6.
 notify-rust = { path = "vendor/security-patches/notify-rust" }
+serde_with = { path = "vendor/security-patches/serde-with" }
+uiautomation = { path = "vendor/security-patches/uiautomation" }
 tauri-plugin-single-instance = { path = "vendor/security-patches/tauri-plugin-single-instance" }
 xcap = { path = "vendor/security-patches/xcap" }
 atspi-common = { path = "vendor/security-patches/atspi-common" }

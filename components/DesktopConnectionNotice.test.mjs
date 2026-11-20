@@ -71,3 +71,20 @@ test("online and checking connections add no default diagnostic copy", () => {
   assert.equal(renderToStaticMarkup(view.render("online", [record(1)])), "");
   assert.equal(renderToStaticMarkup(view.render("checking", [record(1)])), "");
 });
+
+test("busy probes show a neutral one-line status with retry and original diagnostics, never an offline alert", () => {
+  const view = fixture(), initial = view.render("busy", [record(1), record(2)]);
+  const html = renderToStaticMarkup(initial);
+  assert.ok(html.includes('role="status"'));
+  assert.ok(html.includes("本地服务响应较慢，正在核对"));
+  assert.ok(!html.includes('role="alert"'));
+  assert.ok(!html.includes("连接已断开"));
+  assert.ok(!html.includes("--danger"));
+  button(initial, "重试").props.onClick();
+  assert.equal(view.retries(), 1);
+  button(initial, "连接详情").props.onClick();
+  const detail = renderToStaticMarkup(view.render("busy", [record(1), record(2)]));
+  assert.ok(detail.includes('role="dialog"'));
+  assert.ok(detail.includes("超时"));
+  assert.ok(detail.includes("4000 ms"));
+});

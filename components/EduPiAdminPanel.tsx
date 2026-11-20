@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import type { EducationContract, EducationEntityDeleteKind } from "@/lib/edupi-education-contract";
 import type { OnboardingChecklistItem, TeacherContextSnapshot } from "@/lib/edupi-onboarding-types";
 import type { WorkbenchView } from "@/lib/edupi-workbench";
-import type { EduPiWorkspaceBundle } from "@/lib/edupi-education-client";
+import { readEduPiWorkspace } from "@/lib/edupi-education-client";
 import { APP_VERSION_DISPLAY } from "@/lib/branding";
 import { useDesktopHostIdentity } from "@/hooks/useDesktopHostIdentity";
 import { useDesktopChrome, WindowControls } from "./desktop";
@@ -25,6 +25,7 @@ import { EduPiBrandMark } from "./EduPiBrandMark";
 import { EduPiPromptOutboxRecovery } from "./EduPiPromptOutboxRecovery";
 import { JevSettingsCard } from "./JevSettingsCard";
 import { OpenConnectorAdminPanel } from "./OpenConnectorAdminPanel";
+import { CoreRecallSettings } from "./CoreRecallSettings";
 
 type AdminSnapshot = {
   context: TeacherContextSnapshot | null;
@@ -70,6 +71,7 @@ type Props = {
   settingsPanel: (page: AppSettingsPage) => ReactNode;
   initialSection?: AdminSectionId;
   refreshToken?: number;
+  active?: boolean;
 };
 
 export const ADMIN_SECTIONS = SETTINGS_GROUPS.flatMap((group) => [...group.sections]);
@@ -126,10 +128,21 @@ function AdminMetric({ value, label }: { value: string | number; label: string }
   return <div><strong>{value}</strong><span>{label}</span></div>;
 }
 
-export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, onNavigate, modelSettingsDirty, settingsBusy = false, modelsPanel, settingsPanel, initialSection = "general", refreshToken = 0 }: Props) {
+export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, onNavigate, modelSettingsDirty, settingsBusy = false, modelsPanel, settingsPanel, initialSection = "general", refreshToken = 0, active = true }: Props) {
   const desktopChrome = useDesktopChrome();
   const nativeIdentity = useDesktopHostIdentity(desktopChrome.isDesktop);
   const [activeSection, setActiveSection] = useState<SettingsSectionId>(() => visibleSection(initialSection));
+  const [automationMounted, setAutomationMounted] = useState(() => visibleSection(initialSection) === "readiness");
+  const [visible, setVisible] = useState(() => typeof document === "undefined" || document.visibilityState !== "hidden");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const setExpandedSection = useCallback((key: string, open: boolean) => {
+    setExpanded(current => current[key] === open ? current : { ...current, [key]: open });
+  }, []);
+  useEffect(() => {
+    const changed = () => setVisible(document.visibilityState !== "hidden");
+    document.addEventListener("visibilitychange", changed);
+    return () => document.removeEventListener("visibilitychange", changed);
+  }, []);
   const [modelsMounted, setModelsMounted] = useState(() => visibleSection(initialSection) === "models");
   const [modelPane, setModelPane] = useState<"chat" | "browser">("chat");
   const [connectionsMounted, setConnectionsMounted] = useState(() => visibleSection(initialSection) === "connections");
@@ -157,6 +170,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
     const visible = visibleSection(section);
     if (visible === "models") setModelsMounted(true);
     if (visible === "connections") setConnectionsMounted(true);
+    if (visible === "readiness") setAutomationMounted(true);
     if (isPreferenceSection(visible)) { setSettingsMounted(true); setSettingsPage(visible); }
     setSearchQuery("");
     setSearchTarget(null);
@@ -234,27 +248,30 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
   }, [initialSection, openSection]);
 
   useEffect(() => {
+    if (!active || !visible) return;
     const controller = new AbortController();
     setLoading(true);
     void (async () => {
       const [bundle, status, platform] = await Promise.all([
-        readJson<EduPiWorkspaceBundle>("/api/edupi/workspace", controller.signal),
+        readEduPiWorkspace({ signal: controller.signal }).catch(() => null),
         readJson<AdminSnapshot["status"] & { compatibility?: CoreCompatibilitySnapshot }>("/api/edupi/status", controller.signal),
         readJson<AdminSnapshot["platform"]>("/api/edupi/platform", controller.signal),
       ]);
+      if (controller.signal.aborted) return;
       const context = bundle?.context ?? null;
       const education = bundle?.data ?? null;
-      const models = await readJson<AdminSnapshot["models"]>(education?.workspace ? `/api/models?cwd=${encodeURIComponent(education.workspace)}` : "/api/models", controller.signal)
-        || await readJson<AdminSnapshot["models"]>("/api/models", controller.signal);
+      let models = await readJson<AdminSnapshot["models"]>(education?.workspace ? `/api/models?cwd=${encodeURIComponent(education.workspace)}` : "/api/models", controller.signal);
+      if (!models && education?.workspace && !controller.signal.aborted) models = await readJson<AdminSnapshot["models"]>("/api/models", controller.signal);
       if (!controller.signal.aborted) setSnapshot({ context, education, status, compatibility: status?.compatibility || null, models, platform });
     })().finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [refreshKey, refreshToken]);
+  }, [refreshKey, refreshToken, active, visible]);
 
   const checklist = useMemo(() => snapshot.context?.checklist ?? FALLBACK_CHECKLIST, [snapshot.context?.checklist]);
+  const automationActive = active && visible && activeSection === "readiness" && !searchQuery.trim();
   const coreConnected = snapshot.status?.core?.status === "ready";
   useEffect(() => {
-    if (activeSection !== "system" || !desktopChrome.isDesktop || coreConnected) {
+    if (!active || !visible || activeSection !== "system" || !desktopChrome.isDesktop || coreConnected) {
       return;
     }
     const controller = new AbortController();
@@ -263,7 +280,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
       .then((status) => { if (!controller.signal.aborted) setCoreRepairStatus(status); })
       .catch(() => { if (!controller.signal.aborted) setCoreRepairStatus("unavailable"); });
     return () => controller.abort();
-  }, [activeSection, desktopChrome.isDesktop, coreConnected, refreshKey, refreshToken]);
+  }, [activeSection, desktopChrome.isDesktop, coreConnected, refreshKey, refreshToken, active, visible]);
   const coreStatusMessage = coreReconnectMessage === "Core 已重新连接" && !coreConnected ? null : coreReconnectMessage;
   const projectionConnected = snapshot.status?.projection?.status === "ready";
   const coreReady = coreConnected && projectionConnected;
@@ -354,7 +371,7 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
     <main ref={workspaceRef} className="edupi-admin-workspace" aria-busy={loading || undefined}>
       {searchQuery.trim() ? <section className="edupi-admin-section edupi-settings-search-results" id="edupi-settings-search-results" aria-label="设置搜索结果"><AdminSectionHeader title="搜索设置" /><span role="status" className="edupi-settings-search-count">{searchResults.length ? `${searchResults.length} 项设置` : "没有匹配的设置"}</span><ul>{searchResults.map((result) => <li key={result.id}><button type="button" onClick={() => openSearchResult(result)}><span><strong>{result.label}</strong><small>{result.path}</small></span><span aria-hidden="true">›</span></button></li>)}</ul></section> : null}
       <div className="edupi-settings-content" hidden={Boolean(searchQuery.trim())}>
-      {activeSection === "readiness" ? <section className="edupi-admin-section">
+      {automationMounted ? <section className="edupi-admin-section" hidden={activeSection !== "readiness"}>
         <AdminSectionHeader title="自动运行" onRefresh={refresh} />
         <div className="edupi-admin-section-break edupi-settings-automation-status" data-setting-id="automation-status"><h2>运行状态</h2><span>{snapshot.status?.core?.status === "ready" ? formatCoreSchedulerStatus(snapshot.status.core.scheduler, kernelRuns.length) : "运行状态不可用"}</span></div>
         <div className="edupi-admin-metrics"><AdminMetric value={kernelSummary?.running ?? "—"} label="运行中" /><AdminMetric value={kernelSummary?.needs_review ?? "—"} label="待确认" /><AdminMetric value={kernelSummary?.succeeded ?? "—"} label="已完成" /></div>
@@ -370,8 +387,18 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
         </details>
         <div className="edupi-settings-automation-domains" data-setting-id="automation-domains"><h2>主动运行范围</h2>{([
           ["teaching_preparation", "课前准备"], ["student_followup", "学生跟进"], ["calendar_administration", "校历与行政"], ["lesson_reflection", "课后复盘"], ["parent_communication", "家长沟通"],
-        ] as const).map(([domain, label]) => <details key={domain}><summary><span>{label}</span><small>试用配置</small></summary><EduPiProactivityCanary domain={domain} feedbackEnabled={snapshot.status?.proactivity?.teacherFeedback === true} onChanged={refresh} /></details>)}</div>
-        <EduPiPromptOutboxRecovery />
+        ] as const).map(([domain, label]) => <details key={domain} onToggle={event => {
+          if (event.target === event.currentTarget) setExpandedSection(domain, event.currentTarget.open);
+        }}><summary><span>{label}</span><small>试用配置</small></summary><EduPiProactivityCanary domain={domain}
+          active={Boolean(automationActive && expanded[domain])} feedbackEnabled={snapshot.status?.proactivity?.teacherFeedback === true} onChanged={refresh} /></details>)}</div>
+        <EduPiPromptOutboxRecovery active={Boolean(automationActive && expanded.outbox)} onToggle={open => setExpandedSection("outbox", open)} />
+        <details className="edupi-settings-diagnostics" onToggle={event => {
+          if (event.target === event.currentTarget) setExpandedSection("recall", event.currentTarget.open);
+        }}><summary>记忆核验</summary>
+          <CoreRecallSettings models={(snapshot.models?.modelList ?? []).map(item => ({ provider: item.provider, modelId: item.id }))}
+            active={Boolean(automationActive && expanded.recall)}
+            classes={(education?.factSpine?.entities ?? []).filter(item => item.kind === "class").map(item => ({ id: item.id, name: item.name }))} />
+        </details>
         <div className="edupi-admin-section-break" data-setting-id="automation-history"><h2>最近运行</h2></div>
         <div className="edupi-admin-runtime" role="list" aria-label="最近自动运行">
           {kernelRuns.length > 0 ? kernelRuns.slice(0, 12).map((run) => {
@@ -384,7 +411,9 @@ export function EduPiAdminPanel({ onClose, onOpenContext, onAskStudentUpdate, on
             </div>;
           }) : <div className="is-empty" role="status">还没有运行记录</div>}
         </div>
-        <details className="edupi-settings-diagnostics"><summary>文档任务</summary><EduPiBackgroundJobs data={snapshot.education} onMaterials={() => leaveAdmin(() => onNavigate("materials"))} onModels={() => openSection("models")} /></details>
+        <details className="edupi-settings-diagnostics" onToggle={event => {
+          if (event.target === event.currentTarget) setExpandedSection("jobs", event.currentTarget.open);
+        }}><summary>文档任务</summary><EduPiBackgroundJobs active={Boolean(automationActive && expanded.jobs)} data={snapshot.education} onMaterials={() => leaveAdmin(() => onNavigate("materials"))} onModels={() => openSection("models")} /></details>
       </section> : null}
 
       {connectionsMounted ? <section className="edupi-admin-section is-connections" hidden={activeSection !== "connections"} data-setting-id="applications">

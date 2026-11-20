@@ -5,9 +5,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import net from "node:net";
+import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { stagedReadinessDiagnostic, waitForStagedRuntime } from "./staged-runtime-readiness.mjs";
+import { createJiti } from "jiti";
+import { migrateV3, migrateMain4 } from "./create-native-l4-acceptance-fixture.mjs";
 
 const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const compat = JSON.parse(fs.readFileSync(path.join(root, "contracts/edupi-core-compat.json"), "utf8"));
@@ -21,6 +24,7 @@ const identityOnly = process.env.EDUPI_STAGED_IDENTITY_ONLY === "1";
 const headlessBoot = process.env.EDUPI_STAGED_HEADLESS_BOOT === "1";
 const statusDiagnostic = process.env.EDUPI_STAGED_STATUS_DIAGNOSTIC === "1";
 const sourceAdminE2 = process.env.EDUPI_STAGED_SOURCE_ADMIN_E2 === "1";
+const recurringE2 = process.env.EDUPI_STAGED_RECURRING_E2 === "1";
 const sourceAdminReview = process.env.EDUPI_STAGED_SOURCE_ADMIN_REVIEW || "hold";
 if (sourceAdminE2 && !["accept", "modify", "reject", "hold"].includes(sourceAdminReview)) throw new Error("invalid staged admin review decision");
 if (identityOnly && headlessBoot) throw new Error("identity-only and headless boot checks are mutually exclusive");
@@ -48,14 +52,18 @@ const serverDir = path.join(isolatedResources, "server");
 const coreRoot = path.join(isolatedResources, "edupi-core");
 const dataRoot = path.join(temporaryRoot, "data");
 const stateRoot = path.join(temporaryRoot, "state");
+const agentRoot = path.join(temporaryRoot, "agent");
 const runtimeDatabase = path.join(dataRoot, ".edupi", "runtime", "core-runtime-v1.sqlite");
 let sourceAdminFact = null;
+let templateClassId = null;
 fs.mkdirSync(isolatedResources, { recursive: true });
 fs.cpSync(stagedServerDir, serverDir, { recursive: true, verbatimSymlinks: true });
 fs.cpSync(stagedCoreRoot, coreRoot, { recursive: true, verbatimSymlinks: true });
-for (const directory of [path.join(dataRoot, ".edupi/memory"), path.join(dataRoot, ".edupi/output"), path.join(dataRoot, ".edupi/locks"), stateRoot]) fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+for (const directory of [path.join(dataRoot, ".edupi/memory"), path.join(dataRoot, ".edupi/output"), path.join(dataRoot, ".edupi/locks"), stateRoot, agentRoot]) fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+fs.writeFileSync(path.join(agentRoot, "settings.json"), JSON.stringify({ packages: [], extensions: [], skills: [] }), { mode: 0o600 });
+fs.writeFileSync(path.join(agentRoot, "models.json"), JSON.stringify({ providers: {} }), { mode: 0o600 });
 
-if (sourceAdminE2) {
+if (sourceAdminE2 || recurringE2) {
   const values = { EDUPI_PROJECT_ROOT: dataRoot, EDUPI_HOME: path.join(dataRoot, ".edupi"),
     EDUPI_MEMORY_DIR: path.join(dataRoot, ".edupi/memory"), EDUPI_OUTPUT_DIR: path.join(dataRoot, ".edupi/output"),
     EDUPI_LOCK_DIR: path.join(dataRoot, ".edupi/locks") };
@@ -73,6 +81,8 @@ if (sourceAdminE2) {
     const entity = (entity_kind, external_id) => facts.registerEducationEntity({ memoryDir, now,
       entity: { entity_kind, namespace: "desktop-staged-admin", external_id, canonical_name: external_id, aliases: [] } }).entity;
     const classroom = entity("class", "isolated-class"), term = entity("term", "isolated-term"), event = entity("calendar_event", "isolated-event");
+    templateClassId = classroom.entity_id;
+    if (sourceAdminE2) {
     const observation = facts.captureEducationObservation({ memoryDir, now, observation: {
       source_kind: "calendar", source_id: "isolated-calendar-feed", source_revision: "revision-one",
       raw_text: `行政材料截止 ${deadline}`, observed_at: now, actor_ref: "synthetic-calendar",
@@ -85,6 +95,7 @@ if (sourceAdminE2) {
     } }).fact;
     sourceAdminFact = facts.reviewEducationFact({ memoryDir, now, fact_id: proposed.fact_id, expected_revision: proposed.revision,
       decision: "accept", reviewer: "synthetic-teacher" }).fact;
+    }
   } catch (error) {
     seedFailure = error;
   } finally {
@@ -92,6 +103,43 @@ if (sourceAdminE2) {
     for (const [key, value] of Object.entries(previous)) if (value === undefined) delete process.env[key]; else process.env[key] = value;
   }
   if (seedFailure) { fs.rmSync(temporaryRoot, { recursive: true, force: true }); throw seedFailure; }
+}
+
+if (recurringE2) {
+  const values = { EDUPI_PROJECT_ROOT: dataRoot, EDUPI_HOME: path.join(dataRoot, ".edupi"),
+    EDUPI_MEMORY_DIR: path.join(dataRoot, ".edupi/memory"), EDUPI_OUTPUT_DIR: path.join(dataRoot, ".edupi/output"),
+    EDUPI_LOCK_DIR: path.join(dataRoot, ".edupi/locks"), EDUPI_DESKTOP_ISOLATED_CANARY: "1" };
+  const previous = Object.fromEntries(Object.keys(values).map(key => [key, process.env[key]]));
+  Object.assign(process.env, values);
+  let daemon, migrationFailure;
+  try {
+    const core = name => import(pathToFileURL(path.join(stagedCoreRoot, "scripts", name)).href);
+    const jiti = createJiti(import.meta.url, { tsconfigPaths: true, fsCache: false });
+    const { loadRuntimeOwnerControlToken } = await jiti.import("../lib/edupi-owner-control-token.ts");
+    const control = loadRuntimeOwnerControlToken(stateRoot, dataRoot, { required: true });
+    const bearer = crypto.randomBytes(32).toString("hex"), supervisorSessionId = crypto.randomUUID();
+    const protocol = await core("core_runtime_protocol.mjs");
+    daemon = await (await core("core_runtime_daemon.mjs")).createCoreRuntimeDaemon({
+      dataRoot, token: bearer, ownerControlToken: control, supervisorSessionId, port: 0,
+      coreCommit: compat.core_runtime.core_commit, componentManifestHash: compat.core_runtime.runtime_component_manifest_hash,
+      ambientPlanning: true,
+    });
+    const rootRef = daemon.dataRootFingerprint;
+    const response = await fetch(daemon.endpoint, { method: "POST", signal: AbortSignal.timeout(15_000),
+      headers: { "content-type": "application/json", authorization: `Bearer ${bearer}`, "x-edupi-owner-control": control },
+      body: JSON.stringify({ protocol: protocol.CORE_RUNTIME_PROTOCOL, protocol_version: protocol.CORE_RUNTIME_PROTOCOL_VERSION,
+        schema_hash: protocol.CORE_RUNTIME_SCHEMA_HASH, request_id: crypto.randomUUID(), operation: "owner_control",
+        payload: { command_id: "synthetic-staged-template-bootstrap", root_ref: rootRef, expected_owner_id: null, action: "bootstrap" } }) });
+    assert.equal(response.status, 200); assert.equal((await response.json()).ok, true);
+    await daemon.close(); daemon = null;
+    await migrateV3(core, dataRoot, control);
+    await migrateMain4(core, dataRoot, control);
+  } catch (error) { migrationFailure = error; }
+  finally {
+    await daemon?.close();
+    for (const [key, value] of Object.entries(previous)) if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
+  if (migrationFailure) { fs.rmSync(temporaryRoot, { recursive: true, force: true }); throw migrationFailure; }
 }
 
 function freePort() {
@@ -122,11 +170,14 @@ const child = spawn(nodeBinary, [path.join(serverDir, "desktop-server.cjs")], {
     EDUPI_CORE_ALLOWED_ROOT: isolatedResources,
     EDUPI_CORE_VALIDATION_MODE: "bundled",
     PI_DESKTOP_STATE_DIR: stateRoot,
+    PI_CODING_AGENT_DIR: agentRoot,
+    EDUPI_AMBIENT_PLANNING: "0",
+    EDUPI_CORE_RECALL_ANSWERS: "0",
     PI_DESKTOP_API_TOKEN: "staged-runtime-token-012345678901234567890123456789",
-    PI_DESKTOP_INSTANCE_ID: sourceAdminE2 ? "a".repeat(64) : "staged-core-instance",
+    PI_DESKTOP_INSTANCE_ID: sourceAdminE2 || recurringE2 ? "a".repeat(64) : "staged-core-instance",
     PI_WEB_PARENT_PID: String(process.pid),
     PI_OFFLINE: "1",
-    ...(sourceAdminE2 ? { EDUPI_DESKTOP_ISOLATED_CANARY: "1" } : {}),
+    ...(sourceAdminE2 || recurringE2 ? { EDUPI_DESKTOP_ISOLATED_CANARY: "1" } : {}),
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -177,8 +228,11 @@ try {
     assert.equal(timetableSources.status, 200);
     assert.equal(timetableSources.headers.get("cache-control"), "no-store");
     assert.deepEqual((await timetableSources.json()).sources, []);
-    if (process.env.EDUPI_STAGED_RECURRING_E2 === "1") {
-      const headers = { "content-type": "application/json", origin: baseUrl, "sec-fetch-site": "same-origin" };
+    if (recurringE2) {
+      assert.ok(templateClassId, "recurring templates need a canonical isolated class");
+      const templateScope = { classId: templateClassId, subject: "数学" };
+      const headers = { "content-type": "application/json", origin: baseUrl, "sec-fetch-site": "same-origin",
+        "x-pi-desktop-token": "staged-runtime-token-012345678901234567890123456789" };
       const write = async (method, route, body) => {
         const response = await fetch(`${baseUrl}${route}`, { method, headers, body: JSON.stringify(body), signal: AbortSignal.timeout(20_000) });
         const result = await response.json();
@@ -194,7 +248,7 @@ try {
       const firstDate = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
       const lastDate = new Date(Date.now() + 35 * 86_400_000).toISOString().slice(0, 10);
       const created = await write("POST", "/api/edupi/tasks", { clientRequestId: "11111111-1111-4111-8111-111111111111",
-        title: "隔离周报", dueDate: firstDate, note: null, recurrence: { kind: "teacher_internal_materials", cadence: "weekly",
+        title: "隔离周报", dueDate: firstDate, note: null, templateScope, recurrence: { kind: "teacher_internal_materials", cadence: "weekly",
           untilDate: lastDate, leadDays: 2, deliverables: ["内部周报"] } });
       const taskId = created.taskId;
       assert.equal(created.receipt.status, "accepted");
@@ -223,7 +277,7 @@ try {
       const monthlyStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 15)).toISOString().slice(0, 10);
       const monthlyEnd = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 3, 15)).toISOString().slice(0, 10);
       const monthly = await write("POST", "/api/edupi/tasks", { clientRequestId: "22222222-2222-4222-8222-222222222222",
-        title: "隔离月度内部材料", dueDate: monthlyStart, note: null,
+        title: "隔离月度内部材料", dueDate: monthlyStart, note: null, templateScope,
         recurrence: { kind: "teacher_internal_materials", cadence: "monthly",
           untilDate: monthlyEnd, leadDays: 3, deliverables: ["月度资料清单"] } });
       const monthlyTask = await readTask(monthly.taskId);

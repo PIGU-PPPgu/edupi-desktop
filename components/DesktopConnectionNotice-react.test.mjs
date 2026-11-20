@@ -145,6 +145,40 @@ test("real React hook retains the accepted two-failure incident after more than 
   assert.ok(!JSON.stringify(incident).includes("private-instance"));
 });
 
+test("actual AppShell renders pure deadline busy status and retries without a native relaunch", async t => {
+  const f = await fixture(t, { fullShell: true });
+  await f.advance(4_000); await f.advance(8_000); await f.advance(4_000);
+  assert.equal(f.controls.connection.state, "busy");
+  assert.equal(f.root.findAllByProps({ role: "alert" }).length, 0);
+  assert.ok(f.root.findAllByProps({ role: "status" }).some(node => text(node).includes("本地服务响应较慢，正在核对")));
+  await f.click("重试"); await f.advance(4_000);
+  assert.equal(f.controls.connection.state, "busy");
+  assert.deepEqual(f.counters(), { reloads: 0, relaunches: 0 });
+  await f.click("连接详情");
+  assert.ok(text(f.root.findByProps({ role: "dialog" })).includes("超时"));
+  await f.advance(8_000); await f.answer(identity("synthetic-pinned-instance"));
+  assert.equal(f.controls.connection.state, "online");
+  assert.equal(f.root.findAllByProps({ role: "alert" }).length, 0);
+  assert.equal(f.root.findAllByProps({ role: "dialog" }).length, 1, "diagnostic history survives recovery");
+  assert.deepEqual(f.snapshots().failureIncident, []);
+});
+
+test("real React recovers the original instance after busy while a changed identity never becomes online", async t => {
+  const f = await fixture(t);
+  await f.answer(identity("synthetic-original"));
+  for (let index = 0; index < 2; index++) { await f.advance(8_000); await f.advance(4_000); }
+  assert.equal(f.controls.connection.state, "busy");
+  await f.advance(8_000); await f.answer(identity("synthetic-original"));
+  assert.equal(f.controls.connection.state, "online");
+  assert.equal(f.snapshots().diagnostics.at(-1).instance, "same");
+  for (let index = 0; index < 2; index++) {
+    await f.advance(8_000); await f.answer(identity("synthetic-changed"));
+    assert.notEqual(f.controls.connection.state, "online");
+  }
+  assert.equal(f.controls.connection.state, "offline");
+  assert.deepEqual(f.snapshots().failureIncident.slice(-2).map(record => record.outcome), ["identity_mismatch", "identity_mismatch"]);
+});
+
 test("actual AppShell settings reopen the same details after recovery without probing, retrying or reloading", async t => {
   const f = await fixture(t, { fullShell: true }); await offline(f);
   await f.click("连接详情");

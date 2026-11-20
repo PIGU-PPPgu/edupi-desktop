@@ -5,12 +5,15 @@ import { readEducationContract } from "@/lib/edupi-education-server";
 import { startPreparation } from "@/lib/edupi-preparation-runtime";
 import { parseTeacherRecurringMaterials } from "@/lib/edupi-teacher-task-form";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
+import { selectTeacherTemplateForCreation } from "@/lib/edupi-teacher-template-server";
+import { EduPiTeacherTemplateError, validTeacherTemplateScope } from "@/lib/edupi-teacher-template-config";
+import { isDesktopApiRequestAllowed } from "@/lib/desktop-api-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 32 * 1024;
-const BODY_KEYS = new Set(["clientRequestId", "title", "dueDate", "note", "preparationSource", "recurrence"]);
+const BODY_KEYS = new Set(["clientRequestId", "title", "dueDate", "note", "preparationSource", "recurrence", "templateScope"]);
 const PREPARATION_KEYS = new Set(["kind", "timetableSlotId", "lessonDate", "materialIds", "deliverables"]);
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -53,6 +56,8 @@ function preparationSource(value: unknown): TeacherCreatedPreparationSource | nu
 
 function statusFor(code: string): number {
   if (code === "invalid_envelope" || code === "invalid_recurrence") return 400;
+  if (code === "teacher_template_invalid_input") return 400;
+  if (["teacher_template_config_conflict", "teacher_template_grant_denied", "teacher_template_runtime_upgrade_required"].includes(code)) return 409;
   if (["stale_snapshot", "stale_revision", "task_conflict", "idempotency_conflict", "invalid_preparation_context", "invalid_transition", "stage_unchanged", "template_capacity"].includes(code)) return 409;
   return 503;
 }
@@ -72,10 +77,20 @@ export async function POST(request: Request) {
     const preparationSourceValue = preparationSource(body.preparationSource);
     const recurring = parseTeacherRecurringMaterials(body.recurrence, due, preparationSourceValue !== null);
     if (recurring.error) throw new TaskBoardCommandError("invalid_envelope", recurring.error);
+    const selection = record(body.templateScope);
+    if (recurring.value ? !selection || Object.keys(selection).length !== 2
+      || !Object.keys(selection).every(key => ["classId", "subject"].includes(key))
+      || !validTeacherTemplateScope({ class_id: selection.classId, subject: selection.subject })
+      : body.templateScope !== undefined) throw new TaskBoardCommandError("invalid_envelope", "请选择周期材料的班级和学科。");
+    if (recurring.value && !isDesktopApiRequestAllowed(request)) {
+      return NextResponse.json({ error: "周期材料授权请求被拒绝。", code: "forbidden" }, { status: 403 });
+    }
     const task = { task_id: taskId, title: body.title.trim(), due_date: due, note: note(body.note), preparation_source: preparationSourceValue,
       ...(recurring.value ? { recurrence: { kind: recurring.value.kind, cadence: recurring.value.cadence,
         until_date: recurring.value.untilDate, lead_days: recurring.value.leadDays, deliverables: recurring.value.deliverables } } : {}) };
     const sourceId = `desktop-task-create-${taskId.slice("teacher-task-".length)}`;
+    if (recurring.value) await selectTeacherTemplateForCreation({ clientRequestId: body.clientRequestId,
+      scope: { classId: String(selection!.classId), subject: String(selection!.subject) }, untilDate: recurring.value.untilDate });
     const commandResult = await issueTaskBoardCommand({
       command_type: "create_task",
       source: { source_id: sourceId, source_kind: "teacher_message", source_hash: taskBoardContentHash(task), evidence_ids: [`evidence-${sourceId}`] },
@@ -89,7 +104,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ taskId, replayed, receipt, preparation, data: refreshed, refreshPending: refreshed === null }, { status: refreshed ? 200 : 202 });
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) return NextResponse.json({ error: "Task request is too large", code: "too_large" }, { status: 413 });
-    const code = error instanceof TaskBoardCommandError ? error.code : "unavailable";
-    return NextResponse.json({ error: error instanceof TaskBoardCommandError ? error.message : "任务创建暂不可用", code }, { status: statusFor(code) });
+    const code = error instanceof TaskBoardCommandError || error instanceof EduPiTeacherTemplateError ? error.code : "unavailable";
+    return NextResponse.json({ error: error instanceof TaskBoardCommandError ? error.message
+      : code === "teacher_template_config_conflict" ? "周期材料的授权范围已变化，请刷新后重试。"
+      : code === "teacher_template_grant_denied" ? "周期材料授权已失效，请重新选择。"
+      : code === "teacher_template_runtime_upgrade_required" ? "当前资料库尚未支持周期材料。"
+      : code === "teacher_template_invalid_input" ? "周期材料范围或日期无效。" : "任务创建暂不可用", code }, { status: statusFor(code) });
   }
 }

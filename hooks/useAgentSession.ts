@@ -26,6 +26,8 @@ import { isTauriDesktop } from "@/lib/desktop-updater";
 import { recallQueueWithBackup } from "@/lib/queue-recovery";
 import { interruptForPrioritySend } from "@/lib/edupi-priority-send";
 import { emptyMessageHistory, messageHistoryReducer, type MessageHistoryAction } from "@/lib/agent-message-history";
+import { coreRecallAnswerDetails, recallViewIsActive, subscribeCoreRecallInvalidation } from "@/lib/edupi-recall-answer-client";
+import { inspectRecallPrompt, submitRecallPrompt } from "@/lib/edupi-recall-prompt-client";
 
 export interface SessionData {
   sessionId: string;
@@ -345,16 +347,66 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [appliedIdentity, setAppliedIdentity] = useState(sessionIdentity);
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
   const [messageHistory, rawDispatchMessageHistory] = useReducer(messageHistoryReducer, undefined, emptyMessageHistory);
-  const { messages, entryIds } = messageHistory;
+  const { entryIds } = messageHistory;
+  const [coreRecallContextEpoch, setCoreRecallContextEpoch] = useState(0);
+  const [coreRecallLive, setCoreRecallLive] = useState<{
+    receiptId: string; clientRequestId: string; sessionId: string; userEntryId: string;
+    generation: number; runId: number; payload: string;
+  } | null>(null);
+  const coreRecallDeliveryRef = useRef<typeof coreRecallLive>(null);
+  const coreRecallRevokedRef = useRef(true);
+  const coreRecallRequestRef = useRef<string | null>(null);
+  const coreRecallReceiptsRef = useRef(new Set<string>());
+  const invalidateCoreRecallLive = useCallback(() => {
+    coreRecallRevokedRef.current = true;
+    coreRecallDeliveryRef.current = null;
+    setCoreRecallLive(null);
+    setCoreRecallContextEpoch(value => value + 1);
+  }, []);
+  useEffect(() => subscribeCoreRecallInvalidation(invalidateCoreRecallLive), [invalidateCoreRecallLive]);
   const messageHistoryRef = useRef(messageHistory);
   const dispatchMessageHistory = useCallback((action: MessageHistoryAction) => {
     const previous = messageHistoryRef.current;
     const next = messageHistoryReducer(previous, action);
     if (next === previous) return false;
+    if (action.type === "optimistic") {
+      invalidateCoreRecallLive();
+      coreRecallRequestRef.current = action.requestId;
+      coreRecallRevokedRef.current = false;
+    }
+    if (action.type === "replace" && coreRecallDeliveryRef.current) {
+      const delivery = coreRecallDeliveryRef.current;
+      const matching = action.messages.map(coreRecallAnswerDetails).filter(details => details?.receiptId === delivery.receiptId);
+      const userIndex = action.messages.findLastIndex(message => message.role === "user");
+      if (matching.length !== 1 || JSON.stringify(matching[0]) !== delivery.payload
+        || action.entryIds[userIndex] !== delivery.userEntryId) invalidateCoreRecallLive();
+    }
+    if (action.type === "completed") {
+      const details = coreRecallAnswerDetails(action.message);
+      if (details && !coreRecallReceiptsRef.current.has(details.receiptId)) {
+        const userIndex = previous.messages.findLastIndex(message => message.role === "user");
+        const userEntry = previous.entryIds[userIndex];
+        if (!coreRecallRevokedRef.current && recallViewIsActive()
+          && action.requestId === coreRecallRequestRef.current
+          && details.clientRequestId === action.requestId && details.sessionId === sessionIdRef.current
+          && (!userEntry || details.userEntryId === userEntry)) {
+          // A fast context-only answer may beat the POST acknowledgement or
+          // its user-entry identity packet. Eligibility is scoped to our own
+          // request; the server still verifies the real latest SDK entry and
+          // complete Core receipt before any current state is displayed.
+          coreRecallReceiptsRef.current.add(details.receiptId);
+          const delivery = { receiptId: details.receiptId, clientRequestId: details.clientRequestId,
+            sessionId: details.sessionId, userEntryId: details.userEntryId, payload: JSON.stringify(details),
+            generation: sessionGenerationRef.current, runId: promptRunIdRef.current };
+          coreRecallDeliveryRef.current = delivery;
+          setCoreRecallLive(delivery);
+        }
+      }
+    }
     messageHistoryRef.current = next;
     rawDispatchMessageHistory(action);
     return true;
-  }, []);
+  }, [invalidateCoreRecallLive]);
   const [streamState, rawStreamDispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
   const streamingMessageRef = useRef<Partial<AgentMessage> | null>(null);
 
@@ -496,6 +548,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const promptRequestIdRef = useRef<string | null>(null);
   const completedPromptRequestIdsRef = useRef(new Set<string>());
   const peerRequestProbeIdRef = useRef(0);
+  const coreRecallGeneration = sessionGenerationRef.current;
+  const messages = useMemo(() => messageHistory.messages.map(message => {
+    if (message.role !== "custom") return message;
+    const details = coreRecallAnswerDetails(message);
+    // Persisted data never supplies live authority, including a forged runtime field.
+    const clean = message.coreRecallLive ? { ...message } : message;
+    if (clean !== message) delete clean.coreRecallLive;
+    return coreRecallLive && !coreRecallRevokedRef.current
+      && coreRecallLive.generation === coreRecallGeneration
+      && details?.receiptId === coreRecallLive.receiptId && details.clientRequestId === coreRecallLive.clientRequestId
+      && details.sessionId === coreRecallLive.sessionId && JSON.stringify(details) === coreRecallLive.payload
+      ? { ...clean, coreRecallLive: { receiptId: coreRecallLive.receiptId, clientRequestId: coreRecallLive.clientRequestId } } : clean;
+  }), [messageHistory.messages, coreRecallLive, coreRecallGeneration]);
 
   const setToolPresetState = opts.setToolPreset ?? setToolPreset;
   toolPresetRef.current = toolPreset;
@@ -522,6 +587,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setAppliedIdentity(sessionIdentity);
 
     if (!isPromotion) {
+      invalidateCoreRecallLive();
+      coreRecallRequestRef.current = null;
       educationToolCallsRef.current.clear();
       // Save the departing session's scroll position now, while the DOM still
       // shows it. The resets below empty the message list in this same commit,
@@ -631,17 +698,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [messages, sessionStatsOverride, contextUsage, data?.filePath, session?.id, session?.name]);
 
   const acknowledgeSubmittedPrompt = useCallback((key: string, pending: {
-    sessionId: string; clientRequestId: string; draftValue: string; message: string;
+    sessionId: string; clientRequestId: string; draftValue: string; message: string; purpose?: "recall";
   }) => {
     const sourcePending = getDraft(key)?.pendingPrompt;
     const promotedPending = key.startsWith("new:") && key !== pending.sessionId
       && activeDraftKeyRef.current === key && sessionIdRef.current === pending.sessionId
       && sourcePending?.sessionId === pending.sessionId && sourcePending.clientRequestId === pending.clientRequestId
-      && sourcePending.message === pending.message && sourcePending.draftValue === pending.draftValue
+      && sourcePending.message === pending.message && sourcePending.draftValue === pending.draftValue && sourcePending.purpose === pending.purpose
       ? getDraft(pending.sessionId)?.pendingPrompt : undefined;
     const promoteEditedDraft = promotedPending?.sessionId === pending.sessionId
       && promotedPending.clientRequestId === pending.clientRequestId
-      && promotedPending.message === pending.message && promotedPending.draftValue === pending.draftValue;
+      && promotedPending.message === pending.message && promotedPending.draftValue === pending.draftValue && promotedPending.purpose === pending.purpose;
     chatInputRef?.current?.acknowledgeSubmittedMessage?.(key, pending.draftValue,
       pending.message.startsWith("/"), { sessionId: pending.sessionId, clientRequestId: pending.clientRequestId });
     acknowledgePendingPrompt(key, pending.clientRequestId);
@@ -657,12 +724,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const pending = getDraft(key)?.pendingPrompt;
     if (!pending || pending.sessionId !== sid) return;
     try {
-      const status = await reconcileEduPiCapturedPrompt(sid, pending.clientRequestId,
-        { type: "prompt", message: pending.message, clientRequestId: pending.clientRequestId });
+      const status = pending.purpose === "recall"
+        ? (await inspectRecallPrompt(sid, pending.clientRequestId)).status
+        : await reconcileEduPiCapturedPrompt(sid, pending.clientRequestId,
+          { type: "prompt", message: pending.message, clientRequestId: pending.clientRequestId });
       const current = getDraft(key)?.pendingPrompt;
       if (status !== "accepted" || !isCurrent() || current?.sessionId !== sid
         || current.clientRequestId !== pending.clientRequestId || current.message !== pending.message
-        || current.occurredAt !== pending.occurredAt) return;
+        || current.occurredAt !== pending.occurredAt || current.purpose !== pending.purpose) return;
       acknowledgeSubmittedPrompt(key, pending);
     } catch {
       // An unavailable proof leaves the exact pending request recoverable.
@@ -1254,11 +1323,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const finishPromptWithoutStream = useCallback(async (sid: string | null = sessionIdRef.current, runId = promptRunIdRef.current) => {
     // Bail out before loadSession too: a stale finish for a previous run
     // must not overwrite the messages of the run currently streaming.
-    if (promptRunIdRef.current !== runId) return;
+    if (promptRunIdRef.current !== runId || promptSubmissionRunIdRef.current === runId) return;
     try {
       if (sid) await loadSession(sid);
     } finally {
-      if (promptRunIdRef.current !== runId) return;
+      if (promptRunIdRef.current !== runId || promptSubmissionRunIdRef.current === runId) return;
       const promptWasPending = rpcPromptPendingRef.current;
       const agentWasActive = sdkAgentActiveRef.current;
       rpcPromptPendingRef.current = false;
@@ -1330,7 +1399,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // If the server reports idle while we still think it's running, finish
   // through the same settlement path used by non-streaming prompts.
   const reconcileAgentState = useCallback(async (sid: string) => {
-    if (!agentRunningRef.current) return;
+    if (!agentRunningRef.current || promptSubmissionRunIdRef.current === promptRunIdRef.current) return;
     const runId = promptRunIdRef.current;
     try {
       const res = await fetch(`/api/agent/${encodeURIComponent(sid)}`);
@@ -1670,18 +1739,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [addNotice, cancelEventStreamGrace, dispatch, dispatchMessageHistory, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, onEducationImportCompleted, scheduleEventStreamClose, scrollToBottom, seedStreamingSnapshot, settleUiStage, verifyPeerPrompt]);
   handleAgentEventRef.current = handleAgentEvent;
 
-  const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
+  const handleSend = useCallback(async (message: string, images?: AttachedImage[], purpose?: "recall") => {
     const trimmedMessage = message.trim();
     if (!trimmedMessage && !images?.length) return false;
     if (agentRunningRef.current || bashRunningRef.current) return false;
+    const recall = purpose === "recall";
+    if (recall && (!isTauriDesktop() || images?.length || message.length > 512 || /^[!/]/u.test(trimmedMessage))) {
+      addNotice({ type: "warning", message: "核对记忆仅支持 512 字以内的文本问题" });
+      return false;
+    }
     const sendGeneration = sessionGenerationRef.current;
     const originDraftKey = draftKey;
     const isSlashCommandPrompt = !images?.length && trimmedMessage.startsWith("/");
     const priorPrompt = originDraftKey ? getDraft(originDraftKey)?.pendingPrompt : undefined;
-    if (priorPrompt && (priorPrompt.message !== message || images?.length)) {
-      const status = await reconcileEduPiCapturedPrompt(priorPrompt.sessionId, priorPrompt.clientRequestId,
-        { type: "prompt", message: priorPrompt.message, clientRequestId: priorPrompt.clientRequestId })
+    if (priorPrompt && (priorPrompt.message !== message || images?.length || priorPrompt.purpose !== purpose || recall)) {
+      const status = await (priorPrompt.purpose === "recall"
+        ? inspectRecallPrompt(priorPrompt.sessionId, priorPrompt.clientRequestId).then(value => value.status)
+        : reconcileEduPiCapturedPrompt(priorPrompt.sessionId, priorPrompt.clientRequestId,
+          { type: "prompt", message: priorPrompt.message, clientRequestId: priorPrompt.clientRequestId }))
         .catch(() => "unavailable");
+      if (sendGeneration !== sessionGenerationRef.current || activeDraftKeyRef.current !== originDraftKey) return false;
       if (status === "accepted") {
         acknowledgeSubmittedPrompt(originDraftKey!, priorPrompt);
         addNotice({ type: "info", message: "先前消息已核对，请再次发送当前内容" });
@@ -1766,7 +1843,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         await sendAgentCommand(sid, { type: "persist_session" });
         const sourceDraft = getDraft(originDraftKey);
         const pending = { sessionId: sid, clientRequestId, occurredAt: new Date(occurredAtMs).toISOString(),
-          message, draftValue: priorPrompt?.draftValue ?? sourceDraft?.value ?? "" };
+          message, draftValue: priorPrompt?.draftValue ?? sourceDraft?.value ?? "", ...(recall ? { purpose: "recall" as const } : {}) };
         const draftUnedited = chatInputRef?.current?.isSubmittedDraftUnedited?.(originDraftKey, pending.draftValue) === true;
         if (!sourceDraft || !stagePendingPrompt(originDraftKey, pending, draftUnedited)) throw new Error("发送标识未能保存，消息未发送");
         if (sid !== originDraftKey) {
@@ -1774,6 +1851,33 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (target && target.value && target.value !== sourceDraft.value) throw new Error("会话草稿冲突，消息未发送");
           if (!target) setDraft(sid, sourceDraft);
           if (!stagePendingPrompt(sid, pending, draftUnedited)) throw new Error("会话标识未能保存，消息未发送");
+        }
+        if (recall) {
+          assertCurrentSend(sid);
+          promptRequestStarted = true;
+          const delivery = await awaitPromptReceipt(submitRecallPrompt({
+            sessionId: sid, clientRequestId, message, occurredAt: pending.occurredAt,
+          }));
+          if (delivery.status === "accepted") {
+            acknowledgeSubmittedPrompt(originDraftKey, pending);
+            if (sid !== originDraftKey) acknowledgePendingPrompt(sid, clientRequestId);
+            return true;
+          }
+          if (delivery.status === "held") {
+            promptRequestStarted = false;
+            if (sendGeneration === sessionGenerationRef.current && promptRunIdRef.current === promptRunId && sessionIdRef.current === sid) {
+              dispatchMessageHistory({ type: "remove_optimistic", requestId: clientRequestId });
+              rpcPromptPendingRef.current = false;
+              settleUiStage();
+              pendingScrollToUserRef.current = false;
+              setPromptAnchorActive(false);
+              addNotice({ type: "warning", message: "记忆核验未发送，草稿已保留" });
+            }
+            return false;
+          }
+          addNotice({ type: "warning", message: "记忆核验发送结果待核对，草稿已保留" });
+          void waitForPromptSettlement(sid, promptRunId);
+          return false;
         }
         const cwd = newSessionCwd ?? session?.cwd;
         if (!cwd) throw new Error("工作区未确认，消息未发送");
@@ -2000,6 +2104,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   executeBashRef.current = executeBash;
 
   const handleAbort = useCallback(async () => {
+    invalidateCoreRecallLive();
     const sid = sessionIdRef.current;
     if (!sid) return;
     if (bashRunningRef.current) {
@@ -2015,12 +2120,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch (e) {
       console.error("Failed to abort:", e);
     }
-  }, []);
+  }, [invalidateCoreRecallLive]);
 
   const handleInterruptSend = useCallback(async (message: string, images?: AttachedImage[]) => {
     if (interruptSendInFlightRef.current) throw new Error("正在打断当前处理，请稍候");
     const sid = sessionIdRef.current;
     if (!sid || !agentRunningRef.current || bashRunningRef.current) return false;
+    invalidateCoreRecallLive();
     const generation = sessionGenerationRef.current;
     const runId = promptRunIdRef.current;
     interruptSendInFlightRef.current = true;
@@ -2047,7 +2153,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       interruptSendInFlightRef.current = false;
     }
-  }, [draftKey, finishPromptWithoutStream, handleSend, waitForPromptSettlement]);
+  }, [draftKey, finishPromptWithoutStream, handleSend, invalidateCoreRecallLive, waitForPromptSettlement]);
 
   const handleFork = useCallback(async (entryId: string) => {
     if (bashRunningRef.current) return;
@@ -2074,21 +2180,23 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (bashRunningRef.current) return;
     const sid = sessionIdRef.current;
     if (!sid) return;
+    invalidateCoreRecallLive();
     sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }).catch(() => {});
     setActiveLeafId(entryId);
     await loadContext(sid, entryId);
-  }, [loadContext]);
+  }, [invalidateCoreRecallLive, loadContext]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
     if (bashRunningRef.current) return;
     const sid = sessionIdRef.current;
     if (!sid) return;
+    invalidateCoreRecallLive();
     setActiveLeafId(leafId);
     const loaded = await loadContext(sid, leafId);
     if (loaded && leafId && sessionIdRef.current === sid) {
       sendAgentCommand(sid, { type: "navigate_tree", targetId: leafId }).catch(() => {});
     }
-  }, [loadContext]);
+  }, [invalidateCoreRecallLive, loadContext]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
     if (isNew) {
@@ -2518,8 +2626,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     completionScrollAllowedRef.current = false;
   }, []);
 
-  // Close SSE / invalidate in-flight work when ChatWindow unmounts.
-  useEffect(() => () => {
+  // Retire the old lifecycle before a replacement layout effect starts loading.
+  // A passive cleanup can run after that new load during StrictMode or refresh,
+  // invalidate its run id, and leave no request owning the loading state.
+  useLayoutEffect(() => () => {
     if (liveFollowFrameRef.current !== null) {
       cancelAnimationFrame(liveFollowFrameRef.current);
       liveFollowFrameRef.current = null;
@@ -2725,6 +2835,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   return {
     // State
     data, loading, error, activeLeafId, messages, entryIds, streamState,
+    coreRecallContextKey: `${sessionGenerationRef.current}:${promptRunIdRef.current}:${coreRecallContextEpoch}`,
     agentRunning, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, permissionMode, thinkingLevel,
     retryInfo, contextUsage, systemPrompt, forkingEntryId,
     isCompacting, compactError, compactResult, currentModel, displayModel, sessionStats,

@@ -454,6 +454,77 @@ test("OpenConnector node static serving rejects a double-decoded protected path"
   }
 });
 
+test("patched Hono blocks cross-origin hyperlink-auditing POSTs before mutation", async () => {
+  const connectorRequire = createRequire(import.meta.resolve("@oomol-lab/open-connector"));
+  const { Hono } = await import(pathToFileURL(connectorRequire.resolve("hono")).href);
+  const { csrf } = await import(pathToFileURL(connectorRequire.resolve("hono/csrf")).href);
+  let changes = 0;
+  const app = new Hono();
+  app.use("*", csrf());
+  app.post("/change", context => { changes++; return context.text("changed"); });
+  const ping = origin => app.request("http://fixture.invalid/change", {
+    method: "POST", headers: { "content-type": "text/ping", origin }, body: "PING",
+  });
+  assert.equal((await ping("http://other.invalid")).status, 403);
+  assert.equal(changes, 0);
+  assert.equal((await ping("http://fixture.invalid")).status, 200);
+  assert.equal(changes, 1);
+});
+
+test("the patched Node adapter rejects raw path backslashes without changing query semantics", async t => {
+  const output = execFileSync(process.execPath, ["-e", String.raw`
+    const assert = require("node:assert/strict");
+    const http = require("node:http");
+    const { once } = require("node:events");
+    const { getRequestListener } = require(process.argv[1]);
+    (async () => {
+      const server = http.createServer(getRequestListener(request => new Response(new URL(request.url).pathname)));
+      server.listen(0, "127.0.0.1"); await once(server, "listening");
+      const get = path => new Promise((resolve, reject) => {
+        http.get({ host: "127.0.0.1", port: server.address().port, path }, response => {
+          let body = ""; response.setEncoding("utf8");
+          response.on("data", chunk => body += chunk);
+          response.on("end", () => resolve({ status: response.statusCode, body }));
+        }).on("error", reject);
+      });
+      try {
+        for (const path of ["/admin\\secret", "/public\\..\\admin/secret"]) {
+          assert.equal((await get(path)).status, 400);
+        }
+        assert.deepEqual(await get("/public?value=a\\b"), { status: 200, body: "/public" });
+        assert.equal((await get("/public%5Cvalue")).status, 200);
+        console.log("raw backslash paths rejected; query and encoded-path controls accepted");
+      } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    })().catch(error => { console.error(error); process.exitCode = 1; });
+  `, require.resolve("@hono/node-server")], {
+    timeout: 6000, killSignal: "SIGKILL", maxBuffer: 128 * 1024, encoding: "utf8", stdio: "pipe",
+  });
+  t.diagnostic(output.trim());
+});
+
+test("XML stop nodes reject an unterminated tag in a bounded process and retain valid raw content", t => {
+  const output = execFileSync(process.execPath, ["--max-old-space-size=96", "-e", String.raw`
+    const assert = require("node:assert/strict");
+    const { XMLParser } = require(process.argv[1]);
+    const parser = new XMLParser({ stopNodes: ["stop"] });
+    assert.deepEqual(parser.parse("<stop><b>kept</b></stop>"), { stop: "<b>kept</b>" });
+    assert.throws(() => parser.parse("<stop>" + "<a ".repeat(100_000)));
+    console.log("unterminated stop-node input rejected; valid raw body preserved");
+  `, require.resolve("fast-xml-parser")], {
+    timeout: 3000, killSignal: "SIGKILL", maxBuffer: 128 * 1024, encoding: "utf8", stdio: "pipe",
+  });
+  t.diagnostic(output.trim());
+});
+
+test("the framework and connector lock entries exclude the remaining November advisories", async () => {
+  const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
+  for (const [name, minimum] of [["next", "16.4.6"], ["hono", "4.13.16"], ["@hono/node-server", "2.1.6"], ["fast-xml-parser", "5.11.3"]]) {
+    const matches = Object.entries(lock.packages).filter(([location]) => location.endsWith(`/node_modules/${name}`) || location === `node_modules/${name}`);
+    assert.ok(matches.length, `${name} must remain installed`);
+    for (const [location, entry] of matches) assert.ok(semver.gte(entry.version, minimum), `${location}: ${entry.version}`);
+  }
+});
+
 test("the connector's SOCKS address parser rejects a pathological IPv6 zone in a bounded child", () => {
   const connectorRequire = createRequire(import.meta.resolve("@oomol-lab/open-connector"));
   const imapRequire = createRequire(connectorRequire.resolve("imapflow"));
@@ -474,6 +545,7 @@ test("Next root matching preserves static, absolute, brace and stepped patterns"
     for (const directory of ["app", "app/nested", "app-01", "app-02", "app-03", "app-10", "app-11", "app-12", ".hidden"]) {
       await mkdir(path.join(root, directory), { recursive: true });
     }
+    await writeFile(path.join(root, "app-file.ts"), "export {};");
     const resolve = pattern => getRootDirs({ cwd: root, settings: { next: { rootDir: pattern } } }).sort();
     assert.deepEqual(getRootDirs({ cwd: root, settings: {} }), [root]);
     assert.deepEqual(resolve(`${root}/app`), [`${root}/app`]);
@@ -481,12 +553,35 @@ test("Next root matching preserves static, absolute, brace and stepped patterns"
     assert.deepEqual(resolve(`${root}/app-{01..03}`), ["01", "02", "03"].map(n => `${root}/app-${n}`));
     assert.deepEqual(resolve(`${root}/app-{10..12}`), ["10", "11", "12"].map(n => `${root}/app-${n}`));
     assert.deepEqual(resolve(`${root}/app-{10..12..2}`), ["10", "12"].map(n => `${root}/app-${n}`));
+    assert.deepEqual(resolve(`${root}/app*`), ["app", "app-01", "app-02", "app-03", "app-10", "app-11", "app-12"].map(name => `${root}/${name}`));
     assert.deepEqual(resolve(`${root}/{app,.hidden}`), [`${root}/.hidden`, `${root}/app`]);
     assert.deepEqual(resolve([`${root}/app`, `${root}/missing`]), [`${root}/app`]);
     assert.deepEqual(resolve(`${root}/app`.replaceAll("/", "\\")), [`${root}/app`]);
     assert.deepEqual(resolve("vendor/next-root-glob"), ["vendor/next-root-glob"]);
     assert.throws(() => nextRequire("fast-glob").globSync("app", { onlyFiles: true }), /Unsupported Next/);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("lint project consumers use the scoped glob adapter without the vulnerable picomatch chain", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
+  assert.equal(manifest.devDependencies.tinyglobby, "file:vendor/lint-project-glob");
+  assert.equal(manifest.overrides.tinyglobby, "$tinyglobby");
+  for (const [location, entry] of Object.entries(lock.packages)) {
+    assert.ok(!location.endsWith("/picomatch"), `${location} restores GHSA-fc5q-39xc-vjpf`);
+    assert.ok(!location.endsWith("/fdir"), `${location} restores the old crawler`);
+    assert.ok(!entry.dependencies?.picomatch, `${location} still requires picomatch`);
+  }
+  const adapter = require.resolve("tinyglobby");
+  for (const name of ["@typescript-eslint/typescript-estree", "eslint-import-resolver-typescript"]) {
+    const consumer = name === "eslint-import-resolver-typescript"
+      ? createRequire(require.resolve("eslint-config-next"))
+      : require;
+    const entry = consumer.resolve(name);
+    assert.equal(createRequire(entry).resolve("tinyglobby"), adapter, `${name} must resolve the reviewed adapter`);
+  }
+  assert.equal(lock.packages["vendor/lint-project-glob"].name, "@edupi/lint-project-glob");
+  assert.equal(lock.packages["vendor/lint-project-glob"].dependencies.glob, "14.0.6");
 });
 
 test("Pi 1.0.2 is pinned consistently and resolves secure packages without installation patches", async () => {

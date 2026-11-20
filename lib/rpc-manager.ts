@@ -39,6 +39,8 @@ import { createEduPiComputerUseTool } from "./edupi-computer-tool";
 import { createEduPiWorkflowTool } from "./edupi-workflow-tool";
 import { createEduPiQrTool, createEduPiShowImageTool } from "./edupi-visual-tool";
 import { createZhixueLoginGuard } from "./edupi-login-guard";
+import { createEduPiMutationGuard } from "./edupi-mutation-guard";
+import { createEduPiZhixueTools } from "./edupi-zhixue-bridge";
 import { createWorkflowReadTools } from "./edupi-workflow-read-tools";
 import { matchingCapturedUserEntry, workflowChildPromptAllowed } from "./edupi-workflow-admission";
 import { parseComputerUseBridgeResult, type ComputerUseBridgeResult, type ComputerUseInput } from "./edupi-computer-use";
@@ -53,8 +55,10 @@ import { persistInitialPiSessionFile } from "./pi-session-first-file";
 import { eduPiDirectPromptGate } from "./edupi-direct-prompt-gate";
 import { createEduPiMemoryRecallAccess, type EduPiMemoryRecallAccess } from "./edupi-memory-recall-access";
 import { inspectEduPiPromptSession } from "./edupi-prompt-reconciliation";
+import { CORE_RECALL_ANSWER_MESSAGE } from "./edupi-recall-answer";
 
 const CORE_CAPTURED_PROMPT = Symbol("edupi-core-captured-prompt");
+const CORE_CAPTURED_RECALL_PROMPT = Symbol("edupi-core-captured-recall-prompt");
 const WORKFLOW_CHILD_PROMPT = Symbol("edupi-workflow-child-prompt");
 
 // The legacy HTTP adapter is intentionally not a production authority. Until
@@ -313,6 +317,11 @@ export class AgentSessionWrapper {
     return this.send({ ...command, [CORE_CAPTURED_PROMPT]: true });
   }
 
+  /** Explicit R04 intent is host-owned and never accepted as a JSON command flag. */
+  sendCoreCapturedRecallPrompt(command: { type: "prompt"; message: string; clientRequestId: string }): Promise<unknown> {
+    return this.send({ ...command, [CORE_CAPTURED_PROMPT]: true, [CORE_CAPTURED_RECALL_PROMPT]: true });
+  }
+
   /** Internal child dispatch: the parent must still be running its Core-captured turn. */
   sendWorkflowChildPrompt(command: { type: "prompt"; message: string }): Promise<unknown> {
     if (!this.privateWorkflowChild || !this.workflowParent) throw new Error("workflow_child_unavailable");
@@ -405,14 +414,21 @@ export class AgentSessionWrapper {
       const clientRequestId = this.promptRequestId;
       const scopedEvent = clientRequestId ? { ...event, clientRequestId } : event;
       if (event.type === "message_end" && event.message && typeof event.message === "object") {
-        const message = event.message;
+        const message = event.message as Record<string, unknown>;
         const manager = this.inner.sessionManager;
         // Pi 1 publishes message_end just before appending the corresponding
         // entry. Defer only this delivery one microtask to attach the actual
         // persisted identity; the next SDK event still follows it in order.
         queueMicrotask(() => {
           const leaf = manager.getLeafEntry();
-          const entryId = leaf?.type === "message" && leaf.message === message ? leaf.id : undefined;
+          const persisted = leaf?.type === "message" && leaf.message === message ? leaf
+            : manager.getBranch().findLast(entry => entry.type === "message" && entry.message === message
+              || entry.type === "custom_message" && message.role === "custom"
+                && message.customType === CORE_RECALL_ANSWER_MESSAGE && entry.customType === CORE_RECALL_ANSWER_MESSAGE
+                && (entry.details as { receiptId?: unknown } | undefined)?.receiptId
+                  === (message.details as { receiptId?: unknown } | undefined)?.receiptId
+                && entry.content === message.content && isDeepStrictEqual(entry.details, message.details));
+          const entryId = persisted?.id;
           const messageId = entryId ?? this.messageEventIds.get(message) ?? `live:${randomUUID()}`;
           this.messageEventIds.set(message, messageId);
           this.emit({ ...scopedEvent, messageId, ...(entryId ? { entryId } : {}) });
@@ -538,10 +554,19 @@ export class AgentSessionWrapper {
 
   private runPromptWithMemoryRecall<T>(command: Record<string, unknown>, callback: () => Promise<T>): Promise<T> {
     if (!this.memoryRecall) return callback();
+    const inner = this.inner;
     return this.memoryRecall.run(this.inner.sessionManager, {
       message: command.message as string,
       ...(typeof command.clientRequestId === "string" ? { clientRequestId: command.clientRequestId } : {}),
-    }, Reflect.get(command, CORE_CAPTURED_PROMPT) === true && !command.streamingBehavior, callback);
+    }, Reflect.get(command, CORE_CAPTURED_PROMPT) === true && !command.streamingBehavior, callback,
+    typeof inner.sendCustomMessage === "function" ? async details => {
+      if (this.inner !== inner || inner.sessionManager.getSessionId() !== details.sessionId) throw new Error("recall_session_changed");
+      await inner.sendCustomMessage!({
+        customType: CORE_RECALL_ANSWER_MESSAGE,
+        content: details.answer?.text ?? "当前资料尚不能核验这个问题。",
+        display: true, details,
+      }, { triggerTurn: false });
+    } : undefined, Reflect.get(command, CORE_CAPTURED_RECALL_PROMPT) === true);
   }
 
   private emit(event: AgentEvent): void {
@@ -1653,7 +1678,7 @@ export async function startRpcSession(
     const toolMode: RpcToolMode = { disabled: toolNames?.length === 0,
       ...(strictToolNames ? { exactToolNames: toolNames ?? [] } : {}) };
     const memoryRecall = createEduPiMemoryRecallAccess(EDUPI_ROOT, { disabled: () => toolMode.disabled });
-    const hostExtensions = [memoryRecall.extension, createZhixueLoginGuard()];
+    const hostExtensions = [memoryRecall.extension, createZhixueLoginGuard(), createEduPiMutationGuard()];
     const host: { wrapper?: AgentSessionWrapper } = {};
     const createRuntime: CreateAgentSessionRuntimeFactory = async ({ cwd: sessionCwd, sessionManager, sessionStartEvent }) => {
       const explicitTools = sessionStartEvent?.reason === "fork" ? host.wrapper?.inner.getActiveToolNames() : toolNames;
@@ -1750,7 +1775,17 @@ export async function startRpcSession(
           }), createEduPiComputerUseTool({
             projectRoot: EDUPI_ROOT,
             requestAction: (action, signal) => requestEduPiComputerAction(action, signal),
-          })] : []),
+          }), ...createEduPiZhixueTools(
+            EDUPI_ROOT,
+            process.env.EDUPI_ZHIXUE_WORKER_PATH
+              || (existsSync(resolve(EDUPI_CODE_ROOT, "desktop", "zhixue-login-worker.mjs"))
+                ? resolve(EDUPI_CODE_ROOT, "desktop", "zhixue-login-worker.mjs")
+                : resolve(process.cwd(), "desktop", "zhixue-login-worker.mjs")),
+            process.env.EDUPI_ZHIXUE_SYNC_WORKER_PATH
+              || (existsSync(resolve(EDUPI_CODE_ROOT, "desktop", "zhixue-sync-worker.mjs"))
+                ? resolve(EDUPI_CODE_ROOT, "desktop", "zhixue-sync-worker.mjs")
+                : resolve(process.cwd(), "desktop", "zhixue-sync-worker.mjs")),
+          )] : []),
           ...(sessionIsEduPiCoreRoot && !sessionIsEduPiDataRoot ? [...createEduPiCalendarTools({ projectRoot: EDUPI_CODE_ROOT }), createStudentEventTool(EDUPI_CODE_ROOT), createMemoryWriteTool(EDUPI_CODE_ROOT), createMemoryForgetTool(EDUPI_CODE_ROOT), createEduPiTaskTool({ projectRoot: EDUPI_CODE_ROOT }), createEduPiClassroomTool({ projectRoot: EDUPI_CODE_ROOT }), createEduPiUpdateTaskTool({ projectRoot: EDUPI_CODE_ROOT })] : []),
         ],
       });

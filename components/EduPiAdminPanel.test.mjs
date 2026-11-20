@@ -33,7 +33,8 @@ test("one settings workspace provides grouped navigation and preserves real capa
   assert.match(admin, /connectionsMounted/);
   assert.match(admin, /modelSettingsDirty && !window.confirm/);
   assert.match(admin, /if \(settingsBusy\) return/);
-  for (const endpoint of ["/api/edupi/workspace", "/api/edupi/status", "/api/models"]) assert.ok(admin.includes(endpoint));
+  assert.match(admin, /readEduPiWorkspace\(\{ signal: controller\.signal \}\)/);
+  for (const endpoint of ["/api/edupi/status", "/api/models"]) assert.ok(admin.includes(endpoint));
   for (const operation of ["reconnectEduPiCore", "readEducationEntityDeletions", "restoreEducationEntity", "kernelRunTitle", "kernelRunDetail", "kernelRunAction", "formatCoreSchedulerStatus"]) assert.ok(admin.includes(operation));
   assert.match(admin, /window.dispatchEvent\(new Event\("edupi-education-refresh"\)\)/);
   assert.match(admin, /<summary>技术信息<\/summary>/);

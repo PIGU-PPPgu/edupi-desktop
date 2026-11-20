@@ -38,9 +38,11 @@ async function mount() {
   window.HTMLElement.prototype.attachEvent = () => {};
   window.HTMLElement.prototype.detachEvent = () => {};
   const runtime = { ...modules, react: React, "react/jsx-runtime": { jsx, jsxs, Fragment }, "./EduPiForeground": { useEduPiForegroundPolicy: () => ({ today: "2026-10-28", graceDays: 3, pinnedTaskIds: [] }), EduPiPagedRows: () => null },
+    "@/lib/edupi-teacher-template-client": { readTeacherTemplateSettings: async () => ({ version: 1, enabled: false }),
+      stopTeacherTemplateAutomation: assert.fail },
     "./AffectSegmentedControl": { SegmentedControl: () => null } };
   const exports = {};
-  vm.runInNewContext(code, { exports, Error, window, document, crypto: globalThis.crypto, requestAnimationFrame: callback => { callback(); return 1; }, cancelAnimationFrame() {}, require(name) { assert.ok(runtime[name], name); return runtime[name]; } });
+  vm.runInNewContext(code, { exports, Error, window, document, AbortController, crypto: globalThis.crypto, requestAnimationFrame: callback => { callback(); return 1; }, cancelAnimationFrame() {}, require(name) { assert.ok(runtime[name], name); return runtime[name]; } });
   const requests = [], root = createRoot(document.getElementById("root"));
   let outcome = { preparationState: "error", preparationError: "activation_pending" };
   const props = { data: { ...buildEducationContract({ workspace: "/synthetic/preparation" }), timetable: [{ slot_id: "slot-one", day_of_week: 3, period: 1, subject: "数学", class_id: "canonical-class", class_name: "合成班" }], teacherMaterials: [{ material_id: "material-one", title: "合成材料", subject: "数学", class_id: "canonical-class", available: true }] }, query: "", selectedObjectId: null,

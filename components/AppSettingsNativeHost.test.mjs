@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { getEventListeners } from "node:events";
 import test from "node:test";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
@@ -37,12 +38,13 @@ async function fixture(options = {}) {
   let requestPermission = () => Promise.resolve(status);
   let mutateControl = enabled => Promise.resolve({ ...status, enabled });
   const calls = { reads: 0, requests: [], enable: [], restart: 0, preferences: [], announcements: [], connectionDetails: 0, upgrades: 0,
-    inspectCore: 0, repairCore: 0, reconnectCore: 0, coreStatusReads: 0 };
+    inspectCore: 0, repairCore: 0, reconnectCore: 0, coreStatusReads: 0, workspaceSignals: [] };
   const preferences = new Map([["computerUseEnabled", options.enabledPreference ?? false]]);
   const savedGlobals = Object.fromEntries(["window", "document", "HTMLElement", "IS_REACT_ACT_ENVIRONMENT"].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
   const window = new EventTarget();
   Object.assign(window, { setInterval, clearInterval, confirm: () => false });
-  Object.assign(globalThis, { window, document: { visibilityState: "visible", activeElement: null, contains: () => false },
+  const document = Object.assign(new EventTarget(), { visibilityState: "visible", activeElement: null, contains: () => false });
+  Object.assign(globalThis, { window, document,
     HTMLElement: class {}, IS_REACT_ACT_ENVIRONMENT: true });
   const originalConsoleError = console.error;
   const errors = [];
@@ -80,6 +82,10 @@ async function fixture(options = {}) {
       setPrefBool: (key, value) => { calls.preferences.push([key, value]); preferences.set(key, value); } },
     "@/hooks/useTheme": { useTheme: () => ({ theme: "light", setTheme() {} }) },
     "@/lib/edupi-foreground-settings": { readForegroundSettings: () => ({ graceDays: 3 }), writeForegroundSettings: async () => {} },
+    "@/lib/edupi-education-client": { readEduPiWorkspace: async ({ signal }) => {
+      calls.workspaceSignals.push(signal);
+      return null;
+    } },
     "@/lib/edupi-runtime-client": {
       inspectEduPiCoreRepair: async () => { calls.inspectCore++; return options.repairStatus ?? "unavailable"; },
       repairEduPiCore: async () => {
@@ -147,7 +153,11 @@ async function fixture(options = {}) {
   const button = label => renderer.root.findAllByType("button").find(node => text(node) === label || node.props["aria-label"] === label);
   const click = async label => { const node = button(label); assert.ok(node, `button ${label}`); assert.notEqual(node.props.disabled, true); await act(async () => node.props.onClick({ currentTarget: node.instance })); };
   return {
-    calls, errors, preferences, window, mount, unmount, click, button,
+    calls, errors, preferences, window, document, mount, unmount, click, button,
+    async setVisibility(value) {
+      document.visibilityState = value;
+      await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+    },
     setStatus(next) { status = next; }, setStatusReader(next) { getStatus = next; }, setRequest(next) { requestPermission = next; },
     setCardHidden(next) { cardHidden = next; },
     setControlMutation(next) { mutateControl = next; },
@@ -156,6 +166,7 @@ async function fixture(options = {}) {
     content: () => text(renderer.root),
     async cleanup() {
       await unmount();
+      assert.equal(getEventListeners(document, "visibilitychange").length, 0);
       console.error = originalConsoleError;
       for (const [key, descriptor] of Object.entries(savedGlobals)) {
         if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
@@ -164,6 +175,29 @@ async function fixture(options = {}) {
     },
   };
 }
+
+test("admin visibility changes cancel projection reads and unmount removes the subscription", async () => {
+  const ui = await fixture({ coreStatus: "ready" });
+  try {
+    await ui.mount("admin");
+    const reads = ui.calls.coreStatusReads, signal = ui.calls.workspaceSignals.at(-1);
+    assert.equal(signal.aborted, false);
+    assert.ok(getEventListeners(ui.document, "visibilitychange").length > 0);
+    await ui.setVisibility("hidden");
+    assert.equal(signal.aborted, true);
+    assert.equal(ui.calls.coreStatusReads, reads);
+    await ui.setVisibility("visible");
+    assert.equal(ui.calls.coreStatusReads, reads + 1);
+    const resumed = ui.calls.workspaceSignals.at(-1);
+    assert.notEqual(resumed, signal);
+    assert.equal(resumed.aborted, false);
+    await ui.unmount();
+    assert.equal(resumed.aborted, true);
+    assert.equal(getEventListeners(ui.document, "visibilitychange").length, 0);
+    await ui.setVisibility("hidden"); await ui.setVisibility("visible");
+    assert.equal(ui.calls.coreStatusReads, reads + 1);
+  } finally { await ui.cleanup(); }
+});
 
 test("desktop stale Core offers repair and reports success after clicking", async () => {
   const ui = await fixture({ coreStatus: "failed", repairStatus: "stale" });

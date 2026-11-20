@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { boundedPrivateData, privateDataKeys, validatePrivateModelConfiguration, MAX_PRIVATE_MODEL_CONFIG_BYTES,
+import { boundedPrivateData, privateDataKeys, validatePrivateModelConfiguration, validatePrivateRecallModelConfiguration, MAX_PRIVATE_MODEL_CONFIG_BYTES,
   G1_MODEL_MAX_CALLS, G1_MODEL_TIMEOUT_MS, RECALL_MODEL_MAX_CALLS, RECALL_MODEL_TIMEOUT_MS } from "./core-runtime-model-config.mjs";
 
 const STARTUP_ERROR_CODES = Object.freeze({
@@ -70,12 +70,17 @@ export function createParentModelExecutor(channel = process, { configurationTime
         if (signal.aborted) cancel();
       });
     },
-    run(request, { signal }) {
+    run(request, { signal, retainUntilSettled = false }) {
       if (closed || !channel.connected || signal.aborted || pending.size >= 2 || !boundedPrivateData(request, 100_000)) return Promise.reject(error());
       const id = randomUUID();
       return new Promise((resolve, reject) => {
         const cancel = () => { if (channel.connected) channel.send({ type: "model-cancel", id }, () => {}); };
-        const timer = setTimeout(() => { cancel(); pending.delete(id); cleanup(); reject(error()); }, Math.max(1, Math.min(305000, Date.parse(request.deadline_at) - Date.now() + 5000)));
+        const timer = setTimeout(() => {
+          cancel();
+          // A response deadline cannot release an unfinished answer assessor.
+          // The broker reports actual completion, or disconnects after draining.
+          if (!retainUntilSettled) { pending.delete(id); cleanup(); reject(error()); }
+        }, Math.max(1, Math.min(305000, Date.parse(request.deadline_at) - Date.now() + 5000)));
         const cleanup = () => { clearTimeout(timer); signal.removeEventListener("abort", cancel); };
         pending.set(id, { kind: "run", resolve, reject, cleanup });
         signal.addEventListener("abort", cancel, { once: true });
@@ -128,6 +133,36 @@ function snapshotG3Bindings(bindings) {
   return Object.freeze(snapshot);
 }
 
+function snapshotTeacherTemplates(value) {
+  const fail = () => { throw new Error("Invalid runtime bootstrap."); };
+  const ownData = (input, required) => {
+    if (!input || typeof input !== "object" || Array.isArray(input)
+      || ![Object.prototype, null].includes(Object.getPrototypeOf(input))) fail();
+    const keys = Reflect.ownKeys(input);
+    if (keys.length !== required.length || keys.some(key => !required.includes(key)
+      || !Object.getOwnPropertyDescriptor(input, key)?.enumerable
+      || !Object.hasOwn(Object.getOwnPropertyDescriptor(input, key), "value"))) fail();
+  };
+  ownData(value, ["ownerId", "grantId", "scope", "templateIds"]);
+  ownData(value.scope, ["class_id", "subject"]);
+  const id = input => typeof input === "string" && /^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$/u.test(input);
+  if (!id(value.ownerId) || !id(value.grantId) || !id(value.scope.class_id)
+    || typeof value.scope.subject !== "string" || !value.scope.subject || value.scope.subject.length > 128
+    || value.scope.subject.trim() !== value.scope.subject || /[\u0000-\u001f\u007f]/u.test(value.scope.subject)) fail();
+  const ids = value.templateIds, selected = [];
+  if (!Array.isArray(ids) || Object.getPrototypeOf(ids) !== Array.prototype || ids.length < 1 || ids.length > 40
+    || Reflect.ownKeys(ids).length !== ids.length + 1) fail();
+  for (let index = 0; index < ids.length; index++) {
+    const slot = Object.getOwnPropertyDescriptor(ids, index);
+    if (!slot?.enumerable || !Object.hasOwn(slot, "value") || typeof slot.value !== "string"
+      || !/^[A-Za-z0-9][A-Za-z0-9._:@/+~=-]{0,159}$/u.test(slot.value) || selected.includes(slot.value)) fail();
+    selected.push(slot.value);
+  }
+  return Object.freeze({ ownerId: value.ownerId, grantId: value.grantId,
+    scope: Object.freeze({ class_id: value.scope.class_id, subject: value.scope.subject }),
+    templateIds: Object.freeze(selected) });
+}
+
 async function usesPlanningV2(coreRoot, dataRoot) {
   const planning = await import(pathToFileURL(path.join(coreRoot, "scripts/ambient_planning_store.mjs")).href);
   if (typeof planning.readAmbientPlanningMigrationFile !== "function") return false;
@@ -142,17 +177,21 @@ async function usesPlanningV2(coreRoot, dataRoot) {
 
 export async function startCoreRuntimeHost({ coreRoot, options }, channel = process) {
   const hasModelScope = options?.g1Scope !== undefined || options?.g2Scope !== undefined;
-  if (!options || Object.keys(options).some(key => !["dataRoot", "token", "supervisorSessionId", "coreCommit", "componentManifestHash", "port", "ambientPlanning", "ownerControlToken", "ownerMessageRegistration", "g1Scope", "g2Scope", "g3Bindings", "sourceAdministrativeGoals", "sourceParentQuestionGoals", "sourceReflectionGoals"].includes(key))
+  if (!options || Object.keys(options).some(key => !["dataRoot", "token", "supervisorSessionId", "coreCommit", "componentManifestHash", "port", "ambientPlanning", "ownerControlToken", "ownerMessageRegistration", "g1Scope", "g2Scope", "g3Bindings", "teacherTemplates", "sourceAdministrativeGoals", "sourceParentQuestionGoals", "sourceReflectionGoals", "recallAnswers"].includes(key))
     || (options.ambientPlanning !== undefined && typeof options.ambientPlanning !== "boolean")
     || (options.ownerMessageRegistration !== undefined && (options.ownerMessageRegistration !== true
       || options.ambientPlanning !== true || typeof options.ownerControlToken !== "string"))
     || (options.sourceAdministrativeGoals !== undefined && options.sourceAdministrativeGoals !== true)
     || (options.sourceParentQuestionGoals !== undefined && (options.sourceParentQuestionGoals !== true || options.ownerMessageRegistration !== true))
     || (options.sourceReflectionGoals !== undefined && (options.sourceReflectionGoals !== true || options.ownerMessageRegistration !== true))
-    || (hasModelScope || options.g3Bindings !== undefined) && (options.ambientPlanning !== true || typeof options.ownerControlToken !== "string")
+    || (options.recallAnswers !== undefined && (options.recallAnswers !== true || options.ambientPlanning !== true
+      || options.ownerMessageRegistration !== true || typeof options.ownerControlToken !== "string" || !options.ownerControlToken.trim()))
+    || (hasModelScope || options.g3Bindings !== undefined || options.teacherTemplates !== undefined)
+      && (options.ambientPlanning !== true || typeof options.ownerControlToken !== "string" || !options.ownerControlToken.trim())
     || options.g1Scope !== undefined && !validScope(options.g1Scope)
     || options.g2Scope !== undefined && (!validScope(options.g2Scope) || options.g2Scope.subject !== "数学")) throw new Error("Invalid runtime bootstrap.");
   const g3Bindings = options.g3Bindings === undefined ? null : snapshotG3Bindings(options.g3Bindings);
+  const teacherTemplates = options.teacherTemplates === undefined ? null : snapshotTeacherTemplates(options.teacherTemplates);
   if (options.sourceAdministrativeGoals === true && !g3Bindings?.some(binding => binding.domain === "calendar_administration"
     && binding.scope.subject === "administration" && binding.ownerId)) throw new Error("Invalid runtime bootstrap.");
   if (options.sourceParentQuestionGoals === true && g3Bindings?.filter(binding => binding.domain === "parent_communication" && binding.ownerId).length !== 1) throw new Error("Invalid runtime bootstrap.");
@@ -164,17 +203,34 @@ export async function startCoreRuntimeHost({ coreRoot, options }, channel = proc
       || options.sourceReflectionGoals === true) && await usesPlanningV2(coreRoot, options.dataRoot);
     const { g1Scope, g2Scope, ...daemonOptions } = options;
     delete daemonOptions.g3Bindings;
+    delete daemonOptions.teacherTemplates;
     delete daemonOptions.sourceAdministrativeGoals;
     delete daemonOptions.sourceParentQuestionGoals;
     delete daemonOptions.sourceReflectionGoals;
+    delete daemonOptions.recallAnswers;
     let recallSupport;
+    let recallAnswers;
+    if (options.recallAnswers === true) {
+      try {
+        validatePrivateRecallModelConfiguration(await hostExecutor.configuration({ signal: new AbortController().signal }),
+          { allowLoopback: process.env.EDUPI_DESKTOP_ISOLATED_CANARY === "1" });
+        const { createRecallFacetAnswerAssessor } = await import(pathToFileURL(path.join(coreRoot, "scripts/recall_facet_answer_assessor.mjs")).href);
+        recallAnswers = createRecallFacetAnswerAssessor({ maxCalls: RECALL_MODEL_MAX_CALLS, timeoutMs: RECALL_MODEL_TIMEOUT_MS,
+          runModel: ({ prompt, signal }) => hostExecutor.run({ model_kind: "recall_answer", prompt,
+            deadline_at: new Date(Date.now() + RECALL_MODEL_TIMEOUT_MS).toISOString() }, { signal, retainUntilSettled: true }) });
+      } catch {
+        // An incomplete private Live profile cannot advertise answer support.
+      }
+      if (!channel.connected) throw Object.assign(new Error("Model host unavailable."), { code: "model_unavailable" });
+    }
     if (options.ownerMessageRegistration) {
       const { createRecallSupportAssessor } = await import(pathToFileURL(path.join(coreRoot, "scripts/recall_source_support.mjs")).href);
       // Core filters the exact captured turn before invoking this assessor.
       // No configuration or model is read until a query actually needs it.
       recallSupport = createRecallSupportAssessor({ maxCalls: RECALL_MODEL_MAX_CALLS, timeoutMs: RECALL_MODEL_TIMEOUT_MS,
         runModel: ({ prompt, signal }) => hostExecutor.run({ model_kind: "memory_recall", prompt,
-          deadline_at: new Date(Date.now() + RECALL_MODEL_TIMEOUT_MS).toISOString() }, { signal }) });
+            deadline_at: new Date(Date.now() + RECALL_MODEL_TIMEOUT_MS).toISOString() },
+        { signal, retainUntilSettled: Boolean(recallAnswers) }) });
     }
     let g1Runner;
     if (g1Scope) {
@@ -207,20 +263,28 @@ export async function startCoreRuntimeHost({ coreRoot, options }, channel = proc
     }
     const daemon = await createCoreRuntimeDaemon({ ...daemonOptions,
       ...(recallSupport ? { recallSupport } : {}),
+      ...(recallAnswers ? { recallAnswers } : {}),
       ...(g1Runner || g2Live || g3Bindings ? { ownerMessageContinuation: true } : {}),
-      ...(g3Bindings ? { g3Live: Object.freeze({ allowedBindings: g3Bindings,
-        ...(!sourcePlanningV2 ? { durableCalendarAdministration: g3Bindings.some(binding => binding.domain === "calendar_administration") } : {}),
+      ...(g3Bindings || teacherTemplates ? { g3Live: Object.freeze({ allowedBindings: g3Bindings ?? Object.freeze([]),
+        ...(g3Bindings && !sourcePlanningV2 ? { durableCalendarAdministration: g3Bindings.some(binding => binding.domain === "calendar_administration") } : {}),
         ...(options.sourceAdministrativeGoals === true ? { sourceAdministrativeGoals: true } : {}),
         ...(options.sourceParentQuestionGoals === true ? { sourceParentQuestionGoals: true } : {}),
-        ...(options.sourceReflectionGoals === true ? { sourceReflectionGoals: true } : {}) }) } : {}),
+        ...(options.sourceReflectionGoals === true ? { sourceReflectionGoals: true } : {}),
+        ...(teacherTemplates ? { teacherTemplates } : {}) }) } : {}),
       ...(g2Live ? { g2Live } : {}),
       ...(g1Runner ? { g1Live: { modelRunner: g1Runner, leaseMs: 300000,
         scope: { classId: g1Scope.classId, subject: g1Scope.subject }, grantId: g1Scope.grantId } } : {}) });
-    return { daemon, async close() { hostExecutor?.close(); try { await daemon.close(); } finally {
-      await g1Runner?.waitForIdle();
-      await g2Live?.modelAdapter.waitForIdle();
-      await recallSupport?.waitForIdle();
-    } } };
+    let closing;
+    return { daemon, recallAnswersActive: Boolean(recallAnswers), close() {
+      return closing ||= (async () => {
+        if (!recallAnswers) hostExecutor?.close();
+        try { await daemon.close(); } finally {
+          try { await Promise.all([g1Runner?.waitForIdle(), g2Live?.modelAdapter.waitForIdle(),
+            recallSupport?.waitForIdle(), recallAnswers?.waitForIdle()]); }
+          finally { hostExecutor?.close(); }
+        }
+      })();
+    } };
   } catch (error) { hostExecutor?.close(); throw error; }
 }
 
@@ -242,10 +306,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     if (value?.type !== "runtime-start" || started || closing) return;
     started = true; clearTimeout(startupTimer);
     startup = startCoreRuntimeHost(value);
-    void startup.then(({ daemon }) => {
+    void startup.then(({ daemon, recallAnswersActive }) => {
       if (!process.connected || closing) return;
       const { endpoint, host, port, protocol, protocolVersion, contractVersion, schemaHash, supervisorSessionId, instanceNonce, coreCommit, componentManifestHash, dataRootFingerprint, fencingGeneration } = daemon;
-      process.send({ type: "runtime-ready", endpoint, host, port, protocolVersion, protocol, contractVersion, schemaHash, supervisorSessionId, instanceNonce, coreCommit, componentManifestHash, dataRootFingerprint, fencingGeneration });
+      process.send({ type: "runtime-ready", endpoint, host, port, protocolVersion, protocol, contractVersion, schemaHash, supervisorSessionId, instanceNonce, coreCommit, componentManifestHash, dataRootFingerprint, fencingGeneration, recallAnswersActive });
     }, error => { if (process.connected) process.send({ type: "runtime-error", code: classifyCoreRuntimeStartupError(error) }, () => process.exit(1)); else process.exit(1); });
   });
 }

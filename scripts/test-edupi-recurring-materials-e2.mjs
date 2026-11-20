@@ -7,9 +7,10 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { syncBuiltinESMExports } from "node:module";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createJiti } from "jiti";
 import { setRecurringTestClockOffset, restoreRecurringTestClock } from "./test-edupi-recurring-clock.mjs";
+import { blockSeedModelRequests, migrateV3, migrateMain4 } from "./create-native-l4-acceptance-fixture.mjs";
 
 assert.ok(process.env.EDUPI_CORE_ROOT && path.isAbsolute(process.env.EDUPI_CORE_ROOT), "EDUPI_CORE_ROOT is required");
 const coreRoot = fs.realpathSync(process.env.EDUPI_CORE_ROOT);
@@ -33,6 +34,7 @@ const environment = {
   EDUPI_HOME: path.join(dataRoot, ".edupi"), EDUPI_MEMORY_DIR: path.join(dataRoot, ".edupi/memory"),
   EDUPI_OUTPUT_DIR: outputDir, EDUPI_LOCK_DIR: path.join(dataRoot, ".edupi/locks"),
   EDUPI_CORE_VALIDATION_MODE: "external", EDUPI_DESKTOP_ISOLATED_CANARY: "1",
+  EDUPI_AMBIENT_PLANNING: "0", EDUPI_CORE_RECALL_ANSWERS: "0", EDUPI_SAFE_MODE: "0",
   PI_DESKTOP_STATE_DIR: stateDir, PI_CODING_AGENT_DIR: agentDir, PI_DESKTOP_API_TOKEN: token, PI_OFFLINE: "1",
 };
 const previous = new Map(Object.keys(environment).map(key => [key, process.env[key]]));
@@ -42,6 +44,7 @@ const originalFork = childProcess.fork;
 const forked = [];
 const runtimeDiagnostics = [];
 const projectionFailures = [];
+const modelRequests = { modelRequests: 0, modelConfigurationRequests: 0 };
 childProcess.fork = (modulePath, args, options) => {
   assert.equal(path.basename(modulePath), "core-runtime-host.mjs");
   assert.equal(options.env.EDUPI_PROJECT_ROOT, dataRoot);
@@ -51,6 +54,7 @@ childProcess.fork = (modulePath, args, options) => {
     execArgv: [...options.execArgv, "--import", fileURLToPath(new URL("./test-edupi-recurring-clock.mjs", import.meta.url))],
     env: { ...options.env, TMPDIR: os.tmpdir(), EDUPI_RECURRING_TEST_CLOCK_OFFSET: String(offset) },
   });
+  blockSeedModelRequests(child, modelRequests);
   forked.push(child);
   child.stderr.on("data", bytes => runtimeDiagnostics.push(bytes.toString().slice(0, 2000)));
   child.on("message", message => {
@@ -122,18 +126,23 @@ try {
     defaultProvider: "local", defaultModel: "local", extensions: [], packages: [], skills: [],
   }), { mode: 0o600 });
   const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
-  const { readRuntimeModelConfiguration } = await jiti.import("../lib/edupi-runtime-model-config.ts");
-  await readRuntimeModelConfiguration({ projectRoot: dataRoot, agentDir, signal: new AbortController().signal });
+  const core = name => import(pathToFileURL(path.join(coreRoot, "scripts", name)).href);
+  const { prepareCoreRuntimeRoot } = await core("core_runtime_root.mjs");
+  const { acquireCoreRuntimeWriterAdmission } = await core("core_runtime_writer_admission.mjs");
+  const facts = await core("education_fact_store.mjs");
+  const admission = await acquireCoreRuntimeWriterAdmission({ root: prepareCoreRuntimeRoot(dataRoot), kind: "legacy_recurring_explicit_scope_fixture" });
+  try {
+    const classroom = facts.registerEducationEntity({ memoryDir: environment.EDUPI_MEMORY_DIR, now: new Date().toISOString(),
+      entity: { entity_kind: "class", namespace: "synthetic-recurring-template", external_id: "class",
+        canonical_name: "合成周期班", aliases: [] } }).entity;
+    taskInput.templateScope = { classId: classroom.entity_id, subject: "数学" };
+  } finally { await admission.release(); }
   supervisor = await jiti.import("../lib/edupi-runtime-supervisor.ts");
   const taskRoute = await jiti.import("../app/api/edupi/tasks/route.ts");
   const educationRoute = await jiti.import("../app/api/edupi/education/route.ts");
   const fileRoute = await jiti.import("../app/api/files/[...path]/route.ts");
   const proactivityRoute = await jiti.import("../app/api/edupi/proactivity/route.ts");
-  const feedbackRoute = await jiti.import("../app/api/edupi/teacher-feedback/route.ts");
   const { NextRequest } = await import("next/server.js");
-  const { issueEducationIntake } = await jiti.import("../lib/edupi-education-intake.ts");
-  const { stageMaterialInputs } = await jiti.import("../lib/edupi-material-staging.ts");
-  const { intakeRecognizedMaterial } = await jiti.import("../lib/edupi-material-intake-flow.ts");
   const { resolveEduPiBridgeRoots } = await jiti.import("../lib/edupi-core-snapshot.ts");
   const readEducation = async () => json(await educationRoute.GET());
   const executionRows = () => {
@@ -203,6 +212,23 @@ try {
     }
     throw new Error(`period ${date} unavailable: ${JSON.stringify({ tasks: data?.tasks, workCases: data?.workCases })}`);
   };
+  const legacyAttempt = await taskRoute.POST(apiRequest("/api/edupi/tasks", taskInput));
+  const legacyBody = await legacyAttempt.json();
+  assert.equal(legacyAttempt.status, 409, JSON.stringify(legacyBody));
+  assert.equal(legacyBody.code, "teacher_template_runtime_upgrade_required");
+  assert.equal(fs.existsSync(path.join(stateDir, "edupi-teacher-templates.json")), false,
+    "an unsupported root must not persist future template activation");
+  const roots = resolveEduPiBridgeRoots();
+  const initialHost = await supervisor.ensureEduPiRuntime(roots);
+  const reference = (await initialHost.call("health", null)).result.data_root_fingerprint;
+  assert.equal((await initialHost.callOwnerControl("owner_control", {
+    command_id: "synthetic-recurring-bootstrap", root_ref: reference, expected_owner_id: null, action: "bootstrap",
+  })).ok, true);
+  await supervisor.closeAllEduPiRuntimes();
+  const { loadOwnerControlToken } = await jiti.import("../lib/edupi-owner-control-token.ts");
+  const control = loadOwnerControlToken(stateDir, dataRoot);
+  await migrateV3(core, dataRoot, control);
+  await migrateMain4(core, dataRoot, control);
   const created = await json(await taskRoute.POST(apiRequest("/api/edupi/tasks", taskInput)));
   assert.equal(created.taskId, templateId);
   assert.equal(created.receipt.status, "accepted");
@@ -215,31 +241,12 @@ try {
   assert.equal(initialReplay.replayed, true);
   assert.equal(initialReplay.taskId, templateId);
   assert.equal(modelCalls, 0);
-  assert.equal(executionRows().length, 0, "default-off G1 must not execute the accepted template");
-  assert.equal((await readEducation()).workCases.filter(item => item.currentState === "draft_ready").length, 0);
-
-  const slot = { slot_id: "synthetic-recurring-scope", day_of_week: new Date(`${firstDate}T12:00:00+08:00`).getUTCDay() || 7,
-    period: 1, subject: "数学", class_name: "合成周期班", class_id: "synthetic-recurring-class",
-    kind: "class", notes: null, start_time: "09:00", time_zone: "Asia/Shanghai" };
-  const timetable = await issueEducationIntake({ command_type: "import_timetable",
-    source: { source_id: "synthetic-recurring-scope", source_kind: "teacher_message",
-      source_hash: hash(JSON.stringify(slot)), evidence_ids: ["synthetic-recurring-scope"] }, slots: [slot] });
-  assert.equal(timetable.receipt.status, "accepted");
-  const descriptor = stageMaterialInputs([{ name: "synthetic-recurring-scope.pdf", mimeType: "application/pdf",
-    bytes: new Uint8Array(Buffer.from("%PDF-1.4\nSynthetic recurring scope only\n")) }])[0];
-  const material = await intakeRecognizedMaterial({ descriptor, title: "合成周期授权材料", materialKind: "lesson_note",
-    subject: "数学", classId: slot.class_id, recognize: false });
-  assert.equal(material.receipts[0].status, "accepted");
-  assert.equal((await json(await feedbackRoute.POST(apiRequest("/api/edupi/teacher-feedback", { action: "bootstrap" })))).ok, true);
+  assert.deepEqual(modelRequests, { modelRequests: 0, modelConfigurationRequests: 0 });
   const before = await json(await proactivityRoute.GET(apiRequest("/api/edupi/proactivity")));
   assert.equal(before.activation.enabled, false);
-  const enabled = await json(await proactivityRoute.POST(apiRequest("/api/edupi/proactivity", {
-    enabled: true, classId: slot.class_id, subject: "数学", expectedUpdatedAt: before.activation.updatedAt,
-  })));
-  assert.equal(enabled.activation.enabled, true);
-  assert.equal(enabled.externalSend, false);
   const health = await (await supervisor.ensureEduPiRuntime(resolveEduPiBridgeRoots())).call("health", null);
-  assert.equal(health.result.capabilities.g1_processor, "active");
+  assert.equal(health.result.capabilities.g1_processor, "activation_pending");
+  assert.equal(health.result.capabilities.g3_processor, "active");
   const first = await waitPeriod(firstDate);
   const firstReplay = await json(await taskRoute.POST(apiRequest("/api/edupi/tasks", taskInput)));
   assert.equal(firstReplay.replayed, true);
@@ -263,13 +270,16 @@ try {
   assert.equal(finalReplay.data.tasks.filter(item => item.id === templateId).length, 1);
   assert.deepEqual(await waitPeriod(secondDate), second);
   assert.equal(modelCalls, 0);
+  assert.deepEqual(modelRequests, { modelRequests: 0, modelConfigurationRequests: 0 });
+  assert.equal((await json(await proactivityRoute.GET(apiRequest("/api/edupi/proactivity")))).activation.enabled, false);
   console.log(JSON.stringify({ status: projectionFailures.length ? "failed" : "passed", synthetic: true, desktopCommit: childProcess.execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
     coreCommit, templateId, acceptedReceipt: created.receipt.receipt_id, templateDefinitionHash: created.receipt.template_definition_hash,
     first, second, coreProcessLaunches: forked.length,
-    networkObservations: { parentFetchRequests, configuredModelEndpointCalls: modelCalls, coreChildNetwork: "unmonitored" },
-    responseFlags: { taskReceiptExternalSend: created.receipt.external_send, proactivityExternalSend: enabled.externalSend },
+    networkObservations: { parentFetchRequests, configuredModelEndpointCalls: modelCalls, ...modelRequests, coreChildNetwork: "unmonitored" },
+    responseFlags: { taskReceiptExternalSend: created.receipt.external_send, proactivityExternalSend: before.externalSend },
+    g1Enabled: false, storage: "Main4; explicit synthetic V3/Main4 migration after legacy rejection",
     clock: "test-only Date offset in parent and real Core child; second period +7 days",
-    passed: ["Desktop task POST accepted and exact replay", "G1 timer first and second periods",
+    passed: ["Desktop task POST accepted and exact replay", "independent teacher-template timer first and second periods with G1 off",
       ...(projectionFailures.length ? [] : ["file route bytes and education path/size_bytes match disk and durable SHA256"]),
       "real Core child exit/relaunch preserves execution/attempt/artifacts", "first-period files retained"],
     projectionFailures,

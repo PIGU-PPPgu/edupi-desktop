@@ -5,12 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { readPackagedServerIdentity, type DesktopConnectionProbeRecord, type DesktopProbeOutcome } from "@/lib/desktop-connection-probe";
 import { relaunchAppNative } from "@/lib/desktop-native";
 
-export type DesktopConnectionState = "online" | "offline" | "checking";
+export type DesktopConnectionState = "online" | "offline" | "checking" | "busy";
 
 const PING_INTERVAL_MS = 8_000;
 const OFFLINE_THRESHOLD = 2;
 const MAX_PROBE_RECORDS = 8;
-type ProbeSettlement = { reachable: boolean; sequence: number };
+type ProbeSettlement = { reachable: boolean; sequence: number; definitiveFailure: boolean };
 
 /** Surface a reconnect banner when the shell-verified local server is unreachable. */
 export function useDesktopConnection(enabled = true): {
@@ -24,6 +24,8 @@ export function useDesktopConnection(enabled = true): {
   const [failureIncident, setFailureIncident] = useState<DesktopConnectionProbeRecord[]>([]);
   const diagnosticsRef = useRef<DesktopConnectionProbeRecord[]>([]);
   const failuresRef = useRef(0);
+  const definitiveFailureRef = useRef(false);
+  const incidentCapturedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const probeControllerRef = useRef<AbortController | null>(null);
   const instanceIdRef = useRef<string | null>(null);
@@ -77,20 +79,23 @@ export function useDesktopConnection(enabled = true): {
       instance = instanceIdRef.current ? "same" : "pinned";
       instanceIdRef.current = instanceId;
       failuresRef.current = 0;
+      definitiveFailureRef.current = false;
+      incidentCapturedRef.current = false;
       record();
       setState("online");
-      return { reachable: true, sequence };
+      return { reachable: true, sequence, definitiveFailure: false };
     } catch {
       if (stoppedRef.current || probeControllerRef.current !== controller) return null;
+      const definitiveFailure = !timedOut || ["http", "missing_header", "identity_mismatch"].includes(outcome);
       if (timedOut) outcome = "timeout";
       failuresRef.current += 1;
-      record(failuresRef.current === OFFLINE_THRESHOLD);
-      if (failuresRef.current >= OFFLINE_THRESHOLD) {
-        setState("offline");
-      } else {
-        setState((prev) => (prev === "offline" ? "offline" : "checking"));
-      }
-      return { reachable: false, sequence };
+      definitiveFailureRef.current ||= definitiveFailure;
+      const offline = failuresRef.current >= OFFLINE_THRESHOLD && definitiveFailureRef.current;
+      const captureIncident = offline && !incidentCapturedRef.current;
+      record(captureIncident);
+      if (captureIncident) incidentCapturedRef.current = true;
+      setState(prev => offline ? "offline" : failuresRef.current >= OFFLINE_THRESHOLD || prev === "busy" ? "busy" : "checking");
+      return { reachable: false, sequence, definitiveFailure };
     } finally {
       window.clearTimeout(timeout);
       if (probeControllerRef.current === controller) {
@@ -116,13 +121,18 @@ export function useDesktopConnection(enabled = true): {
     if (!enabled || stoppedRef.current) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
-    setState("checking");
-    failuresRef.current = 0;
+    setState(prev => prev === "busy" ? "busy" : "checking");
     void probe().then(async (result) => {
       if (stoppedRef.current || result === null || result.sequence !== probeSequenceRef.current) return;
       if (result.reachable) {
         // Recreate every HTTP/SSE connection, not only the health probe.
         window.location.reload();
+        return;
+      }
+      if (!result.definitiveFailure) {
+        // A deadline is not proof that the process died. Keep checking without
+        // restarting it; only verified success resets the failure chain.
+        schedule();
         return;
       }
 
@@ -154,6 +164,8 @@ export function useDesktopConnection(enabled = true): {
       probeSequenceRef.current += 1;
       instanceIdRef.current = null;
       failuresRef.current = 0;
+      definitiveFailureRef.current = false;
+      incidentCapturedRef.current = false;
       diagnosticsRef.current = [];
       setDiagnostics([]);
       setFailureIncident([]);
