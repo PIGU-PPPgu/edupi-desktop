@@ -9,7 +9,7 @@ on:
         default: draft
         options: [draft, publish]
       draft_run_id:
-        description: Successful all-platform draft run ID; required for publish
+        description: Successful draft run ID for the selected platform; required for publish
         type: string
       accepted_assets_sha256:
         description: Asset-set fingerprint recorded during signed draft installation
@@ -602,7 +602,7 @@ jobs:
   manifest:
     needs: [release, build, draft-proof]
     # Publishing is an explicit second dispatch after the signed draft has
-    # been installed and accepted. Verify that a prior all-platform build
+    # been installed and accepted. Verify that the selected platform build
     # succeeded and its exact asset IDs/digests have not changed.
     if: ${{ always() && inputs.phase == 'publish' && needs.release.result == 'success' && needs.build.result == 'skipped' && needs['draft-proof'].result == 'skipped' }}
     runs-on: ubuntu-latest
@@ -618,6 +618,7 @@ jobs:
           RELEASE_VERSION: ${{ needs.release.outputs.version }}
           DRAFT_RUN_ID: ${{ inputs.draft_run_id }}
           ACCEPTED_ASSETS_SHA256: ${{ inputs.accepted_assets_sha256 }}
+          RELEASE_PLATFORM: ${{ inputs.platform }}
         run: |
           set -euo pipefail
           [[ "$DRAFT_RUN_ID" =~ ^[1-9][0-9]*$ ]]
@@ -628,7 +629,8 @@ jobs:
             --version "$RELEASE_VERSION" --release-id "$RELEASE_ID" \
             --target-sha "$GITHUB_SHA" --draft-run-id "$DRAFT_RUN_ID" \
             --accepted-fingerprint "$ACCEPTED_ASSETS_SHA256" \
-            --run-json accepted-run.json --jobs-json accepted-jobs.json --assets-json accepted-assets.json
+            --run-json accepted-run.json --jobs-json accepted-jobs.json --assets-json accepted-assets.json \
+            --platform "$RELEASE_PLATFORM"
 
       - name: Upload component manifest to the release
         env:
@@ -638,6 +640,7 @@ jobs:
           RELEASE_ID: ${{ needs.release.outputs.release_id }}
           RELEASE_TAG: ${{ needs.release.outputs.tag }}
           RELEASE_VERSION: ${{ needs.release.outputs.version }}
+          RELEASE_PLATFORM: ${{ inputs.platform }}
         run: |
           set -euo pipefail
           mkdir -p release-assets
@@ -656,9 +659,11 @@ jobs:
           }
 
           download_signature 'EduPi_aarch64.app.tar.gz.sig'
-          download_signature "EduPi_${RELEASE_VERSION}_amd64.AppImage.sig"
-          download_signature "EduPi_${RELEASE_VERSION}_amd64.deb.sig"
-          download_signature "EduPi_${RELEASE_VERSION}_x64-setup.exe.sig"
+          if [ "$RELEASE_PLATFORM" = "all" ]; then
+            download_signature "EduPi_${RELEASE_VERSION}_amd64.AppImage.sig"
+            download_signature "EduPi_${RELEASE_VERSION}_amd64.deb.sig"
+            download_signature "EduPi_${RELEASE_VERSION}_x64-setup.exe.sig"
+          fi
 
           node scripts/updater-manifest.mjs \
             --version "$RELEASE_VERSION" \
@@ -666,6 +671,7 @@ jobs:
             --assets-dir release-assets \
             --assets-json release-assets.json \
             --notes-file scripts/release-notes.md \
+            --platform "$RELEASE_PLATFORM" \
             --output latest.json
           node --input-type=module <<'NODE'
           import fs from "node:fs";
@@ -699,11 +705,11 @@ jobs:
           import { requiredReleaseAssetNames } from "./scripts/updater-manifest.mjs";
           const assets = JSON.parse(fs.readFileSync("final-assets.json", "utf8"));
           const accepted = JSON.parse(fs.readFileSync("accepted-assets.json", "utf8"));
-          const expected = [...requiredReleaseAssetNames(process.env.RELEASE_VERSION), "component-versions.json", "latest.json"].sort();
+          const expected = [...requiredReleaseAssetNames(process.env.RELEASE_VERSION, process.env.RELEASE_PLATFORM), "component-versions.json", "latest.json"].sort();
           const names = assets.map((asset) => asset.name).sort();
           if (JSON.stringify(names) !== JSON.stringify(expected)) throw new Error(`Release assets differ: ${names.join(", ")}`);
           const originalByName = new Map(accepted.map((asset) => [asset.name, asset]));
-          for (const name of requiredReleaseAssetNames(process.env.RELEASE_VERSION)) {
+          for (const name of requiredReleaseAssetNames(process.env.RELEASE_VERSION, process.env.RELEASE_PLATFORM)) {
             const original = originalByName.get(name);
             const current = assets.find((asset) => asset.name === name);
             if (!original || !current || original.id !== current.id || original.size !== current.size

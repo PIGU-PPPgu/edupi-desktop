@@ -25,6 +25,12 @@ const bundles = [
   },
 ];
 
+function selectedBundles(platform) {
+  if (platform === "macos") return bundles.slice(0, 1);
+  if (platform === "all") return bundles;
+  throw new Error(`Unsupported release platform: ${platform}`);
+}
+
 function assertVersion(version) {
   if (typeof version !== "string" || !/^[0-9A-Za-z.+-]{1,64}$/.test(version)) {
     throw new Error("Updater version is invalid");
@@ -45,15 +51,16 @@ function signatureText(value, filename) {
   return signature;
 }
 
-export function requiredReleaseAssetNames(version) {
+export function requiredReleaseAssetNames(version, platform = "all") {
   assertVersion(version);
+  const selected = selectedBundles(platform);
   return [
     `EduPi_${version}_aarch64.dmg`,
-    ...bundles.flatMap((bundle) => [bundle.asset(version), bundle.signature(version)]),
+    ...selected.flatMap((bundle) => [bundle.asset(version), bundle.signature(version)]),
   ];
 }
 
-export function validateReleaseAssets(version, assets) {
+export function validateReleaseAssets(version, assets, platform = "all") {
   if (!Array.isArray(assets)) throw new Error("Release asset index is invalid");
   const byName = new Map();
   const ids = new Set();
@@ -74,7 +81,7 @@ export function validateReleaseAssets(version, assets) {
     ids.add(asset.id);
     byName.set(asset.name, asset);
   }
-  for (const name of requiredReleaseAssetNames(version)) {
+  for (const name of requiredReleaseAssetNames(version, platform)) {
     if (!byName.has(name)) throw new Error(`Release asset is missing: ${name}`);
   }
   return byName;
@@ -90,17 +97,17 @@ export function releaseAssetUrl(repository, assetId) {
   return url;
 }
 
-export function createUpdaterManifest({ version, repository, notes, pubDate, signatures, releaseAssets }) {
+export function createUpdaterManifest({ version, repository, notes, pubDate, signatures, releaseAssets, platform = "all" }) {
   assertVersion(version);
   assertRepository(repository);
-  validateReleaseAssets(version, releaseAssets);
+  validateReleaseAssets(version, releaseAssets, platform);
   if (typeof notes !== "string" || !notes.trim()) throw new Error("Release notes are empty");
   if (typeof pubDate !== "string" || !Number.isFinite(Date.parse(pubDate))) throw new Error("Publish date is invalid");
   if (!signatures || typeof signatures !== "object" || Array.isArray(signatures)) throw new Error("Updater signatures are invalid");
 
   const platforms = {};
-  const assetsByName = validateReleaseAssets(version, releaseAssets);
-  for (const bundle of bundles) {
+  const assetsByName = validateReleaseAssets(version, releaseAssets, platform);
+  for (const bundle of selectedBundles(platform)) {
     const asset = bundle.asset(version);
     const signatureFile = bundle.signature(version);
     const releaseAsset = assetsByName.get(asset);
@@ -137,8 +144,9 @@ export async function writeUpdaterManifest(argv = process.argv.slice(2)) {
   const values = parseArguments(argv);
   const version = values.version;
   const releaseAssets = JSON.parse(await readFile(values["assets-json"], "utf8"));
+  const platform = values.platform || "all";
   const signatures = {};
-  for (const bundle of bundles) {
+  for (const bundle of selectedBundles(platform)) {
     const filename = bundle.signature(version);
     signatures[filename] = await readFile(resolve(values["assets-dir"], filename), "utf8");
   }
@@ -149,6 +157,7 @@ export async function writeUpdaterManifest(argv = process.argv.slice(2)) {
     pubDate: values["pub-date"] || new Date().toISOString(),
     signatures,
     releaseAssets,
+    platform,
   });
   await writeFile(values.output, `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;

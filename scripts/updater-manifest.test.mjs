@@ -43,6 +43,23 @@ test("builds one signed updater manifest from all platform assets", () => {
   }
 });
 
+test("builds a macOS-only updater manifest from the selected assets", () => {
+  const macAssets = requiredReleaseAssetNames(version, "macos").map((name, index) => ({ name, id: index + 100, size: 128 }));
+  const macSignatures = Object.fromEntries(
+    macAssets.filter((asset) => asset.name.endsWith(".sig")).map((asset) => [asset.name, "A".repeat(404)]),
+  );
+  const manifest = createUpdaterManifest({
+    version,
+    repository: "PIGU-PPPgu/edupi-desktop",
+    notes: "Signed macOS-only release",
+    pubDate: "2026-09-15T20:16:50.063Z",
+    signatures: macSignatures,
+    releaseAssets: macAssets,
+    platform: "macos",
+  });
+  assert.deepEqual(Object.keys(manifest.platforms).sort(), ["darwin-aarch64", "darwin-aarch64-app"]);
+});
+
 test("refuses to publish when an installer is missing or duplicated", () => {
   assert.throws(
     () => validateReleaseAssets(version, releaseAssets.filter((asset) => !asset.name.endsWith("x64-setup.exe"))),

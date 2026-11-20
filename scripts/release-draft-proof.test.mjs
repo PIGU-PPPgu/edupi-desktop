@@ -32,6 +32,26 @@ test("a successful three-platform draft accepts only the installed asset identit
   assert.equal(verifyDraftReleaseProof(input), acceptedFingerprint);
 });
 
+test("a successful macOS-only draft accepts only its signed assets", () => {
+  const macAssets = requiredReleaseAssetNames(version, "macos").map((name, index) => ({
+    name, id: index + 1, size: 100 + index, digest: `sha256:${String(index).padStart(64, "0")}`,
+    created_at: createdAt, updated_at: createdAt,
+  }));
+  const macJobs = ["release", "build (aarch64-apple-darwin)"].map((name) => ({
+    name, status: "completed", conclusion: "success",
+  }));
+  const macFingerprint = draftAssetFingerprint({
+    version, releaseId, assets: macAssets, runStartedAt: run.run_started_at, platform: "macos",
+  });
+  assert.equal(verifyDraftReleaseProof({
+    ...input, assets: macAssets, jobs: macJobs, acceptedFingerprint: macFingerprint, platform: "macos",
+  }), macFingerprint);
+  assert.throws(() => verifyDraftReleaseProof({
+    ...input, assets: macAssets, jobs: [{ name: "release", status: "completed", conclusion: "success" }],
+    acceptedFingerprint: macFingerprint, platform: "macos",
+  }), /Required draft builders/);
+});
+
 test("fingerprint CLI records an active selective rerun without requiring its own job to finish", (t) => {
   const root = mkdtempSync(join(tmpdir(), "release-draft-proof-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
