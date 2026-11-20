@@ -8,8 +8,10 @@
 - 安全收紧提交：`6d54c7835ebea9b7ff9cbb2317a6a3d7638f8424`
 - 绑定 Core：`fc89b3bc899a55b0fdad61b8f37e238d950f37c6`
 - DMG 交付文件：`EduPi_0.3.119_aarch64.dmg`
-- DMG SHA-256：以本轮 signed draft 产物为准
-- DMG 大小：以本轮 signed draft 产物为准
+- DMG SHA-256：`ef454a66b6d180075f9a1fa5444a2b54481bbe7e543b703c76651a1609983d4d`
+- DMG 大小：`242473504` bytes
+- Signed draft：`v0.3.119`
+- GitHub Actions run：`44673379640`
 
 ## 已验证
 
@@ -35,10 +37,10 @@
 
 - 未使用真实智学网账号扫码，未验证真实 Chrome 回调和登录态续接。
 - 未验证学情数据抓取和班级、学科配置。
-- App 通过 Developer ID 证书签名，但本机没有 Apple notarization 凭据，`spctl` 会报告 `Unnotarized Developer ID`。
-- Tauri updater 私钥未在本地构建环境注入，正式 signed draft 由 GitHub 发布工作流负责完成。
+- 本轮 GitHub signed draft 已通过 Apple notarization、stapling、Gatekeeper 和 updater 签名校验。
+- `v0.3.119` 仍保持 Draft，因为本轮只构建和验收 macOS，Windows 明确延后。
 - 未构建 Windows。
 
-DMG 作为本轮待验收产物保留在上述路径。完成正式公证、真实账号验收或清理本轮构建时再删除该文件及对应的生成资源。
+DMG 作为本轮待验收产物保留在本地交付目录。完成真实账号验收或清理本轮构建时再删除该文件及对应的生成资源。
 
 本轮验收结束后已删除 `.next-desktop/`、`src-tauri/target/` 以及 staged server、Core、Node 和 OpenConnector 生成目录，保留最终 DMG。
