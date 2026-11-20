@@ -117,13 +117,16 @@ if (existingBrowserLock && existingBrowserLock.flowId !== flowId && alive(existi
   process.exitCode = 4;
   process.exit();
 }
-removeIfExists(browserLock);
 try {
-  const descriptor = openSync(browserLock, "wx", 0o600);
-  try {
-    writeFileSync(descriptor, `${JSON.stringify({ version: 1, flowId, pid: process.pid, startedAt: now() })}\n`);
-  } finally {
-    closeSync(descriptor);
+  if (existingBrowserLock?.flowId === flowId) {
+    writeAtomic(browserLock, { ...existingBrowserLock, pid: process.pid, updatedAt: now() });
+  } else {
+    const descriptor = openSync(browserLock, "wx", 0o600);
+    try {
+      writeFileSync(descriptor, `${JSON.stringify({ version: 1, flowId, pid: process.pid, startedAt: now() })}\n`);
+    } finally {
+      closeSync(descriptor);
+    }
   }
 } catch {
   writeAtomic(stateFile, { version: 1, flowId, status: "failed", month, error: "浏览器登录会话已被另一个任务占用。" });
