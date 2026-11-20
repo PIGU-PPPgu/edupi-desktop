@@ -288,7 +288,7 @@ const previousMonth = () => {
   }
 
   const base = "https://gece.zhixue.com/api-platform-report/";
-  const studentsByName = new Map();
+  const studentsById = new Map();
   const reportSummaries = [];
   for (const report of targetReports) {
     const classReport = classMatch(report) || {};
@@ -305,11 +305,17 @@ const previousMonth = () => {
       scoreType: 1,
       token,
     });
-    const rows = (students.list || []).map(student => {
+    const rows = (students.list || []).map((student, studentIndex) => {
       const name = typeof student.studentName === "string" ? student.studentName.trim() : "";
+      const studentId = String(
+        student.studentId
+        ?? student.id
+        ?? student.studentInfo?.studentId
+        ?? `${name || "unknown"}#${studentIndex}`,
+      );
       const scoreRate = numeric(student.scoreRate);
       if (name) {
-        const current = studentsByName.get(name) || { name, records: [] };
+        const current = studentsById.get(studentId) || { studentId, name, records: [] };
         current.records.push({
           homeworkId: report.homeworkId,
           title: report.title,
@@ -318,9 +324,10 @@ const previousMonth = () => {
           scoreRate,
           classRank: student.classRank ?? null,
         });
-        studentsByName.set(name, current);
+        studentsById.set(studentId, current);
       }
       return {
+        studentId,
         name: name || null,
         score: student.score ?? null,
         scoreRate,
@@ -340,10 +347,11 @@ const previousMonth = () => {
     });
   }
 
-  const studentsSummary = [...studentsByName.values()].map(student => {
+  const studentsSummary = [...studentsById.values()].map(student => {
     const rates = student.records.map(record => record.scoreRate).filter(value => value !== null);
     const averageScoreRate = rates.length ? rates.reduce((sum, value) => sum + value, 0) / rates.length : null;
     return {
+      studentId: student.studentId,
       name: student.name,
       averageScoreRate,
       records: student.records,
