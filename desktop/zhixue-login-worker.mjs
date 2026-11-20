@@ -12,8 +12,9 @@ const stateFile = args.get("--state");
 const sessionFile = args.get("--session");
 const qrFile = args.get("--qr");
 const profile = args.get("--profile");
+const browserLock = args.get("--browser-lock");
 
-if (![root, flowId, stateFile, sessionFile, qrFile, profile].every(value => typeof value === "string" && value.length > 0)) {
+if (![root, flowId, stateFile, sessionFile, qrFile, profile, browserLock].every(value => typeof value === "string" && value.length > 0)) {
   process.exitCode = 2;
   throw new Error("invalid zhixue login worker arguments");
 }
@@ -77,6 +78,10 @@ const stop = async code => {
   stopping = true;
   removeIfExists(qrFile);
   try { await context?.close(); } catch {}
+  try {
+    const lock = JSON.parse(readFileSync(browserLock, "utf8"));
+    if (lock.flowId === flowId) removeIfExists(browserLock);
+  } catch {}
   process.exitCode = code;
 };
 process.on("SIGTERM", () => { void stop(143); });
@@ -88,6 +93,21 @@ process.on("SIGINT", () => { void stop(130); });
   ensurePrivateDir(dirname(sessionFile));
   ensurePrivateDir(dirname(qrFile));
   ensurePrivateDir(profile);
+  const claimedBrowserLock = (() => {
+    try {
+      const lock = JSON.parse(readFileSync(browserLock, "utf8"));
+      if (lock.flowId !== flowId) return false;
+      writeAtomic(browserLock, { ...lock, pid: process.pid, updatedAt: now() });
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  if (!claimedBrowserLock) {
+    updateState({ status: "error", error: "登录浏览器会话锁不可用，请重试。" });
+    await stop(1);
+    return;
+  }
   const browser = findBrowser();
   if (!browser) {
     updateState({ status: "error", error: "未找到 Chrome 或 Chromium，请安装浏览器后重试。" });

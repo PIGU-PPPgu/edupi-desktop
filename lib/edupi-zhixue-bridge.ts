@@ -93,6 +93,7 @@ function layout(projectRoot: string) {
     syncState: resolve(root, "sync-state.json"),
     syncSnapshot: resolve(root, "sync-snapshot.json"),
     syncLock: resolve(root, "sync.lock"),
+    browserLock: resolve(root, "browser.lock"),
   };
 }
 
@@ -165,6 +166,31 @@ function syncBusy(layoutValue: ReturnType<typeof layout>): boolean {
   return false;
 }
 
+function browserBusy(layoutValue: ReturnType<typeof layout>): boolean {
+  const lock = readJson<{ pid?: number }>(layoutValue.browserLock);
+  if (!lock) return false;
+  if (alive(lock.pid)) return true;
+  try {
+    if (Date.now() - statSync(layoutValue.browserLock).mtimeMs < 30_000) return true;
+  } catch {}
+  try { unlinkSync(layoutValue.browserLock); } catch {}
+  return false;
+}
+
+function writeLoginFailure(layoutValue: ReturnType<typeof layout>, flowId: string, message: string): void {
+  const state = readJson<LoginState>(layoutValue.state);
+  if (state?.flowId === flowId && ["starting", "awaiting_scan"].includes(state.status)) {
+    atomicJson(layoutValue.state, { ...state, status: "error", error: message, updatedAt: new Date().toISOString() });
+  }
+}
+
+function writeSyncFailure(layoutValue: ReturnType<typeof layout>, flowId: string, message: string): void {
+  const state = readJson<SyncState>(layoutValue.syncState);
+  if (state?.flowId === flowId && state.status === "running") {
+    atomicJson(layoutValue.syncState, { ...state, status: "failed", error: message, updatedAt: new Date().toISOString() });
+  }
+}
+
 function validSyncConfig(value: unknown): value is SyncConfig {
   if (!value || typeof value !== "object") return false;
   const config = value as Record<string, unknown>;
@@ -221,22 +247,34 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
     execute: async () => {
       const flowId = randomUUID();
       privateDir(paths.root);
-      if (busy(paths) || !claimLock(paths.lock, { version: 1, flowId, startedAt: new Date().toISOString(), pid: 0 })) {
+      if (busy(paths) || browserBusy(paths)
+        || !claimLock(paths.lock, { version: 1, flowId, startedAt: new Date().toISOString(), pid: 0 })
+        || !claimLock(paths.browserLock, { version: 1, flowId, startedAt: new Date().toISOString(), pid: 0 })) {
+        try { releaseLockForFlow(paths.lock, flowId); } catch {}
         return textResult("智学网登录窗口已经在运行，请完成当前扫码，不要再次弹窗。", visual(paths, current(paths)), { terminate: true });
       }
       atomicJson(paths.state, { version: 1, flowId, status: "starting", startedAt: new Date().toISOString() });
       const child = spawn(process.execPath, [
         workerPath, "--root", paths.root, "--flow-id", flowId, "--state", paths.state,
         "--session", paths.session, "--qr", paths.qr, "--profile", paths.profile,
+        "--browser-lock", paths.browserLock,
       ], { cwd: paths.root, detached: true, stdio: "ignore", env: { ...process.env } });
       if (!child.pid) {
         try { unlinkSync(paths.lock); } catch {}
+        try { unlinkSync(paths.browserLock); } catch {}
         return textResult("智学网登录进程启动失败。", undefined, { isError: true, terminate: true });
       }
       let childExited = false;
+      child.once("error", () => {
+        writeLoginFailure(paths, flowId, "登录进程启动失败。");
+        releaseLockForFlow(paths.lock, flowId);
+        releaseLockForFlow(paths.browserLock, flowId);
+      });
       child.once("exit", () => {
         childExited = true;
         releaseLockForFlow(paths.lock, flowId);
+        releaseLockForFlow(paths.browserLock, flowId);
+        writeLoginFailure(paths, flowId, "登录进程异常退出，请重新扫码。");
       });
       atomicJson(paths.lock, { version: 1, flowId, startedAt: new Date().toISOString(), pid: child.pid });
       if (childExited) releaseLockForFlow(paths.lock, flowId);
@@ -306,7 +344,7 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
       if (loginState?.status !== "authenticated") {
         return textResult(statusText(loginState), visual(paths, loginState), { isError: true, terminate: true });
       }
-      if (syncBusy(paths)) {
+      if (syncBusy(paths) || browserBusy(paths)) {
         const running = readJson<SyncState>(paths.syncState);
         return textResult(running?.message || "同步任务已经在运行，请稍后查看同步状态。", { sync: running }, { terminate: true });
       }
@@ -334,6 +372,9 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
         startedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       } satisfies SyncState);
+      if (!claimLock(paths.browserLock, { version: 1, flowId: syncFlowId, pid: 0, startedAt: new Date().toISOString() })) {
+        return textResult("同步任务已经在运行，请稍后查看同步状态。", undefined, { isError: true, terminate: true });
+      }
       const child = spawn(process.execPath, [
         syncWorkerPath,
         "--root", paths.root,
@@ -345,6 +386,7 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
         "--snapshot", paths.syncSnapshot,
         "--month", params.month || new Date().toISOString().slice(0, 7),
         "--lock", paths.syncLock,
+        "--browser-lock", paths.browserLock,
       ], { cwd: paths.root, detached: true, stdio: "ignore", env: { ...process.env } });
       if (!child.pid) {
         atomicJson(paths.syncState, {
@@ -356,8 +398,20 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
           error: "同步进程启动失败。",
           updatedAt: new Date().toISOString(),
         } satisfies SyncState);
+        releaseLockForFlow(paths.syncLock, syncFlowId);
+        releaseLockForFlow(paths.browserLock, syncFlowId);
         return textResult("同步进程启动失败。", undefined, { isError: true, terminate: true });
       }
+      child.once("error", () => {
+        writeSyncFailure(paths, syncFlowId, "同步进程启动失败。");
+        releaseLockForFlow(paths.syncLock, syncFlowId);
+        releaseLockForFlow(paths.browserLock, syncFlowId);
+      });
+      child.once("exit", () => {
+        releaseLockForFlow(paths.syncLock, syncFlowId);
+        releaseLockForFlow(paths.browserLock, syncFlowId);
+        writeSyncFailure(paths, syncFlowId, "同步进程异常退出，请重试。");
+      });
       child.unref();
       return textResult(`已开始同步 ${next.className} 的学情数据。完成后查看同步状态。`, {
         flowId: syncFlowId,

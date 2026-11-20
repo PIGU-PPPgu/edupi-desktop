@@ -18,8 +18,9 @@ const configFile = args.get("--config");
 const snapshotFile = args.get("--snapshot");
 const month = args.get("--month");
 const lockFile = args.get("--lock");
+const browserLock = args.get("--browser-lock");
 
-if (![root, flowId, stateFile, sessionFile, profile, configFile, snapshotFile, month, lockFile]
+if (![root, flowId, stateFile, sessionFile, profile, configFile, snapshotFile, month, lockFile, browserLock]
   .every(value => typeof value === "string" && value.length > 0)) {
   process.exitCode = 2;
   throw new Error("invalid zhixue sync worker arguments");
@@ -109,6 +110,27 @@ try {
   process.exitCode = 4;
   process.exit();
 }
+const existingBrowserLock = readJson(browserLock);
+if (existingBrowserLock && existingBrowserLock.flowId !== flowId && alive(existingBrowserLock.pid)) {
+  writeAtomic(stateFile, { version: 1, flowId, status: "failed", month, error: "浏览器登录会话已被另一个任务占用。" });
+  removeIfExists(lockFile);
+  process.exitCode = 4;
+  process.exit();
+}
+removeIfExists(browserLock);
+try {
+  const descriptor = openSync(browserLock, "wx", 0o600);
+  try {
+    writeFileSync(descriptor, `${JSON.stringify({ version: 1, flowId, pid: process.pid, startedAt: now() })}\n`);
+  } finally {
+    closeSync(descriptor);
+  }
+} catch {
+  writeAtomic(stateFile, { version: 1, flowId, status: "failed", month, error: "浏览器登录会话已被另一个任务占用。" });
+  removeIfExists(lockFile);
+  process.exitCode = 4;
+  process.exit();
+}
 
 let context;
 let stopping = false;
@@ -117,6 +139,8 @@ const stop = async code => {
   stopping = true;
   try { await context?.close(); } catch {}
   removeIfExists(lockFile);
+  const browser = readJson(browserLock);
+  if (browser?.flowId === flowId) removeIfExists(browserLock);
   process.exitCode = code;
 };
 process.on("SIGTERM", () => { void stop(143); });
@@ -255,11 +279,16 @@ const previousMonth = () => {
     reports.push(...(pageResult.content || []));
   }
 
-  const targetReports = reports.filter(report => String(report.homeworkDeployTime || "").slice(0, 7) === month);
-  const classMatch = report => (report.classReportList || []).find(item => item.className === config.className.trim());
-  const firstClassReport = targetReports.map(classMatch).find(Boolean) || reports.map(classMatch).find(Boolean);
+  const classMatch = report => (report.classReportList || []).find(item => {
+    const nameMatches = item.className === config.className.trim();
+    const idMatches = !config.classId || String(item.classId) === String(config.classId);
+    return nameMatches && idMatches;
+  });
+  const firstClassReport = reports.map(classMatch).find(Boolean);
   const classId = config.classId || firstClassReport?.classId;
   if (!classId) throw new Error(`没有找到班级「${config.className.trim()}」，请检查班级名称或 classId。`);
+  const targetReports = reports.filter(report =>
+    String(report.homeworkDeployTime || "").slice(0, 7) === month && Boolean(classMatch(report)));
   if (!targetReports.length) {
     writeAtomic(stateFile, {
       version: 1,
@@ -292,20 +321,31 @@ const previousMonth = () => {
   const reportSummaries = [];
   for (const report of targetReports) {
     const classReport = classMatch(report) || {};
-    const students = await apiResult(page, `${base}report/teacherStudent/getStudentListV4`, {
-      homeworkId: report.homeworkId,
-      classId,
-      pageIndex: 1,
-      pageSize: 100,
-      orderBy: "scoreRate",
-      orderDirection: "DESC",
-      userInfo: "",
-      isPyj: false,
-      isThird: false,
-      scoreType: 1,
-      token,
-    });
-    const rows = (students.list || []).map((student, studentIndex) => {
+    const studentRows = [];
+    let pageIndex = 1;
+    let totalStudents = null;
+    while (pageIndex <= 100) {
+      const students = await apiResult(page, `${base}report/teacherStudent/getStudentListV4`, {
+        homeworkId: report.homeworkId,
+        classId,
+        pageIndex,
+        pageSize: 100,
+        orderBy: "scoreRate",
+        orderDirection: "DESC",
+        userInfo: "",
+        isPyj: false,
+        isThird: false,
+        scoreType: 1,
+        token,
+      });
+      const list = Array.isArray(students.list) ? students.list : [];
+      studentRows.push(...list);
+      totalStudents ??= Number(students.total ?? students.totalCount ?? students.totalNum);
+      if (list.length < 100 || (Number.isFinite(totalStudents) && studentRows.length >= totalStudents)) break;
+      pageIndex += 1;
+    }
+    if (pageIndex > 100) throw new Error(`学生列表分页超过安全上限 @ ${report.homeworkId}`);
+    const rows = studentRows.map((student, studentIndex) => {
       const name = typeof student.studentName === "string" ? student.studentName.trim() : "";
       const studentId = String(
         student.studentId
