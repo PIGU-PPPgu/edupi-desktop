@@ -18,7 +18,7 @@ on:
         description: Target platform
         type: choice
         default: macos
-        options: [all, macos, windows, linux]
+        options: [all, macos]
 
 permissions:
   contents: write

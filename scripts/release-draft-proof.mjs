@@ -96,7 +96,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const assets = json("assets-json");
   if (operation === "fingerprint") {
     const run = json("run-json");
-    process.stdout.write(`${draftAssetFingerprint({ version, releaseId, assets, runStartedAt: draftRunCreatedAt(run) })}\n`);
+    process.stdout.write(`${draftAssetFingerprint({
+      version, releaseId, assets, runStartedAt: draftRunCreatedAt(run), platform: options.get("platform") || "all",
+    })}\n`);
   } else if (operation === "verify") {
     const value = verifyDraftReleaseProof({ version, releaseId, assets,
       targetSha: options.get("target-sha"), draftRunId: Number(options.get("draft-run-id")),
