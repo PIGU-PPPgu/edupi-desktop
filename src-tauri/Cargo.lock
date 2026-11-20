@@ -3875,7 +3875,7 @@ dependencies = [
 
 [[package]]
 name = "pi-agent-desktop"
-version = "0.3.118"
+version = "0.3.119"
 dependencies = [
  "base64 0.22.1",
  "block2",
