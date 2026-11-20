@@ -276,7 +276,10 @@ const previousMonth = () => {
   const listUrl = "https://gece.zhixue.com/api-platform-report/report/list/teacher";
   const first = await apiResult(page, listUrl, reportListBody);
   const reports = [...(first.content || [])];
-  const totalPages = Math.min(Number(first.totalPages || 1), 20);
+  const totalPages = Number(first.totalPages || 1);
+  if (!Number.isSafeInteger(totalPages) || totalPages < 1 || totalPages > 100) {
+    throw new Error("作业列表分页超出安全上限，未继续同步。");
+  }
   for (let currentPage = 2; currentPage <= totalPages; currentPage += 1) {
     const pageResult = await apiResult(page, listUrl, { ...reportListBody, page: currentPage });
     reports.push(...(pageResult.content || []));

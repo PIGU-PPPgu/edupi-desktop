@@ -202,6 +202,12 @@ function validSyncConfig(value: unknown): value is SyncConfig {
     && (config.classId === undefined || typeof config.classId === "string");
 }
 
+function validMonth(value: string | undefined): value is string {
+  if (!value || !/^\d{4}-\d{2}$/.test(value)) return false;
+  const month = Number(value.slice(5));
+  return month >= 1 && month <= 12;
+}
+
 function syncText(state: SyncState | null, config: SyncConfig | null): string {
   if (!state) {
     return config
@@ -340,6 +346,9 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
     }),
     executionMode: "sequential" as const,
     execute: async (_callId, params) => {
+      if (params.month !== undefined && !validMonth(params.month)) {
+        return textResult("同步月份必须是有效的 YYYY-MM，例如 2026-11。", undefined, { isError: true, terminate: true });
+      }
       const loginState = current(paths);
       if (loginState?.status !== "authenticated") {
         return textResult(statusText(loginState), visual(paths, loginState), { isError: true, terminate: true });
