@@ -312,7 +312,10 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
     executionMode: "sequential" as const,
     execute: async () => {
       const state = current(paths);
-      return textResult(statusText(state), visual(paths, state), { terminate: true });
+      const terminalFailure = state?.status === "expired" || state?.status === "error";
+      return textResult(statusText(state), visual(paths, state), terminalFailure
+        ? { isError: true, terminate: true }
+        : {});
     },
   });
   const syncStatus = defineTool({
@@ -327,13 +330,16 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
       const config = readJson<SyncConfig>(paths.config);
       const syncState = readJson<SyncState>(paths.syncState);
       if (state?.status !== "authenticated") {
-        return textResult(statusText(state), visual(paths, state), { terminate: true });
+        const terminalFailure = state?.status === "expired" || state?.status === "error";
+        return textResult(statusText(state), visual(paths, state), terminalFailure
+          ? { isError: true, terminate: true }
+          : {});
       }
       return textResult(syncText(syncState, validSyncConfig(config) ? config : null), {
         ...visual(paths, state),
         sync: syncState,
         config: validSyncConfig(config) ? config : undefined,
-      }, syncState?.status === "failed" || syncState?.status === "needs_login" ? { isError: true, terminate: true } : { terminate: true });
+      }, syncState?.status === "failed" || syncState?.status === "needs_login" ? { isError: true, terminate: true } : {});
     },
   });
   const sync = defineTool({
