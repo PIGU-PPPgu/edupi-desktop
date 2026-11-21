@@ -9,7 +9,7 @@ export function createZhixueLoginGuard(): ExtensionFactory {
       if (!statusRead && event.toolName !== "zhixue_login" && event.toolName !== "zhixue_sync") return;
       const userEntry = [...ctx.sessionManager.getBranch()].reverse().find((entry) =>
         entry.type === "message" && entry.message.role === "user");
-      const key = `${statusRead ? "zhixue_status" : event.toolName}:${userEntry?.id ?? "no-user-entry"}`;
+      const key = `${event.toolName}:${userEntry?.id ?? "no-user-entry"}`;
       if (startedForUserEntries.has(key)) {
         return { block: true, terminate: true, reason: statusRead
           ? "本条请求已读过智学网状态。停止查询并告诉老师当前结论；需要扫码时只调用一次 zhixue_login，展示二维码后等待老师操作。"
