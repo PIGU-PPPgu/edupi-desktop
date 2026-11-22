@@ -2,11 +2,17 @@ import { NextResponse } from "next/server";
 import { studentEventRequest } from "@/lib/edupi-student-events";
 import { parseJsonWithinLimit } from "@/lib/bounded-form-data";
 import { isApiRequestAllowed, hasJsonContentType } from "@/lib/request-security";
-import { createEduPiCloudClient } from "@/lib/edupi-cloud-client";
+import { createEduPiCloudClient, EduPiCloudError } from "@/lib/edupi-cloud-client";
 import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
 import { createHash } from "node:crypto";
 
 export const dynamic="force-dynamic";
+function failure(error: unknown, fallback: number) {
+  if (error instanceof EduPiCloudError) {
+    return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+  }
+  return NextResponse.json({ error: error instanceof Error ? error.message : "操作失败" }, { status: fallback });
+}
 export async function GET(request:Request) {
   if(!isApiRequestAllowed(request))return NextResponse.json({error:"请求无效"},{status:403});
   const query=new URL(request.url).searchParams;
@@ -42,7 +48,7 @@ export async function GET(request:Request) {
     }
     return NextResponse.json(await studentEventRequest({action:"list_events",student_id:query.get("student_id")||undefined,student:query.get("student")||undefined,kind:kind||undefined,offset,query:query.get("query")||undefined,from:query.get("from")||undefined,to:query.get("to")||undefined},request.signal));
   }
-  catch(error){return NextResponse.json({error:error instanceof Error?error.message:"读取失败"},{status:503});}
+  catch(error){return failure(error,503);}
 }
 export async function POST(request:Request) {
   if (!isApiRequestAllowed(request)||!hasJsonContentType(request)) return NextResponse.json({error:"请求无效"},{status:403});
@@ -72,5 +78,5 @@ export async function POST(request:Request) {
       return NextResponse.json(result.result);
     }
     return NextResponse.json(await studentEventRequest(body,request.signal));
-  } catch(error){return NextResponse.json({error:error instanceof Error?error.message:"保存失败"},{status:400});}
+  } catch(error){return failure(error,400);}
 }
