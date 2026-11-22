@@ -74,14 +74,23 @@ GitHub 审查补丁另有 Node 行为测试证明 cloud 任务/Today 审核在�
 | 原生 Desktop 不登录的完整教师工作流 | 默认与 local 回归通过；本轮未重新安装 App 操作 |
 | 原生 WebView 登录、切换、离线恢复和冷重启 | 实际客户端 HTTPS、组件交互通过；组合安装版未验 |
 | Desktop 新事实的可见录入入口 | broker/client capture 通过；Pi chat capture 到云端尚未接入 |
-| Desktop 材料 staging→Storage→重读 | 元数据编辑/恢复通过；二进制上传未接入 |
+| Desktop 材料 staging→Storage→重读 | cloud client 的上传、intake、Storage 下载回读通过；原生暂存 UI/安装版未验 |
 | iPhone 读取桌面新任务 | mobile-dashboard 独立客户端通过；实体 iPhone 未验 |
-| iPhone 修改后 Desktop 读取 | 手机版写入入口尚未实现；未以模拟通过代替 |
-| 全量事实脊柱编辑、学生/班级/校历/课表写入 | 部分只读/服务端已有；Desktop 写入未全部接入 |
+| iPhone 修改后 Desktop 读取 | iOS 任务/学生事件写入 API 已编译；实体 iPhone 与跨客户端写入未验 |
+| 全量事实脊柱编辑、学生/班级/校历/课表写入 | 校历/课表 cloud client E2 通过，班级路由已接入；学生档案、完整事实脊柱和安装版 UI 未验 |
 | 周期任务、课前准备、任务审核、对象删除/恢复 | 保持本地功能；cloud 未支持项明确拒绝 |
 | Session/SSE/Pi prompt、Runtime 云 register/lease/event | 保持本机 Core；尚未接入 Desktop 云控制 |
 | 原生后台真实断网与恢复 | 隔离传输断网和浏览器可见性模拟已验，系统真实断网未验 |
-| macOS 新安装包、签名、公证、升级和 Release | 本轮源码工作待后续安装验收；没有沿用旧包证明新代码 |
+| macOS 新安装包、签名、公证、升级和 Release | 当前分支没有对应安装包；另一聊天的 `.123` 资产不能证明本轮代码 |
 | Windows runner/构建/打包/安装/升级 | 用户明确暂停，未启动 |
 
-不能据此宣称“全量云端同步完成”。
+## 追加闭包验证
+
+本轮追加的 `codex/edupi-cloud-closure-20261122` 验证如下：
+
+- `scripts/test-edupi-desktop-cloud-sync.mjs` 的真实公网 E2 已通过任务、事实、校历、课表、材料元数据、二进制材料上传、Storage 下载回读、离线 outbox 恢复和清理。
+- `npm test`：5,115 tests、5,058 passed、0 failed、57 conditional skipped；typecheck、修改文件 lint 通过。
+- iOS 任务创建/移动、学生事件修改/删除 API 已加入；无签名 iOS Simulator build 为 `BUILD SUCCEEDED`。
+- Desktop classroom cloud route 已加入已有 `edupi-classroom` writer 并对保存/恢复回读；真实安装版 UI 尚未操作。
+
+尚未完成的独立范围仍包括 Pi chat/session/SSE/prompt、学生名单/档案 cloud writer、通用对象删除恢复、Desktop Runtime supervisor 联动、实体 iPhone 写入、macOS 当前分支签名安装/升级/Release；Windows 按用户要求暂停。

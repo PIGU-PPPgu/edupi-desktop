@@ -23,6 +23,51 @@ export async function verifyCloudWrite(
     const receipt = cloudRecord(receiptEnvelope?.payload);
     const target = cloudRecord(receipt?.target);
     const creating = command?.command_type === "create_task";
+    const intake = command?.command_type === "import_calendar"
+      || command?.command_type === "import_timetable"
+      || command?.command_type === "intake_material";
+    if (intake) {
+      if (!command || !receipt || !receiptEnvelope
+        || receiptEnvelope.schema_hash !== envelope?.schema_hash
+        || receiptEnvelope.contract_version !== envelope?.contract_version
+        || receiptEnvelope.request_id !== requestId
+        || receiptEnvelope.external_send !== false
+        || receipt.command_id !== envelope?.message_id
+        || receipt.request_id !== requestId
+        || receipt.status !== "accepted"
+        || receipt.external_send !== false
+        || !Array.isArray(receipt.rejected_ids)
+        || receipt.rejected_ids.length !== 0) throw new CloudReadbackError();
+      const source = cloudRecord(command.source);
+      const expectedTargetKind = command.command_type === "intake_material" ? "material_intake"
+        : command.command_type === "import_calendar" ? "calendar_import" : "timetable_import";
+      if (target?.target_kind !== expectedTargetKind
+        || command.command_type !== "intake_material" && target.target_id !== source?.source_id
+        || command.command_type === "intake_material" && target.target_id !== cloudRecord(command.material)?.material_id) {
+        throw new CloudReadbackError();
+      }
+      const snapshot = await read("snapshot");
+      const payload = cloudRecord(snapshot.payload);
+      if (payload?.workspace_id !== workspaceId) throw new CloudReadbackError();
+      if (command.command_type === "import_calendar" || command.command_type === "import_timetable") {
+        const field = command.command_type === "import_calendar" ? "calendar" : "timetable";
+        const expectedItems = command.command_type === "import_calendar" ? command.events : command.slots;
+        const actualItems = Array.isArray(payload[field]) ? payload[field].map(cloudRecord).filter(Boolean) : [];
+        if (!Array.isArray(expectedItems) || expectedItems.some((item) => {
+          const raw = cloudRecord(item);
+          const id = raw?.event_id || raw?.slot_id;
+          return !actualItems.some(candidate => (candidate?.id || candidate?.event_id || candidate?.slot_id) === id);
+        })) throw new CloudReadbackError();
+      } else {
+        const material = cloudRecord(command.material);
+        const actual = Array.isArray(payload.materials)
+          ? payload.materials.map(cloudRecord).find(item => item?.material_id === material?.material_id)
+          : null;
+        if (!actual || actual.source_hash !== material?.source_hash
+          || actual.title !== material?.title || !actual.storage_object_key) throw new CloudReadbackError();
+      }
+      return;
+    }
     const expectedTask = creating ? cloudRecord(command?.task) : null;
     const id = creating ? expectedTask?.task_id : command?.task_id;
     if (!command || !["create_task", "move_task_stage"].includes(String(command.command_type))

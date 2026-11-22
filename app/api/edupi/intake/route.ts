@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
 import { EducationIntakeError, issueEducationIntake } from "@/lib/edupi-education-intake";
 import { listStagedMaterials, settleStagedMaterial } from "@/lib/edupi-material-staging";
-import { intakeRecognizedMaterial } from "@/lib/edupi-material-intake-flow";
+import { buildMaterialIntakeCommand, intakeRecognizedMaterial } from "@/lib/edupi-material-intake-flow";
 import { MaterialRecognitionAdmissionError, withMaterialRecognitionLock } from "@/lib/edupi-material-recognition-lock";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 import { parseTimetableIntakeCommand } from "@/lib/edupi-timetable-intake";
 import { parseCalendarIntakeCommand } from "@/lib/edupi-calendar-intake-request";
+import { createEduPiCloudClient, EduPiCloudError } from "@/lib/edupi-cloud-client";
+import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
+import { readVerifiedStagedMaterial } from "@/lib/edupi-material-recognition";
+import { contentHash } from "@/lib/edupi-education-intake";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,12 +66,74 @@ function statusFor(error: EducationIntakeError): number {
   return 503;
 }
 
+function contentTypeForExtension(extension: string): string {
+  return ({
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".ics": "text/calendar",
+  } as Record<string, string>)[extension] || "application/octet-stream";
+}
+
+function cloudResponse(result: { queued: boolean; result?: Record<string, unknown>; entry?: unknown }) {
+  if (result.queued) return { receipt: null, queued: true, status: "pending_sync", queueEntry: result.entry };
+  const response = result.result || {};
+  const receipt = response.receipt && typeof response.receipt === "object" && !Array.isArray(response.receipt)
+    ? (response.receipt as Record<string, unknown>).payload || response.receipt
+    : null;
+  return { receipt, queued: false, response };
+}
+
 export async function POST(request: Request) {
   if (!isApiRequestAllowed(request)) return NextResponse.json({ error: "Education intake request rejected" }, { status: 403 });
   if (!hasJsonContentType(request)) return NextResponse.json({ error: "Use application/json" }, { status: 415 });
   try {
     const body = record(await parseJsonWithinLimit(request, MAX_BODY_BYTES));
     if (!body || typeof body.kind !== "string") throw new EducationIntakeError("invalid_envelope", "教育导入请求无效。");
+    const selected = await captureEducationWriteScope(request);
+    if (selected.mode === "cloud") {
+      const client = createEduPiCloudClient();
+      if (body.kind === "material") {
+        const material = materialInput(body);
+        const command = buildMaterialIntakeCommand(material);
+        if (command.command_type !== "intake_material") throw new EducationIntakeError("invalid_envelope", "材料接入请求无效。");
+        const verified = await readVerifiedStagedMaterial(material.descriptor);
+        const upload = await client.uploadMaterial({
+          materialId: command.material.material_id,
+          fileName: material.descriptor.original_name,
+          contentType: contentTypeForExtension(verified.extension),
+          sizeBytes: verified.bytes.byteLength,
+          sha256: command.material.source_hash,
+          bytes: verified.bytes,
+        }, selected.scope);
+        const suffix = command.material.source_hash.slice("sha256:".length, "sha256:".length + 32);
+        const result = await client.intakeCommand(command, {
+          requestId: `cloud-intake-material-${suffix}`,
+          idempotencyKey: `sha256:${command.material.source_hash.slice("sha256:".length)}`,
+          storageObjectKey: upload.objectKey,
+        }, selected.scope);
+        settleStagedMaterial(material.descriptor.staging_id, "accepted_receipt");
+        return NextResponse.json({
+          ...cloudResponse(result),
+          storageObjectKey: upload.objectKey,
+          materialReceivedOnly: true,
+          staged: listStagedMaterials(),
+        });
+      }
+      const command = body.kind === "calendar" ? parseCalendarIntakeCommand(body)
+        : body.kind === "timetable" ? parseTimetableIntakeCommand(body)
+          : (() => { throw new EducationIntakeError("invalid_envelope", "不支持的教育导入类型。"); })();
+      const hash = contentHash(command);
+      const result = await client.intakeCommand(command, {
+        requestId: `cloud-intake-${command.command_type}-${hash.slice("sha256:".length, "sha256:".length + 32)}`,
+        idempotencyKey: hash,
+      }, selected.scope);
+      return NextResponse.json(cloudResponse(result));
+    }
     if (body.kind === "material") {
       const material = materialInput(body);
       const result = await withMaterialRecognitionLock(material.descriptor.staging_id, () => intakeRecognizedMaterial(material));
@@ -87,6 +153,10 @@ export async function POST(request: Request) {
     if (error instanceof RequestBodyTooLargeError) return NextResponse.json({ error: "Education intake request is too large" }, { status: 413 });
     if (error instanceof EducationIntakeError) return NextResponse.json({ error: error.message, code: error.code }, { status: statusFor(error) });
     if (error instanceof MaterialRecognitionAdmissionError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
+    if (error instanceof EduPiCloudError) {
+      const status = error.status === 409 ? 409 : error.status >= 400 && error.status < 500 ? error.status : 503;
+      return NextResponse.json({ error: error.message, code: error.code }, { status });
+    }
     return NextResponse.json({ error: "教育导入暂不可用", code: "unavailable" }, { status: 503 });
   }
 }

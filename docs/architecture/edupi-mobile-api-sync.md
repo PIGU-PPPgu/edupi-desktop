@@ -6,7 +6,7 @@
 
 桌面端默认仍是 local。可选 cloud 模式提供独立的 Supabase 登录、明确选择工作区、版本化 dashboard 读取、普通任务创建/阶段移动、事实生命周期与材料元数据编辑/恢复。任务、事实和材料元数据先写入私有 outbox，再向已有 broker 发送；任务意图可在尚未读取云端快照时离线保存。常驻同步组件在联网恢复、页面重新可见及每 15 秒重试，设置面板关闭后仍运行。
 
-桌面端的完整接口集合还没有全部迁移到手机版或云端：材料文件上传、学生名单/档案写入、校历/课表导入、任务审核、对象删除/恢复、聊天会话、SSE、Pi prompt、Core Runtime 控制和教育记忆仍分别处于未接入、只读或仅本地状态。不能把 dashboard 读取或 broker E2 当作完整桌面云同步。
+桌面端的完整接口集合还没有全部迁移到手机版或云端：学生名单/档案写入、任务审核、对象删除/恢复、聊天会话、SSE、Pi prompt、Core Runtime supervisor 联动和教育记忆仍分别处于未接入、只读或仅本地状态。材料二进制上传、校历/课表导入和班级方案路由已有 Desktop cloud 接线及远程/客户端验证，但不能把这些局部闭环当作完整桌面云同步。
 
 桌面端云模式配置：
 
@@ -22,7 +22,7 @@ local 模式继续使用 `EDUPI_CORE_ROOT`、`EDUPI_DATA_ROOT` 和本地 Pi sess
 
 队列按 Supabase 地址、账号及工作区绑定，登录、工作区或模式改变后丢弃迟到响应，保留原归属的待同步记录。每个请求保留首次 envelope；已核验回执不按条数淘汰，存储达到 4 MiB 或待同步达到 256 条时拒绝新增并保留旧记录。冲突保留原内容，不自动覆盖云端；单一对象冲突不会挡住后面的独立记录。
 
-`snapshot_id/state_hash` 是当前 broker 支持的等价同步游标，重启后保留；broker 仍返回完整投影，没有新增 delta API，也不声称已实现增量分页下载。只有回执和对象重读均核对后才清除待同步项。材料二进制文件仍未接入 Desktop 同步，云端材料不会伪装成本地可打开路径。
+`snapshot_id/state_hash` 是当前 broker 支持的等价同步游标，重启后保留；broker 仍返回完整投影，没有新增 delta API，也不声称已实现增量分页下载。只有回执和对象重读均核对后才清除待同步项。材料上传 envelope 会剥离本地 staging path，并把 Storage object key 绑定到材料对象；云端材料不会伪装成本地可打开路径。
 
 ## 已建立的同步边界
 
@@ -49,8 +49,8 @@ iOS 收到新的 `contract_id`、`contract_version` 或 `schema_hash` 时会拒�
 | 任务创建与移动 | Core command | `edupi-core-broker` command | 未接入 |
 | 事实 capture/审核/删除/恢复 | Core education facts | `edupi-core-broker` education-facts | 未接入 |
 | 事实脊柱 | Core fact spine | `edupi-core-broker` education-facts | 未接入 |
-| 材料元信息与上传 | Core material APIs | `edupi-core-broker`、`edupi-materials` | 未接入 |
-| 班级方案写入 | `/api/edupi/classroom` | `edupi-classroom` | 只读名单 |
+| 材料元信息与上传 | Core material APIs | `edupi-core-broker`、`edupi-materials` | Desktop cloud 已接入；手机版未接入 |
+| 班级方案写入 | `/api/edupi/classroom` | `edupi-classroom` | Desktop cloud 路由已接入；手机版只读名单 |
 | 学生事件修改 | `/api/edupi/student-events` | `edupi-student-events` | 未接入 |
 | Pi session、聊天、SSE | `/api/agent/*`、`/api/sessions/*` | 尚未迁移 | 未接入 |
 | Core Runtime lease | Desktop Runtime | `edupi-core-runtime` | 未接入 |
@@ -59,7 +59,7 @@ iOS 收到新的 `contract_id`、`contract_version` 或 `schema_hash` 时会拒�
 
 上表的 `/api/edupi/account` 是本地宿主账号服务，与 Supabase Auth 概念分离。云端普通任务通过独立 `edupi-cloud-writer-v1` 适配器发送：已部署 cloud writer 固定 Core `3ce22b1e…`、bridge schema `2749b120…`；本地 Core 仍固定 `fc89b3bc…`、schema `4d406ea0…`。不修改历史 migration 或本地 pin 来掩盖两者差异。
 
-cloud 中未接入的本地写入会被拒绝，不能把云端对象 ID 交给本地 writer。周期任务、课前准备、冲突事实替换、材料文件上传、学生档案、校历/课表写入、班级方案写入与 Runtime 云控制仍不在 Desktop 的本轮同步范围内。学生事件有独立在线转发，尚未接入持久 outbox。
+cloud 中未接入的本地写入会被拒绝，不能把云端对象 ID 交给本地 writer。周期任务、课前准备、冲突事实替换、学生档案、通用对象删除恢复与 Runtime supervisor 联动仍不在 Desktop 的本轮同步范围内。校历/课表、材料二进制和班级方案已有 Desktop cloud 接线，但学生事件仍是独立在线转发，尚未接入持久 outbox。
 
 ## 以后桌面端更新接口的流程
 

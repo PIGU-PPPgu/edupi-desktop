@@ -133,6 +133,74 @@ try {
   assert.equal((await peer.snapshot()).payload.materials.find(row => row.material_id === materialId).class_id, "synthetic-class");
   pass("desktop-material-metadata-edit-history-restore-and-peer-readback");
 
+  const calendarCommand = {
+    command_type: "import_calendar",
+    source: { source_id: `desktop-calendar-${suffix}`, source_kind: "teacher_message",
+      source_hash: `sha256:${"d".repeat(64)}`, evidence_ids: [`calendar-evidence-${suffix}`] },
+    events: [{ event_id: `calendar-event-${suffix}`, date: "2026-11-24", end_date: null,
+      name: "云端阶段测验", type: "exam", confidence: "teacher_confirmed", notes: null }],
+  };
+  const calendarResult = await client.intakeCommand(calendarCommand, {
+    requestId: `calendar-intake-${suffix}`, idempotencyKey: `calendar-intake-${suffix}`,
+  });
+  assert.equal(calendarResult.queued, false);
+  const timetableCommand = {
+    command_type: "import_timetable",
+    source: { source_id: `desktop-timetable-${suffix}`, source_kind: "teacher_message",
+      source_hash: `sha256:${"e".repeat(64)}`, evidence_ids: [`timetable-evidence-${suffix}`] },
+    slots: [{ slot_id: `slot-${suffix}`, day_of_week: 1, period: 1, subject: "数学",
+      class_name: "synthetic-class", kind: "class", notes: null }],
+  };
+  const timetableResult = await client.intakeCommand(timetableCommand, {
+    requestId: `timetable-intake-${suffix}`, idempotencyKey: `timetable-intake-${suffix}`,
+  });
+  assert.equal(timetableResult.queued, false);
+  const scheduleSnapshot = await peer.snapshot();
+  assert.ok(scheduleSnapshot.payload.calendar.some(row => row.event_id === `calendar-event-${suffix}`));
+  assert.ok(scheduleSnapshot.payload.timetable.some(row => row.slot_id === `slot-${suffix}`));
+  pass("desktop-cloud-calendar-and-timetable-import-readback");
+
+  const uploadedMaterialId = `material-upload-${suffix}`;
+  const uploadedBytes = Buffer.from("desktop cloud binary material\n", "utf8");
+  const uploadedHash = `sha256:${createHash("sha256").update(uploadedBytes).digest("hex")}`;
+  const uploaded = await client.uploadMaterial({
+    materialId: uploadedMaterialId,
+    fileName: "desktop-upload.txt",
+    contentType: "text/plain",
+    sizeBytes: uploadedBytes.byteLength,
+    sha256: uploadedHash,
+    bytes: uploadedBytes,
+  });
+  storageKeys.push(uploaded.objectKey);
+  const uploadedCommand = {
+    command_type: "intake_material",
+    source: { source_id: `desktop-upload-source-${suffix}`, source_kind: "teacher_file",
+      source_hash: uploadedHash, evidence_ids: [`desktop-upload-evidence-${suffix}`] },
+    material: {
+      material_id: uploadedMaterialId, staging_id: `stg_${"a".repeat(32)}`,
+      staging_path: "/private/local/path/desktop-upload.txt", source_path: null,
+      source_hash: uploadedHash, expected_size_bytes: uploadedBytes.byteLength,
+      kind: "worksheet", title: "桌面云端二进制材料", subject: "数学", class_id: "synthetic-class",
+      source_scope: "desktop_staging",
+    },
+  };
+  const uploadedReceipt = await client.intakeCommand(uploadedCommand, {
+    requestId: `desktop-upload-intake-${suffix}`,
+    idempotencyKey: `sha256:${uploadedHash.slice("sha256:".length)}`,
+    storageObjectKey: uploaded.objectKey,
+  });
+  assert.equal(uploadedReceipt.queued, false);
+  const uploadedRow = (await peer.snapshot()).payload.materials.find(row => row.material_id === uploadedMaterialId);
+  assert.equal(uploadedRow.storage_object_key, uploaded.objectKey);
+  assert.equal(uploadedRow.source_hash, uploadedHash);
+  const downloaded = await fetch(`${url}/storage/v1/object/edupi-materials/${uploaded.objectKey.split("/").map(encodeURIComponent).join("/")}`, {
+    headers: { apikey: key, Authorization: `Bearer ${(await client.state()).session.accessToken}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  assert.equal(downloaded.status, 200);
+  assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()), uploadedBytes);
+  pass("desktop-staging-equivalent-upload-material-intake-and-storage-readback");
+
   if (process.env.EDUPI_TEST_STORAGE_SECURITY === "1") {
     const token = (await client.state()).session.accessToken;
     const uploadBody = { action: "create_upload", material_id: materialId, file_name: "isolated.txt",
@@ -216,10 +284,10 @@ try {
     const cleanup = [
       "set -euo pipefail",
       ". /srv/edupi-supabase/.supabase.env",
-      ...storageKeys.map(key => `curl -fsS -o /dev/null -X DELETE "$API_URL/storage/v1/object/edupi-materials" -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY" -H "Content-Type: application/json" --data '${JSON.stringify({ prefixes: [key] })}'`),
+      ...storageKeys.map(key => `curl -fsS -o /dev/null -X DELETE "$API_URL/storage/v1/object/edupi-materials" -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY" -H "Content-Type: application/json" --data '${JSON.stringify({ prefixes: [key] })}' || true`),
       ...workspaceIds.map(id => `docker exec supabase_db_edupi-desktop psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "delete from edupi.workspaces where id = '${id}';" >/dev/null`),
-      ...(userId ? [`curl -fsS -o /dev/null -X DELETE "$API_URL/auth/v1/admin/users/${userId}" -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY"`] : []),
-      ...extraUserIds.map(id => `curl -fsS -o /dev/null -X DELETE "$API_URL/auth/v1/admin/users/${id}" -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY"`),
+      ...(userId ? [`curl -fsS -o /dev/null -X DELETE "$API_URL/auth/v1/admin/users/${userId}" -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY" || true`] : []),
+      ...extraUserIds.map(id => `curl -fsS -o /dev/null -X DELETE "$API_URL/auth/v1/admin/users/${id}" -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY" || true`),
     ].join("\n");
     execFileSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
       process.env.EDUPI_REMOTE_HOST || "ubuntu@43.134.4.108", "bash", "-s"], { input: cleanup, stdio: ["pipe", "pipe", "pipe"], timeout: 30_000 });

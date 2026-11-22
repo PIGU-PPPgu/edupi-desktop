@@ -143,6 +143,50 @@ final class EduPiAppState: ObservableObject {
         dashboard.tasks[index].revision += 1
     }
 
+    func createTask(title: String, note: String, requestID: String? = nil) async -> Bool {
+        if isPreview { return createPreviewTask(title: title, note: note) }
+        guard let api else {
+            syncError = "云端账号未登录"
+            return false
+        }
+        do {
+            let task = try await api.createTask(title: title, note: note, requestID: requestID)
+            guard let index = dashboard.tasks.firstIndex(where: { $0.id == task.id }) else {
+                dashboard.tasks.insert(EduPiTaskItem(id: task.id, title: task.title, dueDate: task.dueDate, note: task.note,
+                    stage: EduPiTaskStage(rawValue: task.stage) ?? .todo, revision: task.revision), at: 0)
+                return true
+            }
+            dashboard.tasks[index].stage = EduPiTaskStage(rawValue: task.stage) ?? .todo
+            dashboard.tasks[index].revision = task.revision
+            syncError = nil
+            return true
+        } catch {
+            syncError = error.localizedDescription
+            return false
+        }
+    }
+
+    func moveTask(_ id: String, to stage: EduPiTaskStage) async -> Bool {
+        if isPreview {
+            movePreviewTask(id, to: stage)
+            return true
+        }
+        guard let api, let index = dashboard.tasks.firstIndex(where: { $0.id == id }) else {
+            syncError = "任务已不可用"
+            return false
+        }
+        do {
+            let task = try await api.moveTask(taskID: id, expectedRevision: dashboard.tasks[index].revision, to: stage)
+            dashboard.tasks[index].stage = EduPiTaskStage(rawValue: task.stage) ?? stage
+            dashboard.tasks[index].revision = task.revision
+            syncError = nil
+            return true
+        } catch {
+            syncError = error.localizedDescription
+            return false
+        }
+    }
+
     func studentEvents(studentID: String? = nil) async throws -> [EduPiRemoteStudentEvent] {
         try await readCloudList { try await $0.loadStudentEvents(studentID: studentID) }
     }

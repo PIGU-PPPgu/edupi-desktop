@@ -4,6 +4,7 @@ import { cloudStateTransaction, readCloudState, type EduPiCloudMode, type EduPiC
   type EduPiCloudSession, type EduPiCloudState } from "./edupi-cloud-store.ts";
 import { cloudRecord as record, verifyCloudWrite, CloudReadbackError, CloudReadbackConflictError } from "./edupi-cloud-verification.ts";
 import { buildCloudTaskEnvelope } from "./edupi-cloud-writer-contract.ts";
+import { buildCloudIntakeEnvelope } from "./edupi-cloud-intake.ts";
 
 const DEFAULT_URL = "https://edupi.intelliclass.online";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -275,7 +276,7 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
     await assertScope(scope);
     const envelope = record(body.envelope);
     const requestId = operationName === "command" ? envelope?.request_id : body.request_id;
-    if (!text(requestId) || !["command", "task-command", "education-facts", "material-metadata"].includes(operationName))
+    if (!text(requestId) || !["command", "task-command", "intake-command", "education-facts", "material-metadata"].includes(operationName))
       return fail("invalid_request", "同步写入必须包含固定请求 ID。", 400);
     const key = { issuer: scope.issuer, accountId: scope.accountId, workspaceId: scope.workspaceId,
       operation: operationName, requestId };
@@ -326,6 +327,28 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
               if (!durable) return fail("outbox_missing", "待同步记录已改变。", 409);
               // Persist the exact envelope before the first network write. Later
               // attempts reuse every byte, including snapshot, time and message ID.
+              durable.body.envelope ||= envelope;
+              return { result: structuredClone(durable.body), write: true };
+            });
+            entry.body = body;
+          }
+          body = { envelope: body.envelope };
+        }
+        if (entry.operation === "intake-command") {
+          operationName = "command";
+          if (!body.envelope) {
+            const currentSnapshot = await snapshot(scope);
+            const envelope = buildCloudIntakeEnvelope({
+              snapshotId: String(currentSnapshot.snapshot_id),
+              command: body.command as never,
+              storageObjectKey: typeof body.storage_object_key === "string" ? body.storage_object_key : undefined,
+              requestId: String(body.request_id),
+              idempotencyKey: String(body.idempotency_key),
+            });
+            body = await tx(current => {
+              if (current.generation !== scope.generation) return fail("scope_changed", "工作区已改变。", 409);
+              const durable = current.outbox.find(item => item.id === entry.id);
+              if (!durable) return fail("outbox_missing", "待同步记录已改变。", 409);
               durable.body.envelope ||= envelope;
               return { result: structuredClone(durable.body), write: true };
             });
@@ -423,19 +446,85 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
       request_id: identity.requestId, idempotency_key: identity.idempotencyKey, command: validated,
     }, selected);
   }
+  async function intakeCommand(command: unknown, identity: {
+    requestId: string; idempotencyKey: string; storageObjectKey?: string;
+  }, selected?: CloudScope) {
+    const validated = record(command);
+    if (!validated || typeof validated.command_type !== "string"
+      || !["import_calendar", "import_timetable", "intake_material"].includes(validated.command_type)) {
+      return fail("unsupported_command", "云端暂不支持此教育导入。", 400);
+    }
+    return operationWithOutbox("intake-command", {
+      request_id: identity.requestId,
+      idempotency_key: identity.idempotencyKey,
+      command: structuredClone(command),
+      ...(identity.storageObjectKey ? { storage_object_key: identity.storageObjectKey } : {}),
+    }, selected);
+  }
+  async function edgeRequest(name: string, init: { method?: string; body?: unknown; query?: string } = {}, selected?: CloudScope) {
+    if (!["edupi-student-events", "edupi-classroom", "edupi-materials"].includes(name)) {
+      return fail("invalid_request", "云端接口无效。", 400);
+    }
+    const scope = selected || await captureScope();
+    const current = await ensureSession();
+    await assertScope(scope);
+    const response = await request(`/functions/v1/${name}${init.query || ""}`,
+      { token: current.session!.accessToken, workspaceId: scope.workspaceId, body: init.body });
+    await assertScope(scope);
+    return response;
+  }
+  async function uploadMaterial(input: {
+    materialId: string;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+    sha256: string;
+    bytes: Uint8Array;
+  }, selected?: CloudScope) {
+    const scope = selected || await captureScope();
+    const response = await edgeRequest("edupi-materials", {
+      body: {
+        action: "create_upload",
+        material_id: input.materialId,
+        file_name: input.fileName,
+        content_type: input.contentType,
+        size_bytes: input.sizeBytes,
+        sha256: input.sha256,
+      },
+    }, scope);
+    const token = typeof response.token === "string" && response.token.length > 0 && response.token.length <= 4000
+      ? response.token : null;
+    const objectKey = typeof response.object_key === "string" && response.object_key.length > 0 && response.object_key.length <= 500
+      ? response.object_key : null;
+    if (!token || !objectKey || response.external_send !== false) {
+      return fail("invalid_response", "云端材料上传地址无效。", 502);
+    }
+    const configValue = config();
+    const encodedPath = objectKey.split("/").map(segment => encodeURIComponent(segment)).join("/");
+    let uploaded: Response;
+    try {
+      uploaded = await transport(
+        `${configValue.url}/storage/v1/object/upload/sign/edupi-materials/${encodedPath}?token=${encodeURIComponent(token)}`,
+        {
+          method: "PUT",
+          redirect: "error",
+          cache: "no-store",
+          signal: AbortSignal.timeout(30_000),
+          headers: { "Content-Type": input.contentType },
+          body: Buffer.from(input.bytes),
+        },
+      );
+    } catch {
+      return fail("network_unavailable", "材料上传未完成，暂存文件仍保留。");
+    }
+    if (!uploaded.ok) return fail("material_upload_failed", "材料上传未完成，暂存文件仍保留。", 503);
+    await assertScope(scope);
+    return { objectKey, token, externalSend: false as const };
+  }
   return {
     state, captureScope, persistMode, login, refresh: () => refresh(), logout, listWorkspaces, selectWorkspace, dashboard,
     config: () => { const current = config(); return { url: current.url, configured: Boolean(current.anonKey) }; },
-    snapshot, taskCommand, operation, operationWithOutbox, flushOutbox, outbox: async () => (await state()).outbox,
-    edge: async (name: string, init: { method?: string; body?: unknown; query?: string } = {}, selected?: CloudScope) => {
-      if (!["edupi-student-events", "edupi-classroom"].includes(name)) return fail("invalid_request", "云端接口无效。", 400);
-      const scope = selected || await captureScope();
-      const current = await ensureSession();
-      await assertScope(scope);
-      const response = await request(`/functions/v1/${name}${init.query || ""}`,
-        { token: current.session!.accessToken, workspaceId: scope.workspaceId, body: init.body });
-      await assertScope(scope);
-      return response;
-    },
+    snapshot, taskCommand, intakeCommand, uploadMaterial, operation, operationWithOutbox, flushOutbox, outbox: async () => (await state()).outbox,
+    edge: edgeRequest,
   };
 }

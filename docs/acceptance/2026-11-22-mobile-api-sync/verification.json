@@ -88,6 +88,23 @@
       ],
       "closed_after_verification": true
     },
+    "closure_followup": {
+      "branch": "codex/edupi-cloud-closure-20261122",
+      "desktop_cloud_calendar_timetable_e2": "passed",
+      "desktop_cloud_binary_material_e2": "passed",
+      "desktop_classroom_cloud_route": "implemented_with_readback",
+      "ios_cloud_write_api": "implemented_and_simulator_build_passed",
+      "npm_test": {
+        "status": "passed",
+        "total": 5115,
+        "passed": 5058,
+        "failed": 0,
+        "conditional_skipped": 57
+      },
+      "tested_script": "scripts/test-edupi-desktop-cloud-sync.mjs",
+      "tested_log": "/tmp/edupi-cloud-closure-desktop-cloud-e2-20261122.log",
+      "ios_log": "/tmp/edupi-cloud-ios-closure-20261122.log"
+    },
     "independent_review": {
       "status": "closed",
       "open_p1": 0,
