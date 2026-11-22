@@ -26,7 +26,9 @@
 .edupi-chat-scan-dialog__head .edupi-chat-scan-dialog__close { flex: 0 0 30px; width: 30px; font-size: 22px; }
 .edupi-chat-scan-dialog__head button:hover, .edupi-chat-scan-dialog__head button:focus-visible { background: var(--bg-hover); color: var(--text); }
 .edupi-chat-scan-dialog > img { display: block; max-width: 100%; max-height: calc(100dvh - 92px); width: auto; height: auto; margin: 8px auto 0; padding: 12px; border-radius: 6px; background: white; object-fit: contain; }
+.edupi-chat-scan-dialog > img[hidden] { display: none; }
 .edupi-chat-scan-dialog > p { margin: 20px 4px 8px; color: var(--text-muted); font-size: 13px; text-align: center; }
+.edupi-chat-zhixue-status { display: grid; justify-items: start; gap: 6px; margin: 4px 0 12px; font-size: 13px; color: var(--text-muted); }
 .edupi-html-preview__actions { display: flex; align-items: center; gap: 4px; }
 .edupi-html-preview > iframe { display: block; width: 100%; height: clamp(240px, 38vh, 420px); border: 0; background: white; }
 .edupi-html-zoom-dialog { position: fixed; inset: 0; width: min(1200px, calc(100vw - 24px)); height: min(820px, calc(100dvh - 24px)); margin: auto; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-panel); color: var(--text); box-shadow: 0 16px 48px rgba(0, 0, 0, .22); overflow: hidden; }

@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
 import {
   closeSync,
+  constants,
+  fstatSync,
   lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
+  readSync,
   renameSync,
   statSync,
   unlinkSync,
@@ -14,13 +17,15 @@ import { spawn } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { Type } from "typebox";
 import { defineTool, type AgentToolResult } from "@earendil-works/pi-coding-agent";
+import { isZhixueFlowId, type ZhixueFlowStatus, type ZhixueLoginPhase, type ZhixueReceipt, type ZhixueSyncPhase } from "./edupi-zhixue-status";
 
 type LoginState = {
   version: 1;
   flowId: string;
-  status: "starting" | "awaiting_scan" | "authenticated" | "expired" | "error";
+  status: Exclude<ZhixueLoginPhase, "not_started">;
   pid?: number;
   qrPath?: string;
+  startedAt?: string;
   authenticatedAt?: string;
   updatedAt?: string;
   error?: string;
@@ -29,6 +34,7 @@ type LoginState = {
 type SyncState = {
   version: 1;
   flowId: string;
+  loginFlowId?: string;
   status: "running" | "ok" | "needs_login" | "failed";
   completeness?: "empty" | "base_performance";
   month?: string;
@@ -97,17 +103,23 @@ function layout(projectRoot: string) {
   };
 }
 
-function current(layoutValue: ReturnType<typeof layout>): LoginState | null {
-  const state = readJson<LoginState>(layoutValue.state);
+function current(layoutValue: ReturnType<typeof layout>, read = readJson): LoginState | null {
+  const state = read<LoginState>(layoutValue.state);
   if (!state || state.status !== "authenticated") return state;
-  const session = readJson<{ flowId?: string }>(layoutValue.session);
-  const loginOk = readJson<{ flowId?: string }>(layoutValue.loginOk);
-  if (session?.flowId === state.flowId && loginOk?.flowId === state.flowId) return state;
-  return {
-    ...state,
-    status: "error",
-    error: "登录回执与当前登录 flow 不一致，请重新扫码。",
-  };
+  const session = read<{ flowId?: string }>(layoutValue.session);
+  const loginOk = read<{ flowId?: string }>(layoutValue.loginOk);
+  if (session?.flowId !== state.flowId || loginOk?.flowId !== state.flowId) {
+    return { ...state, status: "error", error: "登录回执与当前登录 flow 不一致，请重新扫码。" };
+  }
+  if (syncForLogin(layoutValue, state.flowId, read)?.status === "needs_login") {
+    return { ...state, status: "needs_login" };
+  }
+  return state;
+}
+
+function syncForLogin(paths: ReturnType<typeof layout>, loginFlowId: string, read = readJson): SyncState | null {
+  const state = read<SyncState>(paths.syncState);
+  return state?.version === 1 && state.loginFlowId === loginFlowId ? state : null;
 }
 
 function busy(layoutValue: ReturnType<typeof layout>): boolean {
@@ -132,7 +144,7 @@ function busy(layoutValue: ReturnType<typeof layout>): boolean {
 }
 
 function visual(layoutValue: ReturnType<typeof layout>, state: LoginState | null) {
-  if (!state?.qrPath || state.qrPath !== layoutValue.qr) return undefined;
+  if (state?.status !== "awaiting_scan" || state.qrPath !== layoutValue.qr) return undefined;
   try {
     const qr = lstatSync(layoutValue.qr);
     if (!qr.isFile() || qr.isSymbolicLink()) return undefined;
@@ -215,7 +227,7 @@ function syncText(state: SyncState | null, config: SyncConfig | null): string {
       : "还没有同步配置，请先提供班级、学科和学段。";
   }
   if (state.status === "running") return state.message || `正在同步 ${state.month ?? "目标月份"}，完成后再读取结果。`;
-  if (state.status === "needs_login") return state.error || "智学网登录态已失效，请先重新扫码。";
+  if (state.status === "needs_login") return "智学网登录已失效，请重新扫码。";
   if (state.status === "ok") {
     const reports = state.counts?.reports ?? 0;
     const students = state.counts?.students ?? 0;
@@ -231,20 +243,107 @@ function releaseLockForFlow(path: string, flowId: string): void {
   }
 }
 
-function statusText(state: LoginState | null): string {
+function statusText(state: LoginState | null, sync?: ZhixueSyncPhase): string {
   if (!state) return "还没有发起智学网登录。";
-  if (state.status === "awaiting_scan") return "二维码已显示，请用智学网教师端 APP 扫码。扫码完成后再检查一次登录状态。";
+  if (state.status === "awaiting_scan") return "等待扫码。请用智学网教师端 App 扫码。";
   if (state.status === "starting") return "登录窗口正在启动，请稍等。";
-  if (state.status === "authenticated") return `智学网登录已完成（${state.authenticatedAt ?? "时间未知"}）。`;
+  if (state.status === "authenticated") {
+    if (sync === "needs_config") return "智学网登录已完成，但同步前还需要班级、学科和学段。";
+    if (sync === "ready") return "智学网登录已完成，可以开始同步。";
+    return `智学网登录已完成（${state.authenticatedAt ?? "时间未知"}）。`;
+  }
+  if (state.status === "needs_login") return "智学网登录已失效，请重新扫码。";
   if (state.status === "expired") return "扫码等待已超时，请重新发起登录。";
   return `智学网登录失败：${state.error ?? "未知错误"}。`;
 }
 
-// Chrome can spend tens of seconds loading the login page before the QR image
-// exists. Returning after a short fixed window loses the visual even though the
-// worker is still healthy, so keep this bounded wait aligned with the worker's
-// page, QR, and image-load deadlines.
+function statusDetails(paths: ReturnType<typeof layout>, state: LoginState | null, sync?: ZhixueSyncPhase) {
+  const zhixue: ZhixueReceipt = { version: 1, status: state?.status ?? "not_started", flowId: state?.flowId ?? null, ...(sync ? { sync } : {}) };
+  return { ...visual(paths, state), zhixue };
+}
+
+function syncPhase(state: SyncState | null, hasConfig: boolean): ZhixueSyncPhase {
+  if (!state) return hasConfig ? "ready" : "needs_config";
+  if (state.status === "needs_login") return "failed";
+  return state.status === "ok" && state.completeness === "empty" ? "empty" : state.status;
+}
+
+function loginFailed(state: LoginState | null): boolean {
+  return state?.status === "expired" || state?.status === "error" || state?.status === "needs_login";
+}
+
+// Chrome's startup, page, token and QR waits have separate deadlines.
 const LOGIN_QR_STARTUP_WAIT_MS = 120_000;
+// The worker gives the teacher 15 minutes to scan, plus time for the last status request.
+const LOGIN_SCAN_WAIT_MS = 16 * 60_000;
+const PNG_SIGNATURE = Buffer.from("89504e470d0a1a0a", "hex");
+
+function readBoundedFile(file: string, limit: number): Buffer | null {
+  let fd: number | undefined;
+  try {
+    if (!lstatSync(file).isFile()) return null;
+    fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const stat = fstatSync(fd);
+    if (!stat.isFile() || stat.size > limit) return null;
+    // The worker replaces JSON atomically. A fixed-size read also bounds a file that grows after stat.
+    const bytes = Buffer.alloc(stat.size + 1);
+    const size = readSync(fd, bytes, 0, bytes.length, 0);
+    return size === stat.size ? bytes.subarray(0, size) : null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+function readStatusJson<T>(file: string): T | null {
+  const bytes = readBoundedFile(file, 1_048_576);
+  try { return bytes ? JSON.parse(bytes.toString("utf8")) as T : null; } catch { return null; }
+}
+
+function expiredLogin(state: LoginState, waitMs: number): boolean {
+  const timestamp = state.status === "starting" ? state.startedAt : state.updatedAt;
+  if (!timestamp || !Number.isFinite(Date.parse(timestamp))) return false;
+  return Date.now() - Date.parse(timestamp) >= waitMs;
+}
+
+/** A desktop caller may read only the safe projection of its exact login flow. */
+export function readEduPiZhixueLoginStatus(projectRoot: string, flowId: string): ZhixueFlowStatus {
+  if (!isZhixueFlowId(flowId)) return { status: "not_current" };
+  const paths = layout(projectRoot);
+  try {
+    if (!lstatSync(dirname(paths.root)).isDirectory() || !lstatSync(paths.root).isDirectory()) return { status: "error" };
+  } catch {
+    return { status: "not_current" };
+  }
+  const observed = current(paths, readStatusJson);
+  if (observed?.version !== 1 || observed.flowId !== flowId) return { status: "not_current" };
+  const qr = observed.status === "awaiting_scan" && observed.qrPath === paths.qr
+    ? readBoundedFile(paths.qr, 262_144) : null;
+  // The worker can finish or replace the image while we read it. The second
+  // observation wins and cannot serve a different login's QR.
+  const state = observed.status === "awaiting_scan" ? current(paths, readStatusJson) : observed;
+  if (state?.version !== 1 || state.flowId !== flowId) return { status: "not_current" };
+  switch (state.status) {
+    case "authenticated": {
+      const config = readStatusJson(paths.config);
+      return { status: state.status, needsSyncConfig: !validSyncConfig(config) };
+    }
+    case "starting":
+      return { status: expiredLogin(state, LOGIN_QR_STARTUP_WAIT_MS + 15_000) ? "error" : state.status };
+    case "awaiting_scan":
+      if (expiredLogin(state, LOGIN_SCAN_WAIT_MS)) return { status: "expired" };
+      return qr?.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
+        ? { status: state.status, qr: qr.toString("base64") }
+        : { status: state.status };
+    case "needs_login":
+    case "expired":
+    case "error":
+      return { status: state.status };
+    default:
+      return { status: "error" };
+  }
+}
 
 export function createEduPiZhixueTools(projectRoot: string, workerPath: string, syncWorkerPath = workerPath) {
   const paths = layout(projectRoot);
@@ -263,7 +362,7 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
         || !claimLock(paths.lock, { version: 1, flowId, startedAt: new Date().toISOString(), pid: 0 })
         || !claimLock(paths.browserLock, { version: 1, flowId, startedAt: new Date().toISOString(), pid: 0 })) {
         try { releaseLockForFlow(paths.lock, flowId); } catch {}
-        return textResult("智学网登录窗口已经在运行，请完成当前扫码，不要再次弹窗。", visual(paths, current(paths)), { terminate: true });
+        return textResult("智学网登录窗口已经在运行，请完成当前扫码，不要再次弹窗。", statusDetails(paths, current(paths)), { terminate: true });
       }
       atomicJson(paths.state, { version: 1, flowId, status: "starting", startedAt: new Date().toISOString() });
       const child = spawn(process.execPath, [
@@ -272,9 +371,12 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
         "--browser-lock", paths.browserLock,
       ], { cwd: paths.root, detached: true, stdio: "ignore", env: { ...process.env } });
       if (!child.pid) {
-        try { unlinkSync(paths.lock); } catch {}
-        try { unlinkSync(paths.browserLock); } catch {}
-        return textResult("智学网登录进程启动失败。", undefined, { isError: true, terminate: true });
+        // spawn reports its specific error asynchronously even if it has no PID.
+        child.once("error", () => {});
+        writeLoginFailure(paths, flowId, "登录进程启动失败。");
+        releaseLockForFlow(paths.lock, flowId);
+        releaseLockForFlow(paths.browserLock, flowId);
+        return textResult("智学网登录进程启动失败。", statusDetails(paths, current(paths)), { isError: true, terminate: true });
       }
       let childExited = false;
       child.once("error", () => {
@@ -294,13 +396,17 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
       const deadline = Date.now() + LOGIN_QR_STARTUP_WAIT_MS;
       while (Date.now() < deadline) {
         const state = current(paths);
-        if (state?.flowId === flowId && (state.status === "awaiting_scan" || state.status === "authenticated" || state.status === "error")) {
-          return textResult(statusText(state), visual(paths, state), { terminate: true });
+        if (state?.flowId === flowId && state.status !== "starting") {
+          const sync = state.status === "authenticated" ? syncPhase(null, validSyncConfig(readJson(paths.config))) : undefined;
+          return textResult(statusText(state, sync), statusDetails(paths, state, sync), {
+            isError: loginFailed(state), terminate: state.status !== "authenticated",
+          });
         }
         await new Promise(resolveDelay => setTimeout(resolveDelay, 250));
       }
       const state = current(paths);
-      return textResult("登录窗口已启动，请等待二维码出现；本条请求不会再次弹窗。", visual(paths, state), { terminate: true });
+      return textResult("登录窗口已启动，请等待二维码出现；本条请求不会再次弹窗。",
+        state?.flowId === flowId ? statusDetails(paths, state) : undefined, { terminate: true });
     },
   });
   const status = defineTool({
@@ -312,8 +418,10 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
     executionMode: "sequential" as const,
     execute: async () => {
       const state = current(paths);
-      const terminalFailure = state?.status === "expired" || state?.status === "error";
-      return textResult(statusText(state), visual(paths, state), terminalFailure
+      const sync = state?.status === "authenticated"
+        ? syncPhase(syncForLogin(paths, state.flowId), validSyncConfig(readJson(paths.config)))
+        : undefined;
+      return textResult(statusText(state, sync), statusDetails(paths, state, sync), loginFailed(state)
         ? { isError: true, terminate: true }
         : {});
     },
@@ -327,26 +435,27 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
     executionMode: "sequential" as const,
     execute: async () => {
       const state = current(paths);
-      const config = readJson<SyncConfig>(paths.config);
-      const syncState = readJson<SyncState>(paths.syncState);
       if (state?.status !== "authenticated") {
-        const terminalFailure = state?.status === "expired" || state?.status === "error";
-        return textResult(statusText(state), visual(paths, state), terminalFailure
+        return textResult(statusText(state), statusDetails(paths, state), loginFailed(state)
           ? { isError: true, terminate: true }
           : {});
       }
-      return textResult(syncText(syncState, validSyncConfig(config) ? config : null), {
-        ...visual(paths, state),
+      const configValue = readJson(paths.config);
+      const config = validSyncConfig(configValue) ? configValue : null;
+      const syncState = syncForLogin(paths, state.flowId);
+      return textResult(syncText(syncState, config), {
+        ...statusDetails(paths, state, syncPhase(syncState, config !== null)),
         sync: syncState,
-        config: validSyncConfig(config) ? config : undefined,
-      }, syncState?.status === "failed" || syncState?.status === "needs_login" ? { isError: true, terminate: true } : {});
+        config: config ?? undefined,
+      }, syncState?.status === "failed" || syncState?.status === "needs_login"
+        ? { isError: true, terminate: true } : {});
     },
   });
   const sync = defineTool({
     name: "zhixue_sync",
     label: "同步智学网学情",
     description: "按老师提供的班级、学科和学段配置同步智学网基础学情。同步在隔离浏览器进程中执行，结果写入当前用户数据根，并明确报告成功、空结果、登录失效或失败。",
-    promptSnippet: "zhixue_sync: 当前仅返回同步桥接未接入状态",
+    promptSnippet: "zhixue_sync: 登录确认后，按已确认的班级、学科、学段开始同步",
     parameters: Type.Object({
       month: Type.Optional(Type.String({ pattern: "^\\d{4}-\\d{2}$" })),
       className: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
@@ -363,11 +472,13 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
       }
       const loginState = current(paths);
       if (loginState?.status !== "authenticated") {
-        return textResult(statusText(loginState), visual(paths, loginState), { isError: true, terminate: true });
+        return textResult(statusText(loginState), statusDetails(paths, loginState), { isError: true, terminate: true });
       }
       if (syncBusy(paths) || browserBusy(paths)) {
-        const running = readJson<SyncState>(paths.syncState);
-        return textResult(running?.message || "同步任务已经在运行，请稍后查看同步状态。", { sync: running }, { terminate: true });
+        const existing = syncForLogin(paths, loginState.flowId);
+        const running = existing?.status === "running" ? existing : null;
+        return textResult(running?.message || "智学网窗口正在使用，请稍后再试。",
+          { ...statusDetails(paths, loginState, running ? "running" : "busy"), sync: running }, { terminate: true });
       }
       const previous = readJson<SyncConfig>(paths.config);
       const next: SyncConfig = {
@@ -379,7 +490,8 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
         ...(params.classId || previous?.classId ? { classId: params.classId || previous?.classId } : {}),
       };
       if (!validSyncConfig(next)) {
-        return textResult("同步前需要明确提供班级、学科代码和学段代码。没有这些信息不会启动抓取。", { config: next }, { isError: true, terminate: true });
+        return textResult("同步前需要明确提供班级、学科代码和学段代码。没有这些信息不会启动抓取。",
+          { ...statusDetails(paths, loginState, "needs_config"), config: next }, { isError: true, terminate: true });
       }
       atomicJson(paths.config, next);
       const syncFlowId = randomUUID();
@@ -387,6 +499,7 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
         version: 1,
         flowId: syncFlowId,
         status: "running",
+        loginFlowId: loginState.flowId,
         month: params.month || new Date().toISOString().slice(0, 7),
         config: next,
         message: `正在同步 ${next.className} 的学情数据。`,
@@ -395,12 +508,13 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
       } satisfies SyncState);
       if (!claimLock(paths.browserLock, { version: 1, flowId: syncFlowId, pid: 0, startedAt: new Date().toISOString() })) {
         writeSyncFailure(paths, syncFlowId, "浏览器登录会话已被另一个任务占用。");
-        return textResult("同步任务已经在运行，请稍后查看同步状态。", undefined, { isError: true, terminate: true });
+        return textResult("智学网窗口正在使用，请稍后再试。", statusDetails(paths, loginState, "busy"), { isError: true, terminate: true });
       }
       const child = spawn(process.execPath, [
         syncWorkerPath,
         "--root", paths.root,
         "--flow-id", syncFlowId,
+        "--login-flow-id", loginState.flowId,
         "--state", paths.syncState,
         "--session", paths.session,
         "--profile", paths.profile,
@@ -411,9 +525,11 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
         "--browser-lock", paths.browserLock,
       ], { cwd: paths.root, detached: true, stdio: "ignore", env: { ...process.env } });
       if (!child.pid) {
+        child.once("error", () => {});
         atomicJson(paths.syncState, {
           version: 1,
           flowId: syncFlowId,
+          loginFlowId: loginState.flowId,
           status: "failed",
           month: params.month || new Date().toISOString().slice(0, 7),
           config: next,
@@ -422,7 +538,7 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
         } satisfies SyncState);
         releaseLockForFlow(paths.syncLock, syncFlowId);
         releaseLockForFlow(paths.browserLock, syncFlowId);
-        return textResult("同步进程启动失败。", undefined, { isError: true, terminate: true });
+        return textResult("同步进程启动失败。", statusDetails(paths, loginState, "failed"), { isError: true, terminate: true });
       }
       child.once("error", () => {
         writeSyncFailure(paths, syncFlowId, "同步进程启动失败。");
@@ -436,6 +552,7 @@ export function createEduPiZhixueTools(projectRoot: string, workerPath: string, 
       });
       child.unref();
       return textResult(`已开始同步 ${next.className} 的学情数据。完成后查看同步状态。`, {
+        ...statusDetails(paths, loginState, "running"),
         flowId: syncFlowId,
         config: next,
         pid: child.pid,

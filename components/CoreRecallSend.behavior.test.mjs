@@ -13,7 +13,7 @@ const jiti = createJiti(import.meta.url, { jsx: { runtime: "automatic" }, tsconf
 const pure = {};
 for (const name of ["edupi-composer-context", "image-attachments", "file-fuzzy", "tool-presets", "normalize",
   "scroll-memory", "streaming-message", "agent-message-history", "ansi", "terminal-input", "message-display",
-  "chat-file-drop", "chat-lazy-load", "edupi-calendar-result", "edupi-priority-send"]) pure[`@/lib/${name}`] = await jiti.import(`../lib/${name}.ts`);
+  "chat-file-drop", "chat-lazy-load", "edupi-calendar-result", "edupi-priority-send", "edupi-zhixue-status"]) pure[`@/lib/${name}`] = await jiti.import(`../lib/${name}.ts`);
 pure["./EduPiBrandMark"] = await jiti.import("./EduPiBrandMark.tsx");
 pure["@/lib/edupi-recall-answer-client"] = {
   ...await jiti.import("../lib/edupi-recall-answer-client.ts"),
@@ -146,6 +146,7 @@ async function mount({ existing = true, durable = true, immediate = false, delay
   for (const name of ["DisclosureChevron", "EduPiConversationFiles", "EduPiProactiveHub", "EduPiRuntimeFlow", "ConversationNavigator"]) modules[`./${name}`] = { [name]: () => null };
   modules["./MessageView"] = { MessageView: ({ message }) => jsx("div", { "data-message": message.role, children: typeof message.content === "string" ? message.content : "synthetic response" }), toolVisualItems: () => [] };
   modules["./ChatVisualResult"] = { ChatVisualResult: () => null };
+  modules["./ZhixueChatStatus"] = { ZhixueChatStatus: () => null };
   let { ChatWindow } = load("ChatWindow");
   const initial = existing ? session() : null;
   const origin = initial?.id ?? `new:${cwd}`;

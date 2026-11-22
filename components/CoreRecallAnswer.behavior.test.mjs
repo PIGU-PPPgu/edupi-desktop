@@ -17,7 +17,7 @@ const pure = {};
 for (const name of ["edupi-recall-answer", "edupi-composer-context", "normalize", "scroll-memory", "streaming-message",
   "agent-message-history", "tool-presets", "ansi", "terminal-input", "message-display", "chat-file-drop", "chat-lazy-load",
   "edupi-calendar-result", "edupi-priority-send", "compaction-summary", "patch", "slash-display", "file-paths", "file-links",
-  "chat-image-source", "draft-store"]) pure[`@/lib/${name}`] = await jiti.import(`../lib/${name}.ts`);
+  "chat-image-source", "draft-store", "edupi-zhixue-status"]) pure[`@/lib/${name}`] = await jiti.import(`../lib/${name}.ts`);
 const paths = {
   client: "../lib/edupi-recall-answer-client.ts", hook: "../hooks/useAgentSession.ts",
   drafts: "../lib/draft-store.ts",
@@ -236,6 +236,7 @@ async function mount({ history = [], ids = [], teacherMode = true, enabled = tru
   modules["./MarkdownBody"] = { MarkdownBody: ({ children }) => jsx("div", { "data-markdown": true, children }) };
   modules["./DisclosureChevron"] = { DisclosureChevron: () => null };
   modules["./ChatVisualResult"] = { ChatVisualResult: () => null };
+  modules["./ZhixueChatStatus"] = { ZhixueChatStatus: () => null };
   for (const name of ["CoreRecallAnswer", "CoreRecallPersonConfirmation", "MessageView"]) modules[`./${name}`] = load(name);
   modules["@/hooks/useKeyboardShortcuts"] = { registerAbortHandler: noop };
   modules["@/hooks/useAudio"] = { useAudio: () => ({ soundEnabled: false, playDoneSound: noop }) };

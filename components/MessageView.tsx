@@ -27,6 +27,7 @@ import { encodeFilePathForApi } from "@/lib/file-paths";
 import { isPathInside } from "@/lib/file-links";
 import { isPreviewableImageSource } from "@/lib/chat-image-source";
 import { ChatVisualResult, type ChatVisualItem } from "./ChatVisualResult";
+import { isLegacyZhixueQr, zhixueToolReceipt } from "@/lib/edupi-zhixue-status";
 import { CORE_RECALL_ANSWER_MESSAGE } from "@/lib/edupi-recall-answer";
 import { coreRecallAnswerDetails } from "@/lib/edupi-recall-answer-client";
 import { CoreRecallAnswer } from "./CoreRecallAnswer";
@@ -897,6 +898,10 @@ export function toolVisualItems(result: ToolResultMessage | undefined, cwd?: str
   if (!result || result.isError) return [];
   const details = result.details as { visual?: { kind?: unknown; title?: unknown; path?: unknown } } | undefined;
   const visual = details?.visual;
+  // Only the flow-specific status card can show a Zhixue login QR. Older
+  // results may lack a tool name and still reference the shared file.
+  if (zhixueToolReceipt(result) || isLegacyZhixueQr(result)
+    || (typeof visual?.path === "string" && /(?:^|[\\/])\.edupi[\\/]zhixue[\\/]login-qr\.png$/iu.test(visual.path))) return [];
   const kind: ChatVisualItem["kind"] = visual?.kind === "qr" ? "qr" : "image";
   const title = typeof visual?.title === "string" && visual.title.trim() ? visual.title.trim() : kind === "qr" ? "二维码" : "图片";
   const images = result.content.flatMap((block) => {
