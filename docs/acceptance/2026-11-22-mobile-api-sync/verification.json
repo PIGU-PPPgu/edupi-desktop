@@ -1,38 +1,113 @@
 {
   "date": "2026-11-22",
   "task": "R24.4c",
-  "functional_commit": "c7c021e82c56ba32b8d9e84f0fff25b56841b5a8",
+  "functional_commit": "dde8c9cf08e379651c78fa61db7788a938f3cfbf",
+  "initial_functional_commit": "c7c021e82c56ba32b8d9e84f0fff25b56841b5a8",
   "base_commit": "5c7ae60feedc422f242b1b492b2fc097e75be618",
   "full_product_status": "partially_implemented",
   "checks": {
-    "npm_test": { "status": "passed", "total": 5103, "passed": 5046, "failed": 0, "conditional_skipped": 57 },
-    "typecheck": { "status": "passed", "command": "node_modules/.bin/tsc --noEmit --incremental false" },
-    "lint": { "status": "passed", "errors": 0, "existing_warnings": 1 },
-    "supabase_contract": { "status": "passed", "passed": 10, "failed": 0 },
-    "deno_check": { "status": "passed", "functions": 6 },
-    "deno_behavior": { "status": "passed", "passed": 5, "steps": 28, "failed": 0 },
-    "remote_broker_e2": { "status": "passed", "script": "scripts/test-edupi-supabase-remote.sh" },
+    "npm_test": {
+      "status": "passed",
+      "total": 5113,
+      "passed": 5056,
+      "failed": 0,
+      "conditional_skipped": 57
+    },
+    "typecheck": {
+      "status": "passed",
+      "command": "node_modules/.bin/tsc --noEmit --incremental false"
+    },
+    "lint": {
+      "status": "passed",
+      "errors": 0,
+      "existing_warnings": 1
+    },
+    "supabase_contract": {
+      "status": "passed",
+      "passed": 10,
+      "failed": 0
+    },
+    "deno_check": {
+      "status": "passed",
+      "functions": 6
+    },
+    "deno_behavior": {
+      "status": "passed",
+      "passed": 6,
+      "steps": 45,
+      "failed": 0
+    },
+    "remote_broker_e2": {
+      "status": "passed",
+      "script": "scripts/test-edupi-supabase-remote.sh"
+    },
     "desktop_client_https_e2": {
       "status": "passed",
       "script": "scripts/test-edupi-desktop-cloud-sync.mjs",
       "storage_security": true,
       "fixtures_cleaned": true,
       "peer": "independent_api_client",
+      "tested_source_commit": "c7c021e82c56ba32b8d9e84f0fff25b56841b5a8",
       "desktop_process_restart": "client_reconstruction_only"
     },
-    "remote_sql_security": { "status": "passed", "transaction_rolled_back": true },
-    "remote_sql_fact_admission": { "status": "passed", "transaction_rolled_back": true },
-    "postgres_two_connection_lease_race": { "status": "passed", "fixtures_cleaned": true },
-    "ios_unsigned_simulator_build": { "status": "passed", "xcode": "27.2", "code_signing_allowed": false },
-    "browser_component_flow": { "status": "passed", "data": "synthetic", "taskspace": 43, "closed_after_verification": true },
-    "independent_review": { "status": "closed", "open_p1": 0, "open_p2": 0 },
-    "literal_secret_scan": { "status": "passed", "staged_files": 142, "potential_literal_secrets": 0 }
+    "followup_desktop_client_https_rerun": {
+      "status": "inconclusive",
+      "reason": "ECONNRESET before TLS setup completed during login/workspace setup",
+      "attempts": 2,
+      "fixtures_cleaned": true
+    },
+    "deployed_student_name_filter": {
+      "status": "passed",
+      "exact_object": true,
+      "missing_empty": true,
+      "ambiguous_empty": true
+    },
+    "remote_sql_security": {
+      "status": "passed",
+      "transaction_rolled_back": true
+    },
+    "remote_sql_fact_admission": {
+      "status": "passed",
+      "transaction_rolled_back": true
+    },
+    "postgres_two_connection_lease_race": {
+      "status": "passed",
+      "fixtures_cleaned": true
+    },
+    "ios_unsigned_simulator_build": {
+      "status": "passed",
+      "xcode": "27.2",
+      "code_signing_allowed": false
+    },
+    "browser_component_flow": {
+      "status": "passed",
+      "data": "synthetic",
+      "taskspaces": [
+        43,
+        46
+      ],
+      "closed_after_verification": true
+    },
+    "independent_review": {
+      "status": "closed",
+      "open_p1": 0,
+      "open_p2": 0
+    },
+    "literal_secret_scan": {
+      "status": "passed",
+      "staged_files": 142,
+      "potential_literal_secrets": 0
+    }
   },
   "deployment": {
     "status": "deployed_and_verified",
-    "migrations": ["20261122071008", "20261122081223"],
+    "migrations": [
+      "20261122071008",
+      "20261122081223"
+    ],
     "historical_migrations_unchanged": true,
     "deployed_bytes_match": true,
+    "student_events_sha256": "f4225a2bc20ed9b7758b62c17677e562d2dfa1818ee2e5721aae90ac05b52dfb",
     "backup": "/srv/edupi-supabase/backups/cloud-sync-20261122/"
   },
   "unverified": [
@@ -41,7 +116,10 @@
     "cloud_pi_chat_capture_and_sessions",
     "all_domain_write_interfaces",
     "physical_iphone_read_and_write",
+    "followup_client_https_rerun_after_transient_network_failure",
     "signed_desktop_install_upgrade_and_release"
   ],
-  "windows": "paused_by_user_no_runner_or_build_started"
+  "windows": "paused_by_user_no_runner_or_build_started",
+  "pull_request": 518,
+  "merge_record_source": "GitHub PR 518"
 }

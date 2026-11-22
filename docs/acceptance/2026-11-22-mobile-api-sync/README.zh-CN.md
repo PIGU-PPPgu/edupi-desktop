@@ -4,7 +4,7 @@
 
 当前状态：**部分实现；本次范围的开发验收与独立审查通过，源码合并状态以本 PR 记录为准；完整 Desktop/iOS 产品同步与安装发布未验收。**
 
-受验功能提交 `c7c021e82c56ba32b8d9e84f0fff25b56841b5a8`，基线 `5c7ae60feedc422f242b1b492b2fc097e75be618`，分支 `codex/edupi-supabase-cloud-sync-20261122`；后续提交仅补充交付记录。整合在独立工作树进行，原桌面端混合修改及原聊天工作树保留。
+最终受验功能提交 `dde8c9cf08e379651c78fa61db7788a938f3cfbf`，初次功能提交 `c7c021e82c56ba32b8d9e84f0fff25b56841b5a8`，基线 `5c7ae60feedc422f242b1b492b2fc097e75be618`，分支 `codex/edupi-supabase-cloud-sync-20261122`。PR 审查后补上任务/Today 审核拒绝、学生姓名过滤和 cloud 材料本地控件隔离；后续仅补充交付记录。整合在独立工作树进行，原桌面端混合修改及原聊天工作树保留。
 
 ## 架构与实际范围
 
@@ -46,20 +46,24 @@
 - `node_modules/.bin/tsc --noEmit --incremental false`：通过。
 - `npm run lint`：0 errors，保留既有 `scripts/test-edupi-core-history-e2.mjs` 的 1 条 unused-vars warning。
 - `npm run test:supabase-contract`：10 passed、0 failed。
-- `npm test`：5,103 tests、5,046 passed、0 failed、57 conditional skipped；跳过不计通过。前两轮失败均保留原始日志。
+- `npm test`：5,113 tests、5,056 passed、0 failed、57 conditional skipped；跳过不计通过。各轮失败均保留原始日志。
 - 6 个函数分别 `deno check --config <function>/deno.json <function>/index.ts`。
-- Deno HTTP/材料路径行为测试：5 passed、28 steps、0 failed。
+- Deno HTTP/材料路径/学生过滤行为测试：6 passed、45 steps、0 failed。
 - `supabase/security-regression.sql` 与 `supabase/fact-conflict-regression.sql` 的远程回滚事务。
 - `xcodebuild -project ios/EduPi.xcodeproj -scheme EduPi -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/edupi-cloud-ios-20261122 CODE_SIGNING_ALLOWED=NO build`：`BUILD SUCCEEDED`。
 - 本机日志 `/tmp/edupi-cloud-sync-*.log`、`/tmp/edupi-cloud-ios-20261122.log`；临时编译目录在验收后清理。
 
-最终整套日志为 `/tmp/edupi-cloud-sync-npm-verified-20261122.log`；页面 scope/旧回调/离线任务创建组合为 173 passed，独立复审另实跑 queued create 的 8 项行为测试，审查范围内无未关闭 P1/P2。最终浏览器重新构建当前源码验证登录后需选择工作区、关闭设置后继续同步（overlap=0）及隔离断网后可切回 local。
+最终整套日志为 `/tmp/edupi-cloud-sync-fully-frozen-npm-20261122.log`；页面 scope/旧回调/离线任务创建组合为 173 passed，独立复审另实跑 queued create 的 8 项行为测试，审查范围内无未关闭 P1/P2。浏览器重新构建当前源码验证登录后需选择工作区、关闭设置后继续同步（overlap=0）及隔离断网后可切回 local；TaskSpace 46 又实际打开 cloud 材料抽屉，metadata 编辑入口存在，schedule/excerpt/上传入口均为零，本地 API 请求为零。
+
+GitHub 审查补丁另有 Node 行为测试证明 cloud 任务/Today 审核在本地 writer 之前返回 409；学生姓名先在同一工作区解析为唯一 ID，未知、同名或控制字符输入不会扩大为全班查询。部署后的扩展 broker E2 已实际验证精确姓名只返回本人事件、未知与同名返回空列表，日志为 `/tmp/edupi-cloud-sync-followup-broker-20261122.log`。student 函数的部署 SHA-256 为 `f4225a2bc20ed9b7758b62c17677e562d2dfa1818ee2e5721aae90ac05b52dfb`，与源码完全一致。
+
+初次真实 Desktop 同步客户端 HTTPS 流程通过的证据仍保留；后续两次扩展客户端重跑在登录/工作区初始化阶段遇到 `ECONNRESET`、TLS 连接中断，记录为**无结论**，不计通过。两次均执行测试账号/工作区/本机状态清理；没有用服务器 broker 回归替代这次客户端重跑。
 
 最终界面截图：[隔离合成设置页](./cloud-settings-synthetic.png)。它只包含合成账号和工作区。
 
 ## 部署与回退
 
-已应用 `20261122071008_edupi_security_boundaries.sql`、`20261122081223_edupi_fact_conflict_admission.sql`，并更新材料上传函数及其路径校验 helper。只有 Edge Runtime 容器重启，现有服务与私有配置沿用。服务器备份在 `/srv/edupi-supabase/backups/cloud-sync-20261122/`，目录权限 0700；保留原 schema 与函数归档用于本次发布回退，后续稳定部署替代并确认无需回退后再清理。未向 Desktop 或 iOS 分发 service role。
+已应用 `20261122071008_edupi_security_boundaries.sql`、`20261122081223_edupi_fact_conflict_admission.sql`，并更新材料上传函数、路径校验 helper 及学生事件过滤函数。只有 Edge Runtime 容器重启，现有服务与私有配置沿用。服务器备份在 `/srv/edupi-supabase/backups/cloud-sync-20261122/`，目录权限 0700；保留原 schema 与函数归档用于本次发布回退，后续稳定部署替代并确认无需回退后再清理。未向 Desktop 或 iOS 分发 service role。
 
 ## 未完成验收
 
