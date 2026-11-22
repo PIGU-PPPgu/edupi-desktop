@@ -17,6 +17,8 @@
 
 `7f484fb` 最终源码检查：`/tmp/edupi-0125-final-source-tests-20261123.log` 为 5,303 tests／5,227 passed／0 failed／76 conditional skipped；`...-types-...log` 通过，`...-lint-...log` 为 0 errors、7 warnings，合同 10/10。完整首条消息持久化、丢 ACK、冷重载、同账号重新登录、跨账号草稿与迟到回执等 worker 回归 168/168；侧栏 queued/失败/确认及同步后刷新为实际 React 组件 7/7；原导航与侧栏组合 52/52、发送生命周期及草稿哨兵组合 49/49。首次全套的旧夹具 54 项失败留存在 `...-tests-20261123-attempt1.log`，补新导入与实际 scope/回执字段后完整重跑通过，未删断言。76 条条件跳过不计通过，固定 Core 班级计算与独立数据库的针对性证据另见 15/15 日志。
 
+随后 `21bdedb` 增加读取响应、SSE 重连和首次 thinking level 的 scope 回归，`fd6c736` 增加 fenced journal 恢复回归；最终源码整套更新为 5,321 tests／5,245 passed／0 failed／76 conditional skipped。真实接管脚本在 `/var/folders/xk/qmn_r8g93ljb7b5vqzq3rd040000gn/T/edupi-cloud-worker-evidence-20261123-3NBB2g/remote-worker.log` 通过：旧实例的 final journal 在新实例遇到 `409 runtime_fenced` 后保持原字节，旧请求变为 `uncertain` 且模型调用为 0，新队列请求由本机 Pi harness 完成且模型调用为 1。该证据使用隔离账号、workspace 和 public anon key，临时账号与状态已清理。
+
 真实资料保护回查仍保留严格失败记录：775 个原文件中 773 个保持原字节，`feishu-bridge.log` 与 `runtime_events.jsonl` 由现有飞书桥重连追加 32／553 bytes，旧前缀与备份一致；事件类型仅 `channel_reconnecting/channel_reconnected`。未用备份覆盖这些新日志，正常 `/Applications/EduPi.app` 未运行或替换。私有保护证据为安装 checkpoint 的 `evidence/real-baseline-after-source-recovery.json` 和 `real-automatic-log-delta.json`，后续安装前另取当时状态，不把本次严格比较改记为通过。
 
 日期：2026-11-22，替代本目录旧的开发工作树测试记录；原 R24.4b 本地账号服务与完整 R04/L4 状态不变。
