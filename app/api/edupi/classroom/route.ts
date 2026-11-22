@@ -5,6 +5,7 @@ import { classroomService, ClassroomError } from "@/lib/edupi-classroom-server";
 import type { ClassroomRequest } from "@/lib/edupi-classroom-types";
 import { createEduPiCloudClient, EduPiCloudError } from "@/lib/edupi-cloud-client";
 import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
+import { cloudClassroomService } from "@/lib/edupi-cloud-classroom";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,23 +23,8 @@ export async function POST(request: Request) {
     const selected = await captureEducationWriteScope(request);
     if (selected.mode === "cloud") {
       const client = createEduPiCloudClient();
-      const result = await client.edge("edupi-classroom", { body }, selected.scope);
-      const record = result.record && typeof result.record === "object" && !Array.isArray(result.record)
-        ? result.record as Record<string, unknown> : null;
-      if (["save", "restore"].includes(body.action as string) && record?.id) {
-        const readback = await client.edge("edupi-classroom", {
-          body: { domain: body.domain, action: "read", id: record.id, request_id: `${body.request_id || record.id}-readback` },
-        }, selected.scope);
-        const readbackRecord = readback.record && typeof readback.record === "object" && !Array.isArray(readback.record)
-          ? readback.record as Record<string, unknown> : null;
-        if (!readbackRecord || readbackRecord.revision !== record.revision
-          || JSON.stringify(readbackRecord.input) !== JSON.stringify(record.input)
-          || JSON.stringify(readbackRecord.result) !== JSON.stringify(record.result)) {
-          throw new EduPiCloudError("readback_unverified", "云端方案写入后回读不一致，请重新打开。", 503);
-        }
-        return NextResponse.json(readback);
-      }
-      return NextResponse.json(result);
+      const result = await cloudClassroomService(body, client, selected.scope!, request.signal);
+      return NextResponse.json(result, { status: result.queued === true ? 202 : 200 });
     }
     return NextResponse.json(await classroomService(body, request.signal));
   } catch (error) {

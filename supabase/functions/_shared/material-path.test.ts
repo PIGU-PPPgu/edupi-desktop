@@ -30,6 +30,14 @@ Deno.test("upload paths retain the exact workspace and material after URL normal
   assert.equal(normalizedPath, `/object/upload/sign/edupi-materials/${key}`);
 });
 
+Deno.test("a verified source hash makes upload retries reuse one object key", () => {
+  const hash = `sha256:${"a".repeat(64)}`;
+  const first = materialUploadObjectKey(workspaceId, "material-1", "file.pdf", hash);
+  const second = materialUploadObjectKey(workspaceId, "material-1", "file.pdf", hash);
+  assert.equal(first, second);
+  assert.match(first!, new RegExp(`^${workspaceId}/material-1/${"a".repeat(64)}-file\\.pdf$`));
+});
+
 Deno.test("upload paths reject unsafe workspace and filename components", () => {
   for (const workspace of ["../other", `${workspaceId}/../other`, `${workspaceId}%2fother`, ""]) {
     assert.equal(materialUploadObjectKey(workspace, "material-1", "file.pdf"), null);

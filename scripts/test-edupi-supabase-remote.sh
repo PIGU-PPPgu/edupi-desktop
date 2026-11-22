@@ -278,17 +278,16 @@ class_id="classroom-cloud-e2-$$"
 body="$(jq -nc --arg id "$class_id" \
   "{domain:\"grades\",action:\"preview\",id:\$id,input:{title:\"云端成绩方案\",class_name:\"703\"},result:{rows:[]},issues:[],request_id:(\"classroom-preview-\"+\$id)}")"
 status="$(request POST /functions/v1/edupi-classroom "$body")"
-expect_status classroom-preview "$status" 200
+expect_status classroom-direct-preview-requires-host "$status" 400
+expect_field classroom-direct-preview-code ".code" host_compute_required
 body="$(jq -nc --arg id "$class_id" \
   "{domain:\"grades\",action:\"save\",id:\$id,input:{title:\"云端成绩方案\",class_name:\"703\"},result:{rows:[{student_id:\"student-cloud-e2\",score:95}]},issues:[],request_id:(\"classroom-save-\"+\$id)}")"
 status="$(request POST /functions/v1/edupi-classroom "$body")"
-expect_status classroom-save "$status" 200
-expect_field classroom-save-revision ".record.revision" 0
+expect_status classroom-fabricated-save-rejected "$status" 400
 body="$(jq -nc --arg id "$class_id" \
   "{domain:\"grades\",action:\"read\",id:\$id,request_id:(\"classroom-read-\"+\$id)}")"
 status="$(request POST /functions/v1/edupi-classroom "$body")"
-expect_status classroom-read "$status" 200
-expect_field classroom-read-title ".record.input.title" "云端成绩方案"
+expect_status classroom-fabrication-did-not-create-plan "$status" 404
 
 status="$(curl -sS -o "$workdir/events.json" -w "%{http_code}" -X GET \
   "$API_URL/functions/v1/edupi-student-events?limit=20" \

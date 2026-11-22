@@ -329,7 +329,11 @@ jobs:
       - name: Prepare packaged Next.js server
         env:
           EDUPI_CORE_ROOT: ${{ github.workspace }}/.edupi-core-runtime
-        run: npm run desktop:prepare
+          SUPABASE_URL: https://edupi.intelliclass.online
+          SUPABASE_ANON_KEY: ${{ secrets.EDUPI_SUPABASE_ANON_KEY }}
+        run: |
+          test -n "$SUPABASE_ANON_KEY"
+          npm run desktop:prepare
 
       - name: Stage Core-approved Windows native asset
         if: runner.os == 'Windows'

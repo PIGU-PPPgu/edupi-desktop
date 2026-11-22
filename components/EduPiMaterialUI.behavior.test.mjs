@@ -71,7 +71,7 @@ for (const cloud of [true, false]) {
     assert.equal(nodes.find(node => node.type.name === "EduPiMaterialMetadataEditor")?.props.material.material_id, "synthetic-material-1");
     assert.equal(nodes.some(node => node.type.name === "EduPiMaterialScheduleProposal"), !cloud);
     assert.equal(nodes.some(node => node.type.name === "EduPiMaterialExcerpt"), !cloud);
-    assert.equal(f.nodes().some(node => node.type === "button" && text(node) === "上传材料"), !cloud);
+    assert.equal(f.nodes().some(node => node.type === "button" && text(node) === "上传材料"), true);
     assert.equal(f.nodes().some(node => node.type.name === "EduPiReceivedLessonProposal"), false);
   });
 }

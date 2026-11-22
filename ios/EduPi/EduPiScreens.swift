@@ -168,6 +168,26 @@ struct EduPiChatView: View {
                             draft = ""
                         }
                         .frame(minHeight: 44)
+                    } else if !state.isPreview {
+                        Menu("对话", systemImage: "list.bullet") {
+                            ForEach(state.cloudSessions) { session in
+                                Button(session.title.isEmpty ? "未命名对话" : session.title) {
+                                    Task { await state.openCloudSession(session.id) }
+                                }
+                            }
+                            ForEach(pendingSessions) { entry in
+                                Button("\(entry.taskTitle) · 待同步") {
+                                    if let id = entry.chatSessionID { Task { await state.openCloudSession(id) } }
+                                }
+                            }
+                        }
+                        .disabled(state.isSendingCloudChat)
+                        Button("新建") {
+                            Task {
+                                if await state.createCloudConversation() { draft = "" }
+                            }
+                        }
+                        .disabled(state.isWriting || state.isSyncing || state.isLoadingCloudChat)
                     }
                 }
                 if state.isPreview {
@@ -186,31 +206,46 @@ struct EduPiChatView: View {
                         Color.clear.frame(height: 1).id("chat-end")
                     }
                 } else {
-                    EduPiStatus(title: "对话服务暂未开通", icon: "bubble.left")
+                    cloudContent
                 }
             }
             .onChange(of: state.previewMessages.count) {
                 proxy.scrollTo("chat-end", anchor: .bottom)
             }
+            .onChange(of: state.cloudConversation?.messages.count) {
+                proxy.scrollTo("chat-end", anchor: .bottom)
+            }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if state.isPreview {
+            if state.isPreview || state.activeCloudSessionID != nil {
                 HStack(alignment: .bottom, spacing: 8) {
-                    TextField("试写消息", text: $draft, axis: .vertical)
+                    TextField(state.isPreview ? "试写消息" : "消息", text: $draft, axis: .vertical)
                         .lineLimit(1...4)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 12)
                         .background(EduPiColor.surface, in: RoundedRectangle(cornerRadius: 16))
                     Button {
-                        state.sendPreviewMessage(draft)
-                        draft = ""
+                        if state.isPreview {
+                            state.sendPreviewMessage(draft)
+                            draft = ""
+                        } else {
+                            let message = draft
+                            Task {
+                                if await state.sendCloudMessage(message) { draft = "" }
+                            }
+                        }
                     } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 34))
-                            .frame(width: 44, height: 44)
+                        if state.isSendingCloudChat {
+                            ProgressView().frame(width: 44, height: 44)
+                        } else {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 34))
+                                .frame(width: 44, height: 44)
+                        }
                     }
-                    .accessibilityLabel("发送预览消息")
-                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityLabel(state.isPreview ? "发送预览消息" : "发送消息")
+                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                              || (!state.isPreview && (state.isWriting || state.isSyncing || state.isLoadingCloudChat || hasBlockedSession)))
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 8)
@@ -219,7 +254,88 @@ struct EduPiChatView: View {
                 .background(EduPiColor.canvas)
             }
         }
+        .onChange(of: state.activeCloudSessionID) { draft = "" }
+        .task(id: "\(state.selectedTab.rawValue)-\(state.activeCloudSessionID ?? "")-\(state.isPreview)") {
+            guard !state.isPreview, state.selectedTab == .chat else { return }
+            await state.refreshCloudChat()
+            while !Task.isCancelled, state.selectedTab == .chat, state.activeCloudSessionID != nil {
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                await state.refreshCloudChat()
+            }
+        }
         .accessibilityIdentifier("chat-screen")
+    }
+
+    private var pendingSessions: [EduPiCloudOutboxEntry] {
+        state.pendingWrites.filter {
+            if case let .chatCreate(id, _) = $0.mutation { return !state.cloudSessions.contains(where: { $0.id == id }) }
+            return false
+        }
+    }
+
+    private var hasBlockedSession: Bool {
+        pendingSessions.contains { $0.chatSessionID == state.activeCloudSessionID && $0.isBlocked }
+    }
+
+    @ViewBuilder private var cloudContent: some View {
+        if let error = state.chatError {
+            Text(error).font(.footnote).foregroundStyle(.red)
+                .accessibilityIdentifier("cloud-chat-error")
+        }
+        if state.activeCloudSessionID == nil {
+            if state.cloudSessions.isEmpty && pendingSessions.isEmpty {
+                EduPiStatus(title: state.isLoadingCloudChat ? "正在读取对话" : "暂无对话", icon: "bubble.left")
+            }
+            ForEach(state.cloudSessions) { session in
+                Button(session.title.isEmpty ? "未命名对话" : session.title) {
+                    Task { await state.openCloudSession(session.id) }
+                }
+                .frame(minHeight: 44)
+            }
+            ForEach(pendingSessions) { entry in
+                Button("\(entry.taskTitle) · 待同步") {
+                    if let id = entry.chatSessionID { Task { await state.openCloudSession(id) } }
+                }
+                .frame(minHeight: 44)
+            }
+        } else {
+            if let conversation = state.cloudConversation {
+                Text(conversation.session.title.isEmpty ? "未命名对话" : conversation.session.title)
+                    .font(.headline).foregroundStyle(EduPiColor.ink)
+            }
+            LazyVStack(alignment: .leading, spacing: 12) {
+                ForEach(state.cloudConversation?.messages ?? []) { message in
+                    VStack(alignment: message.role == "user" ? .trailing : .leading, spacing: 6) {
+                        Text(message.message.text)
+                            .textSelection(.enabled)
+                            .padding(12)
+                            .foregroundStyle(EduPiColor.ink)
+                            .background(message.role == "user" ? EduPiColor.soft : EduPiColor.surface,
+                                        in: RoundedRectangle(cornerRadius: 16))
+                        if message.role == "user",
+                           let request = state.cloudConversation?.requests.first(where: { $0.id == message.requestID }),
+                           request.status != "completed" {
+                            Text(request.statusLabel).font(.footnote).foregroundStyle(EduPiColor.muted)
+                                .accessibilityIdentifier("cloud-chat-status-\(request.id)")
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
+                }
+                ForEach(state.pendingChatWrites) { entry in
+                    VStack(alignment: .trailing, spacing: 6) {
+                        if case let .chatPrompt(_, message) = entry.mutation {
+                            Text(message).textSelection(.enabled).padding(12)
+                                .background(EduPiColor.soft, in: RoundedRectangle(cornerRadius: 16))
+                        }
+                        Text(entry.lastError ?? entry.statusLabel)
+                            .font(.footnote).foregroundStyle(entry.isBlocked ? .red : EduPiColor.muted)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .accessibilityIdentifier("pending-chat-\(entry.id)")
+                }
+                Color.clear.frame(height: 1).id("chat-end")
+            }
+        }
     }
 }
 
@@ -233,13 +349,34 @@ struct EduPiWorkspaceView: View {
     var body: some View {
         EduPiPage {
             EduPiHeader(title: "工作区") {
-                if state.isPreview {
+                if state.canWriteTasks {
                     Button {
                         adding = true
                     } label: {
                         EduPiIconButtonLabel(icon: "plus")
                     }
                     .accessibilityLabel("新建任务")
+                    .disabled(state.isWriting || state.isSyncing)
+                }
+            }
+            if !state.pendingTaskWrites.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    EduPiSectionHeading(title: "待同步")
+                    EduPiSurface {
+                        ForEach(state.pendingTaskWrites) { entry in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(entry.taskTitle).font(.body.weight(.semibold))
+                                Text("\(entry.actionLabel) · \(entry.statusLabel)")
+                                    .font(.footnote).foregroundStyle(EduPiColor.muted)
+                                if let error = entry.lastError {
+                                    Text(error).font(.footnote)
+                                        .foregroundStyle(entry.isBlocked ? .red : EduPiColor.muted)
+                                }
+                            }
+                            .padding(14)
+                            .accessibilityIdentifier("pending-write-\(entry.id)")
+                        }
+                    }
                 }
             }
             if textSize.isAccessibilitySize {
@@ -601,6 +738,18 @@ struct EduPiTaskDetailView: View {
                 }
                 .font(.body.weight(.semibold))
                 .frame(minHeight: 44)
+                .disabled(state.isTaskBusy(id) || state.isWriting || state.isSyncing)
+                if state.movingTaskIDs.contains(id) {
+                    ProgressView("正在保存")
+                }
+                if let pending = state.pendingTaskWrites.first(where: { $0.taskID == id }) {
+                    Text(pending.lastError ?? pending.statusLabel)
+                        .font(.footnote).foregroundStyle(pending.isBlocked ? .red : EduPiColor.muted)
+                }
+                if let error = state.mutationError {
+                    Text(error).font(.footnote).foregroundStyle(.red)
+                        .accessibilityIdentifier("task-write-error")
+                }
             } else {
                 EduPiStatus(title: "任务已不可用")
             }
@@ -621,8 +770,14 @@ struct EduPiCreateTaskView: View {
         NavigationStack {
             Form {
                 TextField("任务名称", text: $title)
+                    .disabled(state.isCreatingTask || isSaved)
                 TextField("备注", text: $note, axis: .vertical)
                     .lineLimit(2...6)
+                    .disabled(state.isCreatingTask || isSaved)
+                if let error = state.mutationError {
+                    Text(error).font(.footnote).foregroundStyle(.red)
+                        .accessibilityIdentifier("task-create-error")
+                }
             }
             .scrollContentBackground(.hidden)
             .background(EduPiColor.canvas)
@@ -631,18 +786,28 @@ struct EduPiCreateTaskView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
+                        .disabled(state.isCreatingTask)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button {
                         Task {
                             if await state.createTask(title: title, note: note, requestID: requestID) { dismiss() }
                         }
+                    } label: {
+                        if state.isCreatingTask {
+                            ProgressView().accessibilityLabel("正在保存")
+                        } else {
+                            Text("保存")
+                        }
                     }
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || title.count > 240)
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || title.count > 240 || state.isWriting || state.isSyncing || isSaved)
                 }
             }
         }
+        .interactiveDismissDisabled(state.isCreatingTask)
     }
+
+    private var isSaved: Bool { state.pendingWrites.contains(where: { $0.id == requestID }) }
 }
 
 struct EduPiStudentDetailView: View {
@@ -971,6 +1136,11 @@ private struct EduPiSettingsContent: View {
             Section("账户") {
                 LabeledContent("账号", value: state.accountName)
                 if !state.isPreview {
+                    if let workspaceID = state.selectedWorkspaceID {
+                        LabeledContent("工作区", value: workspaceID)
+                    }
+                    Button("切换工作区") { state.showWorkspaceSelection() }
+                        .disabled(state.isWriting || state.isSyncing)
                     if let lastSync = state.lastSync {
                         LabeledContent("上次同步", value: lastSync.formatted(date: .omitted, time: .shortened))
                     }
@@ -979,7 +1149,7 @@ private struct EduPiSettingsContent: View {
                     } label: {
                         if state.isSyncing { ProgressView() } else { Text("同步数据") }
                     }
-                    .disabled(state.isSyncing)
+                    .disabled(state.isSyncing || state.isWriting)
                 }
             }
             Section {

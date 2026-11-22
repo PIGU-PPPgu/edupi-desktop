@@ -45,7 +45,8 @@ async function mount({ existing = false, durable = true, immediate = false, dela
   let timerId = 0;
   const timer = fn => { timers.set(++timerId, fn); return timerId; };
   const frame = fn => timer(fn);
-  const host = { api: null, hook: null, input: { current: null }, creations: [], history: new Map(), pending: [], imageReaders: [], startup: deferred() };
+  const host = { api: null, hook: null, input: { current: null }, creations: [], history: new Map(), pending: [], imageReaders: [], startup: deferred(),
+    localIntents: 0, localCaptures: 0 };
   if (existing) host.history.set(session().id, initialHistory);
   const modules = { ...pure, react: React, "react/jsx-runtime": { jsx, jsxs, Fragment: React.Fragment } };
   const load = (name, extras = {}) => {
@@ -101,9 +102,9 @@ async function mount({ existing = false, durable = true, immediate = false, dela
     if (command.type === "get_commands") return { commands: [] };
     assert.fail(`Unexpected synthetic command ${command.type}`);
   } };
-  modules["@/lib/edupi-ambient-message"] = { persistEduPiPromptIntent: async () => "pending",
+  modules["@/lib/edupi-ambient-message"] = { persistEduPiPromptIntent: async () => { host.localIntents++; return "pending"; },
     reconcileEduPiCapturedPrompt: async () => "unavailable", resolveEduPiPromptIntentClient: async () => {},
-    sendEduPiCapturedPrompt: async ({ sessionId, command }) => { if (!durable) { await receive(sessionId, command); return "accepted"; } return "disabled"; } };
+    sendEduPiCapturedPrompt: async ({ sessionId, command }) => { host.localCaptures++; if (!durable) { await receive(sessionId, command); return "accepted"; } return "disabled"; } };
   modules["@/lib/fetch-timeout"] = { fetchWithRetry: fetch, fetchJsonWithDeadline: async url => { const res = await fetch(url); return { response: res, body: await res.json() }; } };
   modules["@/lib/desktop-updater"] = { isTauriDesktop: () => durable };
   modules["@/lib/edupi-recall-prompt-client"] = {
@@ -206,6 +207,21 @@ test("an interrupted Zhixue turn shows the confirmed login and remaining setup o
     assert.equal(f.container.querySelector(".edupi-chat-zhixue-status"), null);
     await f.run(() => f.host.api.select(session().id));
     assert.match(f.container.querySelector(".edupi-chat-zhixue-status")?.textContent, /已确认登录/);
+  } finally { await f.close(); }
+});
+
+for (const existing of [false, true]) test(`cloud ${existing ? "existing" : "new"} Desktop chat sends through its cloud queue without touching local Core intent`, async () => {
+  const f = await mount({ existing, durable: true });
+  try {
+    await f.run(() => existing ? f.host.api.select("cloud-existing", "cloud:workspace") : f.host.api.newCwd("cloud:workspace"));
+    await f.type("合成云端消息");
+    await f.send();
+    assert.equal(f.host.pending.length, 1);
+    assert.equal(f.host.localIntents, 0);
+    assert.equal(f.host.localCaptures, 0);
+    assert.equal(f.host.pending[0].command.message, "合成云端消息");
+    await f.accept(); await f.done();
+    assert.equal(f.textarea().value, "");
   } finally { await f.close(); }
 });
 

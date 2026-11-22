@@ -1,15 +1,26 @@
 import { createHash, randomUUID } from "node:crypto";
 import { assertMobileDashboardContract, EduPiCloudContractError, type EduPiMobileDashboardResponse } from "./edupi-cloud-contract.ts";
-import { cloudStateTransaction, readCloudState, type EduPiCloudMode, type EduPiCloudOutboxEntry,
+import { cloudStateTransaction, readCloudState, cloudRuntimeDirectory, type EduPiCloudMode, type EduPiCloudOutboxEntry,
   type EduPiCloudSession, type EduPiCloudState } from "./edupi-cloud-store.ts";
 import { cloudRecord as record, verifyCloudWrite, CloudReadbackError, CloudReadbackConflictError } from "./edupi-cloud-verification.ts";
 import { buildCloudTaskEnvelope } from "./edupi-cloud-writer-contract.ts";
 import { buildCloudIntakeEnvelope } from "./edupi-cloud-intake.ts";
+import { assertCloudSyncContract } from "./edupi-cloud-sync-contract.ts";
+import type { MaterialStagingDescriptor } from "./edupi-material-staging.ts";
+import type { EducationIntakeCommand } from "./edupi-education-intake.ts";
 
 const DEFAULT_URL = "https://edupi.intelliclass.online";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const refreshes = new Map<string, Promise<EduPiCloudState>>();
 const deliveries = new Map<string, Promise<Record<string, unknown>>>();
+const EDGE_OPERATIONS: Record<string, string> = {
+  students: "edupi-students",
+  entities: "edupi-entities",
+  sessions: "edupi-sessions",
+  runtime: "edupi-core-runtime",
+  classroom: "edupi-classroom",
+  "student-events": "edupi-student-events",
+};
 export type CloudScope = { issuer: string; accountId: string; workspaceId: string; generation: number };
 type Workspace = { id: string; mode: string };
 export type EduPiCloudClientOptions = {
@@ -251,11 +262,16 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
     await assertScope(selected);
     const authenticated = await ensureSession();
     await assertScope(selected);
-    const response = await request("/functions/v1/edupi-core-broker", {
+    const response = await request(`/functions/v1/${EDGE_OPERATIONS[operationName] || "edupi-core-broker"}`, {
       token: authenticated.session!.accessToken, workspaceId: selected.workspaceId,
-      body: { ...body, operation: operationName },
+      body: EDGE_OPERATIONS[operationName] && operationName !== "runtime"
+        ? body : { ...body, operation: operationName },
     });
     await assertScope(selected);
+    if (["students", "entities", "sessions"].includes(operationName)) {
+      try { assertCloudSyncContract(response); }
+      catch { return fail("unsupported_contract", "云端同步接口版本与当前客户端不匹配。", 502); }
+    }
     return response;
   }
   async function dashboard(selected?: CloudScope): Promise<EduPiMobileDashboardResponse> {
@@ -276,7 +292,8 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
     await assertScope(scope);
     const envelope = record(body.envelope);
     const requestId = operationName === "command" ? envelope?.request_id : body.request_id;
-    if (!text(requestId) || !["command", "task-command", "intake-command", "education-facts", "material-metadata"].includes(operationName))
+    if (!text(requestId) || !["command", "task-command", "intake-command", "education-facts",
+      "material-metadata", "material-intake", "students", "entities", "sessions", "classroom", "student-events"].includes(operationName))
       return fail("invalid_request", "同步写入必须包含固定请求 ID。", 400);
     const key = { issuer: scope.issuer, accountId: scope.accountId, workspaceId: scope.workspaceId,
       operation: operationName, requestId };
@@ -356,9 +373,14 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
           }
           body = { envelope: body.envelope };
         }
-        const result = await operation(operationName, body, scope);
-        await verifyCloudWrite(operationName, body, result, scope.workspaceId,
-          (op, body) => operation(op, body, scope));
+        let result: Record<string, unknown>;
+        if (entry.operation === "material-intake") {
+          result = await deliverMaterialIntake(entry, body, scope);
+        } else {
+          result = await operation(operationName, body, scope);
+          await verifyCloudWrite(operationName, body, result, scope.workspaceId,
+            (op, body) => operation(op, body, scope));
+        }
         await assertScope(scope);
         await tx(current => {
           if (current.generation !== scope.generation) return fail("scope_changed", "工作区已改变。", 409);
@@ -369,6 +391,7 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
           ];
           return { result: null, write: true };
         });
+        if (entry.operation === "material-intake") await settleCompletedMaterials(scope);
         return result;
       } catch (error) {
         await tx(current => {
@@ -390,10 +413,163 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
     deliveries.set(key, pending);
     try { return await pending; } finally { if (deliveries.get(key) === pending) deliveries.delete(key); }
   }
+  async function settleCompletedMaterials(scope: CloudScope) {
+    const current = await assertScope(scope);
+    const completed = current.completed.filter(item => item.entry.operation === "material-intake"
+      && item.entry.issuer === scope.issuer && item.entry.accountId === scope.accountId
+      && item.entry.workspaceId === scope.workspaceId && item.result.upload_verified === true
+      && item.result.staging_settled !== true);
+    if (!completed.length) return;
+    const { listStagedMaterials, settleStagedMaterial } = await import("./edupi-material-staging.ts");
+    for (const item of completed) {
+      await assertScope(scope);
+      const descriptor = record(item.entry.body.staging);
+      let settled = false;
+      try {
+        if (!descriptor || typeof descriptor.staging_id !== "string") throw new Error("invalid_staging");
+        const staged = listStagedMaterials({ stateDir }).find(row => row.staging_id === descriptor.staging_id);
+        if (staged && (staged.source_hash !== descriptor.source_hash
+          || staged.staging_path !== descriptor.staging_path
+          || staged.expected_size_bytes !== descriptor.expected_size_bytes)) throw new Error("staging_changed");
+        settleStagedMaterial(descriptor.staging_id, "accepted_receipt", { stateDir });
+        settled = true;
+      } catch { /* The durable receipt retains an independently retryable settlement. */ }
+      await tx(latest => {
+        const row = latest.completed.find(row => row.entry.id === item.entry.id);
+        if (!row) return { result: null };
+        row.result.staging_settled = settled;
+        return { result: null, write: true };
+      });
+    }
+  }
+  async function deliverMaterialIntake(entry: EduPiCloudOutboxEntry, body: Record<string, unknown>, scope: CloudScope): Promise<Record<string, unknown>> {
+    const { readVerifiedStagedMaterial } = await import("./edupi-material-recognition.ts");
+    const descriptor = record(body.staging) as MaterialStagingDescriptor | null;
+    const command = record(body.command) as EducationIntakeCommand | null;
+    if (!descriptor || !command || command.command_type !== "intake_material"
+      || typeof body.request_id !== "string" || typeof body.idempotency_key !== "string") {
+      return fail("invalid_request", "云端材料接入请求无效。", 400);
+    }
+    let verified: { bytes: Buffer; extension: string };
+    try {
+      verified = await readVerifiedStagedMaterial(descriptor);
+    } catch {
+      return fail("staging_unavailable", "暂存材料无法读取，材料仍保留在待接入列表。", 409);
+    }
+    const material = record(command.material);
+    if (!material || verified.bytes.byteLength !== Number(body.size_bytes)
+      || material.source_hash !== body.sha256
+      || descriptor.source_hash !== body.sha256
+      || descriptor.expected_size_bytes !== Number(body.size_bytes)) {
+      return fail("staging_integrity_conflict", "暂存材料已变化，请重新上传。", 409);
+    }
+    const uploadResponse = await edgeRequest("edupi-materials", {
+      body: {
+        action: "create_upload",
+        request_id: body.request_id,
+        material_id: body.material_id,
+        file_name: body.file_name,
+        content_type: body.content_type,
+        size_bytes: body.size_bytes,
+        sha256: body.sha256,
+        ...(typeof body.object_key === "string" ? { object_key: body.object_key } : {}),
+      },
+    }, scope);
+    const token = typeof uploadResponse.token === "string" && uploadResponse.token.length > 0 && uploadResponse.token.length <= 4000
+      ? uploadResponse.token : null;
+    const objectKey = typeof uploadResponse.object_key === "string" && uploadResponse.object_key.length > 0 && uploadResponse.object_key.length <= 500
+      ? uploadResponse.object_key : null;
+    if (!token || !objectKey || uploadResponse.external_send !== false) {
+      return fail("invalid_response", "云端材料上传地址无效。", 502);
+    }
+    if (body.object_key && body.object_key !== objectKey) {
+      return fail("material_integrity_conflict", "云端材料对象身份发生变化。", 409);
+    }
+    if (!body.envelope) {
+      const currentSnapshot = await snapshot(scope);
+      const envelope = buildCloudIntakeEnvelope({
+        snapshotId: String(currentSnapshot.snapshot_id),
+        command,
+        storageObjectKey: objectKey,
+        requestId: String(body.request_id),
+        idempotencyKey: String(body.idempotency_key),
+      });
+      body = await tx(current => {
+        if (current.generation !== scope.generation) return fail("scope_changed", "工作区已改变。", 409);
+        const durable = current.outbox.find(item => item.id === entry.id);
+        if (!durable) return fail("outbox_missing", "待同步材料记录已改变。", 409);
+        durable.body.object_key ||= objectKey;
+        durable.body.envelope ||= envelope;
+        return { result: structuredClone(durable.body), write: true };
+      });
+      entry.body = body;
+    }
+    const verifyUpload = async () => edgeRequest("edupi-materials", {
+      body: {
+        action: "verify_upload",
+        request_id: body.request_id,
+        material_id: body.material_id,
+        file_name: body.file_name,
+        content_type: body.content_type,
+        size_bytes: body.size_bytes,
+        sha256: body.sha256,
+        object_key: body.object_key || objectKey,
+      },
+    }, scope);
+    let alreadyVerified = false;
+    try {
+      const existing = await verifyUpload();
+      alreadyVerified = existing.verified === true && existing.object_key === (body.object_key || objectKey)
+        && existing.sha256 === body.sha256 && existing.size_bytes === body.size_bytes;
+    } catch (error) {
+      if (!(error instanceof EduPiCloudError)
+        || !["material_not_uploaded", "material_integrity_conflict"].includes(error.code)) throw error;
+      if (error.code === "material_integrity_conflict") throw error;
+    }
+    if (!alreadyVerified) {
+      let putSucceeded = false;
+      const configValue = config();
+      const encodedPath = objectKey.split("/").map(segment => encodeURIComponent(segment)).join("/");
+      try {
+        const uploaded = await transport(
+          `${configValue.url}/storage/v1/object/upload/sign/edupi-materials/${encodedPath}?token=${encodeURIComponent(token)}`,
+          {
+            method: "PUT", redirect: "error", cache: "no-store", signal: AbortSignal.timeout(30_000),
+            headers: { "Content-Type": String(body.content_type) }, body: Buffer.from(verified.bytes),
+          },
+        );
+        putSucceeded = uploaded.ok;
+      } catch {
+        putSucceeded = false;
+      }
+      try {
+        const confirmed = await verifyUpload();
+        if (confirmed.verified !== true || confirmed.object_key !== objectKey
+          || confirmed.sha256 !== body.sha256 || confirmed.size_bytes !== body.size_bytes) {
+          return fail("material_integrity_conflict", "云端材料二进制核对失败，材料仍保留。", 409);
+        }
+      } catch (error) {
+        if (error instanceof EduPiCloudError && error.code === "material_integrity_conflict") throw error;
+        if (!putSucceeded) return fail("network_unavailable", "材料上传未完成，材料仍保留。");
+        return fail("material_upload_unverified", "材料上传尚未通过二进制核对，材料仍保留。", 503);
+      }
+    }
+    const commandResult = await operation("command", { envelope: body.envelope }, scope);
+    await verifyCloudWrite("command", { envelope: body.envelope }, commandResult, scope.workspaceId,
+      (op, readBody) => operation(op, readBody, scope));
+    return {
+      ok: true, operation: "material-intake", request_id: body.request_id,
+      object_key: objectKey, upload_verified: true, response: commandResult,
+      replayed: commandResult.replayed === true, external_send: false,
+    };
+  }
   async function operationWithOutbox(operationName: string, body: Record<string, unknown>, scope?: CloudScope) {
     const selected = scope || await captureScope();
     const prepared = await prepare(operationName, body, selected);
-    if ("completed" in prepared) return { queued: false as const, result: prepared.completed };
+    if ("completed" in prepared) {
+      if (operationName === "material-intake") await settleCompletedMaterials(selected);
+      return { queued: false as const, result: prepared.completed };
+    }
     const entry = prepared;
     try { return { queued: false as const, result: await deliver(entry, selected) }; }
     catch (error) {
@@ -408,6 +584,7 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
     if (current.mode !== "cloud" || !current.session || !current.workspaceId)
       return { flushed: 0, pending: current.outbox.length };
     const scope = await captureScope();
+    await settleCompletedMaterials(scope);
     let flushed = 0;
     for (const entry of current.outbox.filter(item => item.issuer === scope.issuer && item.accountId === scope.accountId
       && item.workspaceId === scope.workspaceId && item.status === "pending")) {
@@ -480,8 +657,26 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
     sizeBytes: number;
     sha256: string;
     bytes: Uint8Array;
+    staging?: MaterialStagingDescriptor;
+    command?: EducationIntakeCommand;
+    requestId?: string;
+    idempotencyKey?: string;
   }, selected?: CloudScope) {
     const scope = selected || await captureScope();
+    if (input.staging && input.command && input.requestId && input.idempotencyKey) {
+      const durable = await operationWithOutbox("material-intake", {
+        request_id: input.requestId,
+        idempotency_key: input.idempotencyKey,
+        material_id: input.materialId,
+        file_name: input.fileName,
+        content_type: input.contentType,
+        size_bytes: input.sizeBytes,
+        sha256: input.sha256,
+        staging: structuredClone(input.staging),
+        command: structuredClone(input.command),
+      }, scope);
+      return durable;
+    }
     const response = await edgeRequest("edupi-materials", {
       body: {
         action: "create_upload",
@@ -518,11 +713,27 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
       return fail("network_unavailable", "材料上传未完成，暂存文件仍保留。");
     }
     if (!uploaded.ok) return fail("material_upload_failed", "材料上传未完成，暂存文件仍保留。", 503);
+    const verifiedUpload = await edgeRequest("edupi-materials", {
+      body: {
+        action: "verify_upload",
+        material_id: input.materialId,
+        file_name: input.fileName,
+        content_type: input.contentType,
+        size_bytes: input.sizeBytes,
+        sha256: input.sha256,
+        object_key: objectKey,
+      },
+    }, scope);
+    if (verifiedUpload.verified !== true || verifiedUpload.object_key !== objectKey
+      || verifiedUpload.sha256 !== input.sha256 || verifiedUpload.size_bytes !== input.sizeBytes) {
+      return fail("material_upload_unverified", "材料上传尚未通过二进制核对，材料仍保留。", 503);
+    }
     await assertScope(scope);
-    return { objectKey, token, externalSend: false as const };
+    return { objectKey, token, uploadVerified: true as const, externalSend: false as const };
   }
   return {
-    state, captureScope, persistMode, login, refresh: () => refresh(), logout, listWorkspaces, selectWorkspace, dashboard,
+    state, captureScope, assertScope, runtimeDirectory: () => cloudRuntimeDirectory(stateDir),
+    persistMode, login, refresh: () => refresh(), logout, listWorkspaces, selectWorkspace, dashboard,
     config: () => { const current = config(); return { url: current.url, configured: Boolean(current.anonKey) }; },
     snapshot, taskCommand, intakeCommand, uploadMaterial, operation, operationWithOutbox, flushOutbox, outbox: async () => (await state()).outbox,
     edge: edgeRequest,

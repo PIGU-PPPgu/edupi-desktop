@@ -5,26 +5,28 @@ import Foundation
 final class AppSettings: ObservableObject {
     private static let serverAddressKey = "edupi.serverAddress"
     private static let usernameKey = "edupi.username"
+    private let defaults: UserDefaults
 
     static let defaultServerAddress = "https://edupi.intelliclass.online"
 
     @Published var serverAddress: String {
         didSet {
-            UserDefaults.standard.set(serverAddress, forKey: Self.serverAddressKey)
+            defaults.set(serverAddress, forKey: Self.serverAddressKey)
         }
     }
 
     @Published var username: String {
         didSet {
-            UserDefaults.standard.set(username, forKey: Self.usernameKey)
+            defaults.set(username, forKey: Self.usernameKey)
         }
     }
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         serverAddress = Self.launchArgument(named: "-edupi-server")
-            ?? UserDefaults.standard.string(forKey: Self.serverAddressKey)
+            ?? defaults.string(forKey: Self.serverAddressKey)
             ?? Self.defaultServerAddress
-        username = UserDefaults.standard.string(forKey: Self.usernameKey) ?? "pigou"
+        username = defaults.string(forKey: Self.usernameKey) ?? "pigou"
     }
 
     func clearServerAddress() {

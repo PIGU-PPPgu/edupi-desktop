@@ -1,5 +1,16 @@
 # R24.4c 可选云端同步验收
 
+2026-11-23 当前续验取代下方 22 日的“未接入”状态：候选 `.125`，基线 main `f0cb69e9`，分支 `codex/edupi-cloud-risk-completion-20261123`。源码已实现，当前仍待最终合并、macOS 签名安装/升级/公开 Release 和实体 iPhone，整体不记为完成。Windows 继续暂停。
+
+- 学生 import/update/history/restore：真实 PostgreSQL、角色/RLS、同名异班、50 条版本窗口和 HTTPS 写后回读通过。
+- 云端文字对话：专用 lease、nonce/generation、请求幂等、事件游标、本机真实 Pi harness 和合成模型 HTTPS 回读通过；页面完成两轮，final journal 在服务重启后恢复，不重复调用模型。工具关闭；合成模型只用于传输验收，不代表教学内容质量。
+- 材料：实际页面登录/选择 workspace、暂存→Storage 字节核验→列表、软删除→回收站恢复→原列表回读通过；另实际断网保存后停止/重启服务，确认原 ID/fingerprint 和文件保留，恢复网络后 outbox=0、upload_verified=true、staging_settled=true。
+- 班级：固定 Core `fc89b3bc…` 真实成绩、排座、值日计算，独立 PostgreSQL 14/14 通过；HTTPS 三域 preview→save→客户端重建重放→回读通过，值日真实任务在 dashboard 回读一致。
+- iOS：33 条 cloud Swift XCTest、5 条现有 UI 测试通过，最终 sync 合同 hash 与 Desktop/Edge/registry 一致；这些是 Simulator/URLProtocol 证据，实体 iPhone 仍未接入。
+- 新增 SQL 已按回滚事务检查后增量部署，并备份服务器 schema、control data、原函数和配置到 `/srv/edupi-supabase/backups/20261123-cloud-risk/`；没有重装数据库或分发 service role。
+
+本机证据：`/tmp/edupi-cloud-risk-http-20261123.log`、`/tmp/edupi-cloud-chat-worker-e2-20261123.log`、`/tmp/edupi-desktop-cloud-client-e2-20261123.log`、`/tmp/edupi-classroom-https-live3-20261123.log`、`/tmp/edupi-cloud-classroom-main-verification2-20261123.log`、`/tmp/edupi-cloud-lease-regression-20261123.log`、`/tmp/edupi-risk-ui-20261123/offline-proof.json`。页面使用隔离账号/根和合成 Tauri IPC 适配，仅证明开发页面；原生 WebView 必须用最终安装包另验。22 日记录作为历史阶段保留。
+
 日期：2026-11-22，替代本目录旧的开发工作树测试记录；原 R24.4b 本地账号服务与完整 R04/L4 状态不变。
 
 当前状态：**部分实现；本次范围的开发验收与独立审查通过，源码合并状态以本 PR 记录为准；完整 Desktop/iOS 产品同步与安装发布未验收。**

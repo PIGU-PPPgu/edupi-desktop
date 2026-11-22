@@ -1,0 +1,20 @@
+{
+  "before_restart": {
+    "id": "14c227bd8da3579e1e9b7471d03f063544ae71589c5db5c896d82ad1caa76052",
+    "fingerprint": "2a4a9c5d62aaae21eb30b22867a2e5182a28cce6291b910b21719a0e1fcb1493",
+    "request_id": "cloud-intake-material-f0c84ecd38c4557dd0567a02e735533d23a16ec40ea20d6f1184f3e725e37631",
+    "operation": "material-intake",
+    "staging_exists": true
+  },
+  "after_restart": {
+    "same_identity": true,
+    "staging_exists": true,
+    "pending": 1
+  },
+  "after_network_recovery": {
+    "pending": 0,
+    "upload_verified": true,
+    "staging_settled": true,
+    "same_request_id": true
+  }
+}

@@ -3,6 +3,9 @@ import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-fo
 import { deleteEducationEntity, restoreEducationEntity } from "@/lib/edupi-education-server";
 import { ENTITY_DELETE_KINDS, EntityDeleteError, type EntityDeleteKind } from "@/lib/edupi-entity-delete";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
+import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
+import { mutateCloudEntity } from "@/lib/edupi-cloud-entities";
+import { EduPiCloudError } from "@/lib/edupi-cloud-client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,12 +44,18 @@ async function handle(request: Request, context: { params: Promise<{ kind: strin
   if (!hasJsonContentType(request)) return NextResponse.json({ error: "请使用 JSON。", code: "invalid_content_type" }, { status: 415 });
   try {
     const input = await requestInput(request, context.params, action);
+    const selected = await captureEducationWriteScope(request);
+    if (selected.mode === "cloud" && selected.scope) {
+      const result = await mutateCloudEntity({ ...input, action }, selected.scope);
+      return NextResponse.json(result, { status: "queued" in result && result.queued ? 202 : 200 });
+    }
     const result = action === "delete"
       ? await deleteEducationEntity({ ...input, signal: request.signal })
       : await restoreEducationEntity({ ...input, restoreRequestId: input.restoreRequestId as string, signal: request.signal });
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) return NextResponse.json({ error: "请求过大。", code: "too_large" }, { status: 413 });
+    if (error instanceof EduPiCloudError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     const code = error instanceof EntityDeleteError ? error.code : "unavailable";
     return NextResponse.json({ error: error instanceof Error ? error.message : action === "delete" ? "删除暂不可用。" : "恢复暂不可用。", code }, { status: statusFor(code) });
   }

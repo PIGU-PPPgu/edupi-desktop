@@ -7,13 +7,16 @@
 // Call sites previously repeated the same 5-line fetch block 13× in
 // hooks/useAgentSession.ts. This helper collapses that down to one line.
 
+import { educationWriteHeaders } from "./edupi-education-client";
+export { educationWriteHeaders } from "./edupi-education-client";
+
 export async function sendAgentCommand<T = unknown>(
   sessionId: string,
   command: Record<string, unknown>,
 ): Promise<T> {
   const res = await fetch(`/api/agent/${encodeURIComponent(sessionId)}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: educationWriteHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(command),
   });
   const body = (await res.json().catch(() => ({}))) as {

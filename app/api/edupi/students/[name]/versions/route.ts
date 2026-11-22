@@ -3,6 +3,12 @@ import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-fo
 import { readEducationContract } from "@/lib/edupi-education-server";
 import type { EducationContract } from "@/lib/edupi-education-contract";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
+import { createEduPiCloudClient, EduPiCloudError } from "@/lib/edupi-cloud-client";
+import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
+import {
+  readCloudStudentEducationData, readCloudStudentProfileVersions, restoreCloudStudentProfileVersion,
+  type CloudStudentContext,
+} from "@/lib/edupi-cloud-students";
 import {
   StudentProfileVersionError,
   readStudentProfileVersions,
@@ -92,8 +98,11 @@ function desiredValues(version: StudentProfileVersion, side: StudentProfileVersi
   return side === "before" ? version.beforeValues : version.afterValues;
 }
 
-async function readCurrentState(name: string, studentId: string): Promise<CurrentState | null> {
-  const [data, history] = await Promise.all([readEducationContract(), readStudentProfileVersions(studentId)]);
+async function readCurrentState(name: string, studentId: string, cloud?: CloudStudentContext): Promise<CurrentState | null> {
+  const [data, history] = await Promise.all(cloud ? [
+    readCloudStudentEducationData(cloud.client, cloud.scope),
+    readCloudStudentProfileVersions(studentId, cloud.client, cloud.scope),
+  ] : [readEducationContract(), readStudentProfileVersions(studentId, undefined, true)]);
   const student = studentFor(data, name, studentId);
   const values = studentProfileValuesFromProjection(student);
   if (!student || !values || history.studentName !== name || revisionFor(student) !== history.profileRevision
@@ -122,10 +131,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ name
   const studentId = text(new URL(request.url).searchParams.get("studentId"), 240);
   if (!name || !studentId) return errorResponse("invalid_request", 400, "学生身份无效");
   try {
-    const history = await readStudentProfileVersions(studentId, request.signal);
+    const client = createEduPiCloudClient();
+    const history = (await client.state()).mode === "cloud"
+      ? await readCloudStudentProfileVersions(studentId, client, await client.captureScope())
+      : await readStudentProfileVersions(studentId, request.signal, true);
     if (history.studentName !== name) return errorResponse("student_not_found", 404, "学生档案不存在");
     return NextResponse.json({ history });
   } catch (error) {
+    if (error instanceof EduPiCloudError) return errorResponse(error.code, error.status, error.message);
     return error instanceof StudentProfileVersionError ? mapError(error) : errorResponse("unavailable", 503, "学生档案历史暂不可用");
   }
 }
@@ -142,32 +155,45 @@ export async function POST(request: Request, { params }: { params: Promise<{ nam
   if (!name || !body) return errorResponse("invalid_request", 400, "学生档案恢复请求无效");
 
   try {
-    const initial = await readCurrentState(name, body.studentId);
+    const client = createEduPiCloudClient();
+    const selected = await captureEducationWriteScope(request, client);
+    const cloud = selected.mode === "cloud" ? { client, scope: selected.scope! } : undefined;
+    const initial = await readCurrentState(name, body.studentId, cloud);
     if (!initial) return errorResponse("stale_student", 409, "学生档案已更新，请刷新后重试");
+    const requestId = studentProfileRestoreRequestId(body);
+    const owned = initial.history.versions.find(version => version.revision === body.expectedRevision + 1
+      && version.sourceKind === "restore" && version.requestId === requestId);
+    if (owned && isOwnedRestore(initial, body, requestId, owned.afterValues)) {
+      return NextResponse.json({ result: null, data: initial.data, history: initial.history, reconciled: true });
+    }
     const version = versionFor(initial.history, body.versionId);
     if (!version) return errorResponse("version_not_found", 404, "这个档案版本已不存在");
     const desired = desiredValues(version, body.versionSide);
-    const requestId = studentProfileRestoreRequestId(body);
-    if (isOwnedRestore(initial, body, requestId, desired)) {
-      return NextResponse.json({ result: null, data: initial.data, history: initial.history, reconciled: true });
-    }
     if (initial.history.profileRevision !== body.expectedRevision) return errorResponse("stale_student", 409, "学生档案已更新，请刷新后重试");
     if (sameStudentProfileValues(initial.values, desired)) return errorResponse("version_already_current", 409, "当前档案已经是这个版本");
 
     let receipt: StudentProfileMutationReceipt;
     try {
-      receipt = await restoreStudentProfileVersion({ ...body, studentName: name, signal: request.signal });
+      receipt = cloud
+        ? await restoreCloudStudentProfileVersion({ ...body, studentName: name, signal: request.signal }, cloud.client, cloud.scope)
+        : await restoreStudentProfileVersion({ ...body, studentName: name, signal: request.signal, localOnly: true });
     } catch (error) {
-      const reconciled = await readCurrentState(name, body.studentId).catch(() => null);
+      const reconciled = await readCurrentState(name, body.studentId, cloud).catch(() => null);
       if (reconciled && isOwnedRestore(reconciled, body, requestId, desired)) {
         return NextResponse.json({ result: null, data: reconciled.data, history: reconciled.history, reconciled: true });
       }
       throw error;
     }
-    const verified = await readCurrentState(name, body.studentId);
+    const verified = await readCurrentState(name, body.studentId, cloud);
     if (!verified || !verifiesReceipt(verified, receipt, desired)) return errorResponse("invalid_response", 502, "恢复结果未能与 Core 对账");
     return NextResponse.json({ result: receipt, data: verified.data, history: verified.history, reconciled: false });
   } catch (error) {
+    if (error instanceof EduPiCloudError) {
+      if (error.code === "write_queued") return NextResponse.json({
+        queued: true, outboxId: "outboxId" in error ? error.outboxId : null, result: null, data: null, history: null,
+      }, { status: 202 });
+      return errorResponse(error.code, error.status, error.message);
+    }
     return error instanceof StudentProfileVersionError ? mapError(error) : errorResponse("unavailable", 503, "学生档案恢复暂不可用");
   }
 }

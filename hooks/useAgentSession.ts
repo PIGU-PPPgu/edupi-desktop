@@ -13,7 +13,7 @@ import type {
 import type { DesktopControlInput } from "@/lib/edupi-desktop-control";
 import type { ComputerUseBridgeResult, ComputerUseInput } from "@/lib/edupi-computer-use";
 import { normalizeToolCalls } from "@/lib/normalize";
-import { sendAgentCommand } from "@/lib/agent-client";
+import { educationWriteHeaders as agentEducationWriteHeaders, sendAgentCommand } from "@/lib/agent-client";
 import { fetchJsonWithDeadline, fetchWithRetry } from "@/lib/fetch-timeout";
 import { getPermissionModeForToolPreset, getToolNamesForPreset, getToolPresetForPermissionMode, type PermissionMode, type ToolEntry } from "@/lib/tool-presets";
 import { rememberScrollPosition, sessionScrollTops } from "@/lib/scroll-memory";
@@ -913,7 +913,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const toolNames = getToolNamesForPreset(toolPresetRef.current);
       const res = await fetch("/api/agent/new", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: typeof agentEducationWriteHeaders === "function"
+          ? agentEducationWriteHeaders({ "Content-Type": "application/json" })
+          : { "Content-Type": "application/json" },
         body: JSON.stringify({
           cwd: newSessionCwd,
           type: "ensure_session",
@@ -1518,6 +1520,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       return;
     }
     switch (event.type) {
+      case "cloud_prompt_queued":
+        agentRunningRef.current = true;
+        setAgentRunning(true);
+        setAgentPhase({ kind: "waiting_model" });
+        break;
+      case "cloud_connection_lost":
+        addNotice({ type: "error", message: "云端连接已中断，消息已保留。" });
+        break;
       case "agent_start":
         cancelEventStreamGrace();
         sdkAgentActiveRef.current = true;
@@ -1779,7 +1789,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       return false;
     }
     if (priorPrompt && isNew && !sessionIdRef.current) sessionIdRef.current = priorPrompt.sessionId;
-    const durableSend = isTauriDesktop() && !images?.length;
+    const cloudSend = Boolean(session?.path?.startsWith("cloud:") || session?.cwd?.startsWith("cloud:")
+      || newSessionCwd?.startsWith("cloud:"));
+    const durableSend = isTauriDesktop() && !images?.length && !cloudSend;
 
     const isBashCommand = !images?.length && trimmedMessage.startsWith("!");
     if (isBashCommand) {
@@ -1838,6 +1850,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const submitPrompt = async (sid: string): Promise<boolean> => {
       const command = { type: "prompt" as const, message, clientRequestId,
         ...(piImages?.length ? { images: piImages } : {}) };
+      if (cloudSend) {
+        assertCurrentSend(sid);
+        promptRequestStarted = true;
+        await awaitPromptReceipt(sendAgentCommand(sid, command));
+        return true;
+      }
       if (durableSend) {
         if (!originDraftKey) throw new Error("草稿尚未就绪，消息未发送");
         await sendAgentCommand(sid, { type: "persist_session" });

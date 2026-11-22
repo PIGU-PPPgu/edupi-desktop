@@ -7,6 +7,7 @@ import * as React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
 import { act, create } from "react-test-renderer";
 import ts from "typescript";
+import { educationWriteHeaders } from "../lib/edupi-education-client.ts";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const source = readFileSync(new URL("./EduPiClassroomWorkspace.tsx", import.meta.url), "utf8");
@@ -27,6 +28,7 @@ function record(id, title = id, revision = 2) {
 async function mount(t, handler) {
   const calls = [], exports = {};
   const modules = { react: React, "react/jsx-runtime": jsxRuntime,
+    "@/lib/edupi-education-client": { educationWriteHeaders },
     "next/navigation": { useSearchParams: () => new URLSearchParams("classroom=duty&classroomId=classroom-a") } };
   vm.runInNewContext(compiled, { exports, crypto, URLSearchParams, window: { confirm: () => true },
     require(name) { assert.ok(modules[name], name); return modules[name]; },

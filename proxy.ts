@@ -7,6 +7,8 @@ import {
   isValidBasicAuthorization,
   isWebPasswordEnabled,
 } from "@/lib/web-auth";
+import { readCloudStateSync } from "@/lib/edupi-cloud-store";
+import { cloudChatRoutePath } from "@/lib/edupi-cloud-chat-routing";
 
 function isLoopbackHost(host: string | null): boolean {
   if (!host) return false;
@@ -55,6 +57,25 @@ export function proxy(request: NextRequest) {
     });
   }
 
+  const cloudPath = cloudChatRoutePath(request.nextUrl.pathname);
+  if (cloudPath) {
+    try {
+      const state = readCloudStateSync(process.env.PI_DESKTOP_STATE_DIR);
+      if (state.mode === "cloud" || state.generation === 0 && process.env.EDUPI_DATA_MODE === "cloud") {
+        const destination = request.nextUrl.clone();
+        destination.pathname = cloudPath;
+        // Next normalizes loopback rewrites to localhost. The browser's origin
+        // was checked above; keep that validated internal request consistent
+        // with the normalized authority used by the route handler.
+        const forwarded = new Headers(request.headers);
+        if (forwarded.has("origin")) forwarded.set("origin", destination.origin);
+        return NextResponse.rewrite(destination, { request: { headers: forwarded } });
+      }
+    } catch {
+      return NextResponse.json({ error: "同步配置无法读取，请在设置中恢复。", code: "cloud_state_unavailable" },
+        { status: 503 });
+    }
+  }
   return NextResponse.next();
 }
 

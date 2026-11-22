@@ -166,7 +166,8 @@ test("cloud request IDs preserve local string request semantics", () => {
   assert.match(migration, /request_id text not null/);
   assert.match(migration, /p_request_id text/);
   assert.match(studentFunction, /requestId\(request, body\)/);
-  assert.match(classroomFunction, /requestId\(request, body\)/);
+  assert.match(classroomFunction, /!text\(body\.request_id, 240\)/);
+  assert.match(classroomFunction, /request\.headers\.get\("idempotency-key"\) !== body\.request_id/);
 });
 
 test("classroom mutations use the canonical writer", () => {

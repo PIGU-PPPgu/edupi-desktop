@@ -18,6 +18,17 @@
 		A3000000000000000000000F /* EduPiRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* EduPiRootView.swift */; };
 		A30000000000000000000010 /* EduPiScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* EduPiScreens.swift */; };
 		A30000000000000000000011 /* EduPiUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* EduPiUITests.swift */; };
+		B30000000000000000000001 /* EduPiCloudOutboxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* EduPiCloudOutboxTests.swift */; };
+		B30000000000000000000002 /* EduPiRemoteAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* EduPiRemoteAPI.swift */; };
+		B30000000000000000000003 /* EduPiModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* EduPiModels.swift */; };
+		B30000000000000000000004 /* EduPiAppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* EduPiAppState.swift */; };
+		B30000000000000000000005 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* AppSettings.swift */; };
+		B30000000000000000000006 /* EduPiCloudOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* EduPiCloudOutbox.swift */; };
+		B30000000000000000000007 /* EduPiCloudOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* EduPiCloudOutbox.swift */; };
+		B30000000000000000000008 /* EduPiCloudChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* EduPiCloudChat.swift */; };
+		B30000000000000000000009 /* EduPiCloudChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* EduPiCloudChat.swift */; };
+		B3000000000000000000000A /* EduPiCloudStudents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000005 /* EduPiCloudStudents.swift */; };
+		B3000000000000000000000B /* EduPiCloudStudents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000005 /* EduPiCloudStudents.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -31,6 +42,11 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B20000000000000000000001 /* EduPiCloudOutboxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPiCloudOutboxTests.swift; sourceTree = "<group>"; };
+		B20000000000000000000002 /* EduPiCloudTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EduPiCloudTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000000000000000000003 /* EduPiCloudOutbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPiCloudOutbox.swift; sourceTree = "<group>"; };
+		B20000000000000000000004 /* EduPiCloudChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPiCloudChat.swift; sourceTree = "<group>"; };
+		B20000000000000000000005 /* EduPiCloudStudents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPiCloudStudents.swift; sourceTree = "<group>"; };
 		A20000000000000000000001 /* EduPiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPiApp.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		A20000000000000000000004 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
@@ -63,6 +79,7 @@
 			children = (
 				A10000000000000000000002 /* EduPi */,
 				A10000000000000000000006 /* EduPiUITests */,
+				B10000000000000000000001 /* EduPiCloudTests */,
 				A10000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -81,6 +98,7 @@
 			children = (
 				A20000000000000000000007 /* EduPi.app */,
 				A2000000000000000000001A /* EduPiUITests.xctest */,
+				B20000000000000000000002 /* EduPiCloudTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -92,6 +110,9 @@
 				A20000000000000000000002 /* RootView.swift */,
 				A20000000000000000000004 /* AppSettings.swift */,
 				A20000000000000000000011 /* EduPiRemoteAPI.swift */,
+				B20000000000000000000003 /* EduPiCloudOutbox.swift */,
+				B20000000000000000000004 /* EduPiCloudChat.swift */,
+				B20000000000000000000005 /* EduPiCloudStudents.swift */,
 				A20000000000000000000014 /* EduPiAppState.swift */,
 				A20000000000000000000015 /* EduPiModels.swift */,
 				A20000000000000000000016 /* EduPiDesignSystem.swift */,
@@ -118,9 +139,30 @@
 			path = EduPiUITests;
 			sourceTree = "<group>";
 		};
+		B10000000000000000000001 /* EduPiCloudTests */ = {
+			isa = PBXGroup;
+			children = (
+				B20000000000000000000001 /* EduPiCloudOutboxTests.swift */,
+			);
+			path = EduPiCloudTests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		B11000000000000000000001 /* EduPiCloudTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B60000000000000000000001;
+			buildPhases = (
+				B40000000000000000000001 /* Sources */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = EduPiCloudTests;
+			productName = EduPiCloudTests;
+			productReference = B20000000000000000000002 /* EduPiCloudTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		A11000000000000000000001 /* EduPi */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A60000000000000000000002 /* Build configuration list for PBXNativeTarget "EduPi" */;
@@ -188,6 +230,7 @@
 			targets = (
 				A11000000000000000000001 /* EduPi */,
 				A11000000000000000000002 /* EduPiUITests */,
+				B11000000000000000000001 /* EduPiCloudTests */,
 			);
 		};
 /* End PBXProject section */
@@ -204,6 +247,21 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		B40000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B30000000000000000000001,
+				B30000000000000000000002,
+				B30000000000000000000003,
+				B30000000000000000000004,
+				B30000000000000000000005,
+				B30000000000000000000006,
+				B30000000000000000000008,
+				B3000000000000000000000A,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A40000000000000000000001 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -212,6 +270,9 @@
 				A30000000000000000000002 /* RootView.swift in Sources */,
 				A30000000000000000000003 /* AppSettings.swift in Sources */,
 				A30000000000000000000009 /* EduPiRemoteAPI.swift in Sources */,
+				B30000000000000000000007 /* EduPiCloudOutbox.swift in Sources */,
+				B30000000000000000000009 /* EduPiCloudChat.swift in Sources */,
+				B3000000000000000000000B,
 				A3000000000000000000000C /* EduPiAppState.swift in Sources */,
 				A3000000000000000000000D /* EduPiModels.swift in Sources */,
 				A3000000000000000000000E /* EduPiDesignSystem.swift in Sources */,
@@ -239,6 +300,31 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		B50000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.abcwyc.edupi.cloudtests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B50000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.abcwyc.edupi.cloudtests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		A50000000000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -333,6 +419,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		B60000000000000000000001 /* Build configuration list for EduPiCloudTests */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B50000000000000000000001 /* Debug */,
+				B50000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		A60000000000000000000001 /* Build configuration list for PBXProject "EduPi" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

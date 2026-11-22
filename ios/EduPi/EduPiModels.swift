@@ -24,7 +24,7 @@ enum EduPiTab: String, CaseIterable, Hashable {
     }
 }
 
-enum EduPiTaskStage: String, CaseIterable, Hashable {
+enum EduPiTaskStage: String, CaseIterable, Hashable, Codable {
     case todo, progress, review, done
 
     var title: String {

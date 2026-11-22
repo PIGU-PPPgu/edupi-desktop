@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
+import { educationWriteHeaders } from "@/lib/edupi-education-client";
 import type { ClassroomDomain, ClassroomInput, ClassroomRecord, ClassroomReply, ClassroomRequest, ClassroomResult, ClassroomStudent, ClassroomSummary, DutyAssignment, DutyInput, GradeInput, SeatingAssignment, SeatingInput } from "@/lib/edupi-classroom-types";
 
 const labels = { grades: "成绩分析", seating: "排座与分组", duty: "值日排班" };
@@ -17,7 +18,7 @@ function studentLabel(student: { student_id: string; name: string }, students: A
 }
 
 async function call(request: ClassroomRequest): Promise<ClassroomReply> {
-  const response = await fetch("/api/edupi/classroom", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request) });
+  const response = await fetch("/api/edupi/classroom", { method: "POST", headers: educationWriteHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(request) });
   const body = await response.json();
   if (!response.ok) throw new Error(body.error || "班级操作失败。");
   return body;
@@ -250,8 +251,9 @@ function ClassroomEditor({ domain, openId, active }: { domain: ClassroomDomain; 
     const version = ++requestVersion.current;
     setBusy(true); setMessage(""); setError("");
     try {
-      const response = await call({ domain, action, input, id: saved?.id || draftId, expected_revision: saved?.revision || 0, revision });
+      const response = await call({ domain, action, input, id: saved?.id || draftId, expected_revision: saved?.revision || 0, revision }) as ClassroomReply & { queued?: boolean };
       if (requestVersion.current !== version) return;
+      if (response.queued) { setMessage("方案已保留，等待云端同步。"); return; }
       if (response.record) { adopt(response.record); setMessage(action === "publish" ? "已关联工作区任务" : action === "restore" ? "已恢复并保存" : "已保存"); setRefresh(value => value + 1); }
       else { setPreview(response); if (response.input) setInput(response.input); setNeedsCompute(false); }
     } catch (error) { if (requestVersion.current === version) setError(error instanceof Error ? error.message : "操作失败。"); }
