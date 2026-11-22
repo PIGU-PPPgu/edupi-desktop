@@ -11,6 +11,7 @@ private enum Phase: String {
 }
 
 private let fixtureTitle = "智学网扫码验收"
+private let fixturePrompt = "帮我看看智学网"
 private let waiting = "正在打开智学网，请稍等。"
 private let ready = "已确认登录。同步前请确认班级、学科和学段。"
 private let close = "关闭扫码窗口"
@@ -31,7 +32,10 @@ private struct Node {
     let role: String
     let names: [String]
 
-    func matches(_ name: String) -> Bool { names.contains(name) }
+    func matches(_ name: String) -> Bool {
+        names.contains(name) || name == fixtureTitle && names.contains { $0.contains(fixtureTitle) }
+          || name == fixturePrompt && names.contains { $0.contains(fixturePrompt) }
+    }
 }
 
 private struct Window {
@@ -145,7 +149,7 @@ private final class NativeProbe {
             if !nodes.isEmpty { candidates.append(Window(nodes: nodes)) }
         }
         let preferred = candidates.first {
-            $0.containsAny([fixtureTitle, "AI 协作", "对话", waiting, ready, "打开扫码窗口", "查看扫码结果"])
+            $0.containsAny([fixtureTitle, fixturePrompt, "AI 协作", "对话", waiting, ready, "打开扫码窗口", "查看扫码结果"])
         }
         return preferred ?? candidates.max { $0.nodes.count < $1.nodes.count }
     }
