@@ -10,7 +10,8 @@ const { emptyMessageHistory, messageHistoryReducer } = await jiti.import("../lib
 const { normalizeToolCalls } = await jiti.import("../lib/normalize.ts");
 const compile = code => ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 const evaluate = (code, context) => {
-  const bindings = { reconcilePendingPrompt: async () => {}, promptSubmissionRunIdRef: { current: null }, ...context };
+  const bindings = { reconcilePendingPrompt: async () => {}, promptSubmissionRunIdRef: { current: null },
+    cloudScopeRef: { current: null }, cloudChatRef: { current: false }, ...context };
   return new Function(...Object.keys(bindings), compile(code))(...Object.values(bindings));
 };
 const noop = () => {};

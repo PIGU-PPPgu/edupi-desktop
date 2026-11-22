@@ -810,6 +810,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [isNew, draftKey, reconcilePendingPrompt]);
 
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
+    const readScope = cloudScopeRef.current;
     const requestId = ++contextLoadIdRef.current;
     const sessionGeneration = sessionGenerationRef.current;
     const runId = promptRunIdRef.current;
@@ -817,9 +818,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const isCurrent = () => sessionIdRef.current === sid
       && sessionGenerationRef.current === sessionGeneration
       && promptRunIdRef.current === runId
-      && contextLoadIdRef.current === requestId;
+      && contextLoadIdRef.current === requestId
+      && cloudScopeRef.current === readScope;
     let messagesLoaded = false;
     try {
+      if (cloudChatRef.current && !readScope) throw new Error("云端工作区尚未确认，请刷新后重试");
       if (showLoading) setLoading(true);
       const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1" });
       // This request owns the "loading session" state, so it must not be able
@@ -827,6 +830,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // appears once the load actually fails.
       const res = await fetchWithRetry(`/api/sessions/${encodeURIComponent(sid)}?${params}`, {
         shouldRetry: isCurrent,
+        ...(readScope ? { init: { headers: agentEducationWriteHeaders(undefined, readScope) } } : {}),
       });
       if (!isCurrent()) return null;
       if (res.status === 404) {
@@ -841,6 +845,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as SessionData;
       if (!isCurrent()) return null;
+      if (readScope ? d.cloudScope !== readScope || d.sessionId !== sid : Boolean(d.cloudScope)) {
+        throw new Error("会话工作区已改变，请刷新后重试");
+      }
       await reconcilePendingPrompt(sid, isCurrent);
       if (!isCurrent()) return null;
       const loadedEntryIds = new Set(d.context.entryIds ?? []);
@@ -860,7 +867,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!includeState) return null;
 
       try {
-        const stateRes = await fetch(`/api/sessions/${encodeURIComponent(sid)}/state`);
+        const stateRes = await fetch(`/api/sessions/${encodeURIComponent(sid)}/state`,
+          readScope ? { headers: agentEducationWriteHeaders(undefined, readScope) } : undefined);
         if (!stateRes.ok) throw new Error(`HTTP ${stateRes.status}`);
         const agentState = await stateRes.json() as { running: boolean; state?: AgentStateResponse };
         if (!isCurrent()) return null;
@@ -1060,7 +1068,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const connectEvents = useCallback((sid: string, timeoutMs = EVENT_STREAM_CONNECT_TIMEOUT_MS, reconnectOnClosed = true): Promise<EventStreamConnectionResult> => {
     closeEvents();
-    const es = new EventSource(`/api/agent/${encodeURIComponent(sid)}/events`);
+    const readScope = cloudScopeRef.current;
+    const scopeQuery = cloudChatRef.current ? `?cloudScope=${encodeURIComponent(readScope ?? "unconfirmed")}` : "";
+    const es = new EventSource(`/api/agent/${encodeURIComponent(sid)}/events${scopeQuery}`);
     eventSourceRef.current = es;
     eventSourceSessionIdRef.current = sid;
 
@@ -1078,7 +1088,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const timeout = setTimeout(() => settle("timeout"), timeoutMs);
 
       es.onmessage = (e) => {
-        if (eventSourceRef.current !== es || eventSourceSessionIdRef.current !== sid) return;
+        if (eventSourceRef.current !== es || eventSourceSessionIdRef.current !== sid || cloudScopeRef.current !== readScope) return;
         try {
           const event = JSON.parse(e.data) as AgentEvent;
           if (event.type === "connected") settle("connected");
@@ -1093,7 +1103,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           // auto-reconnect. Settle the Promise and manually reconnect for
           // already-running sessions or an active idle grace window.
           settle("closed");
-          if (reconnectOnClosed && eventSourceRef.current === es && (agentRunningRef.current || eventStreamGraceActiveRef.current)) {
+          if (reconnectOnClosed && eventSourceRef.current === es && cloudScopeRef.current === readScope
+            && (agentRunningRef.current || eventStreamGraceActiveRef.current)) {
             eventSourceRef.current = null;
             eventSourceSessionIdRef.current = null;
             eventConnectionAttemptRef.current = null;
@@ -1102,7 +1113,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               // The session may have been switched during the delay. Without
               // this guard the retry closes the new session's stream and pipes
               // the old session's events into it.
-              if (sessionIdRef.current !== sid) return;
+              if (sessionIdRef.current !== sid || cloudScopeRef.current !== readScope) return;
               if (
                 reconnectGeneration === eventStreamGraceGenerationRef.current
                 && !eventSourceRef.current
@@ -2756,7 +2767,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
     const cloudScope = cloudScopeRef.current;
     setThinkingLevel(level);
-    if (isNew && !sessionIdRef.current) {
+    if (isNew) {
       thinkingLevelOverrideRef.current = level === "auto" ? null : level;
     }
     if (level === "auto") return; // "auto" leaves pi's current setting untouched

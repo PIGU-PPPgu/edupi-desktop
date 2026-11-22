@@ -1,7 +1,7 @@
 import { randomUUID, createHash } from "node:crypto";
 import { parseJsonWithinLimit } from "./bounded-form-data";
 import { createEduPiCloudClient, EduPiCloudError, type CloudScope } from "./edupi-cloud-client";
-import { captureEducationWriteScope } from "./edupi-cloud-request-scope";
+import { captureEducationWriteScope, cloudScopeKey } from "./edupi-cloud-request-scope";
 import { chatRecord, cloudChatData, cloudChatInfo, cloudChatAgentState } from "./edupi-cloud-chat-projection";
 import { hasJsonContentType, isApiRequestAllowed } from "./request-security";
 
@@ -51,6 +51,11 @@ export async function cloudChatApi(request: Request, parts: string[], dependenci
       throw new EduPiCloudError("scope_changed", "数据模式已改变。", 409);
     }
     const scope = selected?.scope || await client.captureScope();
+    const expectedReadScope = request.method === "GET"
+      ? request.headers.get("x-edupi-cloud-scope") ?? new URL(request.url).searchParams.get("cloudScope") : null;
+    if (expectedReadScope !== null && expectedReadScope !== cloudScopeKey(scope)) {
+      throw new EduPiCloudError("scope_changed", "会话工作区已改变，请刷新后重试。", 409);
+    }
     const pump = dependencies.pump || kick;
     const [group, id, suffix] = parts;
     if (request.method === "GET") {

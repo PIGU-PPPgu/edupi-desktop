@@ -41,7 +41,7 @@ function fixture({ newChat = false, persisted = new Map(), server = new Map(), g
     store.setDraft(draftKey, { value: "老师输入", images: [] });
     store.flushDraftNow(draftKey);
   }
-  const sent = [], reads = [], notices = [], promoted = [], localCalls = [];
+  const sent = [], reads = [], notices = [], promoted = [], localCalls = [], prepared = [], commands = [];
   const coldDraft = key => JSON.parse(persisted.get("drafts") || "{}")[key] ?? null;
   const rowFor = (sid, id, message) => ({
     workspace_id: "workspace-a", actor_id: "account-a", session_id: sid, request_id: id,
@@ -59,6 +59,11 @@ function fixture({ newChat = false, persisted = new Map(), server = new Map(), g
       }) };
     }
     const body = JSON.parse(init.body);
+    if (body.type === "ensure_session") {
+      assert.equal(url, "/api/agent/new");
+      prepared.push({ url, body, scope: new Headers(init.headers).get("x-edupi-cloud-scope") });
+      return { ok: true, status: 200, json: async () => ({ success: true, sessionId: "cloud-prepared-session", thinkingLevel: "off" }) };
+    }
     const sid = url === "/api/agent/new" ? context.sessionIdRef.current : decodeURIComponent(url.split("/").at(-1));
     sent.push({ url, body, bytes: init.body, scope: new Headers(init.headers).get("x-edupi-cloud-scope"),
       durableBeforeRequest: plain(coldDraft(draftKey)?.pendingPrompt) });
@@ -86,11 +91,14 @@ function fixture({ newChat = false, persisted = new Map(), server = new Map(), g
     session: newChat ? null : { id: "cloud-session", path: "cloud:workspace-a/cloud-session",
       cwd: "cloud:workspace-a", cloudScope: currentScope },
     draftKey, activeDraftKeyRef: { current: draftKey },
+    cloudScopeRef: { current: currentScope }, cloudChatRef: { current: true },
     sessionIdRef: { current: newChat ? null : "cloud-session" }, sessionGenerationRef: { current: 0 },
     promptRunIdRef: { current: 0 }, promptSubmissionRunIdRef: { current: null }, promptRequestIdRef: { current: null },
     agentRunningRef: { current: false }, bashRunningRef: { current: false }, rpcPromptPendingRef: { current: false },
     sdkAgentActiveRef: { current: false }, newSessionModelOverrideRef: { current: null },
     thinkingLevelOverrideRef: { current: null }, newSessionPromotedRef: { current: false },
+    toolPresetRef: { current: "none" }, permissionModeRef: { current: "approval" }, getToolNamesForPreset: () => [],
+    setPendingModel: noop, setNewSessionDefaultModel: noop,
     ensuringNewSessionRef: { current: null },
     contextLoadIdRef: { current: 0 }, messageHistoryRef: { current: { messageIds: [] } },
     pendingScrollToUserRef: { current: false }, completionScrollAllowedRef: { current: false },
@@ -99,11 +107,12 @@ function fixture({ newChat = false, persisted = new Map(), server = new Map(), g
     setData: noop, setActiveLeafId: noop, setCurrentModelOverride: noop, setError: noop, setThinkingLevel: noop,
     dispatch: noop, dispatchMessageHistory: noop, cancelEventStreamGrace: noop, closeEvents: noop,
     settleUiStage: noop, refreshPromptRecovery: noop,
-    ensureNewSession: async () => { context.sessionIdRef.current = "cloud-session"; return "cloud-session"; },
     ensureEventsConnected: async () => {}, waitForPromptSettlement: noop,
     promoteNewSession: (...args) => promoted.push(args), loadSession: async () => null,
     addNotice: notice => notices.push(notice),
-    sendAgentCommand: async (sid, command) => {
+    sendAgentCommand: async (sid, command, capturedScope) => {
+      commands.push({ sid, command, scope: capturedScope });
+      if (command.type === "set_thinking_level") return null;
       if (command.type !== "prompt") throw new Error("cloud must not call local/config commands");
       return fetcher(`/api/agent/${sid}`, { method: "POST", body: JSON.stringify(command) });
     },
@@ -123,18 +132,21 @@ function fixture({ newChat = false, persisted = new Map(), server = new Map(), g
   const acknowledging = source.slice(source.indexOf("  const acknowledgeSubmittedPrompt = useCallback"),
     source.indexOf("  const loadSession = useCallback")).split("  useEffect(() => {")[0];
   const sending = source.slice(source.indexOf("  const handleSend = useCallback"), source.indexOf("  const executeBash = useCallback"));
-  const api = new Function(...Object.keys(context), compile(`${helpers}\n${acknowledging}\n${sending}
-    return { handleSend, reconcilePendingPrompt };`))(...Object.values(context));
+  const ensuring = source.slice(source.indexOf("  const ensureNewSession = useCallback"), source.indexOf("  const loadSlashCommands = useCallback"));
+  const thinking = source.slice(source.indexOf("  const handleThinkingLevelChange = useCallback"), source.indexOf("  const handleToolPresetChange = useCallback"));
+  const api = new Function(...Object.keys(context), compile(`${helpers}\n${acknowledging}\n${ensuring}\n${thinking}\n${sending}
+    return { handleSend, reconcilePendingPrompt, ensureNewSession, handleThinkingLevelChange };`))(...Object.values(context));
   return {
-    context, store, persisted, server, sent, reads, notices, promoted, localCalls, draftKey, coldDraft,
+    context, store, persisted, server, sent, reads, notices, promoted, localCalls, draftKey, coldDraft, prepared, commands,
     send: (message = original) => api.handleSend(message),
+    prepare: api.ensureNewSession, thinking: api.handleThinkingLevelChange,
     recover: async () => {
       context.promptSubmissionRunIdRef.current = null;
       await api.reconcilePendingPrompt(context.sessionIdRef.current, () => true, draftKey);
     },
     finish: () => { context.agentRunningRef.current = false; context.rpcPromptPendingRef.current = false; },
     dropAck: value => { dropAck = value; }, queue: value => { queued = value; },
-    writable: value => { writable = value; }, scope: value => { currentScope = value; },
+    writable: value => { writable = value; }, scope: value => { currentScope = value; context.cloudScopeRef.current = value; },
     delayRead: value => { readGate = value; },
   };
 }
@@ -245,6 +257,28 @@ test("a new offline cloud chat keeps one deterministic session and original requ
   assert.equal(cold.context.sessionIdRef.current, pending.sessionId);
   assert.equal(cold.server.size, 1);
   assert.deepEqual(cold.localCalls, []);
+});
+
+test("ensure_session then choosing high preserves that choice in the first cloud prompt POST", async () => {
+  const f = fixture({ newChat: true });
+  assert.equal(await f.prepare(), "cloud-prepared-session");
+  assert.equal(f.prepared.length, 1);
+  assert.equal(f.prepared[0].body.type, "ensure_session");
+  assert.equal(f.prepared[0].body.thinkingLevel, undefined);
+  assert.equal(f.context.sessionIdRef.current, "cloud-prepared-session");
+  await f.thinking("high");
+  assert.equal(f.context.thinkingLevelOverrideRef.current, "high",
+    "preparing the new session must not stop the first prompt from retaining a later explicit choice");
+  assert.deepEqual(f.commands, [{ sid: "cloud-prepared-session",
+    command: { type: "set_thinking_level", level: "high" }, scope: scope() }]);
+  assert.equal(await f.send(), true);
+  assert.equal(f.sent.length, 1);
+  assert.equal(f.sent[0].url, "/api/agent/new");
+  assert.equal(f.sent[0].body.type, "prompt");
+  assert.equal(f.sent[0].body.thinkingLevel, "high");
+  assert.equal(JSON.parse(f.sent[0].durableBeforeRequest.cloudRequestBody).thinkingLevel, "high",
+    "the exact request saved before POST must retain the choice for a lost-ACK retry");
+  assert.deepEqual(f.localCalls, []);
 });
 
 function commandHandlers({ cloud = true, pending = false, delayedSession = null } = {}) {

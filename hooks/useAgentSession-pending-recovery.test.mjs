@@ -38,6 +38,7 @@ function fixture({ status = "accepted", gate = null, inFlight = false, composerC
     acknowledgePendingPrompt: store.acknowledgePendingPrompt, releasePendingPromptForNewMessage: store.releasePendingPromptForNewMessage,
     chatInputRef: { current: composerClears === null ? null : { acknowledgeSubmittedMessage: () => composerClears } },
     isTauriDesktop: () => true, promptSubmissionRunIdRef: { current: inFlight ? 5 : null },
+    cloudScopeRef: { current: null }, cloudChatRef: { current: false },
     sessionIdRef: { current: newDraft ? null : "fork-session" }, sessionGenerationRef: { current: 0 }, promptRunIdRef: { current: 5 },
     contextLoadIdRef: { current: 0 }, messageHistoryRef: { current: { messageIds: [] } },
     reconcileEduPiCapturedPrompt: async (...args) => { requests.push(args); if (gate) await gate; return status; },

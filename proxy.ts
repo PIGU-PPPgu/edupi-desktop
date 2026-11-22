@@ -71,8 +71,9 @@ export function proxy(request: NextRequest) {
         if (forwarded.has("origin")) forwarded.set("origin", destination.origin);
         return NextResponse.rewrite(destination, { request: { headers: forwarded } });
       }
-      if (["POST", "PATCH", "PUT", "DELETE"].includes(request.method)
-        && !localChatWriteScopeMatches(request.headers.get("x-edupi-cloud-scope"), state.generation)) {
+      const expectedScope = request.headers.get("x-edupi-cloud-scope") ?? request.nextUrl.searchParams.get("cloudScope");
+      if ((["POST", "PATCH", "PUT", "DELETE"].includes(request.method) || request.method === "GET" && expectedScope !== null)
+        && !localChatWriteScopeMatches(expectedScope, state.generation)) {
         return NextResponse.json({ error: "数据模式已改变，请刷新后再操作。", code: "scope_changed" },
           { status: 409, headers: { "Cache-Control": "no-store" } });
       }
