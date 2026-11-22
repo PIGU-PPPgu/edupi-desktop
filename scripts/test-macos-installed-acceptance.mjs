@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-// Run only on a fresh GitHub hosted macos-15 VM. No GUI automation, Cmd+Q,
-// teacher workflow, model generation, or updater acceptance is claimed here.
-import { createHash, randomBytes } from "node:crypto";
+// Run only on a fresh GitHub hosted macos-15 VM. This branch also checks
+// Zhixue's native chat UI with a synthetic receipt on the exact signed App.
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -22,6 +22,9 @@ const DIGEST = /^sha256:[a-f0-9]{64}$/u;
 const harness = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const hash = bytes => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 const readJson = filename => JSON.parse(fs.readFileSync(filename, "utf8"));
+const ZHIXUE_TITLE = "智学网扫码验收";
+// Offline QR encoded from the text "EduPi synthetic QA".
+const ZHIXUE_PNG = "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAAAklEQVR4AewaftIAAAM9SURBVO3BMW7kOAAAwW5C//9ynxMCCiRbM3NeOmCVfWFbZrAtNdiWGmxLDbalBttSg22pg2+o/JaKM5UrFU+o3KmYVKaKM5XfUnFlsC012JY6eKjiUyp3Kv6Sik+p/GSwLTXYlhpsSx28SeWJik+onFVMKlPFpHKm8gmVJypeNdiWGmxLHfwRKlcqzlR+UnGmMlX8JYNtqcG21MEfp3JWMalcUTmrmFSmitUG21KDbanBttTBmyp+S8UTFVcq7lS8quK3DLalBttSBw+prKByVjGpTBWTylnFpDJV3FH5FwbbUoNtqYNvVKyg8kTFpDJVnKk8UfGvDbalBttSg22pg2+oTBVPqJxVTCpPVEwqn6q4ovKpijsqU8WVwbbUYFvq4CGVs4pJ5YmKSeWs4krFmcpPVO5U3Km4ovKEylnFTwbbUoNtqYOHKs5UrlTcUbmjcqXiTsUTKlcq3lExqUwVrxpsSw22pQbbUgdvqnhCZaq4ozJVPKEyVUwqZxWTyp2KSeVVKmcVPxlsSw22pewLD6icVVxROauYVD5VcUXlTsUVlScqzlSmiknlTsWVwbbUYFvq4BsqU8U7VKaKOyqvUpkq7qhcqXhC5aziSsWrBttSg20p+8KHVO5UTCp3KiaVqeJM5RMVk8oTFWcqVypeNdiWGmxLDbal7AsLqHyqYlKZKs5Unqi4onJWMalMFa8abEsNtqUOvqHyqoo7KlPFHZWp4o7K/0nlEyp3Kq4MtqUG21L2hT9A5YmKKyp3KiaVqeIJlbOKSWWqOFOZKq4MtqUG21KDbamDb6j8loo7Fa+q+JTKVPGpip8MtqUG21IHD1V8SuVOxatUpopJ5aziiYonVK6o3Km4MtiWGmxLHbxJ5YmKJ1SmijsqU8Wk8iqVd1RMKlPFmcpPBttSg22pwbbUwR9RMancqZhUpoonKiaVOxVPVEwqrxpsSw22pQ7+uIozlSsqdyomlSdUpoozlScqfjLYlhpsSx28qeK3VEwqdyomlaniTsUTKpPKWcWk8onBttRgW2qwLXXwkMpvUpkqpoo7Kk+oTBWTyjtUnlCZKq4MtqUG21L2hW2ZwbbUYFtqsC012JYabEv9B59Am9CnIGvVAAAAAElFTkSuQmCC";
 const inside = (root, candidate) => {
   const relative = path.relative(root, candidate);
   return relative === "" || relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
@@ -38,6 +41,59 @@ function check(condition, code) {
   if (!condition) throw new AcceptanceFailure(code);
 }
 function equal(actual, expected, code) { check(isDeepStrictEqual(actual, expected), code); }
+
+export function seedZhixueFixture(root) {
+  check(fs.realpathSync(root) === root && /^edupi-route1-canary-[a-f0-9]{32}$/u.test(path.basename(root))
+    && (fs.lstatSync(root).mode & 0o777) === 0o700, "zhixue_fixture_needs_private_canary");
+  const title = ZHIXUE_TITLE;
+  const flowId = randomUUID();
+  const sessionId = randomUUID();
+  const timestamp = new Date().toISOString();
+  const id = "synthetic-zhixue-qr";
+  const text = value => [{ type: "text", text: value }];
+  const entries = [{ type: "session", version: 3, id: sessionId, timestamp, cwd: root }];
+  const append = entry => entries.push({ ...entry, timestamp,
+    id: (entries.length + 10).toString(16).padStart(8, "0"), parentId: entries.at(-1).type === "session" ? null : entries.at(-1).id });
+  const message = item => append({ type: "message", message: { ...item, timestamp: Date.parse(timestamp) } });
+  const model = { api: "openai-completions", provider: "synthetic", model: "synthetic-offline" };
+  append({ type: "session_info", name: title });
+  message({ role: "user", content: text("帮我看看智学网，先登录一下。") });
+  message({ role: "assistant", ...model, stopReason: "toolUse",
+    content: [{ type: "toolCall", id, name: "zhixue_login", arguments: {} }] });
+  message({ role: "toolResult", toolCallId: id, toolName: "zhixue_login", isError: false,
+    content: text("已提交登录请求。"), details: { zhixue: { version: 1, flowId, status: "starting" } } });
+  const sessionDir = path.join(root, ".edupi/agent/sessions", `--${root.slice(1).replaceAll("/", "-")}--`);
+  const zhixue = path.join(root, ".edupi/zhixue");
+  check(!fs.existsSync(path.dirname(sessionDir)) && !fs.existsSync(zhixue), "zhixue_fixture_already_present");
+  for (const directory of [sessionDir, zhixue]) fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const session = path.join(sessionDir, `${timestamp.replaceAll(":", "-").replaceAll(".", "-")}_${sessionId}.jsonl`);
+  fs.writeFileSync(session, `${entries.map(entry => JSON.stringify(entry)).join("\n")}\n`, { flag: "wx", mode: 0o600 });
+  const put = (name, payload) => {
+    const file = path.join(zhixue, name);
+    const staged = `${file}.fixture`;
+    fs.writeFileSync(staged, JSON.stringify({ version: 1, flowId, ...payload }), { flag: "wx", mode: 0o600 });
+    fs.renameSync(staged, file);
+  };
+  const qr = path.join(zhixue, "login-qr.png");
+  return {
+    title, session,
+    start() {
+      const startedAt = new Date().toISOString();
+      put("login-state.json", { status: "starting", startedAt, updatedAt: startedAt });
+    },
+    showQr() {
+      fs.writeFileSync(qr, Buffer.from(ZHIXUE_PNG, "base64"), { flag: "wx", mode: 0o600 });
+      put("login-state.json", { status: "awaiting_scan", qrPath: qr, updatedAt: new Date().toISOString() });
+    },
+    completeScan() {
+      const authenticatedAt = new Date().toISOString();
+      put("session.json", { authenticatedAt, cookies: [] });
+      put("login_ok.json", { authenticatedAt });
+      put("login-state.json", { status: "authenticated", authenticatedAt, updatedAt: authenticatedAt });
+      fs.unlinkSync(qr);
+    },
+  };
+}
 
 export function validateInputs(raw) {
   const id = value => typeof value === "string" && /^[1-9]\d{0,15}$/u.test(value)
@@ -788,6 +844,29 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
     await command("/usr/bin/hdiutil", ["detach", mount]);
     check(!(await hdiInfo()).images?.some(row => row["system-entities"]?.some(entity => entity["mount-point"] === mount)),
       "dmg_still_mounted_before_launch");
+    stage("prepare_zhixue_synthetic_chat_check");
+    const zhixueProbe = path.join(task, "zhixue-ax-check");
+    await command("/usr/bin/swiftc", [
+      "-module-cache-path", path.join(task, "swift-cache"),
+      path.join(harness, "scripts/macos-zhixue-native-probe.swift"), "-o", zhixueProbe,
+    ], { timeout: 100_000 });
+    const zhixue = seedZhixueFixture(root);
+    zhixue.start();
+    evidence.zhixue = { syntheticOnly: true, tested: [] };
+    const checkZhixue = async (app, mode) => {
+      stage(`zhixue_${mode}_native_chat`);
+      check(sameProcess(app, (await sample()).find(row => row.pid === app.pid)), "zhixue_app_identity_changed");
+      const result = await command(zhixueProbe, [String(app.pid), appPath, mode, zhixue.title],
+        { allowed: [0, 1], timeout: 100_000 });
+      if (result.code !== 0) {
+        const reason = result.stderr.trim();
+        evidence.zhixue.failure = /^[a-z0-9_]{1,85}$/u.test(reason) ? reason : "native_probe_failed";
+        throw new AcceptanceFailure(`zhixue_${mode}_not_observed`);
+      }
+      evidence.zhixue.tested.push(mode);
+      evidence.windowServer.guiInteraction = true;
+      persist();
+    };
     const markerPath = path.join(root, ".edupi/output/installed-acceptance-marker.json");
     const markerValue = { schemaVersion: 1, synthetic: true, id: nonce(), sourceDesktop: input.sourceSha,
       version: input.version, assetSha256: input.assetSha256 };
@@ -914,6 +993,17 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
         ready = true; break;
       }
       check(ready, "installed_app_core_startup_deadline_no_node_fallback");
+      if (label === "first") {
+        zhixue.start();
+        await checkZhixue(app, "open");
+        zhixue.showQr();
+        await checkZhixue(app, "qr");
+        zhixue.completeScan();
+        await checkZhixue(app, "success");
+      } else {
+        await checkZhixue(app, "restart");
+        evidence.claims.gui = "signed_app_synthetic_zhixue_scan_and_reopen";
+      }
       stage(`${label}_stop_all_task_processes`);
       launch.shutdown = await stopAll();
       processes.appPid = null;
