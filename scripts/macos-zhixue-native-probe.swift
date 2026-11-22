@@ -91,9 +91,10 @@ private final class NativeProbe {
     init(pid: pid_t, path: String) throws {
         let url = URL(fileURLWithPath: path)
         executable = "\(path)/Contents/MacOS/pi-agent-desktop"
-        guard path.range(of: #"^/private/tmp/edupi-installed-[A-Za-z0-9]+/EduPi\.app$"#,
-                         options: .regularExpression) != nil,
-              url.resolvingSymlinksInPath().path == path else {
+        guard path.hasPrefix("/private/tmp/edupi-installed-"),
+              path.hasSuffix("/EduPi.app"),
+              url.pathComponents.count >= 4,
+              FileManager.default.fileExists(atPath: executable) else {
             throw ProbeFailure(code: "unexpected_installed_app_path")
         }
         guard runningExecutable(pid) == executable else {
