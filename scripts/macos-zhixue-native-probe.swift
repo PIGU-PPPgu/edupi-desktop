@@ -28,6 +28,17 @@ private func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
     return value
 }
 
+private func hasNoChildren(_ value: Any) -> Bool {
+    if value is NSNull { return true }
+    let raw = value as CFTypeRef
+    guard CFGetTypeID(raw) == AXValueGetTypeID() else { return false }
+    let errorValue = raw as! AXValue
+    var error = AXError.success
+    return AXValueGetType(errorValue) == .axError
+      && AXValueGetValue(errorValue, .axError, &error)
+      && (error == .noValue || error == .attributeUnsupported)
+}
+
 private struct Node {
     let element: AXUIElement
     let parent: Int?
@@ -139,6 +150,7 @@ private final class NativeProbe {
                 guard AXUIElementCopyMultipleAttributeValues(element, fields as CFArray, [], &result) == .success,
                       let values = result as? [Any], values.count == fields.count,
                       let role = values[0] as? String else {
+                    complete = false
                     continue
                 }
                 let names = values[1...3].compactMap { value in
@@ -152,6 +164,8 @@ private final class NativeProbe {
                         break
                     }
                     pending.append(contentsOf: children.reversed().map { ($0, index, depth + 1) })
+                } else if !hasNoChildren(values[4]) {
+                    complete = false
                 }
             }
             if !nodes.isEmpty { candidates.append(Window(nodes: nodes, complete: complete)) }
@@ -262,6 +276,7 @@ private final class NativeProbe {
             }
             try awaitWindow("scan_success_missing_in_reopened_chat") { window in
                 try window.button(close) == nil && showsSettledLogin(window)
+                  && window.nodes.contains { $0.matches(fixturePrompt) }
             }
             let initial = initiallyVisible ? "visible_before_navigation" : "not_in_initial_snapshot"
             print("\(initial) \(openedResult ? "result_button" : "direct")")
