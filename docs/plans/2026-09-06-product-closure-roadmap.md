@@ -18,7 +18,7 @@
 
 R24.4c 最终受验功能为 `dde8c9cf`；后续两次 Desktop HTTPS 重跑因 TLS 建连前 `ECONNRESET` 无结论，未计通过。安全补丁 `5168149e` 将 `url`／`form_urlencoded` 更新为 `2.5.9`／`1.2.3`，修复 CI `45012858152` 新发现的 `RUSTSEC-2026-0592`；修复后的 CI 与源码合并状态分别读取 PR #518 的最新 checks 和 merge 记录。
 
-2026-11-22 智学网 `0.3.123` 是 macOS 修复候选。已用隔离数据验证等待、二维码与扫码结果，以及重复查询被拦后聊天可见的下一步。签名安装、真实教师账号同步和完整 L4 待验收。现有 `0.3.122` 复现与验证记录见 [智学网扫码验收](../acceptance/2026-11-20-zhixue-desktop-login-bridge.md)。
+2026-11-23 智学网 `0.3.123` 已正式发布到 Apple Silicon Mac。签名安装版用合成数据验证了等待提示、二维码、扫码结果和冷启动后重开原对话读回结果。GitHub Mac 上的 App 内 `.122 → .123` 自动升级及合成资料与默认模型回读通过，保留本机隔离失败记录。真实教师扫码、学情同步与回读和完整 L4 仍待验收。[智学网扫码验收](../acceptance/2026-11-20-zhixue-desktop-login-bridge.md#2026-11-23-macos-03123-安装验收与正式发布)
 
 2026-11-18 最新发布状态：**`.118` 已完成 Mac-only 签名、公证、同包双冷启安装验收，并按用户明确批准公开为正式 GitHub Release。** 签名源 `7935753a`／Core `fc89b3bc`、run `44303236812` success；首轮安装 `44316698278` 因 harness 旧 Core pin 失败，`5ef4bd0f` 最小修复后原 DMG 第二轮 `44318046052` success，失败证据保留。Release `449948350` 已回读 `draft=false`、`prerelease=false`、GitHub Latest `.118`，原三项 Mac 资产和 `.117` 资产未变；自动更新 feed 仍 `7924328e…`。Rust audit 的 `RUSTSEC-2026-0543` 仍失败，按本次 macOS 书面例外保留；PR509 仍 Draft。GUI、updater、真实教师流程及真实 GLM 语义未在本次安装流程执行，普通 R04 语义门仍 false，完整 R04／R15／L4 均未完成。Windows runner／构建／打包／smoke／升级继续暂停，未经用户明确恢复不得启动。当前段取代下方源码候选与审计阻塞阶段状态，详见 [R04 当前验收](../acceptance/2026-11-18-core-recall-desktop.md)。
 
