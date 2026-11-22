@@ -229,6 +229,7 @@ struct EduPiRemoteStudentEvent: Decodable, Identifiable {
     let topic: String?
     let observedOn: String?
     let className: String?
+    let revision: Int
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -237,6 +238,18 @@ struct EduPiRemoteStudentEvent: Decodable, Identifiable {
         case topic
         case observedOn = "observed_on"
         case className = "class_name"
+        case revision
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        kind = try container.decode(String.self, forKey: .kind)
+        summary = try container.decode(String.self, forKey: .summary)
+        topic = try? container.decode(String.self, forKey: .topic)
+        observedOn = try? container.decode(String.self, forKey: .observedOn)
+        className = try? container.decode(String.self, forKey: .className)
+        revision = (try? container.decode(Int.self, forKey: .revision)) ?? 0
     }
 }
 
@@ -336,6 +349,40 @@ final class EduPiRemoteAPI {
 
     private struct StudentEventsResponse: Decodable {
         let records: [EduPiRemoteStudentEvent]
+    }
+
+    private struct CloudSnapshotIdentity: Decodable {
+        let snapshotID: String
+        let stateHash: String
+
+        enum CodingKeys: String, CodingKey {
+            case snapshotID = "snapshot_id"
+            case stateHash = "state_hash"
+        }
+    }
+
+    private struct CloudCommandResponse: Decodable {
+        let ok: Bool
+        let operation: String
+        let requestID: String
+        let externalSend: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case ok, operation
+            case requestID = "request_id"
+            case externalSend = "external_send"
+        }
+    }
+
+    private struct StudentEventMutationResponse: Decodable {
+        let ok: Bool
+        let record: EduPiRemoteStudentEvent?
+        let externalSend: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case ok, record
+            case externalSend = "external_send"
+        }
     }
 
     private struct PersistedSession: Codable {
@@ -517,6 +564,154 @@ final class EduPiRemoteAPI {
             calendar: snapshot.payload.calendar,
             timetable: snapshot.payload.timetable
         )
+    }
+
+    func createTask(title: String, note: String?) async throws -> EduPiRemoteTask {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty, trimmedTitle.count <= 240 else {
+            throw EduPiRemoteAPIError.server(statusCode: 400, message: "任务名称无效。")
+        }
+        let snapshot: CloudSnapshotIdentity = try await send(
+            path: "/functions/v1/edupi-core-broker",
+            method: "POST",
+            body: ["operation": "snapshot"],
+            workspaceID: try requiredWorkspaceID()
+        )
+        let requestID = "ios-task-create-\(UUID().uuidString)"
+        let taskNote: Any = note?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? note! : NSNull()
+        let command: [String: Any] = [
+            "command_type": "create_task",
+            "source": [
+                "source_id": requestID,
+                "source_kind": "teacher_message",
+                "source_hash": "sha256:\(String(repeating: "0", count: 64))",
+                "evidence_ids": [requestID],
+            ],
+            "task": [
+                "task_id": requestID,
+                "title": trimmedTitle,
+                "due_date": NSNull(),
+                "note": taskNote,
+            ],
+        ]
+        try await sendCloudCommand(command, snapshot: snapshot, requestID: requestID, revision: 0)
+        guard let task = try await loadDashboard().tasks.first(where: { $0.id == requestID }) else {
+            throw EduPiRemoteAPIError.invalidResponse
+        }
+        return task
+    }
+
+    func moveTask(taskID: String, expectedRevision: Int, to stage: EduPiTaskStage) async throws -> EduPiRemoteTask {
+        guard !taskID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, expectedRevision >= 0 else {
+            throw EduPiRemoteAPIError.server(statusCode: 400, message: "任务身份无效。")
+        }
+        let snapshot: CloudSnapshotIdentity = try await send(
+            path: "/functions/v1/edupi-core-broker",
+            method: "POST",
+            body: ["operation": "snapshot"],
+            workspaceID: try requiredWorkspaceID()
+        )
+        let requestID = "ios-task-move-\(UUID().uuidString)"
+        let command: [String: Any] = [
+            "command_type": "move_task_stage",
+            "source": [
+                "source_id": taskID,
+                "source_kind": "teacher_message",
+                "source_hash": "sha256:\(String(repeating: "0", count: 64))",
+                "evidence_ids": [taskID],
+            ],
+            "task_id": taskID,
+            "expected_revision": expectedRevision,
+            "to_stage": stage.rawValue,
+            "note": NSNull(),
+        ]
+        try await sendCloudCommand(command, snapshot: snapshot, requestID: requestID, revision: expectedRevision)
+        guard let task = try await loadDashboard().tasks.first(where: { $0.id == taskID && $0.stage == stage.rawValue && $0.revision == expectedRevision + 1 }) else {
+            throw EduPiRemoteAPIError.invalidResponse
+        }
+        return task
+    }
+
+    func updateStudentEvent(eventID: String, expectedRevision: Int, summary: String, topic: String?, observedOn: String?) async throws -> EduPiRemoteStudentEvent {
+        let response: StudentEventMutationResponse = try await send(
+            path: "/functions/v1/edupi-student-events",
+            method: "POST",
+            body: [
+                "action": "update_event",
+                "event_id": eventID,
+                "expected_revision": expectedRevision,
+                "summary": summary,
+                "topic": topic ?? NSNull(),
+                "observed_on": observedOn ?? NSNull(),
+                "request_id": "ios-student-event-\(UUID().uuidString)",
+            ],
+            workspaceID: try requiredWorkspaceID()
+        )
+        guard response.ok, response.externalSend == false, let record = response.record else {
+            throw EduPiRemoteAPIError.invalidResponse
+        }
+        return record
+    }
+
+    func deleteStudentEvent(eventID: String, expectedRevision: Int) async throws {
+        let response: StudentEventMutationResponse = try await send(
+            path: "/functions/v1/edupi-student-events",
+            method: "POST",
+            body: [
+                "action": "delete_event",
+                "event_id": eventID,
+                "expected_revision": expectedRevision,
+                "request_id": "ios-student-event-delete-\(UUID().uuidString)",
+            ],
+            workspaceID: try requiredWorkspaceID()
+        )
+        guard response.ok, response.externalSend == false else {
+            throw EduPiRemoteAPIError.invalidResponse
+        }
+    }
+
+    private func requiredWorkspaceID() throws -> String {
+        guard let workspaceID else { throw EduPiRemoteAPIError.noWorkspace }
+        return workspaceID
+    }
+
+    private func sendCloudCommand(
+        _ command: [String: Any],
+        snapshot: CloudSnapshotIdentity,
+        requestID: String,
+        revision: Int
+    ) async throws {
+        let response: CloudCommandResponse = try await send(
+            path: "/functions/v1/edupi-core-broker",
+            method: "POST",
+            body: [
+                "operation": "command",
+                "envelope": [
+                    "contract_version": "1.1",
+                    "message_id": "ios-cloud-command-\(UUID().uuidString)",
+                    "request_id": requestID,
+                    "issued_at": ISO8601DateFormatter().string(from: Date()),
+                    "producer": "edupi-ios",
+                    "schema_hash": "sha256:2749b1208b47bf475bd30d266b5ca1b213aa78c6c8b4dcd53059c524400565c8",
+                    "snapshot_id": snapshot.snapshotID,
+                    "idempotency_key": requestID,
+                    "provenance": [],
+                    "teacher_review": [
+                        "state": "pending_review",
+                        "reviewer_id": NSNull(),
+                        "reviewed_at": NSNull(),
+                        "note": NSNull(),
+                        "revision": revision,
+                    ],
+                    "external_send": false,
+                    "command": command,
+                ],
+            ],
+            workspaceID: try requiredWorkspaceID()
+        )
+        guard response.ok, response.operation == "command", response.requestID == requestID, response.externalSend == false else {
+            throw EduPiRemoteAPIError.invalidResponse
+        }
     }
 
     func loadStudentEvents(studentID: String? = nil) async throws -> [EduPiRemoteStudentEvent] {

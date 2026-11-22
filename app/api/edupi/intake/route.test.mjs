@@ -185,7 +185,13 @@ async function materialRouteFixture(kind, proposal, oldSource = false, lessonPro
         ...(lessonProposal ? { materialLessonProposal: lessonProposal } : {}), recognition: { eventCount: 0, slotCount: 0 }, scheduleNeedsReview: false };
     } },
     "@/lib/edupi-material-recognition": { MaterialRecognitionError: class extends Error {},
-      recognizeStagedMaterial: async () => { throw new Error("unexpected recognition"); } },
+      recognizeStagedMaterial: async () => { throw new Error("unexpected recognition"); },
+      readVerifiedStagedMaterial: async () => ({ bytes: Buffer.from("synthetic"), extension: ".pdf" }) },
+    "@/lib/edupi-cloud-client": {
+      EduPiCloudError: class extends Error {},
+      createEduPiCloudClient: () => ({ state: async () => ({ mode: "local" }) }),
+    },
+    "@/lib/edupi-cloud-request-scope": { captureEducationWriteScope: async () => ({ mode: "local" }) },
     "@/lib/edupi-material-recognition-lock": { MaterialRecognitionAdmissionError: class extends Error {}, withMaterialRecognitionLock: async (_id, work) => work() },
     "@/lib/request-security": await createJiti(import.meta.url, { tsconfigPaths: true }).import("../../../../lib/request-security.ts"),
     "@/lib/desktop-api-auth": { isDesktopApiRequestAllowed: () => true },

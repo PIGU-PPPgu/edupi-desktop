@@ -592,15 +592,15 @@ struct EduPiTaskDetailView: View {
                             .textSelection(.enabled)
                     }
                 }
-                if state.isPreview {
-                    Menu("更改状态", systemImage: "arrow.left.arrow.right") {
-                        ForEach(EduPiTaskStage.allCases.filter { $0 != task.stage }, id: \.self) { stage in
-                            Button(stage.title) { state.movePreviewTask(id, to: stage) }
+                Menu("更改状态", systemImage: "arrow.left.arrow.right") {
+                    ForEach(EduPiTaskStage.allCases.filter { $0 != task.stage }, id: \.self) { stage in
+                        Button(stage.title) {
+                            Task { _ = await state.moveTask(id, to: stage) }
                         }
                     }
-                    .font(.body.weight(.semibold))
-                    .frame(minHeight: 44)
                 }
+                .font(.body.weight(.semibold))
+                .frame(minHeight: 44)
             } else {
                 EduPiStatus(title: "任务已不可用")
             }
@@ -633,7 +633,9 @@ struct EduPiCreateTaskView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        if state.createPreviewTask(title: title, note: note) { dismiss() }
+                        Task {
+                            if await state.createTask(title: title, note: note) { dismiss() }
+                        }
                     }
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || title.count > 240)
                 }
