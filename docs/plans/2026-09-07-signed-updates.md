@@ -1,6 +1,6 @@
 # 自动下载安装
 
-2026-11-22 R24.4c 云同步：本轮为独立源码整合和既有 Supabase 安全修复，客户端/服务端开发验证与原生安装发布分别记录。新同步代码的签名包、公开下载、安装冷启、旧版升级与实体 iPhone 组合流程未验；既有 `0.3.123` 智学网发布候选不作为云同步的安装证据。Windows runner、构建、打包、smoke 与升级继续暂停。状态见 [云同步验收](../acceptance/2026-11-22-mobile-api-sync/README.zh-CN.md)。
+2026-11-22 R24.4c 云同步：**部分实现**，本轮为独立源码整合和既有 Supabase 安全修复，客户端/服务端开发验证与原生安装发布分别记录。新同步代码的签名包、公开下载、安装冷启、旧版升级与实体 iPhone 组合流程未验。`0.3.123` 智学网 Release 由另一聊天维护，本轮不变更其发布状态、资产或更新 feed，也不借作云同步安装证据。Windows runner、构建、打包、smoke 与升级继续暂停。状态见 [云同步验收](../acceptance/2026-11-22-mobile-api-sync/README.zh-CN.md)。
 
 2026-11-18 最终发布回读：**`.118` 已公开为 macOS Apple Silicon 正式 GitHub Release，安装和双冷启通过，GUI／updater 未验收。** 签名源 `7935753a`、Core `fc89b3bc`，签名 run `44303236812` success；首轮安装 `44316698278` 的 harness 旧 pin 错误保留，修复 `5ef4bd0f` 后原 DMG 第二轮 `44318046052` success。Release `449948350`、tag `v0.3.118` 精确绑定原签名源，`draft=false`、`prerelease=false`、GitHub Latest `.118`；三项 Mac 资产的 ID／大小／SHA-256 和 `.117` 资产保持。用户明确批准后由协调侧唯一进行 Release metadata 发布，没有执行仍要求全平台资产的 `phase=publish`，没有重复构建或安装；正式自动更新 feed 仍 `7924328ee893c9527adb54e25b0023e9f2a26ff7`，不宣称客户端已升级。Windows 所有 runner／构建／打包／smoke／升级继续暂停；PR509 保持 Draft。Rust audit 仍失败、按本次 macOS 书面例外保留，普通 R04 语义门和完整 R04／R15／L4 均未放行。完整资产、失败及成功证据见 [当前 R04 记录](../acceptance/2026-11-18-core-recall-desktop.md)；本段取代下方尚未签名／安装／公开的历史状态。
 

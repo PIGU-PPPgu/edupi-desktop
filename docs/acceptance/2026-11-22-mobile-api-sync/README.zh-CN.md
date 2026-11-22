@@ -4,7 +4,7 @@
 
 当前状态：**部分实现；本次范围的开发验收与独立审查通过，源码合并状态以本 PR 记录为准；完整 Desktop/iOS 产品同步与安装发布未验收。**
 
-最终受验功能提交 `dde8c9cf08e379651c78fa61db7788a938f3cfbf`，初次功能提交 `c7c021e82c56ba32b8d9e84f0fff25b56841b5a8`，基线 `5c7ae60feedc422f242b1b492b2fc097e75be618`，分支 `codex/edupi-supabase-cloud-sync-20261122`。PR 审查后补上任务/Today 审核拒绝、学生姓名过滤和 cloud 材料本地控件隔离；后续仅补充交付记录。整合在独立工作树进行，原桌面端混合修改及原聊天工作树保留。
+最终受验功能提交 `dde8c9cf08e379651c78fa61db7788a938f3cfbf`，初次功能提交 `c7c021e82c56ba32b8d9e84f0fff25b56841b5a8`，基线 `5c7ae60feedc422f242b1b492b2fc097e75be618`，分支 `codex/edupi-supabase-cloud-sync-20261122`。PR 审查后补上任务/Today 审核拒绝、学生姓名过滤和 cloud 材料本地控件隔离；安全补丁 `5168149eb8d5ef4dc2dfb13297259e5b421cd278` 另更新两项 Rust 依赖，未改变云同步功能源码。整合在独立工作树进行，原桌面端混合修改及原聊天工作树保留。
 
 ## 架构与实际范围
 
@@ -58,6 +58,8 @@
 GitHub 审查补丁另有 Node 行为测试证明 cloud 任务/Today 审核在本地 writer 之前返回 409；学生姓名先在同一工作区解析为唯一 ID，未知、同名或控制字符输入不会扩大为全班查询。部署后的扩展 broker E2 已实际验证精确姓名只返回本人事件、未知与同名返回空列表，日志为 `/tmp/edupi-cloud-sync-followup-broker-20261122.log`。student 函数的部署 SHA-256 为 `f4225a2bc20ed9b7758b62c17677e562d2dfa1818ee2e5721aae90ac05b52dfb`，与源码完全一致。
 
 初次真实 Desktop 同步客户端 HTTPS 流程通过的证据仍保留；后续两次扩展客户端重跑在登录/工作区初始化阶段遇到 `ECONNRESET`、TLS 连接中断，记录为**无结论**，不计通过。两次均执行测试账号/工作区/本机状态清理；没有用服务器 broker 回归替代这次客户端重跑。
+
+安全 CI `45012858152` 在提交 `3d3e461f84aee5c25c6283fa110e4254b4d004d7` 上的 `audit`、`linux-source` 通过，`rust-audit` 因新发布的 `RUSTSEC-2026-0592` 失败：`url 2.5.8` 处理嵌套 `blob:` URL 可能造成栈溢出。安全补丁通过官方 Cargo registry 将 `url` 更新为 `2.5.9`，并按其依赖约束将 `form_urlencoded` 更新为 `1.2.3`；其他解析版本、审计策略和工作流均保持。失败日志为 `/tmp/edupi-cloud-rust-job-clean-20261122.log`，更新日志为 `/tmp/edupi-cargo-url-update-20261122.log`。修复后的 `cargo audit --file src-tauri/Cargo.lock --deny warnings`、Linux `cargo check --locked` 及应用兼容性结果以 PR #518 的最新 CI 为准，源码合并状态单独读取该 PR，不能沿用修复前结果。
 
 最终界面截图：[隔离合成设置页](./cloud-settings-synthetic.png)。它只包含合成账号和工作区。
 

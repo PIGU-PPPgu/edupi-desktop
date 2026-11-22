@@ -93,6 +93,27 @@
       "open_p1": 0,
       "open_p2": 0
     },
+    "rust_security_ci": {
+      "before_patch": {
+        "run": 45012858152,
+        "commit": "3d3e461f84aee5c25c6283fa110e4254b4d004d7",
+        "audit": "passed",
+        "linux_source": "passed",
+        "rust_audit": "failed",
+        "advisory": "RUSTSEC-2026-0592",
+        "affected_resolution": "url 2.5.8"
+      },
+      "patch_commit": "5168149eb8d5ef4dc2dfb13297259e5b421cd278",
+      "patched_resolutions": {
+        "url": "2.5.9",
+        "form_urlencoded": "1.2.3"
+      },
+      "registry": "official_crates_io",
+      "audit_policy_unchanged": true,
+      "result_source": "GitHub PR 518 latest CI checks",
+      "failure_log": "/tmp/edupi-cloud-rust-job-clean-20261122.log",
+      "update_log": "/tmp/edupi-cargo-url-update-20261122.log"
+    },
     "literal_secret_scan": {
       "status": "passed",
       "staged_files": 142,
