@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import Darwin
 import Foundation
 
 private struct ProbeFailure: Error {
@@ -23,6 +24,17 @@ private func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
         return nil
     }
     return value
+}
+
+private func runningExecutable(_ pid: pid_t) -> String? {
+    var bytes = [UInt8](repeating: 0, count: 4096)
+    let length = bytes.withUnsafeMutableBytes { buffer in
+        proc_pidpath(pid, buffer.baseAddress, UInt32(buffer.count))
+    }
+    guard length > 0, let path = String(bytes: bytes.prefix(while: { $0 != 0 }), encoding: .utf8) else {
+        return nil
+    }
+    return URL(fileURLWithPath: path).resolvingSymlinksInPath().path
 }
 
 private struct Node {
@@ -72,24 +84,23 @@ private struct Window {
 }
 
 private final class NativeProbe {
-    private let running: NSRunningApplication
     private let app: AXUIElement
     private let pid: pid_t
+    private let executable: String
 
     init(pid: pid_t, path: String) throws {
         let url = URL(fileURLWithPath: path)
+        executable = "\(path)/Contents/MacOS/pi-agent-desktop"
         guard path.range(of: #"^/private/tmp/edupi-installed-[A-Za-z0-9]+/EduPi\.app$"#,
                          options: .regularExpression) != nil,
               url.resolvingSymlinksInPath().path == path,
-              let running = NSRunningApplication(processIdentifier: pid),
-              running.bundleIdentifier == "com.abcwyc.pi-agent",
-              running.bundleURL?.resolvingSymlinksInPath().path == path,
-              running.executableURL?.resolvingSymlinksInPath().path == "\(path)/Contents/MacOS/pi-agent-desktop",
-              !running.isTerminated else {
+              Bundle(url: url)?.bundleIdentifier == "com.abcwyc.pi-agent" else {
+            throw ProbeFailure(code: "unexpected_installed_bundle_identity")
+        }
+        guard runningExecutable(pid) == executable else {
             throw ProbeFailure(code: "unexpected_installed_app_identity")
         }
         guard AXIsProcessTrusted() else { throw ProbeFailure(code: "native_accessibility_unavailable") }
-        self.running = running
         self.pid = pid
         app = AXUIElementCreateApplication(pid)
         var axPid: pid_t = 0
@@ -97,11 +108,11 @@ private final class NativeProbe {
             throw ProbeFailure(code: "unexpected_accessibility_app_identity")
         }
         _ = AXUIElementSetMessagingTimeout(app, 0.5)
-        _ = running.activate(options: [])
+        _ = NSRunningApplication(processIdentifier: pid)?.activate(options: [])
     }
 
     private func snapshot() throws -> Window? {
-        guard !running.isTerminated, running.processIdentifier == pid else {
+        guard runningExecutable(pid) == executable else {
             throw ProbeFailure(code: "installed_app_exited_during_native_probe")
         }
         guard let windows = attribute(app, kAXWindowsAttribute) as? [AXUIElement], !windows.isEmpty else {
@@ -155,7 +166,9 @@ private final class NativeProbe {
     }
 
     private func press(_ button: AXUIElement, failure: String) throws {
-        guard !running.isTerminated,
+        var buttonPid: pid_t = 0
+        guard runningExecutable(pid) == executable,
+              AXUIElementGetPid(button, &buttonPid) == .success, buttonPid == pid,
               AXUIElementPerformAction(button, kAXPressAction as CFString) == .success else {
             throw ProbeFailure(code: failure)
         }
