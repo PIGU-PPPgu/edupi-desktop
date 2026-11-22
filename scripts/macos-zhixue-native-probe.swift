@@ -37,6 +37,16 @@ private func runningExecutable(_ pid: pid_t) -> String? {
     return URL(fileURLWithPath: path).resolvingSymlinksInPath().path
 }
 
+private func bundleIdentifier(at path: String) -> String? {
+    let plist = URL(fileURLWithPath: path).appendingPathComponent("Contents/Info.plist")
+    guard let data = try? Data(contentsOf: plist),
+          let object = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil),
+          let values = object as? [String: Any] else {
+        return nil
+    }
+    return values["CFBundleIdentifier"] as? String
+}
+
 private struct Node {
     let element: AXUIElement
     let parent: Int?
@@ -94,7 +104,7 @@ private final class NativeProbe {
         guard path.range(of: #"^/private/tmp/edupi-installed-[A-Za-z0-9]+/EduPi\.app$"#,
                          options: .regularExpression) != nil,
               url.resolvingSymlinksInPath().path == path,
-              Bundle(url: url)?.bundleIdentifier == "com.abcwyc.pi-agent" else {
+              bundleIdentifier(at: path) == "com.abcwyc.pi-agent" else {
             throw ProbeFailure(code: "unexpected_installed_bundle_identity")
         }
         guard runningExecutable(pid) == executable else {
