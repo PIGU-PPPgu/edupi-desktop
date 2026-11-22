@@ -11,6 +11,7 @@ for (let index = 2; index < process.argv.length; index += 2) {
 
 const root = args.get("--root");
 const flowId = args.get("--flow-id");
+const loginFlowId = args.get("--login-flow-id");
 const stateFile = args.get("--state");
 const sessionFile = args.get("--session");
 const profile = args.get("--profile");
@@ -20,7 +21,7 @@ const month = args.get("--month");
 const lockFile = args.get("--lock");
 const browserLock = args.get("--browser-lock");
 
-if (![root, flowId, stateFile, sessionFile, profile, configFile, snapshotFile, month, lockFile, browserLock]
+if (![root, flowId, loginFlowId, stateFile, sessionFile, profile, configFile, snapshotFile, month, lockFile, browserLock]
   .every(value => typeof value === "string" && value.length > 0)) {
   process.exitCode = 2;
   throw new Error("invalid zhixue sync worker arguments");
@@ -34,6 +35,7 @@ const writeAtomic = (file, value) => {
   writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
   renameSync(temporary, file);
 };
+const writeState = value => writeAtomic(stateFile, { version: 1, flowId, loginFlowId, month, ...value });
 const readJson = file => {
   try { return JSON.parse(readFileSync(file, "utf8")); } catch { return null; }
 };
@@ -77,7 +79,7 @@ if (!config || typeof config !== "object"
   || (config.gradeCode !== undefined && config.gradeCode !== null && !/^\d+$/.test(String(config.gradeCode)))
   || (config.schoolId !== undefined && config.schoolId !== null && typeof config.schoolId !== "string")
   || (config.classId !== undefined && config.classId !== null && typeof config.classId !== "string")) {
-  writeAtomic(stateFile, { version: 1, flowId, status: "failed", month, error: "同步配置不完整，需提供班级、学科和学段。" });
+  writeState({ status: "failed", error: "同步配置不完整，需提供班级、学科和学段。" });
   process.exitCode = 3;
   throw new Error("invalid zhixue sync configuration");
 }
@@ -93,7 +95,7 @@ if (existingLock && existingLock.flowId !== flowId
   && (alive(existingLock.pid) || (() => {
     try { return Date.now() - statSync(lockFile).mtimeMs < 30_000; } catch { return false; }
   })())) {
-  writeAtomic(stateFile, { version: 1, flowId, status: "failed", month, error: "已有同步任务在运行。" });
+  writeState({ status: "failed", error: "已有同步任务在运行。" });
   process.exitCode = 4;
   process.exit();
 }
@@ -106,13 +108,13 @@ try {
     closeSync(descriptor);
   }
 } catch {
-  writeAtomic(stateFile, { version: 1, flowId, status: "failed", month, error: "同步任务已被另一个进程占用。" });
+  writeState({ status: "failed", error: "同步任务已被另一个进程占用。" });
   process.exitCode = 4;
   process.exit();
 }
 const existingBrowserLock = readJson(browserLock);
 if (existingBrowserLock && existingBrowserLock.flowId !== flowId && alive(existingBrowserLock.pid)) {
-  writeAtomic(stateFile, { version: 1, flowId, status: "failed", month, error: "浏览器登录会话已被另一个任务占用。" });
+  writeState({ status: "failed", error: "浏览器登录会话已被另一个任务占用。" });
   removeIfExists(lockFile);
   process.exitCode = 4;
   process.exit();
@@ -129,7 +131,7 @@ try {
     }
   }
 } catch {
-  writeAtomic(stateFile, { version: 1, flowId, status: "failed", month, error: "浏览器登录会话已被另一个任务占用。" });
+  writeState({ status: "failed", error: "浏览器登录会话已被另一个任务占用。" });
   removeIfExists(lockFile);
   process.exitCode = 4;
   process.exit();
@@ -193,11 +195,8 @@ const previousMonth = () => {
 };
 
 (async () => {
-  writeAtomic(stateFile, {
-    version: 1,
-    flowId,
+  writeState({
     status: "running",
-    month,
     config: {
       className: config.className.trim(),
       subjectCode: config.subjectCode,
@@ -211,15 +210,15 @@ const previousMonth = () => {
   });
 
   const session = readJson(sessionFile);
-  if (!session || !Array.isArray(session.cookies) || session.cookies.length === 0) {
-    writeAtomic(stateFile, { version: 1, flowId, status: "needs_login", month, error: "没有可用的智学网登录态，请先扫码。" });
+  if (session?.flowId !== loginFlowId || !Array.isArray(session.cookies) || session.cookies.length === 0) {
+    writeState({ status: "needs_login", error: "没有可用的智学网登录态，请先扫码。" });
     await stop(5);
     return;
   }
 
   const browser = findBrowser();
   if (!browser) {
-    writeAtomic(stateFile, { version: 1, flowId, status: "failed", month, error: "未找到 Chrome 或 Chromium。" });
+    writeState({ status: "failed", error: "未找到 Chrome 或 Chromium。" });
     await stop(6);
     return;
   }
@@ -235,9 +234,11 @@ const previousMonth = () => {
   page.setDefaultTimeout(60_000);
   await page.goto("https://www.zhixue.com/", { waitUntil: "domcontentloaded", timeout: 60_000 });
   const tokenResponse = await page.request.post("https://www.zhixue.com/container/app/token/getToken", { data: {} });
-  const token = extractToken(await tokenResponse.json().catch(() => ({})));
+  const rejected = tokenResponse.status() === 401 || tokenResponse.status() === 403;
+  if (!tokenResponse.ok() && !rejected) throw new Error("暂时无法向智学网确认登录，请稍后重试。");
+  const token = rejected ? "" : extractToken(await tokenResponse.json());
   if (!token) {
-    writeAtomic(stateFile, { version: 1, flowId, status: "needs_login", month, error: "智学网登录态已失效，请重新扫码。" });
+    writeState({ status: "needs_login", error: "智学网登录态已失效，请重新扫码。" });
     await stop(7);
     return;
   }
@@ -296,12 +297,9 @@ const previousMonth = () => {
   const targetReports = reports.filter(report =>
     String(report.homeworkDeployTime || "").slice(0, 7) === month && Boolean(classMatch(report)));
   if (!targetReports.length) {
-    writeAtomic(stateFile, {
-      version: 1,
-      flowId,
+    writeState({
       status: "ok",
       completeness: "empty",
-      month,
       config: { ...config, schoolId, classId },
       counts: { reports: 0, students: 0 },
       message: `已完成同步检查，但 ${month} 没有找到可用作业记录。`,
@@ -423,12 +421,9 @@ const previousMonth = () => {
     source: "zhixue",
   };
   writeAtomic(snapshotFile, snapshot);
-  writeAtomic(stateFile, {
-    version: 1,
-    flowId,
+  writeState({
     status: "ok",
     completeness: "base_performance",
-    month,
     config: snapshot.config,
     counts: { reports: reportSummaries.length, students: studentsSummary.length },
     message: `已同步 ${reportSummaries.length} 份作业和 ${studentsSummary.length} 名学生的基础成绩数据。`,
@@ -438,6 +433,6 @@ const previousMonth = () => {
   await stop(0);
 })().catch(async error => {
   const message = error instanceof Error ? error.message : String(error);
-  writeAtomic(stateFile, { version: 1, flowId, status: "failed", month, error: message, updatedAt: now() });
+  writeState({ status: "failed", error: message, updatedAt: now() });
   await stop(1);
 });

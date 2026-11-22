@@ -7,6 +7,7 @@ import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { MessageView, toolVisualItems } from "./MessageView";
 import { ChatVisualResult, type ChatVisualItem } from "./ChatVisualResult";
+import { ZhixueChatStatus } from "./ZhixueChatStatus";
 import { DisclosureChevron } from "./DisclosureChevron";
 import { EduPiConversationFiles } from "./EduPiConversationFiles";
 import { EduPiProactiveHub } from "./EduPiProactiveHub";
@@ -33,6 +34,8 @@ import type { ComputerUseBridgeResult, ComputerUseInput } from "@/lib/edupi-comp
 import type { KernelRunAction } from "@/lib/edupi-kernel-display";
 import { parseTeacherMessage, type EduPiComposerContext } from "@/lib/edupi-composer-context";
 import { calendarResultSummary } from "@/lib/edupi-calendar-result";
+import { isLegacyZhixueQr, zhixueTurnStatus } from "@/lib/edupi-zhixue-status";
+import { isTauriDesktop } from "@/lib/desktop-updater";
 import { coreRecallAnswerDetails, coreRecallClient } from "@/lib/edupi-recall-answer-client";
 import { readRecallSettings, recallSendAvailable, RECALL_SETTINGS_CHANGED, type RecallSettingsView } from "@/lib/edupi-recall-prompt-client";
 
@@ -79,6 +82,7 @@ interface Props {
 function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string | null {
   if (phase?.kind === "running_tools") {
     const names = phase.tools.map((t) => t.name);
+    if (names.includes("zhixue_login")) return "正在打开智学网，请稍等。";
     if (names.length === 0) return t("chat.runningTool");
     if (names.length === 1) return t("chat.runningNamedTool", { name: names[0] });
     if (names.length <= 3) return t("chat.runningTools", { names: names.join(", ") });
@@ -917,7 +921,16 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         continue;
       }
 
-      const isLiveTail = (sessionBusy || streamActive) && endIdx === messages.length && userIdx === lastAnchorIdx;
+      const isCurrentTurn = endIdx === messages.length && userIdx === lastAnchorIdx;
+      const isLiveTail = (sessionBusy || streamActive) && isCurrentTurn;
+      const turnMessages = messages.slice(userIdx + 1, endIdx);
+      const zhixue = zhixueTurnStatus(turnMessages);
+      const legacyQr = !zhixue && isTauriDesktop()
+        && turnMessages.some(message => message.role === "toolResult" && isLegacyZhixueQr(message));
+      const zhixueStatus = zhixue ? <ZhixueChatStatus key={`zhixue-${entryIds[userIdx] ?? userIdx}-${zhixue.flowId}`}
+        receipt={zhixue} currentTurn={isCurrentTurn} autoOpen={isLiveTail} /> : legacyQr
+        ? <p key={`zhixue-legacy-${entryIds[userIdx] ?? userIdx}`} className="edupi-chat-zhixue-status">旧扫码记录无法核对。需要登录时请发起新的扫码。</p>
+        : null;
       const turnVisuals = collectTurnVisualItems(messages, userIdx + 1, endIdx, messageCwd, sessionIdForViews ?? sessionIdRef.current ?? undefined);
       const visualGallery = turnVisuals.length > 0
         ? <ChatVisualResult key={`turn-visuals-${entryIds[userIdx] ?? userIdx}`} items={turnVisuals} autoOpenQr={isLiveTail} standalone onOpenFile={onOpenFile} onOpenImage={onOpenImage} />
@@ -927,6 +940,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           rendered.push(renderMessage(renderIdx, { showToolVisuals: false }));
         }
         if (visualGallery) rendered.push(visualGallery);
+        if (zhixueStatus) rendered.push(zhixueStatus);
         idx = endIdx;
         continue;
       }
@@ -959,6 +973,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       }
 
       if (visualGallery) rendered.push(visualGallery);
+      if (zhixueStatus) rendered.push(zhixueStatus);
 
       if (finalAnswerMessage) {
         const calendarResult = teacherMode ? calendarResultSummary(messages.slice(userIdx + 1, endIdx)) : null;

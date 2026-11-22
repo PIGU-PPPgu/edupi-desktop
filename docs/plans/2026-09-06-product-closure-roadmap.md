@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-22 智学网 `0.3.123` 是 macOS 修复候选。已用隔离数据验证等待、二维码与扫码结果，以及重复查询被拦后聊天可见的下一步。签名安装、真实教师账号同步和完整 L4 待验收。现有 `0.3.122` 复现与验证记录见 [智学网扫码验收](../acceptance/2026-11-20-zhixue-desktop-login-bridge.md)。
+
 2026-11-18 最新发布状态：**`.118` 已完成 Mac-only 签名、公证、同包双冷启安装验收，并按用户明确批准公开为正式 GitHub Release。** 签名源 `7935753a`／Core `fc89b3bc`、run `44303236812` success；首轮安装 `44316698278` 因 harness 旧 Core pin 失败，`5ef4bd0f` 最小修复后原 DMG 第二轮 `44318046052` success，失败证据保留。Release `449948350` 已回读 `draft=false`、`prerelease=false`、GitHub Latest `.118`，原三项 Mac 资产和 `.117` 资产未变；自动更新 feed 仍 `7924328e…`。Rust audit 的 `RUSTSEC-2026-0543` 仍失败，按本次 macOS 书面例外保留；PR509 仍 Draft。GUI、updater、真实教师流程及真实 GLM 语义未在本次安装流程执行，普通 R04 语义门仍 false，完整 R04／R15／L4 均未完成。Windows runner／构建／打包／smoke／升级继续暂停，未经用户明确恢复不得启动。当前段取代下方源码候选与审计阻塞阶段状态，详见 [R04 当前验收](../acceptance/2026-11-18-core-recall-desktop.md)。
 
 2026-11-18 风险续修历史：picomatch lint 依赖链已用官方 glob 与两个固定 consumer 的窄适配替换，另升级 Next 16.4.6、Hono／Node server／XML parser 的官方安全补丁；干净 npm ci 后 audit 全部级别 0，适配行为 13 passed、依赖安全 29 passed、类型／完整 lint／生产前端编译通过。最终功能 head `ca54e91` 的 Linux source 与 npm/application audit 均通过；Rust chrono 完整锁文件审计仍失败，Mac 无启用路径不替代该门。SDK／周期模板页面／32 项连接证据仍有效；全量最终 4981 tests／4924 passed／0 failed／0 cancelled／57 conditional skipped，跳过不计通过。后续 macOS-only 签名、安装及正式 Release 已由上段更新；普通 R04 语义仍 false，GLM `429/code1310` 不调用。

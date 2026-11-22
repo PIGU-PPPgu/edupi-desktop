@@ -13,7 +13,7 @@ const jiti = createJiti(import.meta.url, { jsx: { runtime: "automatic" }, tsconf
 const pure = {};
 for (const name of ["edupi-composer-context", "image-attachments", "file-fuzzy", "tool-presets", "normalize",
   "scroll-memory", "streaming-message", "agent-message-history", "ansi", "terminal-input", "message-display",
-  "chat-file-drop", "chat-lazy-load", "edupi-calendar-result", "edupi-priority-send"]) pure[`@/lib/${name}`] = await jiti.import(`../lib/${name}.ts`);
+  "chat-file-drop", "chat-lazy-load", "edupi-calendar-result", "edupi-priority-send", "edupi-zhixue-status"]) pure[`@/lib/${name}`] = await jiti.import(`../lib/${name}.ts`);
 pure["./EduPiBrandMark"] = await jiti.import("./EduPiBrandMark.tsx");
 pure["@/lib/edupi-recall-answer-client"] = {
   ...await jiti.import("../lib/edupi-recall-answer-client.ts"),
@@ -33,7 +33,7 @@ const createdId = "synthetic-created-session";
 const session = (id = "synthetic-existing", directory = cwd) => ({ id, cwd: directory, path: "", created: "2026-10-28T00:00:00Z", modified: "2026-10-28T00:00:00Z", messageCount: 0, firstMessage: "" });
 const text = "[UI TEST] 合成发送";
 
-async function mount({ existing = false, durable = true, immediate = false, delayStartup = false } = {}) {
+async function mount({ existing = false, durable = true, immediate = false, delayStartup = false, initialHistory = [] } = {}) {
   const { window } = parseHTML("<html><body><div id='root'></div></body></html>");
   const globals = Object.fromEntries(["window", "document", "HTMLElement", "IS_REACT_ACT_ENVIRONMENT"].map(name => [name, globalThis[name]]));
   Object.assign(globalThis, { window, document: window.document, HTMLElement: window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true });
@@ -46,6 +46,7 @@ async function mount({ existing = false, durable = true, immediate = false, dela
   const timer = fn => { timers.set(++timerId, fn); return timerId; };
   const frame = fn => timer(fn);
   const host = { api: null, hook: null, input: { current: null }, creations: [], history: new Map(), pending: [], imageReaders: [], startup: deferred() };
+  if (existing) host.history.set(session().id, initialHistory);
   const modules = { ...pure, react: React, "react/jsx-runtime": { jsx, jsxs, Fragment: React.Fragment } };
   const load = (name, extras = {}) => {
     const exported = {};
@@ -131,6 +132,7 @@ async function mount({ existing = false, durable = true, immediate = false, dela
   for (const name of ["DisclosureChevron", "EduPiConversationFiles", "EduPiProactiveHub", "EduPiRuntimeFlow", "ConversationNavigator"]) modules[`./${name}`] = { [name]: () => null };
   modules["./MessageView"] = { MessageView: ({ message }) => jsx("div", { "data-message": message.role, children: typeof message.content === "string" ? message.content : "synthetic response" }), toolVisualItems: () => [] };
   modules["./ChatVisualResult"] = { ChatVisualResult: () => null };
+  modules["./ZhixueChatStatus"] = await jiti.import("./ZhixueChatStatus.tsx");
   const { ChatWindow } = load("ChatWindow");
   const initial = existing ? session() : null;
   const origin = initial?.id ?? `new:${cwd}`;
@@ -175,6 +177,37 @@ async function mount({ existing = false, durable = true, immediate = false, dela
   await act(async () => root.render(jsx(Parent, {}))); await f.flush();
   return f;
 }
+
+test("an interrupted Zhixue turn shows the confirmed login and remaining setup outside the tool log", async () => {
+  const flowId = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa";
+  const receipt = { version: 1, flowId, status: "authenticated" };
+  const tools = [
+    { type: "toolCall", toolCallId: "sync", toolName: "zhixue_sync_status", input: {} },
+    { type: "toolCall", toolCallId: "login", toolName: "zhixue_login_status", input: {} },
+  ];
+  const assistant = content => ({ role: "assistant", provider: "fixture", model: "fixture", stopReason: "toolUse", content });
+  const tool = (toolName, toolCallId, details, isError) => ({ role: "toolResult", toolName, toolCallId, details, isError, content: [] });
+  const f = await mount({ existing: true, initialHistory: [
+    { role: "user", content: "我扫好了，接着弄吧。" },
+    assistant(tools),
+    tool("zhixue_sync_status", "sync", { zhixue: { ...receipt, sync: "needs_config" } }, false),
+    tool("zhixue_login_status", "login", { zhixue: receipt }, false),
+    assistant(tools.map(call => ({ ...call, toolCallId: `${call.toolCallId}-duplicate` }))),
+    tool("zhixue_sync_status", "sync-duplicate", undefined, true),
+    tool("zhixue_login_status", "login-duplicate", undefined, true),
+  ] });
+  try {
+    const result = f.container.querySelectorAll(".edupi-chat-zhixue-status > p");
+    assert.equal(result.length, 1);
+    assert.equal(result[0].textContent, "已确认登录。同步前请确认班级、学科和学段。");
+    assert.equal(result[0].getAttribute("role"), "status");
+    assert.equal(f.requests.some(({ url }) => url.includes("/api/edupi/zhixue/login/")), false);
+    await f.run(() => f.host.api.select("another-conversation"));
+    assert.equal(f.container.querySelector(".edupi-chat-zhixue-status"), null);
+    await f.run(() => f.host.api.select(session().id));
+    assert.match(f.container.querySelector(".edupi-chat-zhixue-status")?.textContent, /已确认登录/);
+  } finally { await f.close(); }
+});
 
 for (const existing of [false, true]) test(`confirmed ${existing ? "existing" : "first new"} send clears the mounted composer and durable draft`, async () => {
   const f = await mount({ existing });

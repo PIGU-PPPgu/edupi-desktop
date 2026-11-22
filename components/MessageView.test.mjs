@@ -51,12 +51,21 @@ test("a reopened QR result renders its deferred image reference", () => {
   assert.match(html, /src="\/api\/sessions\/session-1\/entries\/tr1\/image\?blockIndex=1"/);
 });
 
-test("a login tool can display a local QR without returning its token to the model", () => {
+test("a legacy Zhixue login result does not reuse the shared local QR in a browser", () => {
   const message = { role: "assistant", provider: "test", model: "test", content: [{ type: "toolCall", toolCallId: "login-1", toolName: "zhixue_login", input: {} }] };
-  const result = { role: "toolResult", toolCallId: "login-1", content: [{ type: "text", text: "请扫码" }], details: { visual: { kind: "qr", title: "智学网登录", path: "/tmp/workspace/data/zhixue/zhixue_assets/login-qr-1.png" } } };
-  const html = renderMessage(message, { cwd: "/tmp/workspace", sessionId: "session-1", toolResults: new Map([["login-1", result]]) });
+  for (const toolName of ["zhixue_login", undefined]) {
+    const result = { role: "toolResult", toolCallId: "login-1", toolName, content: [{ type: "text", text: "请扫码" }], details: { visual: { kind: "qr", title: "智学网登录", path: "/tmp/workspace/.edupi/zhixue/login-qr.png" } } };
+    const html = renderMessage(message, { cwd: "/tmp/workspace", sessionId: "session-1", toolResults: new Map([["login-1", result]]) });
+    assert.doesNotMatch(html, /edupi-chat-visual-result/);
+  }
+});
+
+test("a normal QR result remains visible in a browser", () => {
+  const message = { role: "assistant", provider: "test", model: "test", content: [{ type: "toolCall", toolCallId: "qr-1", toolName: "edupi_show_qr", input: {} }] };
+  const result = { role: "toolResult", toolCallId: "qr-1", content: [{ type: "text", text: "二维码已显示" }], details: { visual: { kind: "qr", title: "扫码", path: "/tmp/workspace/data/qr.png" } } };
+  const html = renderMessage(message, { cwd: "/tmp/workspace", sessionId: "session-1", toolResults: new Map([["qr-1", result]]) });
   assert.match(html, /aria-label="打开扫码窗口"/);
-  assert.match(html, /src="\/api\/files\/tmp\/workspace\/data\/zhixue\/zhixue_assets\/login-qr-1\.png\?type=read&amp;sessionId=session-1&amp;qrRefresh=0"/);
+  assert.match(html, /src="\/api\/files\/tmp\/workspace\/data\/qr\.png\?type=read&amp;sessionId=session-1&amp;qrRefresh=0"/);
 });
 
 test("a tool can show a local output image without sending its bytes to the model", () => {

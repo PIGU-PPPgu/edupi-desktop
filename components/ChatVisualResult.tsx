@@ -9,7 +9,13 @@ export interface ChatVisualItem {
   filePath?: string;
 }
 
-function ScanDialog({ item, onClose, onOpenInPanel }: { item: ChatVisualItem; onClose: () => void; onOpenInPanel?: () => void }) {
+export function ScanDialog({ title, src, status, onClose, onOpenInPanel }: {
+  title: string;
+  src?: string;
+  status?: string;
+  onClose: () => void;
+  onOpenInPanel?: () => void;
+}) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [imageFailed, setImageFailed] = useState(false);
@@ -22,13 +28,13 @@ function ScanDialog({ item, onClose, onOpenInPanel }: { item: ChatVisualItem; on
     return () => { if (dialog.open) dialog.close(); };
   }, []);
 
-  useEffect(() => { setImageFailed(false); }, [item.src]);
+  useEffect(() => { setImageFailed(false); }, [src]);
 
-  return <dialog ref={dialogRef} className="edupi-chat-scan-dialog" aria-modal="true" aria-label={item.title} onCancel={(event) => { event.preventDefault(); onClose(); }}>
-    <div className="edupi-chat-scan-dialog__head"><strong>{item.title}</strong>{onOpenInPanel && !imageFailed ? <button type="button" className="edupi-chat-scan-dialog__panel-action" onClick={() => { onOpenInPanel(); onClose(); }}>在侧栏查看</button> : null}<button ref={closeRef} type="button" className="edupi-chat-scan-dialog__close" onClick={onClose} aria-label="关闭扫码窗口">×</button></div>
+  return <dialog ref={dialogRef} className="edupi-chat-scan-dialog" aria-modal="true" aria-label={title} onCancel={(event) => { event.preventDefault(); onClose(); }}>
+    <div className="edupi-chat-scan-dialog__head"><strong>{title}</strong>{onOpenInPanel && !imageFailed ? <button type="button" className="edupi-chat-scan-dialog__panel-action" onClick={() => { onOpenInPanel(); onClose(); }}>在侧栏查看</button> : null}<button ref={closeRef} type="button" className="edupi-chat-scan-dialog__close" onClick={onClose} aria-label="关闭扫码窗口">×</button></div>
     {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img src={item.src} alt={item.title} onLoad={() => setImageFailed(false)} onError={() => setImageFailed(true)} style={imageFailed ? { display: "none" } : undefined} />
-    {imageFailed ? <p role="status">二维码已失效，请重新发起扫码。</p> : null}
+    {src ? <img src={src} alt={title} onLoad={() => setImageFailed(false)} onError={() => setImageFailed(true)} hidden={imageFailed} /> : null}
+    {status || imageFailed ? <p role="status">{imageFailed ? "二维码暂时无法显示，请核对扫码状态。" : status}</p> : null}
   </dialog>;
 }
 
@@ -87,10 +93,10 @@ export function ChatVisualResult({ items, autoOpenQr = false, standalone = false
       <img src={currentSrc(item)} alt="" loading="lazy" style={failedQr[itemKey] ? { opacity: 0.25 } : undefined}
         onError={item.kind === "qr" ? () => setFailedQr(current => ({ ...current, [itemKey]: true })) : undefined}
         onLoad={item.kind === "qr" ? () => setFailedQr(current => current[itemKey] ? { ...current, [itemKey]: false } : current) : undefined} />
-      <span>{failedQr[itemKey] ? "二维码已失效" : item.title}</span>
+      <span>{failedQr[itemKey] ? "二维码无法显示" : item.title}</span>
     </button>;
     })}
-    {scanItem ? <ScanDialog item={{ ...scanItem, src: currentSrc(scanItem) }} onClose={closeScan}
+    {scanItem ? <ScanDialog title={scanItem.title} src={currentSrc(scanItem)} onClose={closeScan}
       onOpenInPanel={scanItem.filePath && onOpenFile ? () => onOpenFile(scanItem.filePath!)
         : !scanItem.filePath && onOpenImage ? () => onOpenImage(currentSrc(scanItem)) : undefined} /> : null}
   </div>;
