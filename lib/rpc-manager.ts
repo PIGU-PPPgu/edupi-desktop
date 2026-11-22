@@ -144,6 +144,8 @@ export interface RpcSessionStartOptions {
   isolatedSessionDir?: string;
   /** The active, Core-captured parent turn that authorized an internal child. */
   workflowParent?: { sessionId: string; sourceEntryId: string };
+  /** Lease-gated cloud chat executor; remains text-only and tool-free. */
+  cloudExecution?: boolean;
 }
 
 /**
@@ -243,7 +245,7 @@ export class AgentSessionWrapper {
   private artifactTaskId: string | null = null;
   private accessMode: PermissionMode = "workspace";
 
-  constructor(public inner: AgentSessionLike, private runtime?: AgentSessionRuntime, private toolMode: RpcToolMode = { disabled: false }, private memoryRecall?: EduPiMemoryRecallAccess, private strictToolNames = false, private privateWorkflowChild = false, private workflowParent?: { sessionId: string; sourceEntryId: string }) {
+  constructor(public inner: AgentSessionLike, private runtime?: AgentSessionRuntime, private toolMode: RpcToolMode = { disabled: false }, private memoryRecall?: EduPiMemoryRecallAccess, private strictToolNames = false, private privateWorkflowChild = false, private workflowParent?: { sessionId: string; sourceEntryId: string }, private cloudExecution = false) {
     runtime?.setBeforeSessionInvalidate(() => {
       this.memoryRecall?.invalidate(this.inner.sessionManager);
       this.sessionInvalidated = true;
@@ -675,7 +677,7 @@ export class AgentSessionWrapper {
         }
         const message = typeof command.message === "string" ? command.message.trim() : "";
         if (!message) throw new Error("Mobile prompt cannot be empty");
-        if (eduPiDirectPromptGate() !== "allowed") throw new Error("core_first_required");
+        if (!this.cloudExecution && eduPiDirectPromptGate() !== "allowed") throw new Error("core_first_required");
         const activeTools = this.inner.getActiveToolNames();
         this.inner.setActiveToolsByName([]);
         this.promptRunning = true;
@@ -1650,7 +1652,10 @@ export async function startRpcSession(
   cwd: string | undefined,
   options: RpcSessionStartOptions = {},
 ): Promise<{ session: AgentSessionWrapper; realSessionId: string }> {
-  const { toolNames, initialModel, thinkingLevel, accessMode, strictToolNames, isolatedSessionDir, workflowParent } = options;
+  const { toolNames, initialModel, thinkingLevel, accessMode, strictToolNames, isolatedSessionDir, workflowParent, cloudExecution } = options;
+  if (cloudExecution && (!strictToolNames || !isolatedSessionDir || toolNames?.length !== 0 || accessMode !== "approval")) {
+    throw new Error("invalid_cloud_executor_scope");
+  }
   const registry = getRegistry();
   const locks = getLocks();
 
@@ -1799,7 +1804,7 @@ export async function startRpcSession(
 
       const persistedPreferences = await persistExplicitStartupPreferences(
         services.settingsManager,
-        sessionStartEvent ? {} : {
+        sessionStartEvent || cloudExecution ? {} : {
           ...(initialModel ? { model: initialModel } : {}),
           ...(thinkingLevel ? { thinkingLevel } : {}),
         },
@@ -1826,7 +1831,7 @@ export async function startRpcSession(
     const runtime = await createAgentSessionRuntime(createRuntime, { cwd: sessionCwd, agentDir, sessionManager });
     const inner = runtime.session;
     const wrapper = new AgentSessionWrapper(inner, runtime, toolMode, memoryRecall, Boolean(strictToolNames), Boolean(isolatedSessionDir),
-      strictToolNames && isolatedSessionDir ? workflowParent : undefined);
+      strictToolNames && isolatedSessionDir ? workflowParent : undefined, Boolean(cloudExecution));
     host.wrapper = wrapper;
     if (accessMode) wrapper.setAccessMode(accessMode);
     requestEduPiAppAction = (action, signal) => wrapper.requestEduPiAppAction(action, signal);

@@ -3,6 +3,9 @@ import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-fo
 import { readEducationContract } from "@/lib/edupi-education-server";
 import { StudentProfileUpdateError, updateStudentProfile } from "@/lib/edupi-student-roster-server";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
+import { createEduPiCloudClient, EduPiCloudError } from "@/lib/edupi-cloud-client";
+import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
+import { readCloudStudentEducationData, updateCloudStudentProfile } from "@/lib/edupi-cloud-students";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,10 +48,23 @@ export async function PUT(request: Request, { params }: { params: Promise<{ name
       || !Number.isInteger(body.expectedRevision) || Number(body.expectedRevision) < 0) {
       throw new StudentProfileUpdateError("invalid_request", "学生档案修改字段无效。");
     }
-    const result = await updateStudentProfile({ name: name.trim(), studentId:body.studentId.trim(), className:body.className as string | null | undefined, traits, parentNotes, expectedUpdatedAt: body.expectedUpdatedAt, expectedRevision: Number(body.expectedRevision), signal: request.signal });
+    const input = { name: name.trim(), studentId:body.studentId.trim(), className:body.className as string | null | undefined, traits, parentNotes, expectedUpdatedAt: body.expectedUpdatedAt, expectedRevision: Number(body.expectedRevision), signal: request.signal };
+    const client = createEduPiCloudClient();
+    const selected = await captureEducationWriteScope(request, client);
+    if (selected.mode === "cloud") {
+      const result = await updateCloudStudentProfile(input, client, selected.scope);
+      return NextResponse.json({ result, data: await readCloudStudentEducationData(client, selected.scope) });
+    }
+    const result = await updateStudentProfile({ ...input, localOnly: true });
     return NextResponse.json({ result, data: await readEducationContract() });
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) return NextResponse.json({ error: "学生档案修改内容过大。", code: "too_large" }, { status: 413 });
+    if (error instanceof EduPiCloudError) {
+      if (error.code === "write_queued") return NextResponse.json({
+        queued: true, outboxId: "outboxId" in error ? error.outboxId : null, result: null, data: null,
+      }, { status: 202 });
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     const code = error instanceof StudentProfileUpdateError ? error.code : "unavailable";
     return NextResponse.json({ error: error instanceof Error ? error.message : "学生档案修改失败。", code }, { status: statusFor(code) });
   }

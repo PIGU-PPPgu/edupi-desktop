@@ -10,6 +10,7 @@ import { pathToFileURL } from "node:url";
 
 const { GET, PUT, POST } = await createJiti(import.meta.url, { tsconfigPaths: true })
   .import("./route.ts");
+const cloud = await createJiti(import.meta.url, { tsconfigPaths: true }).import("../../../../lib/edupi-cloud-client.ts");
 const coreRoot = process.env.EDUPI_CORE_ROOT;
 const dataRoot = process.env.EDUPI_DATA_ROOT;
 
@@ -42,6 +43,7 @@ test("manual save refuses a real newer capture before it can accept the other va
     const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
     const routeModule = { exports: {} };
     const dependencies = {
+      "@/lib/edupi-cloud-client": cloud,
       "next/server": { NextResponse: { json: (body, init) => new Response(JSON.stringify(body), init) } },
       "@/lib/edupi-core-snapshot": { resolveEduPiBridgeRoots: () => ({}) },
       "@/lib/edupi-teacher-context-review": { TeacherContextReviewError: class extends Error {} },

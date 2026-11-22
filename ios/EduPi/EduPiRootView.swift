@@ -35,11 +35,53 @@ struct EduPiRootView: View {
                     .accessibilityLabel("正在同步")
             case .login:
                 EduPiLoginView(state: state)
+            case .workspaceSelection:
+                EduPiWorkspaceSelectionView(state: state)
             case .ready:
                 EduPiWorkbenchView(state: state)
+                    .id(state.scopeID)
             }
         }
         .tint(EduPiColor.accent)
+    }
+}
+
+private struct EduPiWorkspaceSelectionView: View {
+    @ObservedObject var state: EduPiAppState
+
+    var body: some View {
+        EduPiPage {
+            EduPiHeader(title: "选择工作区")
+            if let error = state.syncError {
+                Text(error).font(.footnote).foregroundStyle(.red)
+            }
+            if state.workspaces.isEmpty {
+                if state.isSyncing {
+                    ProgressView("正在读取工作区")
+                } else if state.syncError == nil {
+                    EduPiStatus(title: "此账号暂无云端工作区")
+                }
+            } else {
+                EduPiSurface {
+                    ForEach(state.workspaces) { workspace in
+                        Button {
+                            Task { await state.chooseWorkspace(workspace.id) }
+                        } label: {
+                            EduPiRow(title: workspace.id, icon: workspace.id == state.selectedWorkspaceID ? "checkmark.circle" : "cloud")
+                        }
+                        .disabled(state.isSyncing || state.isWriting)
+                        .accessibilityIdentifier("choose-workspace-\(workspace.id)")
+                    }
+                }
+            }
+            Button("刷新工作区") { Task { await state.refresh() } }
+                .disabled(state.isSyncing)
+            if state.selectedWorkspaceID != nil {
+                Button("返回") { state.cancelWorkspaceSelection() }
+            }
+            Button("退出登录", role: .destructive) { state.signOut() }
+        }
+        .accessibilityIdentifier("workspace-selection")
     }
 }
 
@@ -146,23 +188,29 @@ private struct EduPiWorkbenchView: View {
     var body: some View {
         tabs
             .safeAreaInset(edge: .top, spacing: 0) {
-                if let error = state.syncError {
+                if let message = state.syncError ?? state.mutationError ?? pendingLabel {
                     HStack(spacing: 12) {
-                        Label(error, systemImage: "exclamationmark.circle")
+                        Label(message, systemImage: state.syncError != nil || state.mutationError != nil ? "exclamationmark.circle" : "arrow.triangle.2.circlepath")
                             .font(.footnote)
                             .foregroundStyle(EduPiColor.ink)
                         Spacer(minLength: 2)
                         Button("重试") { Task { await state.refresh() } }
                             .font(.footnote.weight(.semibold))
                             .frame(minHeight: 44)
+                            .disabled(state.isSyncing || state.isWriting)
                     }
                     .padding(.horizontal, 20)
                     .background(EduPiColor.soft)
+                    .accessibilityIdentifier("cloud-sync-status")
                 }
             }
             .sheet(item: $sheet) { destination in
                 EduPiSheetView(destination: destination, state: state)
             }
+    }
+
+    private var pendingLabel: String? {
+        state.pendingWrites.isEmpty ? nil : "\(state.pendingWrites.count) 项待同步"
     }
 
     private var tabs: some View {

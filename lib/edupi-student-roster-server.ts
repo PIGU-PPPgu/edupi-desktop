@@ -70,7 +70,14 @@ export function manualRosterRequestId(csv: string, sourceName: string): string {
   return `student-roster-manual-${createHash("sha256").update(sourceName).update("\0").update(csv, "utf8").digest("base64url")}`;
 }
 
-export async function importStudentRoster({ students, sourceName, signal, requestId }: { students: StudentRosterRow[]; sourceName: string; signal?: AbortSignal; requestId?: string }): Promise<StudentRosterResponse> {
+export async function importStudentRoster({ students, sourceName, signal, requestId, localOnly }: { students: StudentRosterRow[]; sourceName: string; signal?: AbortSignal; requestId?: string; localOnly?: boolean }): Promise<StudentRosterResponse> {
+  const { createEduPiCloudClient, EduPiCloudError } = await import("./edupi-cloud-client");
+  const cloud = createEduPiCloudClient();
+  if ((await cloud.state()).mode === "cloud") {
+    if (localOnly) throw new EduPiCloudError("scope_changed", "数据模式已改变，请刷新后重试。", 409);
+    const { importCloudStudentRoster } = await import("./edupi-cloud-students");
+    return importCloudStudentRoster({ students, sourceName, signal, requestId }, cloud);
+  }
   const roots = resolveEduPiBridgeRoots();
   const durableRequestId = requestId ?? `student-roster-${Date.now().toString(36)}`;
   const response = await runCoreProcess<StudentRosterResponse>({
@@ -94,7 +101,14 @@ export async function importStudentRoster({ students, sourceName, signal, reques
   return response;
 }
 
-export async function updateStudentProfile({ signal, ...input }: StudentProfileUpdateInput & { signal?: AbortSignal }): Promise<StudentProfileMutationReceipt> {
+export async function updateStudentProfile({ signal, localOnly, ...input }: StudentProfileUpdateInput & { signal?: AbortSignal; localOnly?: boolean }): Promise<StudentProfileMutationReceipt> {
+  const { createEduPiCloudClient, EduPiCloudError } = await import("./edupi-cloud-client");
+  const cloud = createEduPiCloudClient();
+  if ((await cloud.state()).mode === "cloud") {
+    if (localOnly) throw new EduPiCloudError("scope_changed", "数据模式已改变，请刷新后重试。", 409);
+    const { updateCloudStudentProfile } = await import("./edupi-cloud-students");
+    return updateCloudStudentProfile({ ...input, signal }, cloud);
+  }
   const roots = resolveEduPiBridgeRoots();
   const requestId = studentProfileUpdateRequestId(input);
   const response = await runCoreProcess<Record<string, unknown>>({

@@ -201,9 +201,17 @@ function validateErrorResponse(source: RawRecord | null, operation: string, requ
   return responseError(source.code);
 }
 
-export async function readStudentProfileVersions(studentId: string, signal?: AbortSignal): Promise<StudentProfileVersionHistory> {
+export async function readStudentProfileVersions(studentId: string, signal?: AbortSignal, localOnly = false): Promise<StudentProfileVersionHistory> {
   const normalizedStudentId = text(studentId, 240);
   if (!normalizedStudentId) throw new StudentProfileVersionError("invalid_request", "学生身份无效");
+  const { createEduPiCloudClient, EduPiCloudError } = await import("./edupi-cloud-client");
+  const cloud = createEduPiCloudClient();
+  if ((await cloud.state()).mode === "cloud") {
+    if (localOnly) throw new EduPiCloudError("scope_changed", "数据模式已改变，请刷新后重试。", 409);
+    signal?.throwIfAborted();
+    const { readCloudStudentProfileVersions } = await import("./edupi-cloud-students");
+    return readCloudStudentProfileVersions(normalizedStudentId, cloud);
+  }
   const requestId = `student-profile-versions-${randomUUID()}`;
   const roots = resolveEduPiBridgeRoots();
   const response = record(await runCoreProcess<unknown>({
@@ -305,7 +313,15 @@ export async function restoreStudentProfileVersion(input: {
   versionSide: StudentProfileVersionSide;
   expectedRevision: number;
   signal?: AbortSignal;
+  localOnly?: boolean;
 }): Promise<StudentProfileMutationReceipt> {
+  const { createEduPiCloudClient, EduPiCloudError } = await import("./edupi-cloud-client");
+  const cloud = createEduPiCloudClient();
+  if ((await cloud.state()).mode === "cloud") {
+    if (input.localOnly) throw new EduPiCloudError("scope_changed", "数据模式已改变，请刷新后重试。", 409);
+    const { restoreCloudStudentProfileVersion } = await import("./edupi-cloud-students");
+    return restoreCloudStudentProfileVersion(input, cloud);
+  }
   const requestId = studentProfileRestoreRequestId(input);
   const roots = resolveEduPiBridgeRoots();
   const response = record(await runCoreProcess<unknown>({

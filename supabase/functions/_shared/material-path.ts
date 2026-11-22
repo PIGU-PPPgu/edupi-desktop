@@ -13,6 +13,7 @@ export function materialUploadObjectKey(
   workspaceId: string,
   materialId: unknown,
   fileName: string,
+  sourceHash?: unknown,
 ): string | null {
   const safeId = safeMaterialId(materialId);
   if (
@@ -21,7 +22,10 @@ export function materialUploadObjectKey(
     || !/^[\p{L}\p{N}._ -]+$/u.test(fileName)
   ) return null;
 
-  const objectKey = `${workspaceId}/${safeId}/${crypto.randomUUID()}-${fileName}`;
+  const suffix = typeof sourceHash === "string" && /^sha256:[a-f0-9]{64}$/u.test(sourceHash)
+    ? sourceHash.slice("sha256:".length)
+    : crypto.randomUUID();
+  const objectKey = `${workspaceId}/${safeId}/${suffix}-${fileName}`;
   // Check the path as the Storage HTTP request will see it, after URL normalization.
   const normalizedPath = decodeURIComponent(
     new URL(`/${objectKey}`, "https://edupi-storage.invalid").pathname,

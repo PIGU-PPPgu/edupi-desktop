@@ -179,7 +179,19 @@ async function materialRouteFixture(kind, proposal, oldSource = false, lessonPro
   const dependencies = {
     "@/lib/edupi-education-intake": { EducationIntakeError, issueEducationIntake: async () => { throw new Error("unexpected direct dispatch"); } },
     "@/lib/edupi-material-staging": { listStagedMaterials: () => [descriptor], settleStagedMaterial: (...args) => calls.push(["settle", ...args]) },
-    "@/lib/edupi-material-intake-flow": { intakeRecognizedMaterial: async input => {
+    "@/lib/edupi-material-intake-flow": {
+      buildMaterialIntakeCommand: input => ({
+        command_type: "intake_material",
+        source: { source_id: input.descriptor.staging_id, source_kind: "teacher_file", source_hash: input.descriptor.source_hash, evidence_ids: [input.descriptor.staging_id] },
+        material: {
+          material_id: `material-${input.descriptor.staging_id.slice(4)}`,
+          staging_id: input.descriptor.staging_id, staging_path: input.descriptor.staging_path, source_path: null,
+          source_hash: input.descriptor.source_hash, expected_size_bytes: input.descriptor.expected_size_bytes,
+          kind: input.materialKind, title: input.title || input.descriptor.original_name,
+          subject: input.subject, class_id: input.classId, source_scope: "desktop_staging",
+        },
+      }),
+      intakeRecognizedMaterial: async input => {
       calls.push(["intake", input]); assert.equal(Object.hasOwn(input, "recognize"), false);
       return { receipts: [receipt], data: {}, materialScheduleProposal: proposal,
         ...(lessonProposal ? { materialLessonProposal: lessonProposal } : {}), recognition: { eventCount: 0, slotCount: 0 }, scheduleNeedsReview: false };
@@ -198,6 +210,9 @@ async function materialRouteFixture(kind, proposal, oldSource = false, lessonPro
     "@/lib/bounded-form-data": await createJiti(import.meta.url, { tsconfigPaths: true }).import("../../../../lib/bounded-form-data.ts"),
     "@/lib/edupi-timetable-intake": { parseTimetableIntakeCommand },
     "@/lib/edupi-calendar-intake-request": { parseCalendarIntakeCommand },
+    "@/lib/edupi-cloud-intake": { cloudMaterialIntakeIdentity: () => ({
+      requestId: "material-request", idempotencyKey: "sha256-material-request",
+    }) },
     "@/lib/edupi-calendar-sources": { CalendarSourceError: class extends Error {} },
     "@/lib/edupi-calendar-file-sync": { calendarRecognitionFingerprint: () => { throw new Error("unexpected fingerprint"); }, syncCalendarFile: async () => {
       assert.equal(oldSource, true, "new intake must not call the old automatic calendar import");
@@ -263,6 +278,108 @@ test("initial DOCX intake exposes a separate pending lesson suggestion without a
   assert.deepEqual(result.materialScheduleProposal, schedule);
   assert.equal(result.materialReceivedOnly, true);
   assert.deepEqual(calls.map(item => item[0]), ["intake", "settle"]);
+});
+
+test("cloud material upload keeps staging when the durable binary or intake write is queued", async () => {
+  const queuedEntry = { id: "material-outbox-1", operation: "material-intake", status: "pending" };
+  const { post, descriptor, calls } = await materialRouteFixture("pdf", { material_id: "synthetic-material" }, false, undefined, {
+    modules: {
+      "@/lib/edupi-cloud-client": {
+        EduPiCloudError: class extends Error {},
+        createEduPiCloudClient: () => ({
+          uploadMaterial: async input => {
+            calls.push(["upload", input]);
+            return { queued: true, entry: queuedEntry };
+          },
+        }),
+      },
+      "@/lib/edupi-cloud-intake": { cloudMaterialIntakeIdentity: command => {
+        calls.push(["identity", command]);
+        return { requestId: "material-request", idempotencyKey: "sha256-material-request" };
+      } },
+      "@/lib/edupi-cloud-request-scope": {
+        captureEducationWriteScope: async () => ({
+          mode: "cloud",
+          scope: { issuer: "https://cloud.example", accountId: "account-a", workspaceId: "workspace-a", generation: 1 },
+        }),
+      },
+      "@/lib/edupi-material-recognition": {
+        MaterialRecognitionError: class extends Error {},
+        readVerifiedStagedMaterial: async () => ({ bytes: Buffer.from("synthetic"), extension: ".pdf" }),
+      },
+    },
+  });
+  const response = await post(request({
+    kind: "material", stagingId: descriptor.staging_id, materialKind: "other", recognize: true,
+  }));
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.queued, true);
+  assert.deepEqual(body.queueEntry, queuedEntry);
+  assert.equal(body.receipt, null);
+  assert.equal(calls[1][0], "upload");
+  assert.equal(calls.some(item => item[0] === "settle"), false);
+});
+
+test("cloud intake preserves a typed upstream 502 without dispatching or settling staging", async () => {
+  class CloudError extends Error {
+    constructor() { super("合成上游错误"); this.code = "invalid_response"; this.status = 502; }
+  }
+  const { post, descriptor, calls } = await materialRouteFixture("pdf", { material_id: "synthetic-material" }, false, undefined, {
+    modules: {
+      "@/lib/edupi-cloud-client": { EduPiCloudError: CloudError, createEduPiCloudClient: assert.fail },
+      "@/lib/edupi-cloud-request-scope": { captureEducationWriteScope: async () => { throw new CloudError(); } },
+    },
+  });
+  const response = await post(request({ kind: "material", stagingId: descriptor.staging_id }));
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).code, "invalid_response");
+  assert.deepEqual(calls, []);
+});
+
+test("cloud material staging settles only after the upload is binary-verified and command is replay-safe", async () => {
+  const commandResponse = {
+    ok: true, operation: "command", request_id: "material-request", external_send: false,
+    receipt: { payload: { status: "accepted", command_type: "intake_material", applied_ids: ["synthetic-material"], rejected_ids: [] } },
+  };
+  const { post, descriptor, calls } = await materialRouteFixture("pdf", { material_id: "synthetic-material" }, false, undefined, {
+    modules: {
+      "@/lib/edupi-cloud-client": {
+        EduPiCloudError: class extends Error {},
+        createEduPiCloudClient: () => ({
+          uploadMaterial: async input => {
+            calls.push(["upload", input]);
+            return { queued: false, result: {
+              operation: "material-intake", request_id: "material-request", object_key: "workspace/material/object",
+              upload_verified: true, response: commandResponse, external_send: false,
+            } };
+          },
+        }),
+      },
+      "@/lib/edupi-cloud-intake": { cloudMaterialIntakeIdentity: command => {
+        calls.push(["identity", command]);
+        return { requestId: "material-request", idempotencyKey: "sha256-material-request" };
+      } },
+      "@/lib/edupi-cloud-request-scope": {
+        captureEducationWriteScope: async () => ({
+          mode: "cloud",
+          scope: { issuer: "https://cloud.example", accountId: "account-a", workspaceId: "workspace-a", generation: 1 },
+        }),
+      },
+      "@/lib/edupi-material-recognition": {
+        MaterialRecognitionError: class extends Error {},
+        readVerifiedStagedMaterial: async () => ({ bytes: Buffer.from("synthetic"), extension: ".pdf" }),
+      },
+    },
+  });
+  const response = await post(request({
+    kind: "material", stagingId: descriptor.staging_id, materialKind: "other", recognize: true,
+  }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.materialReceivedOnly, true);
+  assert.equal(body.storageObjectKey, "workspace/material/object");
+  assert.deepEqual(calls.map(item => item[0]), ["identity", "upload", "settle"]);
 });
 
 test("explicit old calendar and document source updates are unavailable without settling staging", async () => {

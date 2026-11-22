@@ -19,6 +19,7 @@ const outbox = await jiti.import("../../../../lib/edupi-attention-outbox.ts");
 const { buildEducationContract } = await jiti.import("../../../../lib/edupi-education-contract.ts");
 const security = await jiti.import("../../../../lib/request-security.ts");
 const bounded = await jiti.import("../../../../lib/bounded-form-data.ts");
+const cloud = await jiti.import("../../../../lib/edupi-cloud-client.ts");
 const desktopApi = await jiti.import("../../../../lib/desktop-api.ts");
 const compiled = ts.transpileModule(fs.readFileSync(new URL("./route.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
 const compiledNativeSend = ts.transpileModule(fs.readFileSync(new URL("./native-send/route.ts", import.meta.url), "utf8"), { compilerOptions: {
@@ -38,7 +39,11 @@ async function reminderRouteFixture(work, { graceDays = 3, afterSync } = {}) {
   let syncCalls = 0;
   const dependencies = {
     "@/lib/edupi-education-server": { readEducationWorkspaceBundle: async () => ({ data }) },
-    "@/lib/edupi-reminder-events": events, "@/lib/edupi-reminder-store": store,
+    "@/lib/edupi-cloud-client": cloud,
+    "@/lib/edupi-reminder-events": events, "@/lib/edupi-reminder-store": { ...store, updateReminderStore: (file, ...args) => {
+      assert.ok(path.isAbsolute(file), "a workspace URI must never become a relative filesystem path");
+      return store.updateReminderStore(file, ...args);
+    } },
     "@/lib/edupi-foreground-server": { readServerForegroundPolicy: () => policy.readServerForegroundPolicy(new FixtureDate()) },
     "@/lib/edupi-reminder-notification-proof": proof,
     "@/lib/edupi-attention-delivery": { syncReminderAttention: async () => {
@@ -66,6 +71,18 @@ async function reminderRouteFixture(work, { graceDays = 3, afterSync } = {}) {
     await rm(root, { recursive: true, force: true });
   }
 }
+
+test("cloud reminder reads and claims reject before writing local or signed-resource files", async () => {
+  await reminderRouteFixture(async ({ GET, claim, data, file, syncCalls }) => {
+    data.workspace = "cloud:synthetic-reminder-workspace";
+    for (const response of [await GET(), await claim()]) {
+      assert.equal(response.status, 409);
+      assert.equal((await response.json()).code, "unsupported_cloud_operation");
+    }
+    assert.equal(fs.existsSync(file), false);
+    assert.equal(syncCalls(), 0);
+  });
+});
 
 test("notification outcomes require an exact bounded claim timestamp", () => {
   const delivered = { id: "reminder-one", type: "notification_delivered", attemptId: "11111111-1111-4111-8111-111111111111",

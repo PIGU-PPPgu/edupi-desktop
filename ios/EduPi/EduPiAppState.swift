@@ -4,7 +4,7 @@ import Foundation
 @MainActor
 final class EduPiAppState: ObservableObject {
     enum Phase {
-        case restoring, login, ready
+        case restoring, login, workspaceSelection, ready
     }
 
     @Published private(set) var phase: Phase = .restoring
@@ -16,15 +16,37 @@ final class EduPiAppState: ObservableObject {
     @Published private(set) var loginError: String?
     @Published private(set) var syncError: String?
     @Published private(set) var lastSync: Date?
+    @Published private(set) var workspaces: [EduPiRemoteWorkspace] = []
+    @Published private(set) var selectedWorkspaceID: String?
+    @Published private(set) var pendingWrites: [EduPiCloudOutboxEntry] = []
+    @Published private(set) var isCreatingTask = false
+    @Published private(set) var movingTaskIDs = Set<String>()
+    @Published private(set) var mutationError: String?
+    @Published private(set) var scopeID = UUID()
+    @Published private(set) var cloudSessions: [EduPiCloudSession] = []
+    @Published private(set) var activeCloudSessionID: String?
+    @Published private(set) var cloudConversation: EduPiCloudConversation?
+    @Published private(set) var isLoadingCloudChat = false
+    @Published private(set) var isSendingCloudChat = false
+    @Published private(set) var chatError: String?
     @Published private(set) var previewMessages: [EduPiChatMessage] = []
     @Published var selectedTab: EduPiTab = .home
 
     let settings: AppSettings
     private var api: EduPiRemoteAPI?
     private var sessionGeneration = 0
+    private var chatSelectionGeneration = UUID()
+    private var chatEventCursor: Int64 = 0
+    private let apiFactory: @MainActor (String) throws -> EduPiRemoteAPI
 
-    init(settings: AppSettings) {
+    var isWriting: Bool { isCreatingTask || !movingTaskIDs.isEmpty || isSendingCloudChat }
+    var canWriteTasks: Bool { isPreview || (api != nil && selectedWorkspaceID != nil) }
+    var pendingTaskWrites: [EduPiCloudOutboxEntry] { pendingWrites.filter { $0.chatSessionID == nil } }
+    var pendingChatWrites: [EduPiCloudOutboxEntry] { pendingWrites.filter { $0.chatSessionID == activeCloudSessionID && $0.chatSessionID != nil } }
+
+    init(settings: AppSettings, apiFactory: @escaping @MainActor (String) throws -> EduPiRemoteAPI = { try EduPiRemoteAPI(baseURLString: $0) }) {
         self.settings = settings
+        self.apiFactory = apiFactory
     }
 
     func restore() async {
@@ -35,13 +57,14 @@ final class EduPiAppState: ObservableObject {
             return
         }
         #endif
-        guard let candidate = try? EduPiRemoteAPI(baseURLString: settings.serverAddress),
+        guard let candidate = try? apiFactory(settings.serverAddress),
               candidate.restoreSession() else {
             phase = .login
             return
         }
         api = candidate
         accountName = candidate.username
+        selectedWorkspaceID = candidate.workspaceID
         await refresh()
     }
 
@@ -55,7 +78,7 @@ final class EduPiAppState: ObservableObject {
             if generation == sessionGeneration { isSigningIn = false }
         }
         do {
-            let candidate = try EduPiRemoteAPI(baseURLString: serverAddress)
+            let candidate = try apiFactory(serverAddress)
             try await candidate.signIn(username: username, password: password)
             guard generation == sessionGeneration, !Task.isCancelled else { return }
             try candidate.activateSession()
@@ -63,7 +86,13 @@ final class EduPiAppState: ObservableObject {
             accountName = candidate.username
             settings.username = username
             settings.serverAddress = candidate.baseURL.absoluteString
-            await refresh()
+            selectedWorkspaceID = candidate.workspaceID
+            workspaces = candidate.workspaces
+            if candidate.workspaceID == nil {
+                phase = .workspaceSelection
+            } else {
+                await refresh()
+            }
         } catch {
             guard generation == sessionGeneration else { return }
             loginError = error is URLError ? "无法连接服务，请检查网络。" : error.localizedDescription
@@ -93,26 +122,194 @@ final class EduPiAppState: ObservableObject {
     }
 
     func refresh() async {
-        guard let api, !isSyncing else { return }
+        guard let api, !isSyncing, !isWriting else { return }
         let generation = sessionGeneration
         isSyncing = true
         defer {
             if generation == sessionGeneration { isSyncing = false }
         }
         do {
+            if api.workspaceID != nil {
+                pendingWrites = try api.pendingWrites()
+            }
+            try await api.loadWorkspaces()
+            guard generation == sessionGeneration, self.api === api, !Task.isCancelled else { return }
+            workspaces = api.workspaces
+            selectedWorkspaceID = api.workspaceID
+            guard api.workspaceID != nil else {
+                syncError = nil
+                phase = .workspaceSelection
+                return
+            }
+            _ = try await api.replayOutbox()
+            try await api.replayChatOutbox()
+            guard generation == sessionGeneration, self.api === api, !Task.isCancelled else { return }
+            pendingWrites = try api.pendingWrites()
             let remote = try await api.loadDashboard()
-            guard generation == sessionGeneration else { return }
+            guard generation == sessionGeneration, self.api === api, !Task.isCancelled else { return }
             dashboard = mapDashboard(remote)
             lastSync = Date()
             syncError = nil
             phase = .ready
+            if selectedTab == .chat { await refreshCloudChat() }
         } catch {
-            guard generation == sessionGeneration else { return }
+            guard generation == sessionGeneration, self.api === api, !Task.isCancelled else { return }
             if !endInvalidSession(error) {
-                syncError = lastSync == nil ? "工作台暂时无法读取" : "同步失败，正在显示上次的数据"
-                phase = .ready
+                syncError = error is URLError
+                    ? (pendingWrites.isEmpty ? "网络不可用，请稍后重试。" : "网络不可用，待同步内容已保留。")
+                    : error.localizedDescription
+                phase = api.workspaceID == nil ? .workspaceSelection : .ready
             }
         }
+    }
+
+    func becameActive() async {
+        guard phase != .restoring, !isPreview else { return }
+        await refresh()
+    }
+
+    func showWorkspaceSelection() {
+        guard !isPreview, !isWriting, !isSyncing else { return }
+        phase = .workspaceSelection
+    }
+
+    func cancelWorkspaceSelection() {
+        if selectedWorkspaceID != nil { phase = .ready }
+    }
+
+    func chooseWorkspace(_ id: String) async {
+        guard let api, !isWriting, !isSyncing else { return }
+        do {
+            try api.chooseWorkspace(id)
+            sessionGeneration += 1
+            scopeID = UUID()
+            dashboard = EduPiDashboard()
+            lastSync = nil
+            syncError = nil
+            mutationError = nil
+            resetCloudChat()
+            selectedWorkspaceID = api.workspaceID
+            pendingWrites = try api.pendingWrites()
+            phase = .ready
+            await refresh()
+        } catch {
+            syncError = error.localizedDescription
+        }
+    }
+
+    func isTaskBusy(_ id: String) -> Bool {
+        movingTaskIDs.contains(id) || pendingTaskWrites.contains(where: { $0.taskID == id })
+    }
+
+    func refreshCloudChat() async {
+        guard !isPreview, let api, selectedWorkspaceID != nil, !isLoadingCloudChat, !isSendingCloudChat else { return }
+        let generation = sessionGeneration
+        let selection = chatSelectionGeneration
+        let sessionID = activeCloudSessionID
+        isLoadingCloudChat = true
+        defer {
+            if generation == sessionGeneration { isLoadingCloudChat = false }
+        }
+        do {
+            try await api.replayChatOutbox()
+            guard generation == sessionGeneration, self.api === api, !Task.isCancelled else { return }
+            pendingWrites = try api.pendingWrites()
+            let sessions = try await api.loadCloudSessions()
+            guard generation == sessionGeneration, self.api === api, !Task.isCancelled else { return }
+            cloudSessions = sessions
+            if let sessionID, !pendingWrites.contains(where: {
+                if case let .chatCreate(id, _) = $0.mutation { return id == sessionID }
+                return false
+            }) {
+                let events = try await api.loadCloudEvents(sessionID: sessionID, after: chatEventCursor)
+                let conversation = try await api.readCloudSession(sessionID)
+                guard generation == sessionGeneration, self.api === api, selection == chatSelectionGeneration,
+                      activeCloudSessionID == sessionID, !Task.isCancelled else { return }
+                chatEventCursor = events.last?.id ?? chatEventCursor
+                cloudConversation = conversation
+            }
+            if selection == chatSelectionGeneration { chatError = nil }
+        } catch {
+            guard generation == sessionGeneration, self.api === api, selection == chatSelectionGeneration,
+                  !Task.isCancelled else { return }
+            if !endInvalidSession(error) {
+                chatError = error is URLError
+                    ? (pendingChatWrites.isEmpty ? "网络不可用，请稍后重试。" : "网络不可用，待发送消息已保存在本机。")
+                    : error.localizedDescription
+            }
+        }
+    }
+
+    func openCloudSession(_ id: String) async {
+        guard !isSendingCloudChat else { return }
+        activeCloudSessionID = id
+        cloudConversation = nil
+        chatSelectionGeneration = UUID()
+        chatEventCursor = 0
+        await refreshCloudChat()
+    }
+
+    func createCloudConversation() async -> Bool {
+        await writeCloudChat { try await $0.createCloudSession() }
+    }
+
+    func sendCloudMessage(_ value: String) async -> Bool {
+        guard let id = activeCloudSessionID else { return false }
+        return await writeCloudChat { try await $0.enqueueCloudPrompt(sessionID: id, message: value) }
+    }
+
+    private func writeCloudChat(_ write: (EduPiRemoteAPI) async throws -> EduPiCloudChatWriteResult) async -> Bool {
+        guard !isPreview, let api, selectedWorkspaceID != nil, !isWriting, !isSyncing, !isLoadingCloudChat else { return false }
+        let generation = sessionGeneration
+        isSendingCloudChat = true
+        chatError = nil
+        defer {
+            if generation == sessionGeneration { isSendingCloudChat = false }
+        }
+        do {
+            let result = try await write(api)
+            guard generation == sessionGeneration, self.api === api, !Task.isCancelled else { return false }
+            if activeCloudSessionID != result.sessionID {
+                cloudConversation = nil
+                chatEventCursor = 0
+                chatSelectionGeneration = UUID()
+            }
+            activeCloudSessionID = result.sessionID
+            pendingWrites = try api.pendingWrites()
+            if let pending = result.pending {
+                chatError = pending.lastError
+                return !pending.isBlocked
+            }
+            // The write already passed its exact readback. A later read failure
+            // keeps that success, so a retry cannot create a second prompt.
+            do {
+                let conversation = try await api.readCloudSession(result.sessionID)
+                let sessions = try await api.loadCloudSessions()
+                guard generation == sessionGeneration, self.api === api, activeCloudSessionID == result.sessionID,
+                      !Task.isCancelled else { return false }
+                cloudConversation = conversation
+                cloudSessions = sessions
+            } catch {
+                guard generation == sessionGeneration, self.api === api else { return false }
+                if !endInvalidSession(error) { chatError = error.localizedDescription }
+            }
+            return true
+        } catch {
+            guard generation == sessionGeneration, self.api === api, !Task.isCancelled else { return false }
+            if !endInvalidSession(error) { chatError = error.localizedDescription }
+            return false
+        }
+    }
+
+    private func resetCloudChat() {
+        cloudSessions = []
+        activeCloudSessionID = nil
+        cloudConversation = nil
+        isLoadingCloudChat = false
+        isSendingCloudChat = false
+        chatError = nil
+        chatSelectionGeneration = UUID()
+        chatEventCursor = 0
     }
 
     func beginPreviewConversation() {
@@ -146,22 +343,29 @@ final class EduPiAppState: ObservableObject {
     func createTask(title: String, note: String, requestID: String? = nil) async -> Bool {
         if isPreview { return createPreviewTask(title: title, note: note) }
         guard let api else {
-            syncError = "云端账号未登录"
+            mutationError = "云端账号未登录"
             return false
         }
+        guard !isWriting, !isSyncing else { return false }
+        let generation = sessionGeneration
+        isCreatingTask = true
+        mutationError = nil
+        defer {
+            if generation == sessionGeneration { isCreatingTask = false }
+        }
         do {
-            let task = try await api.createTask(title: title, note: note, requestID: requestID)
-            guard let index = dashboard.tasks.firstIndex(where: { $0.id == task.id }) else {
-                dashboard.tasks.insert(EduPiTaskItem(id: task.id, title: task.title, dueDate: task.dueDate, note: task.note,
-                    stage: EduPiTaskStage(rawValue: task.stage) ?? .todo, revision: task.revision), at: 0)
-                return true
+            let result = try await api.createTask(title: title, note: note, requestID: requestID)
+            guard generation == sessionGeneration, self.api === api, !Task.isCancelled else { return false }
+            if let task = result.task {
+                apply(task)
+                syncError = nil
             }
-            dashboard.tasks[index].stage = EduPiTaskStage(rawValue: task.stage) ?? .todo
-            dashboard.tasks[index].revision = task.revision
-            syncError = nil
-            return true
+            pendingWrites = try api.pendingWrites()
+            mutationError = result.pending?.isBlocked == true ? result.pending?.lastError : nil
+            return result.pending?.isBlocked != true
         } catch {
-            syncError = error.localizedDescription
+            guard generation == sessionGeneration, self.api === api, !Task.isCancelled else { return false }
+            if !endInvalidSession(error) { mutationError = error.localizedDescription }
             return false
         }
     }
@@ -171,19 +375,41 @@ final class EduPiAppState: ObservableObject {
             movePreviewTask(id, to: stage)
             return true
         }
-        guard let api, let index = dashboard.tasks.firstIndex(where: { $0.id == id }) else {
-            syncError = "任务已不可用"
+        guard let api, let current = dashboard.tasks.first(where: { $0.id == id }) else {
+            mutationError = "任务已不可用"
             return false
         }
+        guard !isWriting, !isSyncing, !isTaskBusy(id) else { return false }
+        let generation = sessionGeneration
+        movingTaskIDs.insert(id)
+        mutationError = nil
+        defer {
+            if generation == sessionGeneration { movingTaskIDs.remove(id) }
+        }
         do {
-            let task = try await api.moveTask(taskID: id, expectedRevision: dashboard.tasks[index].revision, to: stage)
-            dashboard.tasks[index].stage = EduPiTaskStage(rawValue: task.stage) ?? stage
-            dashboard.tasks[index].revision = task.revision
-            syncError = nil
-            return true
+            let result = try await api.moveTask(taskID: id, expectedRevision: current.revision, to: stage, taskTitle: current.title)
+            guard generation == sessionGeneration, self.api === api, !Task.isCancelled else { return false }
+            if let task = result.task {
+                apply(task)
+                syncError = nil
+            }
+            pendingWrites = try api.pendingWrites()
+            mutationError = result.pending?.isBlocked == true ? result.pending?.lastError : nil
+            return result.pending?.isBlocked != true
         } catch {
-            syncError = error.localizedDescription
+            guard generation == sessionGeneration, self.api === api, !Task.isCancelled else { return false }
+            if !endInvalidSession(error) { mutationError = error.localizedDescription }
             return false
+        }
+    }
+
+    private func apply(_ task: EduPiRemoteTask) {
+        let item = EduPiTaskItem(id: task.id, title: task.title, dueDate: task.dueDate, note: task.note,
+                                 stage: EduPiTaskStage(rawValue: task.stage) ?? .todo, revision: task.revision)
+        if let index = dashboard.tasks.firstIndex(where: { $0.id == task.id }) {
+            dashboard.tasks[index] = item
+        } else {
+            dashboard.tasks.insert(item, at: 0)
         }
     }
 
@@ -226,6 +452,7 @@ final class EduPiAppState: ObservableObject {
 
     private func resetWorkbench() {
         sessionGeneration += 1
+        scopeID = UUID()
         api = nil
         isPreview = false
         isSigningIn = false
@@ -234,6 +461,13 @@ final class EduPiAppState: ObservableObject {
         loginError = nil
         syncError = nil
         lastSync = nil
+        workspaces = []
+        selectedWorkspaceID = nil
+        pendingWrites = []
+        isCreatingTask = false
+        movingTaskIDs = []
+        mutationError = nil
+        resetCloudChat()
         previewMessages = []
         dashboard = EduPiDashboard()
         selectedTab = .home

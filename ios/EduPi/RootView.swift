@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var settings: AppSettings
     @StateObject private var state: EduPiAppState
 
@@ -14,6 +15,11 @@ struct RootView: View {
         EduPiRootView(state: state)
             .task {
                 await state.restore()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    Task { await state.becameActive() }
+                }
             }
     }
 }

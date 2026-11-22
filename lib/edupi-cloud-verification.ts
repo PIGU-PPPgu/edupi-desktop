@@ -17,6 +17,68 @@ export async function verifyCloudWrite(
   const requestId = operation === "command" ? envelope?.request_id : body.request_id;
   if (result.ok !== true || result.operation !== operation || result.request_id !== requestId
     || result.external_send !== false) throw new CloudReadbackError();
+  if (operation === "students") {
+    const { verifyCloudStudentWrite } = await import("./edupi-cloud-students-verification.ts");
+    return verifyCloudStudentWrite(body, result, workspaceId, read);
+  }
+  if (operation === "classroom") {
+    const { verifyCloudClassroomWrite } = await import("./edupi-cloud-classroom-verification");
+    return verifyCloudClassroomWrite(body, result, workspaceId, read);
+  }
+  if (operation === "entities") {
+    const target = cloudRecord(result.target);
+    if (result.workspace_id !== workspaceId || result.action !== body.action
+      || !target || target.kind !== body.kind || target.id !== body.id
+      || result.target_fingerprint !== body.expected_fingerprint) throw new CloudReadbackError();
+    const response = await read("entities", { action: "read", kind: body.kind, id: body.id });
+    const state = cloudRecord(response.state);
+    if (response.workspace_id !== workspaceId || response.tombstone_revision !== result.tombstone_revision
+      || state?.deleted !== (body.action === "delete")) throw new CloudReadbackConflictError();
+    return;
+  }
+  if (operation === "student-events") {
+    const receipt = cloudRecord(result.record);
+    const response = await read(operation, { action: "read_event", event_id: body.event_id });
+    const event = cloudRecord(response.record);
+    if (!receipt || !event || response.workspace_id !== workspaceId
+      || result.action !== body.action || receipt.id !== body.event_id || event.id !== body.event_id
+      || event.revision !== Number(body.expected_revision) + 1 || receipt.revision !== event.revision
+      || event.deleted_at !== receipt.deleted_at || event.summary !== receipt.summary
+      || event.topic !== receipt.topic || event.observed_on !== receipt.observed_on
+      || body.action === "delete_event" && typeof event.deleted_at !== "string"
+      || body.action === "update_event" && (event.deleted_at !== null
+        || body.summary !== undefined && event.summary !== String(body.summary).trim()
+        || event.topic !== (typeof body.topic === "string" ? body.topic.trim() || null : null)
+        || event.observed_on !== (body.observed_on ?? null))) throw new CloudReadbackConflictError();
+    return;
+  }
+  if (operation === "sessions") {
+    if (result.action !== body.action || result.workspace_id !== workspaceId && body.action === "create") throw new CloudReadbackError();
+    const response = await read("sessions", { action: "read", session_id: body.session_id });
+    const session = cloudRecord(response.session);
+    if (response.workspace_id !== workspaceId || !session || session.session_id !== body.session_id) throw new CloudReadbackError();
+    if (body.action === "enqueue") {
+      const request = Array.isArray(response.requests) ? response.requests.map(cloudRecord)
+        .find(row => row?.request_id === requestId) : null;
+      const messages = Array.isArray(response.messages) ? response.messages.map(cloudRecord) : [];
+      if (!request || JSON.stringify(canonical(request.command)) !== JSON.stringify(canonical(body.command))
+        || !messages.some(row => row && row.request_id === requestId
+          && cloudRecord(row.message)?.content === cloudRecord(body.command)?.message)) throw new CloudReadbackError();
+    } else if (body.action === "create") {
+      if (session.title !== body.title || session.thinking_level !== body.thinking_level
+        || JSON.stringify(canonical(session.model)) !== JSON.stringify(canonical(body.model))) throw new CloudReadbackConflictError();
+    } else if (body.action === "delete") {
+      if (typeof session.deleted_at !== "string") throw new CloudReadbackError();
+    } else if (body.action === "rename" || body.action === "configure") {
+      if (session.revision !== result.revision || body.action === "rename" && session.title !== body.title
+        || body.model !== undefined && JSON.stringify(canonical(session.model)) !== JSON.stringify(canonical(body.model))
+        || body.thinking_level !== undefined && session.thinking_level !== body.thinking_level) throw new CloudReadbackConflictError();
+    } else if (body.action === "cancel") {
+      if (Array.isArray(response.requests) && response.requests.map(cloudRecord)
+        .some(row => ["queued", "claimed", "running"].includes(String(row?.status)))) throw new CloudReadbackError();
+    } else throw new CloudReadbackError();
+    return;
+  }
   if (operation === "command") {
     const command = cloudRecord(envelope?.command);
     const receiptEnvelope = cloudRecord(result.receipt);
@@ -128,4 +190,10 @@ export async function verifyCloudWrite(
     return;
   }
   throw new CloudReadbackError();
+}
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  const object = cloudRecord(value);
+  return object ? Object.fromEntries(Object.keys(object).sort().map(key => [key, canonical(object[key])])) : value;
 }

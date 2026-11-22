@@ -1,8 +1,10 @@
-import { randomUUID } from "node:crypto";
-import type { EducationIntakeCommand } from "./edupi-education-intake";
+import { createHash, randomUUID } from "node:crypto";
+import type { EducationIntakeCommand } from "./edupi-education-intake.ts";
 import { EDUPI_CLOUD_BRIDGE_CONTRACT } from "./edupi-cloud-writer-contract.ts";
 
 type RawRecord = Record<string, unknown>;
+const contentHash = (value: unknown) =>
+  `sha256:${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
 
 function record(value: unknown): RawRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as RawRecord : {};
@@ -148,5 +150,17 @@ export function buildCloudIntakeEnvelope(options: {
     },
     external_send: false,
     command,
+  };
+}
+
+export function cloudMaterialIntakeIdentity(command: EducationIntakeCommand): {
+  requestId: string;
+  idempotencyKey: string;
+} {
+  if (command.command_type !== "intake_material") throw new Error("材料接入请求类型无效");
+  const idempotencyKey = `sha256:${contentHash(command).slice("sha256:".length)}`;
+  return {
+    requestId: `cloud-intake-material-${idempotencyKey.slice("sha256:".length)}`,
+    idempotencyKey,
   };
 }

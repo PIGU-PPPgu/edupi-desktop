@@ -307,6 +307,8 @@ export interface SessionInfo {
   path: string;
   id: string;
   cwd: string;
+  /** Identity of the cloud snapshot displayed by the client. */
+  cloudScope?: string;
   name?: string;
   created: string;
   modified: string;

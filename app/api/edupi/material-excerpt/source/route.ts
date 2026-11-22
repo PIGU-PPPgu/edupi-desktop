@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readEducationContract } from "@/lib/edupi-education-server";
+import { EduPiCloudError } from "@/lib/edupi-cloud-client";
 import { resolveEduPiBridgeRoots } from "@/lib/edupi-core-snapshot";
 import { runCoreProcess } from "@/lib/edupi-core-process-client";
 import { ensureEduPiRuntime } from "@/lib/edupi-runtime-supervisor";
@@ -64,6 +65,7 @@ function selectionReadbackMatches(preview: Preview, selectors: Span[], excerpt: 
 }
 
 function errorResponse(error: unknown) {
+  if (error instanceof EduPiCloudError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
   if (error instanceof RequestBodyTooLargeError) return NextResponse.json({ error: "所选内容过多" }, { status: 413 });
   const code = (error as { code?: string })?.code;
   if (["invalid_input", "invalid_review", "docx_fragment_invalid"].includes(code || "")) return NextResponse.json({ error: "所选原文无效，请重新选择" }, { status: 400 });

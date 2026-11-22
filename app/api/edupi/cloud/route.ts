@@ -77,6 +77,8 @@ function publicState(client: ReturnType<typeof createEduPiCloudClient>, state: E
   catch (error) { failure ??= error; }
   const sync = { pending: 0, conflict: 0, failed: 0 };
   for (const entry of state.outbox) sync[entry.status]++;
+  sync.pending += state.completed.filter(item => item.entry.operation === "material-intake"
+    && item.result.upload_verified === true && item.result.staging_settled !== true).length;
   const lastError = state.outbox.find(entry => entry.lastError)?.lastError;
   if (!failure && lastError) failure = new EduPiCloudError(lastError, "");
   const safeError = failure ? publicError(failure) : null;

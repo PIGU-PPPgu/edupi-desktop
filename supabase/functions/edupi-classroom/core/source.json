@@ -1,0 +1,42 @@
+{
+  "core_commit": "fc89b3bc899a55b0fdad61b8f37e238d950f37c6",
+  "source": "scripts/classroom",
+  "files": [
+    {
+      "path": "grade.mjs",
+      "sha256": "0afc32f1dbf923b79f34d268a087d935ffaa649b4f0f872059374fe567100ccd"
+    },
+    {
+      "path": "seating.mjs",
+      "sha256": "731b768423841e3e84cdcd4c240ab387ba76d73ffc66105fc7a7ba7f26daf532"
+    },
+    {
+      "path": "duty.mjs",
+      "sha256": "df8b01c48cef213ccd83c7303635047c1ba75fc8ad5998718306cae7f46840ea"
+    },
+    {
+      "path": "student-gender.mjs",
+      "sha256": "bafadffa9524b3001deea04d2c0ad5ddb7deaea0d6aca0e135e0e38badfdcb45"
+    },
+    {
+      "path": "duty-engine.mjs",
+      "sha256": "6fa986a5bb7b268f352375615adccb5368413581858c887ab06cea60624da719"
+    },
+    {
+      "path": "grade-engine/analysisService.mjs",
+      "sha256": "dfc449799ac9b733395a024f6a0afeab765c1fcae47f7c442c3f529ca4a01e94"
+    },
+    {
+      "path": "grade-engine/statistics.mjs",
+      "sha256": "ee1063e8f9cd4262155356623301ec7d880bbab375ac48fc45f9c3b4646551cb"
+    },
+    {
+      "path": "grade-engine/studentValueAddedService.mjs",
+      "sha256": "2fe2db15dff2ce3464a49c881669c56219d68eb2047408695a02b0a9419cc7f3"
+    },
+    {
+      "path": "grade-engine/classValueAddedService.mjs",
+      "sha256": "57053ecaec3f5969c7aad2d07e5436a9e1441f3e723b170f4e7c2130cb8ac6ac"
+    }
+  ]
+}

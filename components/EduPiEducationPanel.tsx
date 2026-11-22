@@ -118,6 +118,8 @@ type AgentPromptMode = "insert" | "replace" | "teacher";
 type EducationIntakeApiResult = {
   error?: string;
   staged?: MaterialStagingDescriptor[];
+  queued?: boolean;
+  status?: string;
   receipt?: { status?: string; evidence_ids?: string[] };
   materialReceivedOnly?: boolean;
   materialScheduleProposal?: EduPiMaterialScheduleProposal;
@@ -556,13 +558,20 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     try {
       const response = await fetch("/api/edupi/intake", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(education?.cloudScope ? { "x-edupi-cloud-scope": education.cloudScope } : {}),
+        },
         body: JSON.stringify(body),
       });
       const result = await response.json() as EducationIntakeApiResult;
       if (!isCurrentWorkspace()) throw new DOMException("工作区已改变。", "AbortError");
-      if (!response.ok) throw new Error(result.error || `接入失败（HTTP ${response.status}）`);
+      if (!response.ok && response.status !== 202) throw new Error(result.error || `接入失败（HTTP ${response.status}）`);
       if (Array.isArray(result.staged)) setStagedMaterials(result.staged);
+      if (result.queued === true) {
+        setMaterialStagingMessage({ tone: "success", text: "材料已保留，等待云端同步。" });
+        return result;
+      }
       await loadWorkspace();
       return result;
     } catch (error) {
@@ -573,13 +582,14 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     } finally {
       if (isCurrentWorkspace()) setEducationIntakeBusy(false);
     }
-  }, [educationIntakeBusy, isCurrentWorkspace, loadWorkspace]);
+  }, [education, educationIntakeBusy, isCurrentWorkspace, loadWorkspace]);
 
   const intakeStagedMaterial = useCallback(async (item: MaterialStagingDescriptor, metadata: MaterialIntakeMetadata) => {
     const result = await submitEducationIntake({ kind: "material", stagingId: item.staging_id,
       title: metadata.title, materialKind: metadata.materialKind, subject: metadata.subject, classId: metadata.classId });
+    const queued = result.queued === true;
     const accepted = result.materialReceivedOnly === true && ["accepted", "modified"].includes(String(result.receipt?.status));
-    setMaterialStagingMessage({ tone: accepted ? "success" : "error", text: `${item.original_name} ${accepted ? "已接入" : "待核对"}` });
+    setMaterialStagingMessage({ tone: queued || accepted ? "success" : "error", text: `${item.original_name} ${queued ? "已保留，等待云端同步" : accepted ? "已接入" : "待核对"}` });
     return result;
   }, [submitEducationIntake]);
 
@@ -1339,6 +1349,10 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       return true;
     } catch (error) {
       if (!isCurrentWorkspace()) return false;
+      if (error instanceof Error && "code" in error && error.code === "pending_sync") {
+        setMaterialStagingMessage({ tone: "success", text: error.message });
+        return false;
+      }
       setMaterialStagingMessage({ tone: "error", text: error instanceof Error ? error.message : "删除失败" });
       throw error;
     } finally {

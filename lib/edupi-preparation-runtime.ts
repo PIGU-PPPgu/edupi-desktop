@@ -3,6 +3,8 @@ import { readEducationContract } from "./edupi-education-server";
 import { ensureEduPiRuntime, getPendingEduPiRuntime, g1ScopeForActivation } from "./edupi-runtime-supervisor";
 import { pumpBackgroundJobs } from "./edupi-background-jobs";
 import { readEduPiProactivityActivation } from "./edupi-proactivity-config";
+import { createEduPiCloudClient, EduPiCloudError } from "./edupi-cloud-client";
+import { stateScopeKey } from "./edupi-cloud-request-scope";
 
 type PreparationStatus = { state: "idle" | "running" | "ready" | "error"; updatedAt: string | null; prepared: number; error: string | null; taskId?: string | null; retryable?: boolean };
 const READY_WORK_STATES = new Set(["draft_ready", "accepted", "modified", "completed"]);
@@ -55,7 +57,8 @@ export async function preparationStatus(taskId?: string): Promise<PreparationSta
     else if (workReady || !status.taskId && prepared > 0) Object.assign(status, { state: "ready", error: null, prepared });
     else Object.assign(status, { state: "idle", error: null, prepared });
     return { ...status, retryable: false };
-  } catch {
+  } catch (error) {
+    if (error instanceof EduPiCloudError) throw error;
     return { ...status, state: "error", error: "备课状态暂不可用", retryable: true };
   }
 }
@@ -63,6 +66,9 @@ export async function preparationStatus(taskId?: string): Promise<PreparationSta
 export async function startPreparation({ taskId = null }: { taskId?: string | null } = {}): Promise<PreparationStatus> {
   const status = current();
   try {
+    const client = createEduPiCloudClient();
+    const selected = await client.state();
+    if (selected.mode === "cloud") throw new EduPiCloudError("unsupported_cloud_operation", "云端事项暂不支持本地备课执行。", 409);
     const roots = resolveEduPiBridgeRoots();
     const host = await ensureEduPiRuntime(roots);
     let payload: Record<string, unknown> | null = null;
@@ -73,15 +79,18 @@ export async function startPreparation({ taskId = null }: { taskId?: string | nu
       if (revision === undefined) throw new Error("请先选择可准备的任务");
       payload = { task_id: taskId, expected_revision: revision };
     }
+    if (stateScopeKey(await client.state()) !== stateScopeKey(selected)) throw new EduPiCloudError("scope_changed", "工作区已改变，未开始备课。", 409);
     let result = await host.call(taskId ? "prepare_task" : "prepare_due", payload);
     if (taskId && !result.ok && result.error_code === "stale_revision") {
       const candidate = (await readEducationContract()).workCandidates.find(item => item.taskId === taskId);
       if (!candidate) throw new Error("请先选择可准备的任务");
+      if (stateScopeKey(await client.state()) !== stateScopeKey(selected)) throw new EduPiCloudError("scope_changed", "工作区已改变，未重试备课。", 409);
       result = await host.call("prepare_task", { task_id: taskId, expected_revision: candidate.revision });
     }
     if (!result.ok) throw failure(result);
     const acknowledgement = result.result as { state?: string; event_id?: string; attempt?: number } | undefined;
     if (taskId && acknowledgement && ["failed", "cancelled"].includes(acknowledgement.state || "")) {
+      if (stateScopeKey(await client.state()) !== stateScopeKey(selected)) throw new EduPiCloudError("scope_changed", "工作区已改变，未重试备课。", 409);
       result = await host.call("retry_preparation", { event_id: acknowledgement.event_id, expected_attempt: acknowledgement.attempt });
       if (!result.ok) throw failure(result);
     }
@@ -91,6 +100,7 @@ export async function startPreparation({ taskId = null }: { taskId?: string | nu
     if (taskId && acknowledgement?.state === "completed") Object.assign(status, await preparationStatus(taskId));
     return { ...status };
   } catch (error) {
+    if (error instanceof EduPiCloudError) throw error;
     const code = (error as { code?: unknown })?.code;
     if (typeof code === "string" && /^[a-z_]{1,64}$/.test(code)) console.warn("[edupi preparation]", code);
     Object.assign(status, { taskId, state: "error", updatedAt: new Date().toISOString(), error: error instanceof Error ? error.message : "备课暂不可用", retryable: false });
@@ -100,6 +110,9 @@ export async function startPreparation({ taskId = null }: { taskId?: string | nu
 
 export async function ensurePreparation(): Promise<PreparationStatus> {
   try {
+    const client = createEduPiCloudClient();
+    const selected = await client.state();
+    if (selected.mode === "cloud") throw new EduPiCloudError("unsupported_cloud_operation", "云端事项暂不支持本地备课执行。", 409);
     const roots = resolveEduPiBridgeRoots();
     const host = await ensureEduPiRuntime(roots);
     // Agent-computer recovery is independent from the preparation scan. A
@@ -115,10 +128,12 @@ export async function ensurePreparation(): Promise<PreparationStatus> {
     // The Core timer performs the same scan every five minutes. Running it
     // once on Desktop startup/resume closes the sleep gap immediately; Core's
     // source revision and queue replay guards keep this idempotent.
+    if (stateScopeKey(await client.state()) !== stateScopeKey(selected)) throw new EduPiCloudError("scope_changed", "工作区已改变，未开始备课。", 409);
     const catchUp = await host.call("prepare_due", null);
     if (!catchUp.ok) throw failure(catchUp);
     return preparationStatus();
-  } catch {
+  } catch (error) {
+    if (error instanceof EduPiCloudError) throw error;
     return { ...current(), state: "error", error: "备课执行尚未连接" };
   }
 }

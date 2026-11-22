@@ -1,5 +1,21 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-23 R24.4c 风险续修最新状态：生产源码 `fd6c736`，候选 `.125`。云错误状态、提醒相对路径、本地备课/绑定误回落、材料丢 ACK、会话创建依赖、聊天完整请求持久化、账号草稿隔离、读取 scope 隔离、fenced journal 恢复及 queued 界面反馈已修复；真实 HTTPS 复验材料、聊天请求精确重放和不同实例接管。最终源码整套 5,321 tests／5,245 passed／0 failed／76 conditional skipped，types 通过，lint 0 errors／7 warnings；跳过不计通过。PR523 普通合并及同源 Mac 签名安装发布继续单独记录，尚未完成。Mac 原生操作实际返回 `screen_locked`；物理设备清单仍只有 simulated，两个外部条件不影响继续 CLI 和签名准备。证据见 [R24.4c 验收](../acceptance/2026-11-22-mobile-api-sync/README.zh-CN.md)。
+
+2026-11-23 R24.4c 接续：用户要求补完剩余 Risk、实体 iPhone 登录/写入/断网/重启、Tauri WebView 冷启动，以及当前源码的 macOS 签名、公证、安装、升级和 Release。基线为 PR519 merge `81f53d02` 加 PR520 版本提交；以下逐项记录，整体仍为**部分实现**，不得以一个 PR 或模拟器编译完成代替全部验收。Windows 继续按用户明确要求暂停。
+
+| R24.4c 欠项 | 当前状态 | 本轮验收条件 |
+| --- | --- | --- |
+| 学生名单、档案及版本恢复云 writer | 已实现，PostgreSQL/HTTPS 验收通过；安装 UI 待验 | 同名/跨班身份保护、固定请求身份、冲突拒绝、写后重读和双客户端 |
+| Pi 云会话、SSE、prompt 与本机 Runtime 租约联动 | 已实现，HTTPS+真实 Pi harness+页面两轮及重启回读通过；安装 UI 待验 | 保留本机 Core 与模型密钥；账号/workspace 隔离、请求重放、事件续读、执行者 fencing 和重启恢复 |
+| 通用对象删除与恢复 | 已实现，HTTPS 和页面材料→回收站→材料回读通过；安装 UI 待验 | 软删除、tombstone 与目标版本绑定；跨入口回读、重复与旧版本冲突 |
+| 材料上传及新增 cloud UI 边界 | 开发页面及真实 Storage 验收通过；安装 UI 待验 | 真实暂存入口、断网保留、Storage 字节核对、重复请求与冷启；本轮实际断网→服务重启→联网后队列 0、暂存结算 |
+| iOS 持久写队列与登录恢复 | 已实现，33 条 Swift cloud 测试和 5 条 UI 测试通过；实体待验 | 首次完整 envelope 持久化、断网排队、进程重建、账号/workspace 切换不串数据 |
+| 实体 iPhone 验收 | 外部阻塞 | `xcrun devicectl list devices` 当前只有 simulated；接入可信物理 iPhone 后执行完整流程，模拟器不代替实体结论 |
+| macOS 当前源码发布与升级 | 待最终源码冻结 | 新版本独立于 `.123`；公开资产安装、WebView 冷启、旧版检测/下载/验签/安装/重启及数据核对 |
+
+2026-11-23 开发续验：当前候选版本 `.125`，基线 main `f0cb69e9`，工作分支 `codex/edupi-cloud-risk-completion-20261123`。独立审查发现的专用租约、请求上下文、终态/损坏 journal 和材料结算问题均修复并补永久回归；班级真实 Core + 独立 PostgreSQL 14/14、三域 HTTPS 保存/重建重放/回读、真实值日关联任务已通过。最后整套检查、独立复审、合并和 macOS 签名发布仍独立记录，不将源码/开发通过写成安装完成。专项证据见 [R24.4c 验收](../acceptance/2026-11-22-mobile-api-sync/README.zh-CN.md)。本轮新装的 `/private/tmp/edupi-core-fc89-20261122/node_modules` 仅为固定 Core 计算验证，待本轮构建/验收结束且无进程使用后清理，保留该工作树源码与锁文件。
+
 2026-11-22 R24.4c 可选 Supabase 同步：**部分实现，本次开发范围验收与独立复审通过，完整产品、安装与发布未验**。基线 `5c7ae60f` 的独立整合保留 local 默认、本地 Core/教师数据/模型/session；增加 Supabase 登录与明确选择工作区、普通任务/事实生命周期/材料元数据 outbox，队列和回执绑定账号/工作区，客户端重建后可恢复重试。审查发现的权限、上传路径、租约、旧页面 scope、队列阻塞和 202 展示问题均已修复并关闭；最终全套 5,113 tests／5,056 passed／0 failed／57 conditional skipped，另有实际客户端 HTTPS、Storage 权限、双连接租约和 broker E2 证据。两条新安全迁移已备份部署并核对字节。源码合并状态以对应 PR 记录为准；R24.4b 的本地宿主账号服务、完整 R04/L4、实体 iPhone 写入、Desktop 文件上传及安装 Release 不因此勾选；Windows 继续按用户要求暂停。证据和逐项未验条件见 [R24.4c 云同步验收](../acceptance/2026-11-22-mobile-api-sync/README.zh-CN.md)。
 
 R24.4c 最终受验功能为 `dde8c9cf`；后续两次 Desktop HTTPS 重跑因 TLS 建连前 `ECONNRESET` 无结论，未计通过。安全补丁 `5168149e` 将 `url`／`form_urlencoded` 更新为 `2.5.9`／`1.2.3`，修复 CI `45012858152` 新发现的 `RUSTSEC-2026-0592`；修复后的 CI 与源码合并状态分别读取 PR #518 的最新 checks 和 merge 记录。

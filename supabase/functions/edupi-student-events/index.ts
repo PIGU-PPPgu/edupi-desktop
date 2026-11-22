@@ -38,6 +38,7 @@ function localRecord(row: Record<string, unknown>): Record<string, unknown> {
     source: row.source,
     history: row.history || [],
     history_count: row.history_count ?? 0,
+    deleted_at: row.deleted_at ?? null,
   };
 }
 
@@ -97,6 +98,18 @@ async function mutateEvent(request: Request): Promise<Response> {
   const body = await readJson(request, 16 * 1024);
   const { db, workspaceId } = await requireWorkspace(request);
   const action = body.action;
+  if (action === "read_event") {
+    const eventId = safeText(body.event_id, 240);
+    if (!eventId || Object.keys(body).some(key => !["action", "event_id"].includes(key))) {
+      throw new ApiError(400, "invalid_request", "事件身份无效");
+    }
+    const { data, error } = await db.from("student_events").select("*")
+      .eq("workspace_id", workspaceId).eq("event_id", eventId).maybeSingle();
+    if (error) throw new ApiError(503, "student_events_unavailable", "学生记录回读失败");
+    if (!data) throw new ApiError(404, "event_not_found", "学生记录不存在");
+    return json({ ok: true, operation: "student-events", action, workspace_id: workspaceId,
+      record: localRecord(data), external_send: false });
+  }
   if (action === "set_topic_alias") {
     if (Object.keys(body).some((key) => !["action", "alias", "canonical"].includes(key))) throw new ApiError(400, "invalid_request", "请求字段无效");
     const alias = safeText(body.alias, 160);
@@ -122,6 +135,7 @@ async function mutateEvent(request: Request): Promise<Response> {
   const observedOn = body.observed_on === undefined ? null : body.observed_on;
   if (action === "update_event" && body.summary !== undefined && !summary) throw new ApiError(400, "invalid_request", "summary 无效");
   if (!validDate(observedOn)) throw new ApiError(400, "invalid_request", "observed_on 无效");
+  const requestIdValue = requestId(request, body);
   const { data, error } = await db.rpc("mutate_student_event", {
     target_workspace: workspaceId,
     p_event_id: eventId,
@@ -130,11 +144,12 @@ async function mutateEvent(request: Request): Promise<Response> {
     p_summary: summary,
     p_topic: topic,
     p_observed_on: observedOn,
-    p_request_id: requestId(request, body),
+    p_request_id: requestIdValue,
   });
   if (error) {
     const message = error.message || "";
     if (message.includes("stale_event")) throw new ApiError(409, "stale_event", "记录已更新，请刷新后重试");
+    if (message.includes("idempotency_conflict")) throw new ApiError(409, "idempotency_conflict", "相同请求的内容已改变");
     if (message.includes("event_not_found")) throw new ApiError(404, "event_not_found", "记录不存在或已删除");
     throw new ApiError(503, "student_events_unavailable", "学生记录暂不可用");
   }
@@ -148,6 +163,7 @@ async function mutateEvent(request: Request): Promise<Response> {
   if (readError) throw new ApiError(503, "student_events_unavailable", "学生记录回读失败");
   return json({
     ok: true,
+    operation: "student-events", action, request_id: requestIdValue, workspace_id: workspaceId,
     record: current ? localRecord(current as Record<string, unknown>) : null,
     revision: result.revision ?? current?.revision ?? null,
     replayed: result.replayed === true,

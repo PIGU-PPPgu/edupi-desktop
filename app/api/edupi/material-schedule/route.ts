@@ -8,6 +8,7 @@ import { ensureEduPiRuntime } from "@/lib/edupi-runtime-supervisor";
 import { hasJsonContentType } from "@/lib/request-security";
 import type { MaterialScheduleAdoptionReceipt } from "@/lib/edupi-material-schedule";
 import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
+import { EduPiCloudError } from "@/lib/edupi-cloud-client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +34,7 @@ function statusFor(code: string): number {
 }
 
 function caught(error: unknown) {
+  if (error instanceof EduPiCloudError) return errorResponse(error.code, error.status);
   const code = record(error)?.code;
   return errorResponse(typeof code === "string" ? code : "material_schedule_unavailable", statusFor(String(code)));
 }

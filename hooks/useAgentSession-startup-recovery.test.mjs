@@ -76,6 +76,7 @@ function startupHarness({ input = true, acceptRestore = false, promptError = nul
     loadSession: async sid => { events.push(["reload", sid]); return { sessionId: sid }; },
     releasePendingPromptForNewMessage: drafts.store.releasePendingPromptForNewMessage,
     sessionIdRef: { current: initialSid }, sessionGenerationRef: { current: 0 },
+    cloudScopeRef: { current: null }, cloudChatRef: { current: false },
     ensuringNewSessionRef: { current: null }, newSessionPromotedRef: { current: false },
     newSessionModelOverrideRef: { current: null }, thinkingLevelOverrideRef: { current: null },
     toolPresetRef: { current: "none" }, permissionModeRef: { current: "none" }, getToolNamesForPreset: () => [],

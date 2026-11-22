@@ -1,5 +1,6 @@
 import type { EducationContract, EducationEntityDeleteKind } from "./edupi-education-contract";
 import type { EntityDeletionHistory, EntityDeletionRestoreRecord } from "./edupi-entity-delete";
+import { educationWriteHeaders } from "./edupi-education-client";
 
 export async function readEducationEntityDeletions(): Promise<{ deletions: EntityDeletionRestoreRecord[]; history: EntityDeletionHistory[] }> {
   const response = await fetch("/api/edupi/entities", { cache: "no-store" });
@@ -11,10 +12,11 @@ export async function readEducationEntityDeletions(): Promise<{ deletions: Entit
 export async function deleteEducationEntity(kind: EducationEntityDeleteKind, id: string, note: string | null = null): Promise<{ target: { kind: EducationEntityDeleteKind; id: string }; deletedAt: string | null; data: EducationContract }> {
   const response = await fetch(`/api/edupi/entities/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
+    headers: educationWriteHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ note }),
   });
-  const result = await response.json() as { error?: string; code?: string; target?: { kind: EducationEntityDeleteKind; id: string }; deletedAt?: string | null; data?: EducationContract };
+  const result = await response.json() as { queued?: boolean; error?: string; code?: string; target?: { kind: EducationEntityDeleteKind; id: string }; deletedAt?: string | null; data?: EducationContract };
+  if (response.ok && result.queued) throw Object.assign(new Error("删除已保留，等待云端同步。"), { code: "pending_sync" });
   if (!response.ok || !result.target || !result.data) throw new Error(result.error || `删除失败（HTTP ${response.status}）`);
   return { target: result.target, deletedAt: result.deletedAt ?? null, data: result.data };
 }
@@ -22,10 +24,11 @@ export async function deleteEducationEntity(kind: EducationEntityDeleteKind, id:
 export async function restoreEducationEntity(kind: EducationEntityDeleteKind, id: string, restoreRequestId: string, note: string | null = null): Promise<{ target: { kind: EducationEntityDeleteKind; id: string }; restoredAt: string | null; data: EducationContract }> {
   const response = await fetch(`/api/edupi/entities/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: educationWriteHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ note, restoreRequestId }),
   });
-  const result = await response.json() as { error?: string; code?: string; target?: { kind: EducationEntityDeleteKind; id: string }; restoredAt?: string | null; data?: EducationContract };
+  const result = await response.json() as { queued?: boolean; error?: string; code?: string; target?: { kind: EducationEntityDeleteKind; id: string }; restoredAt?: string | null; data?: EducationContract };
+  if (response.ok && result.queued) throw Object.assign(new Error("恢复已保留，等待云端同步。"), { code: "pending_sync" });
   if (!response.ok || !result.target || !result.data) throw new Error(result.error || `恢复失败（HTTP ${response.status}）`);
   return { target: result.target, restoredAt: result.restoredAt ?? null, data: result.data };
 }

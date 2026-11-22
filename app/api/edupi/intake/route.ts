@@ -11,6 +11,7 @@ import { createEduPiCloudClient, EduPiCloudError } from "@/lib/edupi-cloud-clien
 import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
 import { readVerifiedStagedMaterial } from "@/lib/edupi-material-recognition";
 import { contentHash } from "@/lib/edupi-education-intake";
+import { cloudMaterialIntakeIdentity } from "@/lib/edupi-cloud-intake";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -102,6 +103,7 @@ export async function POST(request: Request) {
         const command = buildMaterialIntakeCommand(material);
         if (command.command_type !== "intake_material") throw new EducationIntakeError("invalid_envelope", "材料接入请求无效。");
         const verified = await readVerifiedStagedMaterial(material.descriptor);
+        const identity = cloudMaterialIntakeIdentity(command);
         const upload = await client.uploadMaterial({
           materialId: command.material.material_id,
           fileName: material.descriptor.original_name,
@@ -109,17 +111,31 @@ export async function POST(request: Request) {
           sizeBytes: verified.bytes.byteLength,
           sha256: command.material.source_hash,
           bytes: verified.bytes,
+          staging: material.descriptor,
+          command,
+          requestId: identity.requestId,
+          idempotencyKey: identity.idempotencyKey,
         }, selected.scope);
-        const suffix = command.material.source_hash.slice("sha256:".length, "sha256:".length + 32);
-        const result = await client.intakeCommand(command, {
-          requestId: `cloud-intake-material-${suffix}`,
-          idempotencyKey: `sha256:${command.material.source_hash.slice("sha256:".length)}`,
-          storageObjectKey: upload.objectKey,
-        }, selected.scope);
+        if (!("queued" in upload)) {
+          throw new EduPiCloudError("material_upload_unverified", "材料上传结果无效。", 502);
+        }
+        if (upload.queued) {
+          return NextResponse.json({
+            receipt: null, queued: true, status: "pending_sync", queueEntry: upload.entry,
+            materialReceivedOnly: true, staged: listStagedMaterials(),
+          }, { status: 202 });
+        }
+        const result = record(upload.result?.response);
+        const receiptEnvelope = record(result?.receipt);
+        const receipt = receiptEnvelope?.payload || receiptEnvelope || null;
+        if (upload.result?.upload_verified !== true || result?.operation !== "command"
+          || result?.external_send !== false) {
+          throw new EduPiCloudError("material_upload_unverified", "材料二进制尚未通过云端核对。", 503);
+        }
         settleStagedMaterial(material.descriptor.staging_id, "accepted_receipt");
         return NextResponse.json({
-          ...cloudResponse(result),
-          storageObjectKey: upload.objectKey,
+          receipt, queued: false, response: result,
+          storageObjectKey: upload.result.object_key,
           materialReceivedOnly: true,
           staged: listStagedMaterials(),
         });
@@ -154,8 +170,7 @@ export async function POST(request: Request) {
     if (error instanceof EducationIntakeError) return NextResponse.json({ error: error.message, code: error.code }, { status: statusFor(error) });
     if (error instanceof MaterialRecognitionAdmissionError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error instanceof EduPiCloudError) {
-      const status = error.status === 409 ? 409 : error.status >= 400 && error.status < 500 ? error.status : 503;
-      return NextResponse.json({ error: error.message, code: error.code }, { status });
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     }
     return NextResponse.json({ error: "教育导入暂不可用", code: "unavailable" }, { status: 503 });
   }

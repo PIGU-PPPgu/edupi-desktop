@@ -16,6 +16,7 @@ import { EduPiEducationPanel } from "./EduPiEducationPanel";
 import { EduPiReminderInbox } from "./EduPiReminderInbox";
 import { EduPiFirstRunGuide } from "./EduPiFirstRunGuide";
 import { EduPiCloudSync } from "./EduPiCloudSync";
+import { EDUPI_EDUCATION_SCOPE_CHANGED } from "@/lib/edupi-cloud-events";
 import "@/app/edupi-first-run.css";
 import { isEducationModule, type EducationModule } from "@/lib/edupi-education-ui";
 import { moduleFromView, viewFromModule, type TaskStage, type WorkbenchView } from "@/lib/edupi-workbench";
@@ -127,6 +128,17 @@ export function AppShell() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [educationRefreshKey, setEducationRefreshKey] = useState(0);
   const [sessionKey, setSessionKey] = useState(0);
+  useEffect(() => {
+    const resetCloudConversation = () => {
+      setSelectedSession(null);
+      setNewSessionCwd(null);
+      setSessionKey(key => key + 1);
+      setRefreshKey(key => key + 1);
+      setEducationRefreshKey(key => key + 1);
+    };
+    window.addEventListener(EDUPI_EDUCATION_SCOPE_CHANGED, resetCloudConversation);
+    return () => window.removeEventListener(EDUPI_EDUCATION_SCOPE_CHANGED, resetCloudConversation);
+  }, []);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [modelsConfigOpen, setModelsConfigOpen] = useState(false);
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
@@ -1276,6 +1288,10 @@ export function AppShell() {
     const canRestore = () => !controller.signal.aborted && !initialCwdSupersededRef.current && !activeCwdRef.current && !activeSessionIdRef.current;
     void readEduPiWorkspace({ signal: controller.signal }).then(async bundle => {
       if (!canRestore()) return;
+      if (bundle.data.workspace.startsWith("cloud:")) {
+        setNewSessionCwd(bundle.data.workspace);
+        return;
+      }
       const response = await fetch("/api/cwd/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd: bundle.data.workspace }), signal: controller.signal });
       if (!response.ok) throw new Error("教育工作区无法打开");
       if (canRestore()) setNewSessionCwd(bundle.data.workspace);

@@ -132,7 +132,7 @@ export function EduPiMaterialsWorkspace({ data, context, query, selectedObjectId
   const classes = useMemo(() => classOptions.map(option => option.value), [classOptions]);
   const unboundSameNameClass = useMemo(() => hasUnboundSameNameClass(data.timetable), [data.timetable]);
   const generatedError = data.generatedArtifactsUnavailable;
-  const materialIntakeReady = data.capabilities.materialIntake.enabled;
+  const materialIntakeReady = isCloudWorkspace || data.capabilities.materialIntake.enabled;
   const allRows = useMemo(() => buildMaterialRows(data, query), [data, query]);
   const selectedMaterial = data.teacherMaterials?.find(item => item.material_id === selected?.id);
   const rows = useMemo(() => allRows.filter(item => category === "all" || item.category === category), [allRows, category]);
@@ -239,7 +239,7 @@ export function EduPiMaterialsWorkspace({ data, context, query, selectedObjectId
   };
 
   return <main className="edupi-module-workspace edupi-database-workspace">
-    <header className="edupi-module-heading"><div><h1>{categoryLabel}</h1><p>{rows.length} 份材料{stagedMaterials.length > 0 ? ` · ${stagedMaterials.length} 份待接入` : ""}</p></div>{!isCloudWorkspace ? <button type="button" className={intakeDraft ? undefined : "is-primary"} disabled={stagingBusy} onClick={onUpload}>{stagingBusy ? "处理中…" : "上传材料"}</button> : null}</header>
+    <header className="edupi-module-heading"><div><h1>{categoryLabel}</h1><p>{rows.length} 份材料{stagedMaterials.length > 0 ? ` · ${stagedMaterials.length} 份待接入` : ""}</p></div><button type="button" className={intakeDraft ? undefined : "is-primary"} disabled={stagingBusy} onClick={onUpload}>{stagingBusy ? "处理中…" : "上传材料"}</button></header>
     {stagedMaterials.length > 0 ? <details className="edupi-material-inbox" open>
       <summary>待接入材料 <span>{stagedMaterials.length}</span></summary>
       <div>{stagedMaterials.map((item) => {

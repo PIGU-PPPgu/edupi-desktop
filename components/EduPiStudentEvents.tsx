@@ -57,6 +57,7 @@ export function EduPiStudentEvents({ student, studentId, studentClass, semesterR
   const [total, setTotal] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [editing, setEditing] = useState<StudentEvent | null>(null);
@@ -174,11 +175,17 @@ export function EduPiStudentEvents({ student, studentId, studentClass, semesterR
     saveFocusRef.current = focusRequest;
     setBusy(true);
     setError(null);
+    setSyncNotice(null);
     try {
       const body = { action, event_id: item.id, expected_revision: item.revision, ...(action === "update_event" ? { summary: item.summary, topic: item.topic, observed_on: item.observed_on } : {}) };
       const response = await fetch("/api/edupi/student-events", { method: "POST", headers: educationWriteHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(body) });
-      const result = await response.json() as { error?: string };
+      const result = await response.json() as { error?: string; queued?: boolean };
       if (!response.ok) throw new Error(result.error || "保存失败");
+      if (result.queued) {
+        if (focusRequest) focusRequest.status = "failed";
+        setSyncNotice("修改已保留，等待云端同步。");
+        return;
+      }
       setEditing(null);
       setDeleting(null);
       if (action === "delete_event") setSelectedRecord(null);
@@ -245,6 +252,7 @@ export function EduPiStudentEvents({ student, studentId, studentClass, semesterR
     </div>
     {activeDateRange === "custom" ? <div className="edupi-student-event-filters"><label>从 <input type="date" value={from} onChange={(event) => setDateFrom(event.target.value)} /></label><label>到 <input type="date" value={to} min={from || undefined} onChange={(event) => setDateTo(event.target.value)} /></label></div> : null}
     {view === "graph" ? <EduPiStudentGraph records={records} total={total} kind={kind} selectedId={selectedRecord} onSelect={setSelectedRecord} student={student} scope={scope} loading={loading} details={graphDetails} footer={graphFooter} alert={recordAlert} /> : null}
+    {syncNotice ? <p role="status">{syncNotice}</p> : null}
     {view === "graph" && kind === "learning" ? <details><summary>合并知识点名称</summary><form onSubmit={async (event) => { event.preventDefault(); setBusy(true); try { const response = await fetch("/api/edupi/student-events", { method: "POST", headers: educationWriteHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ action: "set_topic_alias", alias, canonical }) }); const result = await response.json() as { error?: string }; if (!response.ok) throw new Error(result.error || "保存失败"); setAlias(""); setCanonical(""); window.dispatchEvent(new Event(EDUPI_STUDENT_RECORDS_UPDATED_EVENT)); } catch (reason) { setError(reason instanceof Error ? reason.message : "保存失败"); } finally { setBusy(false); } }}><label>原名称<input required maxLength={160} value={alias} onChange={(event) => setAlias(event.target.value)} /></label><label>统一名称<input required maxLength={160} value={canonical} onChange={(event) => setCanonical(event.target.value)} /></label><button disabled={busy} type="submit">保存</button></form></details> : null}
     {view === "graph" ? selectedDetails : loading ? <p role="status">读取中…</p> : records.length === 0 ? <p>暂无记录</p> : records.map(renderRecord)}
     {view === "list" && total > STUDENT_GRAPH_PAGE_SIZE ? <footer><button type="button" disabled={page === 0 || loading} onClick={() => setPage((value) => value - 1)}>上一页</button><span>{page + 1} / {Math.max(1, Math.ceil(total / STUDENT_GRAPH_PAGE_SIZE))}</span><button type="button" disabled={(page + 1) * STUDENT_GRAPH_PAGE_SIZE >= total || loading} onClick={() => setPage((value) => value + 1)}>下一页</button></footer> : null}

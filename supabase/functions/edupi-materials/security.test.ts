@@ -31,6 +31,12 @@ Deno.test("material upload rejects unsafe IDs before the privileged signer", asy
         assert.equal(url.searchParams.get("revoked_at"), "is.null");
         return Promise.resolve(Response.json([{ role: "teacher" }]));
       }
+      if (url.pathname === "/rest/v1/material_upload_receipts") {
+        return Promise.resolve(Response.json([]));
+      }
+      if (url.pathname.startsWith("/storage/v1/object/edupi-materials/")) {
+        return Promise.resolve(new Response(new Uint8Array([1, 2, 3])));
+      }
       const prefix = "/storage/v1/object/upload/sign/edupi-materials/";
       if (url.pathname.startsWith(prefix)) {
         const key = decodeURIComponent(url.pathname.slice(prefix.length));
@@ -118,6 +124,29 @@ Deno.test("material upload rejects unsafe IDs before the privileged signer", asy
         assert.equal(body.external_send, false);
       });
     }
+
+    const binary = new Uint8Array([1, 2, 3]);
+    const binaryDigest = await crypto.subtle.digest("SHA-256", binary.slice().buffer);
+    const binaryHash = `sha256:${Array.from(new Uint8Array(binaryDigest), byte => byte.toString(16).padStart(2, "0")).join("")}`;
+    const verifiedKey = `${workspaceId}/material-verify/${binaryHash.slice(7)}-课前讲义.pdf`;
+    const verifyRequest = (overrides: Record<string, unknown> = {}) => new Request("https://edupi.invalid/materials", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer test-user-token",
+        "Content-Type": "application/json",
+        "x-edupi-workspace-id": workspaceId,
+      },
+      body: JSON.stringify({
+        action: "verify_upload", request_id: "verify-material-1", material_id: "material-verify",
+        file_name: "课前讲义.pdf", content_type: "application/pdf", size_bytes: 3,
+        sha256: binaryHash, object_key: verifiedKey, ...overrides,
+      }),
+    });
+    const verified = await handler!(verifyRequest());
+    assert.equal(verified.status, 200);
+    assert.equal((await verified.json()).verified, true);
+    const mismatch = await handler!(verifyRequest({ size_bytes: 4 }));
+    assert.equal(mismatch.status, 409);
 
     await test.step("encoded separators in filenames cannot alter the signed workspace", async () => {
       const { response, body } = await upload("material-1", "%2e%2e%2fother%5cfile.pdf");

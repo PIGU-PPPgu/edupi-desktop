@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
 import { readEducationContract } from "@/lib/edupi-education-server";
+import { EduPiCloudError } from "@/lib/edupi-cloud-client";
 import type { EducationTeachingPriority } from "@/lib/edupi-education-contract";
 import { parseTeachingPriorityCreateBody, parseTeachingPriorityUpdateBody } from "@/lib/edupi-teaching-priority-request";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ result: receipt, data });
   } catch (error) {
+    if (error instanceof EduPiCloudError) return errorResponse(error.code, error.status, error.message);
     if (error instanceof RequestBodyTooLargeError) return errorResponse("too_large", 413, "教学重点内容过大");
     return error instanceof TeachingPriorityError ? mapError(error) : errorResponse("unavailable", 503, "教学重点暂不可用");
   }
@@ -78,6 +80,7 @@ export async function PUT(request: Request) {
     if (!verifyCurrent(current, receipt, body.patch)) return errorResponse("invalid_response", 502, "教学重点修改结果未能与 Core 对账");
     return NextResponse.json({ result: receipt, data });
   } catch (error) {
+    if (error instanceof EduPiCloudError) return errorResponse(error.code, error.status, error.message);
     if (error instanceof RequestBodyTooLargeError) return errorResponse("too_large", 413, "教学重点内容过大");
     return error instanceof TeachingPriorityError ? mapError(error) : errorResponse("unavailable", 503, "教学重点修改暂不可用");
   }

@@ -3,6 +3,8 @@ import { buildEducationContractFromWorkspace, type EducationContract, type Educa
 import { createEduPiCloudClient, type CloudScope, EduPiCloudError } from "./edupi-cloud-client";
 import type { TeacherContextSnapshot } from "./edupi-onboarding-types";
 import { cloudScopeKey } from "./edupi-cloud-request-scope";
+import { readCloudStudentRoster } from "./edupi-cloud-students";
+import { cacheCloudEntities } from "./edupi-cloud-entity-cache";
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -139,7 +141,9 @@ export async function readCloudEducationWorkspaceBundle(
   const spineResponse = Array.isArray(payload.facts) && payload.facts.length
     ? await client.operation("education-facts", { action: "read_spine" }, scope) : {};
   const workspaceId = dashboard.payload.workspace_id;
-  const students = dashboard.payload.students.map(record);
+  const students = await readCloudStudentRoster(client, scope);
+  const lifecycle = await client.operation("entities", { action: "list" }, scope);
+  cacheCloudEntities(client, scope, lifecycle);
   const workspace = {
     students,
     tasks: (Array.isArray(payload.tasks) ? payload.tasks : dashboard.payload.tasks).map(cloudTask),
@@ -152,10 +156,21 @@ export async function readCloudEducationWorkspaceBundle(
     supportedCommands: [], entityDeleteEnabled: false,
   });
   data.cloudScope = cloudScopeKey(scope);
+  data.capabilities.entityDelete = { enabled: true,
+    targetKinds: ["calendar", "timetable", "memory", "student", "task", "material"], reason: "" };
   data.teacherMaterials = cloudMaterials(payload.materials, workspaceId);
+  const counts = { students: data.students.length, tasks: data.tasks.length, calendar: data.calendar.length,
+    timetable: data.timetable.length, materials: data.teacherMaterials.length } as const;
+  for (const [key, count] of Object.entries(counts)) {
+    data.dataSources[key as keyof typeof counts] = { path: `cloud:${workspaceId}/${key}`,
+      present: true, count, status: count ? "ready" : "empty", observedAt: new Date().toISOString() };
+  }
+  for (const capability of ["calendar", "timetable", "materialIntake"] as const) {
+    data.capabilities[capability] = { ...data.capabilities[capability], enabled: true, reason: "" };
+  }
   data.factSpine = factSpine(payload.facts, students, text(snapshot.state_hash), spineResponse.spine);
   data.workspaceResourcesUnavailable = false;
-  data.generatedArtifactsUnavailable = true;
+  data.generatedArtifactsUnavailable = false;
   data.generatedArtifacts = [];
   return { context: emptyContext(), data };
 }

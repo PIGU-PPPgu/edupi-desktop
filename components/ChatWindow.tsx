@@ -38,6 +38,8 @@ import { isLegacyZhixueQr, zhixueTurnStatus } from "@/lib/edupi-zhixue-status";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { coreRecallAnswerDetails, coreRecallClient } from "@/lib/edupi-recall-answer-client";
 import { readRecallSettings, recallSendAvailable, RECALL_SETTINGS_CHANGED, type RecallSettingsView } from "@/lib/edupi-recall-prompt-client";
+import { cloudChatDraftKey } from "@/lib/draft-store";
+import { educationWriteHeaders } from "@/lib/agent-client";
 
 interface Props {
   session: SessionInfo | null;
@@ -265,7 +267,17 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
 }
 
 export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onOpenImage, onOpenPreview, onProjectFilesImported, onEducationImportCompleted, onEduPiAction, teacherMode = false, onEduPiProactiveTarget, onOpenEduPiReminders, proactiveOpenRequest = 0, reminderContext, reminderOpenId, onReminderContextApplied, educationContext, educationOpenId, onEducationContextApplied, teacherDraftText, teacherDraftOpenId, onTeacherDraftApplied, reminderTitle, reminderDraftKey, onEduPiComputerAction, emptyTitle, emptySubtitle }: Props) {
-  const draftKey = session?.id ?? reminderDraftKey ?? (newSessionCwd ? `new:${newSessionCwd}` : null);
+  const cloudChat = Boolean(session?.path?.startsWith("cloud:") || session?.cwd?.startsWith("cloud:") || newSessionCwd?.startsWith("cloud:"));
+  let cloudScope: string | null = null;
+  if (cloudChat) {
+    try {
+      const current = educationWriteHeaders().get("x-edupi-cloud-scope");
+      const displayed = session ? session.cloudScope : current;
+      if (displayed && displayed === current) cloudScope = displayed;
+    } catch { /* An unconfirmed account cannot own a cloud draft. */ }
+  }
+  const unscopedDraftKey = session?.id ?? reminderDraftKey ?? (newSessionCwd ? `new:${newSessionCwd}` : null);
+  const draftKey = cloudChat && unscopedDraftKey ? cloudChatDraftKey(cloudScope, unscopedDraftKey) : unscopedDraftKey;
   const appliedReminderOpenId = useRef<string | null>(null);
   useEffect(() => {
     if (!reminderContext || !reminderOpenId || !(session?.id || newSessionCwd) || !chatInputRef?.current || appliedReminderOpenId.current === reminderOpenId) return;
@@ -316,9 +328,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   }, [chatInputRef]);
 
   const handleSessionCreated = useCallback((created: SessionInfo) => {
-    if (draftKey) chatInputRef?.current?.promoteDraftToSession(draftKey, created.id);
+    const targetKey = cloudChat ? cloudChatDraftKey(created.cloudScope, created.id) : created.id;
+    if (draftKey && targetKey) chatInputRef?.current?.promoteDraftToSession(draftKey, targetKey);
     onSessionCreated?.(created);
-  }, [chatInputRef, draftKey, onSessionCreated]);
+  }, [chatInputRef, draftKey, cloudChat, onSessionCreated]);
 
   const {
     loading, error, messages, entryIds, streamState, coreRecallContextKey,
@@ -339,7 +352,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     handleBuiltinSlashCommand, retryLoad,
     handleToolPresetChange, handlePermissionModeChange, handleThinkingLevelChange, loadSlashCommands, scrollToBottom, scrollUserMsgToTop,
   } = useAgentSession({
-    session, newSessionCwd, draftKey, onAgentEnd: wrappedOnAgentEnd, onSessionCreated: handleSessionCreated, onSessionForked,
+    session, newSessionCwd, draftKey, cloudScope, onAgentEnd: wrappedOnAgentEnd, onSessionCreated: handleSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
     onEducationImportCompleted, onEduPiAction, onEduPiComputerAction,
   });

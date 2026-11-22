@@ -42,6 +42,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ fac
           if (error.status === 404) return errorResponse(error.code, 404, "事实不存在");
           if (error.status === 409) return errorResponse(error.code, 409, "事实已更新，请刷新后重试");
           if (error.status === 400) return errorResponse(error.code, 400, "事实操作请求无效");
+          return errorResponse(error.code, error.status, error.message);
         }
         return errorResponse("unavailable", 503, "云端事实操作暂不可用");
       }

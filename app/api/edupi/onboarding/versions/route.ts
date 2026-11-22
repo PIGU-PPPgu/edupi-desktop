@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { parseJsonWithinLimit } from "@/lib/bounded-form-data";
 import { readEducationContract, reviewTeacherContextCandidate } from "@/lib/edupi-education-server";
+import { EduPiCloudError } from "@/lib/edupi-cloud-client";
 import type { EducationContract, EducationTeacherContextCandidate } from "@/lib/edupi-education-contract";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 import {
@@ -106,6 +107,7 @@ export async function GET() {
   try {
     return NextResponse.json({ versions: await readTeacherContextVersions() });
   } catch (error) {
+    if (error instanceof EduPiCloudError) return errorResponse(error.code, error.status, error.message);
     return error instanceof TeacherContextVersionError ? mapVersionError(error) : errorResponse("unavailable", 503, "教师资料版本暂不可用");
   }
 }
@@ -182,7 +184,8 @@ export async function POST(request: Request) {
       }
       const verified = await readRestoredData(body, restoreSourceId, desiredValue);
       return verified ? NextResponse.json({ receipt: result.receipt, data: verified, reconciled: false }) : errorResponse("invalid_response", 502, "恢复结果未能与 Core 对账");
-    } catch {
+    } catch (error) {
+      if (error instanceof EduPiCloudError) throw error;
       const replay = await captureTeacherContextFieldRestore({
         versionId: body.versionId,
         versionSide: body.versionSide,
@@ -195,6 +198,7 @@ export async function POST(request: Request) {
       return restored ? NextResponse.json({ receipt: null, data: restored, reconciled: true }) : errorResponse("invalid_response", 502, "恢复结果未能与 Core 对账");
     }
   } catch (error) {
+    if (error instanceof EduPiCloudError) return errorResponse(error.code, error.status, error.message);
     return error instanceof TeacherContextVersionError ? mapVersionError(error) : errorResponse("unavailable", 503, "教师资料恢复暂不可用");
   }
 }

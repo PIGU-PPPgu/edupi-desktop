@@ -43,6 +43,16 @@ const FILE = "cloud-private.json";
 const MAX_BYTES = 4 * 1024 * 1024;
 const nofollow = fs.constants.O_NOFOLLOW ?? 0;
 
+export function cloudRuntimeDirectory(stateDir?: string): string {
+  const base = directory(stateDir, true)!;
+  const selected = path.join(base, "chat-runtime");
+  fs.mkdirSync(selected, { recursive: true, mode: 0o700 });
+  const stat = fs.lstatSync(selected);
+  if (!stat.isDirectory() || stat.isSymbolicLink()
+    || process.platform !== "win32" && (stat.mode & 0o077) !== 0) throw new Error("云端执行目录权限无效");
+  return selected;
+}
+
 function directory(stateDir: string | undefined, create: boolean): string | null {
   const selected = stateDir?.trim() || path.join(getAgentDir(), "edupi-desktop");
   if (!path.isAbsolute(selected)) throw new Error("云端配置目录必须是绝对路径");

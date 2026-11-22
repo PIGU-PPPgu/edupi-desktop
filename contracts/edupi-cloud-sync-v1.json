@@ -1,0 +1,66 @@
+{
+  "contract_id": "edupi-cloud-sync-v1",
+  "contract_version": "1.0",
+  "scope": [
+    "issuer",
+    "account_id",
+    "workspace_id"
+  ],
+  "endpoints": {
+    "edupi-sessions": [
+      "list",
+      "create",
+      "read",
+      "rename",
+      "delete",
+      "enqueue",
+      "events",
+      "claim",
+      "running",
+      "append",
+      "complete",
+      "fail",
+      "configure",
+      "cancel",
+      "recover"
+    ],
+    "edupi-entities": [
+      "list",
+      "read",
+      "delete",
+      "restore"
+    ],
+    "edupi-students": [
+      "list",
+      "import",
+      "update",
+      "read",
+      "history",
+      "restore"
+    ]
+  },
+  "request_identity": {
+    "field": "request_id",
+    "replay": "same_actor_and_payload",
+    "conflict": "reject_changed_payload",
+    "retention": "durable"
+  },
+  "runtime": {
+    "execution": "local_desktop",
+    "credentials": "local_only",
+    "proof": [
+      "instance_id",
+      "instance_nonce",
+      "fencing_generation",
+      "lease_name",
+      "lease_token"
+    ],
+    "uncertain_dispatch": "retain_without_automatic_reexecution"
+  },
+  "deletion": {
+    "kind": "soft_delete",
+    "restore": "fingerprint_and_tombstone_revision",
+    "overwrite": false
+  },
+  "schema_hash": "sha256:2ef7b7849941bc6fd1cb1cff884b9d5ba4f08b8cb83dadaf8968529f3509c197"
+}

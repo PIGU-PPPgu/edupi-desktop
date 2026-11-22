@@ -1,4 +1,4 @@
-import { access, chmod, copyFile, cp, lstat, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { access, chmod, copyFile, cp, lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -126,6 +126,9 @@ async function assembleServer() {
     join(rootDir, "desktop", "server-launcher.cjs"),
     join(serverResourcesDir, "desktop-server.cjs"),
   );
+  await copyFile(join(rootDir, "desktop", "cloud-public-config.cjs"), join(serverResourcesDir, "cloud-public-config.cjs"));
+  const { publicCloudConfig } = createRequire(import.meta.url)("../desktop/cloud-public-config.cjs");
+  await writeFile(join(serverResourcesDir, "edupi-cloud-public.json"), JSON.stringify(publicCloudConfig(process.env)), { mode: 0o644 });
   await copyFile(join(rootDir, "desktop", "mobile-gateway.cjs"), join(serverResourcesDir, "mobile-gateway.cjs"));
   await copyFile(join(rootDir, "desktop", "preparation-worker.mjs"), join(serverResourcesDir, "preparation-worker.mjs"));
   await copyFile(join(rootDir, "desktop", "zhixue-login-worker.mjs"), join(serverResourcesDir, "zhixue-login-worker.mjs"));

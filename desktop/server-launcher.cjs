@@ -2,6 +2,8 @@
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const path = require("node:path");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const fs = require("node:fs");
 
 function firstConfigured(environment, names) {
   return names.map((name) => environment[name]).find((value) => typeof value === "string" && value) ?? "";
@@ -109,6 +111,12 @@ async function wakePackagedCoreAtStartup(environment = process.env, fetcher = fe
 }
 
 if (require.main === module) {
+  // This build artifact contains only the public URL and public anon key.
+  const publicCloudConfigPath = path.join(__dirname, "cloud-public-config.cjs");
+  if (fs.existsSync(publicCloudConfigPath)) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require(publicCloudConfigPath).loadPackagedPublicCloudConfig(path.join(__dirname, "edupi-cloud-public.json"));
+  }
   Object.assign(process.env, resolveEduPiLaunchRoots());
   process.env.EDUPI_ZHIXUE_WORKER_PATH ||= path.join(__dirname, "zhixue-login-worker.mjs");
   process.env.EDUPI_ZHIXUE_SYNC_WORKER_PATH ||= path.join(__dirname, "zhixue-sync-worker.mjs");
