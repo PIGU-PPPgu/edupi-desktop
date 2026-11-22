@@ -8,7 +8,7 @@ import test from "node:test";
 import {
   AcceptanceFailure, HDI_INFO_PROGRAM, NODE_STORAGE_PROGRAM, STORAGE_PROGRAM, acceptanceCleanupReport,
   cleanupTargets, collectOwned, downloadVerified,
-  githubReader, launchEnvironment, main, parseProcesses, requireHostedMac, validateInputs,
+  githubReader, launchEnvironment, main, parseProcesses, probeInstalledDefaultModel, requireHostedMac, validateInputs,
   trackAcceptanceDirectory, verifyBundleContracts, verifyHttpOwner, verifyMetadata, verifyRestart, verifyStatus, verifyTag, verifyWorkspace,
 } from "./test-macos-installed-acceptance.mjs";
 import { cleanupRegisteredDirectories, registerCleanupDirectory } from "./macos-acceptance-cleanup.mjs";
@@ -327,6 +327,29 @@ test("task cleanup includes detached helper groups and title-erased orphans but 
   assert.deepEqual([...collectOwned(new Map(), [titleErased, unrelated], appPath, null, [101]).keys()], [101]);
   const mixedGroup = { ...unrelated, pgid: 101 };
   assert.deepEqual(cleanupTargets(new Map([[101, http]]), [http, mixedGroup]), { groups: [], pids: [101] });
+});
+
+test("installed model verification uses the App-authorized marker directory and requires the saved model", async () => {
+  const origin = "http://127.0.0.1:30141";
+  const marker = "/Users/runner/edupi-route1-canary-fixture/.edupi/output/installed-acceptance-marker.json";
+  const defaultModel = { provider: "synthetic", modelId: "synthetic-offline" };
+  const modelList = [{ provider: defaultModel.provider, id: defaultModel.modelId }];
+  const fetchModels = async (url, options) => {
+    assert.equal(new URL(url).pathname, "/api/models");
+    assert.equal(options.headers.Origin, origin);
+    return new URL(url).searchParams.get("cwd") === path.dirname(marker)
+      ? Response.json({ defaultModel, modelList })
+      : new Response(null, { status: 403 });
+  };
+  assert.deepEqual(await probeInstalledDefaultModel(origin, marker, fetchModels), defaultModel);
+  await assert.rejects(probeInstalledDefaultModel(origin, marker, async () => new Response("denied", { status: 403 })),
+    { code: "installed_app_models_http_403" });
+  await assert.rejects(probeInstalledDefaultModel(origin, marker, async () => new Response("not JSON")),
+    { code: "installed_app_models_invalid_response" });
+  await assert.rejects(probeInstalledDefaultModel(origin, marker, async () => Response.json({ defaultModel: null, modelList })),
+    { code: "installed_app_uses_a_different_default_model" });
+  await assert.rejects(probeInstalledDefaultModel(origin, marker, async () => Response.json({ defaultModel, modelList: [] })),
+    { code: "installed_app_default_model_not_available" });
 });
 
 for (const reader of ["system_python", "node_sqlite"]) {

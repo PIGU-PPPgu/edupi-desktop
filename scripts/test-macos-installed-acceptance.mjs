@@ -23,6 +23,7 @@ const harness = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const hash = bytes => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 const readJson = filename => JSON.parse(fs.readFileSync(filename, "utf8"));
 const ZHIXUE_TITLE = "智学网扫码验收";
+const SYNTHETIC_DEFAULT_MODEL = { provider: "synthetic", modelId: "synthetic-offline" };
 // Offline QR encoded from the text "EduPi synthetic QA".
 const ZHIXUE_PNG = "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAAAklEQVR4AewaftIAAAM9SURBVO3BMW7kOAAAwW5C//9ynxMCCiRbM3NeOmCVfWFbZrAtNdiWGmxLDbalBttSg22pg2+o/JaKM5UrFU+o3KmYVKaKM5XfUnFlsC012JY6eKjiUyp3Kv6Sik+p/GSwLTXYlhpsSx28SeWJik+onFVMKlPFpHKm8gmVJypeNdiWGmxLHfwRKlcqzlR+UnGmMlX8JYNtqcG21MEfp3JWMalcUTmrmFSmitUG21KDbanBttTBmyp+S8UTFVcq7lS8quK3DLalBttSBw+prKByVjGpTBWTylnFpDJV3FH5FwbbUoNtqYNvVKyg8kTFpDJVnKk8UfGvDbalBttSg22pg2+oTBVPqJxVTCpPVEwqn6q4ovKpijsqU8WVwbbUYFvq4CGVs4pJ5YmKSeWs4krFmcpPVO5U3Km4ovKEylnFTwbbUoNtqYOHKs5UrlTcUbmjcqXiTsUTKlcq3lExqUwVrxpsSw22pQbbUgdvqnhCZaq4ozJVPKEyVUwqZxWTyp2KSeVVKmcVPxlsSw22pewLD6icVVxROauYVD5VcUXlTsUVlScqzlSmiknlTsWVwbbUYFvq4BsqU8U7VKaKOyqvUpkq7qhcqXhC5aziSsWrBttSg20p+8KHVO5UTCp3KiaVqeJM5RMVk8oTFWcqVypeNdiWGmxLDbal7AsLqHyqYlKZKs5Unqi4onJWMalMFa8abEsNtqUOvqHyqoo7KlPFHZWp4o7K/0nlEyp3Kq4MtqUG21L2hT9A5YmKKyp3KiaVqeIJlbOKSWWqOFOZKq4MtqUG21KDbamDb6j8loo7Fa+q+JTKVPGpip8MtqUG21IHD1V8SuVOxatUpopJ5aziiYonVK6o3Km4MtiWGmxLHbxJ5YmKJ1SmijsqU8Wk8iqVd1RMKlPFmcpPBttSg22pwbbUwR9RMancqZhUpoonKiaVOxVPVEwqrxpsSw22pQ7+uIozlSsqdyomlSdUpoozlScqfjLYlhpsSx28qeK3VEwqdyomlaniTsUTKpPKWcWk8onBttRgW2qwLXXwkMpvUpkqpoo7Kk+oTBWTyjtUnlCZKq4MtqUG21L2hW2ZwbbUYFtqsC012JYabEv9B59Am9CnIGvVAAAAAElFTkSuQmCC";
 const inside = (root, candidate) => {
@@ -609,13 +610,36 @@ async function signature(target, dmg = false) {
   return { codesign: "passed", stapler: "passed", spctl: "passed", developerIdTeam: TEAM };
 }
 
+function fetchProbe(origin, pathname, timeout, fetcher = fetch) {
+  return fetcher(origin + pathname, { method: "GET", redirect: "error",
+    headers: { Origin: origin, "Sec-Fetch-Site": "same-origin" }, signal: requestSignal(timeout) });
+}
+
 async function jsonProbe(origin, pathname, timeout = 20_000) {
   try {
-    const response = await fetch(origin + pathname, { method: "GET", redirect: "error",
-      headers: { Origin: origin, "Sec-Fetch-Site": "same-origin" }, signal: requestSignal(timeout) });
+    const response = await fetchProbe(origin, pathname, timeout);
     if (response.status !== 200) return null;
     return await response.json();
   } catch { return null; }
+}
+
+export async function probeInstalledDefaultModel(origin, markerPath, fetcher = fetch) {
+  // The workspace exposes the output directory through its scoped file roots.
+  // The marker readback has already established that this directory is allowed.
+  const cwd = encodeURIComponent(path.dirname(markerPath));
+  let response;
+  try { response = await fetchProbe(origin, `/api/models?cwd=${cwd}`, 20_000, fetcher); }
+  catch { throw new AcceptanceFailure("installed_app_models_request_failed"); }
+  if (response.status !== 200) {
+    await response.body?.cancel().catch(() => {});
+    throw new AcceptanceFailure(`installed_app_models_http_${response.status}`);
+  }
+  const models = await response.json().catch(() => null);
+  check(Array.isArray(models?.modelList), "installed_app_models_invalid_response");
+  equal(models.defaultModel, SYNTHETIC_DEFAULT_MODEL, "installed_app_uses_a_different_default_model");
+  check(models.modelList.some(model => model?.provider === SYNTHETIC_DEFAULT_MODEL.provider
+    && model.id === SYNTHETIC_DEFAULT_MODEL.modelId), "installed_app_default_model_not_available");
+  return models.defaultModel;
 }
 
 export function requireHostedMac(env, platform = process.platform) {
@@ -812,7 +836,8 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
         ...(upgrade ? { apiKey: "synthetic-offline-key" } : {}),
         models: [{ id: "synthetic-offline", name: "Synthetic offline", input: ["text"], contextWindow: 4096, maxTokens: 256,
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }] } } },
-      "settings.json": { defaultProvider: "synthetic", defaultModel: "synthetic-offline" },
+      "settings.json": { defaultProvider: SYNTHETIC_DEFAULT_MODEL.provider,
+        defaultModel: SYNTHETIC_DEFAULT_MODEL.modelId },
       "auth.json": {},
     };
     for (const [name, value] of Object.entries(models))
@@ -1076,12 +1101,7 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
         launch.markerReadback = { throughInstalledHttp: true, fromDisk: true, contentSha256: hash(fileResponse.content) };
         launch.modelConfig = modelSummary();
         equal(launch.modelConfig, initialModels, "synthetic_model_configuration_changed");
-        if (upgrade) {
-          const configuredModels = await jsonProbe(origin, `/api/models?cwd=${encodeURIComponent(root)}`);
-          equal(configuredModels?.defaultModel, { provider: "synthetic", modelId: "synthetic-offline" },
-            "installed_app_uses_a_different_default_model");
-          launch.appDefaultModel = configuredModels.defaultModel;
-        }
+        if (upgrade) launch.appDefaultModel = await probeInstalledDefaultModel(origin, markerPath);
         check(sameProcess(app, (await sample()).find(row => row.pid === app.pid)),
           "app_exited_before_controlled_shutdown");
         ready = true; break;
@@ -1127,7 +1147,7 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
     stage(upgrade ? "native_upgrade_readback" : "cold_restart_comparison");
     verifyRestart(evidence.launches[0], evidence.launches[1], input.version);
     evidence.readback = { sameSqliteFile: true, readOnlyQuickCheckTwice: true, persistentSqliteRecordsPreserved: true, sameMarkerObject: true,
-      ...(upgrade ? { updatedVersion: input.version } : { sameVersion: true }),
+      ...(upgrade ? { updatedVersion: input.version, sameAppDefaultModel: true } : { sameVersion: true }),
       sameBundledCore: true, sameModelConfig: true, newAppPid: true, newInstanceNonce: true };
     if (upgrade) {
       evidence.claims.updater = "public_release_native_download_signature_install_and_automatic_relaunch";
