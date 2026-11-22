@@ -353,6 +353,9 @@ with sqlite3.connect(sys.argv[1]) as db:
     version: "0.3.117", core: { validationMode: "bundled" }, modelConfig: { digest: digest("{}") } };
   const restarted = { ...launch, appPid: 200, instanceNonce: "b".repeat(64), storage: second };
   verifyRestart(launch, restarted);
+  const newerReader = { ...second, driver: { ...second.driver, nodeVersion: "22.99.0" } };
+  fails(() => verifyRestart(launch, { ...restarted, storage: newerReader }), "restart_database_reader_changed");
+  verifyRestart(launch, { ...restarted, version: "0.3.123", storage: newerReader }, "0.3.123");
   for (const patch of [{ appPid: 100 }, { instanceNonce: launch.instanceNonce }])
     fails(() => verifyRestart(launch, { ...restarted, ...patch }), "restart_did_not_create_new_app_and_instance");
   execFileSync(python, ["-c", `import sqlite3,sys

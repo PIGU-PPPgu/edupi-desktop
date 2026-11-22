@@ -516,7 +516,8 @@ export function verifyRestart(first, second, targetVersion = first.version) {
   equal(first.storage.fileIdentity, second.storage.fileIdentity, "restart_database_identity_changed");
   for (const key of ["schemaSha256", "userVersion", "quickCheck", "readOnly"])
     equal(first.storage[key], second.storage[key], "restart_database_schema_changed");
-  equal(first.storage.driver, second.storage.driver, "restart_database_reader_changed");
+  if (first.version === targetVersion)
+    equal(first.storage.driver, second.storage.driver, "restart_database_reader_changed");
   const records = first.storage.persistentRecords;
   check(records && Object.values(records).some(rows => rows.length > 0), "restart_database_baseline_records_missing");
   for (const [table, rows] of Object.entries(records)) {
@@ -796,11 +797,19 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
     const prefs = path.join(config, "ui-prefs.json");
     const persistedWorkspace = upgrade ? root : teacher;
     fs.writeFileSync(prefs, JSON.stringify({ edupiDataRoot: persistedWorkspace }), { flag: "wx", mode: 0o600 });
-    const agent = path.join(root, ".edupi/agent");
+    const piHome = path.join(home, ".pi");
+    if (upgrade) {
+      // A normal restart reads the runner's normal agent directory.
+      check(!fs.existsSync(piHome), "runner_pi_profile_is_not_fresh");
+      fs.mkdirSync(piHome, { mode: 0o700 });
+      ownDirectory(piHome, "synthetic_pi_home");
+    }
+    const agent = upgrade ? path.join(piHome, "agent") : path.join(root, ".edupi/agent");
     fs.mkdirSync(agent, { recursive: true, mode: 0o700 });
     fs.mkdirSync(path.join(task, "tmp"), { mode: 0o700 });
     const models = {
       "models.json": { providers: { synthetic: { api: "openai-completions", baseUrl: "http://127.0.0.1:9/v1",
+        ...(upgrade ? { apiKey: "synthetic-offline-key" } : {}),
         models: [{ id: "synthetic-offline", name: "Synthetic offline", input: ["text"], contextWindow: 4096, maxTokens: 256,
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }] } } },
       "settings.json": { defaultProvider: "synthetic", defaultModel: "synthetic-offline" },
@@ -1048,7 +1057,7 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
         }
         launch.coreHost = pidEvidence(host, "core_host");
         launch.version = observedVersion; launch.core = core; launch.runtime = runtime;
-        launch.nativeGuard = "passed";
+        launch.nativeGuard = upgrade ? "hosted_persisted_synthetic_workspace" : "passed";
         if (label === "first" && !markerBaseline) {
           fs.mkdirSync(path.dirname(markerPath), { recursive: true, mode: 0o700 });
           fs.writeFileSync(markerPath, `${JSON.stringify(markerValue)}\n`, { flag: "wx", mode: 0o600 });
@@ -1067,6 +1076,12 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
         launch.markerReadback = { throughInstalledHttp: true, fromDisk: true, contentSha256: hash(fileResponse.content) };
         launch.modelConfig = modelSummary();
         equal(launch.modelConfig, initialModels, "synthetic_model_configuration_changed");
+        if (upgrade) {
+          const configuredModels = await jsonProbe(origin, `/api/models?cwd=${encodeURIComponent(root)}`);
+          equal(configuredModels?.defaultModel, { provider: "synthetic", modelId: "synthetic-offline" },
+            "installed_app_uses_a_different_default_model");
+          launch.appDefaultModel = configuredModels.defaultModel;
+        }
         check(sameProcess(app, (await sample()).find(row => row.pid === app.pid)),
           "app_exited_before_controlled_shutdown");
         ready = true; break;

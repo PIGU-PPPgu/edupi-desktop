@@ -244,19 +244,22 @@ private final class NativeProbe {
 
     private func triggerUpgrade() throws {
         var skippedWelcome = false
-        try awaitWindow("update_reminder_unavailable", seconds: 40, preferring: upgradeWindowLabels) { window in
+        try awaitWindow("update_settings_unavailable", seconds: 40, preferring: upgradeWindowLabels) { window in
             if !skippedWelcome, let later = try window.button("稍后再说") {
                 try press(later, failure: "welcome_dismiss_failed")
                 skippedWelcome = true
                 return false
             }
+            if try window.button(aboutSettings) != nil || window.button("About & Updates") != nil { return true }
             let settings = try window.button("打开设置", parentLabel: updateReminder)
                 ?? window.button("Open Settings", parentLabel: "Updates available")
+                ?? window.button("设置") ?? window.button("Settings")
             guard let settings else { return false }
-            try press(settings, failure: "update_reminder_open_settings_failed")
+            try press(settings, failure: "open_update_settings_failed")
             return true
         }
         var openedAbout = false
+        var checkedUpdates = false
         try awaitWindow("expected_upgrade_versions_or_control_unavailable", seconds: 35,
                         preferring: upgradeWindowLabels) { window in
             if window.showsAboutVersion("0.3.122", latest: "0.3.123") {
@@ -267,6 +270,9 @@ private final class NativeProbe {
             } else if !openedAbout, let about = try window.button(aboutSettings) ?? window.button("About & Updates") {
                 try press(about, failure: "old_app_open_about_failed")
                 openedAbout = true
+            } else if !checkedUpdates, let check = try window.button("检查更新") ?? window.button("Check for Updates") {
+                try press(check, failure: "check_updates_failed")
+                checkedUpdates = true
             }
             return false
         }
