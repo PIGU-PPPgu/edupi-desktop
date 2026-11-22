@@ -120,23 +120,25 @@ private struct Window {
             }) { return true }
 
             // WebKit can expose the chip as several static text children.
-            var chipText = Set<String>()
+            var chipText: [[String]] = []
             for child in nodes.indices where nodes[child].role == kAXStaticTextRole {
                 var parent = nodes[child].parent
                 while let ancestor = parent {
                     if ancestor == index {
-                        chipText.formUnion(nodes[child].names)
+                        if !nodes[child].names.isEmpty { chipText.append(nodes[child].names) }
                         break
                     }
                     parent = nodes[ancestor].parent
                 }
             }
-            guard chipText.contains("v\(current)") else { continue }
-            if let latest {
-                if chipText.contains("v\(latest)") && !chipText.isDisjoint(with: ["最新正式版", "Latest stable release"]) {
-                    return true
-                }
-            } else if !chipText.isDisjoint(with: ["版本", "当前版本", "Version", "Current version"]) {
+            guard chipText.count >= 2, chipText[1].contains("v\(current)") else { continue }
+            if let latest, chipText.count >= 4, chipText[3].contains("v\(latest)"),
+               (chipText[0].contains("当前版本") && chipText[2].contains("最新正式版")
+                || chipText[0].contains("Current version") && chipText[2].contains("Latest stable release")) {
+                return true
+            }
+            let currentLabels: Set<String> = ["版本", "当前版本", "Version", "Current version"]
+            if latest == nil && !currentLabels.isDisjoint(with: chipText[0]) {
                 return true
             }
         }
@@ -294,8 +296,8 @@ private final class NativeProbe {
             try awaitWindow("expected_upgrade_versions_or_control_unavailable", seconds: 45,
                             preferring: upgradeWindowLabels) { window in
                 let showsExpected = window.showsAboutVersion("0.3.122", latest: "0.3.123")
-                expectedVersionsVisible = expectedVersionsVisible || showsExpected
-                releaseLookupFailed = releaseLookupFailed || window.containsAny(releaseLookupFailure)
+                expectedVersionsVisible = showsExpected
+                releaseLookupFailed = window.containsAny(releaseLookupFailure)
                 if showsExpected, let update = try window.button("更新") ?? window.button("Update") {
                     try press(update, failure: "update_request_failed")
                     return true
