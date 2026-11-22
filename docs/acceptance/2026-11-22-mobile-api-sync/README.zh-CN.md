@@ -4,7 +4,7 @@
 
 当前状态：**部分实现；本次范围的开发验收与独立审查通过，源码合并状态以本 PR 记录为准；完整 Desktop/iOS 产品同步与安装发布未验收。**
 
-源码基线 `5c7ae60feedc422f242b1b492b2fc097e75be618`，分支 `codex/edupi-supabase-cloud-sync-20261122`；最终代码版本以对应 PR 的提交为准。整合在独立工作树进行，原桌面端混合修改及原聊天工作树保留。
+受验功能提交 `c7c021e82c56ba32b8d9e84f0fff25b56841b5a8`，基线 `5c7ae60feedc422f242b1b492b2fc097e75be618`，分支 `codex/edupi-supabase-cloud-sync-20261122`；后续提交仅补充交付记录。整合在独立工作树进行，原桌面端混合修改及原聊天工作树保留。
 
 ## 架构与实际范围
 
@@ -54,6 +54,8 @@
 - 本机日志 `/tmp/edupi-cloud-sync-*.log`、`/tmp/edupi-cloud-ios-20261122.log`；临时编译目录在验收后清理。
 
 最终整套日志为 `/tmp/edupi-cloud-sync-npm-verified-20261122.log`；页面 scope/旧回调/离线任务创建组合为 173 passed，独立复审另实跑 queued create 的 8 项行为测试，审查范围内无未关闭 P1/P2。最终浏览器重新构建当前源码验证登录后需选择工作区、关闭设置后继续同步（overlap=0）及隔离断网后可切回 local。
+
+最终界面截图：[隔离合成设置页](./cloud-settings-synthetic.png)。它只包含合成账号和工作区。
 
 ## 部署与回退
 
