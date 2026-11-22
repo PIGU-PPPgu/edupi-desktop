@@ -54,6 +54,11 @@ description = "Allows the UI to persist light/dark theme for the next cold start
 commands.allow = ["set_ui_theme"]
 
 [[permission]]
+identifier = "allow-desktop-workspace"
+description = "Allows the trusted desktop WebView to persist the last open chat and file tabs across local server origin changes."
+commands.allow = ["get_desktop_workspace", "set_desktop_workspace", "clear_desktop_workspace"]
+
+[[permission]]
 identifier = "allow-foreground-settings"
 description = "Allows the trusted main WebView to read and save bounded display-only task preferences."
 commands.allow = ["get_foreground_settings", "set_foreground_settings"]

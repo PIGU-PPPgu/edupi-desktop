@@ -11,6 +11,7 @@ import {
   stageNativeMaterialPaths,
   type MaterialStagingDescriptor,
 } from "@/lib/edupi-material-staging-client";
+import type { PersistedWorkspace } from "@/lib/workspace-state";
 
 export type DesktopDialogFilter = {
   name: string;
@@ -36,6 +37,7 @@ function asPathArray(selection: string | string[] | null): string[] {
 }
 
 let desktopApiTokenPromise: Promise<string> | null = null;
+let desktopWorkspaceWriteQueue: Promise<void> = Promise.resolve();
 
 async function getDesktopApiToken(): Promise<string> {
   if (!isTauriDesktop()) {
@@ -210,6 +212,29 @@ export function setEduPiDataRootNative(path: string): Promise<EduPiRootStatus> {
 
 export function resetEduPiDataRootNative(): Promise<EduPiRootStatus> {
   return invokeEduPiRootCommand<EduPiRootStatus>("reset_edupi_data_root");
+}
+
+export async function getDesktopWorkspaceNative(): Promise<PersistedWorkspace | null> {
+  if (!isTauriDesktop()) return null;
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<PersistedWorkspace | null>("get_desktop_workspace");
+}
+
+export function setDesktopWorkspaceNative(workspace: PersistedWorkspace): Promise<void> {
+  if (!isTauriDesktop()) return Promise.resolve();
+  desktopWorkspaceWriteQueue = desktopWorkspaceWriteQueue
+    .catch(() => {})
+    .then(async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("set_desktop_workspace", { workspace });
+    });
+  return desktopWorkspaceWriteQueue;
+}
+
+export async function clearDesktopWorkspaceNative(): Promise<void> {
+  if (!isTauriDesktop()) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("clear_desktop_workspace");
 }
 
 /** Native file-selection dialog. Resolves [] when cancelled. */

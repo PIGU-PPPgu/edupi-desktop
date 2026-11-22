@@ -126,7 +126,7 @@ async function mount({ initialSessionId = original.id, sessions = [original, oth
       props.onSelectSession(session, isRestore);
     }, onCwdSelect(cwd) { manualCwdSelections.push(cwd); props.onCwdSelect?.(cwd); } });
   }
-  const stateDeclarations = ["selectedSession", "newSessionCwd", "sessionKey", "edupiEducationModule", "edupiChatActive", "initialSessionId", "activeCwd", "activeCwdRef", "activeProjectRootRef", "initialSessionRestored", "suppressCwdBumpRef", "initialCwdSupersededRef", "activeSessionIdRef", "initialCwdStatus", "initialCwdError"]
+  const stateDeclarations = ["desktopMode", "workspaceRestoreReady", "selectedSession", "newSessionCwd", "sessionKey", "edupiEducationModule", "edupiChatActive", "initialSessionId", "activeCwd", "activeCwdRef", "activeProjectRootRef", "initialSessionRestored", "suppressCwdBumpRef", "initialCwdSupersededRef", "activeSessionIdRef", "initialCwdStatus", "initialCwdError"]
     .map(name => declaration(shellSource, "AppShell", name)).join("\n");
   const handlers = ["handleCwdSelect", "handleCwdChange", "handleSelectSession", "handleEducationSelectSession", "handleNewSession", "handleEducationNewSession", "handleInitialRestoreDone", "openEducationView"]
     .map(name => declaration(shellSource, "AppShell", name)).join("\n");
@@ -135,6 +135,7 @@ async function mount({ initialSessionId = original.id, sessions = [original, oth
     SessionSidebar, host, store, initialNavigation, URLSearchParams, window: { dispatchEvent: noop, alert: assert.fail }, Event: window.Event,
     moduleFromView: workbench.moduleFromView, resetNewSessionDraft: store.resetNewSessionDraft, fetch, AbortController,
     readEduPiWorkspace: ({ signal }) => { const request = { signal }; request.promise = new Promise(resolve => { request.resolve = cwd => resolve({ data: { workspace: cwd } }); }); workspaceReads.push(request); return request.promise; },
+    isTauriDesktop: () => false,
   };
   const parent = `
     function Parent() {

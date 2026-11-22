@@ -55,7 +55,15 @@ import { copyText } from "@/lib/clipboard";
 import { useDesktopConnection } from "@/lib/desktop-connection";
 import { DesktopConnectionNotice } from "./DesktopConnectionNotice";
 import { createDesktopCatchUpCoordinator } from "@/lib/desktop-catch-up";
-import { isTauriDesktop, listenDesktopResumeNative, listenQuickEntryNative, setCloseQuitsNative, showMainWindowNative } from "@/lib/desktop-native";
+import {
+  getDesktopWorkspaceNative,
+  isTauriDesktop,
+  listenDesktopResumeNative,
+  listenQuickEntryNative,
+  setCloseQuitsNative,
+  setDesktopWorkspaceNative,
+  showMainWindowNative,
+} from "@/lib/desktop-native";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import { PRODUCT_NAME } from "@/lib/branding";
@@ -105,10 +113,13 @@ export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [desktopMode] = useState(() => isTauriDesktop());
-  const [persistedWorkspace] = useState(() => (
+  const [persistedWorkspace, setPersistedWorkspace] = useState<PersistedWorkspace | null>(() => (
     desktopMode ? getPrefJson<PersistedWorkspace>(APP_PREF_KEYS.workspace) : null
   ));
-  const [initialNavigation] = useState(() => resolveInitialNavigation(searchParams, persistedWorkspace));
+  const startupWorkspaceRef = useRef(persistedWorkspace);
+  const startupSearchParamsRef = useRef(searchParams);
+  const [initialNavigation, setInitialNavigation] = useState(() => resolveInitialNavigation(searchParams, persistedWorkspace));
+  const [workspaceRestoreReady, setWorkspaceRestoreReady] = useState(() => !desktopMode);
   const [workspaceHydrated, setWorkspaceHydrated] = useState(() => !desktopMode);
   const { isDark, toggleTheme } = useTheme();
   const { locale, t: translate } = useI18n();
@@ -576,10 +587,33 @@ export function AppShell() {
   const activeCwdRef = useRef<string | null>(null);
   const activeProjectRootRef = useRef<string | null>(null);
   // True once the initial ?session= URL param has been resolved (or confirmed absent)
-  const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !initialSessionId);
+  const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !desktopMode && !initialSessionId);
   // Suppresses sessionKey bump in handleCwdChange during the initial URL restore
   const suppressCwdBumpRef = useRef(false);
   const initialCwdSupersededRef = useRef(false);
+
+  useEffect(() => {
+    if (!desktopMode) return;
+    let cancelled = false;
+    void getDesktopWorkspaceNative()
+      .catch(() => null)
+      .then((nativeWorkspace) => {
+        if (cancelled) return;
+        const workspace = nativeWorkspace ?? startupWorkspaceRef.current;
+        if (nativeWorkspace) {
+          setPersistedWorkspace(nativeWorkspace);
+          setPrefJson(APP_PREF_KEYS.workspace, nativeWorkspace);
+        }
+        const nextNavigation = resolveInitialNavigation(startupSearchParamsRef.current, workspace);
+        setInitialNavigation(nextNavigation);
+        setInitialSessionRestored(!nextNavigation.sessionId);
+        setWorkspaceRestoreReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [desktopMode]);
+
   const handleCwdSelect = useCallback((cwd: string) => {
     initialCwdSupersededRef.current = true;
     suppressCwdBumpRef.current = false;
@@ -1333,7 +1367,7 @@ export function AppShell() {
   // Persist workspace so the next desktop cold start can restore chat + files.
   useEffect(() => {
     if (!desktopMode || !workspaceHydrated) return;
-    setPrefJson(APP_PREF_KEYS.workspace, {
+    const workspace = {
       sessionId: selectedSession?.id ?? null,
       cwd: selectedSession?.cwd ?? newSessionCwd ?? activeCwd,
       fileTabs: fileTabs.map((tab) => ({
@@ -1344,7 +1378,9 @@ export function AppShell() {
       })),
       activeFileTabId,
       rightPanelOpen: rightPanelOpen && !chatPreview,
-    } satisfies PersistedWorkspace);
+    } satisfies PersistedWorkspace;
+    setPrefJson(APP_PREF_KEYS.workspace, workspace);
+    void setDesktopWorkspaceNative(workspace).catch(() => {});
   }, [
     workspaceHydrated,
     desktopMode,
@@ -1477,7 +1513,7 @@ export function AppShell() {
         onSelectSession={presentation === "embedded-chat" ? handleEducationSelectSession : handleSelectSession}
         onNewSession={presentation === "embedded-chat" ? handleEducationNewSession : handleNewSession}
         initialSessionId={initialSessionRestored ? null : initialSessionId}
-        skipInitialProjectSelection={initialNavigation.requestedCwd !== null || Boolean(selectedSession || effectiveNewSessionCwd)}
+        skipInitialProjectSelection={!workspaceRestoreReady || initialNavigation.requestedCwd !== null || Boolean(selectedSession || effectiveNewSessionCwd)}
         onInitialRestoreDone={handleInitialRestoreDone}
         refreshKey={refreshKey}
         onSessionDeleted={handleSessionDeleted}

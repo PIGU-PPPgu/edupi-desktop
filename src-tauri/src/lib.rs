@@ -28,7 +28,7 @@ use windows_sys::Win32::Storage::FileSystem::{
     MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
 };
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -57,6 +57,11 @@ const EDUPI_CORE_ROOT_ENV: &str = "EDUPI_CORE_ROOT";
 const EDUPI_DATA_ALLOWED_ROOT_ENV: &str = "EDUPI_DATA_ALLOWED_ROOT";
 const EDUPI_CORE_ALLOWED_ROOT_ENV: &str = "EDUPI_CORE_ALLOWED_ROOT";
 const EDUPI_DATA_PREF_KEY: &str = "edupiDataRoot";
+const DESKTOP_WORKSPACE_PREF_KEY: &str = "workspace";
+const MAX_DESKTOP_WORKSPACE_BYTES: usize = 128 * 1024;
+const MAX_DESKTOP_WORKSPACE_TABS: usize = 64;
+const MAX_DESKTOP_WORKSPACE_PATH_BYTES: usize = 4096;
+const MAX_DESKTOP_WORKSPACE_LABEL_BYTES: usize = 512;
 const MOBILE_BRIDGE_PREF_KEY: &str = "mobileBridgeEnabled";
 const SAFE_MODE_FLAG: &str = "--safe-mode";
 const ROUTE1_ISOLATED_CANARY_ENV: &str = "EDUPI_ROUTE1_ISOLATED_CANARY";
@@ -86,6 +91,40 @@ const RESUME_GAP_THRESHOLD: Duration = Duration::from_secs(45);
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const MIN_WINDOW_WIDTH: f64 = 800.0;
 const MIN_WINDOW_HEIGHT: f64 = 600.0;
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum DesktopWorkspaceDisplayMode {
+    Source,
+    Preview,
+    Diff,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct DesktopWorkspaceFileTab {
+    file_path: String,
+    label: String,
+    #[serde(default)]
+    source_session_id: Option<String>,
+    #[serde(default)]
+    initial_display_mode: Option<DesktopWorkspaceDisplayMode>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct DesktopWorkspace {
+    #[serde(default)]
+    session_id: Option<String>,
+    #[serde(default)]
+    cwd: Option<String>,
+    #[serde(default)]
+    file_tabs: Vec<DesktopWorkspaceFileTab>,
+    #[serde(default)]
+    active_file_tab_id: Option<String>,
+    #[serde(default)]
+    right_panel_open: bool,
+}
 
 const LIGHT_WINDOW_BG: Color = Color(247, 247, 245, 255);
 const DARK_WINDOW_BG: Color = Color(28, 28, 30, 255);
@@ -804,6 +843,38 @@ fn set_ui_theme(app: AppHandle, theme: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_desktop_workspace(app: AppHandle) -> Result<Option<DesktopWorkspace>, String> {
+    let prefs = read_ui_prefs(&app);
+    desktop_workspace_from_prefs(&prefs)
+}
+
+#[tauri::command]
+fn set_desktop_workspace(
+    app: AppHandle,
+    workspace: serde_json::Value,
+) -> Result<(), String> {
+    let workspace = normalize_desktop_workspace_value(workspace)?;
+    let mut prefs = read_ui_prefs(&app);
+    if !prefs.is_object() {
+        prefs = serde_json::json!({});
+    }
+    prefs[DESKTOP_WORKSPACE_PREF_KEY] =
+        serde_json::to_value(workspace).map_err(|error| error.to_string())?;
+    write_ui_prefs(&app, &prefs)
+}
+
+#[tauri::command]
+fn clear_desktop_workspace(app: AppHandle) -> Result<(), String> {
+    let mut prefs = read_ui_prefs(&app);
+    if let Some(object) = prefs.as_object_mut() {
+        object.remove(DESKTOP_WORKSPACE_PREF_KEY);
+    } else {
+        prefs = serde_json::json!({});
+    }
+    write_ui_prefs(&app, &prefs)
+}
+
+#[tauri::command]
 fn get_update_proxy(app: AppHandle) -> Result<Option<String>, String> {
     read_update_proxy_from_path(&update_proxy_path(&app)?)
 }
@@ -882,6 +953,92 @@ fn read_ui_prefs(app: &AppHandle) -> serde_json::Value {
         .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
         .unwrap_or_else(|| serde_json::json!({}))
+}
+
+fn validate_desktop_workspace_string(
+    value: &str,
+    max_bytes: usize,
+    field: &str,
+) -> Result<(), String> {
+    if value.is_empty() {
+        return Err(format!("{field} must not be empty"));
+    }
+    if value.len() > max_bytes {
+        return Err(format!("{field} is too long"));
+    }
+    if value.chars().any(char::is_control) {
+        return Err(format!("{field} contains a control character"));
+    }
+    Ok(())
+}
+
+fn validate_desktop_workspace(workspace: &DesktopWorkspace) -> Result<(), String> {
+    if workspace.file_tabs.len() > MAX_DESKTOP_WORKSPACE_TABS {
+        return Err("workspace has too many file tabs".to_string());
+    }
+    if let Some(session_id) = workspace.session_id.as_deref() {
+        validate_desktop_workspace_string(session_id, MAX_DESKTOP_WORKSPACE_PATH_BYTES, "sessionId")?;
+    }
+    if let Some(cwd) = workspace.cwd.as_deref() {
+        validate_desktop_workspace_string(cwd, MAX_DESKTOP_WORKSPACE_PATH_BYTES, "cwd")?;
+    }
+    if let Some(active_file_tab_id) = workspace.active_file_tab_id.as_deref() {
+        validate_desktop_workspace_string(
+            active_file_tab_id,
+            MAX_DESKTOP_WORKSPACE_PATH_BYTES,
+            "activeFileTabId",
+        )?;
+    }
+    for tab in &workspace.file_tabs {
+        validate_desktop_workspace_string(
+            &tab.file_path,
+            MAX_DESKTOP_WORKSPACE_PATH_BYTES,
+            "filePath",
+        )?;
+        validate_desktop_workspace_string(
+            &tab.label,
+            MAX_DESKTOP_WORKSPACE_LABEL_BYTES,
+            "label",
+        )?;
+        if let Some(source_session_id) = tab.source_session_id.as_deref() {
+            validate_desktop_workspace_string(
+                source_session_id,
+                MAX_DESKTOP_WORKSPACE_PATH_BYTES,
+                "sourceSessionId",
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn normalize_desktop_workspace_value(
+    value: serde_json::Value,
+) -> Result<DesktopWorkspace, String> {
+    let encoded = serde_json::to_vec(&value).map_err(|error| error.to_string())?;
+    if encoded.len() > MAX_DESKTOP_WORKSPACE_BYTES {
+        return Err("workspace is too large".to_string());
+    }
+    let workspace: DesktopWorkspace =
+        serde_json::from_value(value).map_err(|error| format!("invalid workspace: {error}"))?;
+    validate_desktop_workspace(&workspace)?;
+    Ok(workspace)
+}
+
+fn desktop_workspace_from_prefs(
+    prefs: &serde_json::Value,
+) -> Result<Option<DesktopWorkspace>, String> {
+    let Some(value) = prefs.get(DESKTOP_WORKSPACE_PREF_KEY) else {
+        return Ok(None);
+    };
+    let encoded = serde_json::to_vec(value).map_err(|error| error.to_string())?;
+    if encoded.len() > MAX_DESKTOP_WORKSPACE_BYTES {
+        return Ok(None);
+    }
+    let workspace = serde_json::from_value(value.clone()).map_err(|_| "invalid workspace".to_string())?;
+    if validate_desktop_workspace(&workspace).is_err() {
+        return Ok(None);
+    }
+    Ok(Some(workspace))
 }
 
 fn write_ui_prefs(app: &AppHandle, prefs: &serde_json::Value) -> Result<(), String> {
@@ -2707,6 +2864,80 @@ mod tests {
     }
 
     #[test]
+    fn desktop_workspace_validation_accepts_cold_start_state_and_preserves_other_prefs() {
+        let value = serde_json::json!({
+            "sessionId": "session-123",
+            "cwd": "/tmp/edupi-teacher",
+            "fileTabs": [{
+                "filePath": "/tmp/edupi-teacher/lesson.md",
+                "label": "lesson.md",
+                "sourceSessionId": "session-123",
+                "initialDisplayMode": "preview"
+            }],
+            "activeFileTabId": "file:/tmp/edupi-teacher/lesson.md",
+            "rightPanelOpen": true
+        });
+        let workspace = normalize_desktop_workspace_value(value).unwrap();
+        assert_eq!(workspace.session_id.as_deref(), Some("session-123"));
+        assert_eq!(
+            workspace.file_tabs[0].initial_display_mode,
+            Some(DesktopWorkspaceDisplayMode::Preview)
+        );
+
+        let temp = TempRoot::new("workspace-prefs");
+        let prefs = temp.path().join("ui-prefs.json");
+        fs::write(
+            &prefs,
+            serde_json::json!({
+                "edupiDataRoot": "/teacher/data",
+                "theme": "dark",
+                "serverPort": 38471
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let mut stored: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&prefs).unwrap()).unwrap();
+        stored[DESKTOP_WORKSPACE_PREF_KEY] = serde_json::to_value(&workspace).unwrap();
+        fs::write(&prefs, serde_json::to_string_pretty(&stored).unwrap()).unwrap();
+        let read_back: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&prefs).unwrap()).unwrap();
+        assert_eq!(read_back["theme"], "dark");
+        assert_eq!(read_back["serverPort"], 38471);
+        assert_eq!(read_back["edupiDataRoot"], "/teacher/data");
+        assert_eq!(
+            desktop_workspace_from_prefs(&read_back).unwrap(),
+            Some(workspace)
+        );
+    }
+
+    #[test]
+    fn desktop_workspace_validation_rejects_unsafe_or_oversized_state() {
+        let empty_path = serde_json::json!({
+            "fileTabs": [{
+                "filePath": "",
+                "label": "lesson.md"
+            }]
+        });
+        assert!(normalize_desktop_workspace_value(empty_path).is_err());
+
+        let control_character = serde_json::json!({
+            "cwd": "/tmp/edupi\u{0000}teacher"
+        });
+        assert!(normalize_desktop_workspace_value(control_character).is_err());
+
+        let too_many_tabs = serde_json::json!({
+            "fileTabs": (0..=MAX_DESKTOP_WORKSPACE_TABS)
+                .map(|index| serde_json::json!({
+                    "filePath": format!("/tmp/file-{index}.md"),
+                    "label": format!("file-{index}.md")
+                }))
+                .collect::<Vec<_>>()
+        });
+        assert!(normalize_desktop_workspace_value(too_many_tabs).is_err());
+    }
+
+    #[test]
     fn update_proxy_accepts_only_local_http_without_credentials_or_paths() {
         assert_eq!(normalize_update_proxy("").unwrap(), None);
         assert_eq!(
@@ -3050,6 +3281,9 @@ pub fn run() {
             show_main_window_cmd,
             show_openconnector_console,
             set_ui_theme,
+            get_desktop_workspace,
+            set_desktop_workspace,
+            clear_desktop_workspace,
             foreground_prefs::get_foreground_settings,
             foreground_prefs::set_foreground_settings,
             get_update_proxy,
