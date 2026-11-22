@@ -143,6 +143,9 @@ export function ensureCloudChatWorker(client: Client, scope: CloudScope,
           request_id: journal.requestId, runtime: proof, message: journal.message }, scope);
         save(file, { ...journal, status: "done" });
       } catch (error) {
+        // A final journal may belong to an older executor. Keep its result,
+        // then let claim() reconcile stale running work under the current lease.
+        if (error instanceof EduPiCloudError && error.code === "runtime_fenced") continue;
         if (!(error instanceof EduPiCloudError)
           || !["session_not_found", "chat_request_changed", "idempotency_conflict"].includes(error.code)) throw error;
         save(file, { ...journal, status: "stopped", reason: error.code });
