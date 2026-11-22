@@ -7,6 +7,7 @@ import {
 } from "@/lib/edupi-work-candidate-review";
 import { readEducationContract, reviewWorkCandidate } from "@/lib/edupi-education-server";
 import { EduPiCloudError } from "@/lib/edupi-cloud-client";
+import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +102,10 @@ export async function POST(request: Request) {
   if (decision === "suppress" && (typeof body.note !== "string" || !body.note.trim())) return bodyError("suppress 必须提供 note。");
 
   try {
+    const selected = await captureEducationWriteScope(request);
+    if (selected.mode === "cloud") {
+      throw new EduPiCloudError("unsupported_cloud_operation", "云端暂不支持 Today 待办审核，请切换到本地模式。", 409);
+    }
     const result = await reviewWorkCandidate({
       targetId: body.candidateId.trim(),
       expectedSnapshotId: body.expectedSnapshotId.trim(),
@@ -113,6 +118,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ receipt: result.receipt, data: result.data }, { status: 200 });
   } catch (error) {
+    if (error instanceof EduPiCloudError) return NextResponse.json({ code: error.code, error: error.message }, { status: error.status });
     const code = errorCode(error);
     return NextResponse.json({ error: code, code, reason: errorReason(code) }, { status: errorStatus(code) });
   }
