@@ -105,41 +105,41 @@ private final class NativeProbe {
         guard let windows = attribute(app, kAXWindowsAttribute) as? [AXUIElement], !windows.isEmpty else {
             return nil
         }
-        guard windows.count == 1 else { throw ProbeFailure(code: "unexpected_installed_app_windows") }
-        let window = windows[0]
-        var windowPid: pid_t = 0
-        guard AXUIElementGetPid(window, &windowPid) == .success, windowPid == pid,
-              (attribute(window, kAXMinimizedAttribute) as? Bool) != true else {
-            return nil
-        }
-
-        let scanDeadline = clock.systemUptime + 4
         let fields = [kAXRoleAttribute, kAXTitleAttribute, kAXValueAttribute,
                       kAXDescriptionAttribute, kAXChildrenAttribute]
-        var pending: [(AXUIElement, Int?, Int)] = [(window, nil, 0)]
-        var nodes: [Node] = []
-        while let (element, parent, depth) = pending.popLast() {
-            guard depth <= 48, nodes.count < 800, clock.systemUptime < scanDeadline else {
-                return nil
+        for window in windows {
+            var windowPid: pid_t = 0
+            guard AXUIElementGetPid(window, &windowPid) == .success, windowPid == pid,
+                  (attribute(window, kAXMinimizedAttribute) as? Bool) != true else {
+                continue
             }
-            _ = AXUIElementSetMessagingTimeout(element, 0.5)
-            var result: CFArray?
-            guard AXUIElementCopyMultipleAttributeValues(element, fields as CFArray, [], &result) == .success,
-                  let values = result as? [Any], values.count == fields.count,
-                  let role = values[0] as? String else {
-                return nil
+            let scanDeadline = clock.systemUptime + 4
+            var pending: [(AXUIElement, Int?, Int)] = [(window, nil, 0)]
+            var nodes: [Node] = []
+            while let (element, parent, depth) = pending.popLast() {
+                guard depth <= 48, nodes.count < 800, clock.systemUptime < scanDeadline else {
+                    break
+                }
+                _ = AXUIElementSetMessagingTimeout(element, 0.5)
+                var result: CFArray?
+                guard AXUIElementCopyMultipleAttributeValues(element, fields as CFArray, [], &result) == .success,
+                      let values = result as? [Any], values.count == fields.count,
+                      let role = values[0] as? String else {
+                    continue
+                }
+                let names = values[1...3].compactMap { value in
+                    (value as? String)?.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+                }
+                let index = nodes.count
+                nodes.append(Node(element: element, parent: parent, role: role, names: names))
+                if let children = values[4] as? [AXUIElement] {
+                    guard children.count + nodes.count + pending.count <= 800 else { break }
+                    pending.append(contentsOf: children.reversed().map { ($0, index, depth + 1) })
+                }
             }
-            let names = values[1...3].compactMap { value in
-                (value as? String)?.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-            }
-            let index = nodes.count
-            nodes.append(Node(element: element, parent: parent, role: role, names: names))
-            if let children = values[4] as? [AXUIElement] {
-                guard children.count + nodes.count + pending.count <= 800 else { return nil }
-                pending.append(contentsOf: children.reversed().map { ($0, index, depth + 1) })
-            }
+            if !nodes.isEmpty { return Window(nodes: nodes) }
         }
-        return Window(nodes: nodes)
+        return nil
     }
 
     private func awaitWindow(_ code: String, seconds: TimeInterval = 13,
@@ -221,6 +221,15 @@ private final class NativeProbe {
                 try window.button(close) == nil && window.showsText(ready) && !window.showsQR
             }
         case .restart:
+            var restored = false
+            try awaitWindow("synthetic_chat_unavailable", seconds: 45) { window in
+                if window.showsText(ready) {
+                    restored = true
+                    return true
+                }
+                return false
+            }
+            if restored { return }
             try selectFixture()
             try awaitWindow("scan_success_missing_after_restart") { window in
                 try window.button(close) == nil && window.showsText(ready) && !window.showsQR
