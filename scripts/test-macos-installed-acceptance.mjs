@@ -863,6 +863,17 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
         evidence.zhixue.failure = /^[a-z0-9_]{1,85}$/u.test(reason) ? reason : "native_probe_failed";
         throw new AcceptanceFailure(`zhixue_${mode}_not_observed`);
       }
+      if (mode === "restart") {
+        const observed = result.stdout.trim();
+        check(["visible_before_navigation", "opened_through_sidebar"].includes(observed),
+          "zhixue_restart_navigation_evidence_missing");
+        evidence.zhixue.restart = {
+          originalChatReopened: true,
+          loginReceiptVisibleBeforeNavigation: observed === "visible_before_navigation",
+          loginReceiptVisibleAfterReopen: true,
+          staleQrAbsent: true,
+        };
+      }
       evidence.zhixue.tested.push(mode);
       evidence.windowServer.guiInteraction = true;
       persist();

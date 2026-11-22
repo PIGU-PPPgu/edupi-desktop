@@ -233,20 +233,16 @@ private final class NativeProbe {
                 try window.button(close) == nil && window.showsText(ready) && !window.showsQR
             }
         case .restart:
-            var restored = false
-            try awaitWindow("synthetic_chat_unavailable", seconds: 45) { window in
-                if window.showsText(ready) {
-                    restored = true
-                    return true
-                }
-                return false
-            }
-            if restored { return }
+            let initiallyVisible = try snapshot().map { try showsReopenedFixture($0) } ?? false
             try selectFixture()
-            try awaitWindow("scan_success_missing_after_restart") { window in
-                try window.button(close) == nil && window.showsText(ready) && !window.showsQR
-            }
+            try awaitWindow("scan_success_missing_after_restart", predicate: showsReopenedFixture)
+            print(initiallyVisible ? "visible_before_navigation" : "opened_through_sidebar")
         }
+    }
+
+    private func showsReopenedFixture(_ window: Window) throws -> Bool {
+        try window.button(close) == nil && window.showsText(fixturePrompt, prefix: true)
+          && window.showsText(ready) && !window.showsQR
     }
 }
 
