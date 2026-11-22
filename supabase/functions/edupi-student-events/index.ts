@@ -46,16 +46,19 @@ async function getEvents(request: Request): Promise<Response> {
   const params = new URL(request.url).searchParams;
   const kind = params.get("kind");
   const student = safeText(params.get("student"), 240);
+  if (params.has("student") && !student) throw new ApiError(400, "invalid_request", "student 无效");
   const offset = Number(params.get("offset") || 0);
   const limit = Number(params.get("limit") || 20);
   if (kind !== null && !["learning", "interaction"].includes(kind)) throw new ApiError(400, "invalid_request", "kind 无效");
   if (!Number.isInteger(offset) || offset < 0 || offset > 1_000_000) throw new ApiError(400, "invalid_request", "offset 无效");
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new ApiError(400, "invalid_request", "limit 无效");
   let studentId = safeText(params.get("student_id"), 160);
+  if (params.has("student_id") && !studentId) throw new ApiError(400, "invalid_request", "student_id 无效");
   if (!studentId && student) {
     const { data: matches, error: studentError } = await db
       .from("student_profiles")
       .select("student_id")
+      .eq("workspace_id", workspaceId)
       .eq("name", student)
       .is("deleted_at", null)
       .limit(2);
@@ -65,7 +68,8 @@ async function getEvents(request: Request): Promise<Response> {
     if (!matches || matches.length !== 1) {
       return json({ ok: true, records: [], total: 0, record_ids: [], external_send: false });
     }
-    studentId = matches[0].student_id;
+    studentId = safeText(matches[0].student_id, 160);
+    if (!studentId) throw new ApiError(503, "student_events_unavailable", "学生身份无效");
   }
   const { data, error } = await db.rpc("list_student_events", {
     target_workspace: workspaceId,

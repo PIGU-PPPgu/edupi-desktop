@@ -119,7 +119,7 @@ async function intakeWorkspaceFixture(kind) {
   new Function("require", "module", "exports", "fetch", compiled)(name => dependencies[name]
     || (name.startsWith("@/") || name.startsWith("./") ? fakeModule : require(name)), componentModule, componentModule.exports,
   async url => { network.push(url); return { ok: true, json: async () => ({ sources: [] }) }; });
-  const props = { data: { timetable: [], teacherMaterials: [], capabilities: { materialIntake: { enabled: true }, calendar: { enabled: true },
+  const props = { data: { workspace: "/synthetic/material-intake", timetable: [], teacherMaterials: [], capabilities: { materialIntake: { enabled: true }, calendar: { enabled: true },
     timetable: { enabled: true }, entityDelete: { enabled: true, targetKinds: [] } }, dataSources: { materials: { present: true } } },
   context: null, query: "", selectedObjectId: null, stagedMaterials: [descriptor], stagingBusy: false,
   onObject() {}, onIntakeMaterial: async (...args) => { calls.push(args); return { materialReceivedOnly: true, materialScheduleProposal: upload,

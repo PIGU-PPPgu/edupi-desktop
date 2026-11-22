@@ -295,6 +295,28 @@ status="$(curl -sS -o "$workdir/events.json" -w "%{http_code}" -X GET \
   -H "apikey: $ANON_KEY" -H "Authorization: Bearer $access_token" \
   -H "x-edupi-workspace-id: $workspace_id")"
 expect_status student-events-list "$status" 200
+docker exec supabase_db_edupi-desktop psql -X -q -U postgres -d postgres -v ON_ERROR_STOP=1 -c "
+  insert into edupi.student_profiles(workspace_id,student_id,name) values
+    ('\''$workspace_id'\'','\''filter-exact'\'','\''SyntheticExact'\''),
+    ('\''$workspace_id'\'','\''filter-other'\'','\''SyntheticOther'\''),
+    ('\''$workspace_id'\'','\''filter-duplicate-one'\'','\''SyntheticDuplicate'\''),
+    ('\''$workspace_id'\'','\''filter-duplicate-two'\'','\''SyntheticDuplicate'\'');
+  insert into edupi.student_events(workspace_id,event_id,kind,student_ids,student_labels,summary,recorded_at,updated_at,source) values
+    ('\''$workspace_id'\'','\''filter-event-exact'\'','\''learning'\'',array['\''filter-exact'\''],array['\''SyntheticExact'\''],'\''isolated exact event'\'',now(),now(),'\''{}'\''),
+    ('\''$workspace_id'\'','\''filter-event-other'\'','\''learning'\'',array['\''filter-other'\''],array['\''SyntheticOther'\''],'\''isolated other event'\'',now(),now(),'\''{}'\'');"
+for name in SyntheticExact SyntheticMissing SyntheticDuplicate; do
+  status="$(curl -sS -o "$workdir/response.json" -w "%{http_code}" \
+    "$API_URL/functions/v1/edupi-student-events?student=$name" \
+    -H "apikey: $ANON_KEY" -H "Authorization: Bearer $access_token" \
+    -H "x-edupi-workspace-id: $workspace_id")"
+  expect_status "student-name-$name" "$status" 200
+  if [ "$name" = SyntheticExact ]; then
+    expect_field student-name-exact-object ".record_ids | join(\",\")" filter-event-exact
+    expect_field student-name-exact-total ".total" 1
+  else
+    expect_field "student-name-empty-$name" ".records | length" 0
+  fi
+done
 body="{\"action\":\"set_topic_alias\",\"alias\":\"分数运算\",\"canonical\":\"数与式\"}"
 status="$(request POST /functions/v1/edupi-student-events "$body")"
 expect_status student-events-alias "$status" 200

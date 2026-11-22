@@ -55,6 +55,7 @@ try {
   }, signup.access_token);
   const workspaceId = provision.workspace_id;
   workspaceIds.push(workspaceId);
+  assert.match(workspaceId, /^[0-9a-f-]{36}$/u);
   await client.login(email, password);
   assert.equal((await client.state()).workspaceId, null);
   await client.selectWorkspace(workspaceId);

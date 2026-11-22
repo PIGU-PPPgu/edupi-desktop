@@ -51,13 +51,62 @@ function workspace(count) {
   };
   const modules = { "@/lib/edupi-domain-navigation": navigation, "@/lib/edupi-material-rows": rowsModel, "@/lib/edupi-material-class-options": classOptions,
     "@/lib/desktop-updater": { isTauriDesktop: () => false }, "@/hooks/useModalDismiss": { useModalDismiss: () => ({ current: null }) },
-    "@/lib/edupi-operation-history": { intakeOperationHistory: () => [] }, "@/lib/edupi-material-schedule": {}, "@/lib/edupi-docx-chapter-suggestion": {},
+    "@/lib/edupi-operation-history": { intakeOperationHistory: () => [] }, "@/lib/edupi-material-schedule": { materialScheduleUploadProposal: value => value }, "@/lib/edupi-docx-chapter-suggestion": {},
     "./EduPiActionIcon": { ...placeholder("EduPiIconButton"), ...placeholder("EduPiPagination") },
   };
   for (const component of ["EduPiMaterialExcerpt", "EduPiOperationHistory", "EduPiMaterialMetadataEditor", "EduPiMaterialScheduleProposal"]) modules[`./${component}`] = placeholder(component);
   const f = mount(workspaceCode, "EduPiMaterialsWorkspace", props, modules);
   return { ...f, get tree() { return f.tree; }, deleted, routed, rows: () => f.nodes().filter(node => node.props.className?.startsWith("edupi-database-button-row")), pager: () => f.find(node => node.type.name === "EduPiPagination"), next() { this.pager().props.onNext(); f.render(); }, async deleteLast() { this.rows().at(-1).props.onClick(); f.render(); f.find(node => node.props.label === "删除材料").props.onClick(); await f.settle(); } };
 }
+
+for (const cloud of [true, false]) {
+  test(`${cloud ? "cloud" : "local"} material drawer keeps metadata editing and ${cloud ? "omits" : "retains"} local readers`, () => {
+    const f = workspace(1);
+    f.props.data = { ...f.props.data, workspace: cloud ? "cloud:00000000-0000-4000-8000-000000000001" : "/synthetic",
+      teacherMaterials: [{ ...material(1), available: false }] };
+    f.render(); f.rows()[0].props.onClick(); f.render();
+    const drawer = f.find(node => node.props.role === "dialog");
+    assert.ok(drawer, "clicking the material must open its drawer");
+    const nodes = descendants(drawer);
+    assert.equal(nodes.find(node => node.type.name === "EduPiMaterialMetadataEditor")?.props.material.material_id, "synthetic-material-1");
+    assert.equal(nodes.some(node => node.type.name === "EduPiMaterialScheduleProposal"), !cloud);
+    assert.equal(nodes.some(node => node.type.name === "EduPiMaterialExcerpt"), !cloud);
+    assert.equal(f.nodes().some(node => node.type === "button" && text(node) === "上传材料"), !cloud);
+    assert.equal(f.nodes().some(node => node.type.name === "EduPiReceivedLessonProposal"), false);
+  });
+}
+
+test("cloud workspace omits received local proposals and restores them when returning to local", async () => {
+  const f = workspace(1), materialId = "material-synthetic-upload";
+  f.props.data = { ...f.props.data, teacherMaterials: [{ ...material(1), material_id: materialId, available: false }],
+    capabilities: { ...f.props.data.capabilities, materialIntake: { enabled: true } } };
+  f.props.stagedMaterials = [{ staging_id: "stg_synthetic-upload", original_name: "合成材料.pdf", kind: "pdf",
+    staging_path: ".edupi/staging/synthetic.pdf", expected_size_bytes: 12, source_hash: "a".repeat(64) }];
+  const proposal = { material_id: materialId, status: "unavailable", read_only: true, external_send: false };
+  f.props.onIntakeMaterial = async () => ({
+    materialScheduleProposal: { ...proposal, automatic_import: false, read_result: null, reason_code: "material_schedule_source_unavailable" },
+    materialLessonProposal: { ...proposal, automatic_prepare: false, reason_code: "lesson_document_unresolved" },
+  });
+  f.render();
+  f.find(node => node.type === "button" && text(node) === "接入 EduPi").props.onClick(); f.render();
+  for (const [label, value] of [["学科", "数学"], ["班级", "703"]]) {
+    const field = descendants(f.find(node => node.type === "form")).find(node => node.type === "label" && text(node.props.children[0]) === label);
+    descendants(field).find(node => node.type === "input").props.onChange({ target: { value } }); f.render();
+  }
+  await f.find(node => node.type === "form").props.onSubmit({ preventDefault() {} }); await f.settle();
+  f.rows()[0].props.onClick(); f.render();
+  const count = name => f.nodes().filter(node => node.type.name === name).length;
+  assert.equal(count("EduPiMaterialScheduleProposal"), 2, "local intake and drawer must both retain schedule controls");
+  assert.equal(count("EduPiReceivedLessonProposal"), 1);
+  assert.equal(count("EduPiMaterialExcerpt"), 1);
+  f.props.data = { ...f.props.data, workspace: "cloud:00000000-0000-4000-8000-000000000001" }; f.render();
+  assert.equal(count("EduPiMaterialMetadataEditor"), 1);
+  for (const name of ["EduPiMaterialScheduleProposal", "EduPiReceivedLessonProposal", "EduPiMaterialExcerpt"]) assert.equal(count(name), 0, `${name} must not mount in cloud`);
+  f.props.data = { ...f.props.data, workspace: "/synthetic" }; f.render();
+  assert.equal(count("EduPiMaterialScheduleProposal"), 2);
+  assert.equal(count("EduPiReceivedLessonProposal"), 1);
+  assert.equal(count("EduPiMaterialExcerpt"), 1);
+});
 
 test("deleting the ninth material renders the eight remaining rows and synchronizes its clamped page", async () => {
   const f = workspace(9); f.next(); assert.equal(f.rows().length, 1);

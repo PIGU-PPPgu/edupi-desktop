@@ -57,6 +57,7 @@ function fixture() {
     } },
     "@/lib/edupi-material-metadata": { readMaterialMetadataHistory: async materialId => { calls.push(["current-metadata"]); return { materialId, revision: state.metadataRevision }; } },
     "@/lib/edupi-runtime-supervisor": { ensureEduPiRuntime: async () => host },
+    "@/lib/edupi-cloud-request-scope": { captureEducationWriteScope: async () => ({ mode: state.cloudMode ? "cloud" : "local" }) },
   };
   const route = { exports: {} };
   new Function("require", "module", "exports", compiled)(name => dependencies[name] || require(name), route, route.exports);
@@ -74,6 +75,21 @@ const adoption = (read, patch = {}) => ({ receipt_id: "receipt-synthetic-adopted
   command_type: "import_calendar", receipt_phase: "mutation", target: { target_kind: "calendar_import", command_type: "import_calendar" },
   status: "accepted", applied_ids: read.events.map(event => event.event_id), rejected_ids: [],
   evidence_ids: [read.source.material_id, read.parse_fingerprint], created_at: "2026-10-15T00:00:00.000Z", external_send: false, ...patch });
+
+test("cloud materials cannot read, bootstrap or apply local schedule proposals", async () => withToken(async () => {
+  const f = fixture();
+  f.state.cloudMode = true;
+  const responses = [
+    await f.GET(new Request(`${url}?materialId=synthetic-material`, { headers })),
+    await f.POST(postRequest({ action: "bootstrap_owner", materialId: "synthetic-material", confirm: true })),
+    await f.POST(postRequest(applyBody())),
+  ];
+  for (const response of responses) {
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).errorCode, "unsupported_cloud_operation");
+  }
+  assert.equal(f.calls.length, 0, "cloud IDs must not reach the local runtime or material history");
+}));
 
 test("native and origin gates reject reads and apply before Core access", async () => withToken(async () => {
   const { GET, POST, calls } = fixture();
