@@ -937,7 +937,7 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
       evidence.windowServer.guiInteraction = true;
       persist();
     };
-    const checkUpgrade = async (app, mode) => {
+    const checkUpgrade = async (app, mode, port) => {
       stage(mode);
       check(sameProcess(app, (await sample()).find(row => row.pid === app.pid)), "updater_app_identity_changed");
       const result = await command(zhixueProbe, [String(app.pid), appPath, mode, zhixue.title],
@@ -945,8 +945,24 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
       if (result.code !== 0) {
         const reason = result.stderr.trim();
         evidence.upgrade.failure = /^[a-z0-9_]{1,85}$/u.test(reason) ? reason : "native_probe_failed";
+        if (mode === "upgrade-old" && sameProcess(app, (await sample()).find(row => row.pid === app.pid))) {
+          const updates = await jsonProbe(`http://127.0.0.1:${port}`, "/api/updates");
+          const desktop = Array.isArray(updates?.components)
+            ? updates.components.find(component => component?.project === "edupi-desktop") : null;
+          const error = Array.isArray(updates?.errors)
+            ? updates.errors.find(entry => entry?.project === "edupi-desktop") : null;
+          const status = /^GitHub request failed with HTTP ([1-5]\d{2})\.$/u.exec(error?.message || "");
+          evidence.upgrade.oldAppReleaseLookup = {
+            response: Boolean(updates), releaseAvailable: desktop?.releaseStatus === "available",
+            expectedTarget: desktop?.latestVersion === input.version,
+            updateAvailable: desktop?.updateAvailable === true,
+            error: error ? (status ? `github_http_${status[1]}` : "check_failed") : null,
+          };
+        }
         throw new AcceptanceFailure("native_upgrade_control_not_observed");
       }
+      equal(result.stdout.trim(), mode === "upgrade-old" ? "upgrade_triggered" : "updated_version_visible",
+        "native_upgrade_result_not_observed");
       evidence.windowServer.guiInteraction = true;
       persist();
     };
@@ -1108,7 +1124,7 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
       }
       check(ready, "installed_app_core_startup_deadline_no_node_fallback");
       if (upgrade && label === "restart") {
-        await checkUpgrade(app, "upgrade-new");
+        await checkUpgrade(app, "upgrade-new", launch.port);
         evidence.claims.gui = "signed_app_update_controls_and_updated_version";
       } else if (!upgrade && label === "first") {
         zhixue.start();
@@ -1139,7 +1155,7 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
       equal(hash(JSON.stringify(fs.readdirSync(teacher))), teacherFingerprint, "synthetic_default_root_touched");
       launch.status = "passed";
       if (upgrade && label === "first") {
-        await checkUpgrade(app, "upgrade-old");
+        await checkUpgrade(app, "upgrade-old", launch.port);
         evidence.upgrade.triggered = true;
       }
       persist();

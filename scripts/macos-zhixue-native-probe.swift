@@ -23,6 +23,11 @@ private let checkScan = "查看扫码结果"
 private let aboutSettings = "关于与更新"
 private let updateReminder = "有可用更新"
 private let updatePreflight = "安装前确认"
+private let checkingUpdates: Set<String> = ["检查中…", "Checking…"]
+private let releaseLookupFailure: Set<String> = [
+    "无法检查 GitHub 发布。", "Could not check GitHub releases.",
+    "无法获取发布信息。", "Release information is unavailable.",
+]
 private let upgradeWindowLabels: Set<String> = [
     aboutSettings, "About & Updates", updateReminder, "Updates available", "设置", "稍后再说", updatePreflight,
 ]
@@ -109,11 +114,33 @@ private struct Window {
         let labels = latest.map {
             ["当前版本: v\(current). 最新正式版: v\($0). ", "Current version: v\(current). Latest stable release: v\($0). "]
         } ?? ["版本: v\(current). ", "当前版本: v\(current). ", "Version: v\(current). ", "Current version: v\(current). "]
-        return nodes.contains { node in
-            node.role == "AXLink" && node.names.contains { name in
+        for index in nodes.indices where nodes[index].role == "AXLink" {
+            if nodes[index].names.contains(where: { name in
                 labels.contains { name.hasPrefix($0) }
+            }) { return true }
+
+            // WebKit can expose the chip as several static text children.
+            var chipText = Set<String>()
+            for child in nodes.indices where nodes[child].role == kAXStaticTextRole {
+                var parent = nodes[child].parent
+                while let ancestor = parent {
+                    if ancestor == index {
+                        chipText.formUnion(nodes[child].names)
+                        break
+                    }
+                    parent = nodes[ancestor].parent
+                }
+            }
+            guard chipText.contains("v\(current)") else { continue }
+            if let latest {
+                if chipText.contains("v\(latest)") && !chipText.isDisjoint(with: ["最新正式版", "Latest stable release"]) {
+                    return true
+                }
+            } else if !chipText.isDisjoint(with: ["版本", "当前版本", "Version", "Current version"]) {
+                return true
             }
         }
+        return false
     }
 }
 
@@ -260,21 +287,38 @@ private final class NativeProbe {
         }
         var openedAbout = false
         var checkedUpdates = false
-        try awaitWindow("expected_upgrade_versions_or_control_unavailable", seconds: 35,
-                        preferring: upgradeWindowLabels) { window in
-            if window.showsAboutVersion("0.3.122", latest: "0.3.123") {
-                if let update = try window.button("更新") ?? window.button("Update") {
+        var checkVisible = false
+        var releaseLookupFailed = false
+        var expectedVersionsVisible = false
+        do {
+            try awaitWindow("expected_upgrade_versions_or_control_unavailable", seconds: 45,
+                            preferring: upgradeWindowLabels) { window in
+                let showsExpected = window.showsAboutVersion("0.3.122", latest: "0.3.123")
+                expectedVersionsVisible = expectedVersionsVisible || showsExpected
+                releaseLookupFailed = releaseLookupFailed || window.containsAny(releaseLookupFailure)
+                if showsExpected, let update = try window.button("更新") ?? window.button("Update") {
                     try press(update, failure: "update_request_failed")
                     return true
                 }
-            } else if !openedAbout, let about = try window.button(aboutSettings) ?? window.button("About & Updates") {
-                try press(about, failure: "old_app_open_about_failed")
-                openedAbout = true
-            } else if !checkedUpdates, let check = try window.button("检查更新") ?? window.button("Check for Updates") {
-                try press(check, failure: "check_updates_failed")
-                checkedUpdates = true
+                let check = try window.button("检查更新") ?? window.button("Check for updates")
+                if check != nil || window.containsAny(checkingUpdates) {
+                    checkVisible = true
+                }
+                if !checkedUpdates, let check {
+                    try press(check, failure: "check_updates_failed")
+                    checkedUpdates = true
+                } else if !openedAbout, !checkVisible,
+                          let about = try window.button(aboutSettings) ?? window.button("About & Updates") {
+                    try press(about, failure: "old_app_open_about_failed")
+                    openedAbout = true
+                }
+                return false
             }
-            return false
+        } catch let error as ProbeFailure where error.code == "expected_upgrade_versions_or_control_unavailable" {
+            if releaseLookupFailed { throw ProbeFailure(code: "old_app_release_lookup_failed") }
+            if expectedVersionsVisible { throw ProbeFailure(code: "old_app_update_button_not_enabled") }
+            if checkVisible { throw ProbeFailure(code: "old_app_expected_release_versions_not_visible") }
+            throw ProbeFailure(code: "old_app_about_page_not_observed")
         }
         try awaitWindow("expected_upgrade_confirmation_unavailable", seconds: 18,
                         preferring: upgradeWindowLabels) { window in
