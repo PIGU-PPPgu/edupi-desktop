@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url);
 const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
 const security = await jiti.import("../../../../../lib/request-security.ts");
 const bounded = await jiti.import("../../../../../lib/bounded-form-data.ts");
+const cloud = await jiti.import("../../../../../lib/edupi-cloud-client.ts");
 const sourceModel = await jiti.import("../../../../../lib/edupi-docx-chapter-suggestion.ts");
 const compiled = ts.transpileModule(fs.readFileSync(new URL("./route.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
 const hash = value => `sha256:${value.repeat(64)}`;
@@ -25,6 +26,7 @@ function fixture(format = "docx") {
   let mutateReadback = () => {};
   const dependencies = {
     "@/lib/edupi-education-server": { readEducationContract: async () => ({ teacherMaterials: [material] }) },
+    "@/lib/edupi-cloud-client": cloud,
     "@/lib/edupi-core-snapshot": { resolveEduPiBridgeRoots: () => ({}) },
     "@/lib/edupi-runtime-supervisor": { ensureEduPiRuntime: async () => { managedRuntimeReady = true; return {}; } },
     "@/lib/request-security": security,

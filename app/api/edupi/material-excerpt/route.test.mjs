@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url);
 const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
 const security = await jiti.import("../../../../lib/request-security.ts");
 const bounded = await jiti.import("../../../../lib/bounded-form-data.ts");
+const cloud = await jiti.import("../../../../lib/edupi-cloud-client.ts");
 const compiled = ts.transpileModule(fs.readFileSync(new URL("./route.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
 function fixture() {
   let excerpt = null;
@@ -16,6 +17,7 @@ function fixture() {
   const material = { material_id: "material", subject: "数学", class_id: "703", available: true };
   const dependencies = {
     "@/lib/edupi-education-server": { readEducationContract: async () => ({ teacherMaterials: [material] }) },
+    "@/lib/edupi-cloud-client": cloud,
     "@/lib/edupi-core-snapshot": { resolveEduPiBridgeRoots: () => ({}) },
     "@/lib/request-security": security,
     "@/lib/bounded-form-data": bounded,

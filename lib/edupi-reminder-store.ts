@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rename, writeFile, rm } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, isAbsolute } from "node:path";
 import lockfile from "proper-lockfile";
 import type { ReminderEvent } from "./edupi-reminder-events";
 import { NOTIFICATION_CLAIM_LEASE_MS, notificationRearmAt } from "./edupi-reminder-attempt";
@@ -127,6 +127,7 @@ function metrics(state: Store): ReminderMetrics {
 }
 
 export async function updateReminderStore(file: string, snapshot: Record<string, ReminderEvent>, action?: ReminderAction, now = Date.now(), options: ReminderStoreOptions = {}): Promise<ReminderStoreResult> {
+  if (!isAbsolute(file)) throw new Error("提醒记录必须使用本地绝对路径");
   await mkdir(dirname(file), { recursive: true });
   const release = await lockfile.lock(dirname(file), { lockfilePath: `${file}.lock`, retries: 5 });
   const temporary = `${file}.${randomUUID()}.tmp`;

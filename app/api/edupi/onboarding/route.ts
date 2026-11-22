@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { EduPiSnapshotError, resolveEduPiBridgeRoots } from "@/lib/edupi-core-snapshot";
 import { readEducationContract, reviewTeacherContextCandidate } from "@/lib/edupi-education-server";
+import { EduPiCloudError } from "@/lib/edupi-cloud-client";
 import { runCoreProcess } from "@/lib/edupi-core-process-client";
 import { isApiRequestAllowed, hasJsonContentType } from "@/lib/request-security";
 import { parseJsonWithinLimit } from "@/lib/bounded-form-data";
@@ -13,7 +14,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     return NextResponse.json(await readTeacherContext());
-  } catch {
+  } catch (error) {
+    if (error instanceof EduPiCloudError) return NextResponse.json({ error: "教育上下文暂不可用", reason: error.message, code: error.code }, { status: error.status });
     return NextResponse.json({ error: "教育上下文暂不可用", reason: "Core v1.1 education_workspace 快照不可用。" }, { status: 503 });
   }
 }
@@ -36,6 +38,7 @@ export async function POST(request: Request) {
     const result = await reviewTeacherContextCandidate({ targetId: candidate.contextId, expectedSnapshotId: candidate.snapshotId, expectedRevision: candidate.revision, decision: "accept", patch: null, note: "教师手动填写并保存", reviewerId: "teacher" });
     return NextResponse.json({ candidate, receipt: result.receipt, data: result.data });
   } catch (error) {
+    if (error instanceof EduPiCloudError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof TeacherContextReviewError && ["stale_snapshot", "stale_revision"].includes(error.code)) return NextResponse.json({ error: "教师资料已被其他操作更新，请刷新后重新保存" }, { status: 409 });
     return NextResponse.json({ error: "保存未确认，请刷新查看待确认更新后重试" }, { status: 503 });
   }
@@ -121,6 +124,7 @@ export async function PUT(request: Request) {
     });
     return NextResponse.json({ receipt: result.receipt, data: result.data }, { status: 200 });
   } catch (error) {
+    if (error instanceof EduPiCloudError) return NextResponse.json({ error: error.code, code: error.code, reason: error.message }, { status: error.status });
     const code = errorCode(error);
     return NextResponse.json({ error: code, code, reason: errorReason(code) }, { status: errorStatus(code) });
   }

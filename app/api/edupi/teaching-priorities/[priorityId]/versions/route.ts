@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
 import { readEducationContract } from "@/lib/edupi-education-server";
+import { EduPiCloudError } from "@/lib/edupi-cloud-client";
 import type { EducationContract, EducationTeachingPriority } from "@/lib/edupi-education-contract";
 import {
   parseTeachingPriorityId,
@@ -87,7 +88,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ prio
       ? NextResponse.json({ history: state.history, data: state.data })
       : errorResponse("stale_priority", 409, "教学重点已更新，请重试");
   }
-  catch (error) { return error instanceof TeachingPriorityError ? mapError(error) : errorResponse("unavailable", 503, "教学重点历史暂不可用"); }
+  catch (error) {
+    if (error instanceof EduPiCloudError) return errorResponse(error.code, error.status, error.message);
+    return error instanceof TeachingPriorityError ? mapError(error) : errorResponse("unavailable", 503, "教学重点历史暂不可用");
+  }
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ priorityId: string }> }) {
@@ -113,7 +117,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ pri
     let receipt: TeachingPriorityMutationReceipt;
     try { receipt = await restoreTeachingPriorityVersion({ priorityId, ...body, signal: request.signal }); }
     catch (error) {
-      const reconciled = await currentState(priorityId).catch(() => null);
+      const reconciled = await currentState(priorityId).catch((error) => {
+        if (error instanceof EduPiCloudError) throw error;
+        return null;
+      });
       if (reconciled && ownedRestore(reconciled, body, requestId, desired)) return NextResponse.json({ result: null, data: reconciled.data, history: reconciled.history, reconciled: true });
       throw error;
     }
@@ -121,6 +128,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pri
     if (!verified || !verifiesReceipt(verified, receipt, desired)) return errorResponse("invalid_response", 502, "教学重点恢复结果未能与 Core 对账");
     return NextResponse.json({ result: receipt, data: verified.data, history: verified.history, reconciled: false });
   } catch (error) {
+    if (error instanceof EduPiCloudError) return errorResponse(error.code, error.status, error.message);
     return error instanceof TeachingPriorityError ? mapError(error) : errorResponse("unavailable", 503, "教学重点恢复暂不可用");
   }
 }

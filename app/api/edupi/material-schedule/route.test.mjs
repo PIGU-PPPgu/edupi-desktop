@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url), jiti = createJiti(import.meta.ur
 const security = await jiti.import("../../../../lib/request-security.ts");
 const native = await jiti.import("../../../../lib/desktop-api-auth.ts");
 const bounded = await jiti.import("../../../../lib/bounded-form-data.ts");
+const cloud = await jiti.import("../../../../lib/edupi-cloud-client.ts");
 const compiled = ts.transpileModule(fs.readFileSync(new URL("./route.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const hash = character => `sha256:${character.repeat(64)}`;
 const token = "synthetic-material-schedule-token-123456789";
@@ -46,6 +47,7 @@ function fixture() {
     },
   };
   const dependencies = {
+    "@/lib/edupi-cloud-client": cloud,
     "@/lib/request-security": security, "@/lib/desktop-api-auth": native, "@/lib/bounded-form-data": bounded,
     "@/lib/edupi-core-snapshot": { resolveEduPiBridgeRoots: () => roots, readEduPiEducationSnapshot: async options => {
       assert.equal(options.scheduleOccurrenceVersion, "1.2", "current visibility and stored wall clocks use the formal occurrence projection");

@@ -292,9 +292,13 @@ export function restoredEntityProjectionIsValid(kind: EntityDeleteKind, id: stri
 export async function bindEducationTaskSession(input: { taskId: unknown; sessionId: unknown }): Promise<{ binding: EducationContract["taskSessions"][string]; data: EducationContract }> {
   const taskId = requiredText(input.taskId, "taskId");
   const sessionId = requiredText(input.sessionId, "sessionId");
+  const client = createEduPiCloudClient();
+  const selected = await client.state();
+  if (selected.mode === "cloud") throw new EduPiCloudError("unsupported_cloud_operation", "云端事项暂不支持会话绑定。", 409);
   const snapshot = await readEduPiEducationSnapshot();
   const root = snapshot.dataRoot.root;
   const current = await readEducationContract();
+  if (stateScopeKey(await client.state()) !== stateScopeKey(selected)) throw new EduPiCloudError("scope_changed", "工作区已改变，未绑定会话。", 409);
   const task = current.tasks.find((item) => item.id === taskId);
   const document = current.continuity.documents.find(item => `document:${item.id}` === taskId);
   if (!document && (!task || task.externalSend || task.scope !== "teacher_internal" || !task.requiresTeacherReview || task.audience.some((item) => item !== "teacher"))) {
@@ -313,6 +317,7 @@ export async function bindEducationTaskSession(input: { taskId: unknown; session
   if (previousBinding && previousBinding.sessionId !== sessionId && previousBinding.status !== "missing" && sessionInfo?.parentSessionId !== previousBinding.sessionId) {
     throw new Error("只能把教学任务切换到当前绑定 Session 的合法 fork");
   }
+  if (stateScopeKey(await client.state()) !== stateScopeKey(selected)) throw new EduPiCloudError("scope_changed", "工作区已改变，未绑定会话。", 409);
   const persistSession = runtime && (runtime as { ensureSessionPersisted?: () => void }).ensureSessionPersisted;
   if (typeof persistSession === "function") persistSession.call(runtime);
 

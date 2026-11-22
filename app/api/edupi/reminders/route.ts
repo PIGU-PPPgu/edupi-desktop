@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import path from "node:path";
 import { readEducationWorkspaceBundle } from "@/lib/edupi-education-server";
+import { EduPiCloudError } from "@/lib/edupi-cloud-client";
 import { reminderEvents, selectForegroundReminders } from "@/lib/edupi-reminder-events";
 import { readServerForegroundPolicy } from "@/lib/edupi-foreground-server";
 import { reminderNotificationSourceFingerprint } from "@/lib/edupi-reminder-notification-proof";
@@ -15,6 +16,9 @@ import { validReminderAction, type ReminderAction } from "@/lib/edupi-reminder-a
 export const dynamic = "force-dynamic";
 async function result(action?: ReminderAction) {
   let { data } = await readEducationWorkspaceBundle();
+  if (data.workspace.startsWith("cloud:")) {
+    throw new EduPiCloudError("unsupported_cloud_operation", "云端提醒暂不可用。", 409);
+  }
   let foregroundPolicyStatus: "current" | "unavailable" = "current";
   const file = path.join(data.workspace, ".edupi", "desktop", "reminders.json");
   let events = reminderEvents(data.tasks, data.workspace, new Date(), data.continuity.documents, data.workCases, data.generatedArtifacts);
@@ -82,6 +86,7 @@ async function result(action?: ReminderAction) {
     return NextResponse.json({ error: "提醒已变化" }, { status: 409 });
   if (notifications.length) {
     const proposed = notifications;
+    let cloudError: EduPiCloudError | undefined;
     // Core attention may finish after a preference/source change or midnight.
     // Re-read at this last response boundary; never send an old async result.
     try {
@@ -94,7 +99,8 @@ async function result(action?: ReminderAction) {
         && sourceEvents.some(event => event.taskId === item.taskId && event.identity === item.identity && event.completion === item.kind));
       data = current;
       events = currentEvents;
-    } catch {
+    } catch (error) {
+      if (error instanceof EduPiCloudError) cloudError = error;
       foregroundPolicyStatus = "unavailable";
       notifications = [];
     }
@@ -104,11 +110,15 @@ async function result(action?: ReminderAction) {
       // the underlying transaction. Release only this exact unsent attempt.
       state = await updateReminderStore(file, events, { id: item.id, type: "release_notification", attemptedAt: item.notificationAttemptedAt, attemptId: item.notificationAttemptId });
     }
+    if (cloudError) throw cloudError;
   }
   return NextResponse.json({ items: state.items, notifications, nativeNotificationIds: notifications.map((item) => item.id), metrics: state.metrics, attention, ...(action?.type === "claim_notifications" ? { foregroundPolicyStatus } : {}), workspace: data.workspace, taskSessions: data.taskSessions });
 }
 export async function GET() {
-  try { return await result(); } catch { return NextResponse.json({ error: "提醒暂不可用" }, { status: 503 }); }
+  try { return await result(); } catch (error) {
+    if (error instanceof EduPiCloudError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    return NextResponse.json({ error: "提醒暂不可用" }, { status: 503 });
+  }
 }
 export async function POST(request: Request) {
   if (!isApiRequestAllowed(request) || !hasJsonContentType(request)) return NextResponse.json({ error: "请求无效" }, { status: 403 });
@@ -116,5 +126,8 @@ export async function POST(request: Request) {
     const body = await parseJsonWithinLimit(request, 2048);
     if (!validReminderAction(body)) return NextResponse.json({ error: "操作无效" }, { status: 400 });
     return await result(body);
-  } catch { return NextResponse.json({ error: "提醒保存失败" }, { status: 503 }); }
+  } catch (error) {
+    if (error instanceof EduPiCloudError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    return NextResponse.json({ error: "提醒保存失败" }, { status: 503 });
+  }
 }

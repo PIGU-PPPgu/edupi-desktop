@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readEducationContract } from "@/lib/edupi-education-server";
+import { EduPiCloudError } from "@/lib/edupi-cloud-client";
 import { resolveEduPiBridgeRoots } from "@/lib/edupi-core-snapshot";
 import { runCoreProcess } from "@/lib/edupi-core-process-client";
 import { isApiRequestAllowed, hasJsonContentType } from "@/lib/request-security";
@@ -22,6 +23,7 @@ async function invoke(action: "read" | "review", input: Record<string, unknown>,
   return result.excerpt;
 }
 function errorResponse(error: unknown) {
+  if (error instanceof EduPiCloudError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
   if (error instanceof RequestBodyTooLargeError) return NextResponse.json({ error: "正文不能超过16 KB" }, { status: 400 });
   const code = (error as { code?: string })?.code;
   if (code === "invalid_input" || code === "invalid_review") return NextResponse.json({ error: "正文不能为空且不能超过16 KB，操作参数需完整" }, { status: 400 });
