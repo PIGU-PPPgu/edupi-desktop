@@ -170,8 +170,7 @@ export async function POST(request: Request) {
     if (error instanceof EducationIntakeError) return NextResponse.json({ error: error.message, code: error.code }, { status: statusFor(error) });
     if (error instanceof MaterialRecognitionAdmissionError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     if (error instanceof EduPiCloudError) {
-      const status = error.status === 409 ? 409 : error.status >= 400 && error.status < 500 ? error.status : 503;
-      return NextResponse.json({ error: error.message, code: error.code }, { status });
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     }
     return NextResponse.json({ error: "教育导入暂不可用", code: "unavailable" }, { status: 503 });
   }

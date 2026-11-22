@@ -17,7 +17,10 @@ export async function GET(request: Request) {
     const ledger = await readEntityDeletionLedger({ signal: request.signal });
     return NextResponse.json({ deletions: ledger.deletions.map((record) => ({ ...record, restoreRequestId: entityRestoreRequestId(record) })), history: ledger.history });
   } catch (error) {
-    const code = error instanceof EntityDeleteError || error instanceof EduPiCloudError ? error.code : "unavailable";
+    if (error instanceof EduPiCloudError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    const code = error instanceof EntityDeleteError ? error.code : "unavailable";
     return NextResponse.json({ error: error instanceof Error ? error.message : "删除记录暂不可用。", code }, { status: 503 });
   }
 }

@@ -321,6 +321,22 @@ test("cloud material upload keeps staging when the durable binary or intake writ
   assert.equal(calls.some(item => item[0] === "settle"), false);
 });
 
+test("cloud intake preserves a typed upstream 502 without dispatching or settling staging", async () => {
+  class CloudError extends Error {
+    constructor() { super("合成上游错误"); this.code = "invalid_response"; this.status = 502; }
+  }
+  const { post, descriptor, calls } = await materialRouteFixture("pdf", { material_id: "synthetic-material" }, false, undefined, {
+    modules: {
+      "@/lib/edupi-cloud-client": { EduPiCloudError: CloudError, createEduPiCloudClient: assert.fail },
+      "@/lib/edupi-cloud-request-scope": { captureEducationWriteScope: async () => { throw new CloudError(); } },
+    },
+  });
+  const response = await post(request({ kind: "material", stagingId: descriptor.staging_id }));
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).code, "invalid_response");
+  assert.deepEqual(calls, []);
+});
+
 test("cloud material staging settles only after the upload is binary-verified and command is replay-safe", async () => {
   const commandResponse = {
     ok: true, operation: "command", request_id: "material-request", external_send: false,

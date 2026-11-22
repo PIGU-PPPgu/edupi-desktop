@@ -29,8 +29,7 @@ export async function POST(request: Request) {
     return NextResponse.json(await classroomService(body, request.signal));
   } catch (error) {
     if (error instanceof EduPiCloudError) {
-      const status = error.status === 409 ? 409 : error.status >= 400 && error.status < 500 ? error.status : 503;
-      return NextResponse.json({ error: error.message, code: error.code }, { status });
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     }
     return NextResponse.json({ error: error instanceof Error ? error.message : "操作失败。", code: error instanceof ClassroomError ? error.code : "unavailable" },
       { status: error instanceof ClassroomError ? error.code === "stale_revision" ? 409 : 400 : 503 });
