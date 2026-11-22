@@ -37,6 +37,10 @@ private struct Node {
 private struct Window {
     let nodes: [Node]
 
+    func containsAny(_ texts: Set<String>) -> Bool {
+        nodes.contains { node in node.names.contains { texts.contains($0) } }
+    }
+
     func button(_ name: String) throws -> AXUIElement? {
         var matches = Set<Int>()
         for index in nodes.indices where nodes[index].matches(name) {
@@ -107,6 +111,7 @@ private final class NativeProbe {
         }
         let fields = [kAXRoleAttribute, kAXTitleAttribute, kAXValueAttribute,
                       kAXDescriptionAttribute, kAXChildrenAttribute]
+        var candidates: [Window] = []
         for window in windows {
             var windowPid: pid_t = 0
             guard AXUIElementGetPid(window, &windowPid) == .success, windowPid == pid,
@@ -137,9 +142,12 @@ private final class NativeProbe {
                     pending.append(contentsOf: children.reversed().map { ($0, index, depth + 1) })
                 }
             }
-            if !nodes.isEmpty { return Window(nodes: nodes) }
+            if !nodes.isEmpty { candidates.append(Window(nodes: nodes)) }
         }
-        return nil
+        let preferred = candidates.first {
+            $0.containsAny([fixtureTitle, "AI 协作", "对话", waiting, ready, "打开扫码窗口", "查看扫码结果"])
+        }
+        return preferred ?? candidates.max { $0.nodes.count < $1.nodes.count }
     }
 
     private func awaitWindow(_ code: String, seconds: TimeInterval = 13,
