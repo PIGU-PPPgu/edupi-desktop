@@ -14,7 +14,7 @@ const fail = (): never => { throw new CloudReadbackError(); };
 export function cloudClassroomDutyTask(record: Row) {
   const input = row(record.input);
   if (!input || record.domain !== "duty" || typeof record.id !== "string") return fail();
-  return { task_id: `duty-${record.id}`, title: `${input.class_name} ${input.title}`.slice(0, 240),
+  return { task_id: `duty-${record.id}`, title: Array.from(`${input.class_name} ${input.title}`).slice(0, 240).join(""),
     due_date: input.start_date,
     note: `值日方案 ${record.id}。从 ${input.start_date} 起 ${input.days} 天，完整排班及当前工作量见关联方案。` };
 }
