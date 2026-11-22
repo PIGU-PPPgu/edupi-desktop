@@ -577,6 +577,13 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
       replayed: commandResult.replayed === true, external_send: false,
     };
   }
+  async function waitingForSessionCreation(entry: EduPiCloudOutboxEntry, scope: CloudScope): Promise<boolean> {
+    if (entry.operation !== "sessions" || entry.body.action === "create") return false;
+    const current = await assertScope(scope);
+    return current.outbox.some(parent => parent.operation === "sessions" && parent.body.action === "create"
+      && parent.issuer === entry.issuer && parent.accountId === entry.accountId && parent.workspaceId === entry.workspaceId
+      && parent.body.session_id === entry.body.session_id);
+  }
   async function operationWithOutbox(operationName: string, body: Record<string, unknown>, scope?: CloudScope) {
     const selected = scope || await captureScope();
     const prepared = await prepare(operationName, body, selected);
@@ -585,6 +592,9 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
       return { queued: false as const, result: prepared.completed };
     }
     const entry = prepared;
+    // A brief recovery between these requests must not send the first prompt
+    // before its session exists, turning a recoverable offline send into a 404.
+    if (await waitingForSessionCreation(entry, selected)) return { queued: true as const, entry };
     try { return { queued: false as const, result: await deliver(entry, selected) }; }
     catch (error) {
       if (error instanceof CloudReadbackError || error instanceof EduPiCloudError
@@ -602,7 +612,10 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
     let flushed = 0;
     for (const entry of current.outbox.filter(item => item.issuer === scope.issuer && item.accountId === scope.accountId
       && item.workspaceId === scope.workspaceId && item.status === "pending")) {
-      try { await deliver(entry, scope); flushed++; }
+      try {
+        if (await waitingForSessionCreation(entry, scope)) continue;
+        await deliver(entry, scope); flushed++;
+      }
       catch (error) {
         // A single object's conflict must not starve independent saved writes.
         // Stop only when the whole connection or authenticated scope is unusable.
