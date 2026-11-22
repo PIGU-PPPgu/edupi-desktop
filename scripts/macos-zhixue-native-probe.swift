@@ -16,6 +16,8 @@ private let waiting = "正在打开智学网，请稍等。"
 private let ready = "已确认登录。同步前请确认班级、学科和学段。"
 private let close = "关闭扫码窗口"
 private let image = "智学网登录"
+private let openScan = "打开扫码窗口"
+private let checkScan = "查看扫码结果"
 private let clock = ProcessInfo.processInfo
 
 private func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
@@ -40,6 +42,7 @@ private struct Node {
 
 private struct Window {
     let nodes: [Node]
+    let complete: Bool
 
     func containsAny(_ texts: Set<String>) -> Bool {
         nodes.contains { node in node.names.contains { texts.contains($0) } }
@@ -125,8 +128,10 @@ private final class NativeProbe {
             let scanDeadline = clock.systemUptime + 4
             var pending: [(AXUIElement, Int?, Int)] = [(window, nil, 0)]
             var nodes: [Node] = []
+            var complete = true
             while let (element, parent, depth) = pending.popLast() {
                 guard depth <= 48, nodes.count < 800, clock.systemUptime < scanDeadline else {
+                    complete = false
                     break
                 }
                 _ = AXUIElementSetMessagingTimeout(element, 0.5)
@@ -142,14 +147,17 @@ private final class NativeProbe {
                 let index = nodes.count
                 nodes.append(Node(element: element, parent: parent, role: role, names: names))
                 if let children = values[4] as? [AXUIElement] {
-                    guard children.count + nodes.count + pending.count <= 800 else { break }
+                    guard children.count + nodes.count + pending.count <= 800 else {
+                        complete = false
+                        break
+                    }
                     pending.append(contentsOf: children.reversed().map { ($0, index, depth + 1) })
                 }
             }
-            if !nodes.isEmpty { candidates.append(Window(nodes: nodes)) }
+            if !nodes.isEmpty { candidates.append(Window(nodes: nodes, complete: complete)) }
         }
         let preferred = candidates.first {
-            $0.containsAny([fixtureTitle, fixturePrompt, "AI 协作", "对话", waiting, ready, "打开扫码窗口", "查看扫码结果"])
+            $0.containsAny([fixtureTitle, fixturePrompt, "AI 协作", "对话", waiting, ready, openScan, checkScan])
         }
         return preferred ?? candidates.max { $0.nodes.count < $1.nodes.count }
     }
@@ -200,7 +208,7 @@ private final class NativeProbe {
         case .open:
             try selectFixture()
             try awaitWindow("scan_waiting_or_action_missing") { window in
-                guard window.showsText(waiting), let open = try window.button("打开扫码窗口") else {
+                guard window.showsText(waiting), let open = try window.button(openScan) else {
                     return false
                 }
                 try press(open, failure: "scan_open_failed")
@@ -223,26 +231,46 @@ private final class NativeProbe {
             }
         case .success:
             try awaitWindow("scan_success_or_qr_removal_not_observed") { window in
-                guard let dismiss = try window.button(close), window.showsText(ready), !window.showsQR else {
+                guard let dismiss = try window.button(close), showsSettledLogin(window) else {
                     return false
                 }
                 try press(dismiss, failure: "scan_close_failed")
                 return true
             }
             try awaitWindow("scan_success_missing_in_chat") { window in
-                try window.button(close) == nil && window.showsText(ready) && !window.showsQR
+                try window.button(close) == nil && showsSettledLogin(window)
             }
         case .restart:
-            let initiallyVisible = try snapshot().map { try showsReopenedFixture($0) } ?? false
+            let initiallyVisible = try snapshot()?.showsText(ready) == true
             try selectFixture()
-            try awaitWindow("scan_success_missing_after_restart", predicate: showsReopenedFixture)
-            print(initiallyVisible ? "visible_before_navigation" : "opened_through_sidebar")
+            try awaitWindow("original_message_missing_after_restart") { window in
+                window.nodes.contains { $0.matches(fixturePrompt) }
+            }
+            var openedResult = false
+            try awaitWindow("scan_success_missing_after_restart") { window in
+                if showsSettledLogin(window) {
+                    if let dismiss = try window.button(close) {
+                        try press(dismiss, failure: "reopened_scan_result_close_failed")
+                    }
+                    return true
+                }
+                if !openedResult, let result = try window.button(checkScan) {
+                    try press(result, failure: "reopen_scan_result_failed")
+                    openedResult = true
+                }
+                return false
+            }
+            try awaitWindow("scan_success_missing_in_reopened_chat") { window in
+                try window.button(close) == nil && showsSettledLogin(window)
+            }
+            let initial = initiallyVisible ? "visible_before_navigation" : "not_in_initial_snapshot"
+            print("\(initial) \(openedResult ? "result_button" : "direct")")
         }
     }
 
-    private func showsReopenedFixture(_ window: Window) throws -> Bool {
-        try window.button(close) == nil && window.showsText(fixturePrompt, prefix: true)
-          && window.showsText(ready) && !window.showsQR
+    private func showsSettledLogin(_ window: Window) -> Bool {
+        window.complete && window.showsText(ready) && !window.showsQR
+          && !window.containsAny([openScan, checkScan])
     }
 }
 

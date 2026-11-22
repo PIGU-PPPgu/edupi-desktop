@@ -864,12 +864,14 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
         throw new AcceptanceFailure(`zhixue_${mode}_not_observed`);
       }
       if (mode === "restart") {
-        const observed = result.stdout.trim();
-        check(["visible_before_navigation", "opened_through_sidebar"].includes(observed),
+        const [initial, resultAccess, unexpected] = result.stdout.trim().split(" ");
+        check(!unexpected && ["visible_before_navigation", "not_in_initial_snapshot"].includes(initial)
+          && ["result_button", "direct"].includes(resultAccess),
           "zhixue_restart_navigation_evidence_missing");
         evidence.zhixue.restart = {
           originalChatReopened: true,
-          loginReceiptVisibleBeforeNavigation: observed === "visible_before_navigation",
+          loginReceiptVisibleInInitialSnapshot: initial === "visible_before_navigation",
+          resultAccess,
           loginReceiptVisibleAfterReopen: true,
           staleQrAbsent: true,
         };
