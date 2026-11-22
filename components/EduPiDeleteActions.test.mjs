@@ -51,7 +51,7 @@ test("delete controls require an explicit named confirmation and show progress",
   assert.match(confirmation, /onResolve\(false\)/);
   assert.match(confirmation, /onResolve\(true\)/);
   assert.match(panel, /Promise<boolean>/);
-  assert.match(panel, /if \(!confirmed\) return false/);
+  assert.match(panel, /if \(!confirmed \|\| !isCurrentWorkspace\(\)\) return false/);
   assert.match(panel, /return true/);
   assert.match(calendar, /const deleted = await onDeleteEntity/);
   assert.match(calendar, /if \(deleted\) \{[\s\S]*?closeContext\.current\.selectionKey === selectionKey[\s\S]*?closeContext\.current\.selectedObjectId === selectedObjectId\) \{[\s\S]*?onSelectItem\(null\)/);

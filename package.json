@@ -45,6 +45,7 @@
     "release:verify": "node scripts/verify-release-components.mjs",
     "drift": "node scripts/measure-fork-drift.mjs",
     "test:release-tools": "node --test scripts/*.test.mjs",
+    "test:supabase-contract": "node --test supabase/contract-alignment.test.mjs",
     "test:edupi-status": "node --experimental-strip-types scripts/test-edupi-status.mjs",
     "test:edupi-c1-e2": "node scripts/test-edupi-c1-e2.mjs",
     "test:edupi-ambient-today-runtime": "node scripts/test-edupi-ambient-today-runtime.mjs",
@@ -90,7 +91,7 @@
     "test:edupi-teacher-created-preparation-e2": "node scripts/test-edupi-teacher-created-preparation-e2.mjs",
     "test:edupi-fact-identity-e2": "node scripts/test-edupi-fact-identity-e2.mjs",
     "test:edupi-c1-visible": "node --test scripts/run-edupi-c1-visible-checkpoint.test.mjs",
-    "test": "node --test 'app/**/*.test.mjs' 'lib/**/*.test.mjs' 'scripts/**/*.test.mjs' 'components/**/*.test.mjs' 'hooks/**/*.test.mjs' 'desktop/**/*.test.mjs'",
+    "test": "node --test 'app/**/*.test.mjs' 'lib/**/*.test.mjs' 'scripts/**/*.test.mjs' 'components/**/*.test.mjs' 'hooks/**/*.test.mjs' 'desktop/**/*.test.mjs' 'supabase/**/*.test.mjs'",
     "security:audit": "npm audit --audit-level=high",
     "lint": "eslint . && npm run check:branding",
     "check:branding": "node --test lib/branding.test.mjs"

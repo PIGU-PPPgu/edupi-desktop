@@ -1,0 +1,58 @@
+{
+  "contract_id": "edupi-mobile-dashboard-v1",
+  "contract_version": "1.0",
+  "operation": "mobile-dashboard",
+  "response_fields": [
+    "ok",
+    "operation",
+    "contract",
+    "payload",
+    "external_send"
+  ],
+  "payload_fields": [
+    "workspace_id",
+    "students",
+    "tasks",
+    "calendar",
+    "timetable",
+    "external_send"
+  ],
+  "student_fields": [
+    "student_id",
+    "name",
+    "class_name",
+    "profile",
+    "revision"
+  ],
+  "task_fields": [
+    "task_id",
+    "title",
+    "due_date",
+    "note",
+    "stage",
+    "status",
+    "revision",
+    "updated_at"
+  ],
+  "calendar_item_fields": [
+    "id",
+    "event_id",
+    "date",
+    "end_date",
+    "name",
+    "notes",
+    "type"
+  ],
+  "timetable_item_fields": [
+    "id",
+    "slot_id",
+    "day_of_week",
+    "period",
+    "subject",
+    "class_name",
+    "notes"
+  ],
+  "depends_on": [
+    "edupi-cloud-canonical-writer"
+  ]
+}

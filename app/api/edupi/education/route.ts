@@ -6,13 +6,15 @@ import {
   type WorkCandidateReviewDecision,
 } from "@/lib/edupi-work-candidate-review";
 import { readEducationContract, reviewWorkCandidate } from "@/lib/edupi-education-server";
+import { EduPiCloudError } from "@/lib/edupi-cloud-client";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
     return NextResponse.json(await readEducationContract());
-  } catch {
+  } catch (error) {
+    if (error instanceof EduPiCloudError) return NextResponse.json({ code: error.code, error: error.message }, { status: error.status });
     return NextResponse.json({ error: "教育投影暂不可用", reason: "Core v1.1 education_workspace 快照不可用。" }, { status: 503 });
   }
 }

@@ -15,6 +15,7 @@ import { EduPiAdminPanel, type AdminSectionId } from "./EduPiAdminPanel";
 import { EduPiEducationPanel } from "./EduPiEducationPanel";
 import { EduPiReminderInbox } from "./EduPiReminderInbox";
 import { EduPiFirstRunGuide } from "./EduPiFirstRunGuide";
+import { EduPiCloudSync } from "./EduPiCloudSync";
 import "@/app/edupi-first-run.css";
 import { isEducationModule, type EducationModule } from "@/lib/edupi-education-ui";
 import { moduleFromView, viewFromModule, type TaskStage, type WorkbenchView } from "@/lib/edupi-workbench";
@@ -1584,6 +1585,7 @@ export function AppShell() {
 
   return (
     <EduPiForegroundProvider {...foregroundSettings} onPinTask={pinTaskInForeground} onDismissStaleTasks={dismissStaleTaskPrompts}>
+    <EduPiCloudSync />
     <style>{`
       @keyframes session-info-pop {
         from { opacity: 0; transform: translateY(-4px) scale(0.99); }

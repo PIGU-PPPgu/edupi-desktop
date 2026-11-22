@@ -19,6 +19,10 @@ import { getLiveSessionSnapshots, getRpcSession, getRunningRpcSessionIds } from 
 import { listAllSessions } from "./session-reader";
 import { workspaceResourcesRequest } from "./edupi-generated-artifacts";
 import { setScopedAllowedFileRoots } from "./allowed-roots";
+import { createEduPiCloudClient } from "./edupi-cloud-client";
+import { readCloudEducationWorkspaceBundle } from "./edupi-cloud-education";
+import { stateScopeKey } from "./edupi-cloud-request-scope";
+import { EduPiCloudError } from "./edupi-cloud-client";
 
 
 export { taskSessionFile } from "./edupi-task-session-store";
@@ -112,16 +116,29 @@ export async function projectEducationContract(snapshot: EducationSnapshot): Pro
 }
 
 export async function readEducationContract(): Promise<EducationContract> {
-  return projectEducationContract(await readEduPiEducationSnapshot({ scheduleOccurrenceVersion: "1.2" }));
+  const client = createEduPiCloudClient();
+  const current = await client.state();
+  if (current.mode === "cloud") {
+    return (await readCloudEducationWorkspaceBundle()).data;
+  }
+  const data = await projectEducationContract(await readEduPiEducationSnapshot({ scheduleOccurrenceVersion: "1.2" }));
+  if (stateScopeKey(await client.state()) !== stateScopeKey(current)) throw new EduPiCloudError("scope_changed", "工作区已改变，请重新读取。", 409);
+  return { ...data, cloudScope: stateScopeKey(current) };
 }
 
 export async function readEducationWorkspaceBundle(): Promise<{ context: TeacherContextSnapshot; data: EducationContract }> {
+  const client = createEduPiCloudClient();
+  const current = await client.state();
+  if (current.mode === "cloud") {
+    return readCloudEducationWorkspaceBundle();
+  }
   const snapshot = await readEduPiEducationSnapshot({ scheduleOccurrenceVersion: "1.2" });
   const [context, data] = await Promise.all([
     Promise.resolve(projectTeacherContextSnapshot(snapshot)),
     projectEducationContract(snapshot),
   ]);
-  return { context, data };
+  if (stateScopeKey(await client.state()) !== stateScopeKey(current)) throw new EduPiCloudError("scope_changed", "工作区已改变，请重新读取。", 409);
+  return { context, data: { ...data, cloudScope: stateScopeKey(current) } };
 }
 
 type EducationMutationRefreshDependencies = {

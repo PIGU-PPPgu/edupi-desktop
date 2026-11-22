@@ -57,6 +57,7 @@ import { UpdateProxySettingsCard } from "./UpdateProxySettingsCard";
 import { announceComputerUseChanged, COMPUTER_USE_CHANGED_EVENT } from "./EduPiComputerUseStop";
 import { MobileBridgeSettingsCard } from "./MobileBridgeSettingsCard";
 import { EduPiAccountSettingsCard } from "./EduPiAccountSettingsCard";
+import { EduPiCloudSettingsCard } from "./EduPiCloudSettingsCard";
 import { EduPiUsageSettingsCard } from "./EduPiUsageSettingsCard";
 import { readForegroundSettings, writeForegroundSettings } from "@/lib/edupi-foreground-settings";
 
@@ -846,6 +847,7 @@ export function AppSettings({ onClose, initialSection = null, embedded = false, 
       {showsPage("profile") ? <section className="app-settings-group" aria-label="教师信息" hidden={embedded && currentPage !== "profile"}>
         {!embedded ? <h2>教师信息</h2> : null}
         <EduPiAccountSettingsCard />
+        <EduPiCloudSettingsCard />
         <TeacherContextSettingsCard disabled={Boolean(upgradeProgress)} />
       </section> : null}
 

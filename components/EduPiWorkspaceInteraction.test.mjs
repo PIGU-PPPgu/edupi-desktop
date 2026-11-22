@@ -883,6 +883,7 @@ function parentCalendarDeletion({ keepOpener = false, externalOpener = false, af
   const response = new Promise((yes, no) => { resolve = yes; reject = no; });
   const writes = [], commits = [], closes = [];
   const context = { exports: {}, useCallback: fn => fn, deleteBusy: null, education: f.app.props.data, deleteResolver: { current: null }, calendarSelectionRef: { current: f.app.props.selection },
+    isCurrentWorkspace: () => true,
     setDeleteLabel() {}, setDeleteBusy(value) { context.deleteBusy = value; }, setMaterialStagingMessage() {}, stopTaskTracking() {}, closeTaskDetail() {}, setSelectedTaskKey() {}, setSelectedStudentId() {},
     deleteEducationEntity: async (kind, id) => { writes.push({ kind, id }); return response; },
     commitEducationSnapshot(data) { commits.push("snapshot"); f.app.setProps({ data }); },

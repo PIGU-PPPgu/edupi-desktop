@@ -7,6 +7,7 @@ import type { ResolvedEduPiCore, ResolvedEduPiDataRoot } from "./edupi-core-root
 import { getPendingEduPiRuntime, eduPiBridgeRequestBudget } from "./edupi-runtime-supervisor";
 export { eduPiBridgeRequestBudget } from "./edupi-runtime-supervisor";
 import { coreRuntimeCanaryEnvironment } from "./safe-mode";
+import { readCloudStateSync } from "./edupi-cloud-store";
 
 const MAX_REQUEST_BYTES = 256 * 1024;
 const MAX_STDOUT_BYTES = 2 * 1024 * 1024;
@@ -167,6 +168,17 @@ export function runCoreProcessWithMetadata<T = unknown>({
   timeoutMs: number;
   signal?: AbortSignal;
 }): Promise<EduPiCoreProcessResult<T>> {
+  const frame = record(request);
+  const readOnly = ["health", "snapshot", "kernel", "memory-scopes"].includes(String(frame?.operation))
+    || frame?.operation === "workspace-resources" && !frame.action
+    || frame?.operation === "education-facts" && ["read", "read_spine", "list_deleted"].includes(String(frame.action))
+    || frame?.operation === "student-events" && ["list_events", "read_event"].includes(String(frame.action));
+  if (!readOnly) {
+    const cloud = readCloudStateSync(process.env.PI_DESKTOP_STATE_DIR);
+    if (cloud.mode === "cloud" || cloud.generation === 0 && process.env.EDUPI_DATA_MODE === "cloud") {
+      return Promise.reject(new EduPiCoreProcessError("unsupported_cloud_operation", "云端模式暂不支持此操作，请切换到本地模式后使用本地资料。"));
+    }
+  }
   if (!dataRoot) return Promise.reject(new EduPiCoreProcessError("data_root", "Validated EduPi data root is required"));
   const input = JSON.stringify(request);
   if (Buffer.byteLength(input) > MAX_REQUEST_BYTES) return Promise.reject(new EduPiCoreProcessError("request_limit", "Core request exceeds limit"));

@@ -53,6 +53,7 @@ function mount(code, name, props, modules, globals = {}, commit = () => {}) {
   };
   const exports = {};
   vm.runInNewContext(code, { exports, URLSearchParams, AbortController, Date, ...globals, require(module) {
+    if (module === "@/lib/edupi-education-client") return { educationWriteHeaders: initial => initial || {} };
     if (module === "react") return react;
     if (module === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
     assert.ok(modules[module], `Unexpected import ${module}`);

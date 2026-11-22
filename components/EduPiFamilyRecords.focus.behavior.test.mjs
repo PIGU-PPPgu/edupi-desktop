@@ -117,6 +117,7 @@ function mount({ records = [row], post, read } = {}) {
     const response = { ok: true, json: async () => ({ studentId: params.get("student_id"), studentEntity: { entity_id: studentEntityId }, parents: [{ entity_id: parentEntityId, canonical_name: "合成联系人", status: "active" }], records: records.slice(offset, offset + 10), total: records.length, offset, limit: 10, nextOffset: offset + 10 < records.length ? offset + 10 : null, sourceStatus: "current", externalSend: false }) };
     return read ? read({ params, signal: options.signal, response }) : response;
   }, require(name) {
+    if (name === "@/lib/edupi-education-client") return { educationWriteHeaders: initial => initial || {} };
     if (name === "react") return react;
     if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
     if (name === "@/lib/edupi-family-graph") return graphModel;

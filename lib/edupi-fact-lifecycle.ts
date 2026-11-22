@@ -114,7 +114,7 @@ export async function mutateEducationFact(factId: string, input: FactMutationInp
   return normalizeReceipt(response, factId, input, request.request_id);
 }
 
-function normalizeDeletedFact(value: unknown): DeletedEducationFact {
+export function normalizeDeletedFact(value: unknown): DeletedEducationFact {
   const source = record(value);
   const keys = ["fact_id", "entity_id", "fact_kind", "predicate", "value", "subject_ref", "topic_ref", "source_ids", "source_count", "observation_ids", "observation_count", "restore_conflicts", "restore_conflict_count", "restore_mode", "status", "deleted_previous_status", "revision", "deleted_at", "external_send"];
   const factId = text(source?.fact_id, 160);

@@ -5,6 +5,7 @@ import type { EducationContract } from "@/lib/edupi-education-contract";
 import { FACT_KIND_LABELS, factStatusLabel, type DeletedEducationFact, type DeletedEducationFactPage, type FactMutationInput } from "@/lib/edupi-fact-lifecycle-model";
 import { EDUPI_FACTS_UPDATED_EVENT } from "@/lib/edupi-ui-events";
 import { runSerializedFactMutation } from "@/lib/edupi-fact-mutation-client";
+import { educationWriteHeaders } from "@/lib/edupi-education-client";
 
 const PAGE_SIZE = 20;
 
@@ -18,6 +19,7 @@ export function EduPiDeletedFacts({ data, reviewer, onEducation }: { data: Educa
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   const [refresh, setRefresh] = useState(0);
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -49,11 +51,13 @@ export function EduPiDeletedFacts({ data, reviewer, onEducation }: { data: Educa
     if (busy) return;
     const conflict = restoreConflict(fact);
     const input: FactMutationInput = { action: "restore", expectedRevision: fact.revision, reviewer: reviewer.trim() || "teacher", supersedesFactId: conflict?.factId || null, supersedesFactRevision: conflict?.revision ?? null };
-    setBusy(fact.factId); setError(null);
+    setBusy(fact.factId); setError(null); setPending(false);
     try {
+      const headers = educationWriteHeaders({ "Content-Type": "application/json" }, data.cloudScope);
       await runSerializedFactMutation(async () => {
-        const response = await fetch(`/api/edupi/facts/${encodeURIComponent(fact.factId)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
-        const value = await response.json() as { data?: EducationContract; error?: string };
+        const response = await fetch(`/api/edupi/facts/${encodeURIComponent(fact.factId)}`, { method: "POST", headers, body: JSON.stringify(input) });
+        const value = await response.json() as { data?: EducationContract; error?: string; queued?: boolean; outboxId?: string };
+        if (response.status === 202 && value.queued && value.outboxId) { setPending(true); return; }
         if (!response.ok || !value.data) throw new Error(value.error || "事实恢复失败");
         onEducation(value.data);
         window.dispatchEvent(new Event(EDUPI_FACTS_UPDATED_EVENT));
@@ -65,6 +69,7 @@ export function EduPiDeletedFacts({ data, reviewer, onEducation }: { data: Educa
   const total = result?.total || 0;
   return <details className="edupi-deleted-facts">
     <summary>已删除事实 <span>{loading && !result ? "…" : total}</span></summary>
+    {pending ? <p role="status">恢复请求已保存在本机，联网后同步。</p> : null}
     <div>{error ? <p role="alert">{error} <button type="button" onClick={() => setRefresh((value) => value + 1)}>重试</button></p> : null}{result?.facts.map((fact) => {
       const conflict = restoreConflict(fact);
       const conflictValue = conflict ? data.factSpine?.acceptedFacts.find((item) => item.id === conflict.factId)?.value : null;

@@ -35,7 +35,8 @@ test("the teacher workbench exposes the complete task and review workflow", asyn
   const insightDatabase = await read("./EduPiInsightDatabase.tsx");
   const growth = await read("./EduPiGrowthWorkspace.tsx");
   const workbench = await read("../lib/edupi-workbench.ts");
-  assert.match(panel, /readEduPiWorkspace\(\{ signal \}\)/);
+  assert.match(panel, /readEduPiWorkspace\(\{ signal: controller\.signal \}\)/);
+  assert.match(panel, /signal\?\.addEventListener\("abort", abort, \{ once: true \}\)/);
   assert.doesNotMatch(panel, /edupi-teacher-topbar/);
   assert.doesNotMatch(panel, /本地工作区 · 已连接/);
   assert.match(panel, /method: "POST"/);
@@ -234,7 +235,7 @@ test("refreshes education data after Core imports without remounting chat", asyn
   const appShell = await read("./AppShell.tsx");
   const panel = await read("./EduPiEducationPanel.tsx");
   const conversationFiles = await read("./EduPiConversationFiles.tsx");
-  const loadEffectTail = "}, [loadWorkspace, refreshKey, projectionReadsActive]);";
+  const loadEffectTail = "}, [loadWorkspace, refreshKey, projectionReadsActive, workspaceScopeVersion]);";
   const loadEffectEnd = panel.indexOf(loadEffectTail);
   assert.ok(loadEffectEnd >= 0, "workspace refresh must retain its key and read-activity dependencies");
   const loadEffect = panel.slice(panel.lastIndexOf("useEffect(() => {", loadEffectEnd), loadEffectEnd + loadEffectTail.length);
@@ -256,7 +257,7 @@ test("refreshes education data after Core imports without remounting chat", asyn
   assert.match(appShell, /key=\{`edupi-chat-\$\{sessionKey\}`\}/);
   assert.doesNotMatch(appShell, /edupi-chat-\$\{educationRefreshKey\}/);
   assert.match(panel, /refreshKey\?: number/);
-  assert.match(loadEffect, /\}, \[loadWorkspace, refreshKey, projectionReadsActive\]\);/);
+  assert.match(loadEffect, /\}, \[loadWorkspace, refreshKey, projectionReadsActive, workspaceScopeVersion\]\);/);
   assert.match(loadEffect, /if \(!projectionReadsActive\) return/);
   assert.match(loadEffect, /loadWorkspace\(controller\.signal\)/);
   assert.match(loadEffect, /return \(\) => controller\.abort\(\)/);
@@ -548,7 +549,8 @@ test("AppShell monitors Core completion without restoring the removed global top
   assert.match(inbox, /completionInboxItems\(tasks\)/);
   assert.match(hook, /readEduPiEducation/);
   assert.doesNotMatch(hook, /fetch\("\/api\/edupi\/education"/);
-  assert.match(panel, /readEduPiWorkspace\(\{ signal \}\)/);
+  assert.match(panel, /readEduPiWorkspace\(\{ signal: controller\.signal \}\)/);
+  assert.match(panel, /controller\.signal\.aborted \|\| scopeVersion !== getEduPiEducationScopeVersion\(\)/);
   assert.match(hook, /setTimeout/);
   assert.match(hook, /AbortController/);
   assert.match(hook, /baseline === null/);

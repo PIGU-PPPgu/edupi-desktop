@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-22 R24.4c 可选 Supabase 同步：**部分实现，本次开发范围验收与独立复审通过，完整产品、安装与发布未验**。基线 `5c7ae60f` 的独立整合保留 local 默认、本地 Core/教师数据/模型/session；增加 Supabase 登录与明确选择工作区、普通任务/事实生命周期/材料元数据 outbox，队列和回执绑定账号/工作区，客户端重建后可恢复重试。审查发现的权限、上传路径、租约、旧页面 scope、队列阻塞和 202 展示问题均已修复并关闭；最终全套 5,103 tests／5,046 passed／0 failed／57 conditional skipped，另有实际客户端 HTTPS、Storage 权限、双连接租约和 broker E2 证据。两条新安全迁移已备份部署并核对字节。源码合并状态以对应 PR 记录为准；R24.4b 的本地宿主账号服务、完整 R04/L4、实体 iPhone 写入、Desktop 文件上传及安装 Release 不因此勾选；Windows 继续按用户要求暂停。证据和逐项未验条件见 [R24.4c 云同步验收](../acceptance/2026-11-22-mobile-api-sync/README.zh-CN.md)。
+
 2026-11-22 智学网 `0.3.123` 是 macOS 修复候选。已用隔离数据验证等待、二维码与扫码结果，以及重复查询被拦后聊天可见的下一步。签名安装、真实教师账号同步和完整 L4 待验收。现有 `0.3.122` 复现与验证记录见 [智学网扫码验收](../acceptance/2026-11-20-zhixue-desktop-login-bridge.md)。
 
 2026-11-18 最新发布状态：**`.118` 已完成 Mac-only 签名、公证、同包双冷启安装验收，并按用户明确批准公开为正式 GitHub Release。** 签名源 `7935753a`／Core `fc89b3bc`、run `44303236812` success；首轮安装 `44316698278` 因 harness 旧 Core pin 失败，`5ef4bd0f` 最小修复后原 DMG 第二轮 `44318046052` success，失败证据保留。Release `449948350` 已回读 `draft=false`、`prerelease=false`、GitHub Latest `.118`，原三项 Mac 资产和 `.117` 资产未变；自动更新 feed 仍 `7924328e…`。Rust audit 的 `RUSTSEC-2026-0543` 仍失败，按本次 macOS 书面例外保留；PR509 仍 Draft。GUI、updater、真实教师流程及真实 GLM 语义未在本次安装流程执行，普通 R04 语义门仍 false，完整 R04／R15／L4 均未完成。Windows runner／构建／打包／smoke／升级继续暂停，未经用户明确恢复不得启动。当前段取代下方源码候选与审计阻塞阶段状态，详见 [R04 当前验收](../acceptance/2026-11-18-core-recall-desktop.md)。

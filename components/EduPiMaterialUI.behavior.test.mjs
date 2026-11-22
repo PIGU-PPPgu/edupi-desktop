@@ -33,6 +33,7 @@ function mount(code, name, props, modules, globals = {}, commit = () => {}) {
   react.useCallback = (fn, deps) => react.useMemo(() => fn, deps);
   const exports = {};
   vm.runInNewContext(code, { exports, Date, AbortController, ...globals, require(module) {
+    if (module === "@/lib/edupi-education-client") return { educationWriteHeaders: initial => initial || {} };
     if (module === "react") return react;
     if (module === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
     assert.ok(modules[module], `Unexpected import ${module}`); return modules[module];
@@ -132,6 +133,7 @@ function metadata() {
   const props = { material: material(1), classes: ["703", "704"], onStartAgent() {}, onEducation(data) { education.push(data); props.material = data.teacherMaterials[0]; } };
   const f = mount(metadataCode, "EduPiMaterialMetadataEditor", props, { "@/lib/edupi-material-metadata-model": metadataModel, "@/lib/edupi-material-class-options": classOptions, "./EduPiActionIcon": placeholder("EduPiIconButton") }, {
     window: { setTimeout() { return 1; }, clearTimeout() {} }, fetch: async (url, options) => { requests.push({ url, ...options }); return new Promise(resolve => { finish = success => {
+      if (success === "queued") { resolve({ ok: true, status: 202, json: async () => ({ pendingSync: true, data: null, history: [] }) }); return; }
       const patch = JSON.parse(options.body).patch;
       const next = { ...props.material, title: patch.title ?? props.material.title, kind: patch.kind ?? props.material.kind, subject: patch.subject ?? props.material.subject, class_id: patch.classId ?? props.material.class_id, metadata_revision: props.material.metadata_revision + 1 };
       resolve({ ok: success, json: async () => success ? { data: { teacherMaterials: [next] }, history: { materialId: next.material_id, revision: next.metadata_revision, historyCount: 1, versions: [] } } : { error: "合成保存失败" } });
@@ -229,6 +231,15 @@ test("failed metadata save retains the draft and does not announce success or cl
   assert.equal(f.dom.listeners.size, 0);
 });
 
+test("queued metadata save reports pending sync without applying a cloud result", async () => {
+  const f = metadata(); f.open(); f.field("名称", "离线待同步标题");
+  const pending = f.submit(); f.finish("queued"); await pending; await f.settle();
+  assert.equal(f.education.length, 0);
+  assert.equal(f.find(node => node.type === "form"), undefined);
+  assert.equal(text(f.find(node => node.props.role === "status")), "已保存在本机，联网后同步。");
+  assert.equal(f.find(node => node.props.role === "alert"), undefined);
+});
+
 test("an authoritative metadata revision change invalidates the editor without submitting or moving focus", () => {
   const f = metadata(); f.open(); f.field("名称", "旧版本草稿"); f.dom.calls.length = 0;
   f.props.material = { ...f.props.material, title: "其他入口新名称", metadata_revision: 3 }; f.render();
@@ -261,6 +272,7 @@ function metadataRestore({ deferProjection = false } = {}) {
       requests.push({ url, ...options });
       if (!options.method) return { ok: true, json: async () => ({ data: { teacherMaterials: [currentMaterial] }, history }) };
       return new Promise(resolve => { finish = (success = true, omitOriginalVersion = false) => {
+        if (success === "queued") { resolve({ ok: true, status: 202, json: async () => ({ pendingSync: true, data: null, history: [] }) }); return; }
         const body = JSON.parse(options.body), desired = body.versionSide === "before" ? version.beforeValues : version.afterValues;
         const next = { ...currentMaterial, title: desired.title, kind: desired.kind, subject: desired.subject, class_id: desired.classId, metadata_revision: currentMaterial.metadata_revision + 1, metadata_history_count: history.historyCount + 1 };
         const restored = { ...version, versionId: "synthetic-restore", revision: next.metadata_revision, beforeValues: metadataModel.materialMetadataValues(currentMaterial), afterValues: desired, sourceKind: "restore" };
@@ -300,6 +312,15 @@ function metadataRestore({ deferProjection = false } = {}) {
     finish(success = true, omitOriginalVersion = false) { assert.ok(finish); finish(success, omitOriginalVersion); },
   };
 }
+
+test("queued metadata restore reports pending sync and preserves the current projection", async () => {
+  const f = metadataRestore();
+  await f.openHistory(); f.restore("before"); f.finish("queued"); await f.settle();
+  assert.equal(f.education.length, 0);
+  assert.equal(f.props.material.metadata_revision, 2);
+  assert.equal(text(f.find(node => node.props.role === "status")), "恢复请求已保存在本机，联网后同步。");
+  assert.equal(f.find(node => node.props.role === "alert"), undefined);
+});
 
 test("material restoration replaces the current side and focuses the other side of that exact version", async () => {
   const f = metadataRestore(); await f.openHistory(); f.restore("before");

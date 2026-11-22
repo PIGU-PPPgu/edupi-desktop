@@ -56,7 +56,8 @@ import { isTaskReviewable, workCaseForTask } from "@/lib/edupi-work-case";
 import { studentRecordKey } from "@/lib/edupi-student-roster-model";
 import { materialItemRoute, objectItemForView, reviewTargetObjectId, reviewTargetRoute, viewKeepsObjectItem, type ReviewTargetRoute } from "@/lib/edupi-domain-navigation";
 import { APP_PREF_KEYS } from "@/lib/app-prefs";
-import { preserveUnavailableWorkspaceResources, readEduPiWorkspace } from "@/lib/edupi-education-client";
+import { educationWriteHeaders, getEduPiEducationScopeVersion, preserveUnavailableWorkspaceResources, readEduPiWorkspace } from "@/lib/edupi-education-client";
+import { EDUPI_EDUCATION_SCOPE_CHANGED } from "@/lib/edupi-cloud-events";
 import { EduPiPreparationArtifactEditor } from "./EduPiPreparationArtifactEditor";
 import { EduPiArtifactUsageContext } from "./EduPiUsageObservation";
 import { projectedArtifactUsageTarget } from "@/lib/edupi-usage-observation";
@@ -140,6 +141,7 @@ function hasDroppedFiles(event: ReactDragEvent): boolean {
 }
 
 export function EduPiEducationPanel({ initialModule = "home", refreshKey, activeAgentSessionId, onActivateAgentSession, chatPanel, reminderPanel, chatSidebar, chatSidebarResizer, onChatLayoutChange, chatSidebarSuspended = false, readOnlyRefreshActive = true, chatPreviewForeground = false, renderFilePreview, onOpenAdmin, onOpenSettings, onOpenProactive, onOpenGuide, onOpenPhoneControl, onPrepareAgentPrompt, onReplaceAgentPrompt, onPrepareTeacherDraft, quickEntryOpen, onOpenQuickEntry, onNewConversation, onCloseQuickEntry, onFocusAgentChat }: Props) {
+  const [workspaceScopeVersion, setWorkspaceScopeVersion] = useState(getEduPiEducationScopeVersion);
   const [pageVisible, setPageVisible] = useState(() => typeof document === "undefined" || document.visibilityState !== "hidden");
   useEffect(() => {
     const changed = () => setPageVisible(document.visibilityState !== "hidden");
@@ -226,6 +228,8 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const durableTaskIdsRef = useRef(new Set<string>());
   const workspaceLoadSequenceRef = useRef(0);
   const workspaceMinimumApplySequenceRef = useRef(0);
+  const workspaceRequestsRef = useRef(new Set<AbortController>());
+  const isCurrentWorkspace = useCallback(() => workspaceScopeVersion === getEduPiEducationScopeVersion(), [workspaceScopeVersion]);
   const objectSider = useEduPiContentSiderCollapse(false);
   const setObjectSiderCollapsed = objectSider.setCollapsed;
   const navigationRail = useEduPiContentSiderCollapse(false, APP_PREF_KEYS.edupiNavigationRailCollapsed);
@@ -308,9 +312,10 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
 
 
   const commitEducationSnapshot = useCallback((nextEducation: EducationContract) => {
+    if (!isCurrentWorkspace()) return;
     workspaceMinimumApplySequenceRef.current = Math.max(workspaceMinimumApplySequenceRef.current, workspaceLoadSequenceRef.current + 1);
     setEducation(nextEducation);
-  }, []);
+  }, [isCurrentWorkspace]);
 
   const cancelActivation = useCallback(() => {
     activationRequestsRef.current.cancel();
@@ -319,27 +324,97 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, []);
 
   const loadWorkspace = useCallback(async (signal?: AbortSignal) => {
-    const sequence = ++workspaceLoadSequenceRef.current;
-    const [workspace, scopeResponse, nextTeachingSkills, nextKernelState] = await Promise.all([
-      readEduPiWorkspace({ signal }),
-      readEducationMemoryScopes({ signal }).then((projection) => ({ projection })).catch(() => null),
-      readEduPiTeachingSkills(signal),
-      readEduPiKernel(signal),
-    ]);
     if (signal?.aborted) return null;
-    const { context: nextContext, data: nextEducation } = workspace;
-    if (sequence < workspaceMinimumApplySequenceRef.current) return null;
-    if (!hasEveryTrackedTask(nextEducation, durableTaskIdsRef.current)) return null;
-    durableTaskIdsRef.current.clear();
-    workspaceMinimumApplySequenceRef.current = Math.max(workspaceMinimumApplySequenceRef.current, sequence);
-    setContext(nextContext);
-    setEducation((current) => current ? preserveUnavailableWorkspaceResources(current, nextEducation) : nextEducation);
-    setMemoryScopes(scopeResponse?.projection?.projection_kind === "scoped_education_memory" ? scopeResponse.projection : null);
-    setTeachingSkills(nextTeachingSkills);
-    setKernelState(nextKernelState);
-    setRunningKernelCount(nextKernelState.running);
-    return nextEducation;
+    const scopeVersion = getEduPiEducationScopeVersion();
+    const sequence = ++workspaceLoadSequenceRef.current;
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal?.addEventListener("abort", abort, { once: true });
+    workspaceRequestsRef.current.add(controller);
+    try {
+      const [workspace, scopeResponse, nextTeachingSkills, nextKernelState] = await Promise.all([
+        readEduPiWorkspace({ signal: controller.signal }),
+        readEducationMemoryScopes({ signal: controller.signal }).then((projection) => ({ projection })).catch(() => null),
+        readEduPiTeachingSkills(controller.signal),
+        readEduPiKernel(controller.signal),
+      ]);
+      if (controller.signal.aborted || scopeVersion !== getEduPiEducationScopeVersion()) return null;
+      const { context: nextContext, data: nextEducation } = workspace;
+      if (sequence < workspaceMinimumApplySequenceRef.current) return null;
+      if (!hasEveryTrackedTask(nextEducation, durableTaskIdsRef.current)) return null;
+      durableTaskIdsRef.current.clear();
+      workspaceMinimumApplySequenceRef.current = Math.max(workspaceMinimumApplySequenceRef.current, sequence);
+      setContext(nextContext);
+      setEducation((current) => current ? preserveUnavailableWorkspaceResources(current, nextEducation) : nextEducation);
+      setMemoryScopes(scopeResponse?.projection?.projection_kind === "scoped_education_memory" ? scopeResponse.projection : null);
+      setTeachingSkills(nextTeachingSkills);
+      setKernelState(nextKernelState);
+      setRunningKernelCount(nextKernelState.running);
+      return nextEducation;
+    } finally {
+      signal?.removeEventListener("abort", abort);
+      workspaceRequestsRef.current.delete(controller);
+    }
   }, []);
+
+  useEffect(() => {
+    const changed = () => {
+      for (const controller of workspaceRequestsRef.current) controller.abort();
+      workspaceRequestsRef.current.clear();
+      for (const controller of preparationPollsRef.current.values()) controller.abort();
+      preparationPollsRef.current.clear();
+      for (const controller of taskRefreshesRef.current.values()) controller.abort();
+      taskRefreshesRef.current.clear();
+      taskRefreshRequirementsRef.current.clear();
+      durableTaskIdsRef.current.clear();
+      workspaceMinimumApplySequenceRef.current = workspaceLoadSequenceRef.current + 1;
+      cancelActivation();
+      deleteResolver.current?.(false);
+      deleteResolver.current = null;
+      setDeleteLabel(null);
+      setDeleteBusy(null);
+      setEducation(null);
+      setContext(null);
+      setMemoryScopes(null);
+      setTeachingSkills({ status: "unavailable", generatedAt: null, mutationEnabled: false, skills: [], teacherGrowth: [], mutationReceipts: [] });
+      setKernelState({ status: "unavailable", updatedAt: null, running: 0, runs: [] });
+      setRunningKernelCount(0);
+      setSelectedTaskKey(null);
+      setSelectedStudentId(null);
+      setSelectedObjectId(null);
+      setSelectedC1Target(null);
+      setReviewMode("board");
+      setActiveStage("brief");
+      setTaskDetailTask(null);
+      setAgentTask(null);
+      setDrawer(null);
+      setPreviewPath(null);
+      setPreviewArtifact(null);
+      setFileReturnTaskKey(null);
+      setPendingTaskBinding(null);
+      setPendingAgentPrompt(null);
+      setTaskSessionError(null);
+      setReviewBusy(null);
+      setReviewMessage(null);
+      setStagedMaterials([]);
+      setMaterialStagingBusy(false);
+      setEducationIntakeBusy(false);
+      setMaterialStagingMessage(null);
+      setContextOpen(false);
+      setContextBusy(false);
+      setCalendarSelection(null);
+      appliedCalendarLink.current = null;
+      setInspectorOpen(false);
+      setLoadError(null);
+      setLoading(true);
+      setWorkspaceScopeVersion(getEduPiEducationScopeVersion());
+      const params = new URLSearchParams(searchParams.toString());
+      for (const key of ["task", "stage", "taskDetail", "student", "item", "reviewTarget", "calendarKind", "calendarItem", "date", "document", "inspector"]) params.delete(key);
+      router.replace(`/?${params.toString()}`, { scroll: false });
+    };
+    window.addEventListener(EDUPI_EDUCATION_SCOPE_CHANGED, changed);
+    return () => window.removeEventListener(EDUPI_EDUCATION_SCOPE_CHANGED, changed);
+  }, [cancelActivation, router, searchParams]);
 
   const stopTaskTracking = useCallback((taskId: string) => {
     preparationPollsRef.current.get(taskId)?.abort();
@@ -402,6 +477,8 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [loadWorkspace]);
 
   useEffect(() => () => {
+    for (const controller of workspaceRequestsRef.current) controller.abort();
+    workspaceRequestsRef.current.clear();
     for (const controller of preparationPollsRef.current.values()) controller.abort();
     preparationPollsRef.current.clear();
     for (const controller of taskRefreshesRef.current.values()) controller.abort();
@@ -410,13 +487,15 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, []);
 
   const retryLoadWorkspace = useCallback(() => {
+    const scopeVersion = getEduPiEducationScopeVersion();
     setLoading(true);
     setLoadError(null);
     void loadWorkspace()
       .catch((error) => {
+        if (scopeVersion !== getEduPiEducationScopeVersion()) return;
         setLoadError(error instanceof Error ? error.message : String(error));
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (scopeVersion === getEduPiEducationScopeVersion()) setLoading(false); });
   }, [loadWorkspace]);
 
   useEffect(() => {
@@ -431,13 +510,15 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => controller.abort();
-  }, [loadWorkspace, refreshKey, projectionReadsActive]);
+  }, [loadWorkspace, refreshKey, projectionReadsActive, workspaceScopeVersion]);
 
   useEffect(() => { if (initialModule !== "context" && !contextBusy) setContextOpen(false); }, [initialModule, contextBusy]);
 
   useEffect(() => {
+    const scopeVersion = getEduPiEducationScopeVersion();
     const controller = new AbortController();
     const refresh = (event: Event) => {
+      if (scopeVersion !== getEduPiEducationScopeVersion()) return;
       // Reply completion already advances refreshKey; the same event also
       // refreshes file panels and must not start a second projection batch.
       if (event.type === "edupi-artifacts-updated" && (event as CustomEvent<{ refreshOnly?: boolean }>).detail?.refreshOnly === true) return;
@@ -459,7 +540,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     window.addEventListener("edupi-artifacts-updated", refresh);
     window.addEventListener("edupi-education-refresh", refresh);
     return () => { controller.abort(); window.removeEventListener("edupi-preparation-updated", refresh); window.removeEventListener("edupi-artifacts-updated", refresh); window.removeEventListener("edupi-education-refresh", refresh); };
-  }, [loadWorkspace, projectionReadsActive]);
+  }, [loadWorkspace, projectionReadsActive, workspaceScopeVersion]);
 
   useEffect(() => {
     if (!materialStagingMessage || materialStagingMessage.sticky || materialStagingMessage.text.endsWith("…")) return;
@@ -468,6 +549,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [materialStagingMessage]);
 
   const submitEducationIntake = useCallback(async (body: Record<string, unknown>): Promise<EducationIntakeApiResult> => {
+    if (!isCurrentWorkspace()) throw new DOMException("工作区已改变。", "AbortError");
     if (educationIntakeBusy) throw new Error("材料正在接入 EduPi。");
     setEducationIntakeBusy(true);
     setMaterialStagingMessage(null);
@@ -478,18 +560,20 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
         body: JSON.stringify(body),
       });
       const result = await response.json() as EducationIntakeApiResult;
+      if (!isCurrentWorkspace()) throw new DOMException("工作区已改变。", "AbortError");
       if (!response.ok) throw new Error(result.error || `接入失败（HTTP ${response.status}）`);
       if (Array.isArray(result.staged)) setStagedMaterials(result.staged);
       await loadWorkspace();
       return result;
     } catch (error) {
+      if (!isCurrentWorkspace()) throw error;
       const message = error instanceof Error ? error.message : "教育数据接入失败。";
       setMaterialStagingMessage({ tone: "error", text: message });
       throw error;
     } finally {
-      setEducationIntakeBusy(false);
+      if (isCurrentWorkspace()) setEducationIntakeBusy(false);
     }
-  }, [educationIntakeBusy, loadWorkspace]);
+  }, [educationIntakeBusy, isCurrentWorkspace, loadWorkspace]);
 
   const intakeStagedMaterial = useCallback(async (item: MaterialStagingDescriptor, metadata: MaterialIntakeMetadata) => {
     const result = await submitEducationIntake({ kind: "material", stagingId: item.staging_id,
@@ -543,6 +627,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
 
   useEffect(() => {
     if (!projectionReadsActive) return;
+    const scopeVersion = getEduPiEducationScopeVersion();
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
@@ -550,9 +635,10 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
         try {
           const response = await fetch("/api/edupi/kernel", { cache: "no-store", signal: controller.signal });
           const next = response.ok ? normalizeKernelState(await response.json()) : { status: "unavailable" as const, updatedAt: null, running: 0, runs: [] };
-          if (!controller.signal.aborted) { setKernelState(next); setRunningKernelCount(next.running); }
+          if (!controller.signal.aborted && scopeVersion === getEduPiEducationScopeVersion()) { setKernelState(next); setRunningKernelCount(next.running); }
         } catch (error) {
-          if (!(error instanceof DOMException && error.name === "AbortError") && !controller.signal.aborted) setRunningKernelCount(0);
+          if (!(error instanceof DOMException && error.name === "AbortError") && !controller.signal.aborted
+            && scopeVersion === getEduPiEducationScopeVersion()) setRunningKernelCount(0);
         }
       }
       if (!controller.signal.aborted) timer = setTimeout(poll, 20_000);
@@ -563,7 +649,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       controller.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [projectionReadsActive]);
+  }, [projectionReadsActive, workspaceScopeVersion]);
 
   useEffect(() => {
     setActiveView(routeView);
@@ -924,6 +1010,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [activeView, collapseObjectNavigation, effectiveObjectNavigationCollapsed, inspectorOpen, selectedStudentId, updateLocation]);
 
   const reviewTask = useCallback(async (action: TaskReviewAction, payload: ReviewPayload) => {
+    if (!isCurrentWorkspace()) return;
     if (!activeTask?.id || !education) return;
     const candidate = education.workCandidates.find(item => item.taskId === activeTask.id);
     if (!(candidate ? education.capabilities.workCandidateReview.enabled : education.capabilities.taskReview.enabled)) return;
@@ -933,6 +1020,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       if (candidate) {
         if (action === "rollback") throw new Error("请使用修改决定调整审核结果");
         const result = await submitTodayWorkReview({ candidate, decision: action, ...(action === "modify" ? {patch:{title:payload.title,dueAt:payload.dueDate ?? null}} : {}), note:payload.note });
+        if (!isCurrentWorkspace()) return;
         commitEducationSnapshot(result.data);
         setReviewMessage(reviewLabels[action]);
         return;
@@ -952,6 +1040,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
         }),
       });
       const result = await response.json() as { error?: string; data?: EducationContract | null; receipt?: { status?: string }; refreshPending?: boolean };
+      if (!isCurrentWorkspace()) return;
       if (!response.ok) throw new Error(result.error || `审核失败（HTTP ${response.status}）`);
       if (result.data) {
         commitEducationSnapshot(result.data);
@@ -961,12 +1050,13 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       else throw new Error(result.error || "审核结果回读未确认。");
       setReviewMessage(reviewLabels[action]);
     } catch (error) {
+      if (!isCurrentWorkspace()) return;
       if (error instanceof TodayWorkReviewError && error.data) commitEducationSnapshot(error.data);
       setReviewMessage(error instanceof Error ? error.message : String(error));
     } finally {
-      setReviewBusy(null);
+      if (isCurrentWorkspace()) setReviewBusy(null);
     }
-  }, [activeTask, commitEducationSnapshot, education, refreshCommittedTask]);
+  }, [activeTask, commitEducationSnapshot, education, isCurrentWorkspace, refreshCommittedTask]);
 
   const rememberStaged = useCallback((items: MaterialStagingDescriptor[]) => {
     setStagedMaterials((current) => {
@@ -1151,11 +1241,21 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   }, [cancelActivation, updateTaskDetailLocation]);
 
   const createBoardTask = useCallback(async (input: CreateTeacherTaskInput): Promise<CreateTeacherTaskOutcome> => {
+    if (!isCurrentWorkspace()) throw new DOMException("工作区已改变。", "AbortError");
+    const capturedHeaders = educationWriteHeaders({ "Content-Type": "application/json" }, education?.cloudScope);
+    const headers = input.recurrence ? await desktopApiHeaders(capturedHeaders) : capturedHeaders;
+    if (!isCurrentWorkspace()) throw new DOMException("工作区已改变。", "AbortError");
     const response = await fetch("/api/edupi/tasks", { method: "POST",
-      headers: input.recurrence ? await desktopApiHeaders({ "Content-Type": "application/json" }) : { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(input) });
-    const result = await response.json() as { error?: string; taskId?: string; data?: EducationContract | null; refreshPending?: boolean; preparation?: { state?: string; error?: string; taskId?: string | null } | null };
-    if (!response.ok || !result.taskId) throw new Error(result.error || `任务创建失败（HTTP ${response.status}）`);
+    const result = await response.json() as { error?: string; taskId?: string; data?: EducationContract | null; refreshPending?: boolean; pendingSync?: boolean; preparation?: { state?: string; error?: string; taskId?: string | null } | null };
+    if (!isCurrentWorkspace()) throw new DOMException("工作区已改变。", "AbortError");
+    if (!response.ok) throw new Error(result.error || `任务创建失败（HTTP ${response.status}）`);
+    if (response.status === 202 && result.pendingSync) {
+      setMaterialStagingMessage({ tone: "success", text: "已保存，待同步。" });
+      return { preparationState: null, preparationError: null };
+    }
+    if (!result.taskId) throw new Error(result.error || "任务创建结果未确认。");
     durableTaskIdsRef.current.add(result.taskId);
     workspaceMinimumApplySequenceRef.current = Math.max(workspaceMinimumApplySequenceRef.current, workspaceLoadSequenceRef.current + 1);
     if (result.data && hasEveryTrackedTask(result.data, durableTaskIdsRef.current)) { durableTaskIdsRef.current.clear(); commitEducationSnapshot(result.data); }
@@ -1167,19 +1267,26 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
     if (result.preparation.state === "running") pollBoardPreparation(result.taskId);
     else window.dispatchEvent(new Event("edupi-preparation-updated"));
     return { preparationState: result.preparation.state as "running" | "ready", preparationError: null };
-  }, [commitEducationSnapshot, pollBoardPreparation, refreshCommittedTask]);
+  }, [commitEducationSnapshot, education?.cloudScope, isCurrentWorkspace, pollBoardPreparation, refreshCommittedTask]);
 
   const moveBoardTask = useCallback(async (task: TeacherTask, stage: CoreTaskBoardStage) => {
+    if (!isCurrentWorkspace()) throw new DOMException("工作区已改变。", "AbortError");
     if (!task.id) throw new Error("任务缺少可写标识。");
-    const response = await fetch(`/api/edupi/tasks/${encodeURIComponent(task.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stage, expectedRevision: task.boardRevision, note: null }) });
-    const result = await response.json() as { error?: string; data?: EducationContract | null; receipt?: { status?: string }; refreshPending?: boolean };
+    const response = await fetch(`/api/edupi/tasks/${encodeURIComponent(task.id)}`, { method: "PATCH",
+      headers: educationWriteHeaders({ "Content-Type": "application/json" }, education?.cloudScope),
+      body: JSON.stringify({ stage, expectedRevision: task.boardRevision, note: null }) });
+    const result = await response.json() as { error?: string; data?: EducationContract | null; receipt?: { status?: string }; refreshPending?: boolean; pendingSync?: boolean };
+    if (!isCurrentWorkspace()) return;
     if (!response.ok) throw new Error(result.error || `任务移动失败（HTTP ${response.status}）`);
-    if (result.data) commitEducationSnapshot(result.data);
+    if (response.status === 202 && result.pendingSync) {
+      setMaterialStagingMessage({ tone: "success", text: "已保存，待同步。" });
+    } else if (result.data) commitEducationSnapshot(result.data);
     else if (result.refreshPending && result.receipt?.status === "modified") refreshCommittedTask(task.id, task.boardRevision + 1);
     else throw new Error(result.error || "任务阶段回读未确认。");
-  }, [commitEducationSnapshot, refreshCommittedTask]);
+  }, [commitEducationSnapshot, education?.cloudScope, isCurrentWorkspace, refreshCommittedTask]);
 
   const updateRecurringTask = useCallback(async (task: TeacherTask, patch: { title: string; dueDate: string; deliverables: string[] }) => {
+    if (!isCurrentWorkspace()) throw new DOMException("工作区已改变。", "AbortError");
     if (!task.id || !task.recurrence) throw new Error("周期任务不可用。");
     const response = await fetch(`/api/edupi/tasks/${encodeURIComponent(task.id)}/review`, {
       method: "POST",
@@ -1187,13 +1294,15 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       body: JSON.stringify({ decision: "modify", expectedRevision: task.revision, patch, note: null }),
     });
     const result = await response.json() as { error?: string; data?: EducationContract | null; receipt?: { status?: string }; refreshPending?: boolean };
+    if (!isCurrentWorkspace()) return;
     if (!response.ok) throw new Error(result.error || `修改失败（HTTP ${response.status}）`);
     if (result.data) commitEducationSnapshot(result.data);
     else if (result.refreshPending && result.receipt?.status === "modified") refreshCommittedTask(task.id, undefined, task.revision + 1);
     else throw new Error(result.error || "修改结果回读未确认。");
-  }, [commitEducationSnapshot, refreshCommittedTask]);
+  }, [commitEducationSnapshot, isCurrentWorkspace, refreshCommittedTask]);
 
   const reactivateRecurringTask = useCallback(async (task: TeacherTask) => {
+    if (!isCurrentWorkspace()) throw new DOMException("工作区已改变。", "AbortError");
     if (!task.id || !task.recurrence || (task.status !== "hold" && task.status !== "rejected")) throw new Error("周期任务不可恢复。");
     const response = await fetch(`/api/edupi/tasks/${encodeURIComponent(task.id)}/review`, {
       method: "POST",
@@ -1201,22 +1310,25 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       body: JSON.stringify({ decision: "accept", expectedRevision: task.revision, note: null }),
     });
     const result = await response.json() as { error?: string; data?: EducationContract | null; receipt?: { status?: string }; refreshPending?: boolean };
+    if (!isCurrentWorkspace()) return;
     if (!response.ok) throw new Error(result.error || `重新接受失败（HTTP ${response.status}）`);
     if (result.data) commitEducationSnapshot(result.data);
     else if (result.refreshPending && result.receipt?.status === "accepted") refreshCommittedTask(task.id, undefined, task.revision + 1);
     else throw new Error(result.error || "重新接受结果回读未确认。");
-  }, [commitEducationSnapshot, refreshCommittedTask]);
+  }, [commitEducationSnapshot, isCurrentWorkspace, refreshCommittedTask]);
 
   const deleteEntity = useCallback(async (kind: EducationEntityDeleteKind, id: string, label: string): Promise<boolean> => {
+    if (!isCurrentWorkspace()) return false;
     const key = `${kind}:${id}`;
     if (deleteBusy || !education?.capabilities.entityDelete.enabled || !education.capabilities.entityDelete.targetKinds.includes(kind)) return false;
     if (deleteResolver.current) return false;
     const confirmed=await new Promise<boolean>(resolve=>{deleteResolver.current=resolve;setDeleteLabel(label);});
-    if (!confirmed) return false;
+    if (!confirmed || !isCurrentWorkspace()) return false;
     setDeleteBusy(key);
     setMaterialStagingMessage({ tone: "success", text: "删除中…" });
     try {
       const result = await deleteEducationEntity(kind, id);
+      if (!isCurrentWorkspace()) return false;
       if (kind === "task") { stopTaskTracking(id); closeTaskDetail(); setSelectedTaskKey(null); }
       commitEducationSnapshot(education && result.data.workspaceResourcesUnavailable
         ? preserveUnavailableWorkspaceResources(education, result.data, { removedMaterialId: kind === "material" ? result.target.id : null })
@@ -1226,12 +1338,13 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       setMaterialStagingMessage({ tone: "success", text: `已删除：${label}` });
       return true;
     } catch (error) {
+      if (!isCurrentWorkspace()) return false;
       setMaterialStagingMessage({ tone: "error", text: error instanceof Error ? error.message : "删除失败" });
       throw error;
     } finally {
-      setDeleteBusy(null);
+      if (isCurrentWorkspace()) setDeleteBusy(null);
     }
-  }, [closeTaskDetail, commitEducationSnapshot, deleteBusy, education, selectCalendarItem, stopTaskTracking]);
+  }, [closeTaskDetail, commitEducationSnapshot, deleteBusy, education, isCurrentWorkspace, selectCalendarItem, stopTaskTracking]);
 
   const closeDrawer = useCallback((restoreTask = true) => {
     const returnTask = restoreTask && drawer === "file" && fileReturnTaskKey
@@ -1333,17 +1446,19 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
       signal: controller.signal,
     }).then(async (response) => {
       const result = await response.json() as { error?: string; data?: EducationContract };
+      if (controller.signal.aborted || !isCurrentWorkspace()) return;
       if (!response.ok) throw new Error(result.error || `任务会话绑定失败（HTTP ${response.status}）`);
       if (result.data) commitEducationSnapshot(result.data);
       setPendingTaskBinding(null);
     }).catch((error) => {
+      if (!isCurrentWorkspace()) return;
       if (error instanceof DOMException && error.name === "AbortError") return;
       setTaskSessionError(error instanceof Error ? error.message : String(error));
     }).finally(() => {
-      if (!controller.signal.aborted) setTaskSessionBusy(false);
+      if (!controller.signal.aborted && isCurrentWorkspace()) setTaskSessionBusy(false);
     });
     return () => controller.abort();
-  }, [activeAgentSessionId, commitEducationSnapshot, pendingTaskBinding]);
+  }, [activeAgentSessionId, commitEducationSnapshot, isCurrentWorkspace, pendingTaskBinding]);
 
   useEffect(() => {
     if (drawer !== "agent" || (routeView !== "tasks" && routeView !== "review") || pendingTaskBinding || !agentTask?.id || !activeAgentSessionId || !education) return;
@@ -1417,6 +1532,7 @@ export function EduPiEducationPanel({ initialModule = "home", refreshKey, active
   const bodyControlStyle = bodyControlsVisible ? { "--edupi-body-controls-width": `${bodyControlCount * 36}px` } as CSSProperties : undefined;
   return (
     <section
+      key={workspaceScopeVersion}
       className={`edupi-teacher-shell${navigationRail.collapsed ? " is-navigation-collapsed" : ""}${desktopChrome.isDesktop ? " has-desktop-drag-region" : ""}`}
       data-view={activeView}
       aria-busy={loading ? true : undefined}

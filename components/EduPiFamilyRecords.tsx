@@ -6,6 +6,7 @@ import { buildFamilyGraph } from "@/lib/edupi-family-graph";
 import { familyQualityLabel, type FamilyCaptureInput, type FamilyPerson, type FamilyQuality, type FamilyRecord, type FamilyRecordDetails, type FamilyRecordPage } from "@/lib/edupi-family-record-model";
 import { EDUPI_STUDENT_RECORDS_UPDATED_EVENT } from "@/lib/edupi-ui-events";
 import { EduPiStudentGraph } from "./EduPiStudentGraph";
+import { educationWriteHeaders } from "@/lib/edupi-education-client";
 
 const styles = { panel: "edupi-family-panel", toolbar: "edupi-family-toolbar", record: "edupi-family-record", identity: "edupi-family-identity",
   actions: "edupi-family-actions", editor: "edupi-family-editor", history: "edupi-family-history", error: "edupi-family-error" };
@@ -168,7 +169,7 @@ export function EduPiFamilyRecords({ studentId, studentName, reviewer, onEducati
         : action === "restore" ? { ...base, action, supersedesFactId: conflict?.fact_id || null, supersedesFactRevision: conflict?.revision ?? null }
           : { ...base, action: "review", decision: action, note: null, supersedesFactId: conflict?.fact_id || null, supersedesFactRevision: conflict?.revision ?? null };
     try {
-      const response = await fetch(`/api/edupi/facts/${encodeURIComponent(row.fact_id)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const response = await fetch(`/api/edupi/facts/${encodeURIComponent(row.fact_id)}`, { method: "POST", headers: educationWriteHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(body) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "记录操作失败");
       onEducation(payload.data); setEditor(null); setDeleting(null);

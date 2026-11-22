@@ -92,6 +92,7 @@ function mount({ mode = "portal", holdReload = false, recordCount = 1 } = {}) {
     if (holdReload && writes > 0) return new Promise(resolve => { resolveReload = () => resolve(response()); });
     return response();
   }, require(name) {
+    if (name === "@/lib/edupi-education-client") return { educationWriteHeaders: initial => initial || {} };
     if (name === "react") return react;
     if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
     if (name === "@/lib/edupi-student-graph") return { buildStudentGraph: records => ({ records }), STUDENT_GRAPH_PAGE_SIZE: 20, STUDENT_GRAPH_RECORD_LIMIT: 200 };
