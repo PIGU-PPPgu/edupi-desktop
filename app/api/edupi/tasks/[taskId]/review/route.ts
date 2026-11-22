@@ -3,6 +3,8 @@ import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-fo
 import { reviewEducationTask } from "@/lib/edupi-education-server";
 import { TASK_REVIEW_DECISIONS, TaskReviewError, type TaskReviewDecision, type TaskReviewPatch } from "@/lib/edupi-task-review";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
+import { EduPiCloudError } from "@/lib/edupi-cloud-client";
+import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,6 +57,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ tas
       || (body.note !== undefined && body.note !== null && (typeof body.note !== "string" || body.note.length > 1000))) {
       throw new TaskReviewError("invalid_envelope", "任务审核字段无效。");
     }
+    const selected = await captureEducationWriteScope(request);
+    if (selected.mode === "cloud") {
+      throw new EduPiCloudError("unsupported_cloud_operation", "云端暂不支持任务审核，请切换到本地模式。", 409);
+    }
     const result = await reviewEducationTask({
       taskId: taskId.trim(),
       expectedRevision: Number(body.expectedRevision),
@@ -66,6 +72,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tas
     return NextResponse.json({ receipt: result.receipt, data: result.data, refreshPending: result.refreshPending }, { status: result.refreshPending ? 202 : 200 });
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) return NextResponse.json({ error: "Task review request is too large", code: "too_large" }, { status: 413 });
+    if (error instanceof EduPiCloudError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     const code = error instanceof TaskReviewError ? error.code : "unavailable";
     return NextResponse.json({ error: error instanceof TaskReviewError ? error.message : "任务审核暂不可用", code }, { status: statusFor(code) });
   }

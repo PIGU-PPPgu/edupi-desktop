@@ -14,7 +14,7 @@ export async function GET(request:Request) {
   try {
     if ((await createEduPiCloudClient().state()).mode === "cloud") {
       const params = new URLSearchParams();
-      for (const key of ["student_id", "kind", "offset", "query", "from", "to"]) {
+      for (const key of ["student_id", "student", "kind", "offset", "query", "from", "to"]) {
         const value = query.get(key);
         if (value !== null) params.set(key, value);
       }
