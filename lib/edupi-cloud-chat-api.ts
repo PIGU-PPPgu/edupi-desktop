@@ -46,7 +46,11 @@ export async function cloudChatApi(request: Request, parts: string[], dependenci
   if (!isApiRequestAllowed(request)) return json({ error: "请求被拒绝。", code: "forbidden" }, 403);
   try {
     const client = dependencies.client || createEduPiCloudClient();
-    const scope = await client.captureScope();
+    const selected = request.method === "GET" ? null : await captureEducationWriteScope(request, client);
+    if (selected && (selected.mode !== "cloud" || !selected.scope)) {
+      throw new EduPiCloudError("scope_changed", "数据模式已改变。", 409);
+    }
+    const scope = selected?.scope || await client.captureScope();
     const pump = dependencies.pump || kick;
     const [group, id, suffix] = parts;
     if (request.method === "GET") {
@@ -72,8 +76,6 @@ export async function cloudChatApi(request: Request, parts: string[], dependenci
         return json(data);
       }
     }
-    const selected = await captureEducationWriteScope(request, client);
-    if (selected.mode !== "cloud" || !selected.scope) throw new EduPiCloudError("scope_changed", "数据模式已改变。", 409);
     if (["POST", "PATCH", "DELETE"].includes(request.method) && request.method !== "DELETE" && !hasJsonContentType(request)) {
       return json({ error: "请使用 JSON。", code: "invalid_content_type" }, 415);
     }
@@ -87,17 +89,18 @@ export async function cloudChatApi(request: Request, parts: string[], dependenci
         action: "create", session_id: sessionId, request_id: `create-${sessionId}`,
         title: "", model, thinking_level: typeof body.thinkingLevel === "string" ? body.thinkingLevel : "off",
       }, scope);
-      if (created.queued) return json({ error: "会话创建已排队，请联网后继续发送。", code: "session_pending" }, 503);
       let result: ObjectValue = { success: true, data: null };
       if (body.type !== "ensure_session") result = await enqueue(client, scope, sessionId, body);
       pump(client, scope);
-      return json({ ...result, sessionId, model, thinkingLevel: body.thinkingLevel || "off" });
+      const queued = created.queued || result.queued === true;
+      return json({ ...result, queued, pendingSync: queued, sessionId, model,
+        thinkingLevel: body.thinkingLevel || "off" }, queued ? 202 : 200);
     }
     if (group === "agent" && id && request.method === "POST") {
       if (["prompt", "steer", "follow_up", "mobile_prompt"].includes(String(body.type))) {
         const result = await enqueue(client, scope, id, body);
         pump(client, scope);
-        return json(result);
+        return json({ ...result, pendingSync: result.queued }, result.queued ? 202 : 200);
       }
       if (body.type === "get_state") return json({ success: true, data:
         cloudChatAgentState(await client.operation("sessions", { action: "read", session_id: id }, scope)).state });
@@ -107,29 +110,29 @@ export async function cloudChatApi(request: Request, parts: string[], dependenci
         throw new EduPiCloudError("cloud_tools_disabled", "云端对话仅支持文字，本机工具保持关闭。", 409);
       }
       if (body.type === "abort") {
-        await client.operationWithOutbox("sessions", { action: "cancel", session_id: id, request_id: `cancel-${randomUUID()}` }, scope);
-        return json({ success: true, data: null });
+        const result = await client.operationWithOutbox("sessions", { action: "cancel", session_id: id, request_id: `cancel-${randomUUID()}` }, scope);
+        return json({ success: !result.queued, data: null, queued: result.queued, pendingSync: result.queued }, result.queued ? 202 : 200);
       }
       if (["set_model", "set_thinking_level"].includes(String(body.type))) {
         const current = await client.operation("sessions", { action: "read", session_id: id }, scope);
-        await client.operationWithOutbox("sessions", {
+        const result = await client.operationWithOutbox("sessions", {
           action: "configure", session_id: id, request_id: `configure-${randomUUID()}`,
           expected_revision: chatRecord(current.session).revision,
           ...(body.type === "set_model" ? { model: { provider: body.provider, modelId: body.modelId } }
             : { thinking_level: body.level }),
         }, scope);
-        return json({ success: true, data: null });
+        return json({ success: !result.queued, data: null, queued: result.queued, pendingSync: result.queued }, result.queued ? 202 : 200);
       }
       throw new EduPiCloudError("unsupported_cloud_operation", "此会话操作尚未支持云端。", 409);
     }
     if (group === "sessions" && id && (request.method === "PATCH" || request.method === "DELETE")) {
       const current = request.method === "PATCH" ? await client.operation("sessions", { action: "read", session_id: id }, scope) : null;
-      await client.operationWithOutbox("sessions", {
+      const result = await client.operationWithOutbox("sessions", {
         action: request.method === "PATCH" ? "rename" : "delete", session_id: id,
         request_id: `${request.method.toLowerCase()}-${randomUUID()}`,
         ...(request.method === "PATCH" ? { title: body.name, expected_revision: chatRecord(current?.session).revision } : {}),
       }, scope);
-      return json({ ok: true });
+      return json({ ok: !result.queued, queued: result.queued, pendingSync: result.queued }, result.queued ? 202 : 200);
     }
     return json({ error: "云端会话接口不存在。", code: "not_found" }, 404);
   } catch (error) {

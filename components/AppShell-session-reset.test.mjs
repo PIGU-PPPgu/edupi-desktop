@@ -29,7 +29,8 @@ test("opening an education task keeps the unrelated new-chat draft", async () =>
 test("task-specific draft identity is shared by the composer and durable send", async () => {
   const chat = await readFile(new URL("./ChatWindow.tsx", import.meta.url), "utf8");
   const session = await readFile(new URL("../hooks/useAgentSession.ts", import.meta.url), "utf8");
-  assert.match(chat, /const draftKey = session\?\.id \?\? reminderDraftKey \?\? \(newSessionCwd \? `new:\$\{newSessionCwd\}` : null\)/);
+  assert.match(chat, /const unscopedDraftKey = session\?\.id \?\? reminderDraftKey \?\? \(newSessionCwd \? `new:\$\{newSessionCwd\}` : null\)/);
+  assert.match(chat, /const draftKey = cloudChat && unscopedDraftKey \? cloudChatDraftKey\(cloudScope, unscopedDraftKey\) : unscopedDraftKey;/);
   assert.match(chat, /useAgentSession\(\{[\s\S]*?draftKey,[\s\S]*?\}\)/);
   assert.match(chat, /<ChatInput[\s\S]*?draftKey=\{draftKey \?\? undefined\}/);
   assert.match(session, /const originDraftKey = draftKey;/);

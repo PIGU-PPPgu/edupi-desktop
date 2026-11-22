@@ -8,7 +8,7 @@ import {
   isWebPasswordEnabled,
 } from "@/lib/web-auth";
 import { readCloudStateSync } from "@/lib/edupi-cloud-store";
-import { cloudChatRoutePath } from "@/lib/edupi-cloud-chat-routing";
+import { cloudChatRoutePath, localChatWriteScopeMatches } from "@/lib/edupi-cloud-chat-routing";
 
 function isLoopbackHost(host: string | null): boolean {
   if (!host) return false;
@@ -70,6 +70,11 @@ export function proxy(request: NextRequest) {
         const forwarded = new Headers(request.headers);
         if (forwarded.has("origin")) forwarded.set("origin", destination.origin);
         return NextResponse.rewrite(destination, { request: { headers: forwarded } });
+      }
+      if (["POST", "PATCH", "PUT", "DELETE"].includes(request.method)
+        && !localChatWriteScopeMatches(request.headers.get("x-edupi-cloud-scope"), state.generation)) {
+        return NextResponse.json({ error: "数据模式已改变，请刷新后再操作。", code: "scope_changed" },
+          { status: 409, headers: { "Cache-Control": "no-store" } });
       }
     } catch {
       return NextResponse.json({ error: "同步配置无法读取，请在设置中恢复。", code: "cloud_state_unavailable" },

@@ -27,7 +27,21 @@ export interface ChatDraft {
   pendingQueueUncertain?: boolean;
   pendingFailedMessages?: FailedDraftMessage[];
   pendingPrompt?: { sessionId: string; clientRequestId: string; occurredAt: string; message: string; draftValue: string;
-    draftUnedited?: boolean; purpose?: "recall" };
+    draftUnedited?: boolean; purpose?: "recall"; cloudScope?: string; cloudRequestBody?: string; cloudNewSession?: boolean };
+}
+
+/** Browser drafts outlive login generations, but never cross issuer/account/workspace boundaries. */
+export function cloudChatDraftKey(scope: string | null | undefined, key: string): string | null {
+  if (!scope || !key) return null;
+  try {
+    const parts: unknown = JSON.parse(scope);
+    if (!Array.isArray(parts) || parts.length !== 5 || parts[0] !== "cloud"
+      || !parts.slice(1, 4).every(value => typeof value === "string" && value.length > 0 && value.length <= 2048)
+      || !Number.isSafeInteger(parts[4]) || parts[4] < 0) return null;
+    return `${key.startsWith("new:") ? "new:cloud:" : "cloud:"}${JSON.stringify([...parts.slice(1, 4), key])}`;
+  } catch {
+    return null;
+  }
 }
 
 const drafts = new Map<string, ChatDraft>();
@@ -120,6 +134,16 @@ function persistableWithoutLoss(draft: ChatDraft): boolean {
 function validPendingPrompt(value: unknown): value is NonNullable<ChatDraft["pendingPrompt"]> {
   if (!value || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
+  if (item.cloudScope !== undefined || item.cloudRequestBody !== undefined || item.cloudNewSession !== undefined) {
+    if (typeof item.cloudScope !== "string" || !cloudChatDraftKey(item.cloudScope, "request")
+      || typeof item.cloudRequestBody !== "string" || item.cloudRequestBody.length > 600_000
+      || item.cloudNewSession !== undefined && typeof item.cloudNewSession !== "boolean" || item.purpose !== undefined) return false;
+    try {
+      const command = JSON.parse(item.cloudRequestBody);
+      if (!command || command.type !== "prompt" || command.message !== item.message
+        || command.clientRequestId !== item.clientRequestId || command.images !== undefined) return false;
+    } catch { return false; }
+  }
   return typeof item.sessionId === "string" && item.sessionId.length > 0 && item.sessionId.length <= 256
     && typeof item.clientRequestId === "string" && /^[0-9a-f-]{36}$/iu.test(item.clientRequestId)
     && typeof item.occurredAt === "string" && !Number.isNaN(Date.parse(item.occurredAt))
@@ -256,13 +280,10 @@ export function setDraft(key: string, draft: ChatDraft): void {
   if (pendingPrompt && !draft.pendingPrompt) draft = { ...draft, pendingPrompt };
   if (pendingPrompt && draft.pendingPrompt?.sessionId === pendingPrompt.sessionId
     && draft.pendingPrompt.clientRequestId === pendingPrompt.clientRequestId) {
-    const sameRequest = { ...draft.pendingPrompt };
-    if (pendingPrompt.purpose) sameRequest.purpose = pendingPrompt.purpose;
-    else delete sameRequest.purpose;
     const inputChanged = previous.value !== draft.value || previous.images.length !== draft.images.length
       || previous.images.some((image, index) => image.data !== draft.images[index]?.data || image.mimeType !== draft.images[index]?.mimeType)
       || JSON.stringify(previous.context ?? null) !== JSON.stringify(draft.context ?? null);
-    draft = { ...draft, pendingPrompt: { ...sameRequest,
+    draft = { ...draft, pendingPrompt: { ...pendingPrompt,
       draftUnedited: pendingPrompt.draftUnedited === true && draft.pendingPrompt.draftUnedited !== false && !inputChanged } };
   }
   if (isEmptyDraft(draft)) {
@@ -299,7 +320,9 @@ export function stagePendingPrompt(key: string, pendingPrompt: NonNullable<ChatD
   if (current.pendingPrompt && (current.pendingPrompt.sessionId !== pendingPrompt.sessionId
     || current.pendingPrompt.clientRequestId !== pendingPrompt.clientRequestId || current.pendingPrompt.occurredAt !== pendingPrompt.occurredAt
     || current.pendingPrompt.message !== pendingPrompt.message || current.pendingPrompt.draftValue !== pendingPrompt.draftValue
-    || current.pendingPrompt.purpose !== pendingPrompt.purpose)) return false;
+    || current.pendingPrompt.purpose !== pendingPrompt.purpose || current.pendingPrompt.cloudScope !== pendingPrompt.cloudScope
+    || current.pendingPrompt.cloudRequestBody !== pendingPrompt.cloudRequestBody
+    || current.pendingPrompt.cloudNewSession !== pendingPrompt.cloudNewSession)) return false;
   const prepared = current.pendingPrompt ?? { ...pendingPrompt,
     draftUnedited: draftUnedited === true && current.value === pendingPrompt.draftValue && current.images.length === 0 };
   setDraft(key, { ...current, pendingPrompt: prepared });
@@ -321,7 +344,10 @@ function clearPendingPrompt(key: string, clientRequestId: string, clearSubmitted
   for (const [draftKey, draft] of [...drafts]) {
     if (draft.pendingPrompt?.clientRequestId !== clientRequestId
       || draft.pendingPrompt.sessionId !== current.pendingPrompt.sessionId
-      || draft.pendingPrompt.purpose !== current.pendingPrompt.purpose) continue;
+      || draft.pendingPrompt.purpose !== current.pendingPrompt.purpose
+      || draft.pendingPrompt.cloudRequestBody !== current.pendingPrompt.cloudRequestBody
+      || (draft.pendingPrompt.cloudScope ? cloudChatDraftKey(draft.pendingPrompt.cloudScope, "request") : null)
+        !== (current.pendingPrompt.cloudScope ? cloudChatDraftKey(current.pendingPrompt.cloudScope, "request") : null)) continue;
     const next = { ...draft };
     if (clearSubmittedText && draft.pendingPrompt.draftUnedited === true
       && next.value === draft.pendingPrompt.draftValue && next.images.length === 0) {
@@ -350,12 +376,14 @@ export function resetNewSessionDraft(key: string): boolean {
   const prior = getDraft(key);
   const pending = prior?.pendingPrompt;
   if (pending) {
-    const target = getDraft(pending.sessionId);
+    const sessionKey = pending.cloudScope ? cloudChatDraftKey(pending.cloudScope, pending.sessionId) : pending.sessionId;
+    if (!sessionKey) return false;
+    const target = getDraft(sessionKey);
     if (target?.pendingPrompt && JSON.stringify(target.pendingPrompt) !== JSON.stringify(pending)) return false;
-    setDraft(pending.sessionId, target
+    setDraft(sessionKey, target
       ? { ...target, pendingPrompt: pending }
       : { ...prior, value: prior.value || pending.draftValue, pendingPrompt: pending });
-    if (!flushDraftNow(pending.sessionId)) return false;
+    if (!flushDraftNow(sessionKey)) return false;
     // The unresolved identity is now durable under its real session. The
     // cwd-based blank-chat key may be reset without redirecting a new chat.
     drafts.delete(key);

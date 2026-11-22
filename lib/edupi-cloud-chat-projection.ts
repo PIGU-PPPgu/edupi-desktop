@@ -17,6 +17,7 @@ export function cloudChatInfo(raw: unknown, scope: CloudScope, messages: ObjectV
   return {
     id: session.session_id, path: `cloud:${scope.workspaceId}/${session.session_id}`,
     cwd: `cloud:${scope.workspaceId}`, projectRoot: `cloud:${scope.workspaceId}`,
+    cloudScope: cloudScopeKey(scope),
     name: typeof session.title === "string" && session.title ? session.title : undefined,
     created: timestamp(session.created_at), modified: timestamp(session.updated_at),
     messageCount: messages.length || Number(session.message_count || 0),

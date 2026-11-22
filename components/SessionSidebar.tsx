@@ -15,6 +15,8 @@ import { isTauriDesktop } from "@/lib/desktop-updater";
 import { revealItemInDirNative } from "@/lib/desktop-native";
 import { getDesktopPlatform, type DesktopPlatform } from "@/lib/desktop-window";
 import { visibleTeacherMessageText } from "@/lib/edupi-composer-context";
+import { mutateSession } from "@/lib/session-mutation";
+import { EDUPI_CLOUD_STATUS_CHANGED, type EduPiCloudStatus } from "@/lib/edupi-cloud-events";
 
 export type SidebarResourceAction = { id: string; label: string; onClick: () => void; disabled?: boolean };
 
@@ -342,6 +344,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   }, []);
 
   const initialLoadDone = useRef(false);
+  useEffect(() => {
+    const onSynced = (event: Event) => {
+      if (((event as CustomEvent<EduPiCloudStatus>).detail?.flushed ?? 0) > 0) void loadSessions(false);
+    };
+    window.addEventListener(EDUPI_CLOUD_STATUS_CHANGED, onSynced);
+    return () => window.removeEventListener(EDUPI_CLOUD_STATUS_CHANGED, onSynced);
+  }, [loadSessions]);
   useEffect(() => {
     const isFirst = !initialLoadDone.current;
     initialLoadDone.current = true;
@@ -1571,6 +1580,8 @@ function SessionItem({
   const [renameValue, setRenameValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [mutationNotice, setMutationNotice] = useState<{ snapshot: string; text: string; pending: boolean } | null>(null);
+  const mutationBusyRef = useRef(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1579,39 +1590,49 @@ function SessionItem({
   const menuId = useId();
 
   const title = session.name || visibleTeacherMessageText(session.firstMessage).slice(0, 50) || session.id.slice(0, 12);
+  const snapshot = JSON.stringify([session.id, session.name, session.cloudScope]);
+  const notice = mutationNotice?.snapshot === snapshot ? mutationNotice : null;
 
   const startRename = useCallback(() => {
+    if (mutationBusyRef.current || notice?.pending) return;
+    setMutationNotice(null);
     setRenameValue(session.name ?? "");
     setRenaming(true);
     setTimeout(() => inputRef.current?.select(), 0);
-  }, [session.name]);
+  }, [session.name, notice?.pending]);
 
   const commitRename = useCallback(async () => {
     const name = renameValue.trim();
     setRenaming(false);
-    if (name === (session.name ?? "")) return;
+    if (mutationBusyRef.current || notice?.pending || name === (session.name ?? "")) return;
+    mutationBusyRef.current = true;
+    setMutationNotice(null);
     try {
-      await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      onRenamed?.();
-    } catch {
-      // ignore
-    }
-  }, [renameValue, session.id, session.name, onRenamed]);
+      const result = await mutateSession(session, { name });
+      if (result === "pending") setMutationNotice({ snapshot, text: "待同步", pending: true });
+      else onRenamed?.();
+    } catch (error) {
+      setMutationNotice({ snapshot, text: error instanceof Error ? error.message : "改名失败，请重试。", pending: false });
+    } finally { mutationBusyRef.current = false; }
+  }, [renameValue, session, snapshot, notice?.pending, onRenamed]);
 
   const performDelete = useCallback(async () => {
+    if (mutationBusyRef.current || notice?.pending) return;
+    mutationBusyRef.current = true;
     setConfirmDelete(false);
     setDeleting(true);
+    setMutationNotice(null);
     try {
-      await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, { method: "DELETE" });
-      onDeleted?.(session.id);
-    } catch {
+      const result = await mutateSession(session, null);
+      if (result === "pending") setMutationNotice({ snapshot, text: "待同步", pending: true });
+      else onDeleted?.(session.id);
+    } catch (error) {
+      setMutationNotice({ snapshot, text: error instanceof Error ? error.message : "删除失败，请重试。", pending: false });
+    } finally {
+      mutationBusyRef.current = false;
       setDeleting(false);
     }
-  }, [session.id, onDeleted]);
+  }, [session, snapshot, notice?.pending, onDeleted]);
 
   // "…" menu: fixed-position portal so the sidebar's overflow/backdrop-filter can't clip it
   const MENU_WIDTH = 190;
@@ -1817,6 +1838,9 @@ function SessionItem({
           >
             {title}
           </span>
+          {notice && <span role={notice.pending ? "status" : "alert"} title={notice.pending ? "已保存，联网后同步。" : notice.text}
+            style={{ maxWidth: "55%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              fontSize: 11, color: notice.pending ? "var(--text-muted)" : "var(--danger)" }}>{notice.text}</span>}
 
           {/* Collapse toggle — always visible when has children */}
           {hasChildren && (
@@ -1881,6 +1905,7 @@ function SessionItem({
             >
               <button
                 role="menuitem"
+                disabled={notice?.pending}
                 onClick={() => { setMenuOpen(false); startRename(); }}
                 style={{
                   display: "flex", alignItems: "center", gap: 8,
@@ -1897,6 +1922,7 @@ function SessionItem({
               </button>
               <button
                 role="menuitem"
+                disabled={notice?.pending}
                 className="is-danger"
                 title={t("sidebar.deleteWithShiftClick")}
                 onClick={(e) => {

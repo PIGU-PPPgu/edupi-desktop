@@ -112,6 +112,8 @@ async function mount({ initialSessionId = original.id, sessions = [original, oth
     "@/lib/desktop-notify": { notifyDesktop: noop }, "@/lib/desktop-updater": { isTauriDesktop: () => false },
     "@/lib/desktop-native": { revealItemInDirNative: noop }, "@/lib/desktop-window": { getDesktopPlatform: () => null },
     "@/lib/edupi-composer-context": { visibleTeacherMessageText: value => value },
+    "@/lib/session-mutation": { mutateSession: () => assert.fail("navigation must not mutate sessions") },
+    "@/lib/edupi-cloud-events": { EDUPI_CLOUD_STATUS_CHANGED: "edupi-cloud-status-changed" },
   };
   const sidebarExports = {};
   class EventSource { static CLOSED = 2; close() {} }
@@ -156,7 +158,13 @@ async function mount({ initialSessionId = original.id, sessions = [original, oth
       ${educationDirectoryEffect()}
       ${declaration(shellSource, "AppShell", "renderSessionSidebar")}
       const session = selectedSession, reminderDraftKey = undefined, newSessionCwdForComposer = effectiveNewSessionCwd;
-      const identity = ((newSessionCwd) => { ${declaration(chatSource, "ChatWindow", "draftKey")} return draftKey; })(newSessionCwdForComposer);
+      const identity = ((newSessionCwd) => {
+        ${declaration(chatSource, "ChatWindow", "cloudChat")}
+        const cloudScope = null, cloudChatDraftKey = store.cloudChatDraftKey;
+        ${declaration(chatSource, "ChatWindow", "unscopedDraftKey")}
+        ${declaration(chatSource, "ChatWindow", "draftKey")}
+        return draftKey;
+      })(newSessionCwdForComposer);
       host.state = { selectedSession, newSessionCwd, effectiveNewSessionCwd, activeCwd, initialSessionRestored, initialCwdStatus, initialCwdError, sessionKey, identity, view: searchParams.get("view"), url };
       host.api = { navigate: openEducationView, cwd: handleCwdChange, select: handleEducationSelectSession, newChat: handleEducationNewSession,
         replaceRoute: router.replace,

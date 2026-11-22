@@ -70,6 +70,8 @@ async function mount(initial = {}) {
     "./FileExplorer": {}, "./ProjectPicker": {}, "./DisclosureChevron": { DisclosureChevron: () => null },
     "./path-ui": {}, "@/lib/app-prefs": {}, "@/lib/desktop-notify": {}, "@/lib/desktop-updater": {},
     "@/lib/desktop-native": {}, "@/lib/desktop-window": {}, "@/lib/edupi-composer-context": { visibleTeacherMessageText: value => value },
+    "@/lib/session-mutation": { mutateSession: () => assert.fail("the menu probe must not mutate sessions") },
+    "@/lib/edupi-cloud-events": { EDUPI_CLOUD_STATUS_CHANGED: "edupi-cloud-status-changed" },
   };
   const rowExports = {};
   vm.runInNewContext(compile("./SessionSidebar.tsx") + "\nexports.SessionItemProbe = SessionItem;", { exports: rowExports, document, window, setTimeout, clearTimeout,

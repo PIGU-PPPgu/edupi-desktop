@@ -21,6 +21,7 @@ test("a late tool read cannot overwrite the teacher's newer tool or permission c
     const context = {
       useCallback: callback => callback,
       sessionIdRef: { current: "synthetic-tools" }, toolsLoadIdRef: { current: 0 },
+      cloudScopeRef: { current: null },
       toolPresetRef: { current: "default" }, permissionModeRef: { current: "workspace" },
       ensuringNewSessionRef: { current: null },
       setToolPresetState: value => { preset = value; }, setPermissionMode() {},

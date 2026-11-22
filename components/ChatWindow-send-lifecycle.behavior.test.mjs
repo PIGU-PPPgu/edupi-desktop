@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import test from "node:test";
+import { createHash } from "node:crypto";
 import ts from "typescript";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -29,8 +30,15 @@ const noop = () => {};
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const cwd = "/synthetic/UI-Test-Data";
+const cloudAccountId = "11111111-1111-4111-8111-111111111111";
+const cloudWorkspaceId = "22222222-2222-4222-8222-222222222222";
+const cloudCwd = `cloud:${cloudWorkspaceId}`;
+const cloudScope = JSON.stringify(["cloud", "https://cloud.example", cloudAccountId, cloudWorkspaceId, 1]);
 const createdId = "synthetic-created-session";
-const session = (id = "synthetic-existing", directory = cwd) => ({ id, cwd: directory, path: "", created: "2026-10-28T00:00:00Z", modified: "2026-10-28T00:00:00Z", messageCount: 0, firstMessage: "" });
+const session = (id = "synthetic-existing", directory = cwd) => ({ id, cwd: directory,
+  path: directory.startsWith("cloud:") ? `${directory}/${id}` : "",
+  ...(directory.startsWith("cloud:") ? { cloudScope } : {}),
+  created: "2026-10-28T00:00:00Z", modified: "2026-10-28T00:00:00Z", messageCount: 0, firstMessage: "" });
 const text = "[UI TEST] 合成发送";
 
 async function mount({ existing = false, durable = true, immediate = false, delayStartup = false, initialHistory = [] } = {}) {
@@ -46,7 +54,7 @@ async function mount({ existing = false, durable = true, immediate = false, dela
   const timer = fn => { timers.set(++timerId, fn); return timerId; };
   const frame = fn => timer(fn);
   const host = { api: null, hook: null, input: { current: null }, creations: [], history: new Map(), pending: [], imageReaders: [], startup: deferred(),
-    localIntents: 0, localCaptures: 0 };
+    localIntents: 0, localCaptures: 0, localReconciles: 0, cloudScope: null, cloudRequests: new Map() };
   if (existing) host.history.set(session().id, initialHistory);
   const modules = { ...pure, react: React, "react/jsx-runtime": { jsx, jsxs, Fragment: React.Fragment } };
   const load = (name, extras = {}) => {
@@ -54,7 +62,7 @@ async function mount({ existing = false, durable = true, immediate = false, dela
     vm.runInNewContext(compile(sources[name]), { exports: exported, window, document: window.document,
       console: { error: (...args) => errors.push(args), warn: noop }, crypto: globalThis.crypto,
       URL: Object.assign(class extends URL {}, { createObjectURL: () => "blob:synthetic-image", revokeObjectURL: noop }), URLSearchParams,
-      AbortController, DOMException, CustomEvent: window.CustomEvent, Event: window.Event, TextDecoder,
+      AbortController, DOMException, CustomEvent: window.CustomEvent, Event: window.Event, TextDecoder, TextEncoder, Headers,
       FileReader: class { readAsDataURL() { host.imageReaders.push(this); } },
       setTimeout: timer, clearTimeout: id => timers.delete(id), setInterval: fn => { intervals.set(++timerId, fn); return timerId; }, clearInterval: id => intervals.delete(id),
       requestAnimationFrame: frame, cancelAnimationFrame: id => timers.delete(id),
@@ -68,7 +76,19 @@ async function mount({ existing = false, durable = true, immediate = false, dela
   modules["@/lib/draft-store"] = store;
   const response = data => ({ ok: true, status: 200, json: async () => data });
   const fetch = async (url, options = {}) => {
-    requests.push({ url, method: options.method ?? "GET" });
+    const requestScope = new Headers(options.headers).get("x-edupi-cloud-scope");
+    requests.push({ url, method: options.method ?? "GET", scope: requestScope });
+    if (options.method === "POST" && url.startsWith("/api/agent/") && requestScope === cloudScope) {
+      const command = JSON.parse(options.body);
+      assert.equal(command.type, "prompt");
+      assert.match(command.clientRequestId, /^[0-9a-f-]{36}$/iu);
+      const id = url === "/api/agent/new"
+        ? `cloud-${createHash("sha256").update(JSON.stringify([cloudWorkspaceId, cloudAccountId, command.clientRequestId])).digest("hex").slice(0, 40)}`
+        : decodeURIComponent(url.split("/").at(-1));
+      await receive(id, command, requestScope);
+      return response({ success: true, data: null, sessionId: id, clientRequestId: command.clientRequestId,
+        queued: false, pendingSync: false });
+    }
     if (url === "/api/agent/new") { if (delayStartup) await host.startup.promise; return response({ sessionId: createdId }); }
     if (url.startsWith("/api/models")) return response({ models: {}, modelList: [] });
     if (url === "/api/edupi/proactivity/messages") return response({ status: "disabled" });
@@ -76,7 +96,10 @@ async function mount({ existing = false, durable = true, immediate = false, dela
       if (url.endsWith("/state")) return response({ running: false });
       const id = decodeURIComponent(url.split("/")[3].split("?")[0]);
       const messages = host.history.get(id) ?? [];
-      return response({ id, context: { messages, entryIds: messages.map((_, index) => `entry-${index}`) }, tree: [], leafId: null });
+      return response({ id, sessionId: id, ...(host.cloudScope ? {
+        filePath: `${cloudCwd}/${id}`, cloudScope: host.cloudScope, requests: host.cloudRequests.get(id) ?? [],
+      } : {}),
+      context: { messages, entryIds: messages.map((_, index) => `entry-${index}`), thinkingLevel: "off", model: null }, tree: [], leafId: null });
     }
     if (url.startsWith("/api/agent/")) return response({ running: false });
     assert.fail(`Unexpected synthetic fetch ${url}`);
@@ -88,14 +111,27 @@ async function mount({ existing = false, durable = true, immediate = false, dela
     close() { this.readyState = EventSource.CLOSED; }
     emit(event) { this.onmessage?.({ data: JSON.stringify(event) }); }
   }
-  const receive = async (sid, command) => {
+  const receive = async (sid, command, scope = null) => {
     const item = { sid, command, ...deferred() };
     host.pending.push(item);
+    if (scope) {
+      const rows = host.cloudRequests.get(sid) ?? [];
+      const prior = rows.find(row => row.request_id === command.clientRequestId);
+      if (prior) assert.deepEqual(prior.command, { type: "prompt", message: command.message, clientRequestId: command.clientRequestId });
+      else rows.push({ workspace_id: cloudWorkspaceId, actor_id: cloudAccountId, session_id: sid,
+        request_id: command.clientRequestId, status: "queued",
+        command: { type: "prompt", message: command.message, clientRequestId: command.clientRequestId } });
+      host.cloudRequests.set(sid, rows);
+    }
     if (immediate) item.resolve();
     await item.promise;
     host.history.set(sid, [{ role: "user", content: command.message, timestamp: 1 }]);
   };
-  modules["@/lib/agent-client"] = { sendAgentCommand: async (sid, command) => {
+  modules["@/lib/agent-client"] = { educationWriteHeaders: (initial, capturedScope) => {
+    const headers = new Headers(initial);
+    headers.set("x-edupi-cloud-scope", capturedScope ?? host.cloudScope ?? "local");
+    return headers;
+  }, sendAgentCommand: async (sid, command) => {
     if (command.type === "get_tools") return [];
     if (command.type === "persist_session") return {};
     if (command.type === "prompt") return receive(sid, command);
@@ -103,9 +139,10 @@ async function mount({ existing = false, durable = true, immediate = false, dela
     assert.fail(`Unexpected synthetic command ${command.type}`);
   } };
   modules["@/lib/edupi-ambient-message"] = { persistEduPiPromptIntent: async () => { host.localIntents++; return "pending"; },
-    reconcileEduPiCapturedPrompt: async () => "unavailable", resolveEduPiPromptIntentClient: async () => {},
+    reconcileEduPiCapturedPrompt: async () => { host.localReconciles++; return "unavailable"; }, resolveEduPiPromptIntentClient: async () => {},
     sendEduPiCapturedPrompt: async ({ sessionId, command }) => { host.localCaptures++; if (!durable) { await receive(sessionId, command); return "accepted"; } return "disabled"; } };
-  modules["@/lib/fetch-timeout"] = { fetchWithRetry: fetch, fetchJsonWithDeadline: async url => { const res = await fetch(url); return { response: res, body: await res.json() }; } };
+  modules["@/lib/fetch-timeout"] = { fetchWithRetry: (url, options) => fetch(url, options?.init ?? options),
+    fetchJsonWithDeadline: async (url, _timeout, init) => { const res = await fetch(url, init); return { response: res, body: await res.json() }; } };
   modules["@/lib/desktop-updater"] = { isTauriDesktop: () => durable };
   modules["@/lib/edupi-recall-prompt-client"] = {
     readRecallSettings: async () => null, recallSendAvailable: () => false,
@@ -142,7 +179,8 @@ async function mount({ existing = false, durable = true, immediate = false, dela
     const [selected, select] = React.useState(initial);
     const [directory, choose] = React.useState(existing ? null : cwd);
     const [visible, show] = React.useState(true);
-    host.api = { select(id, path = cwd) { select(session(id, path)); choose(null); }, newCwd(path) { select(null); choose(path); }, show };
+    host.api = { select(id, path = cwd) { host.cloudScope = path.startsWith("cloud:") ? cloudScope : null; select(session(id, path)); choose(null); },
+      newCwd(path) { host.cloudScope = path.startsWith("cloud:") ? cloudScope : null; select(null); choose(path); }, show };
     return visible ? jsx(ChatWindow, { session: selected, newSessionCwd: directory, chatInputRef: host.input,
       onSessionCreated: value => { host.creations.push(value.id); select(value); choose(null); }, teacherMode: true }) : null;
   }
@@ -213,15 +251,38 @@ test("an interrupted Zhixue turn shows the confirmed login and remaining setup o
 for (const existing of [false, true]) test(`cloud ${existing ? "existing" : "new"} Desktop chat sends through its cloud queue without touching local Core intent`, async () => {
   const f = await mount({ existing, durable: true });
   try {
-    await f.run(() => existing ? f.host.api.select("cloud-existing", "cloud:workspace") : f.host.api.newCwd("cloud:workspace"));
+    await f.run(() => existing ? f.host.api.select("cloud-existing", cloudCwd) : f.host.api.newCwd(cloudCwd));
+    const origin = f.store.cloudChatDraftKey(cloudScope, existing ? "cloud-existing" : `new:${cloudCwd}`);
     await f.type("合成云端消息");
+    assert.equal(f.store.getDraft(origin)?.value, "合成云端消息");
     await f.send();
     assert.equal(f.host.pending.length, 1);
     assert.equal(f.host.localIntents, 0);
     assert.equal(f.host.localCaptures, 0);
-    assert.equal(f.host.pending[0].command.message, "合成云端消息");
+    const { sid, command } = f.host.pending[0];
+    const target = f.store.cloudChatDraftKey(cloudScope, sid);
+    const pending = f.persisted(origin)?.pendingPrompt;
+    assert.equal(command.message, "合成云端消息");
+    assert.equal(pending?.sessionId, sid);
+    assert.equal(pending?.cloudScope, cloudScope);
+    assert.equal(pending?.clientRequestId, command.clientRequestId);
+    assert.deepEqual(JSON.parse(pending.cloudRequestBody), command);
+    assert.equal(f.persisted(target)?.pendingPrompt.clientRequestId, command.clientRequestId);
+    assert.ok(f.requests.some(request => request.method === "POST" && request.scope === cloudScope
+      && request.url === (existing ? "/api/agent/cloud-existing" : "/api/agent/new")));
     await f.accept(); await f.done();
     assert.equal(f.textarea().value, "");
+    assert.equal(f.persisted(origin), null);
+    assert.equal(f.persisted(target), null);
+    assert.equal(f.store.getDraft(sid), null, "cloud data must not be copied under an unscoped session key");
+    const rows = f.host.cloudRequests.get(sid);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].request_id, command.clientRequestId);
+    assert.ok(f.requests.some(request => request.method === "GET"
+      && request.url === `/api/sessions/${encodeURIComponent(sid)}` && request.scope === cloudScope), "ACK cleanup must have exact cloud request readback");
+    assert.equal(f.host.localIntents, 0);
+    assert.equal(f.host.localCaptures, 0);
+    assert.equal(f.host.localReconciles, 0);
   } finally { await f.close(); }
 });
 

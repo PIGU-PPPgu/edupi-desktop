@@ -21,7 +21,7 @@ import { applyAssistantMessageEvent, type ClientAssistantMessageEvent } from "@/
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import { EDUPI_STUDENT_RECORDS_UPDATED_EVENT } from "@/lib/edupi-ui-events";
 import { persistEduPiPromptIntent, reconcileEduPiCapturedPrompt, resolveEduPiPromptIntentClient, sendEduPiCapturedPrompt } from "@/lib/edupi-ambient-message";
-import { acknowledgeLocalQueueRecovery, acknowledgePendingPrompt, completeStagedQueueRecovery, getDraft, markQueueRecoveryUncertain, releasePendingPromptForNewMessage, restoreFailedMessageDraft, setDraft, stagePendingPrompt } from "@/lib/draft-store";
+import { acknowledgeLocalQueueRecovery, acknowledgePendingPrompt, cloudChatDraftKey, completeStagedQueueRecovery, getDraft, markQueueRecoveryUncertain, releasePendingPromptForNewMessage, restoreFailedMessageDraft, setDraft, stagePendingPrompt, type ChatDraft } from "@/lib/draft-store";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { recallQueueWithBackup } from "@/lib/queue-recovery";
 import { interruptForPrioritySend } from "@/lib/edupi-priority-send";
@@ -32,6 +32,11 @@ import { inspectRecallPrompt, submitRecallPrompt } from "@/lib/edupi-recall-prom
 export interface SessionData {
   sessionId: string;
   filePath: string;
+  cloudScope?: string;
+  requests?: {
+    workspace_id: string; actor_id: string; session_id: string; request_id: string; status: string;
+    command: { type: string; message: string; clientRequestId: string };
+  }[];
   tree: SessionTreeNode[];
   leafId: string | null;
   context: {
@@ -165,6 +170,7 @@ export interface UseAgentSessionOptions {
   session: SessionInfo | null;
   newSessionCwd: string | null;
   draftKey: string | null;
+  cloudScope?: string | null;
   onAgentEnd?: () => void;
   onSessionCreated?: (session: SessionInfo) => void;
   onSessionForked?: (newSessionId: string) => void;
@@ -328,6 +334,46 @@ type SlashCommandsResponse = {
   commands?: SlashCommandInfo[];
 };
 
+function captureCloudPromptScope(expected?: string | null): string {
+  const current = agentEducationWriteHeaders().get("x-edupi-cloud-scope");
+  const scope = expected ?? current;
+  if (!scope || !cloudChatDraftKey(scope, "request") || scope !== current) {
+    throw new Error("云端账号或工作区已改变，请刷新后重试");
+  }
+  return scope;
+}
+
+async function cloudSessionIdForRequest(scope: string, clientRequestId: string): Promise<string> {
+  const [, , accountId, workspaceId] = JSON.parse(scope) as string[];
+  const hash = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([workspaceId, accountId, clientRequestId])));
+  return `cloud-${Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, "0")).join("").slice(0, 40)}`;
+}
+
+async function readCloudPromptReceipt(pending: NonNullable<ChatDraft["pendingPrompt"]>, scope: string): Promise<"accepted" | "not_found" | "unavailable"> {
+  captureCloudPromptScope(scope);
+  if (!pending.cloudScope || cloudChatDraftKey(pending.cloudScope, pending.sessionId) !== cloudChatDraftKey(scope, pending.sessionId)) return "unavailable";
+  const res = await fetchWithRetry(`/api/sessions/${encodeURIComponent(pending.sessionId)}`, {
+    init: { cache: "no-store", headers: agentEducationWriteHeaders(undefined, scope) },
+    shouldRetry: () => {
+      try { return captureCloudPromptScope(scope) === scope; } catch { return false; }
+    },
+  });
+  captureCloudPromptScope(scope);
+  if (res.status === 404) return "not_found";
+  if (!res.ok) return "unavailable";
+  const data = await res.json() as SessionData;
+  captureCloudPromptScope(scope);
+  if (data.cloudScope !== scope || data.sessionId !== pending.sessionId || !Array.isArray(data.requests)) return "unavailable";
+  const [, , accountId, workspaceId] = JSON.parse(scope) as string[];
+  const rows = data.requests.filter(row => row.request_id === pending.clientRequestId);
+  if (!rows.length) return "not_found";
+  const row = rows[0];
+  return rows.length === 1 && row.actor_id === accountId && row.workspace_id === workspaceId && row.session_id === pending.sessionId
+    && row.command?.type === "prompt" && row.command.message === pending.message && row.command.clientRequestId === pending.clientRequestId
+    && ["queued", "claimed", "running", "completed", "failed", "uncertain", "cancelled"].includes(row.status)
+    ? "accepted" : "unavailable";
+}
+
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     session, newSessionCwd, draftKey, onAgentEnd, onSessionCreated, onSessionForked,
@@ -337,6 +383,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const isNew = session === null && newSessionCwd !== null;
   const sessionIdentity = session?.id ?? (newSessionCwd ? `new:${newSessionCwd}` : null);
+  const displayedCloudScope = opts.cloudScope === undefined ? session?.cloudScope ?? null : opts.cloudScope;
 
   const [data, setData] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(!isNew);
@@ -344,7 +391,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // Tracks the session identity last applied to local state. When the parent
   // switches sessions without remounting ChatWindow, we reset visible state
   // during render so the previous session's messages never flash.
-  const [appliedIdentity, setAppliedIdentity] = useState(sessionIdentity);
+  const [storedAppliedIdentity, setAppliedIdentity] = useState(sessionIdentity);
+  const [appliedCloudScope, setAppliedCloudScope] = useState(displayedCloudScope);
+  const appliedIdentity = displayedCloudScope === appliedCloudScope ? storedAppliedIdentity : null;
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
   const [messageHistory, rawDispatchMessageHistory] = useReducer(messageHistoryReducer, undefined, emptyMessageHistory);
   const { entryIds } = messageHistory;
@@ -508,6 +557,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const eventStreamGraceGenerationRef = useRef(0);
   const eventStreamGraceActiveRef = useRef(false);
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
+  const cloudScopeRef = useRef(displayedCloudScope);
+  cloudScopeRef.current = displayedCloudScope ?? session?.cloudScope ?? null;
+  const cloudChatRef = useRef(false);
+  cloudChatRef.current = Boolean(session?.path?.startsWith("cloud:") || session?.cwd?.startsWith("cloud:") || newSessionCwd?.startsWith("cloud:"));
   const activeDraftKeyRef = useRef(draftKey);
   activeDraftKeyRef.current = draftKey;
   // Async reads that write session-scoped UI state need their own monotonic
@@ -575,6 +628,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // render (React-supported prop→state sync) so the message list clears in the
   // same frame as the session change. Skip the new→created promotion path —
   // that session is already live under sessionIdRef.
+  if (displayedCloudScope !== appliedCloudScope) setAppliedCloudScope(displayedCloudScope);
   if (sessionIdentity !== appliedIdentity) {
     const previousIdentity = appliedIdentity;
     const isPromotion =
@@ -698,14 +752,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [messages, sessionStatsOverride, contextUsage, data?.filePath, session?.id, session?.name]);
 
   const acknowledgeSubmittedPrompt = useCallback((key: string, pending: {
-    sessionId: string; clientRequestId: string; draftValue: string; message: string; purpose?: "recall";
+    sessionId: string; clientRequestId: string; draftValue: string; message: string; purpose?: "recall"; cloudScope?: string;
   }) => {
+    const sessionKey = pending.cloudScope ? cloudChatDraftKey(pending.cloudScope, pending.sessionId) : pending.sessionId;
+    if (!sessionKey) return;
     const sourcePending = getDraft(key)?.pendingPrompt;
-    const promotedPending = key.startsWith("new:") && key !== pending.sessionId
+    const promotedPending = key.startsWith("new:") && key !== sessionKey
       && activeDraftKeyRef.current === key && sessionIdRef.current === pending.sessionId
       && sourcePending?.sessionId === pending.sessionId && sourcePending.clientRequestId === pending.clientRequestId
       && sourcePending.message === pending.message && sourcePending.draftValue === pending.draftValue && sourcePending.purpose === pending.purpose
-      ? getDraft(pending.sessionId)?.pendingPrompt : undefined;
+      ? getDraft(sessionKey)?.pendingPrompt : undefined;
     const promoteEditedDraft = promotedPending?.sessionId === pending.sessionId
       && promotedPending.clientRequestId === pending.clientRequestId
       && promotedPending.message === pending.message && promotedPending.draftValue === pending.draftValue && promotedPending.purpose === pending.purpose;
@@ -715,23 +771,27 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // The target alias was staged before any newer edit. Carry the retained
     // source draft forward before React promotes new:<cwd> to this session.
     const retained = promoteEditedDraft ? getDraft(key) : null;
-    if (retained && !retained.pendingPrompt) setDraft(pending.sessionId, retained);
+    if (retained && !retained.pendingPrompt) setDraft(sessionKey, retained);
     refreshPromptRecovery(value => value + 1);
   }, [chatInputRef]);
 
-  const reconcilePendingPrompt = useCallback(async (sid: string, isCurrent: () => boolean, key = sid) => {
-    if (!isTauriDesktop() || !isCurrent() || promptSubmissionRunIdRef.current === promptRunIdRef.current) return;
+  const reconcilePendingPrompt = useCallback(async (sid: string, isCurrent: () => boolean, key = activeDraftKeyRef.current ?? sid) => {
+    if (!isCurrent() || promptSubmissionRunIdRef.current === promptRunIdRef.current) return;
     const pending = getDraft(key)?.pendingPrompt;
     if (!pending || pending.sessionId !== sid) return;
+    if (!pending.cloudScope && !isTauriDesktop()) return;
     try {
-      const status = pending.purpose === "recall"
+      const status = pending.cloudScope
+        ? await readCloudPromptReceipt(pending, captureCloudPromptScope())
+        : pending.purpose === "recall"
         ? (await inspectRecallPrompt(sid, pending.clientRequestId)).status
         : await reconcileEduPiCapturedPrompt(sid, pending.clientRequestId,
           { type: "prompt", message: pending.message, clientRequestId: pending.clientRequestId });
       const current = getDraft(key)?.pendingPrompt;
       if (status !== "accepted" || !isCurrent() || current?.sessionId !== sid
         || current.clientRequestId !== pending.clientRequestId || current.message !== pending.message
-        || current.occurredAt !== pending.occurredAt || current.purpose !== pending.purpose) return;
+        || current.occurredAt !== pending.occurredAt || current.purpose !== pending.purpose
+        || current.cloudScope !== pending.cloudScope || current.cloudRequestBody !== pending.cloudRequestBody) return;
       acknowledgeSubmittedPrompt(key, pending);
     } catch {
       // An unavailable proof leaves the exact pending request recoverable.
@@ -739,9 +799,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [acknowledgeSubmittedPrompt]);
 
   useEffect(() => {
-    if (!isNew || !draftKey || !isTauriDesktop()) return;
+    if (!isNew || !draftKey) return;
     const pending = getDraft(draftKey)?.pendingPrompt;
-    if (!pending || sessionIdRef.current) return;
+    if (!pending || !pending.cloudScope && !isTauriDesktop() || sessionIdRef.current) return;
     const generation = sessionGenerationRef.current, runId = promptRunIdRef.current;
     const isCurrent = () => activeDraftKeyRef.current === draftKey
       && sessionGenerationRef.current === generation && promptRunIdRef.current === runId
@@ -862,13 +922,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [dispatchMessageHistory]);
 
   const loadTools = useCallback(async (sid: string) => {
+    const cloudScope = cloudScopeRef.current;
     const requestId = ++toolsLoadIdRef.current;
     const isCurrent = () => (
       sessionIdRef.current === sid
       && toolsLoadIdRef.current === requestId
     );
     try {
-      const tools = await sendAgentCommand<ToolEntry[]>(sid, { type: "get_tools" });
+      const tools = await sendAgentCommand<ToolEntry[]>(sid, { type: "get_tools" }, cloudScope);
       if (tools && isCurrent()) {
         const { getPresetFromTools } = await import("@/lib/tool-presets");
         if (!isCurrent()) return;
@@ -886,10 +947,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!isNew || !newSessionCwd || !sid || newSessionPromotedRef.current) return;
     newSessionPromotedRef.current = true;
     if (preserveContext) chatInputRef?.current?.preserveContextForSession(sid);
+    const cloudScope = newSessionCwd.startsWith("cloud:") ? captureCloudPromptScope() : null;
     onSessionCreated?.({
       id: sid,
-      path: "",
+      path: cloudScope ? `${newSessionCwd}/${sid}` : "",
       cwd: newSessionCwd,
+      ...(cloudScope ? { cloudScope } : {}),
       name: undefined,
       created: new Date().toISOString(),
       modified: new Date().toISOString(),
@@ -958,6 +1021,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [isNew, newSessionCwd]);
 
   const loadSlashCommands = useCallback(async () => {
+    const cloudScope = cloudScopeRef.current;
     const sid = sessionIdRef.current ?? await ensureNewSession();
     if (!sid) {
       setSlashCommands([]);
@@ -965,7 +1029,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
     setSlashCommandsLoading(true);
     try {
-      const data = await sendAgentCommand<SlashCommandsResponse>(sid, { type: "get_commands" });
+      const data = await sendAgentCommand<SlashCommandsResponse>(sid, { type: "get_commands" }, cloudScope);
       const commands = data?.commands ?? [];
       setSlashCommands(commands);
       return commands;
@@ -1090,6 +1154,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     request: ExtensionUiDialogRequest,
     response: { value: string } | { confirmed: boolean } | { cancelled: true },
   ) => {
+    const cloudScope = cloudScopeRef.current;
     const sid = sessionIdRef.current;
     setExtensionDialog((current) => current?.id === request.id ? null : current);
     if (!sid) return;
@@ -1098,13 +1163,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         type: "extension_ui_response",
         id: request.id,
         ...response,
-      });
+      }, cloudScope);
     } catch (e) {
       console.error("Failed to send extension UI response:", e);
     }
   }, []);
 
   const sendExtensionCustomInput = useCallback(async (request: ExtensionUiCustomRequest, data: string) => {
+    const cloudScope = cloudScopeRef.current;
     const sid = sessionIdRef.current;
     if (!sid) return;
     try {
@@ -1112,7 +1178,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         type: "extension_ui_input",
         id: request.id,
         data,
-      });
+      }, cloudScope);
     } catch (e) {
       console.error("Failed to send extension custom UI input:", e);
     }
@@ -1133,6 +1199,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
 
   const handleExtensionUiRequest = useCallback((request: ExtensionUiRequest) => {
+    const cloudScope = cloudScopeRef.current;
     switch (request.method) {
       case "select":
       case "confirm":
@@ -1186,7 +1253,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
                 type: "extension_ui_response",
                 id: request.id,
                 confirmed,
-              });
+              }, cloudScope);
             } catch (error) {
               console.error("Failed to acknowledge EduPi app action:", error);
             }
@@ -1206,7 +1273,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
                 type: "extension_ui_response",
                 id: request.id,
                 value: JSON.stringify(result),
-              });
+              }, cloudScope);
             } catch (error) {
               console.error("Failed to return EduPi computer-use result:", error);
             }
@@ -1760,10 +1827,31 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
     const sendGeneration = sessionGenerationRef.current;
     const originDraftKey = draftKey;
-    const isSlashCommandPrompt = !images?.length && trimmedMessage.startsWith("/");
+    const cloudSend = Boolean(session?.path?.startsWith("cloud:") || session?.cwd?.startsWith("cloud:")
+      || newSessionCwd?.startsWith("cloud:"));
+    let cloudScope: string | null = null;
+    if (cloudSend) {
+      if (images?.length || recall || message.length > 64_000) {
+        addNotice({ type: "warning", message: "云端对话仅支持 64000 字以内的文字" });
+        return false;
+      }
+      try { cloudScope = captureCloudPromptScope(session?.cloudScope); }
+      catch {
+        addNotice({ type: "warning", message: "云端账号或工作区已改变，请刷新后重试" });
+        return false;
+      }
+    }
+    const isSlashCommandPrompt = !cloudSend && !images?.length && trimmedMessage.startsWith("/");
     const priorPrompt = originDraftKey ? getDraft(originDraftKey)?.pendingPrompt : undefined;
+    if (priorPrompt && (Boolean(priorPrompt.cloudScope) !== cloudSend
+      || cloudSend && cloudChatDraftKey(priorPrompt.cloudScope, priorPrompt.sessionId) !== cloudChatDraftKey(cloudScope, priorPrompt.sessionId))) {
+      addNotice({ type: "warning", message: "先前消息属于另一账号或工作区，请先核对" });
+      return false;
+    }
     if (priorPrompt && (priorPrompt.message !== message || images?.length || priorPrompt.purpose !== purpose || recall)) {
-      const status = await (priorPrompt.purpose === "recall"
+      const status = await (priorPrompt.cloudScope && cloudScope
+        ? readCloudPromptReceipt(priorPrompt, cloudScope)
+        : priorPrompt.purpose === "recall"
         ? inspectRecallPrompt(priorPrompt.sessionId, priorPrompt.clientRequestId).then(value => value.status)
         : reconcileEduPiCapturedPrompt(priorPrompt.sessionId, priorPrompt.clientRequestId,
           { type: "prompt", message: priorPrompt.message, clientRequestId: priorPrompt.clientRequestId }))
@@ -1789,11 +1877,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       return false;
     }
     if (priorPrompt && isNew && !sessionIdRef.current) sessionIdRef.current = priorPrompt.sessionId;
-    const cloudSend = Boolean(session?.path?.startsWith("cloud:") || session?.cwd?.startsWith("cloud:")
-      || newSessionCwd?.startsWith("cloud:"));
     const durableSend = isTauriDesktop() && !images?.length && !cloudSend;
 
-    const isBashCommand = !images?.length && trimmedMessage.startsWith("!");
+    const isBashCommand = !cloudSend && !images?.length && trimmedMessage.startsWith("!");
     if (isBashCommand) {
       const isExcluded = trimmedMessage.startsWith("!!");
       const bashCmd = (isExcluded ? trimmedMessage.slice(2) : trimmedMessage.slice(1)).trim();
@@ -1834,6 +1920,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     let promptRequestStarted = false;
     let previouslyResolved = false;
     const assertCurrentSend = (sid?: string | null) => {
+      if (cloudScope) captureCloudPromptScope(cloudScope);
       if (sendGeneration !== sessionGenerationRef.current || promptRunIdRef.current !== promptRunId
         || (sid !== undefined && sessionIdRef.current !== sid)) {
         throw new Error("The conversation changed before the message was submitted.");
@@ -1850,15 +1937,86 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const submitPrompt = async (sid: string): Promise<boolean> => {
       const command = { type: "prompt" as const, message, clientRequestId,
         ...(piImages?.length ? { images: piImages } : {}) };
-      if (cloudSend) {
+      if (cloudSend && cloudScope) {
+        if (!originDraftKey) throw new Error("草稿尚未就绪，消息未发送");
+        const sourceDraft = getDraft(originDraftKey);
+        const selectedModel = newSessionModelOverrideRef.current;
+        const selectedThinkingLevel = thinkingLevelOverrideRef.current;
+        const pending = priorPrompt ?? {
+          sessionId: sid, clientRequestId, occurredAt: new Date(occurredAtMs).toISOString(),
+          message, draftValue: sourceDraft?.value ?? "", cloudScope,
+          ...(isNew ? { cloudNewSession: true } : {}),
+          cloudRequestBody: JSON.stringify({ ...command, ...(isNew ? {
+            cwd: newSessionCwd,
+            ...(selectedModel ? { provider: selectedModel.provider, modelId: selectedModel.modelId } : {}),
+            ...(selectedThinkingLevel ? { thinkingLevel: selectedThinkingLevel } : {}),
+          } : {}) }),
+        };
+        const draftUnedited = chatInputRef?.current?.isSubmittedDraftUnedited?.(originDraftKey, pending.draftValue) === true;
+        if (!sourceDraft || !stagePendingPrompt(originDraftKey, pending, draftUnedited)) throw new Error("发送标识未能保存，消息未发送");
+        const sessionKey = cloudChatDraftKey(cloudScope, sid);
+        if (!sessionKey) throw new Error("云端草稿归属未确认，消息未发送");
+        if (sessionKey !== originDraftKey) {
+          const target = getDraft(sessionKey);
+          if (target?.value && target.value !== sourceDraft.value) throw new Error("会话草稿冲突，消息未发送");
+          if (!target) setDraft(sessionKey, sourceDraft);
+          if (!stagePendingPrompt(sessionKey, pending, draftUnedited)) throw new Error("会话标识未能保存，消息未发送");
+        }
         assertCurrentSend(sid);
+        if (priorPrompt) {
+          const status = await awaitPromptReceipt(readCloudPromptReceipt(pending, cloudScope));
+          assertCurrentSend(sid);
+          if (status === "accepted") {
+            previouslyResolved = true;
+            acknowledgeSubmittedPrompt(originDraftKey, pending);
+            dispatchMessageHistory({ type: "remove_optimistic", requestId: clientRequestId });
+            rpcPromptPendingRef.current = false;
+            void ensureEventsConnected(sid).catch(() => {});
+            void loadSession(sid);
+            return true;
+          }
+          if (status !== "not_found") {
+            rpcPromptPendingRef.current = false;
+            addNotice({ type: "warning", message: "云端发送结果待核对，原消息已保留" });
+            return false;
+          }
+        }
         promptRequestStarted = true;
-        await awaitPromptReceipt(sendAgentCommand(sid, command));
+        const receipt = await awaitPromptReceipt((async () => {
+          const response = await fetch(pending.cloudNewSession ? "/api/agent/new" : `/api/agent/${encodeURIComponent(sid)}`, {
+            method: "POST", headers: agentEducationWriteHeaders({ "Content-Type": "application/json" }, cloudScope),
+            body: pending.cloudRequestBody,
+          });
+          const body = await response.json() as {
+            success?: boolean; error?: string; sessionId?: string; clientRequestId?: string; queued?: boolean; pendingSync?: boolean;
+          };
+          if (!response.ok || body.error || body.success !== true) throw new Error(body.error || `HTTP ${response.status}`);
+          if (body.clientRequestId !== clientRequestId || body.sessionId && body.sessionId !== sid) throw new Error("云端回执标识不一致，原消息已保留");
+          return { body, status: response.status };
+        })());
+        assertCurrentSend(sid);
+        if (receipt.status === 202 || receipt.body.queued || receipt.body.pendingSync) {
+          rpcPromptPendingRef.current = false;
+          dispatchMessageHistory({ type: "remove_optimistic", requestId: clientRequestId });
+          addNotice({ type: "info", message: "已保存，联网后同步。" });
+          return false;
+        }
+        void ensureEventsConnected(sid).catch(() => {});
+        const status = await awaitPromptReceipt(readCloudPromptReceipt(pending, cloudScope));
+        assertCurrentSend(sid);
+        if (status !== "accepted") {
+          rpcPromptPendingRef.current = false;
+          addNotice({ type: "warning", message: "云端发送结果待核对，原消息已保留" });
+          return false;
+        }
+        acknowledgeSubmittedPrompt(originDraftKey, pending);
+        rpcPromptPendingRef.current = false;
+        void loadSession(sid);
         return true;
       }
       if (durableSend) {
         if (!originDraftKey) throw new Error("草稿尚未就绪，消息未发送");
-        await sendAgentCommand(sid, { type: "persist_session" });
+        await sendAgentCommand(sid, { type: "persist_session" }, cloudScope);
         const sourceDraft = getDraft(originDraftKey);
         const pending = { sessionId: sid, clientRequestId, occurredAt: new Date(occurredAtMs).toISOString(),
           message, draftValue: priorPrompt?.draftValue ?? sourceDraft?.value ?? "", ...(recall ? { purpose: "recall" as const } : {}) };
@@ -1942,7 +2100,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       if (isSlashCommandPrompt && !durableSend) {
         promptRequestStarted = true;
-        await awaitPromptReceipt(sendAgentCommand(sid, { ...command, awaitUserPersistence: true }));
+        await awaitPromptReceipt(sendAgentCommand(sid, { ...command, awaitUserPersistence: true }, cloudScope));
         return true;
       }
       // A lost response can mean Pi accepted the prompt. Never blindly replay it.
@@ -1977,7 +2135,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           addNotice({ type: "warning", message: "先前发送结果未核对，未自动重发" });
           return false;
         }
-        await awaitPromptReceipt(sendAgentCommand(sid, { ...command, awaitUserPersistence: true }));
+        await awaitPromptReceipt(sendAgentCommand(sid, { ...command, awaitUserPersistence: true }, cloudScope));
         if (durableSend) {
           try { await awaitPromptReceipt(resolveEduPiPromptIntentClient(sid, clientRequestId)); }
           catch {
@@ -2001,7 +2159,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
     let confirmed = true;
     try {
-      if (isNew && newSessionCwd) {
+      if (cloudSend && cloudScope) {
+        const sid = priorPrompt?.sessionId ?? (!isNew ? session?.id : null)
+          ?? await cloudSessionIdForRequest(cloudScope, clientRequestId);
+        assertCurrentSend();
+        sessionIdRef.current = sid;
+        sentSessionId = sid;
+        confirmed = await submitPrompt(sid);
+        assertCurrentSend(sid);
+        if (confirmed) promoteNewSession(1, message);
+      } else if (isNew && newSessionCwd) {
         const selectedModel = newSessionModel;
         const existingSid = sessionIdRef.current ?? await ensuringNewSessionRef.current;
         assertCurrentSend();
@@ -2013,7 +2180,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (selectedModel) {
             setPendingModel(selectedModel);
             if (existingSid) {
-              await sendAgentCommand(sid, { type: "set_model", provider: selectedModel.provider, modelId: selectedModel.modelId });
+              await sendAgentCommand(sid, { type: "set_model", provider: selectedModel.provider, modelId: selectedModel.modelId }, cloudScope);
               assertCurrentSend(sid);
             }
           }
@@ -2094,6 +2261,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [isNew, newSessionCwd, newSessionModel, session, draftKey, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, acknowledgeSubmittedPrompt, addNotice, cancelEventStreamGrace, closeEvents, dispatch, dispatchMessageHistory, chatInputRef, settleUiStage, loadSession]);
 
   const executeBash = useCallback(async (command: string, excludeFromContext: boolean) => {
+    const cloudScope = cloudScopeRef.current;
     if (agentRunningRef.current || bashRunningRef.current) return;
     const inputText = `${excludeFromContext ? "!!" : "!"}${command}`;
     bashRunningRef.current = true;
@@ -2106,7 +2274,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         type: "bash",
         command,
         excludeFromContext,
-      });
+      }, cloudScope);
       await loadSession(sid);
       promoteNewSession(1, inputText, true);
     } catch (e) {
@@ -2122,25 +2290,29 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   executeBashRef.current = executeBash;
 
   const handleAbort = useCallback(async () => {
+    const cloudScope = cloudScopeRef.current;
     invalidateCoreRecallLive();
     const sid = sessionIdRef.current;
     if (!sid) return;
     if (bashRunningRef.current) {
       try {
-        await sendAgentCommand(sid, { type: "abort_bash" });
+        await sendAgentCommand(sid, { type: "abort_bash" }, cloudScope);
       } catch (e) {
         console.error("Failed to abort bash:", e);
       }
       return;
     }
     try {
-      await sendAgentCommand(sid, { type: "abort" });
+      await sendAgentCommand(sid, { type: "abort" }, cloudScope);
     } catch (e) {
       console.error("Failed to abort:", e);
+      addNotice({ type: e instanceof Error && e.name === "AgentCommandPendingError" ? "info" : "error",
+        message: e instanceof Error ? e.message : String(e) });
     }
-  }, [invalidateCoreRecallLive]);
+  }, [invalidateCoreRecallLive, addNotice]);
 
   const handleInterruptSend = useCallback(async (message: string, images?: AttachedImage[]) => {
+    const cloudScope = cloudScopeRef.current;
     if (interruptSendInFlightRef.current) throw new Error("正在打断当前处理，请稍候");
     const sid = sessionIdRef.current;
     if (!sid || !agentRunningRef.current || bashRunningRef.current) return false;
@@ -2150,11 +2322,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     interruptSendInFlightRef.current = true;
     try {
       return await interruptForPrioritySend({
-        readState: () => sendAgentCommand<AgentStateResponse>(sid, { type: "get_state" }),
+        readState: () => sendAgentCommand<AgentStateResponse>(sid, { type: "get_state" }, cloudScope),
         canAbort: () => promptSubmissionRunIdRef.current !== runId
           && (!isTauriDesktop() || Boolean(draftKey))
           && (!draftKey || !getDraft(draftKey)?.pendingPrompt),
-        abort: () => sendAgentCommand<void>(sid, { type: "abort" }),
+        abort: () => sendAgentCommand<void>(sid, { type: "abort" }, cloudScope),
         settle: async () => {
           await waitForPromptSettlement(sid, runId);
           if (sessionIdRef.current !== sid || sessionGenerationRef.current !== generation || promptRunIdRef.current !== runId) {
@@ -2174,6 +2346,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [draftKey, finishPromptWithoutStream, handleSend, invalidateCoreRecallLive, waitForPromptSettlement]);
 
   const handleFork = useCallback(async (entryId: string) => {
+    const cloudScope = cloudScopeRef.current;
     if (bashRunningRef.current) return;
     const sid = sessionIdRef.current;
     if (!sid) return;
@@ -2182,7 +2355,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const result = await sendAgentCommand<{ cancelled?: boolean; newSessionId?: string }>(sid, {
         type: "fork",
         entryId,
-      });
+      }, cloudScope);
       const { cancelled, newSessionId } = result ?? {};
       if (!cancelled && newSessionId) {
         onSessionForked?.(newSessionId);
@@ -2195,16 +2368,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [onSessionForked]);
 
   const handleNavigate = useCallback(async (entryId: string) => {
+    const cloudScope = cloudScopeRef.current;
     if (bashRunningRef.current) return;
     const sid = sessionIdRef.current;
     if (!sid) return;
     invalidateCoreRecallLive();
-    sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }).catch(() => {});
+    sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }, cloudScope).catch(() => {});
     setActiveLeafId(entryId);
     await loadContext(sid, entryId);
   }, [invalidateCoreRecallLive, loadContext]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
+    const cloudScope = cloudScopeRef.current;
     if (bashRunningRef.current) return;
     const sid = sessionIdRef.current;
     if (!sid) return;
@@ -2212,11 +2387,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setActiveLeafId(leafId);
     const loaded = await loadContext(sid, leafId);
     if (loaded && leafId && sessionIdRef.current === sid) {
-      sendAgentCommand(sid, { type: "navigate_tree", targetId: leafId }).catch(() => {});
+      sendAgentCommand(sid, { type: "navigate_tree", targetId: leafId }, cloudScope).catch(() => {});
     }
   }, [invalidateCoreRecallLive, loadContext]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
+    const cloudScope = cloudScopeRef.current;
     if (isNew) {
       const selectedModel = { provider, modelId };
       newSessionModelOverrideRef.current = selectedModel;
@@ -2225,30 +2401,35 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const sid = sessionIdRef.current ?? await ensuringNewSessionRef.current;
       if (!sid) return;
       try {
-        await sendAgentCommand(sid, { type: "set_model", provider, modelId });
+        await sendAgentCommand(sid, { type: "set_model", provider, modelId }, cloudScope);
       } catch (e) {
         console.error("Failed to set model:", e);
+        addNotice({ type: e instanceof Error && e.name === "AgentCommandPendingError" ? "info" : "error",
+          message: e instanceof Error ? e.message : String(e) });
       }
       return;
     }
     const sid = sessionIdRef.current;
     if (!sid) return;
     try {
-      await sendAgentCommand(sid, { type: "set_model", provider, modelId });
+      await sendAgentCommand(sid, { type: "set_model", provider, modelId }, cloudScope);
       setCurrentModelOverride({ provider, modelId });
     } catch (e) {
       console.error("Failed to set model:", e);
+      addNotice({ type: e instanceof Error && e.name === "AgentCommandPendingError" ? "info" : "error",
+        message: e instanceof Error ? e.message : String(e) });
     }
-  }, [isNew, setNewSessionModel]);
+  }, [isNew, setNewSessionModel, addNotice]);
 
   const handleCompact = useCallback(async () => {
+    const cloudScope = cloudScopeRef.current;
     const sid = sessionIdRef.current;
     if (!sid || isCompacting) return;
     setIsCompacting(true);
     setCompactError(null);
     setCompactResult(null);
     try {
-      const result = await sendAgentCommand<CompactCommandResult>(sid, { type: "compact" });
+      const result = await sendAgentCommand<CompactCommandResult>(sid, { type: "compact" }, cloudScope);
       setCompactResult(readCompactResult(result, "manual"));
       await loadSession(sid, true);
     } catch (e) {
@@ -2288,6 +2469,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [isNew, newSessionCwd, session?.cwd]);
 
   const handleBuiltinSlashCommand = useCallback(async (text: string): Promise<BuiltinSlashCommandResult> => {
+    const cloudScope = cloudScopeRef.current;
     if (!text.startsWith("/")) return { handled: false };
     const match = text.match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/);
     if (!match) return { handled: false };
@@ -2315,7 +2497,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           const result = await sendAgentCommand<CompactCommandResult>(sid, {
             type: "compact",
             ...(args ? { customInstructions: args } : {}),
-          });
+          }, cloudScope);
           setCompactResult(readCompactResult(result, "manual"));
           if (await loadSession(sid, true)) promoteNewSession(0, "(no messages)", true);
           return complete({ handled: true, message: "Compacted context" });
@@ -2323,7 +2505,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
         case "reload": {
           if (!sid) return complete({ handled: true, error: "No active session to reload" });
-          await sendAgentCommand(sid, { type: "reload" });
+          await sendAgentCommand(sid, { type: "reload" }, cloudScope);
           await Promise.all([
             loadSession(sid, false, true),
             loadTools(sid),
@@ -2336,14 +2518,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         case "name": {
           if (!sid) return complete({ handled: true, error: "No active session to name" });
           if (!args) return complete({ handled: true, error: "Usage: /name <name>" });
-          await sendAgentCommand(sid, { type: "set_session_name", name: args });
+          await sendAgentCommand(sid, { type: "set_session_name", name: args }, cloudScope);
           if (await loadSession(sid)) promoteNewSession(0, "(no messages)", true);
           return complete({ handled: true, message: `Session renamed to ${args}` });
         }
 
         case "session": {
           if (!sid) return complete({ handled: true, error: "No active session" });
-          const stats = await sendAgentCommand<SessionStatsInfo>(sid, { type: "get_session_stats" });
+          const stats = await sendAgentCommand<SessionStatsInfo>(sid, { type: "get_session_stats" }, cloudScope);
           if (stats) {
             setSessionStatsOverride(stats);
           }
@@ -2353,7 +2535,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
         case "copy": {
           if (!sid) return complete({ handled: true, error: "No active session" });
-          const data = await sendAgentCommand<LastAssistantTextResponse>(sid, { type: "get_last_assistant_text" });
+          const data = await sendAgentCommand<LastAssistantTextResponse>(sid, { type: "get_last_assistant_text" }, cloudScope);
           const textToCopy = data?.text ?? "";
           if (!textToCopy) return complete({ handled: true, error: "No assistant message to copy" });
           const { copyText } = await import("@/lib/clipboard");
@@ -2376,6 +2558,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // optimistic chat bubble here would duplicate the queue panel and turn into
   // a ghost message if the queue is recalled.
   const handleSteer = useCallback(async (message: string, images?: AttachedImage[]) => {
+    const cloudScope = cloudScopeRef.current;
+    if (cloudChatRef.current) {
+      const error = new Error("云端处理期间请等待当前回复后再发送，草稿已保留");
+      addNotice({ type: "warning", message: error.message });
+      throw error;
+    }
     const sid = sessionIdRef.current;
     if (!sid) throw new Error("会话尚未就绪");
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
@@ -2384,18 +2572,24 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         type: "steer",
         message,
         ...(piImages?.length ? { images: piImages } : {}),
-      });
+      }, cloudScope);
     } catch (e) {
       console.error("Failed to steer:", e);
       throw e;
     }
-  }, []);
+  }, [addNotice]);
 
   const handlePromptWithStreamingBehavior = useCallback(async (
     message: string,
     behavior: "steer" | "followUp",
     images?: AttachedImage[],
   ) => {
+    const cloudScope = cloudScopeRef.current;
+    if (cloudChatRef.current) {
+      const error = new Error("云端处理期间请等待当前回复后再发送，草稿已保留");
+      addNotice({ type: "warning", message: error.message });
+      throw error;
+    }
     const sid = sessionIdRef.current;
     if (!sid) throw new Error("会话尚未就绪");
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
@@ -2405,14 +2599,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         message,
         streamingBehavior: behavior,
         ...(piImages?.length ? { images: piImages } : {}),
-      });
+      }, cloudScope);
     } catch (e) {
       console.error("Failed to queue prompt:", e);
       throw e;
     }
-  }, []);
+  }, [addNotice]);
 
   const handleFollowUp = useCallback(async (message: string, images?: AttachedImage[]) => {
+    const cloudScope = cloudScopeRef.current;
+    if (cloudChatRef.current) {
+      const error = new Error("云端处理期间请等待当前回复后再发送，草稿已保留");
+      addNotice({ type: "warning", message: error.message });
+      throw error;
+    }
     const sid = sessionIdRef.current;
     if (!sid) throw new Error("会话尚未就绪");
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
@@ -2421,18 +2621,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         type: "follow_up",
         message,
         ...(piImages?.length ? { images: piImages } : {}),
-      });
+      }, cloudScope);
     } catch (e) {
       console.error("Failed to follow up:", e);
       throw e;
     }
-  }, []);
+  }, [addNotice]);
 
   const handleAbortCompaction = useCallback(async () => {
+    const cloudScope = cloudScopeRef.current;
     const sid = sessionIdRef.current;
     if (!sid) return;
     try {
-      await sendAgentCommand(sid, { type: "abort_compaction" });
+      await sendAgentCommand(sid, { type: "abort_compaction" }, cloudScope);
     } catch (e) {
       console.error("Failed to abort compaction:", e);
     }
@@ -2553,6 +2754,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [chatInputRef, addNotice]);
 
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
+    const cloudScope = cloudScopeRef.current;
     setThinkingLevel(level);
     if (isNew && !sessionIdRef.current) {
       thinkingLevelOverrideRef.current = level === "auto" ? null : level;
@@ -2561,13 +2763,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const sid = sessionIdRef.current ?? await ensuringNewSessionRef.current;
     if (!sid) return;
     try {
-      await sendAgentCommand(sid, { type: "set_thinking_level", level });
+      await sendAgentCommand(sid, { type: "set_thinking_level", level }, cloudScope);
     } catch (e) {
       console.error("Failed to set thinking level:", e);
+      addNotice({ type: e instanceof Error && e.name === "AgentCommandPendingError" ? "info" : "error",
+        message: e instanceof Error ? e.message : String(e) });
     }
-  }, [isNew]);
+  }, [isNew, addNotice]);
 
   const handleToolPresetChange = useCallback(async (preset: "none" | "default" | "full") => {
+    const cloudScope = cloudScopeRef.current;
     toolsLoadIdRef.current++;
     const toolNames = getToolNamesForPreset(preset);
     setToolPresetState(preset);
@@ -2576,14 +2781,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const sid = sessionIdRef.current ?? await ensuringNewSessionRef.current;
     if (!sid) return;
     try {
-      await sendAgentCommand(sid, { type: "set_tools", toolNames });
-      await sendAgentCommand(sid, { type: "set_access_mode", mode: getPermissionModeForToolPreset(preset) });
+      await sendAgentCommand(sid, { type: "set_tools", toolNames }, cloudScope);
+      await sendAgentCommand(sid, { type: "set_access_mode", mode: getPermissionModeForToolPreset(preset) }, cloudScope);
     } catch (e) {
       console.error("Failed to set tools:", e);
     }
   }, [setToolPresetState]);
 
   const handlePermissionModeChange = useCallback(async (mode: PermissionMode) => {
+    const cloudScope = cloudScopeRef.current;
     toolsLoadIdRef.current++;
     const preset = getToolPresetForPermissionMode(mode);
     const toolNames = getToolNamesForPreset(preset);
@@ -2594,8 +2800,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const sid = sessionIdRef.current ?? await ensuringNewSessionRef.current;
     if (!sid) return;
     try {
-      await sendAgentCommand(sid, { type: "set_tools", toolNames });
-      await sendAgentCommand(sid, { type: "set_access_mode", mode });
+      await sendAgentCommand(sid, { type: "set_tools", toolNames }, cloudScope);
+      await sendAgentCommand(sid, { type: "set_access_mode", mode }, cloudScope);
     } catch (e) {
       console.error("Failed to set access mode:", e);
     }
@@ -2679,6 +2885,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   useLayoutEffect(() => {
     if (!sessionIdentity) return;
 
+    if ((session?.path?.startsWith("cloud:") || session?.cwd?.startsWith("cloud:") || newSessionCwd?.startsWith("cloud:"))
+      && !displayedCloudScope) {
+      cancelEventStreamGrace();
+      closeEvents();
+      sessionIdRef.current = null;
+      setLoading(false);
+      setError("云端账号或工作区尚未确认，请刷新后重试");
+      return;
+    }
     const isExisting = !sessionIdentity.startsWith("new:");
     if (
       isExisting
@@ -2745,6 +2960,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     });
   }, [
     sessionIdentity,
+    displayedCloudScope,
+    session?.path,
+    session?.cwd,
+    newSessionCwd,
     cancelEventStreamGrace,
     closeEvents,
     connectEvents,
