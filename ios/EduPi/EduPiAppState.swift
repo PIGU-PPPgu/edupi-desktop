@@ -143,14 +143,14 @@ final class EduPiAppState: ObservableObject {
         dashboard.tasks[index].revision += 1
     }
 
-    func createTask(title: String, note: String) async -> Bool {
+    func createTask(title: String, note: String, requestID: String? = nil) async -> Bool {
         if isPreview { return createPreviewTask(title: title, note: note) }
         guard let api else {
             syncError = "云端账号未登录"
             return false
         }
         do {
-            let task = try await api.createTask(title: title, note: note)
+            let task = try await api.createTask(title: title, note: note, requestID: requestID)
             guard let index = dashboard.tasks.firstIndex(where: { $0.id == task.id }) else {
                 dashboard.tasks.insert(EduPiTaskItem(id: task.id, title: task.title, dueDate: task.dueDate, note: task.note,
                     stage: EduPiTaskStage(rawValue: task.stage) ?? .todo, revision: task.revision), at: 0)

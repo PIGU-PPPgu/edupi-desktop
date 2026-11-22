@@ -614,6 +614,7 @@ struct EduPiCreateTaskView: View {
     @ObservedObject var state: EduPiAppState
     @State private var title = ""
     @State private var note = ""
+    @State private var requestID = "ios-task-create-\(UUID().uuidString)"
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -634,7 +635,7 @@ struct EduPiCreateTaskView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
                         Task {
-                            if await state.createTask(title: title, note: note) { dismiss() }
+                            if await state.createTask(title: title, note: note, requestID: requestID) { dismiss() }
                         }
                     }
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || title.count > 240)

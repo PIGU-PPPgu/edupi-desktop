@@ -566,7 +566,7 @@ final class EduPiRemoteAPI {
         )
     }
 
-    func createTask(title: String, note: String?) async throws -> EduPiRemoteTask {
+    func createTask(title: String, note: String?, requestID: String? = nil) async throws -> EduPiRemoteTask {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty, trimmedTitle.count <= 240 else {
             throw EduPiRemoteAPIError.server(statusCode: 400, message: "任务名称无效。")
@@ -577,7 +577,7 @@ final class EduPiRemoteAPI {
             body: ["operation": "snapshot"],
             workspaceID: try requiredWorkspaceID()
         )
-        let requestID = "ios-task-create-\(UUID().uuidString)"
+        let requestID = requestID ?? "ios-task-create-\(UUID().uuidString)"
         let taskNote: Any = note?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? note! : NSNull()
         let command: [String: Any] = [
             "command_type": "create_task",
