@@ -1,5 +1,7 @@
 # EduPi 产品闭环 PR 路线图
 
+2026-11-23 R24.4c 风险续修最新状态：生产源码 `7f484fb`，候选 `.125`。云错误状态、提醒相对路径、本地备课/绑定误回落、材料丢 ACK、会话创建依赖、聊天完整请求持久化、账号草稿隔离及 queued 界面反馈已修复；真实 HTTPS 复验材料和聊天请求的精确重放与写后回读。最终源码整套 5,303 tests／5,227 passed／0 failed／76 conditional skipped，types 通过，lint 0 errors／7 warnings；跳过不计通过。独立最终复审、PR523 合并及同源 Mac 签名安装发布继续单独记录，尚未完成。Mac 原生操作实际返回 `screen_locked`；物理设备清单仍只有 simulated，两个外部条件不影响继续 CLI 和签名准备。证据见 [R24.4c 验收](../acceptance/2026-11-22-mobile-api-sync/README.zh-CN.md)。
+
 2026-11-23 R24.4c 接续：用户要求补完剩余 Risk、实体 iPhone 登录/写入/断网/重启、Tauri WebView 冷启动，以及当前源码的 macOS 签名、公证、安装、升级和 Release。基线为 PR519 merge `81f53d02` 加 PR520 版本提交；以下逐项记录，整体仍为**部分实现**，不得以一个 PR 或模拟器编译完成代替全部验收。Windows 继续按用户明确要求暂停。
 
 | R24.4c 欠项 | 当前状态 | 本轮验收条件 |

@@ -1,15 +1,23 @@
 # R24.4c 可选云端同步验收
 
-2026-11-23 当前续验取代下方 22 日的“未接入”状态：候选 `.125`，基线 main `f0cb69e9`，分支 `codex/edupi-cloud-risk-completion-20261123`。源码已实现，当前仍待最终合并、macOS 签名安装/升级/公开 Release 和实体 iPhone，整体不记为完成。Windows 继续暂停。
+2026-11-23 当前续验取代下方 22 日的“未接入”状态：候选 `.125`，基线 main `f0cb69e9`，分支 `codex/edupi-cloud-risk-completion-20261123`。源码已实现，当前仍待最终合并、macOS 签名安装/升级/公开 Release 和实体 iPhone，整体不记为完成。Windows 继续暂停；最新逐项状态以本页“未完成验收”表为准。
 
 - 学生 import/update/history/restore：真实 PostgreSQL、角色/RLS、同名异班、50 条版本窗口和 HTTPS 写后回读通过。
 - 云端文字对话：专用 lease、nonce/generation、请求幂等、事件游标、本机真实 Pi harness 和合成模型 HTTPS 回读通过；页面完成两轮，final journal 在服务重启后恢复，不重复调用模型。工具关闭；合成模型只用于传输验收，不代表教学内容质量。
 - 材料：实际页面登录/选择 workspace、暂存→Storage 字节核验→列表、软删除→回收站恢复→原列表回读通过；另实际断网保存后停止/重启服务，确认原 ID/fingerprint 和文件保留，恢复网络后 outbox=0、upload_verified=true、staging_settled=true。
-- 班级：固定 Core `fc89b3bc…` 真实成绩、排座、值日计算，独立 PostgreSQL 14/14 通过；HTTPS 三域 preview→save→客户端重建重放→回读通过，值日真实任务在 dashboard 回读一致。
+- 班级：固定 Core `fc89b3bc…` 真实成绩、排座、值日计算，独立 PostgreSQL 增加 Unicode 边界后 15/15 通过；HTTPS 三域 preview→save→客户端重建重放→回读通过，值日真实任务在 dashboard 回读一致。
 - iOS：33 条 cloud Swift XCTest、5 条现有 UI 测试通过，最终 sync 合同 hash 与 Desktop/Edge/registry 一致；这些是 Simulator/URLProtocol 证据，实体 iPhone 仍未接入。
 - 新增 SQL 已按回滚事务检查后增量部署，并备份服务器 schema、control data、原函数和配置到 `/srv/edupi-supabase/backups/20261123-cloud-risk/`；没有重装数据库或分发 service role。
 
 本机证据：`/tmp/edupi-cloud-risk-http-20261123.log`、`/tmp/edupi-cloud-chat-worker-e2-20261123.log`、`/tmp/edupi-desktop-cloud-client-e2-20261123.log`、`/tmp/edupi-classroom-https-live3-20261123.log`、`/tmp/edupi-cloud-classroom-main-verification2-20261123.log`、`/tmp/edupi-cloud-lease-regression-20261123.log`、`/tmp/edupi-risk-ui-20261123/offline-proof.json`。页面使用隔离账号/根和合成 Tauri IPC 适配，仅证明开发页面；原生 WebView 必须用最终安装包另验。22 日记录作为历史阶段保留。
+
+2026-11-23 风险续修：`6ef4822` 保留 11 个入口的云错误状态，并阻止 cloud 事项进入本地备课、绑定及提醒文件；107/107 定向检查通过。`9291d3b` 修复材料回执丢失后的已有对象恢复，真实 HTTPS 在完整接收写入成功回执后故意丢 ACK，再用新客户端默认 fetch 重放，确认原 envelope/request/receipt、远端字节和唯一材料记录，最后 outbox=0、staging=0；日志为 `/tmp/edupi-material-ack-loss-current-20261123.log`。此前真实 Storage 对已有对象重新签名返回 503 的失败证据保留。
+
+会话新增恢复验证使用 `scripts/test-edupi-cloud-chat-ack-loss.mjs`：只让创建请求在服务端提交前失败一次，然后立即恢复真实网络，API 仍返回 202 和固定 sessionId，首次消息依赖创建完成后才投递；重建客户端后仅一条 request 和一条用户消息。另分别验证真实改名、停止、配置、删除成功后消费完整回执再丢 ACK，接口均返回待同步，新客户端使用原请求重放并重新读取，最终队列 0。日志 `/tmp/edupi-chat-ack-loss-https-20261123.log`，首次“排队请求尚未停止便改配置”的 409 测试顺序错误保留在 `...-attempt1.log`；修正为先停止后配置，不放宽生产校验。新的草稿/发送恢复和侧栏组件检查单独记录，不将其冒充安装版交互。
+
+`7f484fb` 最终源码检查：`/tmp/edupi-0125-final-source-tests-20261123.log` 为 5,303 tests／5,227 passed／0 failed／76 conditional skipped；`...-types-...log` 通过，`...-lint-...log` 为 0 errors、7 warnings，合同 10/10。完整首条消息持久化、丢 ACK、冷重载、同账号重新登录、跨账号草稿与迟到回执等 worker 回归 168/168；侧栏 queued/失败/确认及同步后刷新为实际 React 组件 7/7；原导航与侧栏组合 52/52、发送生命周期及草稿哨兵组合 49/49。首次全套的旧夹具 54 项失败留存在 `...-tests-20261123-attempt1.log`，补新导入与实际 scope/回执字段后完整重跑通过，未删断言。76 条条件跳过不计通过，固定 Core 班级计算与独立数据库的针对性证据另见 15/15 日志。
+
+真实资料保护回查仍保留严格失败记录：775 个原文件中 773 个保持原字节，`feishu-bridge.log` 与 `runtime_events.jsonl` 由现有飞书桥重连追加 32／553 bytes，旧前缀与备份一致；事件类型仅 `channel_reconnecting/channel_reconnected`。未用备份覆盖这些新日志，正常 `/Applications/EduPi.app` 未运行或替换。私有保护证据为安装 checkpoint 的 `evidence/real-baseline-after-source-recovery.json` 和 `real-automatic-log-delta.json`，后续安装前另取当时状态，不把本次严格比较改记为通过。
 
 日期：2026-11-22，替代本目录旧的开发工作树测试记录；原 R24.4b 本地账号服务与完整 R04/L4 状态不变。
 
@@ -85,12 +93,13 @@ GitHub 审查补丁另有 Node 行为测试证明 cloud 任务/Today 审核在�
 | 原生 Desktop 不登录的完整教师工作流 | 默认与 local 回归通过；本轮未重新安装 App 操作 |
 | 原生 WebView 登录、切换、离线恢复和冷重启 | 实际客户端 HTTPS、组件交互通过；组合安装版未验 |
 | Desktop 新事实的可见录入入口 | broker/client capture 通过；Pi chat capture 到云端尚未接入 |
-| Desktop 材料 staging→Storage→重读 | cloud client 的上传、intake、Storage 下载回读通过；原生暂存 UI/安装版未验 |
+| Desktop 材料 staging→Storage→重读 | 开发页面及真实 Storage、断网重启和丢 ACK 精确重放通过；原生安装版未验 |
 | iPhone 读取桌面新任务 | mobile-dashboard 独立客户端通过；实体 iPhone 未验 |
 | iPhone 修改后 Desktop 读取 | iOS 任务/学生事件写入 API 已编译；实体 iPhone 与跨客户端写入未验 |
-| 全量事实脊柱编辑、学生/班级/校历/课表写入 | 校历/课表 cloud client E2 通过，班级路由已接入；学生档案、完整事实脊柱和安装版 UI 未验 |
-| 周期任务、课前准备、任务审核、对象删除/恢复 | 保持本地功能；cloud 未支持项明确拒绝 |
-| Session/SSE/Pi prompt、Runtime 云 register/lease/event | 保持本机 Core；尚未接入 Desktop 云控制 |
+| 全量事实脊柱编辑、学生/班级/校历/课表写入 | 学生及版本、班级三域、校历/课表 HTTPS 和真实 Core 通过；完整事实脊柱及安装版 UI 未验 |
+| 周期任务、课前准备、任务审核、提醒与本地会话绑定 | 保持本地功能；cloud 未支持入口拒绝，不写入本地对象或相对文件夹 |
+| 对象删除/恢复 | 通用软删除及材料开发页面跨入口回读通过；安装版 UI 未验 |
+| Session/SSE/Pi prompt、Runtime 云 register/lease/event | 已接入；HTTPS、本机真实 Pi harness、开发页面两轮及重启恢复通过；新增发送恢复未验安装版 |
 | 原生后台真实断网与恢复 | 隔离传输断网和浏览器可见性模拟已验，系统真实断网未验 |
 | macOS 新安装包、签名、公证、升级和 Release | 当前分支没有对应安装包；另一聊天的 `.123` 资产不能证明本轮代码 |
 | Windows runner/构建/打包/安装/升级 | 用户明确暂停，未启动 |
@@ -104,4 +113,4 @@ GitHub 审查补丁另有 Node 行为测试证明 cloud 任务/Today 审核在�
 - iOS 任务创建/移动、学生事件修改/删除 API 已加入；无签名 iOS Simulator build 为 `BUILD SUCCEEDED`。
 - Desktop classroom cloud route 已加入已有 `edupi-classroom` writer 并对保存/恢复回读；真实安装版 UI 尚未操作。
 
-尚未完成的独立范围仍包括 Pi chat/session/SSE/prompt、学生名单/档案 cloud writer、通用对象删除恢复、Desktop Runtime supervisor 联动、实体 iPhone 写入、macOS 当前分支签名安装/升级/Release；Windows 按用户要求暂停。
+上段为 22 日追加的阶段证据；Pi chat/session/SSE/prompt、学生名单/档案 cloud writer、对象删除恢复和 Runtime 联动的 23 日实现与开发验收已记在页首。实体 iPhone、macOS 当前分支签名安装/升级/Release 仍单独待验；Windows 按用户要求暂停。
