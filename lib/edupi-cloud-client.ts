@@ -463,7 +463,32 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
       || descriptor.expected_size_bytes !== Number(body.size_bytes)) {
       return fail("staging_integrity_conflict", "暂存材料已变化，请重新上传。", 409);
     }
-    const uploadResponse = await edgeRequest("edupi-materials", {
+    const verifyUpload = async (objectKey: string) => edgeRequest("edupi-materials", {
+      body: {
+        action: "verify_upload",
+        request_id: body.request_id,
+        material_id: body.material_id,
+        file_name: body.file_name,
+        content_type: body.content_type,
+        size_bytes: body.size_bytes,
+        sha256: body.sha256,
+        object_key: objectKey,
+      },
+    }, scope);
+    let existingUpload: Record<string, unknown> | null = null;
+    if (typeof body.object_key === "string") {
+      try {
+        const existing = await verifyUpload(body.object_key);
+        if (existing.verified !== true || existing.object_key !== body.object_key
+          || existing.sha256 !== body.sha256 || existing.size_bytes !== body.size_bytes) {
+          return fail("material_integrity_conflict", "云端材料二进制核对失败，材料仍保留。", 409);
+        }
+        existingUpload = existing;
+      } catch (error) {
+        if (!(error instanceof EduPiCloudError) || error.code !== "material_not_uploaded") throw error;
+      }
+    }
+    const uploadResponse = existingUpload || await edgeRequest("edupi-materials", {
       body: {
         action: "create_upload",
         request_id: body.request_id,
@@ -479,7 +504,7 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
       ? uploadResponse.token : null;
     const objectKey = typeof uploadResponse.object_key === "string" && uploadResponse.object_key.length > 0 && uploadResponse.object_key.length <= 500
       ? uploadResponse.object_key : null;
-    if (!token || !objectKey || uploadResponse.external_send !== false) {
+    if (!existingUpload && !token || !objectKey || uploadResponse.external_send !== false) {
       return fail("invalid_response", "云端材料上传地址无效。", 502);
     }
     if (body.object_key && body.object_key !== objectKey) {
@@ -504,29 +529,18 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
       });
       entry.body = body;
     }
-    const verifyUpload = async () => edgeRequest("edupi-materials", {
-      body: {
-        action: "verify_upload",
-        request_id: body.request_id,
-        material_id: body.material_id,
-        file_name: body.file_name,
-        content_type: body.content_type,
-        size_bytes: body.size_bytes,
-        sha256: body.sha256,
-        object_key: body.object_key || objectKey,
-      },
-    }, scope);
-    let alreadyVerified = false;
-    try {
-      const existing = await verifyUpload();
-      alreadyVerified = existing.verified === true && existing.object_key === (body.object_key || objectKey)
-        && existing.sha256 === body.sha256 && existing.size_bytes === body.size_bytes;
-    } catch (error) {
-      if (!(error instanceof EduPiCloudError)
-        || !["material_not_uploaded", "material_integrity_conflict"].includes(error.code)) throw error;
-      if (error.code === "material_integrity_conflict") throw error;
+    let alreadyVerified = existingUpload !== null;
+    if (!alreadyVerified) {
+      try {
+        const existing = await verifyUpload(objectKey);
+        alreadyVerified = existing.verified === true && existing.object_key === objectKey
+          && existing.sha256 === body.sha256 && existing.size_bytes === body.size_bytes;
+      } catch (error) {
+        if (!(error instanceof EduPiCloudError) || error.code !== "material_not_uploaded") throw error;
+      }
     }
     if (!alreadyVerified) {
+      if (!token) return fail("invalid_response", "云端材料上传地址无效。", 502);
       let putSucceeded = false;
       const configValue = config();
       const encodedPath = objectKey.split("/").map(segment => encodeURIComponent(segment)).join("/");
@@ -543,7 +557,7 @@ export function createEduPiCloudClient(options: EduPiCloudClientOptions = {}) {
         putSucceeded = false;
       }
       try {
-        const confirmed = await verifyUpload();
+        const confirmed = await verifyUpload(objectKey);
         if (confirmed.verified !== true || confirmed.object_key !== objectKey
           || confirmed.sha256 !== body.sha256 || confirmed.size_bytes !== body.size_bytes) {
           return fail("material_integrity_conflict", "云端材料二进制核对失败，材料仍保留。", 409);
