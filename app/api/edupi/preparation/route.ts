@@ -4,6 +4,7 @@ import { isApiRequestAllowed, hasJsonContentType } from "@/lib/request-security"
 import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
 import { readEducationContract } from "@/lib/edupi-education-server";
 import { EduPiCloudError } from "@/lib/edupi-cloud-client";
+import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,9 +26,11 @@ export async function POST(request: Request) {
   try {
     const body = await parseJsonWithinLimit(request, MAX_BODY_BYTES) as { action?: string; taskId?: string } | null;
     if (!body || typeof body !== "object" || Array.isArray(body) || !["ensure", "run"].includes(body.action || "") || Object.keys(body).some((key) => !BODY_KEYS.has(key)) || (body.action === "ensure" && body.taskId !== undefined)) return NextResponse.json({ error: "操作无效" }, { status: 400 });
+    if (body.taskId !== undefined && (typeof body.taskId !== "string" || !body.taskId || body.taskId.length > 160 || /[\r\n]/.test(body.taskId))) return NextResponse.json({ error: "任务标识无效" }, { status: 400 });
+    const selected = await captureEducationWriteScope(request);
+    if (selected.mode === "cloud") throw new EduPiCloudError("unsupported_cloud_operation", "云端事项暂不支持本地备课执行。", 409);
     if (body.action === "ensure") return NextResponse.json(await ensurePreparation());
     if (body.taskId !== undefined) {
-      if (typeof body.taskId !== "string" || !body.taskId || body.taskId.length > 160 || /[\r\n]/.test(body.taskId)) return NextResponse.json({ error: "任务标识无效" }, { status: 400 });
       const data = await readEducationContract();
       const executable = data.workCases.some((item) => item.taskId === body.taskId && ["teaching_before_class", "calendar_preparation"].includes(item.kind))
         || data.tasks.some((item) => item.id === body.taskId && item.trigger === "teaching_before_class" && Boolean(item.sourceEventId && item.sourceEventDate && item.materialId && item.deliverables.length));
