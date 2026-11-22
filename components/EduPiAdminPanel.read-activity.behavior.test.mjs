@@ -172,7 +172,11 @@ test("Admin collapsed disclosures issue zero private reads; open/collapse/hidden
   const before = f.reads().length;
   await f.hide(true);
   assert.equal(f.intervals.size, 0);
-  for (const request of f.reads().filter(item => item.signal && !item.finished)) assert.equal(request.signal.aborted, true);
+  for (const request of f.reads().filter(item => item.signal && !item.finished)) {
+    // A caller releases its own lease; the shared workspace transport remains
+    // available to peers. All panel-owned reads must still be cancelled.
+    assert.equal(request.signal.aborted, request.url !== "/api/edupi/workspace", request.url);
+  }
   await f.poll(); assert.equal(f.reads().length, before);
   await f.hide(false);
   assert.equal(f.reads("/api/edupi/jobs").length, 2);

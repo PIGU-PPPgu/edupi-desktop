@@ -1,0 +1,23 @@
+[Unit]
+Description=EduPi Supabase HTTPS reverse proxy
+Requires=docker.service edupi-supabase.service
+After=docker.service edupi-supabase.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=HOME=/home/ubuntu
+ExecStartPre=-/usr/bin/docker rm -f edupi-supabase-caddy
+ExecStart=/usr/bin/docker run --name edupi-supabase-caddy --network host --rm \
+  -v /srv/edupi-supabase/Caddyfile:/etc/caddy/Caddyfile:ro \
+  -v /srv/edupi-supabase/caddy-data:/data \
+  -v /srv/edupi-supabase/caddy-config:/config \
+  caddy:2.10-alpine caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+ExecStop=/usr/bin/docker stop -t 10 edupi-supabase-caddy
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=2min
+TimeoutStopSec=30s
+
+[Install]
+WantedBy=multi-user.target

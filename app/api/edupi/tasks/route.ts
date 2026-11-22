@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
-import { issueTaskBoardCommand, taskBoardContentHash, TaskBoardCommandError, type TeacherCreatedPreparationSource } from "@/lib/edupi-task-board-command";
+import { issueTaskBoardCommand, taskBoardContentHash, TaskBoardCommandError, type TaskBoardCommand, type TeacherCreatedPreparationSource } from "@/lib/edupi-task-board-command";
 import { readEducationContract } from "@/lib/edupi-education-server";
 import { startPreparation } from "@/lib/edupi-preparation-runtime";
 import { parseTeacherRecurringMaterials } from "@/lib/edupi-teacher-task-form";
@@ -8,6 +8,10 @@ import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security"
 import { selectTeacherTemplateForCreation } from "@/lib/edupi-teacher-template-server";
 import { EduPiTeacherTemplateError, validTeacherTemplateScope } from "@/lib/edupi-teacher-template-config";
 import { isDesktopApiRequestAllowed } from "@/lib/desktop-api-auth";
+import { EduPiCloudError } from "@/lib/edupi-cloud-client";
+import { issueCloudTaskBoardCommand } from "@/lib/edupi-cloud-task";
+import { EduPiCloudWriterContractError } from "@/lib/edupi-cloud-writer-contract";
+import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,7 +59,7 @@ function preparationSource(value: unknown): TeacherCreatedPreparationSource | nu
 }
 
 function statusFor(code: string): number {
-  if (code === "invalid_envelope" || code === "invalid_recurrence") return 400;
+  if (code === "invalid_envelope" || code === "invalid_recurrence" || code === "unsupported_command") return 400;
   if (code === "teacher_template_invalid_input") return 400;
   if (["teacher_template_config_conflict", "teacher_template_grant_denied", "teacher_template_runtime_upgrade_required"].includes(code)) return 409;
   if (["stale_snapshot", "stale_revision", "task_conflict", "idempotency_conflict", "invalid_preparation_context", "invalid_transition", "stage_unchanged", "template_capacity"].includes(code)) return 409;
@@ -85,17 +89,47 @@ export async function POST(request: Request) {
     if (recurring.value && !isDesktopApiRequestAllowed(request)) {
       return NextResponse.json({ error: "周期材料授权请求被拒绝。", code: "forbidden" }, { status: 403 });
     }
+    const selected = await captureEducationWriteScope(request);
+    const cloudMode = selected.mode === "cloud";
+    if (cloudMode && (recurring.value || preparationSourceValue)) {
+      throw new TaskBoardCommandError("unsupported_command", "云端暂不支持周期材料或课前准备任务。");
+    }
     const task = { task_id: taskId, title: body.title.trim(), due_date: due, note: note(body.note), preparation_source: preparationSourceValue,
       ...(recurring.value ? { recurrence: { kind: recurring.value.kind, cadence: recurring.value.cadence,
         until_date: recurring.value.untilDate, lead_days: recurring.value.leadDays, deliverables: recurring.value.deliverables } } : {}) };
     const sourceId = `desktop-task-create-${taskId.slice("teacher-task-".length)}`;
     if (recurring.value) await selectTeacherTemplateForCreation({ clientRequestId: body.clientRequestId,
       scope: { classId: String(selection!.classId), subject: String(selection!.subject) }, untilDate: recurring.value.untilDate });
-    const commandResult = await issueTaskBoardCommand({
+    const command = {
       command_type: "create_task",
       source: { source_id: sourceId, source_kind: "teacher_message", source_hash: taskBoardContentHash(task), evidence_ids: [`evidence-${sourceId}`] },
       task,
-    }, { envelopeOptions: { idempotencyKey: `create-${body.clientRequestId.toLowerCase()}` } });
+    } as TaskBoardCommand;
+    if (cloudMode) {
+      const stableRequestId = `create-${body.clientRequestId.toLowerCase()}`;
+      const result = await issueCloudTaskBoardCommand(command, { requestId: stableRequestId, idempotencyKey: stableRequestId, scope: selected.scope });
+      if (result.queued) {
+        return NextResponse.json({
+          taskId,
+          replayed: false,
+          receipt: null,
+          preparation: null,
+          data: null,
+          refreshPending: true,
+          pendingSync: true,
+          outboxId: result.queueEntry.id,
+        }, { status: 202 });
+      }
+      return NextResponse.json({
+        taskId,
+        replayed: result.replayed,
+        receipt: result.receipt,
+        preparation: null,
+        data: result.data,
+        refreshPending: false,
+      });
+    }
+    const commandResult = await issueTaskBoardCommand(command, { envelopeOptions: { idempotencyKey: `create-${body.clientRequestId.toLowerCase()}` } });
     const receipt = commandResult.receipt;
     const replayed = commandResult.replayed;
     const preparation = task.preparation_source ? await startPreparation({ taskId }) : null;
@@ -104,7 +138,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ taskId, replayed, receipt, preparation, data: refreshed, refreshPending: refreshed === null }, { status: refreshed ? 200 : 202 });
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) return NextResponse.json({ error: "Task request is too large", code: "too_large" }, { status: 413 });
-    const code = error instanceof TaskBoardCommandError || error instanceof EduPiTeacherTemplateError ? error.code : "unavailable";
+    if (error instanceof EduPiCloudError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    const code = error instanceof TaskBoardCommandError || error instanceof EduPiTeacherTemplateError
+      ? error.code
+      : error instanceof EduPiCloudWriterContractError ? error.code : "unavailable";
     return NextResponse.json({ error: error instanceof TaskBoardCommandError ? error.message
       : code === "teacher_template_config_conflict" ? "周期材料的授权范围已变化，请刷新后重试。"
       : code === "teacher_template_grant_denied" ? "周期材料授权已失效，请重新选择。"

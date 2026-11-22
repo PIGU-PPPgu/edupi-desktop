@@ -4,6 +4,9 @@ import { parseMaterialId, parseMaterialMetadataUpdateBody } from "@/lib/edupi-ma
 import { materialMetadataPatchMatches, readMaterialMetadataCurrentState, verifiesMaterialMetadataReceipt } from "@/lib/edupi-material-metadata-server";
 import { MaterialMetadataError, updateMaterialMetadata } from "@/lib/edupi-material-metadata";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
+import { createEduPiCloudClient, EduPiCloudError } from "@/lib/edupi-cloud-client";
+import { cloudMaterialMutationResponse } from "@/lib/edupi-cloud-material";
+import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +32,24 @@ export async function PUT(request: Request, { params }: { params: Promise<{ mate
   try {
     const body = parseMaterialMetadataUpdateBody(await parseJsonWithinLimit(request, 8 * 1024));
     if (!materialId || !body) return errorResponse("invalid_request", 400, "材料信息修改字段无效");
+    const client = createEduPiCloudClient();
+    const selected = await captureEducationWriteScope(request, client);
+    if (selected.mode === "cloud") {
+      const scope = selected.scope!;
+      const mutation = {
+        action: "update",
+        request_id: `desktop-material-${materialId}-update-${body.expectedRevision}`,
+        material_id: materialId,
+        expected_revision: body.expectedRevision,
+        patch: Object.fromEntries(Object.entries(body.patch).map(([key, value]) => [key === "classId" ? "class_id" : key, value])),
+        external_send: false,
+      };
+      const result = await client.operationWithOutbox("material-metadata", mutation, scope);
+      if (result.queued) {
+        return NextResponse.json({ result: null, data: null, history: [], pendingSync: true, outboxId: result.entry.id }, { status: 202 });
+      }
+      return NextResponse.json(await cloudMaterialMutationResponse(client, scope, mutation, result.result));
+    }
     const receipt = await updateMaterialMetadata({ materialId, ...body, signal: request.signal });
     const state = await readMaterialMetadataCurrentState(materialId);
     if (!state || !materialMetadataPatchMatches(state.material, body.patch) || !verifiesMaterialMetadataReceipt(state, receipt, state.values)) {
@@ -38,6 +59,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ mate
     return NextResponse.json({ result: receipt, data: state.data, history: state.history });
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) return errorResponse("too_large", 413, "材料信息内容过大");
+    if (error instanceof EduPiCloudError) return errorResponse(error.code, error.status, error.message);
     return error instanceof MaterialMetadataError ? mapError(error) : errorResponse("unavailable", 503, "材料信息修改暂不可用");
   }
 }

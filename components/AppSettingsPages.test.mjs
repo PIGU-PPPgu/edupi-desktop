@@ -42,6 +42,7 @@ function loadSettings({ hooks = React, jsxRuntime = runtime, realProxy = false }
     "./MobileBridgeSettingsCard": { MobileBridgeSettingsCard: () => jsx("div", { id: "mobile-bridge-settings", children: "手机继续对话" }) },
     "./EduPiUsageSettingsCard": { EduPiUsageSettingsCard: () => jsx("section", { children: "本地用量" }) },
     "./EduPiAccountSettingsCard": { EduPiAccountSettingsCard: () => jsx("section", { "data-setting-id": "account", children: "账号" }) },
+    "./EduPiCloudSettingsCard": { EduPiCloudSettingsCard: () => jsx("section", { "data-setting-id": "cloud", children: "云端同步" }) },
     "@/lib/edupi-foreground-settings": { readForegroundSettings: () => ({ graceDays: 3 }) },
   };
   if (realProxy) {
@@ -65,7 +66,7 @@ function loadSettings({ hooks = React, jsxRuntime = runtime, realProxy = false }
 }
 
 const pageItems = {
-  general: ["language", "appearance", "foreground", "window-close"], profile: ["account", "teacher-profile"],
+  general: ["language", "appearance", "foreground", "window-close"], profile: ["account", "cloud", "teacher-profile"],
   notifications: ["completion-notifications", "notification-permission"], devices: ["computer-use", "mobile"],
   data: ["data-root", "usage"], about: ["updates", "update-proxy"],
 };

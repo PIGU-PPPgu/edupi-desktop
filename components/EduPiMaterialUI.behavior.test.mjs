@@ -33,6 +33,7 @@ function mount(code, name, props, modules, globals = {}, commit = () => {}) {
   react.useCallback = (fn, deps) => react.useMemo(() => fn, deps);
   const exports = {};
   vm.runInNewContext(code, { exports, Date, AbortController, ...globals, require(module) {
+    if (module === "@/lib/edupi-education-client") return { educationWriteHeaders: initial => initial || {} };
     if (module === "react") return react;
     if (module === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
     assert.ok(modules[module], `Unexpected import ${module}`); return modules[module];
@@ -50,13 +51,62 @@ function workspace(count) {
   };
   const modules = { "@/lib/edupi-domain-navigation": navigation, "@/lib/edupi-material-rows": rowsModel, "@/lib/edupi-material-class-options": classOptions,
     "@/lib/desktop-updater": { isTauriDesktop: () => false }, "@/hooks/useModalDismiss": { useModalDismiss: () => ({ current: null }) },
-    "@/lib/edupi-operation-history": { intakeOperationHistory: () => [] }, "@/lib/edupi-material-schedule": {}, "@/lib/edupi-docx-chapter-suggestion": {},
+    "@/lib/edupi-operation-history": { intakeOperationHistory: () => [] }, "@/lib/edupi-material-schedule": { materialScheduleUploadProposal: value => value }, "@/lib/edupi-docx-chapter-suggestion": {},
     "./EduPiActionIcon": { ...placeholder("EduPiIconButton"), ...placeholder("EduPiPagination") },
   };
   for (const component of ["EduPiMaterialExcerpt", "EduPiOperationHistory", "EduPiMaterialMetadataEditor", "EduPiMaterialScheduleProposal"]) modules[`./${component}`] = placeholder(component);
   const f = mount(workspaceCode, "EduPiMaterialsWorkspace", props, modules);
   return { ...f, get tree() { return f.tree; }, deleted, routed, rows: () => f.nodes().filter(node => node.props.className?.startsWith("edupi-database-button-row")), pager: () => f.find(node => node.type.name === "EduPiPagination"), next() { this.pager().props.onNext(); f.render(); }, async deleteLast() { this.rows().at(-1).props.onClick(); f.render(); f.find(node => node.props.label === "删除材料").props.onClick(); await f.settle(); } };
 }
+
+for (const cloud of [true, false]) {
+  test(`${cloud ? "cloud" : "local"} material drawer keeps metadata editing and ${cloud ? "omits" : "retains"} local readers`, () => {
+    const f = workspace(1);
+    f.props.data = { ...f.props.data, workspace: cloud ? "cloud:00000000-0000-4000-8000-000000000001" : "/synthetic",
+      teacherMaterials: [{ ...material(1), available: false }] };
+    f.render(); f.rows()[0].props.onClick(); f.render();
+    const drawer = f.find(node => node.props.role === "dialog");
+    assert.ok(drawer, "clicking the material must open its drawer");
+    const nodes = descendants(drawer);
+    assert.equal(nodes.find(node => node.type.name === "EduPiMaterialMetadataEditor")?.props.material.material_id, "synthetic-material-1");
+    assert.equal(nodes.some(node => node.type.name === "EduPiMaterialScheduleProposal"), !cloud);
+    assert.equal(nodes.some(node => node.type.name === "EduPiMaterialExcerpt"), !cloud);
+    assert.equal(f.nodes().some(node => node.type === "button" && text(node) === "上传材料"), !cloud);
+    assert.equal(f.nodes().some(node => node.type.name === "EduPiReceivedLessonProposal"), false);
+  });
+}
+
+test("cloud workspace omits received local proposals and restores them when returning to local", async () => {
+  const f = workspace(1), materialId = "material-synthetic-upload";
+  f.props.data = { ...f.props.data, teacherMaterials: [{ ...material(1), material_id: materialId, available: false }],
+    capabilities: { ...f.props.data.capabilities, materialIntake: { enabled: true } } };
+  f.props.stagedMaterials = [{ staging_id: "stg_synthetic-upload", original_name: "合成材料.pdf", kind: "pdf",
+    staging_path: ".edupi/staging/synthetic.pdf", expected_size_bytes: 12, source_hash: "a".repeat(64) }];
+  const proposal = { material_id: materialId, status: "unavailable", read_only: true, external_send: false };
+  f.props.onIntakeMaterial = async () => ({
+    materialScheduleProposal: { ...proposal, automatic_import: false, read_result: null, reason_code: "material_schedule_source_unavailable" },
+    materialLessonProposal: { ...proposal, automatic_prepare: false, reason_code: "lesson_document_unresolved" },
+  });
+  f.render();
+  f.find(node => node.type === "button" && text(node) === "接入 EduPi").props.onClick(); f.render();
+  for (const [label, value] of [["学科", "数学"], ["班级", "703"]]) {
+    const field = descendants(f.find(node => node.type === "form")).find(node => node.type === "label" && text(node.props.children[0]) === label);
+    descendants(field).find(node => node.type === "input").props.onChange({ target: { value } }); f.render();
+  }
+  await f.find(node => node.type === "form").props.onSubmit({ preventDefault() {} }); await f.settle();
+  f.rows()[0].props.onClick(); f.render();
+  const count = name => f.nodes().filter(node => node.type.name === name).length;
+  assert.equal(count("EduPiMaterialScheduleProposal"), 2, "local intake and drawer must both retain schedule controls");
+  assert.equal(count("EduPiReceivedLessonProposal"), 1);
+  assert.equal(count("EduPiMaterialExcerpt"), 1);
+  f.props.data = { ...f.props.data, workspace: "cloud:00000000-0000-4000-8000-000000000001" }; f.render();
+  assert.equal(count("EduPiMaterialMetadataEditor"), 1);
+  for (const name of ["EduPiMaterialScheduleProposal", "EduPiReceivedLessonProposal", "EduPiMaterialExcerpt"]) assert.equal(count(name), 0, `${name} must not mount in cloud`);
+  f.props.data = { ...f.props.data, workspace: "/synthetic" }; f.render();
+  assert.equal(count("EduPiMaterialScheduleProposal"), 2);
+  assert.equal(count("EduPiReceivedLessonProposal"), 1);
+  assert.equal(count("EduPiMaterialExcerpt"), 1);
+});
 
 test("deleting the ninth material renders the eight remaining rows and synchronizes its clamped page", async () => {
   const f = workspace(9); f.next(); assert.equal(f.rows().length, 1);
@@ -132,6 +182,7 @@ function metadata() {
   const props = { material: material(1), classes: ["703", "704"], onStartAgent() {}, onEducation(data) { education.push(data); props.material = data.teacherMaterials[0]; } };
   const f = mount(metadataCode, "EduPiMaterialMetadataEditor", props, { "@/lib/edupi-material-metadata-model": metadataModel, "@/lib/edupi-material-class-options": classOptions, "./EduPiActionIcon": placeholder("EduPiIconButton") }, {
     window: { setTimeout() { return 1; }, clearTimeout() {} }, fetch: async (url, options) => { requests.push({ url, ...options }); return new Promise(resolve => { finish = success => {
+      if (success === "queued") { resolve({ ok: true, status: 202, json: async () => ({ pendingSync: true, data: null, history: [] }) }); return; }
       const patch = JSON.parse(options.body).patch;
       const next = { ...props.material, title: patch.title ?? props.material.title, kind: patch.kind ?? props.material.kind, subject: patch.subject ?? props.material.subject, class_id: patch.classId ?? props.material.class_id, metadata_revision: props.material.metadata_revision + 1 };
       resolve({ ok: success, json: async () => success ? { data: { teacherMaterials: [next] }, history: { materialId: next.material_id, revision: next.metadata_revision, historyCount: 1, versions: [] } } : { error: "合成保存失败" } });
@@ -229,6 +280,15 @@ test("failed metadata save retains the draft and does not announce success or cl
   assert.equal(f.dom.listeners.size, 0);
 });
 
+test("queued metadata save reports pending sync without applying a cloud result", async () => {
+  const f = metadata(); f.open(); f.field("名称", "离线待同步标题");
+  const pending = f.submit(); f.finish("queued"); await pending; await f.settle();
+  assert.equal(f.education.length, 0);
+  assert.equal(f.find(node => node.type === "form"), undefined);
+  assert.equal(text(f.find(node => node.props.role === "status")), "已保存在本机，联网后同步。");
+  assert.equal(f.find(node => node.props.role === "alert"), undefined);
+});
+
 test("an authoritative metadata revision change invalidates the editor without submitting or moving focus", () => {
   const f = metadata(); f.open(); f.field("名称", "旧版本草稿"); f.dom.calls.length = 0;
   f.props.material = { ...f.props.material, title: "其他入口新名称", metadata_revision: 3 }; f.render();
@@ -261,6 +321,7 @@ function metadataRestore({ deferProjection = false } = {}) {
       requests.push({ url, ...options });
       if (!options.method) return { ok: true, json: async () => ({ data: { teacherMaterials: [currentMaterial] }, history }) };
       return new Promise(resolve => { finish = (success = true, omitOriginalVersion = false) => {
+        if (success === "queued") { resolve({ ok: true, status: 202, json: async () => ({ pendingSync: true, data: null, history: [] }) }); return; }
         const body = JSON.parse(options.body), desired = body.versionSide === "before" ? version.beforeValues : version.afterValues;
         const next = { ...currentMaterial, title: desired.title, kind: desired.kind, subject: desired.subject, class_id: desired.classId, metadata_revision: currentMaterial.metadata_revision + 1, metadata_history_count: history.historyCount + 1 };
         const restored = { ...version, versionId: "synthetic-restore", revision: next.metadata_revision, beforeValues: metadataModel.materialMetadataValues(currentMaterial), afterValues: desired, sourceKind: "restore" };
@@ -300,6 +361,15 @@ function metadataRestore({ deferProjection = false } = {}) {
     finish(success = true, omitOriginalVersion = false) { assert.ok(finish); finish(success, omitOriginalVersion); },
   };
 }
+
+test("queued metadata restore reports pending sync and preserves the current projection", async () => {
+  const f = metadataRestore();
+  await f.openHistory(); f.restore("before"); f.finish("queued"); await f.settle();
+  assert.equal(f.education.length, 0);
+  assert.equal(f.props.material.metadata_revision, 2);
+  assert.equal(text(f.find(node => node.props.role === "status")), "恢复请求已保存在本机，联网后同步。");
+  assert.equal(f.find(node => node.props.role === "alert"), undefined);
+});
 
 test("material restoration replaces the current side and focuses the other side of that exact version", async () => {
   const f = metadataRestore(); await f.openHistory(); f.restore("before");

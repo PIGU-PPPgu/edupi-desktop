@@ -24,8 +24,9 @@ const compiled = ts.transpileModule(`exports.PanelReads = function PanelReads({r
   ${effect('document.addEventListener("visibilitychange"')}
   ${declaration("projectionReadsActive")}
   const workspaceLoadSequenceRef = useRef(0), workspaceMinimumApplySequenceRef = useRef(0), durableTaskIdsRef = useRef(new Set());
+  const workspaceRequestsRef = useRef(new Set()), workspaceScopeVersion = 0;
   ${declaration("loadWorkspace")}
-  ${effect("setLoading(true)")}
+  ${effect("[loadWorkspace, refreshKey, projectionReadsActive,")}
   ${effect('window.addEventListener("edupi-preparation-updated"')}
   ${effect('fetch("/api/edupi/kernel"')}
   expose(loadWorkspace);
@@ -45,6 +46,7 @@ async function mount(t, props = {}) {
   vm.runInNewContext(compiled, { exports: exported, ...React, document, window, AbortController, DOMException,
     setTimeout: (callback, ms) => { timers.set(++nextTimer, { callback, ms }); return nextTimer; },
     clearTimeout: id => timers.delete(id),
+    getEduPiEducationScopeVersion: () => 0,
     readEduPiWorkspace: async () => { state.reads++; return state.nextWorkspace.shift()?.promise ?? workspace(); },
     readEducationMemoryScopes: async () => null, readEduPiTeachingSkills: async () => ({}),
     readEduPiKernel: async () => { state.kernelBatch++; return { running: 0 }; },

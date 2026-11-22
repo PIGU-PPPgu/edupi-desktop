@@ -15,6 +15,7 @@ import {
 } from "@/lib/edupi-material-metadata-model";
 import { EduPiIconButton } from "./EduPiActionIcon";
 import { materialClassLabel, type MaterialClassOption } from "@/lib/edupi-material-class-options";
+import { educationWriteHeaders } from "@/lib/edupi-education-client";
 
 const KIND_LABELS: Record<MaterialMetadataKind, string> = {
   worksheet: "学案 / 练习",
@@ -186,8 +187,8 @@ export function EduPiMaterialMetadataEditor({ material, classes, classLabels = [
     historyAbort.current = controller;
     setHistoryLoading(true); setHistoryError(null);
     try {
-      const response = await fetch(`/api/edupi/materials/${encodeURIComponent(requestedMaterialId)}/metadata/versions`, { cache: "no-store", signal: controller.signal });
-      const result = await response.json() as { data?: EducationContract; history?: MaterialMetadataVersionHistory; error?: string };
+      const response = await fetch(`/api/edupi/materials/${encodeURIComponent(requestedMaterialId)}/metadata/versions`, { cache: "no-store", headers: educationWriteHeaders(), signal: controller.signal });
+      const result = await response.json() as { data?: EducationContract; history?: MaterialMetadataVersionHistory; error?: string; pendingSync?: boolean };
       if (!response.ok || !result.data || !result.history) throw new Error(result.error || "材料信息历史读取失败");
       if (activeMaterialId.current !== requestedMaterialId) return;
       onEducation(result.data);
@@ -241,8 +242,15 @@ export function EduPiMaterialMetadataEditor({ material, classes, classLabels = [
     mutationAbort.current = controller;
     setBusy(true); setMessage(null);
     try {
-      const response = await fetch(`/api/edupi/materials/${encodeURIComponent(requestedMaterialId)}/metadata`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision: editor.baseRevision, patch: editorPatch }), signal: controller.signal });
-      const result = await response.json() as { data?: EducationContract; history?: MaterialMetadataVersionHistory; error?: string };
+      const response = await fetch(`/api/edupi/materials/${encodeURIComponent(requestedMaterialId)}/metadata`, { method: "PUT", headers: educationWriteHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ expectedRevision: editor.baseRevision, patch: editorPatch }), signal: controller.signal });
+      const result = await response.json() as { data?: EducationContract; history?: MaterialMetadataVersionHistory; error?: string; pendingSync?: boolean };
+      if (response.status === 202 && result.pendingSync) {
+        if (!controller.signal.aborted && activeMaterialId.current === requestedMaterialId) {
+          setEditor(null);
+          setMessage({ tone: "success", text: "已保存在本机，联网后同步。" });
+        }
+        return;
+      }
       if (!response.ok || !result.data || !result.history) throw new Error(result.error || "材料信息保存失败");
       if (activeMaterialId.current !== requestedMaterialId) return;
       onEducation(result.data); setHistory(result.history); setEditor(null);
@@ -266,8 +274,14 @@ export function EduPiMaterialMetadataEditor({ material, classes, classLabels = [
     mutationAbort.current = controller;
     setBusy(true); setRestoring(key); setMessage(null);
     try {
-      const response = await fetch(`/api/edupi/materials/${encodeURIComponent(requestedMaterialId)}/metadata/versions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ versionId: version.versionId, versionSide: side, expectedRevision: material.metadata_revision }), signal: controller.signal });
-      const result = await response.json() as { data?: EducationContract; history?: MaterialMetadataVersionHistory; error?: string };
+      const response = await fetch(`/api/edupi/materials/${encodeURIComponent(requestedMaterialId)}/metadata/versions`, { method: "POST", headers: educationWriteHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ versionId: version.versionId, versionSide: side, expectedRevision: material.metadata_revision }), signal: controller.signal });
+      const result = await response.json() as { data?: EducationContract; history?: MaterialMetadataVersionHistory; error?: string; pendingSync?: boolean };
+      if (response.status === 202 && result.pendingSync) {
+        if (!controller.signal.aborted && activeMaterialId.current === requestedMaterialId) {
+          setMessage({ tone: "success", text: "恢复请求已保存在本机，联网后同步。" });
+        }
+        return;
+      }
       if (!response.ok || !result.data || !result.history) throw new Error(result.error || "材料信息恢复失败");
       if (activeMaterialId.current !== requestedMaterialId) return;
       onEducation(result.data); setHistory(result.history); setEditor(null);

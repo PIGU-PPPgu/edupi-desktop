@@ -1,0 +1,21 @@
+[Unit]
+Description=EduPi Supabase self-hosted test stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/srv/edupi-supabase/supabase
+Environment=HOME=/home/ubuntu
+ExecStart=/usr/bin/supabase start --exclude imgproxy --exclude studio --exclude logflare --exclude mailpit --exclude vector --exclude postgres-meta
+ExecStartPost=/bin/sh -c 'umask 077; /usr/bin/supabase status -o env 2>/dev/null | awk -F= '\''/^[A-Z][A-Z0-9_]*=/{print}'\'' > /srv/edupi-supabase/.supabase.env; chmod 600 /srv/edupi-supabase/.supabase.env'
+ExecStop=/usr/bin/supabase stop
+RemainAfterExit=yes
+TimeoutStartSec=20min
+TimeoutStopSec=5min
+
+[Install]
+WantedBy=multi-user.target

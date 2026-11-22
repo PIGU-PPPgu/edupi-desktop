@@ -1,0 +1,39 @@
+{
+  "contract_id": "edupi-cloud-canonical-writer",
+  "contract_version": "1.0",
+  "schema_hash": "sha256:2749b1208b47bf475bd30d266b5ca1b213aa78c6c8b4dcd53059c524400565c8",
+  "core_commit": "3ce22b1e08804aa36dccf59d76a8e61b15f2c462",
+  "supported_commands": [
+    "review_observation",
+    "review_memory_candidate",
+    "review_teacher_context",
+    "review_work_candidate",
+    "review_follow_up",
+    "review_task",
+    "import_calendar",
+    "import_timetable",
+    "intake_material",
+    "create_task",
+    "move_task_stage",
+    "update_memory"
+  ],
+  "supported_projections": [
+    "education_workspace",
+    "education_fact_v1",
+    "core_runtime"
+  ],
+  "bridge_contract": {
+    "contract_id": "edupi-bridge-v1.1",
+    "contract_version": "1.1",
+    "schema_hash": "sha256:2749b1208b47bf475bd30d266b5ca1b213aa78c6c8b4dcd53059c524400565c8"
+  },
+  "schedule_occurrence_contract": {
+    "contract_id": "edupi-schedule-occurrence-v1.2",
+    "contract_version": "1.2",
+    "schema_hash": "sha256:b739852f427520f787ad32c7f41b258976a3b41d60fa6116439696c1495b97cb"
+  },
+  "bounded_task_commands": [
+    "create_task",
+    "move_task_stage"
+  ]
+}

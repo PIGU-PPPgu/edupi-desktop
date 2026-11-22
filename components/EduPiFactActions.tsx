@@ -6,20 +6,24 @@ import { conflictingAcceptedFacts, type FactMutationInput } from "@/lib/edupi-fa
 import { EDUPI_FACTS_UPDATED_EVENT } from "@/lib/edupi-ui-events";
 import { runSerializedFactMutation } from "@/lib/edupi-fact-mutation-client";
 import { EduPiDeleteConfirmation } from "./EduPiDeleteConfirmation";
+import { educationWriteHeaders } from "@/lib/edupi-education-client";
 
-type Result = { data?: EducationContract; error?: string };
+type Result = { data?: EducationContract; error?: string; queued?: boolean; outboxId?: string };
 
 export function EduPiFactActions({ fact, spine, reviewer, onEducation }: { fact: EducationFact; spine: EducationFactSpine; reviewer: string; onEducation: (data: EducationContract) => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ revision: number; value: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const conflicts = conflictingAcceptedFacts(fact, spine);
   const conflicting = conflicts.length === 1 ? conflicts[0] : null;
   const multipleConflicts = conflicts.length > 1;
-  const replacementBlocked = multipleConflicts || Boolean(conflicting && fact.hasPredecessor);
+  const missingConflict = fact.conflictIds.length > 0 && fact.conflictIds.some(id => !spine.conflicts.some(conflict => conflict.id === id));
+  const replacementBlocked = missingConflict || multipleConflicts || Boolean(conflicting && fact.hasPredecessor);
   let replacementMessage: string | null = null;
-  if (multipleConflicts) replacementMessage = `存在 ${conflicts.length} 条冲突事实，请先逐条处理。`;
+  if (missingConflict) replacementMessage = "冲突关系尚未读取完整，请刷新后再审核。";
+  else if (multipleConflicts) replacementMessage = `存在 ${conflicts.length} 条冲突事实，请先逐条处理。`;
   else if (conflicting && fact.hasPredecessor) replacementMessage = `请先处理“${conflicting.value}”，再接受这条恢复事实。`;
   else if (conflicting) replacementMessage = `接受后将替换“${conflicting.value}”`;
 
@@ -29,15 +33,23 @@ export function EduPiFactActions({ fact, spine, reviewer, onEducation }: { fact:
       setError("事实已在其他入口更新，请重新打开后修改");
     }
   }, [editing, fact.revision]);
+  useEffect(() => { setPending(false); }, [fact.id, fact.revision]);
 
   const submit = async (input: FactMutationInput) => {
     if (busy) return;
     setBusy(input.action === "review" ? input.decision : input.action);
     setError(null);
+    setPending(false);
     try {
+      const headers = educationWriteHeaders({ "Content-Type": "application/json" });
       await runSerializedFactMutation(async () => {
-        const response = await fetch(`/api/edupi/facts/${encodeURIComponent(fact.id)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+        const response = await fetch(`/api/edupi/facts/${encodeURIComponent(fact.id)}`, { method: "POST", headers, body: JSON.stringify(input) });
         const result = await response.json() as Result;
+        if (response.status === 202 && result.queued && result.outboxId) {
+          setEditing(null);
+          setPending(true);
+          return;
+        }
         if (!response.ok || !result.data) throw new Error(result.error || "事实操作失败");
         setEditing(null);
         onEducation(result.data);
@@ -78,6 +90,7 @@ export function EduPiFactActions({ fact, spine, reviewer, onEducation }: { fact:
     </div>}
     {reviewable && replacementMessage ? <small>{replacementMessage}</small> : null}
     {error ? <p role="alert">{error}</p> : null}
+    {pending ? <p role="status">已保存在本机，联网后同步。</p> : null}
     {confirmDelete ? <EduPiDeleteConfirmation label={fact.value} onResolve={(confirmed) => { setConfirmDelete(false); if (confirmed) void submit({ action: "delete", expectedRevision: fact.revision, reviewer: reviewer.trim() || "teacher" }); }} /> : null}
   </div>;
 }

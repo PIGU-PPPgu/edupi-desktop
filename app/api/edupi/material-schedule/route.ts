@@ -7,6 +7,7 @@ import { readMaterialMetadataHistory } from "@/lib/edupi-material-metadata";
 import { ensureEduPiRuntime } from "@/lib/edupi-runtime-supervisor";
 import { hasJsonContentType } from "@/lib/request-security";
 import type { MaterialScheduleAdoptionReceipt } from "@/lib/edupi-material-schedule";
+import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +26,8 @@ function errorResponse(code: string, status: number) {
 
 function statusFor(code: string): number {
   if (code === "material_schedule_invalid") return 400;
-  if (["material_schedule_stale", "material_schedule_unresolved", "material_schedule_source_unavailable", "material_schedule_command_conflict", "owner_uninitialized"].includes(code)) return 409;
+  if (["material_schedule_stale", "material_schedule_unresolved", "material_schedule_source_unavailable", "material_schedule_command_conflict", "owner_uninitialized",
+    "unsupported_cloud_operation", "scope_changed"].includes(code)) return 409;
   if (["owner_identity_mismatch", "owner_control_required", "permission_denied"].includes(code)) return 403;
   return 503;
 }
@@ -148,6 +150,7 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams, materialId = params.get("materialId");
   if ([...params.keys()].some(key => key !== "materialId") || params.getAll("materialId").length !== 1 || !materialId || !ID.test(materialId)) return errorResponse("material_schedule_invalid", 400);
   try {
+    if ((await captureEducationWriteScope(request)).mode === "cloud") fail("unsupported_cloud_operation");
     const context = await runtimeContext(request.signal);
     const current = await currentProof(context, materialId, request.signal);
     const result = await read(context, materialId, current.proof, request.signal);
@@ -160,6 +163,7 @@ export async function POST(request: Request) {
   if (!isDesktopApiRequestAllowed(request)) return errorResponse("forbidden", 403);
   if (!hasJsonContentType(request)) return errorResponse("material_schedule_invalid", 415);
   try {
+    if ((await captureEducationWriteScope(request)).mode === "cloud") fail("unsupported_cloud_operation");
     const body = record(await parseJsonWithinLimit(request, 4 * 1024));
     if (body?.action === "bootstrap_owner") {
       if (Object.keys(body).length !== 3 || !Object.hasOwn(body, "materialId") || !Object.hasOwn(body, "confirm")

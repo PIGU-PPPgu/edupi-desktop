@@ -249,6 +249,7 @@ function panelHandlers(receipt = { status: "held", evidence_ids: ["evidence-a"] 
   const listeners = new Map(), requests = [], messages = [], signals = [], reviewMessages = [];
   let current = null, refreshes = 0;
   const exports = {}, context = { exports, AbortController, projectionReadsActive, scheduleResolutionMatchesTarget: conflicts.scheduleResolutionMatchesTarget,
+    getEduPiEducationScopeVersion: () => 0,
     useCallback: fn => fn, submitEducationIntake: async body => { requests.push(body); return { receipt }; },
     setMaterialStagingMessage: value => { current = typeof value === "function" ? value(current) : value; messages.push(current); },
     setReviewMessage: value => reviewMessages.push(value), loadWorkspace: async signal => {
@@ -367,6 +368,7 @@ test("the real parent delete handler closes only its still-selected calendar tar
   const callback = expression(node => ts.isCallExpression(node) && node.parent && ts.isVariableDeclaration(node.parent) && node.parent.name.getText(panelSource) === "deleteEntity");
   for (const scenario of ["current", "other", "cancel"]) {
     const api = deferred(), writes = [], closes = [], context = { exports: {}, useCallback: fn => fn, deleteBusy: null,
+      isCurrentWorkspace: () => true,
       education: { capabilities: { entityDelete: { enabled: true, targetKinds: ["calendar"] } }, workspaceResourcesUnavailable: false },
       calendarSelectionRef: { current: { kind: "calendar", sourceId: "calendar-a" } }, deleteResolver: { current: null },
       setDeleteLabel() {}, setDeleteBusy(value) { context.deleteBusy = value; }, setMaterialStagingMessage() {},

@@ -460,6 +460,7 @@ export type EducationTeacherMaterial = {
 };
 
 export type EducationContract = {
+  cloudScope?: string;
   teacherMaterials?: EducationTeacherMaterial[];
   workspaceResourcesUnavailable?: boolean;
   generatedArtifactsUnavailable?: boolean;

@@ -61,6 +61,7 @@ function bindingHarness(overrides = {}) {
   const stored = structuredClone(state.education);
   const update = values => { Object.assign(state, values); dirty = true; };
   const hooks = {
+    isCurrentWorkspace: () => true,
     useMemo: factory => factory(),
     useEffect(callback, deps) {
       const index = cursor++;

@@ -16,6 +16,10 @@ import {
   type MaterialMetadataMutationReceipt,
 } from "@/lib/edupi-material-metadata";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
+import { createEduPiCloudClient, EduPiCloudError } from "@/lib/edupi-cloud-client";
+import { readCloudMaterialHistory, cloudMaterialMutationResponse } from "@/lib/edupi-cloud-material";
+import { readCloudEducationWorkspaceBundle } from "@/lib/edupi-cloud-education";
+import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,11 +42,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ mate
   const materialId = parseMaterialId((await params).materialId);
   if (!materialId) return errorResponse("invalid_request", 400, "材料身份无效");
   try {
+    const client = createEduPiCloudClient();
+    const selected = await captureEducationWriteScope(request, client);
+    if (selected.mode === "cloud") {
+      const scope = selected.scope!;
+      return NextResponse.json({
+        history: await readCloudMaterialHistory(client, scope, materialId),
+        data: (await readCloudEducationWorkspaceBundle(client, scope)).data,
+      });
+    }
     const state = await readMaterialMetadataCurrentState(materialId, request.signal);
     return state
       ? NextResponse.json({ history: state.history, data: state.data })
       : errorResponse("stale_material_metadata", 409, "材料信息已更新，请重试");
   } catch (error) {
+    if (error instanceof EduPiCloudError) return errorResponse(error.code, error.status, error.message);
     return error instanceof MaterialMetadataError ? mapError(error) : errorResponse("unavailable", 503, "材料信息历史暂不可用");
   }
 }
@@ -57,6 +71,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ mat
   if (!materialId || !body) return errorResponse("invalid_request", 400, "材料信息恢复请求无效");
 
   try {
+    const client = createEduPiCloudClient();
+    const selected = await captureEducationWriteScope(request, client);
+    if (selected.mode === "cloud") {
+      const scope = selected.scope!;
+      const mutation = {
+        action: "restore",
+        request_id: `desktop-material-${materialId}-restore-${body.versionId}-${body.versionSide}-${body.expectedRevision}`,
+        material_id: materialId,
+        expected_revision: body.expectedRevision,
+        version_id: body.versionId,
+        version_side: body.versionSide,
+        external_send: false,
+      };
+      const result = await client.operationWithOutbox("material-metadata", mutation, scope);
+      if (result.queued) {
+        return NextResponse.json({ result: null, data: null, history: [], pendingSync: true, outboxId: result.entry.id }, { status: 202 });
+      }
+      return NextResponse.json({ ...await cloudMaterialMutationResponse(client, scope, mutation, result.result), reconciled: false });
+    }
     const initial = await readMaterialMetadataCurrentState(materialId);
     if (!initial) return errorResponse("stale_material_metadata", 409, "材料信息已更新，请刷新后重试");
     const version = materialMetadataVersionFor(initial.history, body.versionId);
@@ -78,6 +111,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ mat
     if (!verified || !verifiesMaterialMetadataReceipt(verified, receipt, desired)) return errorResponse("invalid_response", 502, "材料信息恢复结果未能与 Core 对账");
     return NextResponse.json({ result: receipt, data: verified.data, history: verified.history, reconciled: false });
   } catch (error) {
+    if (error instanceof EduPiCloudError) return errorResponse(error.code, error.status, error.message);
     return error instanceof MaterialMetadataError ? mapError(error) : errorResponse("unavailable", 503, "材料信息恢复暂不可用");
   }
 }

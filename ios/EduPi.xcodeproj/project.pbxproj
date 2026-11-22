@@ -1,0 +1,366 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A30000000000000000000001 /* EduPiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* EduPiApp.swift */; };
+		A30000000000000000000002 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* RootView.swift */; };
+		A30000000000000000000003 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* AppSettings.swift */; };
+		A30000000000000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* Assets.xcassets */; };
+		A30000000000000000000009 /* EduPiRemoteAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* EduPiRemoteAPI.swift */; };
+		A3000000000000000000000C /* EduPiAppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* EduPiAppState.swift */; };
+		A3000000000000000000000D /* EduPiModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* EduPiModels.swift */; };
+		A3000000000000000000000E /* EduPiDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* EduPiDesignSystem.swift */; };
+		A3000000000000000000000F /* EduPiRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* EduPiRootView.swift */; };
+		A30000000000000000000010 /* EduPiScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* EduPiScreens.swift */; };
+		A30000000000000000000011 /* EduPiUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* EduPiUITests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A70000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A12000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A11000000000000000000001;
+			remoteInfo = EduPi;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A20000000000000000000001 /* EduPiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPiApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000002 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		A20000000000000000000005 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A20000000000000000000006 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A20000000000000000000007 /* EduPi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EduPi.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000011 /* EduPiRemoteAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPiRemoteAPI.swift; sourceTree = "<group>"; };
+		A20000000000000000000014 /* EduPiAppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPiAppState.swift; sourceTree = "<group>"; };
+		A20000000000000000000015 /* EduPiModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPiModels.swift; sourceTree = "<group>"; };
+		A20000000000000000000016 /* EduPiDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPiDesignSystem.swift; sourceTree = "<group>"; };
+		A20000000000000000000017 /* EduPiRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPiRootView.swift; sourceTree = "<group>"; };
+		A20000000000000000000018 /* EduPiScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPiScreens.swift; sourceTree = "<group>"; };
+		A20000000000000000000019 /* EduPiUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPiUITests.swift; sourceTree = "<group>"; };
+		A2000000000000000000001A /* EduPiUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EduPiUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A40000000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A10000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000002 /* EduPi */,
+				A10000000000000000000006 /* EduPiUITests */,
+				A10000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A10000000000000000000002 /* EduPi */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000004 /* Sources */,
+				A10000000000000000000005 /* Resources */,
+			);
+			path = EduPi;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000007 /* EduPi.app */,
+				A2000000000000000000001A /* EduPiUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000004 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000001 /* EduPiApp.swift */,
+				A20000000000000000000002 /* RootView.swift */,
+				A20000000000000000000004 /* AppSettings.swift */,
+				A20000000000000000000011 /* EduPiRemoteAPI.swift */,
+				A20000000000000000000014 /* EduPiAppState.swift */,
+				A20000000000000000000015 /* EduPiModels.swift */,
+				A20000000000000000000016 /* EduPiDesignSystem.swift */,
+				A20000000000000000000017 /* EduPiRootView.swift */,
+				A20000000000000000000018 /* EduPiScreens.swift */,
+			);
+			name = Sources;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000005 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000005 /* Info.plist */,
+				A20000000000000000000006 /* Assets.xcassets */,
+			);
+			name = Resources;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000006 /* EduPiUITests */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000019 /* EduPiUITests.swift */,
+			);
+			path = EduPiUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A11000000000000000000001 /* EduPi */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A60000000000000000000002 /* Build configuration list for PBXNativeTarget "EduPi" */;
+			buildPhases = (
+				A40000000000000000000001 /* Sources */,
+				A40000000000000000000002 /* Resources */,
+				A40000000000000000000003 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = EduPi;
+			productName = EduPi;
+			productReference = A20000000000000000000007 /* EduPi.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A11000000000000000000002 /* EduPiUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A60000000000000000000003 /* Build configuration list for PBXNativeTarget "EduPiUITests" */;
+			buildPhases = (
+				A40000000000000000000004 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A80000000000000000000001 /* PBXTargetDependency */,
+			);
+			name = EduPiUITests;
+			productName = EduPiUITests;
+			productReference = A2000000000000000000001A /* EduPiUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A12000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastSwiftUpdateCheck = 2720;
+				LastUpgradeCheck = 2720;
+				ORGANIZATIONNAME = EduPi;
+				TargetAttributes = {
+					A11000000000000000000001 = {
+						CreatedOnToolsVersion = 2720;
+					};
+					A11000000000000000000002 = {
+						CreatedOnToolsVersion = 2720;
+						TestTargetID = A11000000000000000000001;
+					};
+				};
+			};
+			buildConfigurationList = A60000000000000000000001 /* Build configuration list for PBXProject "EduPi" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A10000000000000000000001;
+			productRefGroup = A10000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A11000000000000000000001 /* EduPi */,
+				A11000000000000000000002 /* EduPiUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A40000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A30000000000000000000005 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A40000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A30000000000000000000001 /* EduPiApp.swift in Sources */,
+				A30000000000000000000002 /* RootView.swift in Sources */,
+				A30000000000000000000003 /* AppSettings.swift in Sources */,
+				A30000000000000000000009 /* EduPiRemoteAPI.swift in Sources */,
+				A3000000000000000000000C /* EduPiAppState.swift in Sources */,
+				A3000000000000000000000D /* EduPiModels.swift in Sources */,
+				A3000000000000000000000E /* EduPiDesignSystem.swift in Sources */,
+				A3000000000000000000000F /* EduPiRootView.swift in Sources */,
+				A30000000000000000000010 /* EduPiScreens.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A40000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A30000000000000000000011 /* EduPiUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A80000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A11000000000000000000001 /* EduPi */;
+			targetProxy = A70000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A50000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A50000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A50000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = K9PG3XK6BG;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = EduPi/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.abcwyc.edupi;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A50000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = K9PG3XK6BG;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = EduPi/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.abcwyc.edupi;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A50000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = K9PG3XK6BG;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.abcwyc.edupi.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = EduPi;
+			};
+			name = Debug;
+		};
+		A50000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = K9PG3XK6BG;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.abcwyc.edupi.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = EduPi;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A60000000000000000000001 /* Build configuration list for PBXProject "EduPi" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A50000000000000000000001 /* Debug */,
+				A50000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A60000000000000000000002 /* Build configuration list for PBXNativeTarget "EduPi" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A50000000000000000000003 /* Debug */,
+				A50000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A60000000000000000000003 /* Build configuration list for PBXNativeTarget "EduPiUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A50000000000000000000005 /* Debug */,
+				A50000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A12000000000000000000001 /* Project object */;
+}

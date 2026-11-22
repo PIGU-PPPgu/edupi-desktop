@@ -5,6 +5,9 @@ import { FactLifecycleError, findDeletedEducationFact, mutateEducationFact } fro
 import { parseFactId, parseFactMutationBody } from "@/lib/edupi-fact-lifecycle-request";
 import { verifiesDeletedFact, verifiesFactMutation } from "@/lib/edupi-fact-lifecycle-server";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
+import { EduPiCloudError } from "@/lib/edupi-cloud-client";
+import { issueCloudFactMutation } from "@/lib/edupi-cloud-fact";
+import { captureEducationWriteScope } from "@/lib/edupi-cloud-request-scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +32,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ fac
   try {
     const input = parseFactMutationBody(await parseJsonWithinLimit(request, 8 * 1024));
     if (!factId || !input) return errorResponse("invalid_fact_request", 400, "事实操作字段无效");
+    const selected = await captureEducationWriteScope(request);
+    if (selected.mode === "cloud") {
+      try {
+        const result = await issueCloudFactMutation(factId, input, selected.scope);
+        return NextResponse.json(result, { status: result.queued ? 202 : 200 });
+      } catch (error) {
+        if (error instanceof EduPiCloudError) {
+          if (error.status === 404) return errorResponse(error.code, 404, "事实不存在");
+          if (error.status === 409) return errorResponse(error.code, 409, "事实已更新，请刷新后重试");
+          if (error.status === 400) return errorResponse(error.code, 400, "事实操作请求无效");
+        }
+        return errorResponse("unavailable", 503, "云端事实操作暂不可用");
+      }
+    }
     const result = await mutateEducationFact(factId, input, request.signal);
     const data = await readEducationContract();
     if (!verifiesFactMutation(data, result, input)) return errorResponse("invalid_response", 502, "事实操作结果未能与 Core 对账");
@@ -40,6 +57,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ fac
     return NextResponse.json({ result, data, deleted });
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) return errorResponse("too_large", 413, "事实操作请求过大");
+    if (error instanceof EduPiCloudError) return errorResponse(error.code, error.status, error.message);
     return error instanceof FactLifecycleError ? mapError(error) : errorResponse("unavailable", 503, "事实操作暂不可用");
   }
 }
