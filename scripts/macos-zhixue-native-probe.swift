@@ -8,6 +8,8 @@ private struct ProbeFailure: Error {
 
 private enum Phase: String {
     case open, qr, success, restart
+    case upgradeOld = "upgrade-old"
+    case upgradeNew = "upgrade-new"
 }
 
 private let fixtureTitle = "智学网扫码验收"
@@ -18,6 +20,12 @@ private let close = "关闭扫码窗口"
 private let image = "智学网登录"
 private let openScan = "打开扫码窗口"
 private let checkScan = "查看扫码结果"
+private let aboutSettings = "关于与更新"
+private let updateReminder = "有可用更新"
+private let updatePreflight = "安装前确认"
+private let upgradeWindowLabels: Set<String> = [
+    aboutSettings, "About & Updates", updateReminder, "Updates available", "设置", "稍后再说", updatePreflight,
+]
 private let clock = ProcessInfo.processInfo
 
 private func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
@@ -59,14 +67,17 @@ private struct Window {
         nodes.contains { node in node.names.contains { texts.contains($0) } }
     }
 
-    func button(_ name: String) throws -> AXUIElement? {
+    func button(_ name: String, parentLabel: String? = nil) throws -> AXUIElement? {
         var matches = Set<Int>()
         for index in nodes.indices where nodes[index].matches(name) {
             var current: Int? = index
             while let candidate = current {
                 let node = nodes[candidate]
                 if node.role == kAXButtonRole {
-                    if (attribute(node.element, kAXEnabledAttribute) as? Bool) != false {
+                    let parentMatches = parentLabel.map { label in
+                        node.parent.map { nodes[$0].matches(label) } ?? false
+                    } ?? true
+                    if parentMatches && (attribute(node.element, kAXEnabledAttribute) as? Bool) != false {
                         matches.insert(candidate)
                     }
                     break
@@ -90,6 +101,19 @@ private struct Window {
 
     var showsQR: Bool {
         nodes.contains { $0.role == kAXImageRole && $0.matches(image) }
+    }
+
+    func showsAboutVersion(_ current: String, latest: String? = nil) -> Bool {
+        guard containsAny([aboutSettings, "About & Updates"]) else { return false }
+        // The version chip names which version is running and which is offered.
+        let labels = latest.map {
+            ["当前版本: v\(current). 最新正式版: v\($0). ", "Current version: v\(current). Latest stable release: v\($0). "]
+        } ?? ["版本: v\(current). ", "当前版本: v\(current). ", "Version: v\(current). ", "Current version: v\(current). "]
+        return nodes.contains { node in
+            node.role == "AXLink" && node.names.contains { name in
+                labels.contains { name.hasPrefix($0) }
+            }
+        }
     }
 }
 
@@ -120,7 +144,7 @@ private final class NativeProbe {
         _ = NSRunningApplication(processIdentifier: pid)?.activate(options: [])
     }
 
-    private func snapshot() throws -> Window? {
+    private func snapshot(preferring labels: Set<String>? = nil) throws -> Window? {
         guard !running.isTerminated, running.processIdentifier == pid else {
             throw ProbeFailure(code: "installed_app_exited_during_native_probe")
         }
@@ -171,16 +195,17 @@ private final class NativeProbe {
             if !nodes.isEmpty { candidates.append(Window(nodes: nodes, complete: complete)) }
         }
         let preferred = candidates.first {
-            $0.containsAny([fixtureTitle, fixturePrompt, "AI 协作", "对话", waiting, ready, openScan, checkScan])
+            $0.containsAny(labels ?? [fixtureTitle, fixturePrompt, "AI 协作", "对话", waiting, ready, openScan, checkScan])
         }
         return preferred ?? candidates.max { $0.nodes.count < $1.nodes.count }
     }
 
     private func awaitWindow(_ code: String, seconds: TimeInterval = 13,
+                             preferring labels: Set<String>? = nil,
                              predicate: (Window) throws -> Bool) throws {
         let deadline = clock.systemUptime + seconds
         repeat {
-            if let window = try snapshot(), try predicate(window) { return }
+            if let window = try snapshot(preferring: labels), try predicate(window) { return }
             Thread.sleep(forTimeInterval: 0.25)
         } while clock.systemUptime < deadline
         throw ProbeFailure(code: code)
@@ -215,6 +240,67 @@ private final class NativeProbe {
             }
             return false
         }
+    }
+
+    private func triggerUpgrade() throws {
+        var skippedWelcome = false
+        try awaitWindow("update_reminder_unavailable", seconds: 40, preferring: upgradeWindowLabels) { window in
+            if !skippedWelcome, let later = try window.button("稍后再说") {
+                try press(later, failure: "welcome_dismiss_failed")
+                skippedWelcome = true
+                return false
+            }
+            let settings = try window.button("打开设置", parentLabel: updateReminder)
+                ?? window.button("Open Settings", parentLabel: "Updates available")
+            guard let settings else { return false }
+            try press(settings, failure: "update_reminder_open_settings_failed")
+            return true
+        }
+        var openedAbout = false
+        try awaitWindow("expected_upgrade_versions_or_control_unavailable", seconds: 35,
+                        preferring: upgradeWindowLabels) { window in
+            if window.showsAboutVersion("0.3.122", latest: "0.3.123") {
+                if let update = try window.button("更新") ?? window.button("Update") {
+                    try press(update, failure: "update_request_failed")
+                    return true
+                }
+            } else if !openedAbout, let about = try window.button(aboutSettings) ?? window.button("About & Updates") {
+                try press(about, failure: "old_app_open_about_failed")
+                openedAbout = true
+            }
+            return false
+        }
+        try awaitWindow("expected_upgrade_confirmation_unavailable", seconds: 18,
+                        preferring: upgradeWindowLabels) { window in
+            guard window.showsAboutVersion("0.3.122", latest: "0.3.123"),
+                  window.containsAny([updatePreflight]),
+                  let confirmation = try window.button("继续更新") else { return false }
+            try press(confirmation, failure: "update_confirmation_failed")
+            return true
+        }
+        print("upgrade_triggered")
+    }
+
+    private func verifyUpdatedVersion() throws {
+        var skippedWelcome = false
+        var openedSettings = false
+        var openedAbout = false
+        try awaitWindow("updated_version_not_visible", seconds: 38, preferring: upgradeWindowLabels) { window in
+            if !skippedWelcome, let later = try window.button("稍后再说") {
+                try press(later, failure: "welcome_dismiss_failed")
+                skippedWelcome = true
+            } else if window.showsAboutVersion("0.3.123") {
+                return true
+            } else if !openedAbout, let about = try window.button(aboutSettings) ?? window.button("About & Updates") {
+                try press(about, failure: "updated_app_open_about_failed")
+                openedAbout = true
+            } else if !openedSettings, !openedAbout, let settings = try window.button("设置") {
+                try press(settings, failure: "updated_app_open_settings_failed")
+                openedSettings = true
+            }
+            return false
+        }
+        print("updated_version_visible")
     }
 
     func run(_ phase: Phase) throws {
@@ -280,6 +366,10 @@ private final class NativeProbe {
             }
             let initial = initiallyVisible ? "visible_before_navigation" : "not_in_initial_snapshot"
             print("\(initial) \(openedResult ? "result_button" : "direct")")
+        case .upgradeOld:
+            try triggerUpgrade()
+        case .upgradeNew:
+            try verifyUpdatedVersion()
         }
     }
 

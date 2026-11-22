@@ -510,7 +510,7 @@ try {
 console.log(JSON.stringify(result));
 `;
 
-export function verifyRestart(first, second) {
+export function verifyRestart(first, second, targetVersion = first.version) {
   check(first.appPid !== second.appPid && first.instanceNonce !== second.instanceNonce,
     "restart_did_not_create_new_app_and_instance");
   equal(first.storage.fileIdentity, second.storage.fileIdentity, "restart_database_identity_changed");
@@ -524,7 +524,8 @@ export function verifyRestart(first, second) {
     for (const [identity, digest] of rows)
       check(restored.get(identity) === digest, "restart_database_record_changed");
   }
-  for (const key of ["version", "core", "modelConfig", "marker"])
+  equal(second.version, targetVersion, "restart_version_changed");
+  for (const key of ["core", "modelConfig", "marker"])
     equal(first[key], second[key], `restart_${key}_changed`);
 }
 
@@ -665,6 +666,13 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
     trackAcceptanceDirectory({ directory, role, nativeProfile, entries: cleanupEntries, failures: registrationFailures });
   const processes = { known: new Map(), appPid: null };
   const liveApps = [];
+  const upgrade = input.upgradeFrom122 === true;
+  const oldInput = upgrade ? validateInputs({
+    repository: input.repository, version: "0.3.122",
+    releaseId: "453538388", assetId: "775046164",
+    sourceSha: "7fa842804aff8c9f2142cae56c6ddffdac9403d6",
+    assetSha256: "b1fc0625df9c8c9f30cbac80175e4707d25179759c34e24d882b1f49a8a5279e",
+  }) : input;
   const stage = name => { evidence.stage = name; persist(); check(!abort.aborted, "acceptance_interrupted"); };
   async function sample() {
     const table = await processTable();
@@ -748,6 +756,17 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
       draft: release.draft, prerelease: release.prerelease, metadataById: true, operations: ["GET"] };
     evidence.asset = asset;
     evidence.tag = await verifyTag(reader, input, release.draft);
+    const oldReader = upgrade ? githubReader(oldInput, process.env.GH_TOKEN || process.env.GITHUB_TOKEN) : reader;
+    let oldAsset = asset;
+    if (upgrade) {
+      check(!release.draft && !release.prerelease, "upgrade_target_not_a_stable_release");
+      const oldRelease = await oldReader.json(`/releases/${oldInput.releaseId}`);
+      check(!oldRelease.draft && !oldRelease.prerelease, "upgrade_source_not_a_stable_release");
+      oldAsset = verifyMetadata(oldInput, oldRelease, await oldReader.json(`/releases/assets/${oldInput.assetId}`));
+      const oldTag = await verifyTag(oldReader, oldInput, false);
+      evidence.upgrade = { sourceVersion: oldInput.version, targetVersion: input.version, oldAsset, oldTag,
+        input: "published_update_service", triggered: false };
+    }
     stage("private_synthetic_directories");
     task = fs.realpathSync(fs.mkdtempSync("/private/tmp/edupi-installed-"));
     fs.chmodSync(task, 0o700);
@@ -755,7 +774,7 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
     check(/^\/private\/tmp\/edupi-installed-[A-Za-z0-9]+$/u.test(task), "invalid_task_directory");
     appPath = path.join(task, "EduPi.app");
     mount = path.join(task, "mount");
-    diskImage = path.join(task, asset.name);
+    diskImage = path.join(task, oldAsset.name);
     root = path.join(home, `edupi-route1-canary-${nonce()}`);
     teacher = path.join(home, `edupi-installed-synthetic-default-${nonce()}`);
     for (const directory of [root, teacher]) {
@@ -775,7 +794,8 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
     }
     const config = path.join(home, "Library/Application Support", BUNDLE);
     const prefs = path.join(config, "ui-prefs.json");
-    fs.writeFileSync(prefs, JSON.stringify({ edupiDataRoot: teacher }), { flag: "wx", mode: 0o600 });
+    const persistedWorkspace = upgrade ? root : teacher;
+    fs.writeFileSync(prefs, JSON.stringify({ edupiDataRoot: persistedWorkspace }), { flag: "wx", mode: 0o600 });
     const agent = path.join(root, ".edupi/agent");
     fs.mkdirSync(agent, { recursive: true, mode: 0o700 });
     fs.mkdirSync(path.join(task, "tmp"), { mode: 0o700 });
@@ -798,17 +818,18 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
     const teacherFingerprint = hash(JSON.stringify(fs.readdirSync(teacher)));
     evidence.isolation = { syntheticOnly: true, canaryDirectlyUnderRunnerHome: true, mode: "0700",
       separateSyntheticTeacherDefaultRoot: true, inheritedSecrets: false, externalCoreRoot: false,
+      persistedSyntheticWorkspace: upgrade,
       canaryRootSha256: hash(root), syntheticTeacherDefaultRootSha256: hash(teacher),
       installedApp: "$TASK/EduPi.app", nativePrefs: "$RUNNER_HOME/Library/Application Support/com.abcwyc.pi-agent/ui-prefs.json" };
     await command("/bin/df", ["-h", task]);
     await command("/usr/bin/du", ["-sh", task]);
     stage("download_exact_dmg");
-    evidence.download = await downloadVerified(await reader.assetResponse(), diskImage, asset);
+    evidence.download = await downloadVerified(await oldReader.assetResponse(), diskImage, oldAsset);
     // Re-read both ID metadata records to catch replacement during download.
-    const rereadRelease = await reader.json(`/releases/${input.releaseId}`);
-    equal(verifyMetadata(input, rereadRelease, await reader.json(`/releases/assets/${input.assetId}`)),
-      asset, "asset_changed_during_download");
-    evidence.tag = await verifyTag(reader, input, rereadRelease.draft);
+    const rereadRelease = await oldReader.json(`/releases/${oldInput.releaseId}`);
+    equal(verifyMetadata(oldInput, rereadRelease, await oldReader.json(`/releases/assets/${oldInput.assetId}`)),
+      oldAsset, "asset_changed_during_download");
+    await verifyTag(oldReader, oldInput, rereadRelease.draft);
     stage("signed_notarized_dmg");
     evidence.dmgSignature = await signature(diskImage, true);
     stage("readonly_dmg_install");
@@ -829,14 +850,14 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
     evidence.installedAppSignature = await signature(appPath);
     const info = await plist(path.join(appPath, "Contents/Info.plist"));
     check(info.CFBundleIdentifier === BUNDLE && info.CFBundleExecutable === "pi-agent-desktop"
-      && info.CFBundleShortVersionString === input.version && info.CFBundleVersion === input.version, "installed_plist_mismatch");
+      && info.CFBundleShortVersionString === oldInput.version && info.CFBundleVersion === oldInput.version, "installed_plist_mismatch");
     const executable = path.join(appPath, "Contents/MacOS/pi-agent-desktop");
     const resources = path.join(appPath, "Contents/Resources/resources");
     const node = path.join(resources, "Pi Agent Server.app/Contents/MacOS/node");
     for (const binary of [executable, node])
       equal((await command("/usr/bin/lipo", ["-archs", binary])).stdout.trim(), "arm64", "installed_binary_not_arm64");
-    equal(readJson(path.join(resources, "component-versions.json")).appVersion, input.version, "component_version_mismatch");
-    evidence.package = { version: input.version, bundleId: BUNDLE, architecture: "arm64",
+    equal(readJson(path.join(resources, "component-versions.json")).appVersion, oldInput.version, "component_version_mismatch");
+    evidence.package = { version: oldInput.version, bundleId: BUNDLE, architecture: "arm64",
       appExecutableSha256: hash(fs.readFileSync(executable)), nativePlistVersion: info.CFBundleShortVersionString };
     stage("bundled_core_exact_source_contract");
     evidence.bundledCore = verifyBundleContracts(resources, compat);
@@ -850,9 +871,11 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
       "-module-cache-path", path.join(task, "swift-cache"),
       path.join(harness, "scripts/macos-zhixue-native-probe.swift"), "-o", zhixueProbe,
     ], { timeout: 100_000 });
-    const zhixue = seedZhixueFixture(root);
-    zhixue.start();
-    evidence.zhixue = { syntheticOnly: true, tested: [] };
+    const zhixue = upgrade ? { title: ZHIXUE_TITLE } : seedZhixueFixture(root);
+    if (!upgrade) {
+      zhixue.start();
+      evidence.zhixue = { syntheticOnly: true, tested: [] };
+    }
     const checkZhixue = async (app, mode) => {
       stage(`zhixue_${mode}_native_chat`);
       check(sameProcess(app, (await sample()).find(row => row.pid === app.pid)), "zhixue_app_identity_changed");
@@ -880,6 +903,19 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
       evidence.windowServer.guiInteraction = true;
       persist();
     };
+    const checkUpgrade = async (app, mode) => {
+      stage(mode);
+      check(sameProcess(app, (await sample()).find(row => row.pid === app.pid)), "updater_app_identity_changed");
+      const result = await command(zhixueProbe, [String(app.pid), appPath, mode, zhixue.title],
+        { allowed: [0, 1], timeout: 140_000 });
+      if (result.code !== 0) {
+        const reason = result.stderr.trim();
+        evidence.upgrade.failure = /^[a-z0-9_]{1,85}$/u.test(reason) ? reason : "native_probe_failed";
+        throw new AcceptanceFailure("native_upgrade_control_not_observed");
+      }
+      evidence.windowServer.guiInteraction = true;
+      persist();
+    };
     const markerPath = path.join(root, ".edupi/output/installed-acceptance-marker.json");
     const markerValue = { schemaVersion: 1, synthetic: true, id: nonce(), sourceDesktop: input.sourceSha,
       version: input.version, assetSha256: input.assetSha256 };
@@ -894,20 +930,48 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
     for (const label of ["first", "restart"]) {
       stage(`${label}_real_app_startup`);
       equal(fs.statSync(root).mode & 0o777, 0o700, "canary_root_is_not_private");
+      let app;
+      if (upgrade && label === "restart") {
+        stage("await_automatic_updater_relaunch");
+        const restartDeadline = Date.now() + 8 * 60_000;
+        const first = evidence.launches[0];
+        while (!abort.aborted && Date.now() < restartDeadline) {
+          const table = await sample();
+          app = table.find(row => row.command === executable && row.pid !== first.appPid);
+          if (app) break;
+          await wait(500);
+        }
+        check(app, "native_updater_automatic_relaunch_missing");
+        processes.appPid = app.pid;
+      } else {
+        const log = fs.openSync(path.join(task, `${label}-app.log`), "wx", 0o600);
+        let child;
+        try {
+          // A fresh hosted user has only the persisted synthetic workspace.
+          // The native updater may start the new process through LaunchServices.
+          const environment = upgrade
+            ? { HOME: home, PATH: "/usr/bin:/bin:/usr/sbin:/sbin", LANG: "en_US.UTF-8",
+              PI_OFFLINE: "1", NEXT_TELEMETRY_DISABLED: "1" }
+            : launchEnvironment(home, root, path.join(task, "tmp"));
+          child = spawn(executable, [], { cwd: task, env: environment,
+            detached: true, stdio: ["ignore", log, log] });
+          child.on("error", () => {});
+          liveApps.push(child);
+        } finally { fs.closeSync(log); }
+        check(Number.isInteger(child.pid), "installed_app_spawn_failed");
+        processes.appPid = child.pid;
+        app = (await sample()).find(row => row.pid === child.pid);
+        check(app && app.command === executable, "installed_app_exited_during_startup");
+      }
       const observedVersion = (await plist(path.join(appPath, "Contents/Info.plist"))).CFBundleShortVersionString;
-      equal(observedVersion, input.version, "installed_version_changed_before_launch");
-      const log = fs.openSync(path.join(task, `${label}-app.log`), "wx", 0o600);
-      let child;
-      try {
-        child = spawn(executable, [], { cwd: task, env: launchEnvironment(home, root, path.join(task, "tmp")),
-          detached: true, stdio: ["ignore", log, log] });
-        child.on("error", () => {});
-        liveApps.push(child);
-      } finally { fs.closeSync(log); }
-      check(Number.isInteger(child.pid), "installed_app_spawn_failed");
-      processes.appPid = child.pid;
-      const app = (await sample()).find(row => row.pid === child.pid);
-      check(app && app.command === executable, "installed_app_exited_during_startup");
+      equal(observedVersion, label === "first" ? oldInput.version : input.version, "installed_version_changed_before_launch");
+      if (upgrade && label === "restart") {
+        equal(hash(fs.readFileSync(executable)), "sha256:056c24a32e4dbe8081826f2389f5f41f201001a56bfb939fb7c44e39e19ba708",
+          "relaunch_binary_is_not_accepted_123");
+        evidence.upgrade.updatedAppSignature = await signature(appPath);
+        equal(readJson(path.join(resources, "component-versions.json")).appVersion, input.version, "updated_component_version_mismatch");
+        evidence.upgrade.updatedBundledCore = verifyBundleContracts(resources, compat);
+      }
       const launch = { label, appPid: app.pid, app: pidEvidence(app, "installed_app"), status: "starting" };
       evidence.launches.push(launch); persist();
       const deadline = Date.now() + 150_000;
@@ -920,7 +984,7 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
         let nativePrefs;
         try { nativePrefs = readJson(prefs); }
         catch { await wait(250); continue; }
-        equal(nativePrefs.edupiDataRoot, teacher, "synthetic_default_root_preference_changed");
+        equal(nativePrefs.edupiDataRoot, persistedWorkspace, "synthetic_default_root_preference_changed");
         const port = nativePrefs.serverPort;
         if (!Number.isInteger(port) || port < 1 || port > 65535) { await wait(500); continue; }
         launch.port = port;
@@ -973,13 +1037,15 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
         check(ancestor?.pid === app.pid, "core_host_not_owned_by_installed_app");
         // Only App/Core environments are inspected. next-server's erased
         // environment is deliberately not used as an acceptance prerequisite.
-        const environments = [];
-        for (const row of [app, host]) {
-          environments.push({ ...row, environment: (await command("/bin/ps",
-            ["eww", "-p", String(row.pid), "-o", "command="])).stdout });
+        if (!upgrade) {
+          const environments = [];
+          for (const row of [app, host]) {
+            environments.push({ ...row, environment: (await command("/bin/ps",
+              ["eww", "-p", String(row.pid), "-o", "command="])).stdout });
+          }
+          try { assertIsolatedProcessEvidence({ root, realRoot: teacher, home, appPath, processes: environments }); }
+          catch { throw new AcceptanceFailure("native_isolation_guard_failed"); }
         }
-        try { assertIsolatedProcessEvidence({ root, realRoot: teacher, home, appPath, processes: environments }); }
-        catch { throw new AcceptanceFailure("native_isolation_guard_failed"); }
         launch.coreHost = pidEvidence(host, "core_host");
         launch.version = observedVersion; launch.core = core; launch.runtime = runtime;
         launch.nativeGuard = "passed";
@@ -1006,20 +1072,25 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
         ready = true; break;
       }
       check(ready, "installed_app_core_startup_deadline_no_node_fallback");
-      if (label === "first") {
+      if (upgrade && label === "restart") {
+        await checkUpgrade(app, "upgrade-new");
+        evidence.claims.gui = "signed_app_update_controls_and_updated_version";
+      } else if (!upgrade && label === "first") {
         zhixue.start();
         await checkZhixue(app, "open");
         zhixue.showQr();
         await checkZhixue(app, "qr");
         zhixue.completeScan();
         await checkZhixue(app, "success");
-      } else {
+      } else if (!upgrade) {
         await checkZhixue(app, "restart");
         evidence.claims.gui = "signed_app_synthetic_zhixue_scan_and_reopen";
       }
-      stage(`${label}_stop_all_task_processes`);
-      launch.shutdown = await stopAll();
-      processes.appPid = null;
+      if (!upgrade || label === "restart") {
+        stage(`${label}_stop_all_task_processes`);
+        launch.shutdown = await stopAll();
+        processes.appPid = null;
+      }
       stage(`${label}_readonly_sqlite_and_marker_readback`);
       const database = path.join(root, ".edupi/runtime/core-runtime-v1.sqlite");
       equal(fs.realpathSync(database), database, "sqlite_not_canonical_in_canary");
@@ -1032,12 +1103,21 @@ export async function runAcceptance(input, source, evidence, persist, abort = ne
       equal(modelSummary(), initialModels, "model_configuration_changed_after_app_exit");
       equal(hash(JSON.stringify(fs.readdirSync(teacher))), teacherFingerprint, "synthetic_default_root_touched");
       launch.status = "passed";
+      if (upgrade && label === "first") {
+        await checkUpgrade(app, "upgrade-old");
+        evidence.upgrade.triggered = true;
+      }
       persist();
     }
-    stage("cold_restart_comparison");
-    verifyRestart(evidence.launches[0], evidence.launches[1]);
+    stage(upgrade ? "native_upgrade_readback" : "cold_restart_comparison");
+    verifyRestart(evidence.launches[0], evidence.launches[1], input.version);
     evidence.readback = { sameSqliteFile: true, readOnlyQuickCheckTwice: true, persistentSqliteRecordsPreserved: true, sameMarkerObject: true,
-      sameVersion: true, sameBundledCore: true, sameModelConfig: true, newAppPid: true, newInstanceNonce: true };
+      ...(upgrade ? { updatedVersion: input.version } : { sameVersion: true }),
+      sameBundledCore: true, sameModelConfig: true, newAppPid: true, newInstanceNonce: true };
+    if (upgrade) {
+      evidence.claims.updater = "public_release_native_download_signature_install_and_automatic_relaunch";
+      evidence.upgrade.automaticRelaunch = true;
+    }
     evidence.status = "passed";
   } catch (error) {
     evidence.status = "failed";
@@ -1143,6 +1223,15 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     check(["prepare", "run"].includes(argv[0]), "invalid_cli_operation");
     check(typeof filename === "string" && path.isAbsolute(filename), "absolute_evidence_path_required");
     const input = validateInputs(raw);
+    if (env.ACCEPT_UPGRADE_FROM_122 === "true") {
+      check(input.version === "0.3.123" && input.repository === "PIGU-PPPgu/edupi-desktop"
+        && input.sourceSha === "adee2798c6b43a3602e7e5627489388d0228b6db"
+        && input.releaseId === 454539958 && input.assetId === 779850956
+        && input.assetSha256 === "2dcf30d5af18886dbb6fc939343be049017c3e7cbdacbc97054a3bb2b4893de8",
+      "native_upgrade_target_must_be_frozen_123");
+      input.upgradeFrom122 = true;
+      evidence.scope = "macos_signed_app_native_upgrade_122_to_123";
+    }
     evidence.request = { releaseId: input.releaseId, assetId: input.assetId, sourceSha: input.sourceSha,
       assetSha256: input.assetSha256, version: input.version, repository: input.repository };
     saveEvidence(filename, evidence);

@@ -25,6 +25,10 @@ on:
         description: Exact packaged version without the v prefix
         required: true
         type: string
+      upgrade_from_122:
+        description: Verify the native 0.3.122 to 0.3.123 upgrade on a fresh runner
+        default: false
+        type: boolean
 
 permissions: {}
 
@@ -42,6 +46,7 @@ jobs:
       ACCEPT_SOURCE_SHA: ${{ inputs.source_sha }}
       ACCEPT_ASSET_SHA256: ${{ inputs.asset_sha256 }}
       ACCEPT_VERSION: ${{ inputs.version }}
+      ACCEPT_UPGRADE_FROM_122: ${{ inputs.upgrade_from_122 }}
       ACCEPT_EVIDENCE: ${{ github.workspace }}/acceptance-evidence/e.JSON
     steps:
       - name: Initialize setup failure evidence
@@ -72,7 +77,7 @@ jobs:
           path: release-source
           persist-credentials: false
 
-      - name: Install signed DMG and cold start the real App twice
+      - name: Verify the signed App and its restart
         env:
           GH_TOKEN: ${{ github.token }}
           ACCEPT_SOURCE_DIR: ${{ github.workspace }}/release-source
