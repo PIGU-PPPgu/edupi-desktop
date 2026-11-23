@@ -1,15 +1,15 @@
 {
-  "version": "0.3.123",
-  "notes": "EduPi Desktop 0.3.123，适用于 Apple Silicon Mac。\n\n智学网登录会显示打开进度、二维码和扫码结果。扫码成功后，聊天会提示同步是否还缺班级、学科和学段。扫码超时或登录失效时会提示重新扫码。\n\n此版本沿用 Core `fc89b3bc899a55b0fdad61b8f37e238d950f37c6`。教师账号扫码后的实际学情同步、登录态冷启动回读及完整 L4 待验收。",
-  "pub_date": "2026-11-22T17:31:28.193Z",
+  "version": "0.3.125",
+  "notes": "EduPi Desktop 0.3.125，适用于 Apple Silicon Mac。\n\n可选 cloud 模式补上学生名单与档案版本恢复、对象软删除与回收站、材料断网续传、班级真实计算与值日任务。写入绑定账号和工作区，保留可恢复队列，并在写入后重新读取核对。\n\n云端对话由持有专用租约的桌面本机执行，模型密钥留在本机；仅支持文字，工具关闭。结果不确定时保留记录，不自动重复调用模型。默认仍为 local，可在设置中选择云端账号和工作区。\n\n固定 Core `fc89b3bc899a55b0fdad61b8f37e238d950f37c6`。实体 iPhone 验收需连接可信物理设备；Windows 构建及验收继续按用户要求暂停。",
+  "pub_date": "2026-11-23T00:49:20.966Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTkrdyt6Q3MvM1FlY2wyTjJ5V1EwOSs2YWhqWlJ1U1dUQWFmT0pKM2VWd0hjbXJCTy9CUDAwemdxSzdJalM2c1R0VmJQalRHckZ5aGFzdWlkVTVYUFlMeEFocEtGZXdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzY3NDY0CWZpbGU6RWR1UGkuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4xMjMKSEJBV0JocE9kOFhuWndIY3IzdXpJTlRFVXdlQ2UveStwQ0x5cnJFMVpLVkFkRGlnTVc3S3JRN29EWnZ6cys2cU5Tc0VQRFQ2SVdhN2pHZVVoTnIrRHc9PQo=",
-      "url": "https://api.github.com/repos/PIGU-PPPgu/edupi-desktop/releases/assets/779810593"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTkrdyt6Q3MvM2JiZ0l1Q1k4eHB1TVU3NGhYVHRENjNqRC9SRzZ5OWk2VkpoRGVkQko0WHY3VTZZeEc1UjNEc1JWajFQbm9rTVFpTmRhVkJNUzdvWWNzWE1TNkQxRkFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzkzNjQyCWZpbGU6RWR1UGkuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4xMjUKeXppd3grZm5GQjFERGxrUC94aTFNUTZ3a3kwZUFVdVRUeEdPSWZOMXhVREJ2ZllDTUxjdDFTV2lZWE8rcEs3Zytva2R1RXpHWGQrWmcyN3FBV3ZVQ2c9PQo=",
+      "url": "https://api.github.com/repos/PIGU-PPPgu/edupi-desktop/releases/assets/780947967"
     },
     "darwin-aarch64-app": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTkrdyt6Q3MvM1FlY2wyTjJ5V1EwOSs2YWhqWlJ1U1dUQWFmT0pKM2VWd0hjbXJCTy9CUDAwemdxSzdJalM2c1R0VmJQalRHckZ5aGFzdWlkVTVYUFlMeEFocEtGZXdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzY3NDY0CWZpbGU6RWR1UGkuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4xMjMKSEJBV0JocE9kOFhuWndIY3IzdXpJTlRFVXdlQ2UveStwQ0x5cnJFMVpLVkFkRGlnTVc3S3JRN29EWnZ6cys2cU5Tc0VQRFQ2SVdhN2pHZVVoTnIrRHc9PQo=",
-      "url": "https://api.github.com/repos/PIGU-PPPgu/edupi-desktop/releases/assets/779810593"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTkrdyt6Q3MvM2JiZ0l1Q1k4eHB1TVU3NGhYVHRENjNqRC9SRzZ5OWk2VkpoRGVkQko0WHY3VTZZeEc1UjNEc1JWajFQbm9rTVFpTmRhVkJNUzdvWWNzWE1TNkQxRkFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MzkzNjQyCWZpbGU6RWR1UGkuYXBwLnRhci5negl2ZXJzaW9uOjAuMy4xMjUKeXppd3grZm5GQjFERGxrUC94aTFNUTZ3a3kwZUFVdVRUeEdPSWZOMXhVREJ2ZllDTUxjdDFTV2lZWE8rcEs3Zytva2R1RXpHWGQrWmcyN3FBV3ZVQ2c9PQo=",
+      "url": "https://api.github.com/repos/PIGU-PPPgu/edupi-desktop/releases/assets/780947967"
     }
   }
 }
